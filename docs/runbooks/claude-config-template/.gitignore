@@ -1,0 +1,45 @@
+# Nada de estado/sessão/secret entra aqui.
+
+# Caso alguém rode bootstrap dentro do repo por engano
+.claude/
+backups/
+sessions/
+projects/
+cache/
+downloads/
+file-history/
+shell-snapshots/
+paste-cache/
+session-env/
+telemetry/
+tasks/
+ide/
+history.jsonl
+mcp-needs-auth-cache.json
+*.log
+
+# Secrets — nunca commitar
+.env
+.env.*
+secrets/
+*.token
+*.key
+*.pem
+
+# OS lixo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Node (caso adicione scripts node)
+node_modules/
+
+# Backups manuais
+*.bak
+*.orig

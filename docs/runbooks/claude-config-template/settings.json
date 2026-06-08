@@ -1,0 +1,26 @@
+{
+  "_comment": "Substitua '7sion-vps' pelo alias SSH da sua VPS NOVA quando contratá-la. Veja docs/runbooks/multi-agent-dev.md e INFRASTRUCTURE.md.",
+  "autoUpdatesChannel": "latest",
+  "skipDangerousModePermissionPrompt": true,
+  "model": "opus",
+  "permissions": {
+    "allow": [
+      "Bash(ssh 7sion-vps:*)",
+      "Bash(ssh -o BatchMode=yes -o ConnectTimeout=8 7sion-vps:*)",
+      "Bash(ssh -o BatchMode=yes 7sion-vps:*)",
+      "Bash(scp:*)",
+      "Bash(rsync:*)"
+    ],
+    "deny": [
+      "Bash(ssh 7sion-vps * rm -rf /:*)",
+      "Bash(ssh 7sion-vps * rm -rf /*)",
+      "Bash(ssh 7sion-vps * mkfs:*)",
+      "Bash(ssh 7sion-vps * dd if=:*)",
+      "Bash(ssh 7sion-vps * shutdown:*)",
+      "Bash(ssh 7sion-vps * reboot:*)",
+      "Bash(ssh 7sion-vps * docker system prune --all:*)",
+      "Bash(ssh 7sion-vps * git push --force:*)",
+      "Bash(ssh 7sion-vps * git reset --hard origin:*)"
+    ]
+  }
+}
