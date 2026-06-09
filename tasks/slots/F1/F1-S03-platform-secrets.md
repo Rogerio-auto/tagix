@@ -2,12 +2,14 @@
 id: F1-S03
 title: Schema platform_secrets + carregamento boot-time
 phase: F1
-status: available
+status: in-progress
 priority: high
 estimated_size: S
 depends_on: [F0-S03]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T23:49:28Z
 
+---
 # F1-S03 — platform_secrets + boot load
 
 > **source_docs:** `docs/features/LIVECHAT.md` §2.4; `docs/DATA_MODEL.md` (platform_secrets)
