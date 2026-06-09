@@ -200,5 +200,16 @@ export const auditLogs = pgTable(
   ],
 );
 
-/** Tabelas com `workspace_id` que recebem RLS (consumido por F0-S04). */
-export const RLS_TABLES = ['workspaces', 'members', 'api_keys', 'subscriptions', 'audit_logs'] as const;
+// Canais de mensageria (F1).
+export * from './channels';
+
+/** Tabelas com `workspace_id` que recebem RLS. */
+export const RLS_TABLES = [
+  'workspaces',
+  'members',
+  'api_keys',
+  'subscriptions',
+  'audit_logs',
+  'channels',
+  'channel_secrets',
+] as const;

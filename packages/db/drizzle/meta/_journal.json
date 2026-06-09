@@ -15,6 +15,20 @@
       "when": 1781017099533,
       "tag": "0001_rls_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781045158231,
+      "tag": "0002_smiling_norman_osborn",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781045159145,
+      "tag": "0003_channels_rls",
+      "breakpoints": true
     }
   ]
 }
