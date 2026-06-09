@@ -2,12 +2,13 @@
 id: F0-S15
 title: Storage — LocalDriver (dev) + R2Driver (S3) + signed URL
 phase: F0
-status: in-progress
+status: review
 priority: medium
 estimated_size: S
 depends_on: [F0-S01]
 agent_id: backend-engineer
 claimed_at: 2026-06-09T22:08:17Z
+completed_at: 2026-06-09T22:10:24Z
 
 ---
 # F0-S15 — Storage drivers (Local + R2)
