@@ -1,0 +1,72 @@
+# Stack de infraestrutura local (dev). Sobe com:
+#   docker compose -f infra/docker/docker-compose.dev.yml up -d
+# Secrets vêm do .env na raiz (NUNCA hardcode aqui). Volumes nomeados = dados sagrados.
+name: tagix-dev
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hm}
+      POSTGRES_DB: ${POSTGRES_DB:-highermind}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hm} -d ${POSTGRES_DB:-highermind}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-hm}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-hm}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  waha:
+    image: devlikeapro/waha:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - waha-data:/app/.sessions
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:
+  waha-data:

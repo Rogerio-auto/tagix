@@ -1,0 +1,19 @@
+{
+  "name": "@hm/workers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hm/channels": "workspace:*",
+    "@hm/logger": "workspace:*",
+    "@hm/shared": "workspace:*",
+    "@hm/storage": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7"
+  }
+}
