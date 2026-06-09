@@ -2,12 +2,15 @@
 id: F1-S09
 title: IChannelAdapter + capabilities + graphClient + MetaInstagramAdapter STUB
 phase: F1
-status: blocked
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F1-S01]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T22:54:14Z
+completed_at: 2026-06-09T22:54:50Z
 
+---
 # F1-S09 — IChannelAdapter interface + capabilities
 
 > **source_docs:** `docs/features/LIVECHAT.md` §2.1, §2.2; `docs/features/INSTAGRAM.md`
