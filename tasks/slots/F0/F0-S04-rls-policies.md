@@ -2,12 +2,15 @@
 id: F0-S04
 title: RLS policies multi-tenant + teste de isolamento
 phase: F0
-status: blocked
+status: review
 priority: critical
 estimated_size: S
 depends_on: [F0-S03]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T14:58:18Z
+completed_at: 2026-06-09T15:01:32Z
 
+---
 # F0-S04 — RLS policies (isolamento multi-tenant)
 
 > **source_docs:** `docs/DATA_MODEL.md` §3.4 (RLS sample), §1; `docs/ARCHITECTURE.md` §"RLS"
