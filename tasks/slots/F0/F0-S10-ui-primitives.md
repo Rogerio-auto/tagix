@@ -2,12 +2,13 @@
 id: F0-S10
 title: "@hm/ui base — infra + Ladle + 5 primitives (Button, Input, Card, Modal, Toast)"
 phase: F0
-status: in-progress
+status: review
 priority: critical
 estimated_size: L
 depends_on: [F0-S09]
 agent_id: backend-engineer
 claimed_at: 2026-06-09T11:37:19Z
+completed_at: 2026-06-09T13:16:09Z
 
 ---
 # F0-S10 — @hm/ui base (infra + 5 primitives + Ladle)
