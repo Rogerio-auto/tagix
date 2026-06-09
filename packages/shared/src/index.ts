@@ -23,4 +23,7 @@ export type ChannelProvider = (typeof CHANNEL_PROVIDERS)[number];
 // --- Auth (IAuthProvider) ---
 export * from './auth';
 
+// --- Tipos de mensagem interativa (LiveChat) ---
+export * from './types/interactive';
+
 export const SHARED_PKG = '@hm/shared' as const;

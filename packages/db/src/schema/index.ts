@@ -202,6 +202,10 @@ export const auditLogs = pgTable(
 
 // Canais de mensageria (F1).
 export * from './channels';
+// LiveChat: contacts → conversations → messages (ordem de dependência).
+export * from './contacts';
+export * from './conversations';
+export * from './messages';
 
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
@@ -212,4 +216,7 @@ export const RLS_TABLES = [
   'audit_logs',
   'channels',
   'channel_secrets',
+  'contacts',
+  'conversations',
+  'messages',
 ] as const;
