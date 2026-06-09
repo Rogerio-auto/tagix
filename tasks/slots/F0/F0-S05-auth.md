@@ -2,12 +2,14 @@
 id: F0-S05
 title: Auth — IAuthProvider + Supabase adapter + login/logout API + cookie de sessão
 phase: F0
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F0-S03]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T17:11:00Z
 
+---
 # F0-S05 — Auth (IAuthProvider + Supabase adapter)
 
 > **source_docs:** `docs/ARCHITECTURE.md` (ADR auth Supabase atrás de interface); `docs/INDEX.md` (Auth ADR); `docs/features/PERMISSIONS.md`
