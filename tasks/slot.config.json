@@ -1,0 +1,36 @@
+{
+  "specialists": {
+    "default": "backend-engineer",
+    "patterns": [
+      { "pattern": "^apps/web/", "specialist": "frontend-engineer" },
+      { "pattern": "^apps/api/", "specialist": "backend-engineer" },
+      { "pattern": "^apps/workers/", "specialist": "backend-engineer" },
+      { "pattern": "^apps/agent-runtime/", "specialist": "python-engineer" },
+      { "pattern": "^packages/ui/", "specialist": "frontend-engineer" },
+      { "pattern": "^packages/design-tokens/", "specialist": "frontend-engineer" },
+      { "pattern": "^packages/", "specialist": "backend-engineer" },
+      { "pattern": "^infra/", "specialist": "backend-engineer" }
+    ],
+    "phase_fallback": { "F2": "python-engineer" }
+  },
+  "phases": {
+    "F0": "Fundação",
+    "F1": "Channels & LiveChat core",
+    "F2": "Agent runtime + Agentes IA",
+    "F3": "Flow Builder",
+    "F4": "Campaigns",
+    "F5": "Calendar",
+    "F6": "Pipeline",
+    "F7": "Dashboard + Conversões",
+    "F8": "Permissions & Settings",
+    "F9": "Hardening + Observability",
+    "F10": "Launch"
+  },
+  "migrations": {
+    "enabled": false,
+    "path": null,
+    "journal_path": null
+  },
+  "review_checks": { "disabled": [] },
+  "validation": { "auto_link_node_modules": true }
+}

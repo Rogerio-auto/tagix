@@ -1,0 +1,15 @@
+# Normaliza para LF no repositório (consistente com .editorconfig).
+* text=auto eol=lf
+
+# Binários — nunca normalizar.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+
+# Lockfile — gerado, sem diff de EOL.
+pnpm-lock.yaml -diff
