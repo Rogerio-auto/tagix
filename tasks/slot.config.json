@@ -6,6 +6,7 @@
       { "pattern": "^apps/api/", "specialist": "backend-engineer" },
       { "pattern": "^apps/workers/", "specialist": "backend-engineer" },
       { "pattern": "^apps/agent-runtime/", "specialist": "python-engineer" },
+      { "pattern": "^packages/db/", "specialist": "db-engineer" },
       { "pattern": "^packages/ui/", "specialist": "frontend-engineer" },
       { "pattern": "^packages/design-tokens/", "specialist": "frontend-engineer" },
       { "pattern": "^packages/", "specialist": "backend-engineer" },
