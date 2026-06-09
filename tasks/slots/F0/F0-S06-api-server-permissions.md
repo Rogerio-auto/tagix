@@ -2,12 +2,13 @@
 id: F0-S06
 title: Express 5 server + middlewares + matriz de permissões can() em @hm/shared
 phase: F0
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F0-S03, F0-S05]
 agent_id: backend-engineer
 claimed_at: 2026-06-09T20:10:58Z
+completed_at: 2026-06-09T20:16:06Z
 
 ---
 # F0-S06 — Express server + middlewares + permissões
@@ -57,7 +58,7 @@ Servidor Express 5 com middlewares de segurança e a matriz de permissões tipad
 ```bash
 pnpm typecheck
 pnpm lint
-pnpm --filter @hm/api build
+pnpm --filter @hm/api test
 ```
 
 ## Notas
