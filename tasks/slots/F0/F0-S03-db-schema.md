@@ -2,12 +2,13 @@
 id: F0-S03
 title: Schema Drizzle base + migrations + seed (workspaces, members, plans, subscriptions, audit_logs)
 phase: F0
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F0-S01]
 agent_id: backend-engineer
 claimed_at: 2026-06-09T14:14:59Z
+completed_at: 2026-06-09T14:22:28Z
 
 ---
 # F0-S03 — Schema Drizzle base + migrations + seed
