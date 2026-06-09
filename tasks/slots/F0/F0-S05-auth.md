@@ -2,7 +2,7 @@
 id: F0-S05
 title: Auth — IAuthProvider + Supabase adapter + login/logout API + cookie de sessão
 phase: F0
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F0-S03]
