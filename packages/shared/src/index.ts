@@ -21,4 +21,7 @@ export type Role = (typeof ROLES)[number];
 export const CHANNEL_PROVIDERS = ['meta_whatsapp', 'meta_instagram', 'waha'] as const;
 export type ChannelProvider = (typeof CHANNEL_PROVIDERS)[number];
 
+// --- Auth (IAuthProvider) ---
+export * from './auth';
+
 export const SHARED_PKG = '@hm/shared' as const;
