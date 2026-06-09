@@ -2,7 +2,7 @@
 id: F1-S09
 title: IChannelAdapter + capabilities + graphClient + MetaInstagramAdapter STUB
 phase: F1
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F1-S01]
