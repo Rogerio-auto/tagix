@@ -1,0 +1,81 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import {
+  Calendar,
+  GitBranch,
+  LayoutDashboard,
+  Megaphone,
+  MessagesSquare,
+  Settings,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
+import { cn } from '@/shared/lib/cn';
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+// UX §2.4: toda entrada de nav tem LABEL visível, não só ícone.
+const NAV: readonly NavItem[] = [
+  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/conversations', label: 'Conversas', icon: MessagesSquare },
+  { href: '/contacts', label: 'Contatos', icon: Users },
+  { href: '/pipeline', label: 'Pipeline', icon: GitBranch },
+  { href: '/campaigns', label: 'Campanhas', icon: Megaphone },
+  { href: '/calendar', label: 'Agenda', icon: Calendar },
+  { href: '/settings', label: 'Configurações', icon: Settings },
+];
+
+export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => void }) {
+  const pathname = usePathname();
+  return (
+    <>
+      {mobileOpen && (
+        <div className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={onClose} aria-hidden />
+      )}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-border bg-surface',
+          'transition-transform duration-200 lg:static lg:translate-x-0',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+        )}
+      >
+        <div className="flex h-14 items-center gap-2 px-5">
+          <span className="font-display text-lg text-brand" aria-hidden>
+            ◢
+          </span>
+          <span className="font-head text-lg font-semibold text-text">Highermind</span>
+        </div>
+        <nav className="flex-1 space-y-1 px-3 py-2">
+          {NAV.map((item) => {
+            const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onClose}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'flex items-center gap-3 rounded-sm border-l-2 px-3 py-2 font-head text-sm font-medium outline-none transition-colors duration-200',
+                  'focus-visible:shadow-glow-md',
+                  active
+                    ? 'border-brand bg-surface-3 text-text'
+                    : 'border-transparent text-text-mid hover:bg-surface-2 hover:text-text',
+                )}
+              >
+                <Icon className="size-5 shrink-0" aria-hidden />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
+    </>
+  );
+}
