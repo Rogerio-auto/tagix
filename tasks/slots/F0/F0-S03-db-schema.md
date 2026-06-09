@@ -2,7 +2,7 @@
 id: F0-S03
 title: Schema Drizzle base + migrations + seed (workspaces, members, plans, subscriptions, audit_logs)
 phase: F0
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F0-S01]

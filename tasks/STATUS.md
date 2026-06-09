@@ -8,7 +8,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | Fase | Total | 🟢  | ⏸️  | 🟡  | 🔵  | 🟣  | ✅  |
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
-| F0   | 16     | 3   | 5   | 0   | 0   | 1   | 7   |
+| F0   | 16     | 3   | 5   | 0   | 0   | 0   | 8   |
 
 ## Fase 0 — Fundação
 
@@ -16,7 +16,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ------ | ----------------------------------------------------------------------------------------------- | ----------- | ---------- | -------------- |
 | F0-S01 | Monorepo pnpm + tsconfig base + lint + skeletons de packages/apps                               | ✅ done      | high       | —              |
 | F0-S02 | Docker Compose dev — Postgres pgvector + Redis + RabbitMQ + WAHA                                | ✅ done      | high       | F0-S01         |
-| F0-S03 | Schema Drizzle base + migrations + seed (workspaces, members, plans, subscriptions, audit_logs) | 🟣 review    | critical   | F0-S01         |
+| F0-S03 | Schema Drizzle base + migrations + seed (workspaces, members, plans, subscriptions, audit_logs) | ✅ done      | critical   | F0-S01         |
 | F0-S04 | RLS policies multi-tenant + teste de isolamento                                                 | ⏸️ blocked  | critical   | F0-S03         |
 | F0-S05 | Auth — IAuthProvider + Supabase adapter + login/logout API + cookie de sessão                   | ⏸️ blocked  | critical   | F0-S03         |
 | F0-S06 | Express 5 server + middlewares + matriz de permissões can() em @hm/shared                       | ⏸️ blocked  | critical   | F0-S03, F0-S05 |
