@@ -2,7 +2,7 @@
 id: F0-S04
 title: RLS policies multi-tenant + teste de isolamento
 phase: F0
-status: review
+status: done
 priority: critical
 estimated_size: S
 depends_on: [F0-S03]
