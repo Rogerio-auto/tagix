@@ -2,7 +2,7 @@
 id: F0-S15
 title: Storage — LocalDriver (dev) + R2Driver (S3) + signed URL
 phase: F0
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F0-S01]
