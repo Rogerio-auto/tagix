@@ -2,12 +2,14 @@
 id: F0-S06
 title: Express 5 server + middlewares + matriz de permissões can() em @hm/shared
 phase: F0
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F0-S03, F0-S05]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T20:10:58Z
 
+---
 # F0-S06 — Express server + middlewares + permissões
 
 > **source_docs:** `docs/ARCHITECTURE.md` §API; `docs/features/PERMISSIONS.md` §2 (roles), §3.1 (matriz ROLE_CAN)
