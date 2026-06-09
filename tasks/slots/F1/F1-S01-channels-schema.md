@@ -2,12 +2,13 @@
 id: F1-S01
 title: Schema channels + channel_secrets + crypto AES-256-GCM (+ colunas IG)
 phase: F1
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F0-S03, F0-S04]
 agent_id: backend-engineer
 claimed_at: 2026-06-09T22:43:58Z
+completed_at: 2026-06-09T22:46:57Z
 
 ---
 # F1-S01 — Schema channels + secrets + crypto
