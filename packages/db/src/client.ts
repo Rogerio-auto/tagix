@@ -24,4 +24,13 @@ export function getDb() {
   return singleton.db;
 }
 
+/** Encerra a conexão compartilhada (testes / shutdown). */
+export async function closeDb(): Promise<void> {
+  if (singleton) {
+    await singleton.sql.end();
+    singleton = null;
+  }
+}
+
 export type DB = ReturnType<typeof getDb>;
+export type DbTx = Parameters<Parameters<DB['transaction']>[0]>[0];
