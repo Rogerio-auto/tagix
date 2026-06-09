@@ -1021,7 +1021,7 @@ Aplica via `pnpm db:migrate` em hook pre-deploy (no script SSH antes do `up -d`)
 
 `docs/runbooks/`:
 
-- `dev-environment-wsl2.md`             — setup do ambiente dev local (Windows 11 + WSL2 + Ubuntu 24.04); pode ser executado manualmente ou por agente IA
+- `dev-environment-windows.md`          — setup do ambiente dev local (Windows 11 nativo: Node via fnm, Python via uv, Docker Desktop); pode ser executado manualmente ou por agente IA
 - `claude-code-sync.md` + `claude-config-template/`  — sincronia da config do Claude Code entre máquinas via repo Git privado (CLAUDE.md + settings.json + skills personalizadas)
 - `multi-agent-dev.md`                  — desenvolvimento multi-agente: 1 orchestrator Claude + 3-4 workers Claude em paralelo, isolados via Git worktrees + slots com `files_allowed`
 - `incident-postgres-down.md`

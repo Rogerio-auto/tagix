@@ -34,7 +34,7 @@
 │   │   └── PERMISSIONS.md      # roles + 3 níveis de settings
 │   ├── reuse-map/REUSE_MAP.md  # mapa v1 → v2 arquivo-por-arquivo
 │   └── runbooks/               # operação
-│       ├── dev-environment-wsl2.md
+│       ├── dev-environment-windows.md
 │       ├── claude-code-sync.md
 │       ├── multi-agent-dev.md
 │       └── claude-config-template/
@@ -85,7 +85,7 @@
 
 1. Provisionar VPS nova (Ubuntu 24.04).
 2. Registrar domínio + apontar DNS pros subdomínios.
-3. Setup ambiente dev local (vide [`docs/runbooks/dev-environment-wsl2.md`](docs/runbooks/dev-environment-wsl2.md)).
+3. Setup ambiente dev local (vide [`docs/runbooks/dev-environment-windows.md`](docs/runbooks/dev-environment-windows.md)).
 4. Sincronizar config do Claude Code (vide [`docs/runbooks/claude-code-sync.md`](docs/runbooks/claude-code-sync.md)).
 5. Rodar `/hm-init` com `docs/` como input → materializa estrutura `apps/` + `packages/` + `infra/` + CI.
 6. Executar fase F0 do [`docs/ROADMAP.md`](docs/ROADMAP.md).
