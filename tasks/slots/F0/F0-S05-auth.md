@@ -2,12 +2,13 @@
 id: F0-S05
 title: Auth — IAuthProvider + Supabase adapter + login/logout API + cookie de sessão
 phase: F0
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F0-S03]
 agent_id: backend-engineer
 claimed_at: 2026-06-09T17:11:00Z
+completed_at: 2026-06-09T17:14:04Z
 
 ---
 # F0-S05 — Auth (IAuthProvider + Supabase adapter)
