@@ -2,12 +2,15 @@
 id: F0-S07
 title: Socket.io + Redis adapter + rooms por workspace/member
 phase: F0
-status: blocked
+status: review
 priority: high
 estimated_size: S
 depends_on: [F0-S06]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T22:15:25Z
+completed_at: 2026-06-09T22:16:27Z
 
+---
 # F0-S07 — Socket.io + Redis adapter
 
 > **source_docs:** `docs/ARCHITECTURE.md` §Real-time; `docs/INFRASTRUCTURE.md`
