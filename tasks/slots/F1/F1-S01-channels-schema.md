@@ -2,7 +2,7 @@
 id: F1-S01
 title: Schema channels + channel_secrets + crypto AES-256-GCM (+ colunas IG)
 phase: F1
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F0-S03, F0-S04]
