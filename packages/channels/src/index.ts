@@ -6,24 +6,48 @@
  * F1-S18 (WAHA).
  */
 
-import type { ChannelProvider } from '@hm/shared';
+// --- Fronteira de canais (tipos canônicos — vide LIVECHAT.md §2.1) ---
+export type {
+  IChannelAdapter,
+  AdapterCapabilities,
+  InboundEvent,
+  SendResult,
+  Channel,
+  MediaRef,
+  MessageType,
+  IgMessageTag,
+  SendTextInput,
+  SendMediaInput,
+  SendTemplateInput,
+  SendInteractiveInput,
+  TemplateComponent,
+} from './types';
 
+/**
+ * Input legado de envio de texto (skeleton F1-S01). Mantido por
+ * compatibilidade; novos calls usam `SendTextInput`.
+ */
 export interface OutboundText {
   readonly to: string;
   readonly body: string;
 }
 
-export interface AdapterCapabilities {
-  readonly text: boolean;
-  readonly media: boolean;
-  readonly template: boolean;
-  readonly interactive: boolean;
-}
+// --- Infra compartilhada Graph/HMAC/erros ---
+export {
+  GraphClient,
+  GRAPH_API_BASE,
+  GRAPH_API_VERSION,
+  type GraphClientOptions,
+  type JsonBody,
+} from './shared/graphClient';
+export { verifyMetaSignature } from './shared/hmac';
+export {
+  MetaError,
+  isRetryableStatus,
+  type MetaErrorBody,
+} from './shared/errors';
 
-export interface IChannelAdapter {
-  readonly provider: ChannelProvider;
-  readonly capabilities: AdapterCapabilities;
-  sendText(input: OutboundText): Promise<{ providerMessageId: string }>;
-}
+// --- Adapters ---
+export { MetaInstagramAdapter } from './meta/instagram/adapter';
 
 export const CHANNELS_PKG = '@hm/channels' as const;
