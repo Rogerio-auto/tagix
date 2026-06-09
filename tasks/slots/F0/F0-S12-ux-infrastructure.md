@@ -2,12 +2,15 @@
 id: F0-S12
 title: Infra de UX — EmptyState, ErrorState, HelpPanel, CommandPalette, atalhos, density
 phase: F0
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F0-S11]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T13:31:38Z
+completed_at: 2026-06-09T13:35:38Z
 
+---
 # F0-S12 — Infra de UX (estados, help, command palette, atalhos)
 
 > Sem equivalente direto no ROADMAP — extrai os padrões transversais de `UX_PRINCIPLES.md` em componentes/hooks reutilizáveis para que TODA feature já nasça cumprindo o checklist DoD UX.
