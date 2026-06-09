@@ -2,12 +2,14 @@
 id: F1-S05
 title: Schema contacts + conversations + messages + repos + interactive types
 phase: F1
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: L
 depends_on: [F1-S01]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T22:48:36Z
 
+---
 # F1-S05 — Schema contacts/conversations/messages
 
 > **source_docs:** `docs/DATA_MODEL.md` §5 (contacts), §6.3 (conversations), §6.4 (messages); `docs/features/LIVECHAT.md` §4 (tipos), §4.1 (interactive_payload)
