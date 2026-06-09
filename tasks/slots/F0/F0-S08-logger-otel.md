@@ -2,7 +2,7 @@
 id: F0-S08
 title: Logger Pino + OpenTelemetry + PII masking em @hm/logger
 phase: F0
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F0-S01]
