@@ -2,12 +2,14 @@
 id: F0-S11
 title: apps/web shell — Next 15 App Router + providers + theme-no-flash + AppLayout
 phase: F0
-status: blocked
+status: in-progress
 priority: high
 estimated_size: L
 depends_on: [F0-S10]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T13:18:59Z
 
+---
 # F0-S11 — apps/web shell (Next 15 + providers + AppLayout)
 
 > Refina o ROADMAP F0-S10 (frontend skeleton). Substitui o stub atual de `apps/web` pelo app Next.js real.
