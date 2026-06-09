@@ -1,3 +1,9 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# Dependências autorizadas a rodar build scripts (binários nativos).
+# esbuild + @swc/core são necessários para vite/ladle; msw fica de fora (não usado).
+onlyBuiltDependencies:
+  - esbuild
+  - "@swc/core"

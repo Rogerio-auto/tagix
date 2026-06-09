@@ -1,0 +1,2 @@
+/* Entry CSS do Ladle: reusa o theme do DS v2 (tokens + Tailwind 4 + @theme). */
+@import '../src/styles/theme.css';

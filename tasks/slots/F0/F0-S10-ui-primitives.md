@@ -2,12 +2,15 @@
 id: F0-S10
 title: "@hm/ui base — infra + Ladle + 5 primitives (Button, Input, Card, Modal, Toast)"
 phase: F0
-status: blocked
+status: review
 priority: critical
 estimated_size: L
 depends_on: [F0-S09]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T11:37:19Z
+completed_at: 2026-06-09T13:16:09Z
 
+---
 # F0-S10 — @hm/ui base (infra + 5 primitives + Ladle)
 
 > Refina o ROADMAP F0-S09 (parte "5 primitives + Ladle"). Cohesivo de propósito: estabelecer a biblioteca + os 5 primitives num PR mantém o barrel e os contratos de variante internamente consistentes.
@@ -62,7 +65,7 @@ Hoje `packages/ui` é skeleton de tipos. Este slot adiciona React 19 + Tailwind 
 - [ ] Zero hex hardcoded — só classes Tailwind mapeadas a tokens.
 - [ ] Cada componente tem story em Ladle cobrindo estados.
 - [ ] Toast é único (um provider, um componente).
-- [ ] `pnpm --filter @hm/ui ladle build` ok; `pnpm typecheck` e `pnpm lint` limpos.
+- [ ] `pnpm --filter @hm/ui ladle:build` ok; `pnpm typecheck` e `pnpm lint` limpos.
 
 ## UX considerations
 
@@ -78,7 +81,7 @@ Hoje `packages/ui` é skeleton de tipos. Este slot adiciona React 19 + Tailwind 
 pnpm install
 pnpm typecheck
 pnpm lint
-pnpm --filter @hm/ui ladle build
+pnpm --filter @hm/ui ladle:build
 ```
 
 ## Notas
