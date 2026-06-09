@@ -1,0 +1,14 @@
+/*
+ * Estilos globais do app web. Reusa o theme do DS v2 (@hm/ui: tokens + Tailwind 4
+ * + @theme + keyframes) e adiciona o scan das fontes do próprio app.
+ */
+@import '../../../packages/ui/src/styles/theme.css';
+@source '../**/*.tsx';
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}

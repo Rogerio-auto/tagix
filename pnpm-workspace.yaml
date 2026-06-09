@@ -3,7 +3,9 @@ packages:
   - "packages/*"
 
 # Dependências autorizadas a rodar build scripts (binários nativos).
-# esbuild + @swc/core são necessários para vite/ladle; msw fica de fora (não usado).
+# esbuild/@swc/core: vite/ladle · sharp: otimização de imagem do Next · msw: worker (ladle).
 onlyBuiltDependencies:
   - esbuild
   - "@swc/core"
+  - sharp
+  - msw
