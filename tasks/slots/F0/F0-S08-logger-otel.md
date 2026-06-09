@@ -2,12 +2,15 @@
 id: F0-S08
 title: Logger Pino + OpenTelemetry + PII masking em @hm/logger
 phase: F0
-status: available
+status: review
 priority: high
 estimated_size: S
 depends_on: [F0-S01]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T22:05:47Z
+completed_at: 2026-06-09T22:08:00Z
 
+---
 # F0-S08 — Logger Pino + OTel + PII masking
 
 > **source_docs:** `docs/ARCHITECTURE.md` §Logging/Observability; `docs/INFRASTRUCTURE.md`

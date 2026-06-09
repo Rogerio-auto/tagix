@@ -8,7 +8,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | Fase | Total | 🟢  | ⏸️  | 🟡  | 🔵  | 🟣  | ✅  |
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
-| F0   | 16     | 3   | 2   | 0   | 0   | 0   | 11   |
+| F0   | 16     | 2   | 2   | 0   | 0   | 1   | 11   |
 
 ## Fase 0 — Fundação
 
@@ -21,7 +21,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F0-S05 | Auth — IAuthProvider + Supabase adapter + login/logout API + cookie de sessão                   | ✅ done      | critical   | F0-S03         |
 | F0-S06 | Express 5 server + middlewares + matriz de permissões can() em @hm/shared                       | ✅ done      | critical   | F0-S03, F0-S05 |
 | F0-S07 | Socket.io + Redis adapter + rooms por workspace/member                                          | ⏸️ blocked  | high       | F0-S06         |
-| F0-S08 | Logger Pino + OpenTelemetry + PII masking em @hm/logger                                         | 🟢 available | high       | F0-S01         |
+| F0-S08 | Logger Pino + OpenTelemetry + PII masking em @hm/logger                                         | 🟣 review    | high       | F0-S01         |
 | F0-S09 | Design tokens — CSS vars + Tailwind preset + tipografia + fontes                                | ✅ done      | critical   | F0-S01         |
 | F0-S10 | "@hm/ui base — infra + Ladle + 5 primitives (Button, Input, Card, Modal, Toast)"                | ✅ done      | critical   | F0-S09         |
 | F0-S11 | apps/web shell — Next 15 App Router + providers + theme-no-flash + AppLayout                    | ✅ done      | high       | F0-S10         |

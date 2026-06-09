@@ -1,9 +1,8 @@
 /**
- * @hm/logger — logging estruturado com PII masking.
- *
- * F0-S08 troca a implementação interna por Pino + OpenTelemetry mantendo esta
- * interface. Consumidores dependem só do contrato `Logger`, nunca da impl.
+ * @hm/logger — logging estruturado (Pino) com PII masking.
+ * O contrato `Logger` é estável; só a implementação interna usa Pino.
  */
+import pino, { type Logger as PinoLogger } from 'pino';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -19,27 +18,43 @@ export interface Logger {
   child(bindings: LogFields): Logger;
 }
 
-const LEVELS: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 };
+// Campos mascarados no output (PII / segredos). `*.x` cobre objetos aninhados.
+const REDACT_PATHS = [
+  'password',
+  '*.password',
+  'token',
+  '*.token',
+  'secret',
+  '*.secret',
+  'authorization',
+  '*.authorization',
+  'req.headers.authorization',
+  'apiKey',
+  '*.apiKey',
+  'phone',
+  '*.phone',
+  'email',
+  '*.email',
+];
 
-/**
- * Implementação mínima sobre `console` (substituída por Pino em F0-S08).
- * Já emite JSON estruturado para parsing por coletores.
- */
-export function createLogger(minLevel: LogLevel = 'info', base: LogFields = {}): Logger {
-  const threshold = LEVELS[minLevel];
-
-  const emit = (level: LogLevel, msg: string, fields?: LogFields): void => {
-    if (LEVELS[level] < threshold) return;
-    const line = JSON.stringify({ level, time: new Date().toISOString(), msg, ...base, ...fields });
-    if (level === 'error' || level === 'warn') console.error(line);
-    else console.log(line);
-  };
-
+function wrap(p: PinoLogger): Logger {
   return {
-    debug: (msg, fields) => emit('debug', msg, fields),
-    info: (msg, fields) => emit('info', msg, fields),
-    warn: (msg, fields) => emit('warn', msg, fields),
-    error: (msg, fields) => emit('error', msg, fields),
-    child: (bindings) => createLogger(minLevel, { ...base, ...bindings }),
+    debug: (msg, fields) => p.debug(fields ?? {}, msg),
+    info: (msg, fields) => p.info(fields ?? {}, msg),
+    warn: (msg, fields) => p.warn(fields ?? {}, msg),
+    error: (msg, fields) => p.error(fields ?? {}, msg),
+    child: (bindings) => wrap(p.child(bindings)),
   };
 }
+
+export function createLogger(minLevel: LogLevel = 'info', base: LogFields = {}): Logger {
+  const p = pino({
+    level: minLevel,
+    base,
+    redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
+    timestamp: pino.stdTimeFunctions.isoTime,
+  });
+  return wrap(p);
+}
+
+export * from './otel';
