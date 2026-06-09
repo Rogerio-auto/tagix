@@ -1,16 +1,11 @@
 /**
- * @hm/db — schema Drizzle + repositories (Repository pattern sobre Postgres).
- *
- * F0-S03 adiciona o schema base (workspaces, members, plans, subscriptions,
- * audit_logs) + migrations + seed. F0-S04 adiciona RLS. Nenhuma chamada Supabase
- * JS no backend — a DAL é Drizzle, para permitir migração futura sem reescrever.
+ * @hm/db — DAL Drizzle sobre Postgres (Repository pattern; ADR-002/003).
+ * Nenhuma chamada Supabase JS aqui — só Drizzle, para permitir trocar driver.
  */
-
-import type { WorkspaceId } from '@hm/shared';
-
-/** Contrato mínimo de um repository com escopo de tenant (RLS reforça no banco). */
-export interface ScopedRepository {
-  readonly workspaceId: WorkspaceId;
-}
+export { createClient, getDb } from './client';
+export type { DB, DbClient, Schema } from './client';
+export * as schema from './schema';
+export { RLS_TABLES } from './schema';
+export { workspacesRepo, membersRepo } from './repos';
 
 export const DB_PKG = '@hm/db' as const;
