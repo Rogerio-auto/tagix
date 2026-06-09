@@ -2,12 +2,14 @@
 id: F0-S03
 title: Schema Drizzle base + migrations + seed (workspaces, members, plans, subscriptions, audit_logs)
 phase: F0
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F0-S01]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T14:14:59Z
 
+---
 # F0-S03 — Schema Drizzle base + migrations + seed
 
 > **source_docs:** `docs/DATA_MODEL.md` §3 (workspaces/members/api_keys), §13 (plans/subscriptions), §14 (audit_logs); `docs/ARCHITECTURE.md` ADR-002/003, §"Pool: postgres driver"
