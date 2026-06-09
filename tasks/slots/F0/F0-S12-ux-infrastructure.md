@@ -2,12 +2,13 @@
 id: F0-S12
 title: Infra de UX — EmptyState, ErrorState, HelpPanel, CommandPalette, atalhos, density
 phase: F0
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F0-S11]
 agent_id: backend-engineer
 claimed_at: 2026-06-09T13:31:38Z
+completed_at: 2026-06-09T13:35:38Z
 
 ---
 # F0-S12 — Infra de UX (estados, help, command palette, atalhos)
