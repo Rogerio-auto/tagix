@@ -2,12 +2,13 @@
 id: F0-S14
 title: RabbitMQ topology + helper publish/consume + envelope schema
 phase: F0
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: [F0-S08]
 agent_id: backend-engineer
 claimed_at: 2026-06-09T22:12:46Z
+completed_at: 2026-06-09T22:14:30Z
 
 ---
 # F0-S14 — RabbitMQ topology + helpers
