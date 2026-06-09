@@ -2,7 +2,7 @@
 id: F0-S16
 title: CI GitHub Actions — lint + typecheck + build + test (+ deploy SSH inerte)
 phase: F0
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F0-S01]
