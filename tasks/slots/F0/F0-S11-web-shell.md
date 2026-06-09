@@ -2,7 +2,7 @@
 id: F0-S11
 title: apps/web shell — Next 15 App Router + providers + theme-no-flash + AppLayout
 phase: F0
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F0-S10]
