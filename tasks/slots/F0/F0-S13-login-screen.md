@@ -2,12 +2,13 @@
 id: F0-S13
 title: Login + ResetPassword (DS v2, RHF + Zod) — primeira tela ponta-a-ponta
 phase: F0
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F0-S11, F0-S12]
 agent_id: backend-engineer
 claimed_at: 2026-06-09T13:36:25Z
+completed_at: 2026-06-09T13:38:13Z
 
 ---
 # F0-S13 — Login + ResetPassword (primeira tela end-to-end)
