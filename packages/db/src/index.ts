@@ -9,5 +9,6 @@ export { encryptSecret, decryptSecret } from './crypto';
 export * as schema from './schema';
 export { RLS_TABLES } from './schema';
 export { workspacesRepo, membersRepo } from './repos';
+export { contactsRepo, conversationsRepo, messagesRepo } from './repos/livechat';
 
 export const DB_PKG = '@hm/db' as const;
