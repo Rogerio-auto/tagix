@@ -2,7 +2,7 @@
 id: F0-S13
 title: Login + ResetPassword (DS v2, RHF + Zod) — primeira tela ponta-a-ponta
 phase: F0
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F0-S11, F0-S12]
