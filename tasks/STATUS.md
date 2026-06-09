@@ -8,7 +8,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | Fase | Total | 🟢  | ⏸️  | 🟡  | 🔵  | 🟣  | ✅  |
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
-| F0   | 16     | 0   | 2   | 0   | 0   | 0   | 14   |
+| F0   | 16     | 0   | 1   | 0   | 0   | 1   | 14   |
 
 ## Fase 0 — Fundação
 
@@ -27,6 +27,6 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F0-S11 | apps/web shell — Next 15 App Router + providers + theme-no-flash + AppLayout                    | ✅ done     | high       | F0-S10         |
 | F0-S12 | Infra de UX — EmptyState, ErrorState, HelpPanel, CommandPalette, atalhos, density               | ✅ done     | high       | F0-S11         |
 | F0-S13 | Login + ResetPassword (DS v2, RHF + Zod) — primeira tela ponta-a-ponta                          | ✅ done     | high       | F0-S11, F0-S12 |
-| F0-S14 | RabbitMQ topology + helper publish/consume + envelope schema                                    | ⏸️ blocked | high       | F0-S08         |
+| F0-S14 | RabbitMQ topology + helper publish/consume + envelope schema                                    | 🟣 review   | high       | F0-S08         |
 | F0-S15 | Storage — LocalDriver (dev) + R2Driver (S3) + signed URL                                        | ✅ done     | medium     | F0-S01         |
 | F0-S16 | CI GitHub Actions — lint + typecheck + build + test (+ deploy SSH inerte)                       | ✅ done     | medium     | F0-S01         |
