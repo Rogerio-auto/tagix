@@ -2,12 +2,15 @@
 id: F0-S16
 title: CI GitHub Actions — lint + typecheck + build + test (+ deploy SSH inerte)
 phase: F0
-status: available
+status: review
 priority: medium
 estimated_size: S
 depends_on: [F0-S01]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T22:11:05Z
+completed_at: 2026-06-09T22:11:47Z
 
+---
 # F0-S16 — CI/CD GitHub Actions
 
 > **source_docs:** `docs/INFRASTRUCTURE.md` §CI/CD; `docs/ARCHITECTURE.md` ADR-CI

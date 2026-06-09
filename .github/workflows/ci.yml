@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: hm
+          POSTGRES_PASSWORD: hm
+          POSTGRES_DB: highermind
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U hm -d highermind"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgres://hm:hm@localhost:5432/highermind
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Gera next-env.d.ts (necessário ao typecheck do web) e builda o front.
+      - name: Build
+        run: pnpm -r --if-present build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: DB migrate
+        run: pnpm --filter @hm/db migrate
+
+      - name: Test
+        run: pnpm -r --if-present test
+
+  # Deploy via SSH para a VPS. PRONTO porém INERTE: só roda em main e no-op
+  # enquanto os secrets (VPS_HOST/VPS_USER/VPS_SSH_KEY) não existirem.
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy (rsync over SSH)
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          if [ -z "$VPS_HOST" ]; then
+            echo "VPS não configurada (sem secret VPS_HOST) — deploy ignorado."
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          echo "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          # TODO(deploy): rsync do build + restart dos containers na VPS.
+          ssh -i ~/.ssh/id_ed25519 "$VPS_USER@$VPS_HOST" 'cd /opt/tagix && git pull && docker compose up -d --build'
