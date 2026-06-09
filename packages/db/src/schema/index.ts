@@ -202,6 +202,8 @@ export const auditLogs = pgTable(
 
 // Canais de mensageria (F1).
 export * from './channels';
+// Segredos de plataforma (sem workspace_id → fora do RLS de tenant).
+export * from './platform_secrets';
 // LiveChat: contacts → conversations → messages (ordem de dependência).
 export * from './contacts';
 export * from './conversations';
