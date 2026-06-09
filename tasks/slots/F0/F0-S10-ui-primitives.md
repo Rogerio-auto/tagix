@@ -2,7 +2,7 @@
 id: F0-S10
 title: "@hm/ui base — infra + Ladle + 5 primitives (Button, Input, Card, Modal, Toast)"
 phase: F0
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: [F0-S09]
