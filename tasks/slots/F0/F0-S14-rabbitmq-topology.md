@@ -2,7 +2,7 @@
 id: F0-S14
 title: RabbitMQ topology + helper publish/consume + envelope schema
 phase: F0
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F0-S08]
