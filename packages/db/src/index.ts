@@ -5,6 +5,7 @@
 export { createClient, getDb, closeDb } from './client';
 export type { DB, DbClient, DbTx, Schema } from './client';
 export { withWorkspace } from './rls';
+export { encryptSecret, decryptSecret } from './crypto';
 export * as schema from './schema';
 export { RLS_TABLES } from './schema';
 export { workspacesRepo, membersRepo } from './repos';
