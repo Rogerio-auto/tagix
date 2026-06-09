@@ -2,7 +2,7 @@
 id: F0-S12
 title: Infra de UX — EmptyState, ErrorState, HelpPanel, CommandPalette, atalhos, density
 phase: F0
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F0-S11]
