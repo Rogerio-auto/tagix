@@ -1,20 +1,28 @@
 /**
- * @hm/ui — Design System v2: primitives React + Tailwind preset.
- *
- * F0-S09 adiciona os 5 primitives base (Button, Input, Card, Modal, Toast) com
- * Ladle como catálogo. Aqui ficam apenas tipos de variantes até lá — os
- * componentes React entram com suas dependências (react, tailwind) no slot.
+ * @hm/ui — biblioteca de primitives React do Design System v2.
+ * Consome tokens de @hm/design-tokens. Estilos: `import '@hm/ui/styles.css'`.
  */
+import type { ButtonVariant, ButtonSize } from './Button/Button';
 
-import type { ThemeName } from '@hm/design-tokens';
+export { Button } from './Button/Button';
+export type { ButtonProps, ButtonVariant, ButtonSize } from './Button/Button';
 
-export type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
-export type Size = 'sm' | 'md' | 'lg';
+export { Input } from './Input/Input';
+export type { InputProps, InputSize } from './Input/Input';
 
-export interface PrimitiveBaseProps {
-  readonly variant?: Variant;
-  readonly size?: Size;
-  readonly theme?: ThemeName;
-}
+export { Card, CardHeader, CardBody } from './Card/Card';
+export type { CardProps, CardHeaderProps, CardElevation } from './Card/Card';
+
+export { Modal } from './Modal/Modal';
+export type { ModalProps } from './Modal/Modal';
+
+export { ToastProvider, useToast } from './Toast/Toast';
+export type { ToastOptions, ToastVariant, ToastPosition } from './Toast/Toast';
+
+export { cn } from './lib/cn';
+
+/** Aliases de compatibilidade (variante/size do Button são os contratos base). */
+export type Variant = ButtonVariant;
+export type Size = ButtonSize;
 
 export const UI_PKG = '@hm/ui' as const;

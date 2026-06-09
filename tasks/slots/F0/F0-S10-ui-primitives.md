@@ -64,7 +64,7 @@ Hoje `packages/ui` é skeleton de tipos. Este slot adiciona React 19 + Tailwind 
 - [ ] Zero hex hardcoded — só classes Tailwind mapeadas a tokens.
 - [ ] Cada componente tem story em Ladle cobrindo estados.
 - [ ] Toast é único (um provider, um componente).
-- [ ] `pnpm --filter @hm/ui ladle build` ok; `pnpm typecheck` e `pnpm lint` limpos.
+- [ ] `pnpm --filter @hm/ui ladle:build` ok; `pnpm typecheck` e `pnpm lint` limpos.
 
 ## UX considerations
 
@@ -80,7 +80,7 @@ Hoje `packages/ui` é skeleton de tipos. Este slot adiciona React 19 + Tailwind 
 pnpm install
 pnpm typecheck
 pnpm lint
-pnpm --filter @hm/ui ladle build
+pnpm --filter @hm/ui ladle:build
 ```
 
 ## Notas
