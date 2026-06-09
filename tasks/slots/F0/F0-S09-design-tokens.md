@@ -2,7 +2,7 @@
 id: F0-S09
 title: Design tokens — CSS vars + Tailwind preset + tipografia + fontes
 phase: F0
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F0-S01]
