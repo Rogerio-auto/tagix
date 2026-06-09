@@ -2,12 +2,14 @@
 id: F0-S13
 title: Login + ResetPassword (DS v2, RHF + Zod) — primeira tela ponta-a-ponta
 phase: F0
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F0-S11, F0-S12]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T13:36:25Z
 
+---
 # F0-S13 — Login + ResetPassword (primeira tela end-to-end)
 
 > Refina o ROADMAP F0-S11 (login). É a primeira tela completa em DS v2 — prova o pipeline tokens → primitives → shell → UX infra.
