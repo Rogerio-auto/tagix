@@ -1,26 +1,52 @@
 /**
- * @hm/design-tokens — tokens semânticos do Design System v2 (dark-first).
+ * @hm/design-tokens — fonte única dos tokens do Design System v2 (dark-first).
  *
- * Fonte única dos tokens. O Tailwind preset (@hm/ui) e os CSS vars derivam
- * destes valores. Regra dura (DESIGN_SYSTEM.md): nenhum hex hardcoded em JSX —
- * tudo vem daqui via token semântico.
+ * - Tokens CSS (runtime): `import '@hm/design-tokens/tokens.css'`.
+ * - Preset Tailwind: `import { tailwindPreset } from '@hm/design-tokens/tailwind-preset'`.
+ * - Tokens tipados (TS): este barrel.
+ *
+ * Vide `docs/DESIGN_SYSTEM.md` §2, §3, §7, §15. Regra dura: nenhum hex hardcoded
+ * em JSX/TSX — sempre via token semântico (`var(--…)` ou classe Tailwind mapeada).
  */
 
-/** Verde-neon da marca — usado com escassez no produto (acento, nunca fundo). */
+export * from './typography';
+export * from './fonts';
+export { tailwindPreset, default as preset } from './tailwind-preset';
+export type { TailwindPreset } from './tailwind-preset';
+
+/** Verde-neon da marca — usado com escassez (1 por tela; CTA principal/status). */
 export const BRAND_NEON = '#1FFF13' as const;
 
-export const fonts = {
-  display: 'Orbitron',
-  heading: 'Chakra Petch',
-  ui: 'Rajdhani',
-  body: 'Manrope',
+/** Tokens de marca como referências CSS var (para uso em estilos inline tipados). */
+export const brandColors = {
+  brand: 'var(--brand)',
+  strong: 'var(--brand-strong)',
+  bright: 'var(--brand-bright)',
+  price: 'var(--brand-price)',
+  soft: 'var(--brand-soft)',
+  faint: 'var(--brand-faint)',
 } as const;
 
+/** Raios (DESIGN_SYSTEM §2.1). */
 export const radii = {
-  sm: '4px',
-  md: '8px',
-  lg: '12px',
-  pill: '9999px',
+  xs: '6px',
+  sm: '10px',
+  md: '14px',
+  lg: '20px',
+  pill: '999px',
+} as const;
+
+/** Espaçamento base-8 + extras (DESIGN_SYSTEM §2.1). */
+export const spacing = {
+  1: '4px',
+  2: '8px',
+  3: '12px',
+  4: '16px',
+  5: '24px',
+  6: '32px',
+  7: '48px',
+  8: '64px',
+  9: '96px',
 } as const;
 
 export type ThemeName = 'dark' | 'light';
