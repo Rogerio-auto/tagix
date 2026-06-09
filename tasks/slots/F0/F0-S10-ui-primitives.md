@@ -2,12 +2,14 @@
 id: F0-S10
 title: "@hm/ui base — infra + Ladle + 5 primitives (Button, Input, Card, Modal, Toast)"
 phase: F0
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: L
 depends_on: [F0-S09]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T11:37:19Z
 
+---
 # F0-S10 — @hm/ui base (infra + 5 primitives + Ladle)
 
 > Refina o ROADMAP F0-S09 (parte "5 primitives + Ladle"). Cohesivo de propósito: estabelecer a biblioteca + os 5 primitives num PR mantém o barrel e os contratos de variante internamente consistentes.
