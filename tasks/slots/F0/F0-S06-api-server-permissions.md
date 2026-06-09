@@ -2,7 +2,7 @@
 id: F0-S06
 title: Express 5 server + middlewares + matriz de permissões can() em @hm/shared
 phase: F0
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F0-S03, F0-S05]
