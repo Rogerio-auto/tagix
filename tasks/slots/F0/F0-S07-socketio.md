@@ -2,7 +2,7 @@
 id: F0-S07
 title: Socket.io + Redis adapter + rooms por workspace/member
 phase: F0
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F0-S06]
