@@ -1,0 +1,100 @@
+/**
+ * Roles + matriz de permissões (PERMISSIONS.md §1, §2, §3.1).
+ * Fonte única usada no backend (`requireRole`) e no frontend (esconder UI).
+ *
+ * Notas: condições "(das suas)" / "(do dept)" são escopo de SERVICE LAYER — aqui
+ * o role é considerado autorizado à AÇÃO; o filtro fino (linhas que ele vê) é
+ * aplicado no service/SQL + RLS. `is_platform_admin` é flag ortogonal (super-admin).
+ */
+
+export const ROLES = ['OWNER', 'ADMIN', 'SUPERVISOR', 'AGENT', 'READONLY'] as const;
+export type Role = (typeof ROLES)[number];
+
+const ALL = ['OWNER', 'ADMIN', 'SUPERVISOR', 'AGENT', 'READONLY'] as const;
+const STAFF = ['OWNER', 'ADMIN', 'SUPERVISOR', 'AGENT'] as const; // todos menos READONLY
+const ADMINS = ['OWNER', 'ADMIN'] as const;
+const MANAGERS = ['OWNER', 'ADMIN', 'SUPERVISOR'] as const;
+const OWNER_ONLY = ['OWNER'] as const;
+
+export const ROLE_CAN = {
+  // §2.1 Conversações
+  'conversation.view': ALL,
+  'conversation.assign': STAFF,
+  'conversation.transfer': STAFF,
+  'conversation.resolve': STAFF,
+  'conversation.snooze': STAFF,
+  'conversation.toggle_ai': STAFF,
+  'conversation.delete_message': ADMINS,
+  'conversation.export': ['OWNER', 'ADMIN', 'SUPERVISOR', 'READONLY'],
+
+  // §2.2 Contatos / Pipeline / Deals
+  'contact.view': ALL,
+  'contact.edit': STAFF,
+  'contact.delete': ADMINS,
+  'pipeline.view': ALL,
+  'pipeline.edit': ADMINS,
+  'deal.move': STAFF,
+  'deal.edit': STAFF,
+  'deal.convert': STAFF,
+  'deal.cancel_conversion': STAFF,
+
+  // §2.3 Agentes IA / Tools / KB
+  'agent.list': ALL,
+  'agent.edit': ADMINS,
+  'agent.toggle_tools': ADMINS,
+  'agent.playground': STAFF,
+  'agent.view_logs': ['OWNER', 'ADMIN', 'SUPERVISOR', 'READONLY'],
+  'agent.view_costs': ['OWNER', 'ADMIN', 'READONLY'],
+  'agent.set_model': ADMINS,
+  'kb.edit': MANAGERS,
+  'kb.delete': ADMINS,
+
+  // §2.4 Flow Builder
+  'flow.list': ALL,
+  'flow.edit': ADMINS,
+  'flow.publish': ADMINS,
+  'flow.trigger': STAFF,
+  'flow.cancel': STAFF,
+  'flow.view_logs': ALL,
+
+  // §2.5 Campanhas
+  'campaign.list': ['OWNER', 'ADMIN', 'SUPERVISOR', 'READONLY'],
+  'campaign.edit': MANAGERS,
+  'campaign.activate': ADMINS,
+  'campaign.pause': MANAGERS,
+  'campaign.cancel': ADMINS,
+  'campaign.upload_recipients': MANAGERS,
+  'campaign.bulk_optin': ADMINS,
+  'campaign.view_metrics': ['OWNER', 'ADMIN', 'SUPERVISOR', 'READONLY'],
+
+  // §2.6 Canais / Workspace settings
+  'channel.connect': ADMINS,
+  'channel.disable': ADMINS,
+  'channel.delete': OWNER_ONLY,
+  'workspace.edit': ADMINS,
+  'member.invite': ADMINS,
+  'member.promote': ADMINS,
+  'member.remove': ADMINS,
+  'department.edit': ADMINS,
+  'team.edit': MANAGERS,
+
+  // §2.7 Billing e exclusão de workspace
+  'billing.view': ADMINS,
+  'billing.change_plan': OWNER_ONLY,
+  'billing.payment_method': OWNER_ONLY,
+  'billing.cancel': OWNER_ONLY,
+  'workspace.delete': OWNER_ONLY,
+
+  // §2.8 API keys e webhooks outbound
+  'apikey.list': ADMINS,
+  'apikey.create': ADMINS,
+  'apikey.revoke': ADMINS,
+  'webhook.edit': ADMINS,
+} as const satisfies Record<string, readonly Role[]>;
+
+export type Permission = keyof typeof ROLE_CAN;
+
+/** Autoriza `role` para `perm`. Usar em requireRole (backend) e p/ esconder UI (frontend). */
+export function can(role: Role, perm: Permission): boolean {
+  return (ROLE_CAN[perm] as readonly Role[]).includes(role);
+}

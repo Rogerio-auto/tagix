@@ -13,9 +13,8 @@ export type MemberId = Brand<string, 'MemberId'>;
 export type ContactId = Brand<string, 'ContactId'>;
 export type ConversationId = Brand<string, 'ConversationId'>;
 
-// --- Roles (vide PERMISSIONS.md). A matriz `ROLE_CAN`/`can()` entra em F0-S06. ---
-export const ROLES = ['owner', 'admin', 'manager', 'agent', 'viewer'] as const;
-export type Role = (typeof ROLES)[number];
+// --- Roles + matriz de permissões (PERMISSIONS.md) ---
+export * from './permissions';
 
 // --- Providers de canal (vide LIVECHAT.md / INSTAGRAM.md) ---
 export const CHANNEL_PROVIDERS = ['meta_whatsapp', 'meta_instagram', 'waha'] as const;
