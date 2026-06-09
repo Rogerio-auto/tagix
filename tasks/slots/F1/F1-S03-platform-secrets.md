@@ -2,7 +2,7 @@
 id: F1-S03
 title: Schema platform_secrets + carregamento boot-time
 phase: F1
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F0-S03]
