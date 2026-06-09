@@ -2,12 +2,13 @@
 id: F0-S11
 title: apps/web shell — Next 15 App Router + providers + theme-no-flash + AppLayout
 phase: F0
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: [F0-S10]
 agent_id: backend-engineer
 claimed_at: 2026-06-09T13:18:59Z
+completed_at: 2026-06-09T13:30:39Z
 
 ---
 # F0-S11 — apps/web shell (Next 15 + providers + AppLayout)
