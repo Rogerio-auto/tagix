@@ -2,12 +2,14 @@
 id: F0-S09
 title: Design tokens — CSS vars + Tailwind preset + tipografia + fontes
 phase: F0
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F0-S01]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T03:11:56Z
 
+---
 # F0-S09 — Design tokens (CSS vars + Tailwind preset + tipografia)
 
 > Refina o ROADMAP F0-S09 (parte "tokens"). É a base de tudo que é visual — nenhum primitive ou tela existe sem isto.
