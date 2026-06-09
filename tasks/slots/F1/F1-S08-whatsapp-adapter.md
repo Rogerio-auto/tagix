@@ -2,12 +2,15 @@
 id: F1-S08
 title: MetaWhatsAppAdapter completo (sendText/Media/Template/Interactive + parser)
 phase: F1
-status: blocked
+status: review
 priority: critical
 estimated_size: L
 depends_on: [F1-S09]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T23:55:10Z
+completed_at: 2026-06-09T23:55:34Z
 
+---
 # F1-S08 — MetaWhatsAppAdapter
 
 > **source_docs:** `docs/features/LIVECHAT.md` §2.2, §4; Graph API WhatsApp Cloud

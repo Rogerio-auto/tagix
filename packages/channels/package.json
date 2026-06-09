@@ -9,9 +9,13 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@hm/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.5"
   }
 }

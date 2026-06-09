@@ -9,7 +9,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | Fase | Total | 🟢  | ⏸️  | 🟡  | 🔵  | 🟣  | ✅  |
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F1   | 23     | 0   | 19   | 0   | 0   | 0   | 4   |
+| F1   | 23     | 0   | 18   | 0   | 0   | 1   | 4   |
 
 ## Fase 0 — Fundação
 
@@ -43,7 +43,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1-S05 | Schema contacts + conversations + messages + repos + interactive types        | ✅ done     | critical   | F1-S01                 |
 | F1-S06 | Schema ig_comments (auxiliar Instagram)                                       | ⏸️ blocked | low        | F1-S05                 |
 | F1-S07 | Worker outbound — composition + per-chat lock + provider routing              | ⏸️ blocked | critical   | F1-S05, F1-S08, F1-S09 |
-| F1-S08 | MetaWhatsAppAdapter completo (sendText/Media/Template/Interactive + parser)   | ⏸️ blocked | critical   | F1-S09                 |
+| F1-S08 | MetaWhatsAppAdapter completo (sendText/Media/Template/Interactive + parser)   | 🟣 review   | critical   | F1-S09                 |
 | F1-S09 | IChannelAdapter + capabilities + graphClient + MetaInstagramAdapter STUB      | ✅ done     | critical   | F1-S01                 |
 | F1-S10 | Worker media — download Meta + dedup SHA-256 + upload R2 + signed URL         | ⏸️ blocked | high       | F1-S04, F1-S08, F0-S15 |
 | F1-S11 | Socket relay — hm.q.socket.relay → io.emit + socket-events tipados            | ⏸️ blocked | high       | F0-S07, F1-S05         |
