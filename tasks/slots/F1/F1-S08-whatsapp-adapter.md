@@ -2,7 +2,7 @@
 id: F1-S08
 title: MetaWhatsAppAdapter completo (sendText/Media/Template/Interactive + parser)
 phase: F1
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: [F1-S09]
