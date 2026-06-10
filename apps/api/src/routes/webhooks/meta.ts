@@ -18,6 +18,12 @@ import { registerWebhookEvent } from './dedup';
 import { deriveEventId } from './event-id';
 import { publishInboundMessage } from './publisher';
 import { verifyMetaSignature } from './signature';
+import {
+  createSubmissionDeps,
+  processMetaFlowSubmission,
+  type MetaFlowSubmissionInput,
+} from '../flows/submissions';
+import { createLogger } from '@hm/logger';
 
 const SIGNATURE_HEADER = 'x-hub-signature-256';
 
@@ -35,6 +41,62 @@ function asString(value: unknown): string | undefined {
 function getRawBody(req: Request): Buffer {
   return Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
 }
+
+/**
+ * Extrai submissions de WhatsApp Flow (`interactive.nfm_reply`) de um payload Meta WA.
+ * Cada nfm_reply vira um MetaFlowSubmissionInput (F4-S14). Tolerante a shape: ignora
+ * entries sem flow response. O `response_json` do nfm_reply e a resposta estruturada.
+ */
+function extractFlowSubmissions(body: Record<string, unknown>): MetaFlowSubmissionInput[] {
+  const out: MetaFlowSubmissionInput[] = [];
+  const entries = Array.isArray(body['entry']) ? (body['entry'] as unknown[]) : [];
+  for (const entry of entries) {
+    const changes = isRecord(entry) && Array.isArray(entry['changes']) ? entry['changes'] : [];
+    for (const change of changes as unknown[]) {
+      const value = isRecord(change) ? change['value'] : undefined;
+      if (!isRecord(value)) continue;
+      const metadata = isRecord(value['metadata']) ? value['metadata'] : undefined;
+      const phoneNumberId = asString(metadata?.['phone_number_id']);
+      if (!phoneNumberId) continue;
+      const messages = Array.isArray(value['messages']) ? value['messages'] : [];
+      for (const msg of messages as unknown[]) {
+        if (!isRecord(msg)) continue;
+        const interactive = isRecord(msg['interactive']) ? msg['interactive'] : undefined;
+        const nfm =
+          interactive && isRecord(interactive['nfm_reply']) ? interactive['nfm_reply'] : undefined;
+        if (!nfm) continue;
+        const responseJson = parseResponseJson(nfm['response_json']);
+        out.push({
+          phoneNumberId,
+          metaFlowId: asString(nfm['name']) ?? asString(responseJson['flow_id']) ?? 'unknown',
+          externalId: asString(msg['id']),
+          contactRemoteId: asString(msg['from']),
+          response: responseJson,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function parseResponseJson(value: unknown): Record<string, unknown> {
+  if (isRecord(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return isRecord(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+const submissionDeps = createSubmissionDeps(createLogger('info', { svc: 'meta-webhook' }));
 
 export function createMetaWebhookRouter(): Router {
   const router = Router();
@@ -81,9 +143,7 @@ export function createMetaWebhookRouter(): Router {
       }
 
       const body =
-        typeof parsed === 'object' && parsed !== null
-          ? (parsed as Record<string, unknown>)
-          : null;
+        typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : null;
       const provider = providerForObject(body?.['object']);
 
       // Objeto desconhecido (ex.: 'page' legado): ack sem publicar.
@@ -102,6 +162,16 @@ export function createMetaWebhookRouter(): Router {
 
       if (isFirst) {
         await publishInboundMessage({ provider, raw: body });
+        // F4-S14: despacha submissions de WhatsApp Flow (nfm_reply) -> engine.
+        if (provider === 'meta_whatsapp') {
+          for (const submission of extractFlowSubmissions(body)) {
+            try {
+              await processMetaFlowSubmission(submission, submissionDeps);
+            } catch {
+              // Nao bloqueia o ack do webhook; o erro ja e logado no handler.
+            }
+          }
+        }
       }
 
       // Meta exige resposta < 5s — devolvemos 200 imediatamente.

@@ -18,6 +18,7 @@ import { createNotesRouter } from './routes/conversations/notes';
 import { createRoutingRouter } from './routes/conversations/routing';
 import { createWindowRouter } from './routes/conversations/window';
 import { createWebhooksRouter } from './routes/webhooks';
+import { createFlowSubmissionsRouter } from './routes/flows/submissions';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
@@ -49,6 +50,8 @@ export function createApp(): Express {
   app.use(createAgentsRouter());
   app.use(createKnowledgeRouter());
   app.use(createKnowledgeFeedbackRouter());
+  // Meta Flow submissions (F4-S14): endpoint interno de despacho do webhook.
+  app.use(createFlowSubmissionsRouter());
 
   // Error handler por último (Express 5 captura erros de handlers async).
   app.use(errorHandler);
