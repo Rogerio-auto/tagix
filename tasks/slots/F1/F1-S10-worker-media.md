@@ -2,7 +2,7 @@
 id: F1-S10
 title: Worker media — download Meta + dedup SHA-256 + upload R2 + signed URL
 phase: F1
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F1-S04, F1-S08, F0-S15]
