@@ -2,7 +2,7 @@
 id: F4-S01
 title: Schema Flow Builder (flows, flow_versions, flow_executions, flow_logs, flow_submissions) + RLS
 phase: F4
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
