@@ -2,12 +2,15 @@
 id: F1-S07
 title: Worker outbound — composition + per-chat lock + provider routing
 phase: F1
-status: blocked
+status: review
 priority: critical
 estimated_size: L
 depends_on: [F1-S05, F1-S08, F1-S09]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T00:30:02Z
+completed_at: 2026-06-10T00:30:08Z
 
+---
 # F1-S07 — Worker outbound
 
 > **source_docs:** `docs/features/LIVECHAT.md` §3 (composition, union, lock, presence)
