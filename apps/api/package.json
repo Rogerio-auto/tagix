@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@hm/agents-core": "workspace:*",
     "@hm/channels": "workspace:*",
     "@hm/db": "workspace:*",
     "@hm/logger": "workspace:*",

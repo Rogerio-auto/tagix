@@ -11,6 +11,8 @@
     "start": "tsx --env-file=../../.env src/main.ts"
   },
   "dependencies": {
+    "@hm/agents-client": "workspace:*",
+    "@hm/agents-core": "workspace:*",
     "@hm/channels": "workspace:*",
     "@hm/db": "workspace:*",
     "@hm/logger": "workspace:*",

@@ -21,7 +21,7 @@
  *
  * Seam S09 (cost-guard/policy): create/update que mexem em `model` devem, quando
  * F2-S09 estiver ligado, consultar `resolvePolicy(workspaceId)` de
- * `apps/api/src/agents/policy-resolver.ts` e validar `model ∈ policy.allowedModels`
+ * `@hm/agents-core` e validar `model ∈ policy.allowedModels`
  * (e usar `policy.defaultChatModel` como fallback). Hoje deixamos o seam marcado
  * (ver TODO(F2-S09)) sem acoplar a policy aqui.
  */

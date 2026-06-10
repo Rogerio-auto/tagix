@@ -29,6 +29,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@hm/agents-core':
+        specifier: workspace:*
+        version: link:../../packages/agents-core
       '@hm/channels':
         specifier: workspace:*
         version: link:../../packages/channels
@@ -160,6 +163,12 @@ importers:
 
   apps/workers:
     dependencies:
+      '@hm/agents-client':
+        specifier: workspace:*
+        version: link:../../packages/agents-client
+      '@hm/agents-core':
+        specifier: workspace:*
+        version: link:../../packages/agents-core
       '@hm/channels':
         specifier: workspace:*
         version: link:../../packages/channels
@@ -207,6 +216,22 @@ importers:
       vitest:
         specifier: ^3.0.5
         version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.20)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@22.19.20)(typescript@5.9.3))(tsx@4.22.4)
+
+  packages/agents-core:
+    dependencies:
+      '@hm/db':
+        specifier: workspace:*
+        version: link:../db
+      drizzle-orm:
+        specifier: ^0.38.3
+        version: 0.38.4(@opentelemetry/api@1.9.1)(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.7)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.7
+        version: 22.19.20
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.20)(lightningcss@1.32.0)(msw@2.14.6(@types/node@22.19.20)(typescript@5.9.3))
 
   packages/channels:
     dependencies:
