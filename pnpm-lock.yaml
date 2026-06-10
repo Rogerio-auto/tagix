@@ -160,6 +160,9 @@ importers:
       '@hm/channels':
         specifier: workspace:*
         version: link:../../packages/channels
+      '@hm/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@hm/logger':
         specifier: workspace:*
         version: link:../../packages/logger

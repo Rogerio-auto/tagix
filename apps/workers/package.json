@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@hm/channels": "workspace:*",
+    "@hm/db": "workspace:*",
     "@hm/logger": "workspace:*",
     "@hm/shared": "workspace:*",
     "@hm/storage": "workspace:*",
