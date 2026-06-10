@@ -2,12 +2,14 @@
 id: F2-S21
 title: Auto follow-up cron job idempotente
 phase: F2
-status: blocked
+status: in-progress
 priority: low
 estimated_size: S
 depends_on: [F2-S11]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T04:06:00Z
 
+---
 # F2-S21 — Auto follow-up cron
 
 > **source_docs:** `docs/AGENTS_LANGGRAPH.md` §4; `docs/ROADMAP.md` F2-S21
