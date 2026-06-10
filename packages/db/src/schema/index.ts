@@ -235,6 +235,10 @@ export * from './knowledge'; // kb_documents, kb_chunks, kb_feedback (tenant)
 // flow_versions nao tem workspace_id proprio: RLS via subquery em flows.
 export * from './flows'; // flows, flow_versions, flow_executions, flow_logs, flow_submissions
 
+// --- Tags domain (DATA_MODEL §5.2) ---
+// tags + contact_tags (contact_tags com workspace_id denormalizado p/ RLS direta).
+export * from './tags'; // tags, contact_tags
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -269,4 +273,7 @@ export const RLS_TABLES = [
   'flow_executions',
   'flow_logs',
   'flow_submissions',
+  // Tags domain (workspace-scoped; contact_tags com workspace_id denormalizado).
+  'tags',
+  'contact_tags',
 ] as const;
