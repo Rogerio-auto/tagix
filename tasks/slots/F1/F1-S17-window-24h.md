@@ -2,12 +2,14 @@
 id: F1-S17
 title: Janela 24h Meta no composer + CTA template (WA) + state machine IG-ready
 phase: F1
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F1-S16, F1-S07]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T00:44:31Z
 
+---
 # F1-S17 — Janela 24h + message_tag
 
 > **source_docs:** `docs/features/LIVECHAT.md` §3.3; `docs/features/INSTAGRAM.md` §6
