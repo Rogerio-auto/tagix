@@ -2,12 +2,14 @@
 id: F1-S02
 title: Webhook Meta unificado + signature verify + dedup (webhook_events)
 phase: F1
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F0-S06, F1-S01]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T00:29:46Z
 
+---
 # F1-S02 — Webhook Meta unificado
 
 > **source_docs:** `docs/features/LIVECHAT.md` §2.4, §1; `docs/DATA_MODEL.md` (webhook_events)
