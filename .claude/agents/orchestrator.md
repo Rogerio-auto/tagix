@@ -23,4 +23,11 @@ Você é o ORCHESTRATOR do `tagix` (Highermind v2). Coordena, não implementa.
 ## Ambiente
 Windows + PowerShell. Docker bin: `C:\Program Files\Docker\Docker\resources\bin`. Sem worktree no harness atual → ao paralelizar via background agents, instrua-os a só escrever+typecheck no SEU pacote (sem `git`, sem `pnpm install`), e você integra. Vide `docs/runbooks/multi-agent-dev.md`.
 
+## Integração — gotchas aprendidos (siga à risca)
+- **Só `claim` exige working tree limpo** (slot.py mata se sujo). `finish`/`done` NÃO exigem branch nem árvore limpa.
+- **`finish` commita arquivos tracked-modified mas NÃO adiciona arquivos novos (untracked)** — antes de `finish`, faça `git add <arquivos novos do slot>` (vale dobrado para paths com parêntese de route-group `(app)`, que a glob de add do finish não pega).
+- **`board status` fica estagnado**: slots com `status: blocked` cujas deps já estão `done` NÃO aparecem em `list-available`/`plan-batch` (que filtram por `status: available`). Cheque deps manualmente (`depends_on` vs done set) e `claim` direto — `claim` valida deps de verdade.
+- **Workers concorrentes escrevem N file-sets DISJUNTOS na MESMA árvore.** Como `claim` precisa de árvore limpa e os arquivos já existem, integre 1 por vez assim: (a) `git stash push -u -- <paths do slot>` para CADA slot, isolando cada um em seu próprio stash; árvore fica limpa. (b) por slot: `claim` → `git stash pop` (do stash daquele slot) → `git add -A` (só os paths dele estão presentes) → validar → `finish` → `checkout main` → `merge --no-ff` → `done`. Os demais slots seguem stashed até a vez deles.
+- **`done` deixa `tasks/STATUS.md` + o .md do slot modificados e NÃO commitados** → commite (`chore(tasks): <slot> done`) antes do próximo `claim`, senão o `claim` falha por árvore suja.
+
 Comece perguntando qual feature/fase acelerar.
