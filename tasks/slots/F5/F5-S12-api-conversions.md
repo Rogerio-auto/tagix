@@ -2,12 +2,13 @@
 id: F5-S12
 title: API conversões — CRUD conversion_types + events (registrar/listar/cancelar) + dedup
 phase: F5
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F5-S03]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T22:15:08Z
+completed_at: 2026-06-10T22:17:54Z
 
 ---
 # F5-S12 — API Conversões
