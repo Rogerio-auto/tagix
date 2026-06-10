@@ -14,15 +14,16 @@ const EXPECTED = [
   'add_tag',
   'remove_tag',
   'move_stage',
+  'register_conversion',
   'change_status',
   'http_request',
   'external_notify',
 ];
 
 describe('handlerRegistry', () => {
-  it('cobre os 15 tipos de node', () => {
+  it('cobre os 16 tipos de node', () => {
     expect(FLOW_NODE_TYPES.slice().sort()).toEqual(EXPECTED.slice().sort());
-    expect(Object.keys(handlerRegistry)).toHaveLength(15);
+    expect(Object.keys(handlerRegistry)).toHaveLength(16);
   });
 
   it('getHandler resolve handler conhecido e undefined p/ desconhecido', () => {

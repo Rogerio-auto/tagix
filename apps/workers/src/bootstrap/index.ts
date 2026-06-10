@@ -18,6 +18,8 @@
  * encerrado após o boot.
  */
 import Redis from 'ioredis';
+import { and, eq } from 'drizzle-orm';
+import { schema, withWorkspace } from '@hm/db';
 import { assertTopology, connectMq, type MqHandle } from '@hm/shared/mq';
 import { createLogger, type Logger } from '@hm/logger';
 import { createInboundDeps, startInboundWorker, type InboundWorkerHandle } from '../inbound/index';
@@ -159,7 +161,84 @@ export async function startWorkers(
   // Motor de automacoes de stage (F5-S06): drainer de pending_automations + cron
   // on_stale. As portas de action (add_tag/register_conversion/trigger_flow) sao
   // preenchidas conforme F5-S14/S16/flow-engine; actions sem porta vao a retry/failed.
-  const automationPorts: ActionPorts = {};
+  // Portas de automacao com backing real (F5-S06 + S14/S16). Acoes puras de DB
+  // (add_tag/remove_tag/register_conversion) sao implementadas aqui sob RLS; as
+  // demais (trigger_flow/send_message/notify_members/create_event) ainda nao tem
+  // backing e vao a retry/failed (honesto — integracoes de canal/calendario sao
+  // fase futura). dealContact resolve o contato do deal p/ tag/conversao.
+  const automationPorts: ActionPorts = {
+    async addTag({ workspaceId, dealId, tagId }) {
+      await withWorkspace(workspaceId, async (tx) => {
+        const [deal] = await tx
+          .select({ contactId: schema.deals.contactId })
+          .from(schema.deals)
+          .where(eq(schema.deals.id, dealId))
+          .limit(1);
+        if (!deal) return;
+        await tx
+          .insert(schema.contactTags)
+          .values({ contactId: deal.contactId, tagId, workspaceId })
+          .onConflictDoNothing();
+      });
+    },
+    async removeTag({ workspaceId, dealId, tagId }) {
+      await withWorkspace(workspaceId, async (tx) => {
+        const [deal] = await tx
+          .select({ contactId: schema.deals.contactId })
+          .from(schema.deals)
+          .where(eq(schema.deals.id, dealId))
+          .limit(1);
+        if (!deal) return;
+        await tx
+          .delete(schema.contactTags)
+          .where(
+            and(
+              eq(schema.contactTags.contactId, deal.contactId),
+              eq(schema.contactTags.tagId, tagId),
+            ),
+          );
+      });
+    },
+    async registerConversion({ workspaceId, dealId }, config) {
+      await withWorkspace(workspaceId, async (tx) => {
+        const [deal] = await tx
+          .select({ contactId: schema.deals.contactId })
+          .from(schema.deals)
+          .where(eq(schema.deals.id, dealId))
+          .limit(1);
+        if (!deal) return;
+        const [type] = await tx
+          .select()
+          .from(schema.conversionTypes)
+          .where(
+            and(
+              eq(schema.conversionTypes.workspaceId, workspaceId),
+              eq(schema.conversionTypes.key, config.conversionTypeKey),
+            ),
+          )
+          .limit(1);
+        if (!type) throw new Error(`conversion_type inexistente: ${config.conversionTypeKey}`);
+        const valueCents =
+          config.valueFrom === 'fixed' ? (config.valueCents ?? null) : null;
+        try {
+          await tx.insert(schema.conversionEvents).values({
+            workspaceId,
+            conversionTypeId: type.id,
+            contactId: deal.contactId,
+            dealId,
+            valueCents,
+            currency: type.currency,
+            source: 'deal_won',
+          });
+        } catch (err: unknown) {
+          // dedup same-day (uq_conv_events_dedup) -> idempotente.
+          if (!(typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505')) {
+            throw err;
+          }
+        }
+      });
+    },
+  };
   const automationExecutor = createActionExecutor(automationPorts);
   const automationWorker = startAutomationWorker({ redis, logger, execute: automationExecutor });
   const staleScheduler = startStaleScheduler({ redis, logger });

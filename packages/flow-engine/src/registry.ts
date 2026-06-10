@@ -17,6 +17,7 @@ import { aiActionHandler } from './handlers/ai_action.handler';
 import { addTagHandler } from './handlers/add_tag.handler';
 import { removeTagHandler } from './handlers/remove_tag.handler';
 import { moveStageHandler } from './handlers/move_stage.handler';
+import { registerConversionHandler } from './handlers/register_conversion.handler';
 import { changeStatusHandler } from './handlers/change_status.handler';
 import { httpRequestHandler } from './handlers/http_request.handler';
 import { externalNotifyHandler } from './handlers/external_notify.handler';
@@ -34,6 +35,7 @@ export const handlerRegistry = {
   add_tag: addTagHandler,
   remove_tag: removeTagHandler,
   move_stage: moveStageHandler,
+  register_conversion: registerConversionHandler,
   change_status: changeStatusHandler,
   http_request: httpRequestHandler,
   external_notify: externalNotifyHandler,
@@ -49,7 +51,7 @@ type HandlerShape = {
 const _registryCheck: Record<keyof typeof handlerRegistry, HandlerShape> = handlerRegistry;
 void _registryCheck;
 
-/** Uniao literal dos 15 tipos de node suportados. */
+/** Uniao literal dos 16 tipos de node suportados. */
 export type FlowNodeType = keyof typeof handlerRegistry;
 
 /** Resolve o handler de um node.type, ou `undefined` se desconhecido. */
