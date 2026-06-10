@@ -14,6 +14,7 @@
     "@hm/agents-core": "workspace:*",
     "@hm/channels": "workspace:*",
     "@hm/db": "workspace:*",
+    "@hm/flow-engine": "workspace:*",
     "@hm/logger": "workspace:*",
     "@hm/shared": "workspace:*",
     "@socket.io/redis-adapter": "^8.3.0",
