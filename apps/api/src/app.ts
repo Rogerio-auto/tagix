@@ -23,6 +23,7 @@ import { createFlowsRouter } from './routes/flows';
 import { createPipelineRouter } from './routes/pipeline';
 import { createDealsRouter } from './routes/deals';
 import { registerDealHooks } from './services/deal-hooks';
+import { createConversionsRouter } from './routes/conversions';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
@@ -65,6 +66,8 @@ export function createApp(): Express {
   app.use(createPipelineRouter());
   // Deals (F5-S05): CRUD + move-stage + close/reopen + anexos.
   app.use(createDealsRouter());
+  // Conversoes (F5-S12): CRUD types + register/list/cancel events.
+  app.use(createConversionsRouter());
 
   // Error handler por último (Express 5 captura erros de handlers async).
   app.use(errorHandler);
