@@ -2,12 +2,13 @@
 id: F1-S11
 title: Socket relay — hm.q.socket.relay → io.emit + socket-events tipados
 phase: F1
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: [F0-S07, F1-S05]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T00:15:13Z
+completed_at: 2026-06-10T00:16:01Z
 
 ---
 # F1-S11 — Socket relay

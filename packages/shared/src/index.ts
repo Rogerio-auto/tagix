@@ -26,4 +26,7 @@ export * from './auth';
 // --- Tipos de mensagem interativa (LiveChat) ---
 export * from './types/interactive';
 
+// --- Eventos Socket.io Server→Client (LIVECHAT.md §6, tipos puros) ---
+export * from './socket-events';
+
 export const SHARED_PKG = '@hm/shared' as const;
