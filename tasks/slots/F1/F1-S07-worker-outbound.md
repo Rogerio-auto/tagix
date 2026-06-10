@@ -2,7 +2,7 @@
 id: F1-S07
 title: Worker outbound — composition + per-chat lock + provider routing
 phase: F1
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: [F1-S05, F1-S08, F1-S09]
