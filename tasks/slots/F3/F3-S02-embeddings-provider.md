@@ -2,10 +2,14 @@
 id: F3-S02
 title: Embeddings provider (OpenAI direto) + endpoint interno /embed + usage logging
 phase: F3
-status: available
+status: review
 priority: critical
 estimated_size: S
 depends_on: []
+agent_id: backend-engineer
+claimed_at: 2026-06-10T16:06:00Z
+completed_at: 2026-06-10T16:09:11Z
+
 ---
 # F3-S02 — Embeddings provider (OpenAI direto)
 
