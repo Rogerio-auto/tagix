@@ -2,7 +2,7 @@
 id: F4-S11
 title: Frontend node components (15 tipos) — node render + inspector + metadata, 1 pasta por tipo
 phase: F4
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F4-S10]
