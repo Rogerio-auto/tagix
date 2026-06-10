@@ -2,12 +2,14 @@
 id: F2-S14
 title: Seed — 5 agent templates globais + questions + default_tools + default_model
 phase: F2
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: S
 depends_on: [F2-S01]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T03:19:27Z
 
+---
 # F2-S14 — Seed de agent templates
 
 > **source_docs:** `docs/AGENTS_LANGGRAPH.md` §7; `docs/ROADMAP.md` F2-S14
