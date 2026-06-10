@@ -8,20 +8,40 @@ import { cn } from '@/shared/lib/cn';
 import { ApiError } from '@/shared/lib/api-client';
 import { useSendMessage } from '../../queries';
 import { mediaFromFile, useMediaUpload, type PendingMedia } from './useMediaUpload';
+import { useWindowState } from './useWindowState';
+import { WindowNotice } from './WindowNotice';
 
 const MAX_TEXTAREA_HEIGHT = 160; // px — ~7 linhas antes de virar scroll interno.
 
 export interface MessageComposerProps {
   conversationId: string;
-  /** Opcional: desabilita o envio (ex.: janela 24h fechada — F1-S17). */
+  /** Opcional: desabilita o envio manualmente (override do estado de janela). */
   disabled?: boolean;
+  /**
+   * Disparado quando o agente clica em "Reabrir com template" no bloqueio de
+   * janela 24h do WhatsApp (F1-S17). O fluxo de seleção de template é externo
+   * ao composer; aqui só sinalizamos a intenção.
+   */
+  onReopenWithTemplate?: () => void;
   className?: string;
 }
 
-export function MessageComposer({ conversationId, disabled = false, className }: MessageComposerProps) {
+export function MessageComposer({
+  conversationId,
+  disabled = false,
+  onReopenWithTemplate,
+  className,
+}: MessageComposerProps) {
   const { toast } = useToast();
   const send = useSendMessage();
   const { upload, uploading } = useMediaUpload();
+  const windowQuery = useWindowState(conversationId);
+
+  // Estado da janela 24h por provider (F1-S17). Enquanto carrega, não bloqueia
+  // (otimista: a maioria das conversas está dentro da janela); o backend é a
+  // autoridade final no envio. WhatsApp fora da janela trava o composer.
+  const windowState = windowQuery.data?.window;
+  const windowBlocked = windowState?.requiresTemplate ?? false;
 
   const [text, setText] = useState('');
   const [media, setMedia] = useState<PendingMedia | null>(null);
@@ -31,7 +51,9 @@ export function MessageComposer({ conversationId, disabled = false, className }:
   const textareaId = useId();
 
   const busy = send.isPending || uploading;
-  const blocked = disabled || busy;
+  // `disabled` = override manual; `windowBlocked` = WhatsApp fora da janela 24h.
+  const inputBlocked = disabled || windowBlocked;
+  const blocked = inputBlocked || busy;
   const canSend = !blocked && (text.trim().length > 0 || media !== null);
 
   // Textarea que cresce com o conteúdo (UX §2 — composer confortável).
@@ -111,6 +133,10 @@ export function MessageComposer({ conversationId, disabled = false, className }:
       aria-busy={busy || undefined}
       className={cn('border-t border-border bg-surface p-3', className)}
     >
+      {windowState && (
+        <WindowNotice window={windowState} onReopenWithTemplate={onReopenWithTemplate} />
+      )}
+
       {media && (
         <div className="mb-2 flex items-center gap-3 rounded-md border border-border-2 bg-surface-inset p-2">
           {media.kind === 'image' ? (
@@ -172,7 +198,13 @@ export function MessageComposer({ conversationId, disabled = false, className }:
           onKeyDown={onKeyDown}
           disabled={blocked}
           rows={1}
-          placeholder={disabled ? 'Envio indisponível para esta conversa' : 'Escreva uma mensagem…'}
+          placeholder={
+            windowBlocked
+              ? 'Janela de 24h encerrada — reabra com um template'
+              : disabled
+                ? 'Envio indisponível para esta conversa'
+                : 'Escreva uma mensagem…'
+          }
           className="max-h-40 flex-1 resize-none bg-transparent py-1.5 font-body text-sm text-text outline-none placeholder:text-text-low disabled:cursor-not-allowed disabled:opacity-60"
         />
 
