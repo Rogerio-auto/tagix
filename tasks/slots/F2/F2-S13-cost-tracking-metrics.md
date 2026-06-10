@@ -2,7 +2,7 @@
 id: F2-S13
 title: Cost tracking + agregação de agent_metrics a partir de llm_usage_logs
 phase: F2
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F2-S01]
