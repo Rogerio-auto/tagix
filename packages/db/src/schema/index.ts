@@ -208,6 +208,8 @@ export * from './platform_secrets';
 export * from './contacts';
 export * from './conversations';
 export * from './messages';
+// Instagram comments (auxiliar, F1.5).
+export * from './ig_comments';
 
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
@@ -221,4 +223,5 @@ export const RLS_TABLES = [
   'contacts',
   'conversations',
   'messages',
+  'ig_comments',
 ] as const;
