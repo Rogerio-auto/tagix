@@ -185,6 +185,9 @@ importers:
       '@types/node':
         specifier: ^22.10.7
         version: 22.19.20
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.4
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.20)(lightningcss@1.32.0)(msw@2.14.6(@types/node@22.19.20)(typescript@5.9.3))

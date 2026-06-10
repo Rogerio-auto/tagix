@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Info, MessageSquare } from 'lucide-react';
+import { useSocket } from '@/shared/realtime';
 import { EmptyState, SkeletonList } from '@/shared/components/feedback';
 import { HelpPanel } from '@/shared/components/help';
 import { useMessages } from '../queries';
@@ -63,6 +64,13 @@ function ConversationPanel({
   onToggleInfo: () => void;
 }) {
   const messages = useMessages(conversationId);
+  const { joinConversation, leaveConversation } = useSocket();
+
+  // Entra na room realtime da conversa aberta (recebe message:new, typing, status…).
+  useEffect(() => {
+    joinConversation(conversationId);
+    return () => leaveConversation(conversationId);
+  }, [conversationId, joinConversation, leaveConversation]);
 
   return (
     <>

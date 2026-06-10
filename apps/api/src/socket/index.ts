@@ -2,6 +2,8 @@ import type { Server as HttpServer } from 'node:http';
 import { Server, type DefaultEventsMap } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
+import { eq } from 'drizzle-orm';
+import { schema, withWorkspace } from '@hm/db';
 import { SESSION_COOKIE, resolveSession, type SessionContext } from '../auth';
 import { loadConfig } from '../config';
 import { startSocketRelay } from './relay';
@@ -63,6 +65,29 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
     const wsRoom = `ws:${session.workspace.id}`;
     socket.join([wsRoom, `member:${session.member.id}`]);
     io.to(wsRoom).emit('member:online', { memberId: session.member.id });
+
+    // Rooms por conversa: o client pede join ao abrir uma conversa. Verifica posse
+    // no workspace (RLS) ANTES de entrar — uma room `conversation:<id>` recebe
+    // eventos sensíveis (message:new etc.), então nunca confiar no id do client.
+    socket.on('conversation:join', (conversationId: unknown) => {
+      if (typeof conversationId !== 'string' || conversationId.length === 0) return;
+      void (async () => {
+        const owned = await withWorkspace(session.workspace.id, async (tx) => {
+          const [row] = await tx
+            .select({ id: schema.conversations.id })
+            .from(schema.conversations)
+            .where(eq(schema.conversations.id, conversationId));
+          return Boolean(row);
+        });
+        if (owned) await socket.join(`conversation:${conversationId}`);
+      })();
+    });
+
+    socket.on('conversation:leave', (conversationId: unknown) => {
+      if (typeof conversationId === 'string' && conversationId.length > 0) {
+        void socket.leave(`conversation:${conversationId}`);
+      }
+    });
   });
 
   return io;

@@ -6,7 +6,9 @@
   "main": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts"
   },
   "dependencies": {
     "@hm/channels": "workspace:*",
@@ -19,6 +21,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.7",
+    "tsx": "^4.19.2",
     "vitest": "^2.1.8"
   }
 }

@@ -8,6 +8,7 @@ import { healthHandler } from './health';
 import { errorHandler } from './middlewares/error';
 import { createChannelsRouter } from './routes/channels';
 import { createConversationsRouter } from './routes/conversations';
+import { createMessagesRouter } from './routes/conversations/messages';
 import { createNotesRouter } from './routes/conversations/notes';
 import { createRoutingRouter } from './routes/conversations/routing';
 import { createWindowRouter } from './routes/conversations/window';
@@ -32,6 +33,7 @@ export function createApp(): Express {
   app.get('/health', healthHandler);
   app.use(createAuthRouter());
   app.use(createConversationsRouter());
+  app.use(createMessagesRouter());
   app.use(createWindowRouter());
   app.use(createNotesRouter());
   app.use(createRoutingRouter());
