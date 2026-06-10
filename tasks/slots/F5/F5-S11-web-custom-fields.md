@@ -2,7 +2,7 @@
 id: F5-S11
 title: Frontend custom fields — settings editor + dynamic form renderer + Zod dinâmico
 phase: F5
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F5-S04]
