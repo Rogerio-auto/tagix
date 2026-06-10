@@ -2,7 +2,7 @@
 id: F2-S15
 title: Seed — catálogo inicial llm_models_whitelist (top modelos OpenRouter)
 phase: F2
-status: review
+status: done
 priority: medium
 estimated_size: XS
 depends_on: [F2-S01]
