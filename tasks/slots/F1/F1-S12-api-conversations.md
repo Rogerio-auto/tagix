@@ -2,7 +2,7 @@
 id: F1-S12
 title: API GET /conversations + /conversations/:id/messages + cache versioning
 phase: F1
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F1-S05, F0-S06]
