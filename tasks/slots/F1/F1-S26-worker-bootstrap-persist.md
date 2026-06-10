@@ -2,12 +2,14 @@
 id: F1-S26
 title: Worker bootstrap + persistência direta (@hm/db) + adapter factory
 phase: F1
-status: available
+status: in-progress
 priority: critical
 estimated_size: L
 depends_on: [F1-S04, F1-S07, F1-S10, F1-S20, F1-S21]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T01:31:55Z
 
+---
 # F1-S26 — Worker bootstrap + persistência
 
 > **source_docs:** `docs/ARCHITECTURE.md` §4.2 (composition roots em `apps/workers/src/<name>/index.ts`; workers usam `@hm/db`)
