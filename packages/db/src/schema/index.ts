@@ -239,6 +239,11 @@ export * from './flows'; // flows, flow_versions, flow_executions, flow_logs, fl
 // tags + contact_tags (contact_tags com workspace_id denormalizado p/ RLS direta).
 export * from './tags'; // tags, contact_tags
 
+// --- Pipeline domain (DATA_MODEL §10) ---
+// pipelines/stages/deals/deal_history/deal_attachments/pending_automations.
+// Todas workspace-scoped (RLS direto). SEM deal_tasks.
+export * from './pipeline';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -276,4 +281,11 @@ export const RLS_TABLES = [
   // Tags domain (workspace-scoped; contact_tags com workspace_id denormalizado).
   'tags',
   'contact_tags',
+  // Pipeline domain (workspace-scoped).
+  'pipelines',
+  'stages',
+  'deals',
+  'deal_history',
+  'deal_attachments',
+  'pending_automations',
 ] as const;
