@@ -9,7 +9,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | Fase | Total | 🟢  | ⏸️  | 🟡  | 🔵  | 🟣  | ✅  |
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F1   | 23     | 0   | 16   | 0   | 0   | 1   | 6   |
+| F1   | 23     | 0   | 16   | 0   | 0   | 0   | 7   |
 
 ## Fase 0 — Fundação
 
@@ -41,7 +41,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1-S03 | Schema platform_secrets + carregamento boot-time                              | ✅ done     | high       | F0-S03                 |
 | F1-S04 | Worker inbound — parser por provider + persist + relay                        | ⏸️ blocked | critical   | F1-S02, F1-S05, F1-S09 |
 | F1-S05 | Schema contacts + conversations + messages + repos + interactive types        | ✅ done     | critical   | F1-S01                 |
-| F1-S06 | Schema ig_comments (auxiliar Instagram)                                       | 🟣 review   | low        | F1-S05                 |
+| F1-S06 | Schema ig_comments (auxiliar Instagram)                                       | ✅ done     | low        | F1-S05                 |
 | F1-S07 | Worker outbound — composition + per-chat lock + provider routing              | ⏸️ blocked | critical   | F1-S05, F1-S08, F1-S09 |
 | F1-S08 | MetaWhatsAppAdapter completo (sendText/Media/Template/Interactive + parser)   | ✅ done     | critical   | F1-S09                 |
 | F1-S09 | IChannelAdapter + capabilities + graphClient + MetaInstagramAdapter STUB      | ✅ done     | critical   | F1-S01                 |
