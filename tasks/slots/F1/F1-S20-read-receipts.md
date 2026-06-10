@@ -2,7 +2,7 @@
 id: F1-S20
 title: Read receipts e delivery status (status callbacks Meta WA)
 phase: F1
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F1-S07, F1-S11, F1-S15]
