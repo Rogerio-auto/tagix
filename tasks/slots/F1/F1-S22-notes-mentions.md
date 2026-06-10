@@ -2,12 +2,15 @@
 id: F1-S22
 title: Notas internas com mentions (conversation_notes + auto-notification)
 phase: F1
-status: blocked
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F1-S05, F1-S12]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T00:44:59Z
+completed_at: 2026-06-10T00:45:00Z
 
+---
 # F1-S22 — Notas internas + mentions
 
 > **source_docs:** `docs/features/LIVECHAT.md` §7.4; `docs/features/DASHBOARD.md` (notificações)
