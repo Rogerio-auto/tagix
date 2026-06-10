@@ -11,30 +11,45 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, status
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
+from app.checkpoint import lifespan_checkpointer
 from app.config import get_settings
-from app.db import close_pool, init_pool
+from app.db import close_pool, get_pool, init_pool
+from app.graph import build_graph
 from app.health import router as health_router
 from app.logging import configure_logging, get_logger
+from app.providers import OpenRouterProvider
+from app.routes import run_router
+from app.tools.registry import build_default_registry
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Startup: inicializa o pool asyncpg. Shutdown: fecha o pool."""
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Startup: pool asyncpg + registry de tools + checkpointer + grafo compilado
+    (publicado em `app.state.graph` para o endpoint `/run`). Shutdown: fecha tudo."""
     settings = get_settings()
     configure_logging(level=settings.log_level, json_logs=settings.log_json)
     logger = get_logger()
 
     await init_pool()
-    logger.info("agent-runtime up (version={})", __version__)
-    try:
-        yield
-    finally:
-        await close_pool()
-        logger.info("agent-runtime down")
+    registry = build_default_registry(get_pool())
+    async with lifespan_checkpointer() as checkpointer:
+        provider = OpenRouterProvider()
+        app.state.graph = build_graph(
+            tool_registry=registry,
+            checkpointer=checkpointer,
+            provider=provider,
+        )
+        logger.info("agent-runtime up (version={})", __version__)
+        try:
+            yield
+        finally:
+            await provider.aclose()
+            await close_pool()
+            logger.info("agent-runtime down")
 
 
 def create_app() -> FastAPI:
@@ -56,11 +71,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health_router)
-
-    @app.post("/run", status_code=status.HTTP_501_NOT_IMPLEMENTED)
-    async def run_placeholder() -> dict[str, str]:
-        """Placeholder. O grafo LangGraph é implementado em F2-S05."""
-        return {"status": "not_implemented", "detail": "graph lands in F2-S05"}
+    app.include_router(run_router)
 
     return app
 

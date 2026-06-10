@@ -6,6 +6,7 @@ import { createAuthRouter } from './auth';
 import { loadConfig } from './config';
 import { healthHandler } from './health';
 import { errorHandler } from './middlewares/error';
+import { createAgentsRouter } from './routes/agents';
 import { createChannelsRouter } from './routes/channels';
 import { createConversationsRouter } from './routes/conversations';
 import { createMessagesRouter } from './routes/conversations/messages';
@@ -38,6 +39,7 @@ export function createApp(): Express {
   app.use(createNotesRouter());
   app.use(createRoutingRouter());
   app.use(createChannelsRouter());
+  app.use(createAgentsRouter());
 
   // Error handler por último (Express 5 captura erros de handlers async).
   app.use(errorHandler);
