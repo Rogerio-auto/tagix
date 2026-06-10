@@ -12,6 +12,8 @@ import {
 import { useToast } from '@hm/ui';
 import { StageColumn } from './StageColumn';
 import { useDeals, usePipelineDetail, usePipelines, useMoveDeal } from './queries';
+import { DealDetailDrawer } from '../deal';
+import type { CustomFieldDef } from '../custom-fields';
 import { useDealSocket } from './useDealSocket';
 import type { Deal, Stage } from './types';
 
@@ -31,6 +33,7 @@ export function PipelinePage(): React.JSX.Element {
   const { toast } = useToast();
   const pipelinesQuery = usePipelines();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [openDealId, setOpenDealId] = useState<string | null>(null);
 
   const pipelines = pipelinesQuery.data?.pipelines ?? [];
   const pipelineId = selectedId ?? pipelines[0]?.id;
@@ -119,11 +122,23 @@ export function PipelinePage(): React.JSX.Element {
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
           <div className="flex flex-1 gap-4 overflow-x-auto pb-4">
             {stages.map((stage) => (
-              <StageColumn key={stage.id} stage={stage} deals={dealsByStage.get(stage.id) ?? []} />
+              <StageColumn
+                key={stage.id}
+                stage={stage}
+                deals={dealsByStage.get(stage.id) ?? []}
+                onOpenDeal={setOpenDealId}
+              />
             ))}
           </div>
         </DndContext>
       )}
+
+      <DealDetailDrawer
+        dealId={openDealId}
+        canEdit
+        customFieldDefs={(detail.data?.pipeline.settings.custom_fields as CustomFieldDef[] | undefined) ?? []}
+        onClose={() => setOpenDealId(null)}
+      />
     </div>
   );
 }

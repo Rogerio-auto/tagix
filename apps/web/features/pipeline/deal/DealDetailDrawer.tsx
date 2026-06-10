@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { ExternalLink, X } from 'lucide-react';
 import { CustomFieldsView, type CustomFieldDef, type CustomFieldValues } from '../custom-fields';
+import { MarkConversionButton } from '@/features/conversions';
 import { CardImageCapture } from './CardImageCapture';
 import { CardImageGallery } from './CardImageGallery';
 import { HistoryTimeline } from './HistoryTimeline';
@@ -94,6 +95,16 @@ export function DealDetailDrawer({
 
         {dealQuery.isError ? (
           <p className="px-5 py-4 text-sm text-danger">Não foi possível carregar o negócio.</p>
+        ) : null}
+
+        {deal?.contactId ? (
+          <Section title="Ações">
+            <MarkConversionButton
+              contactId={deal.contactId}
+              dealId={deal.id}
+              variant="secondary"
+            />
+          </Section>
         ) : null}
 
         {customFieldDefs.length > 0 && deal ? (
