@@ -2,7 +2,7 @@
 id: F5-S07
 title: Real-time deals — socket events deal:* + relay + client listeners
 phase: F5
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F5-S05]
