@@ -2,7 +2,7 @@
 id: F5-S06
 title: Automation engine — pending_automations worker + on_stale cron + dispatch from move
 phase: F5
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F5-S02, F5-S05]
