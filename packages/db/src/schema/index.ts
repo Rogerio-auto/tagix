@@ -244,6 +244,10 @@ export * from './tags'; // tags, contact_tags
 // Todas workspace-scoped (RLS direto). SEM deal_tasks.
 export * from './pipeline';
 
+// --- Conversions domain (DATA_MODEL §10.7) ---
+// conversion_types/conversion_events/conversion_tag_triggers (workspace-scoped).
+export * from './conversions';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -288,4 +292,8 @@ export const RLS_TABLES = [
   'deal_history',
   'deal_attachments',
   'pending_automations',
+  // Conversions domain (workspace-scoped).
+  'conversion_types',
+  'conversion_events',
+  'conversion_tag_triggers',
 ] as const;
