@@ -2,7 +2,7 @@
 id: F4-S03
 title: Worker-flows runtime — consumer hm.q.flow.execution + scheduler de wakeup (waiting)
 phase: F4
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F4-S02]
