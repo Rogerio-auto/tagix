@@ -2,10 +2,13 @@
 id: F5-S14
 title: Conversões automações — flow handler register_conversion + tag pg-trigger + fecha F2-S20
 phase: F5
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on: [F5-S03, F5-S06, F5-S12]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T22:24:47Z
+
 ---
 # F5-S14 — Conversões automações
 
