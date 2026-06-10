@@ -46,4 +46,32 @@ export {
   type OutboundWorkerHandle,
 } from './outbound/index';
 
+// --- Worker inbound (F1-S04) ---
+export {
+  startInboundWorker,
+  handleInboundEnvelope,
+  runInboundPipeline,
+  ChannelInboundParser,
+  extractRoutingHints,
+  MqInboundPersistence,
+  MqMediaEnqueue,
+  INBOUND_QUEUE,
+  INBOUND_PERSIST_TYPE,
+  INBOUND_PERSIST_RK,
+  INBOUND_MEDIA_TYPE,
+  INBOUND_MEDIA_RK,
+  type InboundDeps,
+  type InboundParserPort,
+  type InboundPersistencePort,
+  type MediaEnqueuePort,
+  type InboundMediaJob,
+  type PersistInboundRequest,
+  type RoutingHints,
+  type ProviderParser,
+  type ProviderParsers,
+  type InboundPipelineResult,
+  type InboundWorkerOptions,
+  type InboundWorkerHandle,
+} from './inbound/index';
+
 export const WORKERS_PKG = '@hm/workers' as const;
