@@ -9,6 +9,17 @@ const nextConfig = {
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '**.r2.cloudflarestorage.com' }],
   },
+  // Proxy de dev: o navegador fala só com o web (mesma origem) e o Next encaminha
+  // /api, /auth e /socket.io para a API. Evita o inferno de cookie cross-origin
+  // (SameSite) no localhost e espelha produção (web + api atrás do mesmo host).
+  async rewrites() {
+    const target = process.env.API_PROXY_TARGET ?? 'http://localhost:3001';
+    return [
+      { source: '/api/:path*', destination: `${target}/api/:path*` },
+      { source: '/auth/:path*', destination: `${target}/auth/:path*` },
+      { source: '/socket.io/:path*', destination: `${target}/socket.io/:path*` },
+    ];
+  },
 };
 
 export default nextConfig;

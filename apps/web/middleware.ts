@@ -18,5 +18,7 @@ export function middleware(req: NextRequest): NextResponse {
 
 export const config = {
   // Ignora assets estáticos e arquivos com extensão.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)'],
+  // Exclui também os paths proxiados para a API (api/auth/socket.io) — quem
+  // autentica lá é a própria API (401), não o redirect de página.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/|auth/|socket.io|.*\\..*).*)'],
 };

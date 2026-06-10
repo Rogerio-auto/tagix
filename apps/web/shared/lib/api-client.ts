@@ -3,7 +3,12 @@
  * Components. Erros viram `ApiError` (com ref copiável quando o backend mandar).
  */
 
-const BASE_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
+// No browser: vazio = mesma origem (o Next proxia /api e /auth → API), então o
+// cookie de sessão é first-party e sempre enviado. No servidor (SSR/RSC) não há
+// origem relativa, então vai direto na API.
+const BASE_URL =
+  process.env['NEXT_PUBLIC_API_URL'] ??
+  (typeof window === 'undefined' ? 'http://localhost:3001' : '');
 
 export class ApiError extends Error {
   constructor(

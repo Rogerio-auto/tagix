@@ -51,8 +51,9 @@ export interface SocketContextValue {
 
 export const SocketContext = createContext<SocketContextValue | null>(null);
 
-/** URL base da API (mesma do `api-client`). */
-const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
+/** URL base do socket. Vazio = mesma origem (o Next proxia /socket.io → API),
+ *  garantindo o cookie de sessão first-party no handshake. */
+const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? '';
 
 export interface SocketProviderProps {
   children: ReactNode;
