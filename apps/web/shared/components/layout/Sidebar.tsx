@@ -34,7 +34,7 @@ const NAV: readonly NavItem[] = [
   { href: '/agents', label: 'Agentes', icon: Bot },
   { href: '/knowledge', label: 'Conhecimento', icon: BookOpen, perm: 'kb.edit' },
   { href: '/contacts', label: 'Contatos', icon: Users },
-  { href: '/pipeline', label: 'Pipeline', icon: GitBranch },
+  { href: '/pipeline', label: 'Pipeline', icon: GitBranch, perm: 'pipeline.view' },
   { href: '/flows', label: 'Flows', icon: Workflow, perm: 'flow.list' },
   { href: '/campaigns', label: 'Campanhas', icon: Megaphone },
   { href: '/calendar', label: 'Agenda', icon: Calendar },
