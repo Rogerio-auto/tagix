@@ -2,6 +2,7 @@
 
 import { useFlowEditor } from '../hooks/useFlowEditor';
 import { NODE_CATALOG, type FlowNodeKind } from '../shared/node-catalog';
+import { nodeInspectors } from '../nodes/nodeInspectors';
 
 /**
  * Container do inspector (FLOW_BUILDER secao 9.2): resolve qual inspector renderizar pelo node
@@ -11,7 +12,6 @@ import { NODE_CATALOG, type FlowNodeKind } from '../shared/node-catalog';
 export function InspectorPanel() {
   const selectedNodeId = useFlowEditor((s) => s.selectedNodeId);
   const nodes = useFlowEditor((s) => s.nodes);
-  const updateNodeData = useFlowEditor((s) => s.updateNodeData);
 
   const node = nodes.find((n) => n.id === selectedNodeId);
 
@@ -23,7 +23,9 @@ export function InspectorPanel() {
     );
   }
 
-  const meta = NODE_CATALOG[(node.type ?? 'message') as FlowNodeKind];
+  const kind = (node.type ?? 'message') as FlowNodeKind;
+  const meta = NODE_CATALOG[kind];
+  const NodeInspector = nodeInspectors[kind];
 
   return (
     <aside className="w-80 shrink-0 overflow-y-auto border-l border-border-2 bg-surface-1 p-4">
@@ -35,24 +37,7 @@ export function InspectorPanel() {
         )}
       </div>
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-text-low">Dados do node (JSON)</span>
-        <textarea
-          className="min-h-[180px] rounded-md border border-border-2 bg-surface-2 px-3 py-2 font-mono text-xs text-text focus:border-accent focus:outline-none"
-          defaultValue={JSON.stringify(node.data ?? {}, null, 2)}
-          onBlur={(e) => {
-            try {
-              const parsed = JSON.parse(e.target.value || '{}') as Record<string, unknown>;
-              updateNodeData(node.id, parsed);
-            } catch {
-              // JSON invalido: ignora (S11 troca por forms tipados, sem JSON cru).
-            }
-          }}
-        />
-      </label>
-      <p className="mt-2 text-[11px] text-text-low">
-        Editor de campos tipados por tipo de node entra na proxima iteracao (S11).
-      </p>
+      <NodeInspector nodeId={node.id} />
     </aside>
   );
 }
