@@ -13,7 +13,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
-| F5   | 16     | 0   | 4   | 0   | 0   | 0   | 12   |
+| F5   | 16     | 0   | 3   | 0   | 0   | 1   | 12   |
 
 ## Fase 0 — Fundação
 
@@ -138,7 +138,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F5-S08 | Agent tools — move_deal_stage + query_deal (agent-runtime)                                                | ✅ done     | medium     | F5-S02, F5-S05         |
 | F5-S09 | Frontend PipelinePage kanban (dnd-kit + optimistic move + filtros) + PipelineSettingsPage                 | ⏸️ blocked | high       | F5-S04, F5-S05         |
 | F5-S10 | Frontend DealDetailDrawer + history timeline + CardImageCapture/gallery                                   | ⏸️ blocked | high       | F5-S05                 |
-| F5-S11 | Frontend custom fields — settings editor + dynamic form renderer + Zod dinâmico                           | ⏸️ blocked | medium     | F5-S04                 |
+| F5-S11 | Frontend custom fields — settings editor + dynamic form renderer + Zod dinâmico                           | 🟣 review   | medium     | F5-S04                 |
 | F5-S12 | API conversões — CRUD conversion_types + events (registrar/listar/cancelar) + dedup                       | ✅ done     | high       | F5-S03                 |
 | F5-S13 | Frontend conversões — botão "Marcar conversão" + modal + página /conversions + settings                   | ⏸️ blocked | medium     | F5-S12                 |
 | F5-S14 | Conversões automações — flow handler register_conversion + tag pg-trigger + fecha F2-S20                  | ✅ done     | medium     | F5-S03, F5-S06, F5-S12 |
