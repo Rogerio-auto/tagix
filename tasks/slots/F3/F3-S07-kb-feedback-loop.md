@@ -2,7 +2,7 @@
 id: F3-S07
 title: Feedback loop — citações do agente + marcar útil/não-útil (kb_feedback)
 phase: F3
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F3-S01, F3-S05, F3-S06]
