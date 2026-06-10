@@ -2,7 +2,7 @@
 id: F2-S01
 title: Schema de agentes IA (agents, templates, tools, executions, llm usage, policies)
 phase: F2
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: []
