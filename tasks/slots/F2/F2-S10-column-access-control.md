@@ -2,12 +2,14 @@
 id: F2-S10
 title: Column-level access control para tools de database
 phase: F2
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: S
 depends_on: [F2-S02]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T03:19:20Z
 
+---
 # F2-S10 — Column-level access control
 
 > **source_docs:** `docs/AGENTS_LANGGRAPH.md` §6.5; `docs/ROADMAP.md` F2-S10
