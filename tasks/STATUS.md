@@ -9,7 +9,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | Fase | Total | 🟢  | ⏸️  | 🟡  | 🔵  | 🟣  | ✅  |
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F1   | 23     | 0   | 13   | 0   | 0   | 0   | 10   |
+| F1   | 23     | 0   | 12   | 0   | 0   | 1   | 10   |
 
 ## Fase 0 — Fundação
 
@@ -37,7 +37,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ID     | Titulo                                                                        | Status     | Prioridade | Depende de             |
 | ------ | ----------------------------------------------------------------------------- | ---------- | ---------- | ---------------------- |
 | F1-S01 | Schema channels + channel_secrets + crypto AES-256-GCM (+ colunas IG)         | ✅ done     | critical   | F0-S03, F0-S04         |
-| F1-S02 | Webhook Meta unificado + signature verify + dedup (webhook_events)            | ⏸️ blocked | critical   | F0-S06, F1-S01         |
+| F1-S02 | Webhook Meta unificado + signature verify + dedup (webhook_events)            | 🟣 review   | critical   | F0-S06, F1-S01         |
 | F1-S03 | Schema platform_secrets + carregamento boot-time                              | ✅ done     | high       | F0-S03                 |
 | F1-S04 | Worker inbound — parser por provider + persist + relay                        | ⏸️ blocked | critical   | F1-S02, F1-S05, F1-S09 |
 | F1-S05 | Schema contacts + conversations + messages + repos + interactive types        | ✅ done     | critical   | F1-S01                 |

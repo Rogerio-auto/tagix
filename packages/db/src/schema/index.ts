@@ -204,6 +204,8 @@ export const auditLogs = pgTable(
 export * from './channels';
 // Segredos de plataforma (sem workspace_id → fora do RLS de tenant).
 export * from './platform_secrets';
+// Dedup de webhooks inbound na borda (platform-level, fora do RLS de tenant).
+export * from './webhook_events';
 // LiveChat: contacts → conversations → messages (ordem de dependência).
 export * from './contacts';
 export * from './conversations';
