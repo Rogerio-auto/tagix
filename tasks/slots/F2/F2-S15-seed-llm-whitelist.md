@@ -2,12 +2,14 @@
 id: F2-S15
 title: Seed — catálogo inicial llm_models_whitelist (top modelos OpenRouter)
 phase: F2
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: XS
 depends_on: [F2-S01]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T03:19:30Z
 
+---
 # F2-S15 — Seed de llm_models_whitelist
 
 > **source_docs:** `docs/AGENTS_LANGGRAPH.md` §5.2; `docs/ROADMAP.md` F2-S15
