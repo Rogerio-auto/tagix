@@ -2,12 +2,13 @@
 id: F4-S10
 title: Frontend FlowEditorPage — canvas ReactFlow + palette + inspector shell + toolbar + executions panel
 phase: F4
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: [F4-S08, F4-S07]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T21:02:03Z
+completed_at: 2026-06-10T21:10:48Z
 
 ---
 # F4-S10 — FlowEditorPage (canvas)
