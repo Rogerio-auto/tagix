@@ -2,12 +2,13 @@
 id: F2-S08
 title: Policy enforcement no runtime (filtra tools, valida modelo, max_iterations)
 phase: F2
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: [F2-S05, F2-S01]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T03:52:22Z
+completed_at: 2026-06-10T03:52:22Z
 
 ---
 # F2-S08 — Policy enforcement (defense-in-depth no runtime)
