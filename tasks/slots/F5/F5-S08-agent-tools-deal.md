@@ -2,7 +2,7 @@
 id: F5-S08
 title: Agent tools — move_deal_stage + query_deal (agent-runtime)
 phase: F5
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F5-S02, F5-S05]
