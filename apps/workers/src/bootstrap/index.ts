@@ -53,6 +53,13 @@ import {
   type FlowWorkerHandle,
   type FlowSchedulerHandle,
 } from '../flows/index';
+import {
+  createActionExecutor,
+  startAutomationWorker,
+  startStaleScheduler,
+  type ActionPorts,
+  type AutomationWorkerHandle,
+} from '../automations/index';
 
 /** Intervalo do rollup de métricas de agentes (F2-S13); idempotente. */
 const METRICS_ROLLUP_INTERVAL_MS = 10 * 60_000;
@@ -80,6 +87,7 @@ export interface WorkersBootstrapHandle {
   readonly followup: FollowupSchedulerHandle;
   readonly flow: FlowWorkerHandle;
   readonly flowScheduler: FlowSchedulerHandle;
+  readonly automationWorker: AutomationWorkerHandle;
   stop(): Promise<void>;
 }
 
@@ -148,6 +156,13 @@ export async function startWorkers(
   const followup = startFollowupScheduler({ redis, channel, logger });
   // Scheduler de wakeup de flows (F4-S03): re-enfileira execucoes waiting vencidas.
   const flowScheduler = startFlowWakeupScheduler({ redis, channel, logger });
+  // Motor de automacoes de stage (F5-S06): drainer de pending_automations + cron
+  // on_stale. As portas de action (add_tag/register_conversion/trigger_flow) sao
+  // preenchidas conforme F5-S14/S16/flow-engine; actions sem porta vao a retry/failed.
+  const automationPorts: ActionPorts = {};
+  const automationExecutor = createActionExecutor(automationPorts);
+  const automationWorker = startAutomationWorker({ redis, logger, execute: automationExecutor });
+  const staleScheduler = startStaleScheduler({ redis, logger });
   const metricsTimer = setInterval(() => {
     void runAgentMetricsRollup({}, logger).catch((err: unknown) => {
       logger.error('falha no rollup de métricas de agentes', {
@@ -167,6 +182,8 @@ export async function startWorkers(
       'followup-scheduler',
       'flow',
       'flow-wakeup-scheduler',
+      'automation-worker',
+      'automation-stale-scheduler',
     ],
   });
 
@@ -179,10 +196,13 @@ export async function startWorkers(
     followup,
     flow,
     flowScheduler,
+    automationWorker,
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
       clearInterval(metricsTimer);
       await flowScheduler.stop();
+      await staleScheduler.stop();
+      await automationWorker.stop();
       await flow.stop();
       followup.stop();
       await kbIngest.stop();

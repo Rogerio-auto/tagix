@@ -22,11 +22,15 @@ import { createFlowSubmissionsRouter } from './routes/flows/submissions';
 import { createFlowsRouter } from './routes/flows';
 import { createPipelineRouter } from './routes/pipeline';
 import { createDealsRouter } from './routes/deals';
+import { registerDealHooks } from './services/deal-hooks';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
   const config = loadConfig();
   const app = express();
+
+  // Seam onStageChanged (F5-S06/S07): socket emit + automation scheduling.
+  registerDealHooks();
 
   app.disable('x-powered-by');
   app.use(helmet());

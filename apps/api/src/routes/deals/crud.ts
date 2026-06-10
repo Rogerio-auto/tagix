@@ -25,6 +25,7 @@ import {
   moveDealToStage,
   type DealActor,
 } from '../../services/deal-move';
+import { emitDealCreated, emitDealUpdated } from '../../services/deal-events';
 
 const { deals, dealHistory } = schema;
 
@@ -129,6 +130,7 @@ export function createDealsCrudRouter(): Router {
       }
       return created;
     });
+    if (result) void emitDealCreated({ workspaceId, deal: result });
     res.status(201).json({ deal: result });
   });
 
@@ -163,6 +165,7 @@ export function createDealsCrudRouter(): Router {
       res.sendStatus(404);
       return;
     }
+    void emitDealUpdated({ workspaceId: req.auth!.workspace.id, deal: updated });
     res.json({ deal: updated });
   });
 
