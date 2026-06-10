@@ -2,7 +2,7 @@
 id: F2-S06
 title: Tool registry + tools "leves" (query_contact/conversation/search_kb) via asyncpg RLS
 phase: F2
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F2-S02, F2-S01, F2-S10]
