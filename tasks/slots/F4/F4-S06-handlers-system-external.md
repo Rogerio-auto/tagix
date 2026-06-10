@@ -2,7 +2,7 @@
 id: F4-S06
 title: Handlers de sistema/externos — ai_action + change_status + http_request + external_notify
 phase: F4
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F4-S02]
