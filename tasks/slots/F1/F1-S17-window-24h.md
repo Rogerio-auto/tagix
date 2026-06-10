@@ -2,7 +2,7 @@
 id: F1-S17
 title: Janela 24h Meta no composer + CTA template (WA) + state machine IG-ready
 phase: F1
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F1-S16, F1-S07]
