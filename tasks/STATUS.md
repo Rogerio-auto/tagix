@@ -9,7 +9,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | Fase | Total | 🟢  | ⏸️  | 🟡  | 🔵  | 🟣  | ✅  |
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F1   | 23     | 0   | 10   | 0   | 0   | 0   | 13   |
+| F1   | 23     | 0   | 9   | 0   | 0   | 1   | 13   |
 
 ## Fase 0 — Fundação
 
@@ -51,7 +51,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1-S13 | Frontend ConversationsPage — layout 3 colunas + ContactInfoPanel skeleton     | ✅ done     | high       | F0-S11, F0-S12, F1-S12 |
 | F1-S14 | ChatList — real-time + filtros (incl. provider) + search + scroll infinito    | ✅ done     | high       | F1-S13, F1-S11, F1-S12 |
 | F1-S15 | MessageBubble — discriminated union (text/image/.../interactive); IG em stubs | ⏸️ blocked | high       | F1-S13, F1-S05, F1-S10 |
-| F1-S16 | MessageComposer — textarea + media upload + emoji + mention @ + reply         | ⏸️ blocked | high       | F1-S13, F1-S12         |
+| F1-S16 | MessageComposer — textarea + media upload + emoji + mention @ + reply         | 🟣 review   | high       | F1-S13, F1-S12         |
 | F1-S17 | Janela 24h Meta no composer + CTA template (WA) + state machine IG-ready      | ⏸️ blocked | high       | F1-S16, F1-S07         |
 | F1-S18 | WAHAAdapter (inbound + outbound) + session management                         | ✅ done     | high       | F1-S09                 |
 | F1-S19 | Channel settings page + connect wizard (Meta FB Login + WAHA)                 | ⏸️ blocked | high       | F1-S01, F1-S03, F0-S11 |
