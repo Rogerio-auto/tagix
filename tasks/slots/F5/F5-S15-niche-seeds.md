@@ -2,7 +2,7 @@
 id: F5-S15
 title: Seeds de nicho — pipeline templates (imobiliária + clínica) + agent_template variants + onboarding wizard
 phase: F5
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F5-S02, F5-S04]
