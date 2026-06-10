@@ -20,6 +20,8 @@ import { createWindowRouter } from './routes/conversations/window';
 import { createWebhooksRouter } from './routes/webhooks';
 import { createFlowSubmissionsRouter } from './routes/flows/submissions';
 import { createFlowsRouter } from './routes/flows';
+import { createPipelineRouter } from './routes/pipeline';
+import { createDealsRouter } from './routes/deals';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
@@ -55,6 +57,10 @@ export function createApp(): Express {
   app.use(createFlowsRouter());
   // Meta Flow submissions (F4-S14): endpoint interno de despacho do webhook.
   app.use(createFlowSubmissionsRouter());
+  // Pipeline/funil (F5-S04): CRUD pipelines + stages.
+  app.use(createPipelineRouter());
+  // Deals (F5-S05): CRUD + move-stage + close/reopen + anexos.
+  app.use(createDealsRouter());
 
   // Error handler por último (Express 5 captura erros de handlers async).
   app.use(errorHandler);
