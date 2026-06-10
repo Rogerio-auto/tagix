@@ -2,7 +2,7 @@
 id: F2-S11
 title: Worker de agentes — ai_mode='on' + inbound → agentsClient.run (stream)
 phase: F2
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F2-S03, F2-S05, F2-S09]
