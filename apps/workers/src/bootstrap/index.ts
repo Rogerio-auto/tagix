@@ -20,11 +20,7 @@
 import Redis from 'ioredis';
 import { assertTopology, connectMq, type MqHandle } from '@hm/shared/mq';
 import { createLogger, type Logger } from '@hm/logger';
-import {
-  createInboundDeps,
-  startInboundWorker,
-  type InboundWorkerHandle,
-} from '../inbound/index';
+import { createInboundDeps, startInboundWorker, type InboundWorkerHandle } from '../inbound/index';
 import {
   createOutboundDeps,
   startOutboundWorker,
@@ -50,6 +46,13 @@ import {
   startKbIngestWorker,
   type KbIngestWorkerHandle,
 } from '../knowledge/index';
+import {
+  createFlowWorkerDeps,
+  startFlowWorker,
+  startFlowWakeupScheduler,
+  type FlowWorkerHandle,
+  type FlowSchedulerHandle,
+} from '../flows/index';
 
 /** Intervalo do rollup de métricas de agentes (F2-S13); idempotente. */
 const METRICS_ROLLUP_INTERVAL_MS = 10 * 60_000;
@@ -75,6 +78,8 @@ export interface WorkersBootstrapHandle {
   readonly agent: AgentWorkerHandle;
   readonly kbIngest: KbIngestWorkerHandle;
   readonly followup: FollowupSchedulerHandle;
+  readonly flow: FlowWorkerHandle;
+  readonly flowScheduler: FlowSchedulerHandle;
   stop(): Promise<void>;
 }
 
@@ -128,6 +133,12 @@ export async function startWorkers(
     logger,
   });
 
+  // Worker de execucao de flows (F4-S03): consome hm.q.flow.execution -> processFlowStep.
+  const flow = await startFlowWorker({
+    deps: createFlowWorkerDeps(channel, logger),
+    logger,
+  });
+
   // Scheduler singleton (Redis lock): follow-up cron (F2-S21) + rollup de métricas
   // (F2-S13, idempotente). Reusa o `channel` AMQP de boot como transporte de publish.
   const redis = new Redis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
@@ -135,6 +146,8 @@ export async function startWorkers(
     maxRetriesPerRequest: 1,
   });
   const followup = startFollowupScheduler({ redis, channel, logger });
+  // Scheduler de wakeup de flows (F4-S03): re-enfileira execucoes waiting vencidas.
+  const flowScheduler = startFlowWakeupScheduler({ redis, channel, logger });
   const metricsTimer = setInterval(() => {
     void runAgentMetricsRollup({}, logger).catch((err: unknown) => {
       logger.error('falha no rollup de métricas de agentes', {
@@ -145,7 +158,16 @@ export async function startWorkers(
   metricsTimer.unref();
 
   logger.info('workers iniciados', {
-    workers: ['inbound', 'outbound', 'media', 'agent', 'kb-ingest', 'followup-scheduler'],
+    workers: [
+      'inbound',
+      'outbound',
+      'media',
+      'agent',
+      'kb-ingest',
+      'followup-scheduler',
+      'flow',
+      'flow-wakeup-scheduler',
+    ],
   });
 
   return {
@@ -155,9 +177,13 @@ export async function startWorkers(
     agent,
     kbIngest,
     followup,
+    flow,
+    flowScheduler,
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
       clearInterval(metricsTimer);
+      await flowScheduler.stop();
+      await flow.stop();
       followup.stop();
       await kbIngest.stop();
       await agent.stop();
