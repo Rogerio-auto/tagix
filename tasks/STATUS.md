@@ -10,7 +10,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
-| F2   | 21     | 0   | 1   | 0   | 0   | 1   | 19   |
+| F2   | 21     | 0   | 1   | 0   | 0   | 0   | 20   |
 
 ## Fase 0 — Fundação
 
@@ -85,7 +85,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F2-S15 | Seed — catálogo inicial llm_models_whitelist (top modelos OpenRouter)                        | ✅ done     | medium     | F2-S01                 |
 | F2-S16 | API CRUD agents + tools_global + toggle agent_tools (Node)                                   | ✅ done     | high       | F2-S01, F2-S03         |
 | F2-S17 | Frontend AgentsListPage + AgentCreationWizard                                                | ✅ done     | high       | F2-S16, F2-S14, F2-S15 |
-| F2-S18 | Frontend AgentDetailPage com tabs (Config, Tools, Knowledge, Metrics, Playground)            | 🟣 review   | medium     | F2-S16, F2-S17         |
+| F2-S18 | Frontend AgentDetailPage com tabs (Config, Tools, Knowledge, Metrics, Playground)            | ✅ done     | medium     | F2-S16, F2-S17         |
 | F2-S19 | Playground do agente com SSE streaming (proxy via API Node)                                  | ⏸️ blocked | medium     | F2-S16, F2-S05, F2-S18 |
 | F2-S20 | Tools workflow modulares + register_conversion (respeitando policies)                        | ✅ done     | medium     | F2-S07, F2-S06         |
 | F2-S21 | Auto follow-up cron job idempotente                                                          | ✅ done     | low        | F2-S11                 |

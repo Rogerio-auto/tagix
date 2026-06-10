@@ -2,7 +2,7 @@
 id: F2-S18
 title: Frontend AgentDetailPage com tabs (Config, Tools, Knowledge, Metrics, Playground)
 phase: F2
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F2-S16, F2-S17]
