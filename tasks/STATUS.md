@@ -13,7 +13,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
-| F5   | 16     | 0   | 7   | 0   | 0   | 0   | 9   |
+| F5   | 16     | 0   | 6   | 0   | 0   | 1   | 9   |
 
 ## Fase 0 — Fundação
 
@@ -141,6 +141,6 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F5-S11 | Frontend custom fields — settings editor + dynamic form renderer + Zod dinâmico                           | ⏸️ blocked | medium     | F5-S04                 |
 | F5-S12 | API conversões — CRUD conversion_types + events (registrar/listar/cancelar) + dedup                       | ✅ done     | high       | F5-S03                 |
 | F5-S13 | Frontend conversões — botão "Marcar conversão" + modal + página /conversions + settings                   | ⏸️ blocked | medium     | F5-S12                 |
-| F5-S14 | Conversões automações — flow handler register_conversion + tag pg-trigger + fecha F2-S20                  | ⏸️ blocked | medium     | F5-S03, F5-S06, F5-S12 |
+| F5-S14 | Conversões automações — flow handler register_conversion + tag pg-trigger + fecha F2-S20                  | 🟣 review   | medium     | F5-S03, F5-S06, F5-S12 |
 | F5-S15 | Seeds de nicho — pipeline templates (imobiliária + clínica) + agent_template variants + onboarding wizard | ⏸️ blocked | medium     | F5-S02, F5-S04         |
 | F5-S16 | Fecha stubs da F4 — handlers move_stage/add_tag/remove_tag + triggers stage_change/tag_added              | ✅ done     | high       | F5-S01, F5-S02, F5-S05 |
