@@ -1,18 +1,26 @@
 /**
- * Handler `wait` (FLOW_BUILDER.md §4).
- *
- * Stub no-op do scaffold S02: schema permissivo + execute trivial. O slot de handler
- * dono substitui APENAS este arquivo (registry/index sao de S02 e nao mudam).
+ * Handler `wait` (FLOW_BUILDER.md secao 4.1). Espera N minutos (ou segundos) e retoma:
+ * retorna WAITING com `nextStepAt = now + duracao`. O scheduler (F4-S03) re-enfileira
+ * quando o timer vence.
  */
 import { z } from 'zod';
 import type { FlowHandler } from '../types';
 
-const waitSchema = z.record(z.unknown());
+const waitSchema = z
+  .object({
+    minutes: z.number().min(0).optional(),
+    seconds: z.number().min(0).optional(),
+  })
+  .refine((d) => d.minutes !== undefined || d.seconds !== undefined, {
+    message: 'wait exige minutes ou seconds',
+  });
 
 export const waitHandler: FlowHandler<z.infer<typeof waitSchema>> = {
   schema: waitSchema,
-  async execute(_node, _ctx) {
-    // STUB (F4-S02 scaffold). Impl real entra no slot de handler correspondente.
-    return { status: 'SUCCESS' };
+  async execute(node, ctx) {
+    const data = waitSchema.parse(node.data);
+    const ms = (data.minutes ?? 0) * 60_000 + (data.seconds ?? 0) * 1000;
+    const nextStepAt = new Date(ctx.now().getTime() + ms).toISOString();
+    return { status: 'WAITING', nextStepAt };
   },
 };
