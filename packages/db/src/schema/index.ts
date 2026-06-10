@@ -212,6 +212,8 @@ export * from './conversations';
 export * from './messages';
 // Notas internas por conversa (+ mentions → notificação). Depende de conversations/members.
 export * from './conversation_notes';
+// Histórico auditável de roteamento (assign/transfer). Depende de conversations/members.
+export * from './routing_history';
 // Instagram comments (auxiliar, F1.5).
 export * from './ig_comments';
 
@@ -228,5 +230,6 @@ export const RLS_TABLES = [
   'conversations',
   'messages',
   'conversation_notes',
+  'routing_history',
   'ig_comments',
 ] as const;

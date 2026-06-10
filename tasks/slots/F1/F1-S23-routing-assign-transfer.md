@@ -2,12 +2,13 @@
 id: F1-S23
 title: Auto-assign + manual transfer + routing_history
 phase: F1
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F1-S05, F1-S12]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T01:02:43Z
+completed_at: 2026-06-10T01:02:43Z
 
 ---
 # F1-S23 — Routing (assign / transfer / history)
