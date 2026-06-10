@@ -2,7 +2,7 @@
 id: F2-S20
 title: Tools workflow modulares + register_conversion (respeitando policies)
 phase: F2
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F2-S07, F2-S06]
