@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
@@ -19,6 +19,11 @@ export interface SheetProps {
  *  (UX §2.3 — drawer no lugar de modal full-screen). Mantido montado para a
  *  transição; alterna pointer-events conforme `open`. */
 export function Sheet({ open, onClose, title, children, widthClass = 'w-[420px]' }: SheetProps) {
+  // Portal só após montar: servidor e 1º render do cliente devolvem null (iguais),
+  // evitando hydration mismatch; o portal entra depois no client.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -28,7 +33,7 @@ export function Sheet({ open, onClose, title, children, widthClass = 'w-[420px]'
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  if (typeof document === 'undefined') return null;
+  if (!mounted) return null;
 
   return createPortal(
     <div className={cn('fixed inset-0 z-50', open ? 'pointer-events-auto' : 'pointer-events-none')}>
