@@ -2,12 +2,15 @@
 id: F2-S04
 title: OpenRouterProvider (chat completion + streaming + tool calls + usage capture)
 phase: F2
-status: blocked
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F2-S02]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T03:19:18Z
+completed_at: 2026-06-10T03:19:18Z
 
+---
 # F2-S04 — OpenRouterProvider (Python)
 
 > **source_docs:** `docs/AGENTS_LANGGRAPH.md` §5; `docs/ROADMAP.md` F2-S04
