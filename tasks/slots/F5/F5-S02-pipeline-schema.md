@@ -2,10 +2,14 @@
 id: F5-S02
 title: Schema pipeline (pipelines, stages, deals, deal_history, deal_attachments, pending_automations) + RLS
 phase: F5
-status: available
+status: review
 priority: critical
 estimated_size: L
 depends_on: []
+agent_id: backend-engineer
+claimed_at: 2026-06-10T21:46:52Z
+completed_at: 2026-06-10T21:52:06Z
+
 ---
 # F5-S02 — Schema Pipeline
 
