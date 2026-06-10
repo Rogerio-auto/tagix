@@ -9,11 +9,20 @@ function isUsable(value: string | undefined, placeholderHint: string): value is 
 }
 
 /**
- * Escolhe o provider de auth: Supabase real se SUPABASE_URL/ANON_KEY estiverem
- * preenchidos no .env (não placeholders); senão, MockAuthProvider (dev).
+ * Escolhe o provider de auth: `AUTH_PROVIDER=mock` força mock (dev local);
+ * senão Supabase real se SUPABASE_URL/ANON_KEY válidos; senão MockAuthProvider.
  */
 export function getAuthProvider(): IAuthProvider {
   if (cached) return cached;
+
+  // Override explícito p/ dev local: `AUTH_PROVIDER=mock` no .env loga com
+  // qualquer senha um member existente (ex. owner@dev.local do seed), mesmo
+  // com as chaves Supabase preenchidas. Nunca usar em produção.
+  if (process.env['AUTH_PROVIDER'] === 'mock') {
+    cached = new MockAuthProvider();
+    return cached;
+  }
+
   const url = process.env['SUPABASE_URL'];
   const anonKey = process.env['SUPABASE_ANON_KEY'];
 
