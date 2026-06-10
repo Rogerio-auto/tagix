@@ -2,12 +2,13 @@
 id: F2-S20
 title: Tools workflow modulares + register_conversion (respeitando policies)
 phase: F2
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F2-S07, F2-S06]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T04:06:03Z
+completed_at: 2026-06-10T04:06:04Z
 
 ---
 # F2-S20 — Workflow tools modulares + register_conversion
