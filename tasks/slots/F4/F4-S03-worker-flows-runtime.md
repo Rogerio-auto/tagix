@@ -2,10 +2,14 @@
 id: F4-S03
 title: Worker-flows runtime — consumer hm.q.flow.execution + scheduler de wakeup (waiting)
 phase: F4
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F4-S02]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T20:32:47Z
+completed_at: 2026-06-10T20:37:05Z
+
 ---
 # F4-S03 — Worker-flows runtime + scheduler
 
