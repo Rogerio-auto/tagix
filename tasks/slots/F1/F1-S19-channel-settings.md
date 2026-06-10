@@ -2,12 +2,13 @@
 id: F1-S19
 title: Channel settings page + connect wizard (Meta FB Login + WAHA)
 phase: F1
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F1-S01, F1-S03, F0-S11]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T00:44:41Z
+completed_at: 2026-06-10T00:44:41Z
 
 ---
 # F1-S19 — Channel settings + connect wizard
