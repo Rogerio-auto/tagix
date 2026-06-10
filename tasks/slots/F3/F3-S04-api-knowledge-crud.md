@@ -2,7 +2,7 @@
 id: F3-S04
 title: API CRUD Knowledge Base + enqueue ingest + envelope kb.document.ingest
 phase: F3
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F3-S01]
