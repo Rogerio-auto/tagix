@@ -2,7 +2,7 @@
 id: F1-S25
 title: Web socket client — SocketProvider + window.__hmSocket (liga o realtime)
 phase: F1
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F1-S11, F0-S11]
