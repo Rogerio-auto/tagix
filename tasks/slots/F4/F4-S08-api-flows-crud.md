@@ -2,12 +2,13 @@
 id: F4-S08
 title: API CRUD flows + publish (version) + trigger manual + executions + cancel + manual-order
 phase: F4
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F4-S01, F4-S02, F4-S07]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T20:50:05Z
+completed_at: 2026-06-10T20:54:18Z
 
 ---
 # F4-S08 — API Flow Builder
