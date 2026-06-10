@@ -8,6 +8,7 @@ export const QUEUES = {
   media: 'hm.q.media',
   campaigns: 'hm.q.campaigns',
   flows: 'hm.q.flows',
+  flowExecution: 'hm.q.flow.execution',
   kbIngest: 'hm.q.kb_ingest',
 } as const;
 
