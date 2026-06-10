@@ -2,12 +2,13 @@
 id: F5-S11
 title: Frontend custom fields — settings editor + dynamic form renderer + Zod dinâmico
 phase: F5
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F5-S04]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T22:41:28Z
+completed_at: 2026-06-10T22:44:31Z
 
 ---
 # F5-S11 — Custom fields (web)
