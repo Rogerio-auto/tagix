@@ -11,7 +11,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
-| F3   | 7     | 2   | 5   | 0   | 0   | 0   | 0   |
+| F3   | 7     | 1   | 5   | 0   | 0   | 1   | 0   |
 
 ## Fase 0 — Fundação
 
@@ -95,7 +95,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID     | Titulo                                                                            | Status      | Prioridade | Depende de             |
 | ------ | --------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------- |
-| F3-S01 | Schema Knowledge Base (kb_documents, kb_chunks pgvector, kb_feedback) + RLS       | 🟢 available | critical   | —                      |
+| F3-S01 | Schema Knowledge Base (kb_documents, kb_chunks pgvector, kb_feedback) + RLS       | 🟣 review    | critical   | —                      |
 | F3-S02 | Embeddings provider (OpenAI direto) + endpoint interno /embed + usage logging     | 🟢 available | critical   | —                      |
 | F3-S03 | Ingest pipeline (worker) — chunking + embeddings + persist kb_chunks              | ⏸️ blocked  | high       | F3-S01, F3-S02, F3-S04 |
 | F3-S04 | API CRUD Knowledge Base + enqueue ingest + envelope kb.document.ingest            | ⏸️ blocked  | high       | F3-S01                 |
