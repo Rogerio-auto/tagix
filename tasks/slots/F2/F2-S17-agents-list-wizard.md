@@ -2,12 +2,13 @@
 id: F2-S17
 title: Frontend AgentsListPage + AgentCreationWizard
 phase: F2
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F2-S16, F2-S14, F2-S15]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T03:52:11Z
+completed_at: 2026-06-10T03:52:12Z
 
 ---
 # F2-S17 — AgentsListPage + Creation Wizard
