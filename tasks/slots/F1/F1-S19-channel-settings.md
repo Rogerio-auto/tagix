@@ -2,7 +2,7 @@
 id: F1-S19
 title: Channel settings page + connect wizard (Meta FB Login + WAHA)
 phase: F1
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F1-S01, F1-S03, F0-S11]
