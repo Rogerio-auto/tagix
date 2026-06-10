@@ -10,7 +10,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
-| F2   | 21     | 0   | 11   | 0   | 0   | 1   | 9   |
+| F2   | 21     | 0   | 11   | 0   | 0   | 0   | 10   |
 
 ## Fase 0 — Fundação
 
@@ -76,7 +76,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F2-S06 | Tool registry + tools "leves" (query_contact/conversation/search_kb) via asyncpg RLS         | ⏸️ blocked | high       | F2-S02, F2-S01, F2-S10 |
 | F2-S07 | Tools de negócio via callback HTTP para o Node (internal tools endpoint)                     | ⏸️ blocked | high       | F2-S06, F2-S01         |
 | F2-S08 | Policy enforcement no runtime (filtra tools, valida modelo, max_iterations)                  | ⏸️ blocked | high       | F2-S05, F2-S01         |
-| F2-S09 | Hard cap de custo no Node antes da chamada ao runtime                                        | 🟣 review   | high       | F2-S01, F2-S03         |
+| F2-S09 | Hard cap de custo no Node antes da chamada ao runtime                                        | ✅ done     | high       | F2-S01, F2-S03         |
 | F2-S10 | Column-level access control para tools de database                                           | ✅ done     | medium     | F2-S02                 |
 | F2-S11 | Worker de agentes — ai_mode='on' + inbound → agentsClient.run (stream)                       | ⏸️ blocked | critical   | F2-S03, F2-S05, F2-S09 |
 | F2-S12 | Aggregation buffer (window_sec) antes de chamar o runtime                                    | ⏸️ blocked | medium     | F2-S11                 |

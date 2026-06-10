@@ -2,7 +2,7 @@
 id: F2-S09
 title: Hard cap de custo no Node antes da chamada ao runtime
 phase: F2
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F2-S01, F2-S03]
