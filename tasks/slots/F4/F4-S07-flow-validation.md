@@ -2,7 +2,7 @@
 id: F4-S07
 title: Validação pré-publish — Zod + cycle detection + unreachable nodes + variable refs
 phase: F4
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F4-S02]
