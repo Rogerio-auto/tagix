@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
+import { FlowExecutionsBadge } from '@/features/flow-builder/livechat';
 import type { ConversationSummary } from '../../types';
 
 export interface ChatListItemProps {
@@ -51,18 +52,19 @@ export function ChatListItem({ conversation, active }: ChatListItemProps) {
             >
               {conversation.remoteId}
             </p>
-            {time && (
-              <time className="shrink-0 font-body text-xs text-text-low">{time}</time>
-            )}
+            {time && <time className="shrink-0 font-body text-xs text-text-low">{time}</time>}
           </div>
-          <p
-            className={cn(
-              'truncate font-body text-sm',
-              hasUnread ? 'text-text-mid' : 'text-text-low',
-            )}
-          >
-            {conversation.lastMessagePreview ?? 'Sem mensagens'}
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p
+              className={cn(
+                'truncate font-body text-sm',
+                hasUnread ? 'text-text-mid' : 'text-text-low',
+              )}
+            >
+              {conversation.lastMessagePreview ?? 'Sem mensagens'}
+            </p>
+            <FlowExecutionsBadge conversationId={conversation.id} interactive={false} />
+          </div>
         </div>
 
         {hasUnread && (

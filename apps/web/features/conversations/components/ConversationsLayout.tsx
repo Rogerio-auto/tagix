@@ -9,6 +9,7 @@ import { useMessages } from '../queries';
 import { ConversationsHelp } from '../help';
 import { ChatList } from './ChatList';
 import { MessageComposer } from './MessageComposer';
+import { FlowExecutionsBadge, ManualFlowsQuickbar } from '@/features/flow-builder/livechat';
 import { ContactInfoPanel } from './ContactInfoPanel';
 import { TypingIndicator } from './TypingIndicator';
 import { MessageBubble } from './MessageBubble';
@@ -76,14 +77,17 @@ function ConversationPanel({
     <>
       <header className="flex h-14 items-center justify-between gap-3 border-b border-border px-4">
         <span className="font-head font-semibold text-text">Conversa</span>
-        <button
-          type="button"
-          onClick={onToggleInfo}
-          aria-label="Informações do contato"
-          className="rounded-sm p-2 text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md"
-        >
-          <Info className="size-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <FlowExecutionsBadge conversationId={conversationId} />
+          <button
+            type="button"
+            onClick={onToggleInfo}
+            aria-label="Informações do contato"
+            className="rounded-sm p-2 text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md"
+          >
+            <Info className="size-5" />
+          </button>
+        </div>
       </header>
 
       {/* Recibos em tempo real (F1-S20): patcha o viewStatus no cache ao chegar status_changed. */}
@@ -101,11 +105,14 @@ function ConversationPanel({
             ))}
           </ul>
         ) : (
-          <p className="py-8 text-center font-body text-sm text-text-low">Nenhuma mensagem ainda.</p>
+          <p className="py-8 text-center font-body text-sm text-text-low">
+            Nenhuma mensagem ainda.
+          </p>
         )}
       </div>
 
       <TypingIndicator conversationId={conversationId} className="px-4" />
+      <ManualFlowsQuickbar conversationId={conversationId} />
       <MessageComposer conversationId={conversationId} />
     </>
   );
