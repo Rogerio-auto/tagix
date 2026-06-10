@@ -2,7 +2,7 @@
 id: F1-S02
 title: Webhook Meta unificado + signature verify + dedup (webhook_events)
 phase: F1
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F0-S06, F1-S01]
