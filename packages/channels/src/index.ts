@@ -50,5 +50,6 @@ export {
 // --- Adapters ---
 export { MetaWhatsAppAdapter } from './meta/whatsapp/adapter';
 export { MetaInstagramAdapter } from './meta/instagram/adapter';
+export { WAHAAdapter } from './waha/adapter';
 
 export const CHANNELS_PKG = '@hm/channels' as const;
