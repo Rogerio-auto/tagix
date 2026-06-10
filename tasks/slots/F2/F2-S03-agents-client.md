@@ -2,12 +2,15 @@
 id: F2-S03
 title: Pacote @hm/agents-client (cliente Node tipado p/ agent-runtime)
 phase: F2
-status: blocked
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F2-S02]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T03:19:33Z
+completed_at: 2026-06-10T03:19:33Z
 
+---
 # F2-S03 — @hm/agents-client (Node → agent-runtime)
 
 > **source_docs:** `docs/AGENTS_LANGGRAPH.md` §2, §10; `docs/ROADMAP.md` F2-S03
