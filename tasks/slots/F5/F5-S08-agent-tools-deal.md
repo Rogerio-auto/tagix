@@ -2,10 +2,13 @@
 id: F5-S08
 title: Agent tools — move_deal_stage + query_deal (agent-runtime)
 phase: F5
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: S
 depends_on: [F5-S02, F5-S05]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T22:30:06Z
+
 ---
 # F5-S08 — Agent tools de deal
 
