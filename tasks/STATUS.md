@@ -10,7 +10,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
-| F2   | 21     | 2   | 19   | 0   | 0   | 0   | 0   |
+| F2   | 21     | 1   | 19   | 0   | 0   | 1   | 0   |
 
 ## Fase 0 — Fundação
 
@@ -68,7 +68,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID     | Titulo                                                                                       | Status      | Prioridade | Depende de             |
 | ------ | -------------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------- |
-| F2-S01 | Schema de agentes IA (agents, templates, tools, executions, llm usage, policies)             | 🟢 available | critical   | —                      |
+| F2-S01 | Schema de agentes IA (agents, templates, tools, executions, llm usage, policies)             | 🟣 review    | critical   | —                      |
 | F2-S02 | Container agent-runtime (FastAPI + LangGraph + LangServe + asyncpg) + logging                | 🟢 available | critical   | —                      |
 | F2-S03 | Pacote @hm/agents-client (cliente Node tipado p/ agent-runtime)                              | ⏸️ blocked  | critical   | F2-S02                 |
 | F2-S04 | OpenRouterProvider (chat completion + streaming + tool calls + usage capture)                | ⏸️ blocked  | critical   | F2-S02                 |

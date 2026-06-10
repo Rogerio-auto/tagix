@@ -2,12 +2,15 @@
 id: F2-S01
 title: Schema de agentes IA (agents, templates, tools, executions, llm usage, policies)
 phase: F2
-status: available
+status: review
 priority: critical
 estimated_size: L
 depends_on: []
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T03:10:07Z
+completed_at: 2026-06-10T03:10:13Z
 
+---
 # F2-S01 — Schema de agentes IA
 
 > **source_docs:** `docs/AGENTS_LANGGRAPH.md` §1; `docs/DATA_MODEL.md` (domínio de agentes); `docs/ROADMAP.md` F2-S01
