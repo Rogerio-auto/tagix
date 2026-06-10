@@ -2,12 +2,13 @@
 id: F4-S06
 title: Handlers de sistema/externos — ai_action + change_status + http_request + external_notify
 phase: F4
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F4-S02]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T20:26:44Z
+completed_at: 2026-06-10T20:28:32Z
 
 ---
 # F4-S06 — Handlers de sistema e externos
