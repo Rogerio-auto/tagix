@@ -2,12 +2,15 @@
 id: F1-S15
 title: MessageBubble — discriminated union (text/image/.../interactive); IG em stubs
 phase: F1
-status: blocked
+status: review
 priority: high
 estimated_size: L
 depends_on: [F1-S13, F1-S05, F1-S10]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T01:02:53Z
+completed_at: 2026-06-10T01:02:54Z
 
+---
 # F1-S15 — MessageBubble
 
 > **source_docs:** `docs/features/LIVECHAT.md` §4 (tipos), §10.2 (DS); `docs/DESIGN_SYSTEM.md` §10.2
