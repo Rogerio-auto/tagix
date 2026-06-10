@@ -2,12 +2,13 @@
 id: F2-S06
 title: Tool registry + tools "leves" (query_contact/conversation/search_kb) via asyncpg RLS
 phase: F2
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F2-S02, F2-S01, F2-S10]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T03:33:52Z
+completed_at: 2026-06-10T03:33:53Z
 
 ---
 # F2-S06 — Tool registry + tools leves
