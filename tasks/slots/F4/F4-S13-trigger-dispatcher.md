@@ -2,7 +2,7 @@
 id: F4-S13
 title: Trigger dispatcher (inbound) — keyword/new_message/new_lead/system_event + resume waiting flows
 phase: F4
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F4-S01, F4-S02]
