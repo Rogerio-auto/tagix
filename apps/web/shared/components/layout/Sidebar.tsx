@@ -12,6 +12,7 @@ import {
   MessagesSquare,
   Settings,
   Users,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react';
 import { can, type Permission } from '@hm/shared';
@@ -34,6 +35,7 @@ const NAV: readonly NavItem[] = [
   { href: '/knowledge', label: 'Conhecimento', icon: BookOpen, perm: 'kb.edit' },
   { href: '/contacts', label: 'Contatos', icon: Users },
   { href: '/pipeline', label: 'Pipeline', icon: GitBranch },
+  { href: '/flows', label: 'Flows', icon: Workflow, perm: 'flow.list' },
   { href: '/campaigns', label: 'Campanhas', icon: Megaphone },
   { href: '/calendar', label: 'Agenda', icon: Calendar },
   { href: '/settings', label: 'Configurações', icon: Settings },
