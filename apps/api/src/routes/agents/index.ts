@@ -15,6 +15,7 @@ import { Router } from 'express';
 import { createAgentsCrudRouter } from './crud';
 import { createAgentMetricsRouter } from './metrics';
 import { createAgentModelsRouter } from './models';
+import { createAgentPlaygroundRouter } from './playground';
 import { createAgentTemplatesRouter } from './templates';
 import { createAgentToolsRouter } from './tools';
 
@@ -26,6 +27,7 @@ export function createAgentsRouter(): Router {
   router.use(createAgentModelsRouter());
   router.use(createAgentTemplatesRouter());
   router.use(createAgentMetricsRouter());
+  router.use(createAgentPlaygroundRouter());
   router.use(createAgentsCrudRouter());
   return router;
 }
