@@ -2,7 +2,7 @@
 id: F1-S26
 title: Worker bootstrap + persistência direta (@hm/db) + adapter factory
 phase: F1
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: [F1-S04, F1-S07, F1-S10, F1-S20, F1-S21]
