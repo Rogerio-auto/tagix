@@ -2,12 +2,14 @@
 id: F1-S25
 title: Web socket client — SocketProvider + window.__hmSocket (liga o realtime)
 phase: F1
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F1-S11, F0-S11]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T01:31:41Z
 
+---
 # F1-S25 — Web socket client (realtime transport)
 
 > **source_docs:** `docs/features/LIVECHAT.md` §6; `packages/shared/src/socket-events.ts`
