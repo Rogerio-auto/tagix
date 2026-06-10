@@ -2,7 +2,7 @@
 id: F2-S17
 title: Frontend AgentsListPage + AgentCreationWizard
 phase: F2
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F2-S16, F2-S14, F2-S15]
