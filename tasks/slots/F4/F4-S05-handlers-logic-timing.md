@@ -2,12 +2,13 @@
 id: F4-S05
 title: Handlers de lógica/timing — wait + wait_for_response (biestável) + condition + switch
 phase: F4
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F4-S02]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T20:24:15Z
+completed_at: 2026-06-10T20:26:27Z
 
 ---
 # F4-S05 — Handlers de lógica e timing
