@@ -7,6 +7,7 @@ import { loadConfig } from './config';
 import { healthHandler } from './health';
 import { errorHandler } from './middlewares/error';
 import { createConversationsRouter } from './routes/conversations';
+import { createWebhooksRouter } from './routes/webhooks';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
@@ -17,6 +18,11 @@ export function createApp(): Express {
   app.use(helmet());
   app.use(cors({ origin: config.corsOrigin, credentials: true }));
   app.use(compression());
+
+  // Webhooks ANTES do json global: as rotas POST usam express.raw p/ HMAC Meta
+  // (exige os bytes exatos recebidos). Ver routes/webhooks/index.ts.
+  app.use(createWebhooksRouter());
+
   app.use(express.json({ limit: '1mb' }));
 
   app.get('/health', healthHandler);
