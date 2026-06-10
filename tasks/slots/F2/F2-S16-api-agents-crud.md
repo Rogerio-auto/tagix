@@ -2,12 +2,13 @@
 id: F2-S16
 title: API CRUD agents + tools_global + toggle agent_tools (Node)
 phase: F2
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F2-S01, F2-S03]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T03:33:47Z
+completed_at: 2026-06-10T03:33:48Z
 
 ---
 # F2-S16 — API CRUD de agentes
