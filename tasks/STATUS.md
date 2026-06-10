@@ -10,7 +10,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
-| F2   | 21     | 0   | 15   | 0   | 0   | 1   | 5   |
+| F2   | 21     | 0   | 15   | 0   | 0   | 0   | 6   |
 
 ## Fase 0 — Fundação
 
@@ -81,7 +81,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F2-S11 | Worker de agentes — ai_mode='on' + inbound → agentsClient.run (stream)                       | ⏸️ blocked | critical   | F2-S03, F2-S05, F2-S09 |
 | F2-S12 | Aggregation buffer (window_sec) antes de chamar o runtime                                    | ⏸️ blocked | medium     | F2-S11                 |
 | F2-S13 | Cost tracking + agregação de agent_metrics a partir de llm_usage_logs                        | ✅ done     | medium     | F2-S01                 |
-| F2-S14 | Seed — 5 agent templates globais + questions + default_tools + default_model                 | 🟣 review   | medium     | F2-S01                 |
+| F2-S14 | Seed — 5 agent templates globais + questions + default_tools + default_model                 | ✅ done     | medium     | F2-S01                 |
 | F2-S15 | Seed — catálogo inicial llm_models_whitelist (top modelos OpenRouter)                        | ⏸️ blocked | medium     | F2-S01                 |
 | F2-S16 | API CRUD agents + tools_global + toggle agent_tools (Node)                                   | ⏸️ blocked | high       | F2-S01, F2-S03         |
 | F2-S17 | Frontend AgentsListPage + AgentCreationWizard                                                | ⏸️ blocked | high       | F2-S16, F2-S14, F2-S15 |

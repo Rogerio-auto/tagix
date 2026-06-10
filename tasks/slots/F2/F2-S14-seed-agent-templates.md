@@ -2,7 +2,7 @@
 id: F2-S14
 title: Seed — 5 agent templates globais + questions + default_tools + default_model
 phase: F2
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F2-S01]
