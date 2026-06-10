@@ -2,12 +2,14 @@
 id: F1-S06
 title: Schema ig_comments (auxiliar Instagram)
 phase: F1
-status: blocked
+status: in-progress
 priority: low
 estimated_size: S
 depends_on: [F1-S05]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T00:05:51Z
 
+---
 # F1-S06 — Schema ig_comments
 
 > **source_docs:** `docs/features/INSTAGRAM.md`; `docs/DATA_MODEL.md`
