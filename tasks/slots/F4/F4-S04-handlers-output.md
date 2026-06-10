@@ -2,7 +2,7 @@
 id: F4-S04
 title: Handlers de saída — trigger + message + interactive + meta_flow
 phase: F4
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F4-S02]
