@@ -2,7 +2,7 @@
 id: F1-S15
 title: MessageBubble — discriminated union (text/image/.../interactive); IG em stubs
 phase: F1
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F1-S13, F1-S05, F1-S10]
