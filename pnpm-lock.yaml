@@ -166,10 +166,16 @@ importers:
       '@hm/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^22.10.7
         version: 22.19.20
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.20)(lightningcss@1.32.0)(msw@2.14.6(@types/node@22.19.20)(typescript@5.9.3))
 
   packages/agents-client:
     dependencies:
