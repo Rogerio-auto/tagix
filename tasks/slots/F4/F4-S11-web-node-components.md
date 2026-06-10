@@ -2,10 +2,14 @@
 id: F4-S11
 title: Frontend node components (15 tipos) — node render + inspector + metadata, 1 pasta por tipo
 phase: F4
-status: blocked
+status: review
 priority: high
 estimated_size: L
 depends_on: [F4-S10]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T21:16:27Z
+completed_at: 2026-06-10T21:20:28Z
+
 ---
 # F4-S11 — Node components (web)
 
