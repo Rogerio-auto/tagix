@@ -210,6 +210,8 @@ export * from './webhook_events';
 export * from './contacts';
 export * from './conversations';
 export * from './messages';
+// Notas internas por conversa (+ mentions → notificação). Depende de conversations/members.
+export * from './conversation_notes';
 // Instagram comments (auxiliar, F1.5).
 export * from './ig_comments';
 
@@ -225,5 +227,6 @@ export const RLS_TABLES = [
   'contacts',
   'conversations',
   'messages',
+  'conversation_notes',
   'ig_comments',
 ] as const;

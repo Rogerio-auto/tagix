@@ -71,6 +71,20 @@
       "when": 1781050854432,
       "tag": "0009_wet_smasher",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781051881069,
+      "tag": "0010_conversation_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781051886330,
+      "tag": "0011_conversation_notes_rls",
+      "breakpoints": true
     }
   ]
 }
