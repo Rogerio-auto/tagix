@@ -2,12 +2,15 @@
 id: F1-S21
 title: Typing/recording presence (pre_action)
 phase: F1
-status: blocked
+status: review
 priority: low
 estimated_size: S
 depends_on: [F1-S07, F1-S11]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T00:44:50Z
+completed_at: 2026-06-10T00:44:50Z
 
+---
 # F1-S21 — Typing/recording presence
 
 > **source_docs:** `docs/features/LIVECHAT.md` §3.5, §6 (typing:from_contact)
