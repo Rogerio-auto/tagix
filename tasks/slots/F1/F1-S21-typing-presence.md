@@ -2,7 +2,7 @@
 id: F1-S21
 title: Typing/recording presence (pre_action)
 phase: F1
-status: review
+status: done
 priority: low
 estimated_size: S
 depends_on: [F1-S07, F1-S11]
