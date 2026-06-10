@@ -11,7 +11,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
-| F3   | 7     | 1   | 5   | 0   | 0   | 0   | 1   |
+| F3   | 7     | 0   | 5   | 0   | 1   | 0   | 1   |
 
 ## Fase 0 — Fundação
 
@@ -93,12 +93,12 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 3 — Flow Builder
 
-| ID     | Titulo                                                                            | Status      | Prioridade | Depende de             |
-| ------ | --------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------- |
-| F3-S01 | Schema Knowledge Base (kb_documents, kb_chunks pgvector, kb_feedback) + RLS       | ✅ done      | critical   | —                      |
-| F3-S02 | Embeddings provider (OpenAI direto) + endpoint interno /embed + usage logging     | 🟢 available | critical   | —                      |
-| F3-S03 | Ingest pipeline (worker) — chunking + embeddings + persist kb_chunks              | ⏸️ blocked  | high       | F3-S01, F3-S02, F3-S04 |
-| F3-S04 | API CRUD Knowledge Base + enqueue ingest + envelope kb.document.ingest            | ⏸️ blocked  | high       | F3-S01                 |
-| F3-S05 | Tool search_knowledge_base — retrieval híbrido (vetor + FTS) + ranking + citações | ⏸️ blocked  | high       | F3-S01, F3-S02         |
-| F3-S06 | Frontend KnowledgeBasePage — upload, lista, editor, preview de chunks, status     | ⏸️ blocked  | high       | F3-S04                 |
-| F3-S07 | Feedback loop — citações do agente + marcar útil/não-útil (kb_feedback)           | ⏸️ blocked  | medium     | F3-S01, F3-S05, F3-S06 |
+| ID     | Titulo                                                                            | Status        | Prioridade | Depende de             |
+| ------ | --------------------------------------------------------------------------------- | ------------- | ---------- | ---------------------- |
+| F3-S01 | Schema Knowledge Base (kb_documents, kb_chunks pgvector, kb_feedback) + RLS       | ✅ done        | critical   | —                      |
+| F3-S02 | Embeddings provider (OpenAI direto) + endpoint interno /embed + usage logging     | 🔵 in-progress | critical   | —                      |
+| F3-S03 | Ingest pipeline (worker) — chunking + embeddings + persist kb_chunks              | ⏸️ blocked    | high       | F3-S01, F3-S02, F3-S04 |
+| F3-S04 | API CRUD Knowledge Base + enqueue ingest + envelope kb.document.ingest            | ⏸️ blocked    | high       | F3-S01                 |
+| F3-S05 | Tool search_knowledge_base — retrieval híbrido (vetor + FTS) + ranking + citações | ⏸️ blocked    | high       | F3-S01, F3-S02         |
+| F3-S06 | Frontend KnowledgeBasePage — upload, lista, editor, preview de chunks, status     | ⏸️ blocked    | high       | F3-S04                 |
+| F3-S07 | Feedback loop — citações do agente + marcar útil/não-útil (kb_feedback)           | ⏸️ blocked    | medium     | F3-S01, F3-S05, F3-S06 |
