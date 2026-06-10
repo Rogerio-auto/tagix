@@ -2,12 +2,14 @@
 id: F1-S04
 title: Worker inbound — parser por provider + persist + relay
 phase: F1
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: L
 depends_on: [F1-S02, F1-S05, F1-S09]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T00:44:21Z
 
+---
 # F1-S04 — Worker inbound
 
 > **source_docs:** `docs/features/LIVECHAT.md` §1 (10 passos), §5.1
