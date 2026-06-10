@@ -9,7 +9,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | Fase | Total | 🟢  | ⏸️  | 🟡  | 🔵  | 🟣  | ✅  |
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F1   | 23     | 0   | 3   | 0   | 1   | 0   | 19   |
+| F1   | 23     | 0   | 3   | 0   | 0   | 1   | 19   |
 
 ## Fase 0 — Fundação
 
@@ -34,28 +34,28 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 1 — Channels & LiveChat core
 
-| ID     | Titulo                                                                        | Status        | Prioridade | Depende de             |
-| ------ | ----------------------------------------------------------------------------- | ------------- | ---------- | ---------------------- |
-| F1-S01 | Schema channels + channel_secrets + crypto AES-256-GCM (+ colunas IG)         | ✅ done        | critical   | F0-S03, F0-S04         |
-| F1-S02 | Webhook Meta unificado + signature verify + dedup (webhook_events)            | ✅ done        | critical   | F0-S06, F1-S01         |
-| F1-S03 | Schema platform_secrets + carregamento boot-time                              | ✅ done        | high       | F0-S03                 |
-| F1-S04 | Worker inbound — parser por provider + persist + relay                        | ✅ done        | critical   | F1-S02, F1-S05, F1-S09 |
-| F1-S05 | Schema contacts + conversations + messages + repos + interactive types        | ✅ done        | critical   | F1-S01                 |
-| F1-S06 | Schema ig_comments (auxiliar Instagram)                                       | ✅ done        | low        | F1-S05                 |
-| F1-S07 | Worker outbound — composition + per-chat lock + provider routing              | ✅ done        | critical   | F1-S05, F1-S08, F1-S09 |
-| F1-S08 | MetaWhatsAppAdapter completo (sendText/Media/Template/Interactive + parser)   | ✅ done        | critical   | F1-S09                 |
-| F1-S09 | IChannelAdapter + capabilities + graphClient + MetaInstagramAdapter STUB      | ✅ done        | critical   | F1-S01                 |
-| F1-S10 | Worker media — download Meta + dedup SHA-256 + upload R2 + signed URL         | 🔵 in-progress | high       | F1-S04, F1-S08, F0-S15 |
-| F1-S11 | Socket relay — hm.q.socket.relay → io.emit + socket-events tipados            | ✅ done        | high       | F0-S07, F1-S05         |
-| F1-S12 | API GET /conversations + /conversations/:id/messages + cache versioning       | ✅ done        | critical   | F1-S05, F0-S06         |
-| F1-S13 | Frontend ConversationsPage — layout 3 colunas + ContactInfoPanel skeleton     | ✅ done        | high       | F0-S11, F0-S12, F1-S12 |
-| F1-S14 | ChatList — real-time + filtros (incl. provider) + search + scroll infinito    | ✅ done        | high       | F1-S13, F1-S11, F1-S12 |
-| F1-S15 | MessageBubble — discriminated union (text/image/.../interactive); IG em stubs | ⏸️ blocked    | high       | F1-S13, F1-S05, F1-S10 |
-| F1-S16 | MessageComposer — textarea + media upload + emoji + mention @ + reply         | ✅ done        | high       | F1-S13, F1-S12         |
-| F1-S17 | Janela 24h Meta no composer + CTA template (WA) + state machine IG-ready      | ✅ done        | high       | F1-S16, F1-S07         |
-| F1-S18 | WAHAAdapter (inbound + outbound) + session management                         | ✅ done        | high       | F1-S09                 |
-| F1-S19 | Channel settings page + connect wizard (Meta FB Login + WAHA)                 | ✅ done        | high       | F1-S01, F1-S03, F0-S11 |
-| F1-S20 | Read receipts e delivery status (status callbacks Meta WA)                    | ⏸️ blocked    | medium     | F1-S07, F1-S11, F1-S15 |
-| F1-S21 | Typing/recording presence (pre_action)                                        | ✅ done        | low        | F1-S07, F1-S11         |
-| F1-S22 | Notas internas com mentions (conversation_notes + auto-notification)          | ✅ done        | medium     | F1-S05, F1-S12         |
-| F1-S23 | Auto-assign + manual transfer + routing_history                               | ⏸️ blocked    | medium     | F1-S05, F1-S12         |
+| ID     | Titulo                                                                        | Status     | Prioridade | Depende de             |
+| ------ | ----------------------------------------------------------------------------- | ---------- | ---------- | ---------------------- |
+| F1-S01 | Schema channels + channel_secrets + crypto AES-256-GCM (+ colunas IG)         | ✅ done     | critical   | F0-S03, F0-S04         |
+| F1-S02 | Webhook Meta unificado + signature verify + dedup (webhook_events)            | ✅ done     | critical   | F0-S06, F1-S01         |
+| F1-S03 | Schema platform_secrets + carregamento boot-time                              | ✅ done     | high       | F0-S03                 |
+| F1-S04 | Worker inbound — parser por provider + persist + relay                        | ✅ done     | critical   | F1-S02, F1-S05, F1-S09 |
+| F1-S05 | Schema contacts + conversations + messages + repos + interactive types        | ✅ done     | critical   | F1-S01                 |
+| F1-S06 | Schema ig_comments (auxiliar Instagram)                                       | ✅ done     | low        | F1-S05                 |
+| F1-S07 | Worker outbound — composition + per-chat lock + provider routing              | ✅ done     | critical   | F1-S05, F1-S08, F1-S09 |
+| F1-S08 | MetaWhatsAppAdapter completo (sendText/Media/Template/Interactive + parser)   | ✅ done     | critical   | F1-S09                 |
+| F1-S09 | IChannelAdapter + capabilities + graphClient + MetaInstagramAdapter STUB      | ✅ done     | critical   | F1-S01                 |
+| F1-S10 | Worker media — download Meta + dedup SHA-256 + upload R2 + signed URL         | 🟣 review   | high       | F1-S04, F1-S08, F0-S15 |
+| F1-S11 | Socket relay — hm.q.socket.relay → io.emit + socket-events tipados            | ✅ done     | high       | F0-S07, F1-S05         |
+| F1-S12 | API GET /conversations + /conversations/:id/messages + cache versioning       | ✅ done     | critical   | F1-S05, F0-S06         |
+| F1-S13 | Frontend ConversationsPage — layout 3 colunas + ContactInfoPanel skeleton     | ✅ done     | high       | F0-S11, F0-S12, F1-S12 |
+| F1-S14 | ChatList — real-time + filtros (incl. provider) + search + scroll infinito    | ✅ done     | high       | F1-S13, F1-S11, F1-S12 |
+| F1-S15 | MessageBubble — discriminated union (text/image/.../interactive); IG em stubs | ⏸️ blocked | high       | F1-S13, F1-S05, F1-S10 |
+| F1-S16 | MessageComposer — textarea + media upload + emoji + mention @ + reply         | ✅ done     | high       | F1-S13, F1-S12         |
+| F1-S17 | Janela 24h Meta no composer + CTA template (WA) + state machine IG-ready      | ✅ done     | high       | F1-S16, F1-S07         |
+| F1-S18 | WAHAAdapter (inbound + outbound) + session management                         | ✅ done     | high       | F1-S09                 |
+| F1-S19 | Channel settings page + connect wizard (Meta FB Login + WAHA)                 | ✅ done     | high       | F1-S01, F1-S03, F0-S11 |
+| F1-S20 | Read receipts e delivery status (status callbacks Meta WA)                    | ⏸️ blocked | medium     | F1-S07, F1-S11, F1-S15 |
+| F1-S21 | Typing/recording presence (pre_action)                                        | ✅ done     | low        | F1-S07, F1-S11         |
+| F1-S22 | Notas internas com mentions (conversation_notes + auto-notification)          | ✅ done     | medium     | F1-S05, F1-S12         |
+| F1-S23 | Auto-assign + manual transfer + routing_history                               | ⏸️ blocked | medium     | F1-S05, F1-S12         |

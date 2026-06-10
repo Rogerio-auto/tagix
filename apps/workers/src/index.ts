@@ -74,4 +74,42 @@ export {
   type InboundWorkerHandle,
 } from './inbound/index';
 
+// --- Worker media (F1-S10) ---
+export {
+  startMediaWorker,
+  handleMediaEnvelope,
+  createMediaDeps,
+  runMediaPipeline,
+  buildMediaKey,
+  parseMediaJob,
+  mediaJobSchema,
+  sha256Hex,
+  deriveExtension,
+  effectiveMime,
+  DbMediaChannelResolver,
+  DbMediaPersistence,
+  StorageMediaPort,
+  MqMediaSocketEmit,
+  MEDIA_QUEUE,
+  MEDIA_PREFETCH,
+  SOCKET_RELAY_QUEUE,
+  type MediaJob,
+  type MediaJobRoutingHints,
+  type MediaDeps,
+  type MediaChannelResolver,
+  type ResolvedMediaChannel,
+  type MediaStoragePort,
+  type MediaUploadInput,
+  type MediaPersistencePort,
+  type MediaMessageTarget,
+  type MediaPersistInput,
+  type MediaSocketPort,
+  type MediaReadyEmit,
+  type MediaPipelineResult,
+  type MediaSkipReason,
+  type AdapterFactory,
+  type MediaWorkerOptions,
+  type MediaWorkerHandle,
+} from './media/index';
+
 export const WORKERS_PKG = '@hm/workers' as const;
