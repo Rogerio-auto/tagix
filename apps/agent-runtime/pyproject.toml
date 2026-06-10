@@ -8,13 +8,21 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "httpx>=0.28",
     "pydantic>=2.10",
+    "pydantic-settings>=2.7",
     "loguru>=0.7",
+    "asyncpg>=0.30",
+    "langgraph>=0.6",
+    "langgraph-checkpoint-postgres>=2.0",
+    "langserve>=0.3",
+    "langchain-core>=0.3",
+    "psycopg[binary]>=3.2",
 ]
 
 [dependency-groups]
 dev = [
     "ruff>=0.9",
     "pytest>=8.3",
+    "pytest-asyncio>=0.25",
 ]
 
 [tool.ruff]
@@ -23,6 +31,10 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
 
 [build-system]
 requires = ["hatchling"]

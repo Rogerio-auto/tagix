@@ -2,12 +2,13 @@
 id: F2-S02
 title: Container agent-runtime (FastAPI + LangGraph + LangServe + asyncpg) + logging
 phase: F2
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: []
 agent_id: backend-engineer
 claimed_at: 2026-06-10T03:10:31Z
+completed_at: 2026-06-10T03:10:41Z
 
 ---
 # F2-S02 — Container agent-runtime (bootstrap)
