@@ -2,12 +2,14 @@
 id: F2-S17
 title: Frontend AgentsListPage + AgentCreationWizard
 phase: F2
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F2-S16, F2-S14, F2-S15]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T03:52:11Z
 
+---
 # F2-S17 — AgentsListPage + Creation Wizard
 
 > **source_docs:** `docs/UX_PRINCIPLES.md` §2/§3; `docs/AGENTS_LANGGRAPH.md` §7; `docs/ROADMAP.md` F2-S17
