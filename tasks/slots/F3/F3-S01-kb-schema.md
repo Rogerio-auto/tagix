@@ -2,7 +2,7 @@
 id: F3-S01
 title: Schema Knowledge Base (kb_documents, kb_chunks pgvector, kb_feedback) + RLS
 phase: F3
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
