@@ -2,7 +2,7 @@
 id: F5-S03
 title: Schema conversões (conversion_types, conversion_events, conversion_tag_triggers) + RLS + dedup
 phase: F5
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F5-S01, F5-S02]

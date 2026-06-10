@@ -13,7 +13,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
-| F5   | 16     | 0   | 13   | 0   | 0   | 1   | 2   |
+| F5   | 16     | 0   | 13   | 0   | 0   | 0   | 3   |
 
 ## Fase 0 — Fundação
 
@@ -130,7 +130,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ------ | --------------------------------------------------------------------------------------------------------- | ---------- | ---------- | ---------------------- |
 | F5-S01 | Schema tags + contact_tags + RLS (destrava conversões e add_tag/remove_tag da F4)                         | ✅ done     | critical   | —                      |
 | F5-S02 | Schema pipeline (pipelines, stages, deals, deal_history, deal_attachments, pending_automations) + RLS     | ✅ done     | critical   | —                      |
-| F5-S03 | Schema conversões (conversion_types, conversion_events, conversion_tag_triggers) + RLS + dedup            | 🟣 review   | high       | F5-S01, F5-S02         |
+| F5-S03 | Schema conversões (conversion_types, conversion_events, conversion_tag_triggers) + RLS + dedup            | ✅ done     | high       | F5-S01, F5-S02         |
 | F5-S04 | API pipelines + stages (CRUD + reorder)                                                                   | ⏸️ blocked | high       | F5-S02                 |
 | F5-S05 | API deals + move-stage service (transition rules + history) + close/reopen + attachments                  | ⏸️ blocked | high       | F5-S02                 |
 | F5-S06 | Automation engine — pending_automations worker + on_stale cron + dispatch from move                       | ⏸️ blocked | high       | F5-S02, F5-S05         |
