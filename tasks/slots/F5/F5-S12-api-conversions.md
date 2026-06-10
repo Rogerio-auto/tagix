@@ -2,7 +2,7 @@
 id: F5-S12
 title: API conversões — CRUD conversion_types + events (registrar/listar/cancelar) + dedup
 phase: F5
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F5-S03]
