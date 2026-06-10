@@ -9,6 +9,8 @@
     "node": ">=22"
   },
   "scripts": {
+    "dev": "pnpm --parallel --filter @hm/api --filter @hm/web dev",
+    "dev:all": "pnpm --parallel --filter @hm/api --filter @hm/web --filter @hm/workers dev",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
