@@ -2,7 +2,7 @@
 id: F5-S14
 title: Conversões automações — flow handler register_conversion + tag pg-trigger + fecha F2-S20
 phase: F5
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F5-S03, F5-S06, F5-S12]
