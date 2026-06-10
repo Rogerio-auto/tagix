@@ -2,7 +2,7 @@
 id: F3-S05
 title: Tool search_knowledge_base — retrieval híbrido (vetor + FTS) + ranking + citações
 phase: F3
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F3-S01, F3-S02]
