@@ -2,7 +2,7 @@
 id: F2-S02
 title: Container agent-runtime (FastAPI + LangGraph + LangServe + asyncpg) + logging
 phase: F2
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []

@@ -10,7 +10,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
-| F2   | 21     | 0   | 19   | 0   | 0   | 1   | 1   |
+| F2   | 21     | 0   | 19   | 0   | 0   | 0   | 2   |
 
 ## Fase 0 — Fundação
 
@@ -69,7 +69,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ID     | Titulo                                                                                       | Status     | Prioridade | Depende de             |
 | ------ | -------------------------------------------------------------------------------------------- | ---------- | ---------- | ---------------------- |
 | F2-S01 | Schema de agentes IA (agents, templates, tools, executions, llm usage, policies)             | ✅ done     | critical   | —                      |
-| F2-S02 | Container agent-runtime (FastAPI + LangGraph + LangServe + asyncpg) + logging                | 🟣 review   | critical   | —                      |
+| F2-S02 | Container agent-runtime (FastAPI + LangGraph + LangServe + asyncpg) + logging                | ✅ done     | critical   | —                      |
 | F2-S03 | Pacote @hm/agents-client (cliente Node tipado p/ agent-runtime)                              | ⏸️ blocked | critical   | F2-S02                 |
 | F2-S04 | OpenRouterProvider (chat completion + streaming + tool calls + usage capture)                | ⏸️ blocked | critical   | F2-S02                 |
 | F2-S05 | Grafo LangGraph (load_context → build_prompt → call_model → tools → finalize) + checkpointer | ⏸️ blocked | critical   | F2-S02, F2-S04, F2-S01 |
