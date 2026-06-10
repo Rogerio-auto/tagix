@@ -2,10 +2,13 @@
 id: F5-S15
 title: Seeds de nicho — pipeline templates (imobiliária + clínica) + agent_template variants + onboarding wizard
 phase: F5
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on: [F5-S02, F5-S04]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T22:33:55Z
+
 ---
 # F5-S15 — Seeds de nicho
 
