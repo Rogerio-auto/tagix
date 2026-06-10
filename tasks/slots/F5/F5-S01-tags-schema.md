@@ -2,7 +2,7 @@
 id: F5-S01
 title: Schema tags + contact_tags + RLS (destrava conversões e add_tag/remove_tag da F4)
 phase: F5
-status: review
+status: done
 priority: critical
 estimated_size: S
 depends_on: []
