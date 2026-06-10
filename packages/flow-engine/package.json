@@ -9,6 +9,18 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hm/channels": "workspace:*",
+    "@hm/db": "workspace:*",
+    "@hm/logger": "workspace:*",
+    "@hm/shared": "workspace:*",
+    "drizzle-orm": "^0.38.3",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8"
   }
 }

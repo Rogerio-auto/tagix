@@ -2,10 +2,14 @@
 id: F4-S02
 title: "@hm/flow-engine core — types + registry + dispatcher + interpolate + stubs de handlers"
 phase: F4
-status: blocked
+status: review
 priority: critical
 estimated_size: L
 depends_on: [F4-S01]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T20:03:02Z
+completed_at: 2026-06-10T20:21:17Z
+
 ---
 # F4-S02 — @hm/flow-engine core
 
