@@ -2,12 +2,14 @@
 id: F1-S19
 title: Channel settings page + connect wizard (Meta FB Login + WAHA)
 phase: F1
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F1-S01, F1-S03, F0-S11]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T00:44:41Z
 
+---
 # F1-S19 — Channel settings + connect wizard
 
 > **source_docs:** `docs/features/LIVECHAT.md`; `docs/features/INSTAGRAM.md`; `docs/features/PERMISSIONS.md` §2.6
