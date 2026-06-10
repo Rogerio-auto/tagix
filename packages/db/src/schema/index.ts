@@ -217,6 +217,15 @@ export * from './routing_history';
 // Instagram comments (auxiliar, F1.5).
 export * from './ig_comments';
 
+// ─── Agents domain (F2 §7) ───────────────────────────────────────────────────
+// Templates + tools são catálogos GLOBAIS (sem RLS de tenant); o resto é
+// workspace-scoped. Ordem: catálogos globais → agents → junções/logs/usage.
+export * from './agent_templates'; // agent_templates, agent_template_questions (global)
+export * from './agents'; // agents, agent_metrics, workspace_agent_policies (tenant)
+export * from './agent_tools'; // tools (global), agent_tools, tool_logs (tenant)
+export * from './agent_executions'; // agent_executions (tenant)
+export * from './llm'; // llm_usage_logs (tenant), llm_models_whitelist (global)
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -232,4 +241,13 @@ export const RLS_TABLES = [
   'conversation_notes',
   'routing_history',
   'ig_comments',
+  // Agents domain (workspace-scoped). `agent_tools` é isolada via subquery em
+  // `agents` (não tem workspace_id próprio) — ver migration RLS dedicada.
+  'agents',
+  'agent_metrics',
+  'workspace_agent_policies',
+  'agent_tools',
+  'tool_logs',
+  'agent_executions',
+  'llm_usage_logs',
 ] as const;
