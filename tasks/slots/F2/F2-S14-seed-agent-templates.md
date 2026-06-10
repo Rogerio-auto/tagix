@@ -2,12 +2,13 @@
 id: F2-S14
 title: Seed — 5 agent templates globais + questions + default_tools + default_model
 phase: F2
-status: in-progress
+status: review
 priority: medium
 estimated_size: S
 depends_on: [F2-S01]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T03:19:27Z
+completed_at: 2026-06-10T03:19:28Z
 
 ---
 # F2-S14 — Seed de agent templates
