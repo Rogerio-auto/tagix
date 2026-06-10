@@ -56,7 +56,8 @@ services:
     image: devlikeapro/waha:latest
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Host 3100 (3000 fica para o app web). Container continua em 3000.
+      - "3100:3000"
     volumes:
       - waha-data:/app/.sessions
     healthcheck:
