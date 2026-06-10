@@ -12,7 +12,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F4   | 14     | 0   | 10   | 0   | 0   | 1   | 3   |
+| F4   | 14     | 0   | 10   | 0   | 0   | 0   | 4   |
 
 ## Fase 0 — Fundação
 
@@ -112,7 +112,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F4-S02 | "@hm/flow-engine core — types + registry + dispatcher + interpolate + stubs de handlers"            | ✅ done     | critical   | F4-S01                 |
 | F4-S03 | Worker-flows runtime — consumer hm.q.flow.execution + scheduler de wakeup (waiting)                 | ⏸️ blocked | high       | F4-S02                 |
 | F4-S04 | Handlers de saída — trigger + message + interactive + meta_flow                                     | ✅ done     | high       | F4-S02                 |
-| F4-S05 | Handlers de lógica/timing — wait + wait_for_response (biestável) + condition + switch               | 🟣 review   | high       | F4-S02                 |
+| F4-S05 | Handlers de lógica/timing — wait + wait_for_response (biestável) + condition + switch               | ✅ done     | high       | F4-S02                 |
 | F4-S06 | Handlers de sistema/externos — ai_action + change_status + http_request + external_notify           | ⏸️ blocked | high       | F4-S02                 |
 | F4-S07 | Validação pré-publish — Zod + cycle detection + unreachable nodes + variable refs                   | ⏸️ blocked | high       | F4-S02                 |
 | F4-S08 | API CRUD flows + publish (version) + trigger manual + executions + cancel + manual-order            | ⏸️ blocked | high       | F4-S01, F4-S02, F4-S07 |

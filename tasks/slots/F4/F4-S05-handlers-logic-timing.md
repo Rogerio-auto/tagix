@@ -2,7 +2,7 @@
 id: F4-S05
 title: Handlers de lógica/timing — wait + wait_for_response (biestável) + condition + switch
 phase: F4
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F4-S02]
