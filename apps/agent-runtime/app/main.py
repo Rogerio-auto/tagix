@@ -23,7 +23,9 @@ from app.graph import build_graph
 from app.health import router as health_router
 from app.logging import configure_logging, get_logger
 from app.providers import OpenRouterProvider
+from app.providers.embeddings import EmbeddingsProvider
 from app.routes import run_router
+from app.routes.embed import router as embed_router
 from app.tools.registry import build_default_registry
 from app.tools.workflow import register_workflow_tools
 
@@ -45,6 +47,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     register_workflow_tools(registry, http_client)
     async with lifespan_checkpointer() as checkpointer:
         provider = OpenRouterProvider()
+        # Provider de embeddings (OpenAI direto) compartilhado por /internal/embed (F3-S02).
+        embeddings_provider = EmbeddingsProvider()
+        app.state.embeddings_provider = embeddings_provider
         app.state.graph = build_graph(
             tool_registry=registry,
             checkpointer=checkpointer,
@@ -55,6 +60,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             yield
         finally:
             await provider.aclose()
+            await embeddings_provider.aclose()
             await http_client.aclose()
             await close_pool()
             logger.info("agent-runtime down")
@@ -80,6 +86,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(run_router)
+    app.include_router(embed_router)
 
     return app
 

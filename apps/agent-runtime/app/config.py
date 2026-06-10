@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     # LLM router (consumido em F2-S04)
     openrouter_api_key: str = Field(alias="OPENROUTER_API_KEY")
 
+    # Embeddings — OpenAI DIRETO (text-embedding-3-small, 1536 dims; F3-S02).
+    # OpenRouter NÃO roteia embeddings; dimensão é contrato rígido com vector(1536).
+    openai_api_key: str = Field(alias="OPENAI_API_KEY")
+    embedding_model: str = Field(default="text-embedding-3-small", alias="EMBEDDING_MODEL")
+    embedding_dim: int = Field(default=1536, alias="EMBEDDING_DIM")
+
     # callback interno Node <-> runtime (consumido pelas tools de negócio em F2-S06/S07)
     agent_runtime_token: str = Field(alias="AGENT_RUNTIME_TOKEN")
     api_base_url: str = Field(default="http://api:3001", alias="API_BASE_URL")
