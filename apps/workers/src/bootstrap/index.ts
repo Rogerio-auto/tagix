@@ -45,6 +45,11 @@ import {
   type AgentWorkerHandle,
   type FollowupSchedulerHandle,
 } from '../agents/index';
+import {
+  createKbIngestDeps,
+  startKbIngestWorker,
+  type KbIngestWorkerHandle,
+} from '../knowledge/index';
 
 /** Intervalo do rollup de métricas de agentes (F2-S13); idempotente. */
 const METRICS_ROLLUP_INTERVAL_MS = 10 * 60_000;
@@ -68,6 +73,7 @@ export interface WorkersBootstrapHandle {
   readonly outbound: OutboundWorkerHandle;
   readonly media: MediaWorkerHandle;
   readonly agent: AgentWorkerHandle;
+  readonly kbIngest: KbIngestWorkerHandle;
   readonly followup: FollowupSchedulerHandle;
   stop(): Promise<void>;
 }
@@ -116,6 +122,12 @@ export async function startWorkers(
     logger,
   });
 
+  // Worker de ingestão de KB (F3-S03): consome hm.q.kb_ingest → chunk+embed+persist.
+  const kbIngest = await startKbIngestWorker({
+    deps: createKbIngestDeps(logger),
+    logger,
+  });
+
   // Scheduler singleton (Redis lock): follow-up cron (F2-S21) + rollup de métricas
   // (F2-S13, idempotente). Reusa o `channel` AMQP de boot como transporte de publish.
   const redis = new Redis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
@@ -133,7 +145,7 @@ export async function startWorkers(
   metricsTimer.unref();
 
   logger.info('workers iniciados', {
-    workers: ['inbound', 'outbound', 'media', 'agent', 'followup-scheduler'],
+    workers: ['inbound', 'outbound', 'media', 'agent', 'kb-ingest', 'followup-scheduler'],
   });
 
   return {
@@ -141,11 +153,13 @@ export async function startWorkers(
     outbound,
     media,
     agent,
+    kbIngest,
     followup,
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
       clearInterval(metricsTimer);
       followup.stop();
+      await kbIngest.stop();
       await agent.stop();
       await media.stop();
       await outbound.stop();
