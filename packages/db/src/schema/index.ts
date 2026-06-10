@@ -230,6 +230,11 @@ export * from './llm'; // llm_usage_logs (tenant), llm_models_whitelist (global)
 // kb_documents/kb_chunks(pgvector)/kb_feedback — todos workspace-scoped (RLS).
 export * from './knowledge'; // kb_documents, kb_chunks, kb_feedback (tenant)
 
+// --- Flow Builder domain (F4 par.9) ---
+// flows/flow_executions/flow_logs/flow_submissions sao workspace-scoped (RLS direto).
+// flow_versions nao tem workspace_id proprio: RLS via subquery em flows.
+export * from './flows'; // flows, flow_versions, flow_executions, flow_logs, flow_submissions
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -258,4 +263,10 @@ export const RLS_TABLES = [
   'kb_documents',
   'kb_chunks',
   'kb_feedback',
+  // Flow Builder (workspace-scoped). flow_versions sem workspace_id proprio:
+  // isolada via subquery em flows (ver migration RLS dedicada).
+  'flows',
+  'flow_executions',
+  'flow_logs',
+  'flow_submissions',
 ] as const;
