@@ -2,12 +2,13 @@
 id: F2-S13
 title: Cost tracking + agregação de agent_metrics a partir de llm_usage_logs
 phase: F2
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F2-S01]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T03:19:24Z
+completed_at: 2026-06-10T03:19:25Z
 
 ---
 # F2-S13 — Cost tracking + agent_metrics
