@@ -9,6 +9,7 @@ import { errorHandler } from './middlewares/error';
 import { createChannelsRouter } from './routes/channels';
 import { createConversationsRouter } from './routes/conversations';
 import { createNotesRouter } from './routes/conversations/notes';
+import { createRoutingRouter } from './routes/conversations/routing';
 import { createWindowRouter } from './routes/conversations/window';
 import { createWebhooksRouter } from './routes/webhooks';
 
@@ -33,6 +34,7 @@ export function createApp(): Express {
   app.use(createConversationsRouter());
   app.use(createWindowRouter());
   app.use(createNotesRouter());
+  app.use(createRoutingRouter());
   app.use(createChannelsRouter());
 
   // Error handler por último (Express 5 captura erros de handlers async).

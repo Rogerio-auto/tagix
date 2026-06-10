@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { Info, MessageSquare } from 'lucide-react';
 import { EmptyState, SkeletonList } from '@/shared/components/feedback';
 import { HelpPanel } from '@/shared/components/help';
-import { cn } from '@/shared/lib/cn';
 import { useMessages } from '../queries';
 import { ConversationsHelp } from '../help';
 import { ChatList } from './ChatList';
 import { MessageComposer } from './MessageComposer';
 import { ContactInfoPanel } from './ContactInfoPanel';
 import { TypingIndicator } from './TypingIndicator';
+import { MessageBubble } from './MessageBubble';
 
 export function ConversationsLayout({ conversationId }: { conversationId?: string }) {
   const [infoOpen, setInfoOpen] = useState(false);
@@ -81,19 +81,10 @@ function ConversationPanel({
         {messages.isLoading ? (
           <SkeletonList rows={5} />
         ) : messages.data && messages.data.messages.length > 0 ? (
-          <ul className="flex flex-col gap-2">
-            {/* Renderização rica (MessageBubble) entra em F1-S15. */}
+          <ul className="flex flex-col gap-3">
             {messages.data.messages.map((m) => (
-              <li
-                key={m.id}
-                className={cn(
-                  'max-w-[70%] rounded-md px-3 py-2 font-body text-sm',
-                  m.direction === 'outbound'
-                    ? 'self-end bg-surface-3 text-text'
-                    : 'self-start bg-surface-2 text-text',
-                )}
-              >
-                {m.content ?? `[${m.type}]`}
+              <li key={m.id}>
+                <MessageBubble message={m} />
               </li>
             ))}
           </ul>

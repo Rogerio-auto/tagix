@@ -3,6 +3,7 @@
 import { X } from 'lucide-react';
 import { Skeleton } from '@/shared/components/feedback';
 import { NotesPanel } from './Notes';
+import { RoutingMenu } from './RoutingMenu';
 
 /**
  * Painel lateral de informações do contato (UX §2.3 — painel, não modal).
@@ -39,6 +40,10 @@ export function ContactInfoPanel({
           <p className="text-center font-body text-xs text-text-low">
             Tags, deals e timeline aparecem aqui em breve.
           </p>
+        </div>
+        {/* Roteamento (F1-S23). assignedTo/departmentId virão do detalhe da conversa. */}
+        <div className="border-b border-border-2 p-4">
+          <RoutingMenu conversationId={conversationId} assignedTo={null} departmentId={null} />
         </div>
         {/* Notas internas + @menções (F1-S22). `members` virá de uma query de membros. */}
         <NotesPanel conversationId={conversationId} />
