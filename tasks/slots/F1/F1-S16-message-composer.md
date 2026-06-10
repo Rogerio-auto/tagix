@@ -2,7 +2,7 @@
 id: F1-S16
 title: MessageComposer — textarea + media upload + emoji + mention @ + reply
 phase: F1
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F1-S13, F1-S12]
