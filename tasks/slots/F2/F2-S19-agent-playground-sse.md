@@ -2,7 +2,7 @@
 id: F2-S19
 title: Playground do agente com SSE streaming (proxy via API Node)
 phase: F2
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F2-S16, F2-S05, F2-S18]
