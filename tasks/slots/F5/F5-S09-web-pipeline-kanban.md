@@ -2,12 +2,13 @@
 id: F5-S09
 title: Frontend PipelinePage kanban (dnd-kit + optimistic move + filtros) + PipelineSettingsPage
 phase: F5
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: [F5-S04, F5-S05]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T22:44:49Z
+completed_at: 2026-06-10T22:49:23Z
 
 ---
 # F5-S09 — PipelinePage kanban (web)
