@@ -2,10 +2,14 @@
 id: F5-S13
 title: Frontend conversões — botão "Marcar conversão" + modal + página /conversions + settings
 phase: F5
-status: blocked
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F5-S12]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T22:53:59Z
+completed_at: 2026-06-10T22:57:43Z
+
 ---
 # F5-S13 — Conversões (web)
 
