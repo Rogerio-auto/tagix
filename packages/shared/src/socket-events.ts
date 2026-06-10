@@ -80,6 +80,35 @@ export interface NoteMentionedPayload {
   preview: string;
 }
 
+/** Pipeline/Deals real-time (F5-S07 / PIPELINE.md §6.1). */
+export interface DealCreatedPayload {
+  workspaceId: string;
+  deal: unknown;
+}
+
+export interface DealUpdatedPayload {
+  workspaceId: string;
+  deal: unknown;
+}
+
+export interface DealStageChangedPayload {
+  workspaceId: string;
+  dealId: string;
+  fromStageId: string;
+  toStageId: string;
+  movedBy: string;
+}
+
+export interface DealDeletedPayload {
+  workspaceId: string;
+  dealId: string;
+}
+
+export interface PipelineUpdatedPayload {
+  workspaceId: string;
+  pipelineId: string;
+}
+
 /**
  * Eventos emitidos do servidor para o client. Cada entrada mapeia o nome do
  * evento → assinatura do listener (convenção Socket.io `EventsMap`).
@@ -97,6 +126,11 @@ export interface ServerToClient {
   'agent_execution:completed': (p: AgentExecutionPayload) => void;
   'flow_execution:started': (p: FlowExecutionPayload) => void;
   'flow_execution:cancelled': (p: FlowExecutionPayload) => void;
+  'deal:created': (p: DealCreatedPayload) => void;
+  'deal:updated': (p: DealUpdatedPayload) => void;
+  'deal:stage_changed': (p: DealStageChangedPayload) => void;
+  'deal:deleted': (p: DealDeletedPayload) => void;
+  'pipeline:updated': (p: PipelineUpdatedPayload) => void;
 }
 
 /** Nome de um evento Server→Client. */
@@ -119,4 +153,9 @@ export const SERVER_TO_CLIENT_EVENTS = [
   'agent_execution:completed',
   'flow_execution:started',
   'flow_execution:cancelled',
+  'deal:created',
+  'deal:updated',
+  'deal:stage_changed',
+  'deal:deleted',
+  'pipeline:updated',
 ] as const satisfies readonly ServerToClientEvent[];
