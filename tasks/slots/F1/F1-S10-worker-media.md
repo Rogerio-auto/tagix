@@ -2,12 +2,14 @@
 id: F1-S10
 title: Worker media — download Meta + dedup SHA-256 + upload R2 + signed URL
 phase: F1
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F1-S04, F1-S08, F0-S15]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T01:02:34Z
 
+---
 # F1-S10 — Worker media
 
 > **source_docs:** `docs/features/LIVECHAT.md` §5
