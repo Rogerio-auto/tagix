@@ -2,12 +2,13 @@
 id: F2-S07
 title: Tools de negócio via callback HTTP para o Node (internal tools endpoint)
 phase: F2
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F2-S06, F2-S01]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T03:52:19Z
+completed_at: 2026-06-10T03:52:19Z
 
 ---
 # F2-S07 — Tools de negócio (callback Python → Node)

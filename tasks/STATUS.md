@@ -10,7 +10,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
-| F2   | 21     | 0   | 6   | 0   | 1   | 0   | 14   |
+| F2   | 21     | 0   | 6   | 0   | 0   | 1   | 14   |
 
 ## Fase 0 — Fundação
 
@@ -66,26 +66,26 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 2 — Agent runtime + Agentes IA
 
-| ID     | Titulo                                                                                       | Status        | Prioridade | Depende de             |
-| ------ | -------------------------------------------------------------------------------------------- | ------------- | ---------- | ---------------------- |
-| F2-S01 | Schema de agentes IA (agents, templates, tools, executions, llm usage, policies)             | ✅ done        | critical   | —                      |
-| F2-S02 | Container agent-runtime (FastAPI + LangGraph + LangServe + asyncpg) + logging                | ✅ done        | critical   | —                      |
-| F2-S03 | Pacote @hm/agents-client (cliente Node tipado p/ agent-runtime)                              | ✅ done        | critical   | F2-S02                 |
-| F2-S04 | OpenRouterProvider (chat completion + streaming + tool calls + usage capture)                | ✅ done        | critical   | F2-S02                 |
-| F2-S05 | Grafo LangGraph (load_context → build_prompt → call_model → tools → finalize) + checkpointer | ✅ done        | critical   | F2-S02, F2-S04, F2-S01 |
-| F2-S06 | Tool registry + tools "leves" (query_contact/conversation/search_kb) via asyncpg RLS         | ✅ done        | high       | F2-S02, F2-S01, F2-S10 |
-| F2-S07 | Tools de negócio via callback HTTP para o Node (internal tools endpoint)                     | 🔵 in-progress | high       | F2-S06, F2-S01         |
-| F2-S08 | Policy enforcement no runtime (filtra tools, valida modelo, max_iterations)                  | ⏸️ blocked    | high       | F2-S05, F2-S01         |
-| F2-S09 | Hard cap de custo no Node antes da chamada ao runtime                                        | ✅ done        | high       | F2-S01, F2-S03         |
-| F2-S10 | Column-level access control para tools de database                                           | ✅ done        | medium     | F2-S02                 |
-| F2-S11 | Worker de agentes — ai_mode='on' + inbound → agentsClient.run (stream)                       | ✅ done        | critical   | F2-S03, F2-S05, F2-S09 |
-| F2-S12 | Aggregation buffer (window_sec) antes de chamar o runtime                                    | ⏸️ blocked    | medium     | F2-S11                 |
-| F2-S13 | Cost tracking + agregação de agent_metrics a partir de llm_usage_logs                        | ✅ done        | medium     | F2-S01                 |
-| F2-S14 | Seed — 5 agent templates globais + questions + default_tools + default_model                 | ✅ done        | medium     | F2-S01                 |
-| F2-S15 | Seed — catálogo inicial llm_models_whitelist (top modelos OpenRouter)                        | ✅ done        | medium     | F2-S01                 |
-| F2-S16 | API CRUD agents + tools_global + toggle agent_tools (Node)                                   | ✅ done        | high       | F2-S01, F2-S03         |
-| F2-S17 | Frontend AgentsListPage + AgentCreationWizard                                                | ✅ done        | high       | F2-S16, F2-S14, F2-S15 |
-| F2-S18 | Frontend AgentDetailPage com tabs (Config, Tools, Knowledge, Metrics, Playground)            | ⏸️ blocked    | medium     | F2-S16, F2-S17         |
-| F2-S19 | Playground do agente com SSE streaming (proxy via API Node)                                  | ⏸️ blocked    | medium     | F2-S16, F2-S05, F2-S18 |
-| F2-S20 | Tools workflow modulares + register_conversion (respeitando policies)                        | ⏸️ blocked    | medium     | F2-S07, F2-S06         |
-| F2-S21 | Auto follow-up cron job idempotente                                                          | ⏸️ blocked    | low        | F2-S11                 |
+| ID     | Titulo                                                                                       | Status     | Prioridade | Depende de             |
+| ------ | -------------------------------------------------------------------------------------------- | ---------- | ---------- | ---------------------- |
+| F2-S01 | Schema de agentes IA (agents, templates, tools, executions, llm usage, policies)             | ✅ done     | critical   | —                      |
+| F2-S02 | Container agent-runtime (FastAPI + LangGraph + LangServe + asyncpg) + logging                | ✅ done     | critical   | —                      |
+| F2-S03 | Pacote @hm/agents-client (cliente Node tipado p/ agent-runtime)                              | ✅ done     | critical   | F2-S02                 |
+| F2-S04 | OpenRouterProvider (chat completion + streaming + tool calls + usage capture)                | ✅ done     | critical   | F2-S02                 |
+| F2-S05 | Grafo LangGraph (load_context → build_prompt → call_model → tools → finalize) + checkpointer | ✅ done     | critical   | F2-S02, F2-S04, F2-S01 |
+| F2-S06 | Tool registry + tools "leves" (query_contact/conversation/search_kb) via asyncpg RLS         | ✅ done     | high       | F2-S02, F2-S01, F2-S10 |
+| F2-S07 | Tools de negócio via callback HTTP para o Node (internal tools endpoint)                     | 🟣 review   | high       | F2-S06, F2-S01         |
+| F2-S08 | Policy enforcement no runtime (filtra tools, valida modelo, max_iterations)                  | ⏸️ blocked | high       | F2-S05, F2-S01         |
+| F2-S09 | Hard cap de custo no Node antes da chamada ao runtime                                        | ✅ done     | high       | F2-S01, F2-S03         |
+| F2-S10 | Column-level access control para tools de database                                           | ✅ done     | medium     | F2-S02                 |
+| F2-S11 | Worker de agentes — ai_mode='on' + inbound → agentsClient.run (stream)                       | ✅ done     | critical   | F2-S03, F2-S05, F2-S09 |
+| F2-S12 | Aggregation buffer (window_sec) antes de chamar o runtime                                    | ⏸️ blocked | medium     | F2-S11                 |
+| F2-S13 | Cost tracking + agregação de agent_metrics a partir de llm_usage_logs                        | ✅ done     | medium     | F2-S01                 |
+| F2-S14 | Seed — 5 agent templates globais + questions + default_tools + default_model                 | ✅ done     | medium     | F2-S01                 |
+| F2-S15 | Seed — catálogo inicial llm_models_whitelist (top modelos OpenRouter)                        | ✅ done     | medium     | F2-S01                 |
+| F2-S16 | API CRUD agents + tools_global + toggle agent_tools (Node)                                   | ✅ done     | high       | F2-S01, F2-S03         |
+| F2-S17 | Frontend AgentsListPage + AgentCreationWizard                                                | ✅ done     | high       | F2-S16, F2-S14, F2-S15 |
+| F2-S18 | Frontend AgentDetailPage com tabs (Config, Tools, Knowledge, Metrics, Playground)            | ⏸️ blocked | medium     | F2-S16, F2-S17         |
+| F2-S19 | Playground do agente com SSE streaming (proxy via API Node)                                  | ⏸️ blocked | medium     | F2-S16, F2-S05, F2-S18 |
+| F2-S20 | Tools workflow modulares + register_conversion (respeitando policies)                        | ⏸️ blocked | medium     | F2-S07, F2-S06         |
+| F2-S21 | Auto follow-up cron job idempotente                                                          | ⏸️ blocked | low        | F2-S11                 |
