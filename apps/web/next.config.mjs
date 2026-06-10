@@ -17,6 +17,8 @@ const nextConfig = {
     return [
       { source: '/api/:path*', destination: `${target}/api/:path*` },
       { source: '/auth/:path*', destination: `${target}/auth/:path*` },
+      // socket.io: o handshake bate em /socket.io (sem segmento) e /socket.io/...
+      { source: '/socket.io', destination: `${target}/socket.io` },
       { source: '/socket.io/:path*', destination: `${target}/socket.io/:path*` },
     ];
   },
