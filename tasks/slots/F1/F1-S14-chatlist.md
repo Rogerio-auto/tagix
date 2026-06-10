@@ -2,12 +2,15 @@
 id: F1-S14
 title: ChatList — real-time + filtros (incl. provider) + search + scroll infinito
 phase: F1
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F1-S13, F1-S11, F1-S12]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T00:30:14Z
+completed_at: 2026-06-10T00:30:19Z
 
+---
 # F1-S14 — ChatList
 
 > **source_docs:** `docs/features/LIVECHAT.md` §7.2; `docs/DESIGN_SYSTEM.md` §10.1; `docs/UX_PRINCIPLES.md`
