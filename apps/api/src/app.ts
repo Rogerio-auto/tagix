@@ -6,6 +6,7 @@ import { createAuthRouter } from './auth';
 import { loadConfig } from './config';
 import { healthHandler } from './health';
 import { errorHandler } from './middlewares/error';
+import { createConversationsRouter } from './routes/conversations';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
@@ -20,6 +21,7 @@ export function createApp(): Express {
 
   app.get('/health', healthHandler);
   app.use(createAuthRouter());
+  app.use(createConversationsRouter());
 
   // Error handler por último (Express 5 captura erros de handlers async).
   app.use(errorHandler);
