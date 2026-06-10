@@ -2,7 +2,7 @@
 id: F2-S05
 title: Grafo LangGraph (load_context → build_prompt → call_model → tools → finalize) + checkpointer
 phase: F2
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: [F2-S02, F2-S04, F2-S01]
