@@ -2,12 +2,13 @@
 id: F2-S18
 title: Frontend AgentDetailPage com tabs (Config, Tools, Knowledge, Metrics, Playground)
 phase: F2
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F2-S16, F2-S17]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T04:06:06Z
+completed_at: 2026-06-10T04:06:07Z
 
 ---
 # F2-S18 — AgentDetailPage (tabs)
