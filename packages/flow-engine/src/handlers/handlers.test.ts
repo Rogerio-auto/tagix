@@ -10,6 +10,7 @@ import { changeStatusHandler } from './change_status.handler';
 import { httpRequestHandler } from './http_request.handler';
 import { externalNotifyHandler } from './external_notify.handler';
 import { addTagHandler } from './add_tag.handler';
+import { registerConversionHandler } from './register_conversion.handler';
 
 function makeCtx(over: Partial<FlowExecutionContext> = {}): FlowExecutionContext {
   return {
@@ -194,6 +195,15 @@ describe('pipeline handlers (F5-S16)', () => {
     const ctx = makeCtx({ contactId: null });
     const r = await addTagHandler.execute(
       node({ tagId: '00000000-0000-0000-0000-0000000000cc' }),
+      ctx,
+    );
+    expect(r.status).toBe('SUCCESS');
+    expect(ctx.log).toHaveBeenCalled();
+  });
+  it('register_conversion sem contactId e no-op SUCCESS (sem tocar DB)', async () => {
+    const ctx = makeCtx({ contactId: null });
+    const r = await registerConversionHandler.execute(
+      node({ conversionTypeKey: 'visita' }),
       ctx,
     );
     expect(r.status).toBe('SUCCESS');

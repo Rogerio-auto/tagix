@@ -10,7 +10,8 @@
  * Cobertura desta fase:
  *  - transfer_to_human / mark_resolved / change_conversation_status → mutam `conversations`.
  *  - escalate → registrado em `tool_logs` (sem tabela de notificações ainda; auditável).
- *  - register_conversion → respeita `allow_agent_conversions`; conversões reais chegam em F5.
+ *  - register_conversion → respeita `allow_agent_conversions`; registra de verdade via o
+ *    serviço de conversões (F5-S12). Fecha o stub-até-F5 de F2-S20.
  */
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
@@ -23,6 +24,7 @@ import {
   type ToolHandlerRegistry,
 } from './registry';
 import type { DbTx } from '@hm/db';
+import { registerConversion as registerConversionEvent } from '../../routes/conversions';
 
 function fail(error: string): ToolHandlerResult {
   return { ok: false, error };
@@ -122,6 +124,13 @@ const changeConversationStatus: ToolHandler = async (env, tx) => {
   };
 };
 
+const registerConversionArgs = z.object({
+  conversion_type_key: z.string().min(1).max(64),
+  value_cents: z.number().int().min(0).nullish(),
+  note: z.string().max(1000).nullish(),
+  contact_id: z.string().uuid().nullish(),
+});
+
 const registerConversion: ToolHandler = async (env, tx) => {
   // Checagem autoritativa de policy (defense-in-depth do lado Node).
   const [policy] = await tx
@@ -132,9 +141,56 @@ const registerConversion: ToolHandler = async (env, tx) => {
   if (!policy?.allow) {
     return fail('Registro de conversões desabilitado para este workspace.');
   }
-  // O schema de conversões (conversion_events) chega em F5-S13. Até lá, o tool
-  // responde explicitamente que ainda não é suportado (o callback já ocorreu).
-  return fail('Registro de conversões ainda não suportado (chega na fase F5).');
+
+  const parsed = registerConversionArgs.safeParse(env.args);
+  if (!parsed.success) return fail('Argumentos inválidos para register_conversion.');
+
+  // Resolve o contato: explícito nos args ou a partir da conversa do contexto.
+  let contactId = parsed.data.contact_id ?? null;
+  if (!contactId && env.conversationId) {
+    const [conv] = await tx
+      .select({ contactId: schema.conversations.contactId })
+      .from(schema.conversations)
+      .where(eq(schema.conversations.id, env.conversationId))
+      .limit(1);
+    contactId = conv?.contactId ?? null;
+  }
+  if (!contactId) return fail('Contato ausente no contexto da conversão.');
+
+  // Registra via o serviço único de conversões (F5-S12). source='agent_tool'.
+  const result = await registerConversionEvent(tx, {
+    workspaceId: env.workspaceId,
+    conversionTypeKey: parsed.data.conversion_type_key,
+    contactId,
+    conversationId: env.conversationId,
+    valueCents: parsed.data.value_cents ?? null,
+    note: parsed.data.note ?? null,
+    source: 'agent_tool',
+    triggeredByAgentId: env.agentId,
+  });
+
+  switch (result.kind) {
+    case 'created':
+      return {
+        ok: true,
+        content: `Conversão '${parsed.data.conversion_type_key}' registrada.`,
+        action: 'register_conversion',
+        tableName: 'conversion_events',
+        payload: { conversionEventId: result.event.id },
+      };
+    case 'deduped':
+      return {
+        ok: true,
+        content: `Conversão '${parsed.data.conversion_type_key}' já registrada hoje para este contato.`,
+        action: 'register_conversion',
+        tableName: 'conversion_events',
+        payload: { deduped: true },
+      };
+    case 'type_not_found':
+      return fail(`Tipo de conversão '${parsed.data.conversion_type_key}' não existe.`);
+    case 'value_required':
+      return fail('Este tipo de conversão exige um valor.');
+  }
 };
 
 /**
