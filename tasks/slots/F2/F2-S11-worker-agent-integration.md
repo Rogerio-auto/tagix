@@ -2,12 +2,13 @@
 id: F2-S11
 title: Worker de agentes — ai_mode='on' + inbound → agentsClient.run (stream)
 phase: F2
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F2-S03, F2-S05, F2-S09]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T03:52:15Z
+completed_at: 2026-06-10T03:52:16Z
 
 ---
 # F2-S11 — Integração worker → agent-runtime
