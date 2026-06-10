@@ -12,6 +12,7 @@ import { createAgentsRouter } from './routes/agents';
 import { createChannelsRouter } from './routes/channels';
 import { createConversationsRouter } from './routes/conversations';
 import { createKnowledgeRouter } from './routes/knowledge';
+import { createKnowledgeFeedbackRouter } from './routes/knowledge/feedback';
 import { createMessagesRouter } from './routes/conversations/messages';
 import { createNotesRouter } from './routes/conversations/notes';
 import { createRoutingRouter } from './routes/conversations/routing';
@@ -47,6 +48,7 @@ export function createApp(): Express {
   app.use(createChannelsRouter());
   app.use(createAgentsRouter());
   app.use(createKnowledgeRouter());
+  app.use(createKnowledgeFeedbackRouter());
 
   // Error handler por último (Express 5 captura erros de handlers async).
   app.use(errorHandler);
