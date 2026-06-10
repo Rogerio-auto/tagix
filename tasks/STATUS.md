@@ -12,7 +12,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F4   | 14     | 0   | 4   | 0   | 0   | 1   | 9   |
+| F4   | 14     | 0   | 4   | 0   | 0   | 0   | 10   |
 
 ## Fase 0 — Fundação
 
@@ -115,7 +115,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F4-S05 | Handlers de lógica/timing — wait + wait_for_response (biestável) + condition + switch               | ✅ done     | high       | F4-S02                 |
 | F4-S06 | Handlers de sistema/externos — ai_action + change_status + http_request + external_notify           | ✅ done     | high       | F4-S02                 |
 | F4-S07 | Validação pré-publish — Zod + cycle detection + unreachable nodes + variable refs                   | ✅ done     | high       | F4-S02                 |
-| F4-S08 | API CRUD flows + publish (version) + trigger manual + executions + cancel + manual-order            | 🟣 review   | high       | F4-S01, F4-S02, F4-S07 |
+| F4-S08 | API CRUD flows + publish (version) + trigger manual + executions + cancel + manual-order            | ✅ done     | high       | F4-S01, F4-S02, F4-S07 |
 | F4-S09 | Frontend FlowsListPage + manual flows drag-reorder                                                  | ⏸️ blocked | high       | F4-S08                 |
 | F4-S10 | Frontend FlowEditorPage — canvas ReactFlow + palette + inspector shell + toolbar + executions panel | ⏸️ blocked | high       | F4-S08, F4-S07         |
 | F4-S11 | Frontend node components (15 tipos) — node render + inspector + metadata, 1 pasta por tipo          | ⏸️ blocked | high       | F4-S10                 |

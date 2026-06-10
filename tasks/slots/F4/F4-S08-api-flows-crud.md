@@ -2,7 +2,7 @@
 id: F4-S08
 title: API CRUD flows + publish (version) + trigger manual + executions + cancel + manual-order
 phase: F4
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F4-S01, F4-S02, F4-S07]
