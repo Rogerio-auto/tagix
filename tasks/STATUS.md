@@ -12,7 +12,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F4   | 14     | 0   | 12   | 0   | 0   | 0   | 2   |
+| F4   | 14     | 0   | 11   | 0   | 1   | 0   | 2   |
 
 ## Fase 0 — Fundação
 
@@ -106,19 +106,19 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 4 — Campaigns
 
-| ID     | Titulo                                                                                              | Status     | Prioridade | Depende de             |
-| ------ | --------------------------------------------------------------------------------------------------- | ---------- | ---------- | ---------------------- |
-| F4-S01 | Schema Flow Builder (flows, flow_versions, flow_executions, flow_logs, flow_submissions) + RLS      | ✅ done     | critical   | —                      |
-| F4-S02 | "@hm/flow-engine core — types + registry + dispatcher + interpolate + stubs de handlers"            | ✅ done     | critical   | F4-S01                 |
-| F4-S03 | Worker-flows runtime — consumer hm.q.flow.execution + scheduler de wakeup (waiting)                 | ⏸️ blocked | high       | F4-S02                 |
-| F4-S04 | Handlers de saída — trigger + message + interactive + meta_flow                                     | ⏸️ blocked | high       | F4-S02                 |
-| F4-S05 | Handlers de lógica/timing — wait + wait_for_response (biestável) + condition + switch               | ⏸️ blocked | high       | F4-S02                 |
-| F4-S06 | Handlers de sistema/externos — ai_action + change_status + http_request + external_notify           | ⏸️ blocked | high       | F4-S02                 |
-| F4-S07 | Validação pré-publish — Zod + cycle detection + unreachable nodes + variable refs                   | ⏸️ blocked | high       | F4-S02                 |
-| F4-S08 | API CRUD flows + publish (version) + trigger manual + executions + cancel + manual-order            | ⏸️ blocked | high       | F4-S01, F4-S02, F4-S07 |
-| F4-S09 | Frontend FlowsListPage + manual flows drag-reorder                                                  | ⏸️ blocked | high       | F4-S08                 |
-| F4-S10 | Frontend FlowEditorPage — canvas ReactFlow + palette + inspector shell + toolbar + executions panel | ⏸️ blocked | high       | F4-S08, F4-S07         |
-| F4-S11 | Frontend node components (15 tipos) — node render + inspector + metadata, 1 pasta por tipo          | ⏸️ blocked | high       | F4-S10                 |
-| F4-S12 | LiveChat flow integration — quickbar manual + confirm modal + ExecutionsBadge                       | ⏸️ blocked | medium     | F4-S08                 |
-| F4-S13 | Trigger dispatcher (inbound) — keyword/new_message/new_lead/system_event + resume waiting flows     | ⏸️ blocked | high       | F4-S01, F4-S02         |
-| F4-S14 | Meta flow_submission webhook + trigger flow (flow_submission)                                       | ⏸️ blocked | medium     | F4-S01, F4-S02         |
+| ID     | Titulo                                                                                              | Status        | Prioridade | Depende de             |
+| ------ | --------------------------------------------------------------------------------------------------- | ------------- | ---------- | ---------------------- |
+| F4-S01 | Schema Flow Builder (flows, flow_versions, flow_executions, flow_logs, flow_submissions) + RLS      | ✅ done        | critical   | —                      |
+| F4-S02 | "@hm/flow-engine core — types + registry + dispatcher + interpolate + stubs de handlers"            | ✅ done        | critical   | F4-S01                 |
+| F4-S03 | Worker-flows runtime — consumer hm.q.flow.execution + scheduler de wakeup (waiting)                 | ⏸️ blocked    | high       | F4-S02                 |
+| F4-S04 | Handlers de saída — trigger + message + interactive + meta_flow                                     | 🔵 in-progress | high       | F4-S02                 |
+| F4-S05 | Handlers de lógica/timing — wait + wait_for_response (biestável) + condition + switch               | ⏸️ blocked    | high       | F4-S02                 |
+| F4-S06 | Handlers de sistema/externos — ai_action + change_status + http_request + external_notify           | ⏸️ blocked    | high       | F4-S02                 |
+| F4-S07 | Validação pré-publish — Zod + cycle detection + unreachable nodes + variable refs                   | ⏸️ blocked    | high       | F4-S02                 |
+| F4-S08 | API CRUD flows + publish (version) + trigger manual + executions + cancel + manual-order            | ⏸️ blocked    | high       | F4-S01, F4-S02, F4-S07 |
+| F4-S09 | Frontend FlowsListPage + manual flows drag-reorder                                                  | ⏸️ blocked    | high       | F4-S08                 |
+| F4-S10 | Frontend FlowEditorPage — canvas ReactFlow + palette + inspector shell + toolbar + executions panel | ⏸️ blocked    | high       | F4-S08, F4-S07         |
+| F4-S11 | Frontend node components (15 tipos) — node render + inspector + metadata, 1 pasta por tipo          | ⏸️ blocked    | high       | F4-S10                 |
+| F4-S12 | LiveChat flow integration — quickbar manual + confirm modal + ExecutionsBadge                       | ⏸️ blocked    | medium     | F4-S08                 |
+| F4-S13 | Trigger dispatcher (inbound) — keyword/new_message/new_lead/system_event + resume waiting flows     | ⏸️ blocked    | high       | F4-S01, F4-S02         |
+| F4-S14 | Meta flow_submission webhook + trigger flow (flow_submission)                                       | ⏸️ blocked    | medium     | F4-S01, F4-S02         |
