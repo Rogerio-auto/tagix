@@ -2,7 +2,7 @@
 id: F1-S11
 title: Socket relay — hm.q.socket.relay → io.emit + socket-events tipados
 phase: F1
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F0-S07, F1-S05]
