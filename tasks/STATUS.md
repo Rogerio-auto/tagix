@@ -9,7 +9,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | Fase | Total | 🟢  | ⏸️  | 🟡  | 🔵  | 🟣  | ✅  |
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F1   | 23     | 0   | 18   | 0   | 0   | 0   | 5   |
+| F1   | 23     | 0   | 17   | 0   | 0   | 1   | 5   |
 
 ## Fase 0 — Fundação
 
@@ -47,7 +47,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1-S09 | IChannelAdapter + capabilities + graphClient + MetaInstagramAdapter STUB      | ✅ done     | critical   | F1-S01                 |
 | F1-S10 | Worker media — download Meta + dedup SHA-256 + upload R2 + signed URL         | ⏸️ blocked | high       | F1-S04, F1-S08, F0-S15 |
 | F1-S11 | Socket relay — hm.q.socket.relay → io.emit + socket-events tipados            | ⏸️ blocked | high       | F0-S07, F1-S05         |
-| F1-S12 | API GET /conversations + /conversations/:id/messages + cache versioning       | ⏸️ blocked | critical   | F1-S05, F0-S06         |
+| F1-S12 | API GET /conversations + /conversations/:id/messages + cache versioning       | 🟣 review   | critical   | F1-S05, F0-S06         |
 | F1-S13 | Frontend ConversationsPage — layout 3 colunas + ContactInfoPanel skeleton     | ⏸️ blocked | high       | F0-S11, F0-S12, F1-S12 |
 | F1-S14 | ChatList — real-time + filtros (incl. provider) + search + scroll infinito    | ⏸️ blocked | high       | F1-S13, F1-S11, F1-S12 |
 | F1-S15 | MessageBubble — discriminated union (text/image/.../interactive); IG em stubs | ⏸️ blocked | high       | F1-S13, F1-S05, F1-S10 |

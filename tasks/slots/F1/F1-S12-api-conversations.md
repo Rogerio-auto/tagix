@@ -2,12 +2,15 @@
 id: F1-S12
 title: API GET /conversations + /conversations/:id/messages + cache versioning
 phase: F1
-status: blocked
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F1-S05, F0-S06]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-09T23:57:23Z
+completed_at: 2026-06-10T00:05:33Z
 
+---
 # F1-S12 — API conversations
 
 > **source_docs:** `docs/features/LIVECHAT.md` §7.2, §8 (cache)
