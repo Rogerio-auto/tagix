@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  BookOpen,
   Bot,
   Calendar,
   GitBranch,
@@ -13,12 +14,16 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
+import { can, type Permission } from '@hm/shared';
+import { useAuthStore } from '@/shared/stores/auth.store';
 import { cn } from '@/shared/lib/cn';
 
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Se presente, o item só aparece quando o papel atual tem a permissão. */
+  perm?: Permission;
 }
 
 // UX §2.4: toda entrada de nav tem LABEL visível, não só ícone.
@@ -26,6 +31,7 @@ const NAV: readonly NavItem[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/conversations', label: 'Conversas', icon: MessagesSquare },
   { href: '/agents', label: 'Agentes', icon: Bot },
+  { href: '/knowledge', label: 'Conhecimento', icon: BookOpen, perm: 'kb.edit' },
   { href: '/contacts', label: 'Contatos', icon: Users },
   { href: '/pipeline', label: 'Pipeline', icon: GitBranch },
   { href: '/campaigns', label: 'Campanhas', icon: Megaphone },
@@ -35,6 +41,8 @@ const NAV: readonly NavItem[] = [
 
 export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => void }) {
   const pathname = usePathname();
+  const role = useAuthStore((st) => st.auth?.role);
+  const items = NAV.filter((item) => !item.perm || (role ? can(role, item.perm) : false));
   return (
     <>
       {mobileOpen && (
@@ -54,7 +62,7 @@ export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose:
           <span className="font-head text-lg font-semibold text-text">Highermind</span>
         </div>
         <nav className="flex-1 space-y-1 px-3 py-2">
-          {NAV.map((item) => {
+          {items.map((item) => {
             const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
             const Icon = item.icon;
             return (

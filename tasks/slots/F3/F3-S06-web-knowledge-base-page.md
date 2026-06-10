@@ -2,10 +2,14 @@
 id: F3-S06
 title: Frontend KnowledgeBasePage — upload, lista, editor, preview de chunks, status
 phase: F3
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F3-S04]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T16:30:23Z
+completed_at: 2026-06-10T16:36:08Z
+
 ---
 # F3-S06 — KnowledgeBasePage (web)
 
