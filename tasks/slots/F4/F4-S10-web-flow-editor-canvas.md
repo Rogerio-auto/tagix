@@ -2,7 +2,7 @@
 id: F4-S10
 title: Frontend FlowEditorPage — canvas ReactFlow + palette + inspector shell + toolbar + executions panel
 phase: F4
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F4-S08, F4-S07]
