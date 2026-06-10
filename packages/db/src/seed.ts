@@ -8,6 +8,8 @@ import { createClient } from './client';
 import { members, plans, subscriptions, workspaces } from './schema';
 import { seedAgentTemplates } from './seed/agent_templates';
 import { seedLlmModels } from './seed/llm_models';
+import { seedNicheAgentTemplates } from './seed/agent_templates_niche';
+import { instantiatePipelineTemplate } from './seed/pipeline_templates';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.resolve(here, '../../../.env') });
@@ -68,7 +70,11 @@ if (!existingSub) {
 
 // Catálogos globais de agentes IA (F2): templates de wizard + whitelist de modelos LLM.
 await seedAgentTemplates(db);
+await seedNicheAgentTemplates(db);
 await seedLlmModels(db);
+// Pipelines de nicho no workspace dev (idempotente).
+await instantiatePipelineTemplate(db, workspace.id, 'real_estate');
+await instantiatePipelineTemplate(db, workspace.id, 'clinic');
 
 await sql.end();
 console.log(`[db] seed ok — workspace=${workspace.slug} owner=${ownerEmail} planos=${PLAN_SEED.length}`);

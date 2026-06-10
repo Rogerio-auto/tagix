@@ -24,6 +24,7 @@ import { createPipelineRouter } from './routes/pipeline';
 import { createDealsRouter } from './routes/deals';
 import { registerDealHooks } from './services/deal-hooks';
 import { createConversionsRouter } from './routes/conversions';
+import { createOnboardingRouter } from './routes/onboarding';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
@@ -68,6 +69,8 @@ export function createApp(): Express {
   app.use(createDealsRouter());
   // Conversoes (F5-S12): CRUD types + register/list/cancel events.
   app.use(createConversionsRouter());
+  // Onboarding por nicho (F5-S15): cria pipeline + agente a partir de template.
+  app.use(createOnboardingRouter());
 
   // Error handler por último (Express 5 captura erros de handlers async).
   app.use(errorHandler);
