@@ -2,12 +2,15 @@
 id: F2-S09
 title: Hard cap de custo no Node antes da chamada ao runtime
 phase: F2
-status: blocked
+status: review
 priority: high
 estimated_size: S
 depends_on: [F2-S01, F2-S03]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T03:33:50Z
+completed_at: 2026-06-10T03:33:50Z
 
+---
 # F2-S09 — Hard cap de custo (pre-call, Node)
 
 > **source_docs:** `docs/AGENTS_LANGGRAPH.md` §8.1; `docs/ROADMAP.md` F2-S09
