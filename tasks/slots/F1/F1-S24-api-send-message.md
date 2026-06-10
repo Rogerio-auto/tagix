@@ -2,7 +2,7 @@
 id: F1-S24
 title: API send message — POST /api/conversations/:id/messages → enqueue outbound
 phase: F1
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F1-S05, F1-S07, F1-S12]
