@@ -2,10 +2,13 @@
 id: F4-S01
 title: Schema Flow Builder (flows, flow_versions, flow_executions, flow_logs, flow_submissions) + RLS
 phase: F4
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: []
+agent_id: backend-engineer
+claimed_at: 2026-06-10T19:52:42Z
+
 ---
 # F4-S01 — Schema Flow Builder
 
