@@ -2,7 +2,7 @@
 id: F4-S09
 title: Frontend FlowsListPage + manual flows drag-reorder
 phase: F4
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F4-S08]
