@@ -1,29 +1,29 @@
 /**
- * Portas (dependency inversion) do worker inbound (F1-S04, LIVECHAT.md §1/§3).
+ * Portas (dependency inversion) do worker inbound (F1-S04 → refatorado em
+ * F1-S26, LIVECHAT.md §1/§3, ARCHITECTURE.md §4.2).
  *
- * Mesma filosofia do worker outbound (F1-S07): `@hm/workers` só depende de
- * `@hm/{channels,shared,storage,logger}` — **nunca** de `@hm/db` nem do
- * Socket.io. Tudo que toca DB ou socket sai por **MQ** (publish no exchange de
- * eventos / fila de relay), atrás de portas injetáveis e testáveis.
+ * **Mudança de arquitetura (F1-S26).** Por ADR (ARCHITECTURE.md §4.2) o worker
+ * inbound AGORA é dono da persistência: `@hm/db` é dep de `@hm/workers` e a
+ * indireção fantasma `publish inbound.persist.requested → consumer DB-owner` foi
+ * REMOVIDA. O pipeline inbound persiste **in-process**, igual ao worker de mídia
+ * (F1-S10): resolve channel→workspace pelas routing hints (`getDb()` cross-tenant)
+ * e, dentro de `withWorkspace(workspaceId, …)` (RLS), aplica
+ * dedup→contact→conversation→message→last_message→cache e emite `message:new`.
+ *
+ * Mesmo assim, **todo IO fica atrás de portas pequenas e injetáveis**: o pipeline
+ * é testável sem RabbitMQ/DB/HTTP (os testes injetam um `InboundPersistencePort`
+ * fake). Os adapters default (ver `db-ports.ts`) usam `@hm/db`.
  *
  * Fronteira de responsabilidade (importante):
  *
- * - O **worker inbound** (este slot) faz a parte que NÃO precisa de DB:
- *   parse por provider → normaliza `InboundEvent[]` → extrai dicas de
- *   roteamento (phone_number_id / igUserId / session) → enfileira mídia (a
- *   `MediaRef` vem do raw, sem DB) → publica **um** evento
- *   `inbound.persist.requested` com tudo que o consumer DB-owner precisa.
+ * - O **worker inbound** faz parse por provider → normaliza `InboundEvent[]` →
+ *   extrai dicas de roteamento (phone_number_id / igUserId / session) → enfileira
+ *   mídia (a `MediaRef` vem do raw, sem DB) → **persiste** (in-process, RLS) →
+ *   emite `message:new` + (ai_mode='on') enfileira agent/flow.
  *
- * - O **consumer DB-owner** (downstream, fora deste slot — ver relatório do
- *   slot) aplica o trecho DB-bound do pipeline de forma atômica dentro do
- *   tenant (RLS): resolve channel→workspace, dedup, ensure contact, ensure
- *   conversation, persist message, update `last_message`, bump cache version e
- *   — porque depende dos UUIDs pós-persist — emite `message:new` e dispara
- *   agent/flow quando `ai_mode='on'`.
- *
- * Esse split é necessário: `conversationId`/`messageId` (UUIDs) só existem após
- * o upsert no DB, então o socket `message:new` e o gatilho de agent/flow não
- * podem sair do worker (que não fala com o DB).
+ * `conversationId`/`messageId` (UUIDs) só existem após o upsert: por isso o
+ * socket `message:new` e o gatilho de agent/flow saem de DENTRO da persistência
+ * (que conhece os UUIDs), não do pipeline estrutural.
  */
 import type { ChannelProvider } from '@hm/shared';
 import type { InboundEvent, MediaRef } from '@hm/channels';
@@ -82,13 +82,26 @@ export interface MediaEnqueuePort {
   enqueue(job: InboundMediaJob): Promise<void>;
 }
 
+/** Contadores observáveis do que a persistência aplicou (log/teste/métrica). */
+export interface PersistInboundResult {
+  /** Mensagens efetivamente inseridas (exclui as deduplicadas). */
+  readonly inserted: number;
+  /** Mensagens puladas por já existirem (`uq_messages_external`). */
+  readonly deduped: number;
+  /** Eventos de status (delivery/read acks) processados. */
+  readonly statuses: number;
+  /** `false` quando nenhum canal casou as routing hints (mensagem órfã). */
+  readonly resolved: boolean;
+}
+
 /**
- * Porta de persistência do pipeline inbound. A impl. publica
- * `inbound.persist.requested` no exchange de eventos; o consumer DB-owner
- * aplica a mutação dentro do tenant (RLS).
+ * Porta de persistência do pipeline inbound (F1-S26). A impl. default
+ * (`DbInboundPersistence`) resolve channel→workspace pelas routing hints e, sob
+ * `withWorkspace` (RLS), aplica dedup→contact→conversation→message→last_message
+ * →cache, emite `message:new` e dispara status (S20)/presença (S21)/flow.
  */
 export interface InboundPersistencePort {
-  persist(request: PersistInboundRequest): Promise<void>;
+  persist(request: PersistInboundRequest): Promise<PersistInboundResult>;
 }
 
 /** Dependências completas do worker inbound. */

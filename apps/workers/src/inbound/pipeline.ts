@@ -1,22 +1,29 @@
 /**
- * Pipeline inbound (F1-S04, LIVECHAT.md §1/§3) — parte que NÃO precisa de DB.
+ * Pipeline inbound (F1-S04 → refatorado em F1-S26, LIVECHAT.md §1/§3,
+ * ARCHITECTURE.md §4.2).
  *
  * ```
  * parse(provider, raw)              → InboundEvent[]
  *   → extractRoutingHints           (phone_number_id / igUserId / session)
  *   → para cada evento com mídia: enqueue hm.q.inbound.media
- *   → publish inbound.persist.requested  (DB-owner faz dedup→contact→conversation
- *                                         →persist→last→cache→socket→agent/flow)
+ *   → persistence.persist(...)      (IN-PROCESS, @hm/db+RLS: dedup→contact→
+ *                                    conversation→message→last→cache→socket
+ *                                    message:new→status(S20)→flow(ai_mode))
  * ```
  *
- * Dedup: a borda do webhook já deduplica por event-id (F1-S02) e o DB-owner
- * deduplica por `uq_messages_external` (conversation_id, external_id). O worker
- * é puramente estrutural e idempotente — reprocessar o mesmo envelope produz a
- * mesma requisição de persist (que o DB-owner trata como no-op).
+ * **F1-S26:** a persistência é DIRETA via `@hm/db` (sem o publish fantasma
+ * `inbound.persist.requested → DB-owner`). O `InboundPersistencePort` continua
+ * injetável — o pipeline não conhece `@hm/db`; quem o conhece é o adapter default
+ * (`DbInboundPersistence`), montado na composição (`createInboundDeps`).
  *
- * Eventos de `status` (delivery/read acks) e demais tipos não-mensagem também
- * são repassados ao DB-owner (que atualiza `view_status` / dispara reações); o
- * worker só os filtra para decidir o que vira media job.
+ * Dedup: a borda do webhook já deduplica por event-id (F1-S02) e a persistência
+ * deduplica por `uq_messages_external (conversation_id, external_id)`. O pipeline
+ * é idempotente — reprocessar o mesmo envelope é no-op (mensagens dedup'd não
+ * reemitem `message:new`).
+ *
+ * Eventos de `status` (delivery/read acks) são processados pela persistência
+ * (handler S20, ver `db-ports.ts`); o pipeline só os filtra para decidir o que
+ * vira media job.
  */
 import type { InboundEvent } from '@hm/channels';
 import type { Logger } from '@hm/logger';
@@ -85,18 +92,19 @@ export async function runInboundPipeline(
     await deps.media.enqueue(job);
   }
 
-  // 2) Publica a requisição de persistência (DB-owner aplica o resto do pipeline).
+  // 2) Persiste in-process (@hm/db+RLS): dedup→contact→conversation→message→
+  //    last→cache→socket(message:new)→status(S20)→flow(ai_mode='on').
   const request: PersistInboundRequest = { provider, routing, events };
-  await deps.persistence.persist(request);
+  const result = await deps.persistence.persist(request);
 
   logger.info('inbound: pipeline processado', {
     provider,
     events: events.length,
     mediaJobs: mediaJobs.length,
-    hasRouting:
-      routing.phoneNumberId !== undefined ||
-      routing.igUserId !== undefined ||
-      routing.wahaSession !== undefined,
+    inserted: result.inserted,
+    deduped: result.deduped,
+    statuses: result.statuses,
+    resolved: result.resolved,
   });
 
   return { events: events.length, mediaJobs: mediaJobs.length, persisted: true };
