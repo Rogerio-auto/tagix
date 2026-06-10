@@ -2,7 +2,7 @@
 id: F5-S10
 title: Frontend DealDetailDrawer + history timeline + CardImageCapture/gallery
 phase: F5
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F5-S05]
