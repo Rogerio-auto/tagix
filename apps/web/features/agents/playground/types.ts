@@ -8,6 +8,8 @@
  * parse defensivo dos frames SSE (`parseSseEvent`).
  */
 
+import type { Citation } from '@/features/knowledge/feedback';
+
 /** Usage do evento `final` (custo + tokens). */
 export interface SseUsage {
   readonly prompt_tokens: number;
@@ -57,6 +59,8 @@ export interface TranscriptTurn {
   toolCalls: ToolCallView[];
   /** Usage do `final` (só assistente, quando concluído). */
   usage?: SseUsage;
+  /** Citações de KB extraídas dos tool_call_completed de search_knowledge_base (F3-S07). */
+  citations: Citation[];
   /** `true` enquanto tokens ainda chegam (mostra cursor). */
   streaming: boolean;
 }

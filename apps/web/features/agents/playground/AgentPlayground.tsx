@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, RotateCcw, Send, Sparkles, Wrench } from 'lucide-react';
 import { Button } from '@hm/ui';
+import { KbCitation } from '@/features/knowledge/feedback';
 import { useAgentPlaygroundStream } from './useAgentPlaygroundStream';
 import type { PlaygroundError, SseUsage, ToolCallView, TranscriptTurn } from './types';
 
@@ -70,7 +71,7 @@ export function AgentPlayground({ agentId }: { agentId: string }) {
         {isEmpty ? (
           <EmptyHint />
         ) : (
-          turns.map((turn) => <TurnBubble key={turn.id} turn={turn} />)
+          turns.map((turn) => <TurnBubble key={turn.id} turn={turn} agentId={agentId} />)
         )}
         {error && <ErrorPanel error={error} />}
       </div>
@@ -127,7 +128,7 @@ function EmptyHint() {
   );
 }
 
-function TurnBubble({ turn }: { turn: TranscriptTurn }) {
+function TurnBubble({ turn, agentId }: { turn: TranscriptTurn; agentId: string }) {
   if (turn.role === 'user') {
     return (
       <div className="flex justify-end">
@@ -161,6 +162,18 @@ function TurnBubble({ turn }: { turn: TranscriptTurn }) {
         )}
       </div>
       {turn.usage && <UsageLine usage={turn.usage} />}
+      {turn.citations.length > 0 && (
+        <div className="mt-1 flex max-w-[85%] flex-col gap-1">
+          <span className="font-head text-xs font-medium text-text-low">Fontes consultadas</span>
+          {turn.citations.map((citation) => (
+            <KbCitation
+              key={`${citation.documentId}:${citation.chunkId ?? 'doc'}`}
+              citation={citation}
+              agentId={agentId}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
