@@ -2,7 +2,7 @@
 id: F4-S02
 title: "@hm/flow-engine core — types + registry + dispatcher + interpolate + stubs de handlers"
 phase: F4
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: [F4-S01]
