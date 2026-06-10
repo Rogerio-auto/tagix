@@ -17,6 +17,7 @@
  * `connectMq()` cria conexão+canal a cada chamada, o canal de topologia é
  * encerrado após o boot.
  */
+import Redis from 'ioredis';
 import { assertTopology, connectMq, type MqHandle } from '@hm/shared/mq';
 import { createLogger, type Logger } from '@hm/logger';
 import {
@@ -38,9 +39,15 @@ import {
 import {
   agentRuntimeConfigFromEnv,
   createAgentDeps,
+  runAgentMetricsRollup,
   startAgentWorker,
+  startFollowupScheduler,
   type AgentWorkerHandle,
+  type FollowupSchedulerHandle,
 } from '../agents/index';
+
+/** Intervalo do rollup de métricas de agentes (F2-S13); idempotente. */
+const METRICS_ROLLUP_INTERVAL_MS = 10 * 60_000;
 import {
   adapterFactoryByChannel,
   createAdapterFactory,
@@ -61,6 +68,7 @@ export interface WorkersBootstrapHandle {
   readonly outbound: OutboundWorkerHandle;
   readonly media: MediaWorkerHandle;
   readonly agent: AgentWorkerHandle;
+  readonly followup: FollowupSchedulerHandle;
   stop(): Promise<void>;
 }
 
@@ -108,19 +116,41 @@ export async function startWorkers(
     logger,
   });
 
-  logger.info('workers iniciados', { workers: ['inbound', 'outbound', 'media', 'agent'] });
+  // Scheduler singleton (Redis lock): follow-up cron (F2-S21) + rollup de métricas
+  // (F2-S13, idempotente). Reusa o `channel` AMQP de boot como transporte de publish.
+  const redis = new Redis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
+    lazyConnect: true,
+    maxRetriesPerRequest: 1,
+  });
+  const followup = startFollowupScheduler({ redis, channel, logger });
+  const metricsTimer = setInterval(() => {
+    void runAgentMetricsRollup({}, logger).catch((err: unknown) => {
+      logger.error('falha no rollup de métricas de agentes', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }, METRICS_ROLLUP_INTERVAL_MS);
+  metricsTimer.unref();
+
+  logger.info('workers iniciados', {
+    workers: ['inbound', 'outbound', 'media', 'agent', 'followup-scheduler'],
+  });
 
   return {
     inbound,
     outbound,
     media,
     agent,
+    followup,
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
+      clearInterval(metricsTimer);
+      followup.stop();
       await agent.stop();
       await media.stop();
       await outbound.stop();
       await inbound.stop();
+      await redis.quit();
       await boot.connection.close();
       logger.info('workers parados');
     },

@@ -13,6 +13,7 @@
  */
 import { Router } from 'express';
 import { createAgentsCrudRouter } from './crud';
+import { createAgentMetricsRouter } from './metrics';
 import { createAgentModelsRouter } from './models';
 import { createAgentTemplatesRouter } from './templates';
 import { createAgentToolsRouter } from './tools';
@@ -24,6 +25,7 @@ export function createAgentsRouter(): Router {
   router.use(createAgentToolsRouter());
   router.use(createAgentModelsRouter());
   router.use(createAgentTemplatesRouter());
+  router.use(createAgentMetricsRouter());
   router.use(createAgentsCrudRouter());
   return router;
 }

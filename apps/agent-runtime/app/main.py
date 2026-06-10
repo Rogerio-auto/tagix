@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,18 +25,24 @@ from app.logging import configure_logging, get_logger
 from app.providers import OpenRouterProvider
 from app.routes import run_router
 from app.tools.registry import build_default_registry
+from app.tools.workflow import register_workflow_tools
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Startup: pool asyncpg + registry de tools + checkpointer + grafo compilado
-    (publicado em `app.state.graph` para o endpoint `/run`). Shutdown: fecha tudo."""
+    """Startup: pool asyncpg + registry de tools (leves + workflow callback) +
+    checkpointer + grafo compilado (publicado em `app.state.graph` para `/run`).
+    Shutdown: fecha tudo (provider, http client de callback, pool)."""
     settings = get_settings()
     configure_logging(level=settings.log_level, json_logs=settings.log_json)
     logger = get_logger()
 
     await init_pool()
-    registry = build_default_registry(get_pool())
+    # Cliente HTTP compartilhado dos callbacks de business tools (F2-S07/S20);
+    # o lifespan é dono e o fecha no shutdown.
+    http_client = httpx.AsyncClient(timeout=15.0)
+    registry = build_default_registry(get_pool(), http_client=http_client)
+    register_workflow_tools(registry, http_client)
     async with lifespan_checkpointer() as checkpointer:
         provider = OpenRouterProvider()
         app.state.graph = build_graph(
@@ -48,6 +55,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             yield
         finally:
             await provider.aclose()
+            await http_client.aclose()
             await close_pool()
             logger.info("agent-runtime down")
 

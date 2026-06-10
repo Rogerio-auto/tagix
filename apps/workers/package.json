@@ -19,6 +19,7 @@
     "@hm/shared": "workspace:*",
     "@hm/storage": "workspace:*",
     "drizzle-orm": "^0.38.3",
+    "ioredis": "^5.11.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {

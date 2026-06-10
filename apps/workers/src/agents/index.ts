@@ -57,3 +57,26 @@ export {
   type AgentMetricsRollupOptions,
   type AgentMetricsRollupResult,
 } from './metrics';
+
+// Auto follow-up cron (F2-S21) — scheduler singleton via Redis lock.
+export {
+  runFollowupTick,
+  startFollowupScheduler,
+  type FollowupDeps,
+  type FollowupTickOptions,
+  type FollowupTickResult,
+  type FollowupSchedulerOptions,
+  type FollowupSchedulerHandle,
+} from './followup';
+
+// Buffer de agregação (F2-S12) — infra pronta; ativação no worker é follow-up.
+export {
+  createAggregationBuffer,
+  type AggregationBuffer,
+  type AggregationBufferDeps,
+  type AggregatedBatch,
+  type BufferedMessage,
+  type OnFlush,
+  type RedisLike,
+  type BufferTimers,
+} from './buffer';

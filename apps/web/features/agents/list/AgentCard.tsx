@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Bot, Cpu, Power } from 'lucide-react';
 import { Button } from '@hm/ui';
 import type { Agent } from '../types';
@@ -27,14 +28,19 @@ export function AgentCard({ agent, canEdit, busy, onToggleActive }: AgentCardPro
         <Bot className="size-5" aria-hidden />
       </span>
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-head text-sm font-semibold text-text">{agent.name}</p>
+      <Link
+        href={`/agents/${agent.id}`}
+        className="min-w-0 flex-1 rounded-sm outline-none focus-visible:shadow-glow-md"
+      >
+        <p className="truncate font-head text-sm font-semibold text-text hover:text-brand">
+          {agent.name}
+        </p>
         <p className="flex items-center gap-1.5 truncate font-body text-xs text-text-low">
           <Cpu className="size-3.5 shrink-0" aria-hidden />
           {agent.model ?? 'Modelo padrão'}
           {agent.description ? ` · ${agent.description}` : ''}
         </p>
-      </div>
+      </Link>
 
       <AgentStatusBadge status={agent.status} />
 
