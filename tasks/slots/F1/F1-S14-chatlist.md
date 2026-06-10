@@ -2,7 +2,7 @@
 id: F1-S14
 title: ChatList — real-time + filtros (incl. provider) + search + scroll infinito
 phase: F1
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F1-S13, F1-S11, F1-S12]

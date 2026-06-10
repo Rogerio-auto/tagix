@@ -9,7 +9,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | Fase | Total | 🟢  | ⏸️  | 🟡  | 🔵  | 🟣  | ✅  |
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F1   | 23     | 0   | 10   | 0   | 0   | 1   | 12   |
+| F1   | 23     | 0   | 10   | 0   | 0   | 0   | 13   |
 
 ## Fase 0 — Fundação
 
@@ -49,7 +49,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1-S11 | Socket relay — hm.q.socket.relay → io.emit + socket-events tipados            | ✅ done     | high       | F0-S07, F1-S05         |
 | F1-S12 | API GET /conversations + /conversations/:id/messages + cache versioning       | ✅ done     | critical   | F1-S05, F0-S06         |
 | F1-S13 | Frontend ConversationsPage — layout 3 colunas + ContactInfoPanel skeleton     | ✅ done     | high       | F0-S11, F0-S12, F1-S12 |
-| F1-S14 | ChatList — real-time + filtros (incl. provider) + search + scroll infinito    | 🟣 review   | high       | F1-S13, F1-S11, F1-S12 |
+| F1-S14 | ChatList — real-time + filtros (incl. provider) + search + scroll infinito    | ✅ done     | high       | F1-S13, F1-S11, F1-S12 |
 | F1-S15 | MessageBubble — discriminated union (text/image/.../interactive); IG em stubs | ⏸️ blocked | high       | F1-S13, F1-S05, F1-S10 |
 | F1-S16 | MessageComposer — textarea + media upload + emoji + mention @ + reply         | ⏸️ blocked | high       | F1-S13, F1-S12         |
 | F1-S17 | Janela 24h Meta no composer + CTA template (WA) + state machine IG-ready      | ⏸️ blocked | high       | F1-S16, F1-S07         |
