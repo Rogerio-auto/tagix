@@ -7,12 +7,26 @@
 export {
   startOutboundWorker,
   handleOutboundEnvelope,
+  createOutboundDeps,
   lockKey,
   OUTBOUND_QUEUE,
   OUTBOUND_LOCK_TTL_MS,
   type OutboundWorkerOptions,
   type OutboundWorkerHandle,
 } from './worker';
+
+export {
+  DbChannelResolver,
+  DbOutboundPersistence,
+  toChannelSnapshot,
+  type ChannelAdapterFactory,
+} from './db-ports';
+
+export {
+  runPresencePreAction,
+  emitContactPresence,
+  type ContactPresenceEmitPort,
+} from './presence';
 
 export {
   parseOutboundJob,

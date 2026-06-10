@@ -15,14 +15,23 @@
  * é ack'd (não há ganho em reprocessar um payload imutável). Só erros de
  * *infra* (lock/DB/MQ) propagam para nack → DLX.
  */
-import { connectMq, consume, type Envelope } from '@hm/shared/mq';
+import { connectMq, consume, type Envelope, type MqHandle } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
 import { runWithDistributedLock, type LockStore } from '../lock';
 import { parseOutboundJob, type OutboundJob } from './job';
 import { dispatchOutbound } from './dispatch';
 import { finalizeOutbound } from './finalize';
 import { runPresencePreAction } from './presence';
+import {
+  DbChannelResolver,
+  DbOutboundPersistence,
+  type ChannelAdapterFactory,
+} from './db-ports';
+import { MqSocketEmit } from './mq-ports';
 import type { OutboundDeps } from './ports';
+
+/** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
+type MqChannel = MqHandle['channel'];
 
 /** Fila canônica de outbound (topology: `QUEUES.outbound`). */
 export const OUTBOUND_QUEUE = 'hm.q.outbound' as const;
@@ -40,6 +49,23 @@ export interface OutboundWorkerOptions {
   readonly logger: Logger;
   /** Backend de lock (default: FIFO em memória — ver `lock.ts`). */
   readonly lockStore?: LockStore;
+}
+
+/**
+ * Monta as dependências default do worker outbound a partir da infra real
+ * (F1-S26): resolver DB-backed (canal+token, RLS) com a `AdapterFactory`
+ * injetada, persistência DIRETA `@hm/db`+RLS (`DbOutboundPersistence`) e socket
+ * via fila de relay. O `channel` AMQP é o do consumer.
+ */
+export function createOutboundDeps(
+  channel: MqChannel,
+  adapterFactory: ChannelAdapterFactory,
+): OutboundDeps {
+  return {
+    channels: new DbChannelResolver(adapterFactory),
+    persistence: new DbOutboundPersistence(),
+    socket: new MqSocketEmit(channel),
+  };
 }
 
 /**

@@ -1,29 +1,42 @@
 /**
- * Worker inbound (F1-S04) — composição (LIVECHAT.md §1/§3).
+ * Worker inbound (F1-S04 → refatorado em F1-S26) — composição
+ * (LIVECHAT.md §1/§3, ARCHITECTURE.md §4.2).
  *
  * ```
  * consume hm.q.inbound → valida Envelope (Zod, em `consume`)
  *   → parsePayload (provider + raw)               [InboundMessagePayload]
- *   → runInboundPipeline (parse → media → persist)
+ *   → runInboundPipeline (parse → media → PERSIST in-process via @hm/db)
  *   → ack/nack
  * ```
  *
  * `consume` de `@hm/shared/mq` já valida o `Envelope`, faz `ack` em sucesso e
  * `nack(requeue=false)→DLX` se o handler lançar. Erros de **conteúdo** (payload
- * malformado, provider desconhecido, raw sem mensagens) NÃO lançam: logam-warn e
- * ack'am (reprocessar um payload imutável não ajuda). Só erros de **infra**
- * (publish/enqueue) propagam para nack→DLX.
+ * malformado, provider desconhecido, raw sem mensagens, canal órfão) NÃO lançam:
+ * logam-warn e ack'am (reprocessar um payload imutável não ajuda). Só erros de
+ * **infra** (DB/socket/enqueue) propagam para nack→DLX.
  *
  * O envelope chega da borda do webhook (F1-S02) com `workspaceId` = NIL UUID
- * (`UNRESOLVED_WORKSPACE_ID`): a resolução real channel→workspace é do consumer
- * DB-owner downstream, a partir das routing hints do raw.
+ * (`UNRESOLVED_WORKSPACE_ID`): a resolução real channel→workspace acontece na
+ * persistência (`DbInboundPersistence`), a partir das routing hints do raw.
  */
 import { z } from 'zod';
-import { connectMq, consume, QUEUES, type Envelope } from '@hm/shared/mq';
+import { connectMq, consume, QUEUES, type Envelope, type MqHandle } from '@hm/shared/mq';
 import { CHANNEL_PROVIDERS } from '@hm/shared';
+import { parseWhatsAppWebhook, parseWahaWebhook } from '@hm/channels';
 import type { Logger } from '@hm/logger';
 import { runInboundPipeline } from './pipeline';
+import { ChannelInboundParser } from './parse';
+import { createStatusDeps } from './status';
+import {
+  DbInboundPersistence,
+  MqInboundFlowEnqueue,
+  MqInboundSocketEmit,
+} from './db-ports';
+import { MqMediaEnqueue } from './mq-ports';
 import type { InboundDeps } from './ports';
+
+/** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
+type MqChannel = MqHandle['channel'];
 
 /** Fila canônica de inbound (`QUEUES.inbound`). */
 export const INBOUND_QUEUE = QUEUES.inbound;
@@ -48,6 +61,26 @@ const inboundMessagePayloadSchema = z.object({
 export interface InboundWorkerOptions {
   readonly deps: InboundDeps;
   readonly logger: Logger;
+}
+
+/**
+ * Monta as dependências default do worker inbound a partir da infra real
+ * (F1-S26). Parser default (WA/WAHA reais de `@hm/channels`, IG placeholder),
+ * persistência DIRETA `@hm/db`+RLS (`DbInboundPersistence`) com socket relay
+ * (`message:new`/`typing:from_contact`), status (S20) e flow enqueue (STUB), e
+ * enfileiramento de mídia via `hm.q.media`. O `channel` AMQP é o do consumer.
+ */
+export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDeps {
+  const parser = new ChannelInboundParser(
+    { metaWhatsApp: parseWhatsAppWebhook, waha: parseWahaWebhook },
+    logger,
+  );
+  const socket = new MqInboundSocketEmit(channel);
+  const flow = new MqInboundFlowEnqueue(channel);
+  const statusDeps = createStatusDeps(channel);
+  const persistence = new DbInboundPersistence(socket, flow, statusDeps, logger);
+  const media = new MqMediaEnqueue(channel);
+  return { parser, persistence, media };
 }
 
 /**

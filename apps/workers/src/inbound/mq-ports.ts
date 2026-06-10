@@ -1,40 +1,28 @@
 /**
- * Implementações default das portas de saída do worker inbound via RabbitMQ.
+ * Implementação default do enfileiramento de mídia do worker inbound via
+ * RabbitMQ (F1-S26).
  *
- * Igual ao outbound (F1-S07): o worker não fala com DB nem Socket.io. Publica no
- * exchange de eventos (`hm.events`, topic) com routing keys que caem nas filas
- * canônicas pelos bindings de `assertTopology` (`<queue>.#`):
+ * Diferente da persistência (que em F1-S26 passou a ser DIRETA via `@hm/db` —
+ * ver `db-ports.ts`), a mídia continua saindo por MQ: o media-worker (F1-S10) é
+ * um consumer independente. Publica no exchange de eventos (`hm.events`, topic)
+ * com a routing key que cai na fila canônica pelo binding de `assertTopology`
+ * (`<queue>.#`):
  *
- * - **Persistência** → `inbound.persist.requested` com RK `hm.q.inbound.persist`
- *   → cai em `hm.q.inbound`. Um consumer DB-owner aplica dedup→contact→
- *   conversation→persist→last→cache e, pós-persist, emite `message:new` +
- *   dispara agent/flow (`ai_mode='on'`). Ver relatório do slot.
  * - **Mídia** → RK `hm.q.media.inbound` → cai em `hm.q.media`. O media-worker
- *   baixa do provider, sobe pro storage e o DB-owner casa a URL pela
- *   `externalId`. (A spec do slot chama essa fila de `hm.q.inbound.media`; a
- *   fila canônica em `topology.ts` é `hm.q.media` — ver relatório.)
+ *   baixa do provider, sobe pro storage e casa a URL pela `externalId`. (A spec
+ *   do slot chama essa fila de `hm.q.inbound.media`; a fila canônica em
+ *   `topology.ts` é `hm.q.media`.)
  *
  * Tudo Zod-friendly: o `Envelope` carrega `payload` estruturado, validado no
- * boundary do consumer correspondente.
+ * boundary do consumer (`media/job.ts`).
  */
 import { Buffer } from 'node:buffer';
 import { makeEnvelope, EXCHANGES, QUEUES, type MqHandle } from '@hm/shared/mq';
 import { UNRESOLVED_WORKSPACE_ID } from './worker';
-import type {
-  InboundMediaJob,
-  InboundPersistencePort,
-  MediaEnqueuePort,
-  PersistInboundRequest,
-} from './ports';
+import type { InboundMediaJob, MediaEnqueuePort } from './ports';
 
 /** Canal AMQP, derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
 type MqChannel = MqHandle['channel'];
-
-/** Tipo do envelope de persistência inbound (discriminado pelo consumer DB). */
-export const INBOUND_PERSIST_TYPE = 'inbound.persist.requested' as const;
-
-/** Routing key da persistência inbound (cai em `hm.q.inbound`). */
-export const INBOUND_PERSIST_RK = `${QUEUES.inbound}.persist` as const;
 
 /** Tipo do envelope de job de mídia inbound. */
 export const INBOUND_MEDIA_TYPE = 'inbound.media.requested' as const;
@@ -49,24 +37,6 @@ function publishEvent(channel: MqChannel, routingKey: string, type: string, payl
     persistent: true,
     contentType: 'application/json',
   });
-}
-
-/**
- * Persistência via publish no exchange de eventos. O consumer DB-owner resolve
- * channel→workspace (o envelope sai com workspace NIL — o roteamento real está
- * no `payload.routing`) e aplica a mutação dentro do tenant (RLS).
- */
-export class MqInboundPersistence implements InboundPersistencePort {
-  constructor(private readonly channel: MqChannel) {}
-
-  async persist(request: PersistInboundRequest): Promise<void> {
-    publishEvent(this.channel, INBOUND_PERSIST_RK, INBOUND_PERSIST_TYPE, {
-      provider: request.provider,
-      routing: request.routing,
-      events: request.events,
-    });
-    await Promise.resolve();
-  }
 }
 
 /** Enfileiramento de mídia via publish no exchange de eventos (cai em `hm.q.media`). */

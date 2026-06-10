@@ -1,14 +1,15 @@
 /**
- * Worker inbound (F1-S04) — barrel.
+ * Worker inbound (F1-S04 → refatorado em F1-S26) — barrel.
  *
  * Consome `hm.q.inbound`: valida o `Envelope` → parse por provider (WA/WAHA
- * reais, IG placeholder logged-warn) → enfileira mídia → publica
- * `inbound.persist.requested` (DB-owner aplica dedup→contact→conversation→
- * persist→last→cache→socket→agent/flow).
+ * reais, IG placeholder logged-warn) → enfileira mídia → **persiste in-process**
+ * via `@hm/db`+RLS (dedup→contact→conversation→message→last→cache) → emite
+ * `message:new` → status (S20) → flow (ai_mode='on', STUB).
  */
 export {
   startInboundWorker,
   handleInboundEnvelope,
+  createInboundDeps,
   INBOUND_QUEUE,
   UNRESOLVED_WORKSPACE_ID,
   type InboundWorkerOptions,
@@ -34,14 +35,28 @@ export type {
   MediaEnqueuePort,
   InboundMediaJob,
   PersistInboundRequest,
+  PersistInboundResult,
   RoutingHints,
 } from './ports';
 
 export {
-  MqInboundPersistence,
   MqMediaEnqueue,
-  INBOUND_PERSIST_TYPE,
-  INBOUND_PERSIST_RK,
   INBOUND_MEDIA_TYPE,
   INBOUND_MEDIA_RK,
 } from './mq-ports';
+
+export {
+  DbInboundPersistence,
+  DbInboundChannelResolver,
+  MqInboundSocketEmit,
+  MqInboundFlowEnqueue,
+  INBOUND_FLOW_TYPE,
+  FLOWS_QUEUE,
+  SOCKET_RELAY_QUEUE,
+  type InboundChannelResolver,
+  type ResolvedInboundChannel,
+  type InboundSocketPort,
+  type InboundMessageNewEmit,
+  type InboundFlowEnqueuePort,
+  type InboundFlowTrigger,
+} from './db-ports';

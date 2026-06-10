@@ -11,7 +11,12 @@ import type { ChannelProvider } from '@hm/shared';
 import { handleInboundEnvelope } from './worker';
 import { runInboundPipeline } from './pipeline';
 import { ChannelInboundParser, extractRoutingHints } from './parse';
-import type { InboundDeps, InboundMediaJob, PersistInboundRequest } from './ports';
+import type {
+  InboundDeps,
+  InboundMediaJob,
+  PersistInboundRequest,
+  PersistInboundResult,
+} from './ports';
 
 const logger = {
   debug: vi.fn(),
@@ -29,7 +34,13 @@ function makeDeps(events: InboundEvent[]): {
   enqueue: ReturnType<typeof vi.fn>;
   parse: ReturnType<typeof vi.fn>;
 } {
-  const persist = vi.fn(async (_req: PersistInboundRequest) => undefined);
+  const persistResult: PersistInboundResult = {
+    inserted: events.filter((e) => e.type === 'message').length,
+    deduped: 0,
+    statuses: events.filter((e) => e.type === 'status').length,
+    resolved: true,
+  };
+  const persist = vi.fn(async (_req: PersistInboundRequest) => persistResult);
   const enqueue = vi.fn(async (_job: InboundMediaJob) => undefined);
   const parse = vi.fn((_provider: ChannelProvider, _raw: unknown) => events);
   return {
