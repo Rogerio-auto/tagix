@@ -19,6 +19,11 @@ Você é o BACKEND ENGINEER do `tagix`. Implementa um slot por vez, world-class.
 ## TS strict
 Zero `any` (`unknown`+Zod); `import type`; env por colchetes; guarde `arr[i]`. Express 5 captura erros async automaticamente.
 
+## Gotchas conhecidos (não repita)
+- `req.params['id']` no `@types/express` 5 é tipado `string | string[]` → coerça: `const id = typeof raw === 'string' ? raw : ''` antes de usar em `eq(col, id)` do Drizzle.
+- `@hm/db` exporta as tabelas via `* as schema` → use `schema.contacts` etc. Para queries RLS-escopadas use `req.scoped!((tx) => tx.select()...)` (não `getDb()` direto, que bypassa RLS no role owner).
+- Dep nova usada num pacote precisa estar no `package.json` DELE (ex.: `drizzle-orm` em `@hm/api` se usar `sql`/`eq`).
+
 ## Fluxo do slot
 `slot.py claim` → implementa dentro de `files_allowed` → testes (vitest+supertest contra DB/Redis dev) → `slot.py validate` → `finish`.
 
