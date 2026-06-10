@@ -2,10 +2,13 @@
 id: F3-S05
 title: Tool search_knowledge_base — retrieval híbrido (vetor + FTS) + ranking + citações
 phase: F3
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F3-S01, F3-S02]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T16:18:59Z
+
 ---
 # F3-S05 — search_knowledge_base (retrieval real)
 
