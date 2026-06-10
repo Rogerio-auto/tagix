@@ -2,12 +2,15 @@
 id: F2-S12
 title: Aggregation buffer (window_sec) antes de chamar o runtime
 phase: F2
-status: blocked
+status: review
 priority: medium
 estimated_size: S
 depends_on: [F2-S11]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T04:05:57Z
+completed_at: 2026-06-10T04:05:58Z
 
+---
 # F2-S12 — Buffer de agregação de mensagens
 
 > **source_docs:** `docs/AGENTS_LANGGRAPH.md` §10; `docs/ROADMAP.md` F2-S12
