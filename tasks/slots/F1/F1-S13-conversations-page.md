@@ -2,7 +2,7 @@
 id: F1-S13
 title: Frontend ConversationsPage — layout 3 colunas + ContactInfoPanel skeleton
 phase: F1
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F0-S11, F0-S12, F1-S12]
