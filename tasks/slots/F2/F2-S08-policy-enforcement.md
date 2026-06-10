@@ -2,7 +2,7 @@
 id: F2-S08
 title: Policy enforcement no runtime (filtra tools, valida modelo, max_iterations)
 phase: F2
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F2-S05, F2-S01]
