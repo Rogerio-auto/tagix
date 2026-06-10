@@ -2,12 +2,14 @@
 id: F2-S16
 title: API CRUD agents + tools_global + toggle agent_tools (Node)
 phase: F2
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F2-S01, F2-S03]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T03:33:47Z
 
+---
 # F2-S16 — API CRUD de agentes
 
 > **source_docs:** `docs/AGENTS_LANGGRAPH.md` §6; `docs/features/PERMISSIONS.md`; `docs/ROADMAP.md` F2-S16
