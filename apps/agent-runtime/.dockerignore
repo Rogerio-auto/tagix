@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.python-version
+
+# Tooling / caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Tests (não vão para a imagem de runtime)
+tests/
+
+# Env / secrets — NUNCA na imagem
+.env
+.env.*
+
+# Docs / VCS
+README.md
+.git/
+.gitignore
