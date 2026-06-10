@@ -17,6 +17,7 @@
     "@hm/flow-engine": "workspace:*",
     "@hm/logger": "workspace:*",
     "@hm/shared": "workspace:*",
+    "@hm/storage": "workspace:*",
     "@socket.io/redis-adapter": "^8.3.0",
     "@supabase/supabase-js": "^2.47.10",
     "compression": "^1.7.5",

@@ -2,12 +2,13 @@
 id: F5-S05
 title: API deals + move-stage service (transition rules + history) + close/reopen + attachments
 phase: F5
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: [F5-S02]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T22:00:53Z
+completed_at: 2026-06-10T22:05:38Z
 
 ---
 # F5-S05 — API deals + move service
