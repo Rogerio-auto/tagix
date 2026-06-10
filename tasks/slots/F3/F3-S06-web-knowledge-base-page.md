@@ -2,7 +2,7 @@
 id: F3-S06
 title: Frontend KnowledgeBasePage — upload, lista, editor, preview de chunks, status
 phase: F3
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F3-S04]
