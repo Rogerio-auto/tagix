@@ -79,10 +79,7 @@ export interface ResolvedInboundChannel {
  * `getDb()` direto — é o passo que descobre o tenant.
  */
 export interface InboundChannelResolver {
-  resolve(
-    provider: ChannelProvider,
-    routing: RoutingHints,
-  ): Promise<ResolvedInboundChannel | null>;
+  resolve(provider: ChannelProvider, routing: RoutingHints): Promise<ResolvedInboundChannel | null>;
 }
 
 /** Filtro de identidade do canal por provider (casa com as routing hints). */
@@ -184,10 +181,7 @@ export class MqInboundSocketEmit implements InboundSocketPort {
     await Promise.resolve();
   }
 
-  async emitContactPresence(
-    workspaceId: string,
-    payload: TypingFromContactPayload,
-  ): Promise<void> {
+  async emitContactPresence(workspaceId: string, payload: TypingFromContactPayload): Promise<void> {
     relayEnvelope(
       this.channel,
       workspaceId,
@@ -283,6 +277,23 @@ function toDate(rawTimestamp: string): Date {
  * aplica todo o trecho DB-bound sob RLS. Recebe as portas de socket/flow por
  * injeção (composição em `createInboundDeps`).
  */
+/**
+ * Hook opcional disparado por mensagem INBOUND DO CONTATO persistida (F4-S13). O
+ * trigger dispatcher de flows pluga aqui para avaliar/disparar flows e retomar
+ * execucoes waiting. Opcional: ausente = comportamento F1 inalterado.
+ */
+export interface InboundContactMessageHook {
+  onContactMessage(input: {
+    workspaceId: string;
+    conversationId: string;
+    contactId: string | null;
+    channelId: string;
+    messageId: string;
+    type: string;
+    content: string | null;
+  }): Promise<void>;
+}
+
 export class DbInboundPersistence implements InboundPersistencePort {
   constructor(
     private readonly socket: InboundSocketPort,
@@ -290,17 +301,14 @@ export class DbInboundPersistence implements InboundPersistencePort {
     private readonly statusDeps: StatusDeps,
     private readonly logger: Logger,
     private readonly channels: InboundChannelResolver = new DbInboundChannelResolver(),
+    private readonly contactMessageHook?: InboundContactMessageHook,
   ) {}
 
   async persist(request: PersistInboundRequest): Promise<PersistInboundResult> {
     const { provider, routing, events } = request;
 
-    const messageEvents = events.filter(
-      (e): e is InboundMessageEvent => e.type === 'message',
-    );
-    const statusEvents = events.filter(
-      (e): e is InboundStatusEvent => e.type === 'status',
-    );
+    const messageEvents = events.filter((e): e is InboundMessageEvent => e.type === 'message');
+    const statusEvents = events.filter((e): e is InboundStatusEvent => e.type === 'status');
     const reactionEvents = events.filter((e) => e.type === 'reaction');
 
     // Status (S20): cada um resolve o próprio canal/tenant — independe da
@@ -360,6 +368,30 @@ export class DbInboundPersistence implements InboundPersistencePort {
         type: msg.type,
         content: msg.content,
       });
+    }
+
+    // Trigger dispatcher de flows (F4-S13): avalia/dispara flows e retoma waiting por
+    // mensagem do contato. Hook opcional — so inbound dispara triggers (secao 5.1).
+    if (this.contactMessageHook && outcome.inserted.length > 0) {
+      for (const msg of outcome.inserted) {
+        try {
+          await this.contactMessageHook.onContactMessage({
+            workspaceId,
+            conversationId: outcome.resolved.conversationId,
+            contactId: outcome.resolved.contactId,
+            channelId,
+            messageId: msg.messageId,
+            type: msg.type,
+            content: msg.content,
+          });
+        } catch (err: unknown) {
+          // Falha de trigger nao deve derrubar a persistencia inbound.
+          this.logger.error('inbound: trigger dispatch de flows falhou', {
+            conversationId: outcome.resolved.conversationId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
     }
 
     if (outcome.inserted.length > 0 && outcome.resolved.aiMode === 'on') {
@@ -444,10 +476,7 @@ async function ensureConversation(
   if (existing !== undefined) {
     const contactId = existing.contactId ?? (await ensureContact(tx, workspaceId, remoteId));
     if (existing.contactId === null) {
-      await tx
-        .update(conversations)
-        .set({ contactId })
-        .where(eq(conversations.id, existing.id));
+      await tx.update(conversations).set({ contactId }).where(eq(conversations.id, existing.id));
     }
     return { contactId, conversationId: existing.id, aiMode: existing.aiMode };
   }

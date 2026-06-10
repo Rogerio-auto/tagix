@@ -27,11 +27,7 @@ import type { Logger } from '@hm/logger';
 import { runInboundPipeline } from './pipeline';
 import { ChannelInboundParser } from './parse';
 import { createStatusDeps } from './status';
-import {
-  DbInboundPersistence,
-  MqInboundFlowEnqueue,
-  MqInboundSocketEmit,
-} from './db-ports';
+import { DbInboundPersistence, MqInboundFlowEnqueue, MqInboundSocketEmit } from './db-ports';
 import { MqMediaEnqueue } from './mq-ports';
 import type { InboundDeps } from './ports';
 
@@ -63,6 +59,8 @@ export interface InboundWorkerOptions {
   readonly logger: Logger;
 }
 
+import { createTriggerDispatchDeps, dispatchTriggersForNewMessage } from '../flows-triggers/index';
+
 /**
  * Monta as dependências default do worker inbound a partir da infra real
  * (F1-S26). Parser default (WA/WAHA reais de `@hm/channels`, IG placeholder),
@@ -78,7 +76,37 @@ export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDe
   const socket = new MqInboundSocketEmit(channel);
   const flow = new MqInboundFlowEnqueue(channel);
   const statusDeps = createStatusDeps(channel);
-  const persistence = new DbInboundPersistence(socket, flow, statusDeps, logger);
+  // Hook de trigger dispatch de flows (F4-S13): avalia/dispara flows + resume waiting.
+  const triggerDeps = createTriggerDispatchDeps(logger);
+  const contactMessageHook = {
+    async onContactMessage(input: {
+      workspaceId: string;
+      conversationId: string;
+      contactId: string | null;
+      channelId: string;
+      messageId: string;
+      type: string;
+      content: string | null;
+    }): Promise<void> {
+      await dispatchTriggersForNewMessage(triggerDeps, {
+        workspaceId: input.workspaceId,
+        conversationId: input.conversationId,
+        contactId: input.contactId,
+        channelId: input.channelId,
+        content: input.content,
+        type: input.type,
+        fromContact: true,
+      });
+    },
+  };
+  const persistence = new DbInboundPersistence(
+    socket,
+    flow,
+    statusDeps,
+    logger,
+    undefined,
+    contactMessageHook,
+  );
   const media = new MqMediaEnqueue(channel);
   return { parser, persistence, media };
 }
