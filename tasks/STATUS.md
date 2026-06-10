@@ -9,7 +9,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | Fase | Total | 🟢  | ⏸️  | 🟡  | 🔵  | 🟣  | ✅  |
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F1   | 23     | 0   | 4   | 0   | 0   | 1   | 18   |
+| F1   | 23     | 0   | 4   | 0   | 0   | 0   | 19   |
 
 ## Fase 0 — Fundação
 
@@ -57,5 +57,5 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1-S19 | Channel settings page + connect wizard (Meta FB Login + WAHA)                 | ✅ done     | high       | F1-S01, F1-S03, F0-S11 |
 | F1-S20 | Read receipts e delivery status (status callbacks Meta WA)                    | ⏸️ blocked | medium     | F1-S07, F1-S11, F1-S15 |
 | F1-S21 | Typing/recording presence (pre_action)                                        | ✅ done     | low        | F1-S07, F1-S11         |
-| F1-S22 | Notas internas com mentions (conversation_notes + auto-notification)          | 🟣 review   | medium     | F1-S05, F1-S12         |
+| F1-S22 | Notas internas com mentions (conversation_notes + auto-notification)          | ✅ done     | medium     | F1-S05, F1-S12         |
 | F1-S23 | Auto-assign + manual transfer + routing_history                               | ⏸️ blocked | medium     | F1-S05, F1-S12         |

@@ -2,7 +2,7 @@
 id: F1-S22
 title: Notas internas com mentions (conversation_notes + auto-notification)
 phase: F1
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F1-S05, F1-S12]
