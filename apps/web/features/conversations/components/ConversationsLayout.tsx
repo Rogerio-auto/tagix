@@ -10,6 +10,7 @@ import { ConversationsHelp } from '../help';
 import { ChatList } from './ChatList';
 import { MessageComposer } from './MessageComposer';
 import { ContactInfoPanel } from './ContactInfoPanel';
+import { TypingIndicator } from './TypingIndicator';
 
 export function ConversationsLayout({ conversationId }: { conversationId?: string }) {
   const [infoOpen, setInfoOpen] = useState(false);
@@ -101,6 +102,7 @@ function ConversationPanel({
         )}
       </div>
 
+      <TypingIndicator conversationId={conversationId} className="px-4" />
       <MessageComposer conversationId={conversationId} />
     </>
   );

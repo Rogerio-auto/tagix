@@ -71,6 +71,15 @@ export interface FlowExecutionPayload {
   executionId: string;
 }
 
+/** Menção `@member` numa nota interna (F1-S22), entregue ao mencionado. */
+export interface NoteMentionedPayload {
+  conversationId: string;
+  noteId: string;
+  mentionedMemberId: string;
+  authorMemberId: string;
+  preview: string;
+}
+
 /**
  * Eventos emitidos do servidor para o client. Cada entrada mapeia o nome do
  * evento → assinatura do listener (convenção Socket.io `EventsMap`).
@@ -83,6 +92,7 @@ export interface ServerToClient {
   'conversation:assigned': (p: ConversationAssignedPayload) => void;
   'conversation:routing_changed': (p: ConversationRoutingChangedPayload) => void;
   'typing:from_contact': (p: TypingFromContactPayload) => void;
+  'note:mentioned': (p: NoteMentionedPayload) => void;
   'agent_execution:started': (p: AgentExecutionPayload) => void;
   'agent_execution:completed': (p: AgentExecutionPayload) => void;
   'flow_execution:started': (p: FlowExecutionPayload) => void;
@@ -104,6 +114,7 @@ export const SERVER_TO_CLIENT_EVENTS = [
   'conversation:assigned',
   'conversation:routing_changed',
   'typing:from_contact',
+  'note:mentioned',
   'agent_execution:started',
   'agent_execution:completed',
   'flow_execution:started',

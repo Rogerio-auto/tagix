@@ -2,14 +2,15 @@
 
 import { X } from 'lucide-react';
 import { Skeleton } from '@/shared/components/feedback';
+import { NotesPanel } from './Notes';
 
 /**
  * Painel lateral de informações do contato (UX §2.3 — painel, não modal).
- * Esqueleto no MVP; dados reais (tags, deals, notas, timeline) vêm com a API de
- * contatos e os slots de notas/routing (F1-S22/S23).
+ * Cabeçalho do contato ainda é esqueleto (dados reais vêm com a API de contatos);
+ * Notas internas (F1-S22) já são funcionais. Tags/deals/timeline: slots futuros.
  */
 export function ContactInfoPanel({
-  conversationId: _conversationId,
+  conversationId,
   onClose,
 }: {
   conversationId: string;
@@ -28,18 +29,19 @@ export function ContactInfoPanel({
           <X className="size-5" />
         </button>
       </div>
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        <div className="flex flex-col items-center gap-2">
-          <Skeleton className="size-16 rounded-pill" />
-          <Skeleton className="h-4 w-32" />
+      <div className="flex flex-1 flex-col overflow-y-auto">
+        {/* Cabeçalho do contato — dados reais entram com a API de contatos. */}
+        <div className="space-y-4 border-b border-border-2 p-4">
+          <div className="flex flex-col items-center gap-2">
+            <Skeleton className="size-16 rounded-pill" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <p className="text-center font-body text-xs text-text-low">
+            Tags, deals e timeline aparecem aqui em breve.
+          </p>
         </div>
-        <div className="space-y-2">
-          <Skeleton className="h-3 w-full" />
-          <Skeleton className="h-3 w-2/3" />
-        </div>
-        <p className="font-body text-xs text-text-low">
-          Tags, deals, eventos e notas aparecem aqui (F1-S22/S23).
-        </p>
+        {/* Notas internas + @menções (F1-S22). `members` virá de uma query de membros. */}
+        <NotesPanel conversationId={conversationId} />
       </div>
     </aside>
   );

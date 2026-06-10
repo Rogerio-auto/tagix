@@ -21,6 +21,7 @@ import { runWithDistributedLock, type LockStore } from '../lock';
 import { parseOutboundJob, type OutboundJob } from './job';
 import { dispatchOutbound } from './dispatch';
 import { finalizeOutbound } from './finalize';
+import { runPresencePreAction } from './presence';
 import type { OutboundDeps } from './ports';
 
 /** Fila canônica de outbound (topology: `QUEUES.outbound`). */
@@ -58,6 +59,11 @@ export async function handleOutboundEnvelope(
     OUTBOUND_LOCK_TTL_MS,
     async () => {
       const { channel, adapter } = await deps.channels.resolve(job.channelId, workspaceId);
+
+      // Pre-action: dispara "digitando…" no canal antes do envio real (F1-S21).
+      // Best-effort — falha aqui não bloqueia o envio.
+      await runPresencePreAction(job, channel, adapter, logger);
+
       const dispatch = await dispatchOutbound(job, channel, adapter);
 
       if (!dispatch.result.ok) {

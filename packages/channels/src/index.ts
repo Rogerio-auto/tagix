@@ -47,6 +47,10 @@ export {
   type MetaErrorBody,
 } from './shared/errors';
 
+// --- Parsers de webhook inbound (provider → InboundEvent[]) ---
+export { parseWhatsAppWebhook } from './meta/whatsapp/webhook.parser';
+export { parseWahaWebhook } from './waha/webhook.parser';
+
 // --- Adapters ---
 export { MetaWhatsAppAdapter } from './meta/whatsapp/adapter';
 export { MetaInstagramAdapter } from './meta/instagram/adapter';
