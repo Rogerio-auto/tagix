@@ -2,12 +2,15 @@
 id: F2-S18
 title: Frontend AgentDetailPage com tabs (Config, Tools, Knowledge, Metrics, Playground)
 phase: F2
-status: blocked
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F2-S16, F2-S17]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T04:06:06Z
+completed_at: 2026-06-10T04:06:07Z
 
+---
 # F2-S18 — AgentDetailPage (tabs)
 
 > **source_docs:** `docs/UX_PRINCIPLES.md` §2/§3; `docs/AGENTS_LANGGRAPH.md` §6/§8; `docs/ROADMAP.md` F2-S18
