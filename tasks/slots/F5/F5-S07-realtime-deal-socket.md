@@ -2,10 +2,13 @@
 id: F5-S07
 title: Real-time deals — socket events deal:* + relay + client listeners
 phase: F5
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: S
 depends_on: [F5-S05]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T22:11:08Z
+
 ---
 # F5-S07 — Real-time deal sync
 
