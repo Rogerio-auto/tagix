@@ -2,12 +2,14 @@
 id: F2-S11
 title: Worker de agentes — ai_mode='on' + inbound → agentsClient.run (stream)
 phase: F2
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F2-S03, F2-S05, F2-S09]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T03:52:15Z
 
+---
 # F2-S11 — Integração worker → agent-runtime
 
 > **source_docs:** `docs/AGENTS_LANGGRAPH.md` §10; `docs/ROADMAP.md` F2-S11; F1-S26 (`MqInboundFlowEnqueue` → `hm.q.flows`)
