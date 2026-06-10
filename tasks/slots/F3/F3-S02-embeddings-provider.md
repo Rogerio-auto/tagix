@@ -2,7 +2,7 @@
 id: F3-S02
 title: Embeddings provider (OpenAI direto) + endpoint interno /embed + usage logging
 phase: F3
-status: review
+status: done
 priority: critical
 estimated_size: S
 depends_on: []
