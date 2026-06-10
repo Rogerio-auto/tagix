@@ -2,7 +2,7 @@
 id: F1-S18
 title: WAHAAdapter (inbound + outbound) + session management
 phase: F1
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F1-S09]
