@@ -8,18 +8,18 @@
 import { triggerHandler } from './handlers/trigger.handler';
 import { messageHandler } from './handlers/message.handler';
 import { interactiveHandler } from './handlers/interactive.handler';
-import { metaFlowHandler } from './handlers/meta-flow.handler';
+import { metaFlowHandler } from './handlers/meta_flow.handler';
 import { waitHandler } from './handlers/wait.handler';
-import { waitForResponseHandler } from './handlers/wait-for-response.handler';
+import { waitForResponseHandler } from './handlers/wait_for_response.handler';
 import { conditionHandler } from './handlers/condition.handler';
 import { switchHandler } from './handlers/switch.handler';
-import { aiActionHandler } from './handlers/ai-action.handler';
-import { addTagHandler } from './handlers/add-tag.handler';
-import { removeTagHandler } from './handlers/remove-tag.handler';
-import { moveStageHandler } from './handlers/move-stage.handler';
-import { changeStatusHandler } from './handlers/change-status.handler';
-import { httpRequestHandler } from './handlers/http-request.handler';
-import { externalNotifyHandler } from './handlers/external-notify.handler';
+import { aiActionHandler } from './handlers/ai_action.handler';
+import { addTagHandler } from './handlers/add_tag.handler';
+import { removeTagHandler } from './handlers/remove_tag.handler';
+import { moveStageHandler } from './handlers/move_stage.handler';
+import { changeStatusHandler } from './handlers/change_status.handler';
+import { httpRequestHandler } from './handlers/http_request.handler';
+import { externalNotifyHandler } from './handlers/external_notify.handler';
 import type { FlowExecutionContext, FlowHandlerResult, RegisteredFlowHandler } from './types';
 
 export const handlerRegistry = {
