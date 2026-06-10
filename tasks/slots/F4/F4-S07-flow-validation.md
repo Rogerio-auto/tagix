@@ -2,12 +2,13 @@
 id: F4-S07
 title: Validação pré-publish — Zod + cycle detection + unreachable nodes + variable refs
 phase: F4
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: [F4-S02]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T20:30:17Z
+completed_at: 2026-06-10T20:31:32Z
 
 ---
 # F4-S07 — Validação de flow (pré-publish)
