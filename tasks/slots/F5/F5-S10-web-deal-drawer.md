@@ -2,12 +2,13 @@
 id: F5-S10
 title: Frontend DealDetailDrawer + history timeline + CardImageCapture/gallery
 phase: F5
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F5-S05]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T22:49:46Z
+completed_at: 2026-06-10T22:53:39Z
 
 ---
 # F5-S10 — DealDetailDrawer (web)
