@@ -2,10 +2,13 @@
 id: F4-S09
 title: Frontend FlowsListPage + manual flows drag-reorder
 phase: F4
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F4-S08]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T20:56:31Z
+
 ---
 # F4-S09 — FlowsListPage (web)
 
