@@ -10,7 +10,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
-| F2   | 21     | 0   | 6   | 0   | 0   | 1   | 14   |
+| F2   | 21     | 0   | 6   | 0   | 0   | 0   | 15   |
 
 ## Fase 0 — Fundação
 
@@ -74,7 +74,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F2-S04 | OpenRouterProvider (chat completion + streaming + tool calls + usage capture)                | ✅ done     | critical   | F2-S02                 |
 | F2-S05 | Grafo LangGraph (load_context → build_prompt → call_model → tools → finalize) + checkpointer | ✅ done     | critical   | F2-S02, F2-S04, F2-S01 |
 | F2-S06 | Tool registry + tools "leves" (query_contact/conversation/search_kb) via asyncpg RLS         | ✅ done     | high       | F2-S02, F2-S01, F2-S10 |
-| F2-S07 | Tools de negócio via callback HTTP para o Node (internal tools endpoint)                     | 🟣 review   | high       | F2-S06, F2-S01         |
+| F2-S07 | Tools de negócio via callback HTTP para o Node (internal tools endpoint)                     | ✅ done     | high       | F2-S06, F2-S01         |
 | F2-S08 | Policy enforcement no runtime (filtra tools, valida modelo, max_iterations)                  | ⏸️ blocked | high       | F2-S05, F2-S01         |
 | F2-S09 | Hard cap de custo no Node antes da chamada ao runtime                                        | ✅ done     | high       | F2-S01, F2-S03         |
 | F2-S10 | Column-level access control para tools de database                                           | ✅ done     | medium     | F2-S02                 |

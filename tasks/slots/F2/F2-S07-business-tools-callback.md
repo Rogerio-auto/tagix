@@ -2,7 +2,7 @@
 id: F2-S07
 title: Tools de negócio via callback HTTP para o Node (internal tools endpoint)
 phase: F2
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F2-S06, F2-S01]
