@@ -2,7 +2,7 @@
 id: F1-S04
 title: Worker inbound — parser por provider + persist + relay
 phase: F1
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: [F1-S02, F1-S05, F1-S09]
