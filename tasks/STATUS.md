@@ -11,6 +11,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
+| F3   | 7     | 2   | 5   | 0   | 0   | 0   | 0   |
 
 ## Fase 0 — Fundação
 
@@ -89,3 +90,15 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F2-S19 | Playground do agente com SSE streaming (proxy via API Node)                                  | ✅ done | medium     | F2-S16, F2-S05, F2-S18 |
 | F2-S20 | Tools workflow modulares + register_conversion (respeitando policies)                        | ✅ done | medium     | F2-S07, F2-S06         |
 | F2-S21 | Auto follow-up cron job idempotente                                                          | ✅ done | low        | F2-S11                 |
+
+## Fase 3 — Flow Builder
+
+| ID     | Titulo                                                                            | Status      | Prioridade | Depende de             |
+| ------ | --------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------- |
+| F3-S01 | Schema Knowledge Base (kb_documents, kb_chunks pgvector, kb_feedback) + RLS       | 🟢 available | critical   | —                      |
+| F3-S02 | Embeddings provider (OpenAI direto) + endpoint interno /embed + usage logging     | 🟢 available | critical   | —                      |
+| F3-S03 | Ingest pipeline (worker) — chunking + embeddings + persist kb_chunks              | ⏸️ blocked  | high       | F3-S01, F3-S02, F3-S04 |
+| F3-S04 | API CRUD Knowledge Base + enqueue ingest + envelope kb.document.ingest            | ⏸️ blocked  | high       | F3-S01                 |
+| F3-S05 | Tool search_knowledge_base — retrieval híbrido (vetor + FTS) + ranking + citações | ⏸️ blocked  | high       | F3-S01, F3-S02         |
+| F3-S06 | Frontend KnowledgeBasePage — upload, lista, editor, preview de chunks, status     | ⏸️ blocked  | high       | F3-S04                 |
+| F3-S07 | Feedback loop — citações do agente + marcar útil/não-útil (kb_feedback)           | ⏸️ blocked  | medium     | F3-S01, F3-S05, F3-S06 |
