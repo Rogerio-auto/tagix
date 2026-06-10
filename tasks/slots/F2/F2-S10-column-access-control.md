@@ -2,7 +2,7 @@
 id: F2-S10
 title: Column-level access control para tools de database
 phase: F2
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F2-S02]
