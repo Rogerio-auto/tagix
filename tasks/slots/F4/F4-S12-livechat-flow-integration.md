@@ -2,7 +2,7 @@
 id: F4-S12
 title: LiveChat flow integration — quickbar manual + confirm modal + ExecutionsBadge
 phase: F4
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F4-S08]
