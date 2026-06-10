@@ -2,7 +2,7 @@
 id: F5-S04
 title: API pipelines + stages (CRUD + reorder)
 phase: F5
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F5-S02]
