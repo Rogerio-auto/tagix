@@ -2,7 +2,7 @@
 id: F5-S13
 title: Frontend conversões — botão "Marcar conversão" + modal + página /conversions + settings
 phase: F5
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F5-S12]
