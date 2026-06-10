@@ -9,7 +9,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | Fase | Total | 🟢  | ⏸️  | 🟡  | 🔵  | 🟣  | ✅  |
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F1   | 26     | 2   | 0   | 0   | 0   | 0   | 24   |
+| F1   | 26     | 1   | 0   | 0   | 0   | 1   | 24   |
 
 ## Fase 0 — Fundação
 
@@ -60,5 +60,5 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1-S22 | Notas internas com mentions (conversation_notes + auto-notification)          | ✅ done      | medium     | F1-S05, F1-S12                         |
 | F1-S23 | Auto-assign + manual transfer + routing_history                               | ✅ done      | medium     | F1-S05, F1-S12                         |
 | F1-S24 | API send message — POST /api/conversations/:id/messages → enqueue outbound    | ✅ done      | critical   | F1-S05, F1-S07, F1-S12                 |
-| F1-S25 | Web socket client — SocketProvider + window.__hmSocket (liga o realtime)      | 🟢 available | critical   | F1-S11, F0-S11                         |
+| F1-S25 | Web socket client — SocketProvider + window.__hmSocket (liga o realtime)      | 🟣 review    | critical   | F1-S11, F0-S11                         |
 | F1-S26 | Worker bootstrap + persistência direta (@hm/db) + adapter factory             | 🟢 available | critical   | F1-S04, F1-S07, F1-S10, F1-S20, F1-S21 |
