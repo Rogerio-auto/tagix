@@ -11,6 +11,9 @@ export default tseslint.config(
       '**/.next/**',
       '**/next-env.d.ts',
       '**/coverage/**',
+      // Python (agent-runtime): virtualenv e caches não são JS do monorepo.
+      '**/.venv/**',
+      '**/__pycache__/**',
       '**/*.config.{js,mjs,cjs,ts}',
     ],
   },

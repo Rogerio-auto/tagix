@@ -6,6 +6,8 @@ import { config } from 'dotenv';
 import { and, eq } from 'drizzle-orm';
 import { createClient } from './client';
 import { members, plans, subscriptions, workspaces } from './schema';
+import { seedAgentTemplates } from './seed/agent_templates';
+import { seedLlmModels } from './seed/llm_models';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.resolve(here, '../../../.env') });
@@ -63,6 +65,10 @@ if (!existingSub) {
     billingCycle: 'monthly',
   });
 }
+
+// Catálogos globais de agentes IA (F2): templates de wizard + whitelist de modelos LLM.
+await seedAgentTemplates(db);
+await seedLlmModels(db);
 
 await sql.end();
 console.log(`[db] seed ok — workspace=${workspace.slug} owner=${ownerEmail} planos=${PLAN_SEED.length}`);
