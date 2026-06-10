@@ -13,6 +13,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
+| F5   | 16     | 2   | 14   | 0   | 0   | 0   | 0   |
 
 ## Fase 0 — Fundação
 
@@ -122,3 +123,24 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F4-S12 | LiveChat flow integration — quickbar manual + confirm modal + ExecutionsBadge                       | ✅ done | medium     | F4-S08                 |
 | F4-S13 | Trigger dispatcher (inbound) — keyword/new_message/new_lead/system_event + resume waiting flows     | ✅ done | high       | F4-S01, F4-S02         |
 | F4-S14 | Meta flow_submission webhook + trigger flow (flow_submission)                                       | ✅ done | medium     | F4-S01, F4-S02         |
+
+## Fase 5 — Calendar
+
+| ID     | Titulo                                                                                                    | Status      | Prioridade | Depende de             |
+| ------ | --------------------------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------- |
+| F5-S01 | Schema tags + contact_tags + RLS (destrava conversões e add_tag/remove_tag da F4)                         | 🟢 available | critical   | —                      |
+| F5-S02 | Schema pipeline (pipelines, stages, deals, deal_history, deal_attachments, pending_automations) + RLS     | 🟢 available | critical   | —                      |
+| F5-S03 | Schema conversões (conversion_types, conversion_events, conversion_tag_triggers) + RLS + dedup            | ⏸️ blocked  | high       | F5-S01, F5-S02         |
+| F5-S04 | API pipelines + stages (CRUD + reorder)                                                                   | ⏸️ blocked  | high       | F5-S02                 |
+| F5-S05 | API deals + move-stage service (transition rules + history) + close/reopen + attachments                  | ⏸️ blocked  | high       | F5-S02                 |
+| F5-S06 | Automation engine — pending_automations worker + on_stale cron + dispatch from move                       | ⏸️ blocked  | high       | F5-S02, F5-S05         |
+| F5-S07 | Real-time deals — socket events deal:* + relay + client listeners                                         | ⏸️ blocked  | medium     | F5-S05                 |
+| F5-S08 | Agent tools — move_deal_stage + query_deal (agent-runtime)                                                | ⏸️ blocked  | medium     | F5-S02, F5-S05         |
+| F5-S09 | Frontend PipelinePage kanban (dnd-kit + optimistic move + filtros) + PipelineSettingsPage                 | ⏸️ blocked  | high       | F5-S04, F5-S05         |
+| F5-S10 | Frontend DealDetailDrawer + history timeline + CardImageCapture/gallery                                   | ⏸️ blocked  | high       | F5-S05                 |
+| F5-S11 | Frontend custom fields — settings editor + dynamic form renderer + Zod dinâmico                           | ⏸️ blocked  | medium     | F5-S04                 |
+| F5-S12 | API conversões — CRUD conversion_types + events (registrar/listar/cancelar) + dedup                       | ⏸️ blocked  | high       | F5-S03                 |
+| F5-S13 | Frontend conversões — botão "Marcar conversão" + modal + página /conversions + settings                   | ⏸️ blocked  | medium     | F5-S12                 |
+| F5-S14 | Conversões automações — flow handler register_conversion + tag pg-trigger + fecha F2-S20                  | ⏸️ blocked  | medium     | F5-S03, F5-S06, F5-S12 |
+| F5-S15 | Seeds de nicho — pipeline templates (imobiliária + clínica) + agent_template variants + onboarding wizard | ⏸️ blocked  | medium     | F5-S02, F5-S04         |
+| F5-S16 | Fecha stubs da F4 — handlers move_stage/add_tag/remove_tag + triggers stage_change/tag_added              | ⏸️ blocked  | high       | F5-S01, F5-S02, F5-S05 |
