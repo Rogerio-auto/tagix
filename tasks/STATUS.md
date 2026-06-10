@@ -9,7 +9,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | Fase | Total | 🟢  | ⏸️  | 🟡  | 🔵  | 🟣  | ✅  |
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F1   | 23     | 0   | 14   | 0   | 0   | 0   | 9   |
+| F1   | 23     | 0   | 13   | 0   | 0   | 1   | 9   |
 
 ## Fase 0 — Fundação
 
@@ -46,7 +46,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1-S08 | MetaWhatsAppAdapter completo (sendText/Media/Template/Interactive + parser)   | ✅ done     | critical   | F1-S09                 |
 | F1-S09 | IChannelAdapter + capabilities + graphClient + MetaInstagramAdapter STUB      | ✅ done     | critical   | F1-S01                 |
 | F1-S10 | Worker media — download Meta + dedup SHA-256 + upload R2 + signed URL         | ⏸️ blocked | high       | F1-S04, F1-S08, F0-S15 |
-| F1-S11 | Socket relay — hm.q.socket.relay → io.emit + socket-events tipados            | ⏸️ blocked | high       | F0-S07, F1-S05         |
+| F1-S11 | Socket relay — hm.q.socket.relay → io.emit + socket-events tipados            | 🟣 review   | high       | F0-S07, F1-S05         |
 | F1-S12 | API GET /conversations + /conversations/:id/messages + cache versioning       | ✅ done     | critical   | F1-S05, F0-S06         |
 | F1-S13 | Frontend ConversationsPage — layout 3 colunas + ContactInfoPanel skeleton     | ✅ done     | high       | F0-S11, F0-S12, F1-S12 |
 | F1-S14 | ChatList — real-time + filtros (incl. provider) + search + scroll infinito    | ⏸️ blocked | high       | F1-S13, F1-S11, F1-S12 |

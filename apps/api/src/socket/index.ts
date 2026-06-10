@@ -4,6 +4,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { SESSION_COOKIE, resolveSession, type SessionContext } from '../auth';
 import { loadConfig } from '../config';
+import { startSocketRelay } from './relay';
 
 interface SocketData {
   session?: SessionContext;
@@ -34,6 +35,11 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
   const pub = new Redis(config.redisUrl);
   const sub = pub.duplicate();
   io.adapter(createAdapter(pub, sub));
+
+  // Relay RabbitMQ → Socket.io. Falha de conexão não derruba o boot.
+  void startSocketRelay(io).catch((err: unknown) => {
+    console.error('[socket] falha ao iniciar relay RabbitMQ:', err);
+  });
 
   io.use((socket, next) => {
     void (async () => {
