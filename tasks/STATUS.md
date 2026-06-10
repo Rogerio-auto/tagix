@@ -13,7 +13,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
-| F5   | 16     | 2   | 14   | 0   | 0   | 0   | 0   |
+| F5   | 16     | 1   | 14   | 0   | 0   | 1   | 0   |
 
 ## Fase 0 — Fundação
 
@@ -128,7 +128,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID     | Titulo                                                                                                    | Status      | Prioridade | Depende de             |
 | ------ | --------------------------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------- |
-| F5-S01 | Schema tags + contact_tags + RLS (destrava conversões e add_tag/remove_tag da F4)                         | 🟢 available | critical   | —                      |
+| F5-S01 | Schema tags + contact_tags + RLS (destrava conversões e add_tag/remove_tag da F4)                         | 🟣 review    | critical   | —                      |
 | F5-S02 | Schema pipeline (pipelines, stages, deals, deal_history, deal_attachments, pending_automations) + RLS     | 🟢 available | critical   | —                      |
 | F5-S03 | Schema conversões (conversion_types, conversion_events, conversion_tag_triggers) + RLS + dedup            | ⏸️ blocked  | high       | F5-S01, F5-S02         |
 | F5-S04 | API pipelines + stages (CRUD + reorder)                                                                   | ⏸️ blocked  | high       | F5-S02                 |
