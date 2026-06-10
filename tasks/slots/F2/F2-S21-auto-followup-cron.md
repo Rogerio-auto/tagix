@@ -2,7 +2,7 @@
 id: F2-S21
 title: Auto follow-up cron job idempotente
 phase: F2
-status: review
+status: done
 priority: low
 estimated_size: S
 depends_on: [F2-S11]

@@ -10,7 +10,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
-| F2   | 21     | 0   | 3   | 0   | 0   | 1   | 17   |
+| F2   | 21     | 0   | 3   | 0   | 0   | 0   | 18   |
 
 ## Fase 0 — Fundação
 
@@ -88,4 +88,4 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F2-S18 | Frontend AgentDetailPage com tabs (Config, Tools, Knowledge, Metrics, Playground)            | ⏸️ blocked | medium     | F2-S16, F2-S17         |
 | F2-S19 | Playground do agente com SSE streaming (proxy via API Node)                                  | ⏸️ blocked | medium     | F2-S16, F2-S05, F2-S18 |
 | F2-S20 | Tools workflow modulares + register_conversion (respeitando policies)                        | ⏸️ blocked | medium     | F2-S07, F2-S06         |
-| F2-S21 | Auto follow-up cron job idempotente                                                          | 🟣 review   | low        | F2-S11                 |
+| F2-S21 | Auto follow-up cron job idempotente                                                          | ✅ done     | low        | F2-S11                 |
