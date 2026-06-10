@@ -36,6 +36,7 @@ _ALL_KEYS = {
     "mark_resolved",
     "change_conversation_status",
     "register_conversion",
+    "move_deal_stage",
 }
 
 

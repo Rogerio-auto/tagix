@@ -303,5 +303,5 @@ def test_with_config_does_not_mutate_original() -> None:
 def test_build_light_db_tools_count() -> None:
     tools = build_light_db_tools(FakePool())
     keys = {t.key for t in tools}
-    assert keys == {"query_contact", "query_conversation", "search_knowledge_base"}
+    assert keys == {"query_contact", "query_deal", "query_conversation", "search_knowledge_base"}
     assert isinstance(tools[0], (QueryContactTool, QueryConversationTool, Tool))

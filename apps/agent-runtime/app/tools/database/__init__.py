@@ -12,11 +12,13 @@ from app.tools.base import Tool
 from app.tools.database.base import DatabaseTool
 from app.tools.database.query_contact import QueryContactTool
 from app.tools.database.query_conversation import QueryConversationTool
+from app.tools.database.query_deal import QueryDealTool
 from app.tools.database.search_knowledge_base import SearchKnowledgeBaseTool
 
 __all__ = [
     "DatabaseTool",
     "QueryContactTool",
+    "QueryDealTool",
     "QueryConversationTool",
     "SearchKnowledgeBaseTool",
     "build_light_db_tools",
@@ -31,6 +33,7 @@ def build_light_db_tools(pool: asyncpg.Pool) -> list[Tool]:
     """
     return [
         QueryContactTool(pool),
+        QueryDealTool(pool),
         QueryConversationTool(pool),
         # F3-S05: retrieval real -> recebe o pool asyncpg do runtime (RLS).
         # O EmbeddingsProvider e criado lazy pela propria tool (1x por instancia).

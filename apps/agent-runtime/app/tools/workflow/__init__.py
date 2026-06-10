@@ -21,6 +21,7 @@ from app.tools.workflow.change_conversation_status import (
 )
 from app.tools.workflow.escalate import EscalateArgs, EscalateTool
 from app.tools.workflow.mark_resolved import MarkResolvedArgs, MarkResolvedTool
+from app.tools.workflow.move_deal_stage import MoveDealStageArgs, MoveDealStageTool
 from app.tools.workflow.register_conversion import (
     RegisterConversionArgs,
     RegisterConversionTool,
@@ -37,6 +38,8 @@ __all__ = [
     "EscalateTool",
     "MarkResolvedArgs",
     "MarkResolvedTool",
+    "MoveDealStageArgs",
+    "MoveDealStageTool",
     "RegisterConversionArgs",
     "RegisterConversionTool",
     "TransferToHumanArgs",
@@ -52,6 +55,7 @@ _WORKFLOW_TOOL_CLASSES: tuple[type[Tool], ...] = (
     MarkResolvedTool,
     ChangeConversationStatusTool,
     RegisterConversionTool,
+    MoveDealStageTool,
 )
 
 

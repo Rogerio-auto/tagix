@@ -25,6 +25,8 @@ import {
 } from './registry';
 import type { DbTx } from '@hm/db';
 import { registerConversion as registerConversionEvent } from '../../routes/conversions';
+import { moveDealToStage, TransitionError } from '../../routes/deals';
+import { and, desc, isNull } from 'drizzle-orm';
 
 function fail(error: string): ToolHandlerResult {
   return { ok: false, error };
@@ -193,6 +195,62 @@ const registerConversion: ToolHandler = async (env, tx) => {
   }
 };
 
+const moveDealStageArgs = z.object({
+  stage_id: z.string().uuid(),
+  deal_id: z.string().uuid().nullish(),
+});
+
+const moveDealStage: ToolHandler = async (env, tx) => {
+  const parsed = moveDealStageArgs.safeParse(env.args);
+  if (!parsed.success) return fail('Argumentos inválidos para move_deal_stage.');
+
+  // Resolve o deal: explícito ou o deal aberto mais recente do contato da conversa.
+  let dealId = parsed.data.deal_id ?? null;
+  if (!dealId) {
+    if (!env.conversationId) return fail('Conversa ausente no contexto.');
+    const [conv] = await tx
+      .select({ contactId: schema.conversations.contactId })
+      .from(schema.conversations)
+      .where(eq(schema.conversations.id, env.conversationId))
+      .limit(1);
+    if (!conv?.contactId) return fail('Contato ausente no contexto.');
+    const [deal] = await tx
+      .select({ id: schema.deals.id })
+      .from(schema.deals)
+      .where(and(eq(schema.deals.contactId, conv.contactId), isNull(schema.deals.closedAt)))
+      .orderBy(desc(schema.deals.createdAt))
+      .limit(1);
+    if (!deal) return fail('Contato sem negócio aberto.');
+    dealId = deal.id;
+  }
+
+  try {
+    const result = await moveDealToStage(tx, {
+      dealId,
+      newStageId: parsed.data.stage_id,
+      actor: { type: 'agent' },
+      workspaceId: env.workspaceId,
+    });
+    return {
+      ok: true,
+      content: 'Negócio movido de estágio.',
+      action: 'move_deal_stage',
+      tableName: 'deals',
+      payload: {
+        dealId: result.deal.id,
+        fromStageId: result.fromStageId,
+        toStageId: result.toStageId,
+      },
+    };
+  } catch (err: unknown) {
+    if (err instanceof TransitionError) return fail(err.message);
+    if (err instanceof Error && (err.message === 'deal_not_found' || err.message === 'stage_not_found')) {
+      return fail('Negócio ou estágio não encontrado.');
+    }
+    throw err;
+  }
+};
+
 /**
  * Registry do endpoint interno já com os handlers de workflow (F2-S20) + o `ping`
  * embutido (F2-S07). É o registry que o `app.ts` injeta em `createInternalToolsRouter`.
@@ -203,5 +261,6 @@ export function buildWorkflowRegistry(): ToolHandlerRegistry {
     .register('escalate', escalate)
     .register('mark_resolved', markResolved)
     .register('change_conversation_status', changeConversationStatus)
-    .register('register_conversion', registerConversion);
+    .register('register_conversion', registerConversion)
+    .register('move_deal_stage', moveDealStage);
 }
