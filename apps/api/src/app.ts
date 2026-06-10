@@ -19,6 +19,7 @@ import { createRoutingRouter } from './routes/conversations/routing';
 import { createWindowRouter } from './routes/conversations/window';
 import { createWebhooksRouter } from './routes/webhooks';
 import { createFlowSubmissionsRouter } from './routes/flows/submissions';
+import { createFlowsRouter } from './routes/flows';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
@@ -50,6 +51,8 @@ export function createApp(): Express {
   app.use(createAgentsRouter());
   app.use(createKnowledgeRouter());
   app.use(createKnowledgeFeedbackRouter());
+  // Flow Builder API (F4-S08): CRUD + publish + trigger + executions.
+  app.use(createFlowsRouter());
   // Meta Flow submissions (F4-S14): endpoint interno de despacho do webhook.
   app.use(createFlowSubmissionsRouter());
 
