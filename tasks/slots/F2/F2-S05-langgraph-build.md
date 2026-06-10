@@ -2,12 +2,14 @@
 id: F2-S05
 title: Grafo LangGraph (load_context → build_prompt → call_model → tools → finalize) + checkpointer
 phase: F2
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: L
 depends_on: [F2-S02, F2-S04, F2-S01]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T03:33:55Z
 
+---
 # F2-S05 — Build do grafo LangGraph
 
 > **source_docs:** `docs/AGENTS_LANGGRAPH.md` §3, §4, §9; `docs/ROADMAP.md` F2-S05
