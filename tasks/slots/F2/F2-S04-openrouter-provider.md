@@ -2,7 +2,7 @@
 id: F2-S04
 title: OpenRouterProvider (chat completion + streaming + tool calls + usage capture)
 phase: F2
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F2-S02]
