@@ -9,8 +9,14 @@ export {
   resumeWaitingFlows,
   dispatchTriggersForNewMessage,
   dispatchDeferredTrigger,
+  dispatchTriggersForStageChange,
+  dispatchTriggersForTagAdded,
+  matchesStageChange,
+  matchesTagAdded,
   type TriggerDispatchDeps,
   type DispatchResult,
+  type StageChangeInfo,
+  type TagAddedInfo,
 } from './dispatcher';
 export { createTriggerDispatchDeps, flowsQueryPort, flowEnginePort } from './db-ports';
 export type { ActiveFlow, FlowEnginePort, FlowsQueryPort, InboundMessageInfo } from './types';

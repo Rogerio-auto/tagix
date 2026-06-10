@@ -148,3 +148,102 @@ export function dispatchDeferredTrigger(
     ...context,
   });
 }
+
+/** Contexto de uma mudanca de stage (vinda do seam onStageChanged de F5-S05). */
+export interface StageChangeInfo {
+  readonly workspaceId: string;
+  readonly dealId: string;
+  readonly contactId: string | null;
+  readonly conversationId?: string | null;
+  readonly fromStageId: string;
+  readonly toStageId: string;
+}
+
+/** Contexto de aplicacao de tag (vinda da aplicacao de tag / trigger pg de F5-S16). */
+export interface TagAddedInfo {
+  readonly workspaceId: string;
+  readonly contactId: string;
+  readonly conversationId?: string | null;
+  readonly tagId: string;
+}
+
+/**
+ * Casa um flow `stage_change` (F5-S16). triggerConfig pode filtrar por
+ * `from_stage_id`/`to_stage_id` (FLOW_BUILDER §5 tabela). Vazio = qualquer.
+ */
+export function matchesStageChange(flow: ActiveFlow, info: StageChangeInfo): boolean {
+  if (flow.triggerType !== 'stage_change') return false;
+  const from = flow.triggerConfig['from_stage_id'];
+  const to = flow.triggerConfig['to_stage_id'];
+  if (typeof from === 'string' && from && from !== info.fromStageId) return false;
+  if (typeof to === 'string' && to && to !== info.toStageId) return false;
+  return true;
+}
+
+/** Casa um flow `tag_added` (F5-S16). triggerConfig.tag_id filtra a tag; vazio = qualquer. */
+export function matchesTagAdded(flow: ActiveFlow, info: TagAddedInfo): boolean {
+  if (flow.triggerType !== 'tag_added') return false;
+  const tag = flow.triggerConfig['tag_id'];
+  if (typeof tag === 'string' && tag && tag !== info.tagId) return false;
+  return true;
+}
+
+/**
+ * Dispara flows `stage_change` para uma mudanca de stage (F5-S16). Chamado pelo
+ * seam onStageChanged (gap-fill do orchestrator). Encerra a divida stub-ate-F5.
+ */
+export async function dispatchTriggersForStageChange(
+  deps: TriggerDispatchDeps,
+  info: StageChangeInfo,
+): Promise<number> {
+  const flows = await deps.flowsQuery.findActiveByTriggerTypes(info.workspaceId, ['stage_change']);
+  let triggered = 0;
+  for (const flow of flows) {
+    if (!matchesStageChange(flow, info)) continue;
+    await deps.engine.triggerFlow({
+      workspaceId: flow.workspaceId,
+      flowId: flow.id,
+      conversationId: info.conversationId ?? undefined,
+      contactId: info.contactId ?? undefined,
+      triggerData: {
+        dealId: info.dealId,
+        fromStageId: info.fromStageId,
+        toStageId: info.toStageId,
+      },
+      triggeredBy: 'automatic',
+    });
+    triggered += 1;
+  }
+  if (triggered > 0) {
+    deps.logger.info('flow-triggers: stage_change disparado', { dealId: info.dealId, triggered });
+  }
+  return triggered;
+}
+
+/**
+ * Dispara flows `tag_added` para a aplicacao de uma tag (F5-S16). Chamado quando
+ * uma tag e aplicada ao contato (gap-fill do orchestrator). Encerra stub-ate-F5.
+ */
+export async function dispatchTriggersForTagAdded(
+  deps: TriggerDispatchDeps,
+  info: TagAddedInfo,
+): Promise<number> {
+  const flows = await deps.flowsQuery.findActiveByTriggerTypes(info.workspaceId, ['tag_added']);
+  let triggered = 0;
+  for (const flow of flows) {
+    if (!matchesTagAdded(flow, info)) continue;
+    await deps.engine.triggerFlow({
+      workspaceId: flow.workspaceId,
+      flowId: flow.id,
+      conversationId: info.conversationId ?? undefined,
+      contactId: info.contactId,
+      triggerData: { tagId: info.tagId },
+      triggeredBy: 'automatic',
+    });
+    triggered += 1;
+  }
+  if (triggered > 0) {
+    deps.logger.info('flow-triggers: tag_added disparado', { contactId: info.contactId, triggered });
+  }
+  return triggered;
+}

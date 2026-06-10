@@ -2,10 +2,14 @@
 id: F5-S16
 title: Fecha stubs da F4 — handlers move_stage/add_tag/remove_tag + triggers stage_change/tag_added
 phase: F5
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F5-S01, F5-S02, F5-S05]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T22:20:09Z
+completed_at: 2026-06-10T22:23:48Z
+
 ---
 # F5-S16 — Fechar stubs de flow da F4
 

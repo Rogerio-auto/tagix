@@ -3,7 +3,11 @@ import { createLogger } from '@hm/logger';
 import {
   dispatchDeferredTrigger,
   dispatchTriggersForNewMessage,
+  dispatchTriggersForStageChange,
+  dispatchTriggersForTagAdded,
   evaluateTrigger,
+  matchesStageChange,
+  matchesTagAdded,
 } from './dispatcher';
 import type { ActiveFlow, InboundMessageInfo, TriggerDispatchDeps } from './index';
 
@@ -104,5 +108,64 @@ describe('dispatchDeferredTrigger', () => {
     const spy = vi.spyOn(log, 'info');
     dispatchDeferredTrigger(log, 'stage_change', { dealId: 'd1' });
     expect(spy).toHaveBeenCalled();
+  });
+});
+
+describe('stage_change triggers (F5-S16)', () => {
+  const info = {
+    workspaceId: WS,
+    dealId: 'd1',
+    contactId: 'ct1',
+    conversationId: 'c1',
+    fromStageId: 's1',
+    toStageId: 's2',
+  };
+
+  it('matchesStageChange: vazio casa qualquer; filtros casam from/to', () => {
+    const f = flow({ triggerType: 'stage_change', triggerConfig: {} });
+    expect(matchesStageChange(f, info)).toBe(true);
+    expect(
+      matchesStageChange(flow({ triggerType: 'stage_change', triggerConfig: { to_stage_id: 's2' } }), info),
+    ).toBe(true);
+    expect(
+      matchesStageChange(flow({ triggerType: 'stage_change', triggerConfig: { to_stage_id: 'sX' } }), info),
+    ).toBe(false);
+    expect(
+      matchesStageChange(flow({ triggerType: 'stage_change', triggerConfig: { from_stage_id: 's9' } }), info),
+    ).toBe(false);
+  });
+
+  it('dispara flows stage_change que casam', async () => {
+    const d = deps([flow({ triggerType: 'stage_change', triggerConfig: { to_stage_id: 's2' } })]);
+    const n = await dispatchTriggersForStageChange(d, info);
+    expect(n).toBe(1);
+    expect(d.triggerFlow).toHaveBeenCalledWith(
+      expect.objectContaining({ contactId: 'ct1', triggerData: expect.objectContaining({ toStageId: 's2' }) }),
+    );
+  });
+
+  it('no-match nao dispara', async () => {
+    const d = deps([flow({ triggerType: 'stage_change', triggerConfig: { to_stage_id: 'sX' } })]);
+    expect(await dispatchTriggersForStageChange(d, info)).toBe(0);
+    expect(d.triggerFlow).not.toHaveBeenCalled();
+  });
+});
+
+describe('tag_added triggers (F5-S16)', () => {
+  const info = { workspaceId: WS, contactId: 'ct1', conversationId: 'c1', tagId: 'tag-1' };
+
+  it('matchesTagAdded: vazio casa; tag_id filtra', () => {
+    expect(matchesTagAdded(flow({ triggerType: 'tag_added', triggerConfig: {} }), info)).toBe(true);
+    expect(matchesTagAdded(flow({ triggerType: 'tag_added', triggerConfig: { tag_id: 'tag-1' } }), info)).toBe(true);
+    expect(matchesTagAdded(flow({ triggerType: 'tag_added', triggerConfig: { tag_id: 'tag-9' } }), info)).toBe(false);
+  });
+
+  it('dispara flows tag_added que casam', async () => {
+    const d = deps([flow({ triggerType: 'tag_added', triggerConfig: { tag_id: 'tag-1' } })]);
+    const n = await dispatchTriggersForTagAdded(d, info);
+    expect(n).toBe(1);
+    expect(d.triggerFlow).toHaveBeenCalledWith(
+      expect.objectContaining({ contactId: 'ct1', triggerData: { tagId: 'tag-1' } }),
+    );
   });
 });

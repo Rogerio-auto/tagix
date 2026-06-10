@@ -1,12 +1,41 @@
 /**
  * Handler `condition` (FLOW_BUILDER.md secao 4.1). Avalia um operando binario e roteia por
- * `true`/`false`. HAS_TAG/IN_STAGE dependem de contact_tags/stages (F5) -> degradam para
- * `false` + log ate la. Os demais (BUSINESS_HOURS/HAS_VALUE/MSG_CONTAINS/MSG_EQUALS) ja
- * funcionam sobre `ctx.variables`.
+ * `true`/`false`. HAS_TAG/IN_STAGE avaliam contact_tags/deals sob RLS (F5-S16). Os demais
+ * (BUSINESS_HOURS/HAS_VALUE/MSG_CONTAINS/MSG_EQUALS) avaliam sobre `ctx.variables`.
  */
 import { z } from 'zod';
+import { and, eq, isNull } from 'drizzle-orm';
+import { schema, withWorkspace } from '@hm/db';
 import type { FlowExecutionContext } from '../types';
 import type { FlowHandler } from '../types';
+
+const { contactTags, deals } = schema;
+
+/** HAS_TAG: o contato tem a tag? (contact_tags sob RLS). */
+async function evalHasTag(ctx: FlowExecutionContext, tagId: string | undefined): Promise<boolean> {
+  if (!ctx.contactId || !tagId) return false;
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [row] = await tx
+      .select({ tagId: contactTags.tagId })
+      .from(contactTags)
+      .where(and(eq(contactTags.contactId, ctx.contactId!), eq(contactTags.tagId, tagId)))
+      .limit(1);
+    return Boolean(row);
+  });
+}
+
+/** IN_STAGE: o contato tem um deal aberto no stage indicado? (deals sob RLS). */
+async function evalInStage(ctx: FlowExecutionContext, stageId: string | undefined): Promise<boolean> {
+  if (!ctx.contactId || !stageId) return false;
+  return withWorkspace(ctx.workspaceId, async (tx) => {
+    const [row] = await tx
+      .select({ id: deals.id })
+      .from(deals)
+      .where(and(eq(deals.contactId, ctx.contactId!), eq(deals.stageId, stageId), isNull(deals.closedAt)))
+      .limit(1);
+    return Boolean(row);
+  });
+}
 
 const OPERATORS = [
   'HAS_TAG',
@@ -65,12 +94,10 @@ export const conditionHandler: FlowHandler<z.infer<typeof conditionSchema>> = {
 
     switch (data.operator) {
       case 'HAS_TAG':
+        result = await evalHasTag(ctx, data.tagId);
+        break;
       case 'IN_STAGE':
-        // Stub-ate-F5: contact_tags/stages sao do dominio Pipeline (F5). Degrada p/ false.
-        ctx.log('warn', `operando ${data.operator} disponivel na F5; avaliando como false`, {
-          operator: data.operator,
-        });
-        result = false;
+        result = await evalInStage(ctx, data.stageId);
         break;
       case 'BUSINESS_HOURS':
         result = data.businessHours ? evalBusinessHours(ctx, data.businessHours) : false;

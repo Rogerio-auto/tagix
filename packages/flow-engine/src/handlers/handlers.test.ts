@@ -87,11 +87,21 @@ describe('condition handler', () => {
     );
     expect(r).toMatchObject({ status: 'SUCCESS', edgeHandle: 'true' });
   });
-  it('HAS_TAG degrada para false + log (F5)', async () => {
-    const ctx = makeCtx();
-    const r = await conditionHandler.execute(node({ operator: 'HAS_TAG', tagId: 't1' }), ctx);
+  it('HAS_TAG sem contactId avalia false (sem tocar DB)', async () => {
+    const ctx = makeCtx({ contactId: null });
+    const r = await conditionHandler.execute(
+      node({ operator: 'HAS_TAG', tagId: '00000000-0000-0000-0000-0000000000aa' }),
+      ctx,
+    );
     expect(r).toMatchObject({ status: 'SUCCESS', edgeHandle: 'false' });
-    expect(ctx.log).toHaveBeenCalled();
+  });
+  it('IN_STAGE sem contactId avalia false (sem tocar DB)', async () => {
+    const ctx = makeCtx({ contactId: null });
+    const r = await conditionHandler.execute(
+      node({ operator: 'IN_STAGE', stageId: '00000000-0000-0000-0000-0000000000bb' }),
+      ctx,
+    );
+    expect(r).toMatchObject({ status: 'SUCCESS', edgeHandle: 'false' });
   });
 });
 
@@ -179,10 +189,13 @@ describe('external_notify (biestavel)', () => {
   });
 });
 
-describe('stub-ate-F5 handlers', () => {
-  it('add_tag loga e segue SUCCESS sem falhar', async () => {
-    const ctx = makeCtx();
-    const r = await addTagHandler.execute(node({ tagId: 't1' }), ctx);
+describe('pipeline handlers (F5-S16)', () => {
+  it('add_tag sem contactId e no-op SUCCESS (sem tocar DB)', async () => {
+    const ctx = makeCtx({ contactId: null });
+    const r = await addTagHandler.execute(
+      node({ tagId: '00000000-0000-0000-0000-0000000000cc' }),
+      ctx,
+    );
     expect(r.status).toBe('SUCCESS');
     expect(ctx.log).toHaveBeenCalled();
   });
