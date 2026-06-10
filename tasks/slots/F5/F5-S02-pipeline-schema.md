@@ -2,7 +2,7 @@
 id: F5-S02
 title: Schema pipeline (pipelines, stages, deals, deal_history, deal_attachments, pending_automations) + RLS
 phase: F5
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: []
