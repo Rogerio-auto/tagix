@@ -190,11 +190,40 @@ async def test_query_conversation_no_conversation() -> None:
     assert out["ok"] is False
 
 
-async def test_search_kb_stub_returns_empty() -> None:
-    reg = build_default_registry(FakePool())
-    out = await reg.dispatch("search_knowledge_base", {"query": "preço do plano"}, _ctx())
-    assert out["ok"] is True
-    assert "indexada" in out["content"] or "índice" in out["content"] or "F3" in out["content"]
+async def test_search_kb_empty_base_returns_empty() -> None:
+    # F3-S05: a tool faz retrieval real. Com a base vazia (fetch -> []) e um
+    # provider de embeddings injetado, devolve resultados vazios sem erro.
+    from app.providers.embeddings import EmbeddingResult, EmbeddingUsage
+    from app.tools.database.search_knowledge_base import SearchKnowledgeBaseTool
+
+    class _EmptyConn:
+        @asynccontextmanager
+        async def transaction(self):
+            yield
+
+        async def execute(self, sql: str, *params: Any) -> str:
+            return "OK"
+
+        async def fetch(self, sql: str, *params: Any) -> list[dict[str, Any]]:
+            return []
+
+    class _EmptyPool:
+        @asynccontextmanager
+        async def acquire(self):
+            yield _EmptyConn()
+
+    class _FakeProvider:
+        async def embed(self, texts: list[str]) -> EmbeddingResult:
+            return EmbeddingResult(
+                embeddings=[[0.01] * 1536 for _ in texts],
+                model="text-embedding-3-small",
+                usage=EmbeddingUsage(total_tokens=1, total_cost_usd=0.0),
+            )
+
+    tool = SearchKnowledgeBaseTool(_EmptyPool(), embeddings_provider=_FakeProvider())
+    out = await tool.execute({"query": "preço do plano"}, ToolContext(**_ctx()))
+    assert out.ok is True
+    assert out.payload == {"results": [], "indexed": True}
 
 
 async def test_search_kb_invalid_args() -> None:
