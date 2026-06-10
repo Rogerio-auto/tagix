@@ -13,7 +13,8 @@
  *  - `conversation_id`/`contact_id` = `null` (sem conversa real).
  *
  * Segurança e governança (espelha o CRUD, F2-S16, e o dispatch do worker, F2-S11):
- *  - Sessão por cookie (`requireAuth` + `withRLS` + `requireRole('agent.list')`).
+ *  - Sessão por cookie (`requireAuth` + `withRLS` + `requireRole('agent.playground')`):
+ *    executa o modelo e gasta budget, então exige STAFF (não READONLY).
  *  - Agente validado como pertencente ao workspace ANTES de qualquer stream.
  *  - Policy resolvida (`resolvePolicy`) → `policy_snapshot` enviado ao runtime.
  *  - Cost-guard pré-chamada (`guardResolved`): se estouraria o cap mensal, emite
@@ -97,7 +98,7 @@ function writeEvent(res: Response, event: AgentStreamEvent): void {
 
 export function createAgentPlaygroundRouter(): Router {
   const router = Router();
-  const guard = [requireAuth, withRLS, requireRole('agent.list')] as const;
+  const guard = [requireAuth, withRLS, requireRole('agent.playground')] as const;
 
   router.post(
     '/api/agents/:id/playground',

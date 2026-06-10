@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { parseSseEvent, type PlaygroundError, type SseEvent, type TranscriptTurn } from './types';
 
 /**
@@ -12,8 +12,8 @@ import { parseSseEvent, type PlaygroundError, type SseEvent, type TranscriptTurn
  *  - `token`        → acumula na bolha do assistente (cursor de streaming).
  *  - `tool_call_*`  → chips (running → done com duração).
  *  - `final`        → fixa a reply + usage/custo, encerra o streaming.
- *  - `error`/`budget_exceeded`/`model_blocked`/`iteration_exceeded` → estado de erro
- *    3-partes (com ref copiável quando o frame trouxer).
+ *  - `error`/`budget_exceeded`/`model_blocked`/`iteration_exceeded`/`interrupt` →
+ *    estado terminal 3-partes (com ref copiável quando o frame trouxer).
  *
  * `AbortController` cancela a leitura (e, via `req.on('close')` no servidor, o
  * stream upstream do runtime) ao desmontar ou ao re-enviar.
@@ -56,6 +56,11 @@ function toError(ev: SseEvent): PlaygroundError | null {
       return {
         title: 'Limite de iterações atingido',
         reason: 'O agente excedeu o número máximo de passos permitido pela policy.',
+      };
+    case 'interrupt':
+      return {
+        title: 'Agente pausado para aprovação',
+        reason: `O agente solicitou rodar a tool "${ev.tool_key}" e precisa de aprovação humana (${ev.reason}). No playground não há fluxo de aprovação — em produção a conversa seria escalada.`,
       };
     default:
       return null;
@@ -132,6 +137,11 @@ export function useAgentPlaygroundStream(agentId: string): PlaygroundStream {
     abortRef.current = null;
     setIsStreaming(false);
   }, []);
+
+  // Aborta o stream em voo ao desmontar (troca de aba/navegação): sem isso o
+  // `fetch` continua aberto e o runtime segue gerando — e faturando — tokens.
+  // Aborta o ref direto (não `cancel`) para não disparar setState pós-unmount.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const reset = useCallback(() => {
     cancel();

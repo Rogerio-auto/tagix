@@ -22,6 +22,8 @@ import type * as AgentsClientModule from '@hm/agents-client';
 const resolvePolicyMock = vi.fn((..._args: unknown[]): unknown => undefined);
 const guardResolvedMock = vi.fn((..._args: unknown[]): unknown => undefined);
 const estimateCostUsdMock = vi.fn((..._args: unknown[]): number => 0);
+// Captura a string de permissão que a rota exige (asserção de autorização real).
+const requireRoleSpy = vi.fn((..._args: unknown[]): void => undefined);
 
 vi.mock('@hm/agents-core', () => ({
   resolvePolicy: (...args: unknown[]) => resolvePolicyMock(...args),
@@ -70,8 +72,10 @@ vi.mock('../../middlewares/auth', () => ({
       });
     next();
   },
-  requireRole: () => (_req: express.Request, _res: express.Response, next: express.NextFunction) =>
-    next(),
+  requireRole: (...args: unknown[]) => {
+    requireRoleSpy(...args);
+    return (_req: express.Request, _res: express.Response, next: express.NextFunction) => next();
+  },
 }));
 
 const { createAgentPlaygroundRouter } = await import('./playground');
@@ -225,5 +229,197 @@ describe('POST /api/agents/:id/playground', () => {
     expect(frames).toHaveLength(1);
     expect(frames[0]?.type).toBe('error');
     expect(frames[0]?.message).toMatch(/ref hm-agent-runtime-/);
+  });
+});
+
+// ─── Cobertura adicional (QA F2-S19) ────────────────────────────────────────────
+//
+// Casos que faltavam no suite original: validação de entrada (faltante/limite),
+// proxy do snapshot/history para o runtime, propagação de eventos intermediários
+// não-`final` (model_blocked/iteration_exceeded), e o caminho de erro genérico
+// (não-AgentRuntimeError → ref sintético `hm-agent-internal-`).
+
+describe('POST /api/agents/:id/playground — validação de entrada', () => {
+  it('body sem user_input (campo ausente) → 400, sem tocar policy/runtime', async () => {
+    const res = await request(makeApp())
+      .post(`/api/agents/${AGENT}/playground`)
+      .set('x-test-auth', '1')
+      .send({ history: [] });
+    expect(res.status).toBe(400);
+    expect(resolvePolicyMock).not.toHaveBeenCalled();
+    expect(runMock).not.toHaveBeenCalled();
+  });
+
+  it('user_input só com whitespace (trim → vazio) → 400', async () => {
+    const res = await request(makeApp())
+      .post(`/api/agents/${AGENT}/playground`)
+      .set('x-test-auth', '1')
+      .send({ user_input: '    \n\t  ' });
+    expect(res.status).toBe(400);
+    expect(runMock).not.toHaveBeenCalled();
+  });
+
+  it('user_input acima de 20000 chars → 400', async () => {
+    const res = await request(makeApp())
+      .post(`/api/agents/${AGENT}/playground`)
+      .set('x-test-auth', '1')
+      .send({ user_input: 'x'.repeat(20001) });
+    expect(res.status).toBe(400);
+    expect(runMock).not.toHaveBeenCalled();
+  });
+
+  it('history com role inválido (não é ChatMessage) → 400', async () => {
+    const res = await request(makeApp())
+      .post(`/api/agents/${AGENT}/playground`)
+      .set('x-test-auth', '1')
+      .send({ user_input: 'oi', history: [{ role: 'banana', content: 'x' }] });
+    expect(res.status).toBe(400);
+    expect(runMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/agents/:id/playground — proxy do request ao runtime', () => {
+  beforeEach(() => {
+    guardResolvedMock.mockReturnValue({ ok: true, headroomUsd: null, estimatedCostUsd: 0 });
+  });
+
+  it('encaminha policy_snapshot e history (turnos prévios) ao runtime', async () => {
+    runMock.mockReturnValue(
+      gen([{ type: 'final', reply: 'ok', usage: { prompt_tokens: 1, completion_tokens: 1, total_cost_usd: 0 }, openrouter_generation_id: null }]),
+    );
+    const history = [
+      { role: 'user', content: 'antes' },
+      { role: 'assistant', content: 'depois' },
+    ];
+
+    await request(makeApp())
+      .post(`/api/agents/${AGENT}/playground`)
+      .set('x-test-auth', '1')
+      .send({ user_input: 'oi', history });
+
+    expect(runMock).toHaveBeenCalledTimes(1);
+    const [runReq] = runMock.mock.calls[0] as [
+      { policy_snapshot: unknown; messages: unknown[]; metadata: { playground?: boolean }; agent_id: string },
+    ];
+    expect(runReq.policy_snapshot).toEqual(SNAPSHOT);
+    expect(runReq.messages).toEqual(history);
+    expect(runReq.metadata).toEqual({ playground: true });
+    expect(runReq.agent_id).toBe(AGENT);
+  });
+
+  it('passa o AbortSignal do request ao client.run (lifecycle de desconexão)', async () => {
+    runMock.mockReturnValue(
+      gen([{ type: 'final', reply: 'ok', usage: { prompt_tokens: 0, completion_tokens: 0, total_cost_usd: 0 }, openrouter_generation_id: null }]),
+    );
+
+    await request(makeApp())
+      .post(`/api/agents/${AGENT}/playground`)
+      .set('x-test-auth', '1')
+      .send({ user_input: 'oi' });
+
+    const opts = runMock.mock.calls[0]?.[1] as { signal?: AbortSignal } | undefined;
+    expect(opts?.signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
+describe('POST /api/agents/:id/playground — proxy de eventos intermediários', () => {
+  beforeEach(() => {
+    guardResolvedMock.mockReturnValue({ ok: true, headroomUsd: null, estimatedCostUsd: 0 });
+  });
+
+  it('proxia tool_call_started + tool_call_completed antes do final', async () => {
+    const final = { type: 'final', reply: 'pronto', usage: { prompt_tokens: 1, completion_tokens: 1, total_cost_usd: 0 }, openrouter_generation_id: null };
+    runMock.mockReturnValue(
+      gen([
+        { type: 'tool_call_started', tool_key: 'db.query', args: {} },
+        { type: 'tool_call_completed', tool_key: 'db.query', result: {}, duration_ms: 12 },
+        final,
+      ]),
+    );
+
+    const res = await request(makeApp())
+      .post(`/api/agents/${AGENT}/playground`)
+      .set('x-test-auth', '1')
+      .send({ user_input: 'oi' });
+
+    const frames = parseFrames(res.text) as Array<{ type: string }>;
+    expect(frames.map((f) => f.type)).toEqual(['tool_call_started', 'tool_call_completed', 'final']);
+  });
+
+  it('proxia model_blocked como frame terminal (stream do runtime encerra sem final)', async () => {
+    runMock.mockReturnValue(gen([{ type: 'model_blocked', reason: 'modelo fora da whitelist' }]));
+
+    const res = await request(makeApp())
+      .post(`/api/agents/${AGENT}/playground`)
+      .set('x-test-auth', '1')
+      .send({ user_input: 'oi' });
+
+    expect(res.status).toBe(200);
+    const frames = parseFrames(res.text) as Array<{ type: string; reason?: string }>;
+    expect(frames).toEqual([{ type: 'model_blocked', reason: 'modelo fora da whitelist' }]);
+  });
+
+  it('proxia iteration_exceeded como frame terminal', async () => {
+    runMock.mockReturnValue(gen([{ type: 'iteration_exceeded' }]));
+
+    const res = await request(makeApp())
+      .post(`/api/agents/${AGENT}/playground`)
+      .set('x-test-auth', '1')
+      .send({ user_input: 'oi' });
+
+    const frames = parseFrames(res.text);
+    expect(frames).toEqual([{ type: 'iteration_exceeded' }]);
+  });
+
+  it('para de proxiar após o final (eventos pós-final são ignorados)', async () => {
+    const final = { type: 'final', reply: 'fim', usage: { prompt_tokens: 0, completion_tokens: 0, total_cost_usd: 0 }, openrouter_generation_id: null };
+    runMock.mockReturnValue(
+      gen([{ type: 'token', content: 'a' }, final, { type: 'token', content: 'NAO_DEVE_VAZAR' }]),
+    );
+
+    const res = await request(makeApp())
+      .post(`/api/agents/${AGENT}/playground`)
+      .set('x-test-auth', '1')
+      .send({ user_input: 'oi' });
+
+    expect(res.text).not.toContain('NAO_DEVE_VAZAR');
+    const frames = parseFrames(res.text) as Array<{ type: string }>;
+    expect(frames[frames.length - 1]?.type).toBe('final');
+  });
+});
+
+describe('POST /api/agents/:id/playground — erro genérico (não-AgentRuntimeError)', () => {
+  it('falha não-tipada no stream → frame error com ref sintético hm-agent-internal-', async () => {
+    guardResolvedMock.mockReturnValue({ ok: true, headroomUsd: null, estimatedCostUsd: 0 });
+    runMock.mockReturnValue(
+      (async function* () {
+        if (Math.random() >= 0) throw new TypeError('kaboom interno');
+        yield { type: 'token', content: '' };
+      })(),
+    );
+
+    const res = await request(makeApp())
+      .post(`/api/agents/${AGENT}/playground`)
+      .set('x-test-auth', '1')
+      .send({ user_input: 'oi' });
+
+    expect(res.status).toBe(200);
+    const frames = parseFrames(res.text) as Array<{ type: string; message?: string }>;
+    expect(frames).toHaveLength(1);
+    expect(frames[0]?.type).toBe('error');
+    // Não vaza a mensagem crua do erro interno ao cliente.
+    expect(frames[0]?.message).not.toContain('kaboom interno');
+    expect(frames[0]?.message).toMatch(/ref hm-agent-internal-/);
+  });
+});
+
+// Autorização: a rota executa o modelo e gasta budget, então DEVE exigir
+// `agent.playground` (= STAFF, exclui READONLY) — não `agent.list` (= ALL).
+describe('POST /api/agents/:id/playground — autorização', () => {
+  it('exige a permissão dedicada `agent.playground` (não `agent.list`)', () => {
+    // O router registra o guard no construtor — basta criá-lo.
+    createAgentPlaygroundRouter();
+    expect(requireRoleSpy).toHaveBeenCalledWith('agent.playground');
+    expect(requireRoleSpy).not.toHaveBeenCalledWith('agent.list');
   });
 });
