@@ -29,6 +29,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@hm/agents-client':
+        specifier: workspace:*
+        version: link:../../packages/agents-client
       '@hm/agents-core':
         specifier: workspace:*
         version: link:../../packages/agents-core
