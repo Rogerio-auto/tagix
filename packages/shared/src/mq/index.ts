@@ -9,6 +9,7 @@ import { envelopeSchema, type Envelope } from './envelope';
 
 export * from './envelope';
 export * from './topology';
+export * from './kb';
 export { connectMq } from './connection';
 export type { MqHandle } from './connection';
 
