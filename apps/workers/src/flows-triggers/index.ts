@@ -8,7 +8,6 @@ export {
   evaluateTrigger,
   resumeWaitingFlows,
   dispatchTriggersForNewMessage,
-  dispatchDeferredTrigger,
   dispatchTriggersForStageChange,
   dispatchTriggersForTagAdded,
   matchesStageChange,

@@ -14,7 +14,8 @@ export const INBOUND_TRIGGER_TYPES = [
   'system_event',
 ] as const;
 
-/** Triggers deferidos para F5 (dependem de deals/contact_tags). No-op + log. */
+/** Triggers de dominio Pipeline (F5-S16): stage_change/tag_added — agora ATIVOS
+ * via dispatchTriggersForStageChange/dispatchTriggersForTagAdded. */
 export const DEFERRED_TRIGGER_TYPES = ['stage_change', 'tag_added'] as const;
 
 function channelMatches(flow: ActiveFlow, channelId: string): boolean {
@@ -134,20 +135,7 @@ export async function dispatchTriggersForNewMessage(
   return { triggered, resumed };
 }
 
-/**
- * Triggers deferidos para F5 (stage_change/tag_added): no-op com log. Mantido como ponto de
- * extensao para quando deals/contact_tags existirem (F5).
- */
-export function dispatchDeferredTrigger(
-  logger: Logger,
-  triggerType: (typeof DEFERRED_TRIGGER_TYPES)[number],
-  context: Record<string, unknown> = {},
-): void {
-  logger.info(`flow-triggers: ${triggerType} deferido ate a F5 (Pipeline)`, {
-    triggerType,
-    ...context,
-  });
-}
+
 
 /** Contexto de uma mudanca de stage (vinda do seam onStageChanged de F5-S05). */
 export interface StageChangeInfo {

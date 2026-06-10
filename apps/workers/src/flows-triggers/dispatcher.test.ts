@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLogger } from '@hm/logger';
 import {
-  dispatchDeferredTrigger,
   dispatchTriggersForNewMessage,
   dispatchTriggersForStageChange,
   dispatchTriggersForTagAdded,
@@ -102,14 +101,6 @@ describe('dispatchTriggersForNewMessage', () => {
   });
 });
 
-describe('dispatchDeferredTrigger', () => {
-  it('loga e nao quebra (stage_change/tag_added)', () => {
-    const log = createLogger('error');
-    const spy = vi.spyOn(log, 'info');
-    dispatchDeferredTrigger(log, 'stage_change', { dealId: 'd1' });
-    expect(spy).toHaveBeenCalled();
-  });
-});
 
 describe('stage_change triggers (F5-S16)', () => {
   const info = {
