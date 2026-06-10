@@ -2,7 +2,7 @@
 id: F2-S03
 title: Pacote @hm/agents-client (cliente Node tipado p/ agent-runtime)
 phase: F2
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F2-S02]
