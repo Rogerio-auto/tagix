@@ -2,12 +2,14 @@
 id: F1-S24
 title: API send message — POST /api/conversations/:id/messages → enqueue outbound
 phase: F1
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F1-S05, F1-S07, F1-S12]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T01:31:31Z
 
+---
 # F1-S24 — API send message (composer → outbound queue)
 
 > **source_docs:** `docs/features/LIVECHAT.md` §3.1; `apps/workers/src/outbound/job.ts` (OutboundJob)
