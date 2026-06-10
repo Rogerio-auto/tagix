@@ -11,6 +11,7 @@ import { MessageComposer } from './MessageComposer';
 import { ContactInfoPanel } from './ContactInfoPanel';
 import { TypingIndicator } from './TypingIndicator';
 import { MessageBubble } from './MessageBubble';
+import { MessageStatusReceipts } from './MessageBubble/status';
 
 export function ConversationsLayout({ conversationId }: { conversationId?: string }) {
   const [infoOpen, setInfoOpen] = useState(false);
@@ -76,6 +77,9 @@ function ConversationPanel({
           <Info className="size-5" />
         </button>
       </header>
+
+      {/* Recibos em tempo real (F1-S20): patcha o viewStatus no cache ao chegar status_changed. */}
+      <MessageStatusReceipts conversationId={conversationId} />
 
       <div className="flex-1 overflow-y-auto p-4" aria-live="polite">
         {messages.isLoading ? (
