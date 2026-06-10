@@ -2,12 +2,14 @@
 id: F1-S16
 title: MessageComposer — textarea + media upload + emoji + mention @ + reply
 phase: F1
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F1-S13, F1-S12]
----
+agent_id: backend-engineer
+claimed_at: 2026-06-10T00:30:25Z
 
+---
 # F1-S16 — MessageComposer
 
 > **source_docs:** `docs/features/LIVECHAT.md` §7.3, §5.2 (upload); `docs/UX_PRINCIPLES.md`
