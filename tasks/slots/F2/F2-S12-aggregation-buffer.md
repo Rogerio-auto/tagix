@@ -2,7 +2,7 @@
 id: F2-S12
 title: Aggregation buffer (window_sec) antes de chamar o runtime
 phase: F2
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F2-S11]
