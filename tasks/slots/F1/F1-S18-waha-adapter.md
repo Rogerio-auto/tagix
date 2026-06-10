@@ -2,12 +2,13 @@
 id: F1-S18
 title: WAHAAdapter (inbound + outbound) + session management
 phase: F1
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F1-S09]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T00:06:08Z
+completed_at: 2026-06-10T00:06:09Z
 
 ---
 # F1-S18 — WAHAAdapter
