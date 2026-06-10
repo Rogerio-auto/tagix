@@ -113,6 +113,27 @@
       "when": 1781060835317,
       "tag": "0015_agents_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1781107330513,
+      "tag": "0016_peaceful_wendell_vaughn",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1781107351373,
+      "tag": "0017_kb_pgvector_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1781107352736,
+      "tag": "0018_kb_rls",
+      "breakpoints": true
     }
   ]
 }

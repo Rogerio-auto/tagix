@@ -226,6 +226,10 @@ export * from './agent_tools'; // tools (global), agent_tools, tool_logs (tenant
 export * from './agent_executions'; // agent_executions (tenant)
 export * from './llm'; // llm_usage_logs (tenant), llm_models_whitelist (global)
 
+// ─── Knowledge Base domain (F3 §8) ───────────────────────────────────────────
+// kb_documents/kb_chunks(pgvector)/kb_feedback — todos workspace-scoped (RLS).
+export * from './knowledge'; // kb_documents, kb_chunks, kb_feedback (tenant)
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -250,4 +254,8 @@ export const RLS_TABLES = [
   'tool_logs',
   'agent_executions',
   'llm_usage_logs',
+  // Knowledge Base domain (workspace-scoped).
+  'kb_documents',
+  'kb_chunks',
+  'kb_feedback',
 ] as const;

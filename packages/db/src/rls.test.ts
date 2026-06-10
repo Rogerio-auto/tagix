@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb } from './client';
 import { withWorkspace } from './rls';
-import { members, plans, workspaces } from './schema';
+import { kbChunks, kbDocuments, kbFeedback, members, plans, workspaces } from './schema';
 
 let wsA = '';
 let wsB = '';
@@ -63,3 +63,60 @@ describe('RLS multi-tenant', () => {
     expect(rows.some((m) => m.workspaceId === wsA)).toBe(false);
   });
 });
+
+describe('RLS Knowledge Base (F3-S01)', () => {
+  it('kb_documents/kb_chunks/kb_feedback isolam por workspace', async () => {
+    // Seed em A (como dono, bypassa RLS).
+    const db = getDb();
+    const [docA] = await db
+      .insert(kbDocuments)
+      .values({
+        workspaceId: wsA,
+        title: 'Doc A',
+        source: 'manual',
+        rawContent: '# A',
+        contentSha256: 'a'.repeat(64),
+      })
+      .returning();
+    if (!docA) throw new Error('Falha ao criar kb_document A.');
+    const [chunkA] = await db
+      .insert(kbChunks)
+      .values({ workspaceId: wsA, documentId: docA.id, chunkIndex: 0, content: 'a', contentTokens: 1 })
+      .returning();
+    if (!chunkA) throw new Error('Falha ao criar kb_chunk A.');
+    await db
+      .insert(kbFeedback)
+      .values({ workspaceId: wsA, documentId: docA.id, chunkId: chunkA.id, helpful: true });
+
+    // Seed em B.
+    const [docB] = await db
+      .insert(kbDocuments)
+      .values({
+        workspaceId: wsB,
+        title: 'Doc B',
+        source: 'manual',
+        rawContent: '# B',
+        contentSha256: 'b'.repeat(64),
+      })
+      .returning();
+    if (!docB) throw new Error('Falha ao criar kb_document B.');
+
+    // A só enxerga os próprios documentos/chunks/feedback.
+    const docsA = await withWorkspace(wsA, (tx) => tx.select().from(kbDocuments));
+    expect(docsA.every((d) => d.workspaceId === wsA)).toBe(true);
+    expect(docsA.some((d) => d.id === docB.id)).toBe(false);
+
+    const chunksA = await withWorkspace(wsA, (tx) => tx.select().from(kbChunks));
+    expect(chunksA.every((c) => c.workspaceId === wsA)).toBe(true);
+
+    const fbA = await withWorkspace(wsA, (tx) => tx.select().from(kbFeedback));
+    expect(fbA.every((f) => f.workspaceId === wsA)).toBe(true);
+
+    // B não enxerga nada de A.
+    const docsB = await withWorkspace(wsB, (tx) => tx.select().from(kbDocuments));
+    expect(docsB.some((d) => d.id === docA.id)).toBe(false);
+    const chunksB = await withWorkspace(wsB, (tx) => tx.select().from(kbChunks));
+    expect(chunksB.some((c) => c.id === chunkA.id)).toBe(false);
+  });
+});
+
