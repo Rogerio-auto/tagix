@@ -2,7 +2,7 @@
 id: F3-S03
 title: Ingest pipeline (worker) — chunking + embeddings + persist kb_chunks
 phase: F3
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F3-S01, F3-S02, F3-S04]
