@@ -2,12 +2,13 @@
 id: F3-S03
 title: Ingest pipeline (worker) — chunking + embeddings + persist kb_chunks
 phase: F3
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F3-S01, F3-S02, F3-S04]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T16:24:03Z
+completed_at: 2026-06-10T16:29:26Z
 
 ---
 # F3-S03 — Ingest pipeline (worker)
