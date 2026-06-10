@@ -26,11 +26,13 @@ __all__ = [
 def build_light_db_tools(pool: asyncpg.Pool) -> list[Tool]:
     """Instancia as tools leves de F2-S06 com o pool asyncpg injetado.
 
-    `search_knowledge_base` é stub (sem pool: não toca DB até F3) — mas é uma tool
-    leve de leitura conceitualmente, então fica neste pacote.
+    `search_knowledge_base` (F3-S05) faz retrieval pgvector real sob RLS: recebe o
+    mesmo pool asyncpg das demais tools leves de leitura.
     """
     return [
         QueryContactTool(pool),
         QueryConversationTool(pool),
-        SearchKnowledgeBaseTool(),
+        # F3-S05: retrieval real -> recebe o pool asyncpg do runtime (RLS).
+        # O EmbeddingsProvider e criado lazy pela propria tool (1x por instancia).
+        SearchKnowledgeBaseTool(pool),
     ]
