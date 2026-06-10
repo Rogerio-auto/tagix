@@ -2,12 +2,13 @@
 id: F3-S04
 title: API CRUD Knowledge Base + enqueue ingest + envelope kb.document.ingest
 phase: F3
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F3-S01]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T16:10:36Z
+completed_at: 2026-06-10T16:18:09Z
 
 ---
 # F3-S04 — API CRUD Knowledge Base
