@@ -3,7 +3,17 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb } from './client';
 import { withWorkspace } from './rls';
-import { kbChunks, kbDocuments, kbFeedback, members, plans, workspaces } from './schema';
+import {
+  flowExecutions,
+  flows,
+  flowVersions,
+  kbChunks,
+  kbDocuments,
+  kbFeedback,
+  members,
+  plans,
+  workspaces,
+} from './schema';
 
 let wsA = '';
 let wsB = '';
@@ -117,6 +127,50 @@ describe('RLS Knowledge Base (F3-S01)', () => {
     expect(docsB.some((d) => d.id === docA.id)).toBe(false);
     const chunksB = await withWorkspace(wsB, (tx) => tx.select().from(kbChunks));
     expect(chunksB.some((c) => c.id === chunkA.id)).toBe(false);
+  });
+});
+
+describe('RLS Flow Builder (F4-S01)', () => {
+  it('flows/flow_versions/flow_executions isolam por workspace', async () => {
+    const db = getDb(); // owner bypassa RLS no seed
+    const [flowA] = await db
+      .insert(flows)
+      .values({ workspaceId: wsA, name: 'Flow A', triggerType: 'manual' })
+      .returning();
+    if (!flowA) throw new Error('Falha ao criar flow A.');
+    const [verA] = await db
+      .insert(flowVersions)
+      .values({ flowId: flowA.id, version: 1, nodes: [], edges: [], triggerConfig: {} })
+      .returning();
+    if (!verA) throw new Error('Falha ao criar flow_version A.');
+    await db.insert(flowExecutions).values({
+      workspaceId: wsA,
+      flowId: flowA.id,
+      flowVersionId: verA.id,
+      triggeredBy: 'manual',
+    });
+
+    const [flowB] = await db
+      .insert(flows)
+      .values({ workspaceId: wsB, name: 'Flow B', triggerType: 'manual' })
+      .returning();
+    if (!flowB) throw new Error('Falha ao criar flow B.');
+
+    const flowsA = await withWorkspace(wsA, (tx) => tx.select().from(flows));
+    expect(flowsA.every((f) => f.workspaceId === wsA)).toBe(true);
+    expect(flowsA.some((f) => f.id === flowB.id)).toBe(false);
+
+    // flow_versions sem workspace_id proprio: isolada via subquery em flows.
+    const versA = await withWorkspace(wsA, (tx) => tx.select().from(flowVersions));
+    expect(versA.some((v) => v.id === verA.id)).toBe(true);
+    const versB = await withWorkspace(wsB, (tx) => tx.select().from(flowVersions));
+    expect(versB.some((v) => v.id === verA.id)).toBe(false);
+
+    const execA = await withWorkspace(wsA, (tx) => tx.select().from(flowExecutions));
+    expect(execA.every((e) => e.workspaceId === wsA)).toBe(true);
+
+    const flowsB = await withWorkspace(wsB, (tx) => tx.select().from(flows));
+    expect(flowsB.some((f) => f.id === flowA.id)).toBe(false);
   });
 });
 
