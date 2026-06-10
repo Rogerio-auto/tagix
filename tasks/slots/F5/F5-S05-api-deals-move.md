@@ -2,7 +2,7 @@
 id: F5-S05
 title: API deals + move-stage service (transition rules + history) + close/reopen + attachments
 phase: F5
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F5-S02]
