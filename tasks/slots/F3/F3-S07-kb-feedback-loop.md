@@ -2,10 +2,14 @@
 id: F3-S07
 title: Feedback loop — citações do agente + marcar útil/não-útil (kb_feedback)
 phase: F3
-status: blocked
+status: review
 priority: medium
 estimated_size: S
 depends_on: [F3-S01, F3-S05, F3-S06]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T16:36:48Z
+completed_at: 2026-06-10T16:40:50Z
+
 ---
 # F3-S07 — Feedback loop (citações + útil/não-útil)
 

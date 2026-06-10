@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { parseSseEvent, type PlaygroundError, type SseEvent, type TranscriptTurn } from './types';
+import { citationsFromToolResult } from '@/features/knowledge/feedback';
 
 /**
  * Hook de streaming do Playground (F2-S19).
@@ -120,7 +121,18 @@ export function useAgentPlaygroundStream(agentId: string): PlaygroundStream {
               }
               return c;
             });
-            return { ...t, toolCalls };
+            // Citações: o search_knowledge_base (F3-S05) devolve payload.results[]
+            // com document_id/chunk_id/title — extraímos para o feedback (F3-S07).
+            const newCitations =
+              ev.tool_key === 'search_knowledge_base'
+                ? citationsFromToolResult(ev.result)
+                : [];
+            const seen = new Set(t.citations.map((cite) => `${cite.documentId}:${cite.chunkId}`));
+            const citations = [
+              ...t.citations,
+              ...newCitations.filter((cite) => !seen.has(`${cite.documentId}:${cite.chunkId}`)),
+            ];
+            return { ...t, toolCalls, citations };
           }
           case 'final':
             return { ...t, text: ev.reply, usage: ev.usage, streaming: false };
@@ -166,6 +178,7 @@ export function useAgentPlaygroundStream(agentId: string): PlaygroundStream {
         role: 'user',
         text: trimmed,
         toolCalls: [],
+        citations: [],
         streaming: false,
       };
       const assistantTurn: TranscriptTurn = {
@@ -173,6 +186,7 @@ export function useAgentPlaygroundStream(agentId: string): PlaygroundStream {
         role: 'assistant',
         text: '',
         toolCalls: [],
+        citations: [],
         streaming: true,
       };
       // Histórico = turnos já fechados (antes deste envio).
