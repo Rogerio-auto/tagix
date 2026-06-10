@@ -2,10 +2,13 @@
 id: F3-S01
 title: Schema Knowledge Base (kb_documents, kb_chunks pgvector, kb_feedback) + RLS
 phase: F3
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: []
+agent_id: backend-engineer
+claimed_at: 2026-06-10T15:59:34Z
+
 ---
 # F3-S01 — Schema Knowledge Base (pgvector)
 
