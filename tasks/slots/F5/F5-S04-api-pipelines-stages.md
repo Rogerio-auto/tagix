@@ -2,12 +2,13 @@
 id: F5-S04
 title: API pipelines + stages (CRUD + reorder)
 phase: F5
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F5-S02]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T21:55:38Z
+completed_at: 2026-06-10T22:00:08Z
 
 ---
 # F5-S04 — API pipelines + stages
