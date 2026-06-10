@@ -2,12 +2,13 @@
 id: F5-S06
 title: Automation engine — pending_automations worker + on_stale cron + dispatch from move
 phase: F5
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F5-S02, F5-S05]
 agent_id: backend-engineer
 claimed_at: 2026-06-10T22:06:51Z
+completed_at: 2026-06-10T22:10:25Z
 
 ---
 # F5-S06 — Automation engine
