@@ -11,6 +11,7 @@ import { buildWorkflowRegistry } from './internal/tools/workflow-handlers';
 import { createAgentsRouter } from './routes/agents';
 import { createChannelsRouter } from './routes/channels';
 import { createConversationsRouter } from './routes/conversations';
+import { createKnowledgeRouter } from './routes/knowledge';
 import { createMessagesRouter } from './routes/conversations/messages';
 import { createNotesRouter } from './routes/conversations/notes';
 import { createRoutingRouter } from './routes/conversations/routing';
@@ -45,6 +46,7 @@ export function createApp(): Express {
   app.use(createRoutingRouter());
   app.use(createChannelsRouter());
   app.use(createAgentsRouter());
+  app.use(createKnowledgeRouter());
 
   // Error handler por último (Express 5 captura erros de handlers async).
   app.use(errorHandler);
