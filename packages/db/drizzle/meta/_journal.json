@@ -176,6 +176,20 @@
       "when": 1781128251528,
       "tag": "0024_pipeline_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1781128386974,
+      "tag": "0025_stale_rockslide",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1781128392351,
+      "tag": "0026_conversions_rls",
+      "breakpoints": true
     }
   ]
 }

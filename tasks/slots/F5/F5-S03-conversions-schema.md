@@ -2,10 +2,14 @@
 id: F5-S03
 title: Schema conversões (conversion_types, conversion_events, conversion_tag_triggers) + RLS + dedup
 phase: F5
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F5-S01, F5-S02]
+agent_id: backend-engineer
+claimed_at: 2026-06-10T21:52:21Z
+completed_at: 2026-06-10T21:54:44Z
+
 ---
 # F5-S03 — Schema Conversões
 
