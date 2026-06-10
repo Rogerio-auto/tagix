@@ -2,10 +2,13 @@
 id: F5-S01
 title: Schema tags + contact_tags + RLS (destrava conversões e add_tag/remove_tag da F4)
 phase: F5
-status: available
+status: in-progress
 priority: critical
 estimated_size: S
 depends_on: []
+agent_id: backend-engineer
+claimed_at: 2026-06-10T21:43:37Z
+
 ---
 # F5-S01 — Schema tags + contact_tags
 
