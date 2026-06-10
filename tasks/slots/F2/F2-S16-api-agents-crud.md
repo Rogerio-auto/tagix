@@ -2,7 +2,7 @@
 id: F2-S16
 title: API CRUD agents + tools_global + toggle agent_tools (Node)
 phase: F2
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F2-S01, F2-S03]
