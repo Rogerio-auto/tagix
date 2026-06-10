@@ -12,7 +12,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F4   | 14     | 0   | 2   | 0   | 0   | 0   | 12   |
+| F4   | 14     | 0   | 1   | 0   | 0   | 1   | 12   |
 
 ## Fase 0 — Fundação
 
@@ -119,6 +119,6 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F4-S09 | Frontend FlowsListPage + manual flows drag-reorder                                                  | ✅ done     | high       | F4-S08                 |
 | F4-S10 | Frontend FlowEditorPage — canvas ReactFlow + palette + inspector shell + toolbar + executions panel | ✅ done     | high       | F4-S08, F4-S07         |
 | F4-S11 | Frontend node components (15 tipos) — node render + inspector + metadata, 1 pasta por tipo          | ⏸️ blocked | high       | F4-S10                 |
-| F4-S12 | LiveChat flow integration — quickbar manual + confirm modal + ExecutionsBadge                       | ⏸️ blocked | medium     | F4-S08                 |
+| F4-S12 | LiveChat flow integration — quickbar manual + confirm modal + ExecutionsBadge                       | 🟣 review   | medium     | F4-S08                 |
 | F4-S13 | Trigger dispatcher (inbound) — keyword/new_message/new_lead/system_event + resume waiting flows     | ✅ done     | high       | F4-S01, F4-S02         |
 | F4-S14 | Meta flow_submission webhook + trigger flow (flow_submission)                                       | ✅ done     | medium     | F4-S01, F4-S02         |
