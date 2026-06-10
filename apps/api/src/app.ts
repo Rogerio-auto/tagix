@@ -6,6 +6,7 @@ import { createAuthRouter } from './auth';
 import { loadConfig } from './config';
 import { healthHandler } from './health';
 import { errorHandler } from './middlewares/error';
+import { createInternalToolsRouter } from './internal/tools';
 import { createAgentsRouter } from './routes/agents';
 import { createChannelsRouter } from './routes/channels';
 import { createConversationsRouter } from './routes/conversations';
@@ -32,6 +33,9 @@ export function createApp(): Express {
   app.use(express.json({ limit: '1mb' }));
 
   app.get('/health', healthHandler);
+  // Endpoint interno service-to-service (runtime Python → Node): auth por token
+  // compartilhado (AGENT_RUNTIME_TOKEN), NÃO por sessão de usuário. Ver F2-S07.
+  app.use(createInternalToolsRouter());
   app.use(createAuthRouter());
   app.use(createConversationsRouter());
   app.use(createMessagesRouter());

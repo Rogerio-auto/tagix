@@ -36,6 +36,12 @@ import {
   type MediaWorkerHandle,
 } from '../media/index';
 import {
+  agentRuntimeConfigFromEnv,
+  createAgentDeps,
+  startAgentWorker,
+  type AgentWorkerHandle,
+} from '../agents/index';
+import {
   adapterFactoryByChannel,
   createAdapterFactory,
   type AdapterFactoryOptions,
@@ -54,6 +60,7 @@ export interface WorkersBootstrapHandle {
   readonly inbound: InboundWorkerHandle;
   readonly outbound: OutboundWorkerHandle;
   readonly media: MediaWorkerHandle;
+  readonly agent: AgentWorkerHandle;
   stop(): Promise<void>;
 }
 
@@ -95,19 +102,27 @@ export async function startWorkers(
     logger,
   });
 
-  logger.info('workers de canal iniciados', { workers: ['inbound', 'outbound', 'media'] });
+  // Worker de agentes IA (F2-S11): consome hm.q.flows (ai_mode='on') → runtime.
+  const agent = await startAgentWorker({
+    deps: createAgentDeps(channel, agentRuntimeConfigFromEnv(), logger),
+    logger,
+  });
+
+  logger.info('workers iniciados', { workers: ['inbound', 'outbound', 'media', 'agent'] });
 
   return {
     inbound,
     outbound,
     media,
+    agent,
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
+      await agent.stop();
       await media.stop();
       await outbound.stop();
       await inbound.stop();
       await boot.connection.close();
-      logger.info('workers de canal parados');
+      logger.info('workers parados');
     },
   };
 }

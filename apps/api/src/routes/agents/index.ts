@@ -13,11 +13,17 @@
  */
 import { Router } from 'express';
 import { createAgentsCrudRouter } from './crud';
+import { createAgentModelsRouter } from './models';
+import { createAgentTemplatesRouter } from './templates';
 import { createAgentToolsRouter } from './tools';
 
 export function createAgentsRouter(): Router {
   const router = Router();
+  // Rotas literais (tools/models/templates) ANTES do CRUD: senão `:id` casa
+  // "tools"/"models"/"templates". Ver nota de precedência acima.
   router.use(createAgentToolsRouter());
+  router.use(createAgentModelsRouter());
+  router.use(createAgentTemplatesRouter());
   router.use(createAgentsCrudRouter());
   return router;
 }

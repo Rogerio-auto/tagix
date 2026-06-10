@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Bot,
   Calendar,
   GitBranch,
   LayoutDashboard,
@@ -24,6 +25,7 @@ interface NavItem {
 const NAV: readonly NavItem[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/conversations', label: 'Conversas', icon: MessagesSquare },
+  { href: '/agents', label: 'Agentes', icon: Bot },
   { href: '/contacts', label: 'Contatos', icon: Users },
   { href: '/pipeline', label: 'Pipeline', icon: GitBranch },
   { href: '/campaigns', label: 'Campanhas', icon: Megaphone },

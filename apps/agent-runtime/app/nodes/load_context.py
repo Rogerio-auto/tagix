@@ -23,7 +23,8 @@ import asyncpg
 
 from app.db import with_workspace
 from app.logging import get_logger
-from app.types import AgentState, PolicySnapshot, ToolDescriptor
+from app.policy import apply_policy
+from app.types import AgentState, PolicySnapshot
 
 logger = get_logger()
 
@@ -73,23 +74,6 @@ async def _load_conversation(
     return dict(row) if row else None
 
 
-def _apply_policy_to_tools(
-    tools: list[ToolDescriptor], policy: PolicySnapshot
-) -> list[ToolDescriptor]:
-    """Defesa-em-profundidade: filtra por categoria + corta em max_tools_per_agent."""
-    allowed_categories = set(policy.allowed_tool_categories)
-    # Categoria vazia no descriptor nunca passa o filtro de categoria (deny-by-default),
-    # a menos que a policy explicitamente não restrinja categorias (lista vazia = sem
-    # restrição declarada → mantém o que o Node mandou).
-    if allowed_categories:
-        filtered = [t for t in tools if t.category in allowed_categories]
-    else:
-        filtered = list(tools)
-    if policy.max_tools_per_agent >= 0:
-        filtered = filtered[: policy.max_tools_per_agent]
-    return filtered
-
-
 def make_load_context_node(pool: asyncpg.Pool):
     """Fábrica do node `load_context`, ligada a um pool asyncpg."""
 
@@ -111,21 +95,19 @@ def make_load_context_node(pool: asyncpg.Pool):
                     else None
                 )
 
-        tools = _apply_policy_to_tools(state.get("tools", []), policy)
+        decision = apply_policy(state.get("tools", []), agent["model"], policy)
 
         patch: dict[str, Any] = {
             "agent": agent,
             "contact": contact,
             "conversation": conversation,
-            "tools": tools,
+            "tools": decision.tools,
             "iteration": 0,
         }
 
         # Defesa-em-profundidade: modelo fora da whitelist é bloqueado aqui.
-        if policy.allowed_models and agent["model"] not in policy.allowed_models:
-            patch["model_blocked_reason"] = (
-                f"model not allowed by workspace policy: {agent['model']}"
-            )
+        if decision.model_blocked_reason is not None:
+            patch["model_blocked_reason"] = decision.model_blocked_reason
             logger.warning(
                 "load_context: modelo bloqueado por policy",
                 workspace_id=workspace_id,
@@ -135,7 +117,7 @@ def make_load_context_node(pool: asyncpg.Pool):
         logger.debug(
             "load_context ok",
             workspace_id=workspace_id,
-            tools=len(tools),
+            tools=len(decision.tools),
             has_contact=contact is not None,
             has_conversation=conversation is not None,
         )
