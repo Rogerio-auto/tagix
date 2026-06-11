@@ -2,7 +2,7 @@
 id: F9-S03
 title: API pública v1 — send_message/template + upsert_contact + trigger_flow + conversations + OpenAPI/Swagger
 phase: F9
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F9-S02]

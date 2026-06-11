@@ -17,7 +17,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
-| F9   | 6     | 0   | 3   | 0   | 0   | 1   | 2   |
+| F9   | 6     | 0   | 3   | 0   | 0   | 0   | 3   |
 
 ## Fase 0 — Fundação
 
@@ -196,7 +196,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ------ | -------------------------------------------------------------------------------------------------------- | ---------- | ---------- | ---------- |
 | F9-S01 | Schema outbound_webhooks + outbound_webhook_deliveries (+ verificar api_keys) + RLS                      | ✅ done     | critical   | —          |
 | F9-S02 | API key auth middleware + rate limit por chave (Redis)                                                   | ✅ done     | high       | F9-S01     |
-| F9-S03 | API pública v1 — send_message/template + upsert_contact + trigger_flow + conversations + OpenAPI/Swagger | 🟣 review   | high       | F9-S02     |
+| F9-S03 | API pública v1 — send_message/template + upsert_contact + trigger_flow + conversations + OpenAPI/Swagger | ✅ done     | high       | F9-S02     |
 | F9-S04 | Management CRUD — API keys (create show-once/list/revoke) + webhooks subscriptions                       | ⏸️ blocked | high       | F9-S01     |
 | F9-S05 | Worker-webhooks — event hooks → deliveries + HMAC dispatch + retry exponencial                           | ⏸️ blocked | high       | F9-S01     |
 | F9-S06 | Frontend Settings → Dev — API keys (show-once) + webhooks + delivery log                                 | ⏸️ blocked | medium     | F9-S04     |
