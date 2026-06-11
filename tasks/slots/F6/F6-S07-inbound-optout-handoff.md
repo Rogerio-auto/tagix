@@ -2,7 +2,7 @@
 id: F6-S07
 title: Inbound hooks — opt-out por keyword + reply handling (mark responded + AI handoff + followup)
 phase: F6
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F6-S01]
