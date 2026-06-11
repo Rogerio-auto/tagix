@@ -16,7 +16,6 @@
  */
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 import type { Permission } from '@hm/shared';
-import { SectionStub } from './SectionStub';
 
 export type SettingsGroup = 'pessoal' | 'workspace';
 
@@ -41,13 +40,6 @@ export interface SettingsSection {
    */
   readonly component?: LazyExoticComponent<ComponentType>;
   readonly externalHref?: string;
-}
-
-/** Stub tipado p/ seções ainda não preenchidas pelos sub-slots. */
-function stub(id: string, title: string): LazyExoticComponent<ComponentType> {
-  return lazy(async () => ({
-    default: () => <SectionStub sectionId={id} title={title} />,
-  }));
 }
 
 /**
