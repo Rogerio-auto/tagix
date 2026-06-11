@@ -68,6 +68,10 @@ import {
   type ActionPorts,
   type AutomationWorkerHandle,
 } from '../automations/index';
+import {
+  createReminderPorts,
+  startReminderScheduler,
+} from '../calendar-reminders/index';
 
 /** Intervalo do rollup de métricas de agentes (F2-S13); idempotente. */
 const METRICS_ROLLUP_INTERVAL_MS = 10 * 60_000;
@@ -268,6 +272,13 @@ export async function startWorkers(
   const automationExecutor = createActionExecutor(automationPorts);
   const automationWorker = startAutomationWorker({ redis, logger, execute: automationExecutor });
   const staleScheduler = startStaleScheduler({ redis, logger });
+  // Calendar reminders (F7-S05): cron 5min que notifica organizer + outbound
+  // WhatsApp ao contato de eventos próximos (idempotente por metadata.remindersSent).
+  const calendarReminders = startReminderScheduler({
+    redis,
+    logger,
+    ports: createReminderPorts({ channel, logger }),
+  });
   const metricsTimer = setInterval(() => {
     void runAgentMetricsRollup({}, logger).catch((err: unknown) => {
       logger.error('falha no rollup de métricas de agentes', {
@@ -291,6 +302,7 @@ export async function startWorkers(
       'campaign-followup-processor',
       'automation-worker',
       'automation-stale-scheduler',
+      'calendar-reminders-scheduler',
     ],
   });
 
@@ -313,6 +325,7 @@ export async function startWorkers(
       await campaignWorker.stop();
       await followupProcessor.handle.stop();
       await campaignFollowupConsumer.connection.close();
+      await calendarReminders.stop();
       await staleScheduler.stop();
       await automationWorker.stop();
       await flow.stop();

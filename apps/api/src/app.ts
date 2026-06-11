@@ -24,6 +24,7 @@ import { createFlowsRouter } from './routes/flows';
 import { createPipelineRouter } from './routes/pipeline';
 import { createDealsRouter } from './routes/deals';
 import { registerDealHooks } from './services/deal-hooks';
+import { registerEventHooks } from './services/event-hooks';
 import { createConversionsRouter } from './routes/conversions';
 import { createCampaignsRouter } from './routes/campaigns';
 import { createCampaignRecipientsRouter } from './routes/campaigns/recipients';
@@ -38,6 +39,8 @@ export function createApp(): Express {
 
   // Seam onStageChanged (F5-S06/S07): socket emit + automation scheduling.
   registerDealHooks();
+  // Seam onEventChanged (F7-S05): cancelamento de evento → notifica participantes.
+  registerEventHooks();
 
   app.disable('x-powered-by');
   app.use(helmet());
