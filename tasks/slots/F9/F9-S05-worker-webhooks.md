@@ -2,10 +2,13 @@
 id: F9-S05
 title: Worker-webhooks — event hooks → deliveries + HMAC dispatch + retry exponencial
 phase: F9
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F9-S01]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T21:56:24Z
+
 ---
 # F9-S05 — Worker webhooks outbound
 
