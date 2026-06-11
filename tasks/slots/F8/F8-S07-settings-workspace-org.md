@@ -2,7 +2,7 @@
 id: F8-S07
 title: Settings Workspace (org) — info/marca/membros/departamentos/times/auto-assign/horário/SLAs + API
 phase: F8
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F8-S01, F8-S05]

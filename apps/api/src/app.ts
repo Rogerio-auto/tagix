@@ -33,6 +33,8 @@ import { createOnboardingRouter } from './routes/onboarding';
 import { createCalendarRouter } from './routes/calendar';
 import { createDashboardRouter } from './routes/dashboard';
 import { createMembersMeRouter } from './routes/members/me';
+import { createWorkspaceSettingsRouter } from './routes/workspace';
+import { createOrgSettingsRouter } from './routes/org';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
@@ -95,6 +97,9 @@ export function createApp(): Express {
   app.use(createDashboardRouter());
   // Settings pessoais (F8-S06): PATCH /members/me + password + sessions.
   app.use(createMembersMeRouter());
+  // Settings workspace (F8-S07): PATCH /workspace + membros + org (depts/teams/SLA).
+  app.use(createWorkspaceSettingsRouter());
+  app.use(createOrgSettingsRouter());
 
   // Error handler por último (Express 5 captura erros de handlers async).
   app.use(errorHandler);

@@ -146,7 +146,7 @@ const WORKSPACE: SettingsSection[] = [
     description: 'Nome, slug, logo, descrição, indústria, timezone, locale.',
     keywords: ['workspace', 'nome', 'slug', 'logo', 'timezone', 'locale', 'marca'],
     permission: 'workspace.edit',
-    component: stub('workspace', 'Workspace'),
+    component: lazy(() => import('../sections/workspace-org/WorkspaceSection')),
   },
   {
     id: 'canais',
@@ -164,7 +164,7 @@ const WORKSPACE: SettingsSection[] = [
     description: 'Convidar, listar, mudar role, remover.',
     keywords: ['membros', 'usuários', 'convidar', 'role', 'equipe'],
     permission: 'member.invite',
-    component: stub('membros', 'Membros'),
+    component: lazy(() => import('../sections/workspace-org/MembersSection')),
   },
   {
     id: 'departamentos',
@@ -173,7 +173,7 @@ const WORKSPACE: SettingsSection[] = [
     description: 'Criar, editar, cor, ordem.',
     keywords: ['departamentos', 'setores'],
     permission: 'department.edit',
-    component: stub('departamentos', 'Departamentos'),
+    component: lazy(() => import('../sections/workspace-org/DepartmentsSection')),
   },
   {
     id: 'times',
@@ -182,7 +182,7 @@ const WORKSPACE: SettingsSection[] = [
     description: 'Criar, editar, alocar members, auto-assign.',
     keywords: ['times', 'equipes', 'teams', 'auto-assign'],
     permission: 'team.edit',
-    component: stub('times', 'Times'),
+    component: lazy(() => import('../sections/workspace-org/TeamsSection')),
   },
   {
     id: 'auto-assign',
@@ -191,7 +191,7 @@ const WORKSPACE: SettingsSection[] = [
     description: 'Regras de roteamento por canal/dept/time.',
     keywords: ['auto-assign', 'roteamento', 'distribuição'],
     permission: 'workspace.edit',
-    component: stub('auto-assign', 'Auto-assign'),
+    component: lazy(() => import('../sections/workspace-org/AutoAssignSection')),
   },
   {
     id: 'horario',
@@ -200,7 +200,7 @@ const WORKSPACE: SettingsSection[] = [
     description: 'Janelas semanais, exceções, mensagem fora do horário.',
     keywords: ['horário', 'comercial', 'expediente', 'janelas'],
     permission: 'workspace.edit',
-    component: stub('horario', 'Horário comercial'),
+    component: lazy(() => import('../sections/workspace-org/BusinessHoursSection')),
   },
   {
     id: 'conversoes',
@@ -227,7 +227,7 @@ const WORKSPACE: SettingsSection[] = [
     description: 'Tempo máximo de resposta, alertas, regras por canal.',
     keywords: ['sla', 'slas', 'tempo', 'resposta', 'meta'],
     permission: 'workspace.edit',
-    component: stub('slas', 'SLAs'),
+    component: lazy(() => import('../sections/workspace-org/SlasSection')),
   },
   {
     id: 'auditoria',
