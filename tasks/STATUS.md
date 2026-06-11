@@ -14,7 +14,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F6   | 9     | 0   | 1   | 0   | 0   | 0   | 8   |
+| F6   | 9     | 0   | 0   | 0   | 1   | 0   | 8   |
 
 ## Fase 0 — Fundação
 
@@ -148,14 +148,14 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 6 — Pipeline
 
-| ID     | Titulo                                                                                          | Status     | Prioridade | Depende de     |
-| ------ | ----------------------------------------------------------------------------------------------- | ---------- | ---------- | -------------- |
-| F6-S01 | Schema campaigns (+ steps/recipients/deliveries/metrics/followups + scheduled_followups) + RLS  | ✅ done     | critical   | —              |
-| F6-S02 | Meta error codes map + channel quality/template helpers (packages/channels)                     | ✅ done     | high       | —              |
-| F6-S03 | API campaigns — CRUD + validate (pre-flight) + activate/pause/resume + metrics/deliveries       | ✅ done     | high       | F6-S01, F6-S02 |
-| F6-S04 | API recipients (bulk CSV + bulk opt-in) + opt-in/opt-out de contato                             | ✅ done     | high       | F6-S01         |
-| F6-S05 | Worker-campaigns — tick + send window + rate adaptativo + dispatch idempotente + auto-pause RED | ✅ done     | critical   | F6-S01, F6-S02 |
-| F6-S06 | Followup processor — scheduled_followups persistente + tick (não setTimeout)                    | ✅ done     | medium     | F6-S01, F6-S05 |
-| F6-S07 | Inbound hooks — opt-out por keyword + reply handling (mark responded + AI handoff + followup)   | ✅ done     | high       | F6-S01         |
-| F6-S08 | Frontend CampaignEditor wizard (6 steps) + template picker + CSV import + send windows editor   | ⏸️ blocked | high       | F6-S03, F6-S04 |
-| F6-S09 | Frontend CampaignsPage + monitoring real-time + health badge                                    | ✅ done     | high       | F6-S03         |
+| ID     | Titulo                                                                                          | Status        | Prioridade | Depende de     |
+| ------ | ----------------------------------------------------------------------------------------------- | ------------- | ---------- | -------------- |
+| F6-S01 | Schema campaigns (+ steps/recipients/deliveries/metrics/followups + scheduled_followups) + RLS  | ✅ done        | critical   | —              |
+| F6-S02 | Meta error codes map + channel quality/template helpers (packages/channels)                     | ✅ done        | high       | —              |
+| F6-S03 | API campaigns — CRUD + validate (pre-flight) + activate/pause/resume + metrics/deliveries       | ✅ done        | high       | F6-S01, F6-S02 |
+| F6-S04 | API recipients (bulk CSV + bulk opt-in) + opt-in/opt-out de contato                             | ✅ done        | high       | F6-S01         |
+| F6-S05 | Worker-campaigns — tick + send window + rate adaptativo + dispatch idempotente + auto-pause RED | ✅ done        | critical   | F6-S01, F6-S02 |
+| F6-S06 | Followup processor — scheduled_followups persistente + tick (não setTimeout)                    | ✅ done        | medium     | F6-S01, F6-S05 |
+| F6-S07 | Inbound hooks — opt-out por keyword + reply handling (mark responded + AI handoff + followup)   | ✅ done        | high       | F6-S01         |
+| F6-S08 | Frontend CampaignEditor wizard (6 steps) + template picker + CSV import + send windows editor   | 🔵 in-progress | high       | F6-S03, F6-S04 |
+| F6-S09 | Frontend CampaignsPage + monitoring real-time + health badge                                    | ✅ done        | high       | F6-S03         |
