@@ -2,7 +2,7 @@
 id: F9-S01
 title: Schema outbound_webhooks + outbound_webhook_deliveries (+ verificar api_keys) + RLS
 phase: F9
-status: review
+status: done
 priority: critical
 estimated_size: S
 depends_on: []
