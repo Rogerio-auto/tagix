@@ -2,7 +2,7 @@
 id: F9-S04
 title: Management CRUD — API keys (create show-once/list/revoke) + webhooks subscriptions
 phase: F9
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F9-S01]

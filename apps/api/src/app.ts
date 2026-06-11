@@ -39,6 +39,7 @@ import { createTagsRouter } from './routes/tags';
 import { createAuditRouter } from './routes/audit';
 import { createDashboardLayoutRouter } from './routes/members/dashboard-layout';
 import { createV1Router } from './routes/v1';
+import { createDevRouter } from './routes/dev';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
@@ -111,6 +112,8 @@ export function createApp(): Express {
   app.use(createAuditRouter());
   // API pública v1 (F9-S03): gated por API key + scope; OpenAPI/Swagger em /api/v1/docs.
   app.use(createV1Router());
+  // Gestão Dev (F9-S04): session-authed CRUD de API keys + webhooks (Settings → Dev).
+  app.use(createDevRouter());
 
   // Error handler por último (Express 5 captura erros de handlers async).
   app.use(errorHandler);
