@@ -2,10 +2,13 @@
 id: F6-S04
 title: API recipients (bulk CSV + bulk opt-in) + opt-in/opt-out de contato
 phase: F6
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F6-S01]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T04:58:47Z
+
 ---
 # F6-S04 — API recipients + opt-in
 
