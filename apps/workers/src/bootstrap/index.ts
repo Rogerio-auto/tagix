@@ -79,6 +79,7 @@ import {
 
 /** Intervalo do rollup de métricas de agentes (F2-S13); idempotente. */
 const METRICS_ROLLUP_INTERVAL_MS = 10 * 60_000;
+import { startWebhookDispatcher } from '../webhooks/index';
 import {
   adapterFactoryByChannel,
   createAdapterFactory,
@@ -287,6 +288,9 @@ export async function startWorkers(
   // materialized views mv_dashboard_* 1h. Singleton via lock Redis dedicado.
   const dashboardSnapshot = startDashboardSnapshotScheduler({ redis, logger });
   const dashboardMv = startDashboardMvScheduler({ redis, logger });
+  // Dispatcher de webhooks outbound (F9-S05): drena deliveries pendentes/retrying e
+  // faz o POST assinado com HMAC + retry exponencial. Singleton via lock Redis.
+  const webhookDispatcher = startWebhookDispatcher({ redis, logger });
   const metricsTimer = setInterval(() => {
     void runAgentMetricsRollup({}, logger).catch((err: unknown) => {
       logger.error('falha no rollup de métricas de agentes', {
@@ -313,6 +317,7 @@ export async function startWorkers(
       'calendar-reminders-scheduler',
       'dashboard-snapshot-scheduler',
       'dashboard-mv-scheduler',
+      'webhook-dispatcher',
     ],
   });
 
@@ -331,6 +336,7 @@ export async function startWorkers(
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
       clearInterval(metricsTimer);
+      await webhookDispatcher.stop();
       await dashboardSnapshot.stop();
       await dashboardMv.stop();
       await flowScheduler.stop();

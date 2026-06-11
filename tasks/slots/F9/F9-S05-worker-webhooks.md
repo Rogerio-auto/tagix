@@ -2,7 +2,7 @@
 id: F9-S05
 title: Worker-webhooks — event hooks → deliveries + HMAC dispatch + retry exponencial
 phase: F9
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F9-S01]
