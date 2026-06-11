@@ -25,6 +25,8 @@ import { createDealsRouter } from './routes/deals';
 import { registerDealHooks } from './services/deal-hooks';
 import { createConversionsRouter } from './routes/conversions';
 import { createCampaignsRouter } from './routes/campaigns';
+import { createCampaignRecipientsRouter } from './routes/campaigns/recipients';
+import { createContactsOptInRouter } from './routes/contacts/opt-in';
 import { createOnboardingRouter } from './routes/onboarding';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
@@ -71,6 +73,8 @@ export function createApp(): Express {
   // Conversoes (F5-S12): CRUD types + register/list/cancel events.
   app.use(createConversionsRouter());
   app.use(createCampaignsRouter());
+  app.use(createCampaignRecipientsRouter());
+  app.use(createContactsOptInRouter());
   // Onboarding por nicho (F5-S15): cria pipeline + agente a partir de template.
   app.use(createOnboardingRouter());
 
