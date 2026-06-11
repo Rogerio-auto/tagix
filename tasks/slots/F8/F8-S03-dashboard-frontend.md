@@ -2,10 +2,13 @@
 id: F8-S03
 title: Dashboard frontend — DashboardClient + card registry (5 layouts role-aware) + alerts + drill-down
 phase: F8
-status: blocked
+status: in-progress
 priority: high
 estimated_size: L
 depends_on: [F8-S02]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T19:34:19Z
+
 ---
 # F8-S03 — Dashboard frontend
 
