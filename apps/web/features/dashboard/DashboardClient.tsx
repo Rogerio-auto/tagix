@@ -19,6 +19,7 @@ import { useDashboard } from './queries';
 import { useDashboardSocket } from './useDashboardSocket';
 import { AlertsBanner } from './AlertsBanner';
 import { DrillDownDrawer } from './DrillDownDrawer';
+import { CustomizeDashboardButton } from './customization';
 import { cardSpan, renderCard } from './cards/registry';
 import type { DashboardCard, MetricCategory } from './types';
 
@@ -90,7 +91,10 @@ export function DashboardClient() {
 
   return (
     <>
-      <PageHeader title="Dashboard" />
+      <div className="flex items-center justify-between">
+        <PageHeader title="Dashboard" />
+        {data && <CustomizeDashboardButton />}
+      </div>
       {isLoading && <SkeletonList rows={6} />}
       {isError && (
         <div className="rounded-lg border border-border bg-surface p-8">

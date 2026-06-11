@@ -84,8 +84,8 @@ const PESSOAL: SettingsSection[] = [
     group: 'pessoal',
     label: 'Dashboard',
     description: 'Cards visíveis, ordem dos cards, período padrão.',
-    keywords: ['dashboard', 'cards', 'período', 'layout', 'pin'],
-    component: stub('dashboard', 'Dashboard'),
+    keywords: ['dashboard', 'cards', 'período', 'layout', 'pin', 'obrigatórios', 'sla', 'alerta'],
+    component: lazy(() => import('../sections/dashboard/DashboardSettingsSection')),
   },
   {
     id: 'notificacoes',
