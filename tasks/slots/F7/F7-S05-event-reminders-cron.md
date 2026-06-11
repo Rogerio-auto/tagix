@@ -2,10 +2,13 @@
 id: F7-S05
 title: Event reminders cron — scheduler 5min + notification + outbound WhatsApp opcional
 phase: F7
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on: [F7-S01, F7-S03]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T17:19:18Z
+
 ---
 # F7-S05 — Event reminders
 
