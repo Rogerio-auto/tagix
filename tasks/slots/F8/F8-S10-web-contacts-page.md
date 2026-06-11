@@ -2,12 +2,13 @@
 id: F8-S10
 title: Frontend ContactsPage (CRM) — lista + detalhe + tags + consentimento + marcar conversão + nav
 phase: F8
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: [F8-S09]
 agent_id: backend-engineer
 claimed_at: 2026-06-11T20:04:09Z
+completed_at: 2026-06-11T20:07:59Z
 
 ---
 # F8-S10 — ContactsPage (web)
