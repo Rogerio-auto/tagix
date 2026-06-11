@@ -2,10 +2,14 @@
 id: F8-S07
 title: Settings Workspace (org) — info/marca/membros/departamentos/times/auto-assign/horário/SLAs + API
 phase: F8
-status: blocked
+status: review
 priority: high
 estimated_size: L
 depends_on: [F8-S01, F8-S05]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T20:16:07Z
+completed_at: 2026-06-11T20:22:42Z
+
 ---
 # F8-S07 — Settings Workspace (organização)
 
