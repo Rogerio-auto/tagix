@@ -14,6 +14,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
+| F6   | 9     | 2   | 7   | 0   | 0   | 0   | 0   |
 
 ## Fase 0 — Fundação
 
@@ -144,3 +145,17 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F5-S14 | Conversões automações — flow handler register_conversion + tag pg-trigger + fecha F2-S20                  | ✅ done | medium     | F5-S03, F5-S06, F5-S12 |
 | F5-S15 | Seeds de nicho — pipeline templates (imobiliária + clínica) + agent_template variants + onboarding wizard | ✅ done | medium     | F5-S02, F5-S04         |
 | F5-S16 | Fecha stubs da F4 — handlers move_stage/add_tag/remove_tag + triggers stage_change/tag_added              | ✅ done | high       | F5-S01, F5-S02, F5-S05 |
+
+## Fase 6 — Pipeline
+
+| ID     | Titulo                                                                                          | Status      | Prioridade | Depende de     |
+| ------ | ----------------------------------------------------------------------------------------------- | ----------- | ---------- | -------------- |
+| F6-S01 | Schema campaigns (+ steps/recipients/deliveries/metrics/followups + scheduled_followups) + RLS  | 🟢 available | critical   | —              |
+| F6-S02 | Meta error codes map + channel quality/template helpers (packages/channels)                     | 🟢 available | high       | —              |
+| F6-S03 | API campaigns — CRUD + validate (pre-flight) + activate/pause/resume + metrics/deliveries       | ⏸️ blocked  | high       | F6-S01, F6-S02 |
+| F6-S04 | API recipients (bulk CSV + bulk opt-in) + opt-in/opt-out de contato                             | ⏸️ blocked  | high       | F6-S01         |
+| F6-S05 | Worker-campaigns — tick + send window + rate adaptativo + dispatch idempotente + auto-pause RED | ⏸️ blocked  | critical   | F6-S01, F6-S02 |
+| F6-S06 | Followup processor — scheduled_followups persistente + tick (não setTimeout)                    | ⏸️ blocked  | medium     | F6-S01, F6-S05 |
+| F6-S07 | Inbound hooks — opt-out por keyword + reply handling (mark responded + AI handoff + followup)   | ⏸️ blocked  | high       | F6-S01         |
+| F6-S08 | Frontend CampaignEditor wizard (6 steps) + template picker + CSV import + send windows editor   | ⏸️ blocked  | high       | F6-S03, F6-S04 |
+| F6-S09 | Frontend CampaignsPage + monitoring real-time + health badge                                    | ⏸️ blocked  | high       | F6-S03         |
