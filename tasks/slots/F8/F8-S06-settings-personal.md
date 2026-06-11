@@ -2,10 +2,14 @@
 id: F8-S06
 title: Settings Pessoal — perfil/preferências/senha/sessões/notificações + API
 phase: F8
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F8-S05]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T20:08:51Z
+completed_at: 2026-06-11T20:14:22Z
+
 ---
 # F8-S06 — Settings Pessoal
 
