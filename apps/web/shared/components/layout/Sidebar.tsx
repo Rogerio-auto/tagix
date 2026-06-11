@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   BookOpen,
   Bot,
+  Calendar,
   GitBranch,
   LayoutDashboard,
   Megaphone,
@@ -34,8 +35,8 @@ const NAV: readonly NavItem[] = [
   { href: '/pipeline', label: 'Pipeline', icon: GitBranch, perm: 'pipeline.view' },
   { href: '/flows', label: 'Flows', icon: Workflow, perm: 'flow.list' },
   { href: '/campaigns', label: 'Campanhas', icon: Megaphone, perm: 'campaign.list' },
-  // Contatos (/contacts) e Agenda (/calendar) saem do nav até serem construídos
-  // (F8 e F7) — não exibir links que dão 404. Voltam com suas fases.
+  { href: '/calendar', label: 'Agenda', icon: Calendar, perm: 'calendar.view' },
+  // Contatos (/contacts) sai do nav até ser construído (F8) — não exibir 404.
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
