@@ -6,15 +6,23 @@ import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { CommandPalette } from '@/shared/components/command';
 import { useUIStore } from '@/shared/stores/ui.store';
+import { useAuthStore } from '@/shared/stores/auth.store';
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const hydrate = useUIStore((s) => s.hydrate);
+  const hydrateAuth = useAuthStore((s) => s.hydrate);
 
   // Restaura a preferência de density persistida.
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // Hidrata a auth (role/workspace) de /api/me — sem isso o gating de UI falha
+  // fechado em refresh/URL direta, escondendo nav e bloqueando páginas com can().
+  useEffect(() => {
+    void hydrateAuth();
+  }, [hydrateAuth]);
 
   return (
     <div className="flex min-h-dvh bg-bg">

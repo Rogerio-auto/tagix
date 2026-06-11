@@ -5,13 +5,11 @@ import { usePathname } from 'next/navigation';
 import {
   BookOpen,
   Bot,
-  Calendar,
   GitBranch,
   LayoutDashboard,
   Megaphone,
   MessagesSquare,
   Settings,
-  Users,
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
@@ -33,11 +31,11 @@ const NAV: readonly NavItem[] = [
   { href: '/conversations', label: 'Conversas', icon: MessagesSquare },
   { href: '/agents', label: 'Agentes', icon: Bot },
   { href: '/knowledge', label: 'Conhecimento', icon: BookOpen, perm: 'kb.edit' },
-  { href: '/contacts', label: 'Contatos', icon: Users },
   { href: '/pipeline', label: 'Pipeline', icon: GitBranch, perm: 'pipeline.view' },
   { href: '/flows', label: 'Flows', icon: Workflow, perm: 'flow.list' },
   { href: '/campaigns', label: 'Campanhas', icon: Megaphone, perm: 'campaign.list' },
-  { href: '/calendar', label: 'Agenda', icon: Calendar },
+  // Contatos (/contacts) e Agenda (/calendar) saem do nav até serem construídos
+  // (F8 e F7) — não exibir links que dão 404. Voltam com suas fases.
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 

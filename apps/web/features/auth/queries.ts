@@ -2,17 +2,25 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { api } from '@/shared/lib/api-client';
+import { snapshotFromMember, useAuthStore } from '@/shared/stores/auth.store';
+import type { Role } from '@hm/shared';
 import type { LoginInput, ResetInput } from './schema';
 
 interface LoginResponse {
-  member: unknown;
-  workspace: unknown;
+  member: { id: string; workspaceId: string; name: string; role: Role };
+  workspace: { id: string };
 }
 
-/** Login real: POST /auth/login → a API seta o cookie httpOnly de sessão. */
+/**
+ * Login real: POST /auth/login → a API seta o cookie httpOnly de sessão e
+ * devolve o member. Hidratamos o store na hora (sem esperar o /api/me) para o
+ * nav e o gating de UI já aparecerem certos ao cair no app.
+ */
 export function useLogin() {
+  const setAuth = useAuthStore((s) => s.setAuth);
   return useMutation({
     mutationFn: (input: LoginInput) => api.post<LoginResponse>('/auth/login', input),
+    onSuccess: (data) => setAuth(snapshotFromMember(data.member)),
   });
 }
 
