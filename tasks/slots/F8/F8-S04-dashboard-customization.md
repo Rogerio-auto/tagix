@@ -2,7 +2,7 @@
 id: F8-S04
 title: Dashboard customização — layout pessoal (hide/reorder/período) + cards obrigatórios (admin)
 phase: F8
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F8-S02, F8-S03, F8-S05]
