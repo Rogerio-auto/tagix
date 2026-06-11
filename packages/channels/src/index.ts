@@ -56,4 +56,21 @@ export { MetaWhatsAppAdapter } from './meta/whatsapp/adapter';
 export { MetaInstagramAdapter } from './meta/instagram/adapter';
 export { WAHAAdapter } from './waha/adapter';
 
+// --- Campaigns: error->action map + Graph quality/template helpers (F6-S02) ---
+export {
+  CAMPAIGN_ERROR_CODES,
+  mapCampaignError,
+  type CampaignErrorAction,
+  type CampaignErrorInfo,
+} from './meta/errors';
+export {
+  fetchChannelQuality,
+  fetchMetaTemplate,
+  type ChannelHealth,
+  type QualityRating,
+  type MetaTemplateInfo,
+  type TemplateCategory,
+  type TemplateStatus,
+} from './meta/quality';
+
 export const CHANNELS_PKG = '@hm/channels' as const;

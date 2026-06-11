@@ -2,10 +2,14 @@
 id: F6-S02
 title: Meta error codes map + channel quality/template helpers (packages/channels)
 phase: F6
-status: available
+status: review
 priority: high
 estimated_size: S
 depends_on: []
+agent_id: backend-engineer
+claimed_at: 2026-06-11T04:45:41Z
+completed_at: 2026-06-11T04:48:53Z
+
 ---
 # F6-S02 — Meta errors + quality
 
