@@ -29,7 +29,7 @@ const {
 } = schema;
 
 /** Fila de followups de campanha (consumida por F6-S06). */
-export const CAMPAIGN_FOLLOWUP_QUEUE = QUEUES.outbound;
+export const CAMPAIGN_FOLLOWUP_QUEUE = QUEUES.campaigns;
 export const CAMPAIGN_FOLLOWUP_TYPE = 'campaign.followup';
 export const OUTBOUND_QUEUE = QUEUES.outbound;
 export const OUTBOUND_JOB_TYPE = 'outbound.request';

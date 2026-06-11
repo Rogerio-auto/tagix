@@ -2,12 +2,13 @@
 id: F6-S06
 title: Followup processor — scheduled_followups persistente + tick (não setTimeout)
 phase: F6
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F6-S01, F6-S05]
 agent_id: backend-engineer
 claimed_at: 2026-06-11T05:20:19Z
+completed_at: 2026-06-11T05:26:30Z
 
 ---
 # F6-S06 — Followup processor
