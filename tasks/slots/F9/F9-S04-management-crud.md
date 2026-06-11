@@ -2,10 +2,13 @@
 id: F9-S04
 title: Management CRUD — API keys (create show-once/list/revoke) + webhooks subscriptions
 phase: F9
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F9-S01]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T21:48:40Z
+
 ---
 # F9-S04 — Management CRUD (keys + webhooks)
 
