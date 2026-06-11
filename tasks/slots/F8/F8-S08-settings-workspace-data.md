@@ -2,12 +2,13 @@
 id: F8-S08
 title: Settings Workspace (dados) — tags CRUD + integração das seções existentes + audit viewer
 phase: F8
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F8-S05]
 agent_id: backend-engineer
 claimed_at: 2026-06-11T20:24:03Z
+completed_at: 2026-06-11T20:27:41Z
 
 ---
 # F8-S08 — Settings Workspace (dados + integrações)
