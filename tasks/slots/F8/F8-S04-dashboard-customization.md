@@ -2,12 +2,13 @@
 id: F8-S04
 title: Dashboard customização — layout pessoal (hide/reorder/período) + cards obrigatórios (admin)
 phase: F8
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F8-S02, F8-S03, F8-S05]
 agent_id: backend-engineer
 claimed_at: 2026-06-11T20:29:15Z
+completed_at: 2026-06-11T20:33:28Z
 
 ---
 # F8-S04 — Dashboard customização
