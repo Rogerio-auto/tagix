@@ -2,7 +2,7 @@
 id: F8-S06
 title: Settings Pessoal — perfil/preferências/senha/sessões/notificações + API
 phase: F8
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F8-S05]

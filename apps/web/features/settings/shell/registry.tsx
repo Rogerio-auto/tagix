@@ -69,7 +69,7 @@ const PESSOAL: SettingsSection[] = [
     label: 'Perfil',
     description: 'Nome de exibição, avatar, telefone, idioma, bio.',
     keywords: ['perfil', 'avatar', 'nome', 'telefone', 'bio', 'idioma'],
-    component: stub('perfil', 'Perfil'),
+    component: lazy(() => import('../sections/personal/ProfileSection')),
   },
   {
     id: 'preferencias',
@@ -77,7 +77,7 @@ const PESSOAL: SettingsSection[] = [
     label: 'Preferências',
     description: 'Tema, idioma da interface, fuso horário, formato de data e moeda.',
     keywords: ['tema', 'dark', 'light', 'fuso', 'timezone', 'idioma', 'data', 'moeda', 'preferências'],
-    component: stub('preferencias', 'Preferências'),
+    component: lazy(() => import('../sections/personal/PreferencesSection')),
   },
   {
     id: 'dashboard',
@@ -93,7 +93,7 @@ const PESSOAL: SettingsSection[] = [
     label: 'Notificações',
     description: 'Toggles por canal (in-app, email, push).',
     keywords: ['notificações', 'email', 'push', 'in-app', 'alertas'],
-    component: stub('notificacoes', 'Notificações'),
+    component: lazy(() => import('../sections/personal/NotificationsSection')),
   },
   {
     id: 'sons',
@@ -101,7 +101,7 @@ const PESSOAL: SettingsSection[] = [
     label: 'Sons',
     description: 'Som ao receber mensagem nova, volume.',
     keywords: ['som', 'sons', 'volume', 'áudio'],
-    component: stub('sons', 'Sons'),
+    component: lazy(() => import('../sections/personal/SoundsSection')),
   },
   {
     id: 'atalhos',
@@ -109,7 +109,7 @@ const PESSOAL: SettingsSection[] = [
     label: 'Atalhos',
     description: 'Referência de atalhos de teclado.',
     keywords: ['atalhos', 'teclado', 'shortcuts'],
-    component: stub('atalhos', 'Atalhos'),
+    component: lazy(() => import('../sections/personal/ShortcutsSection')),
   },
   {
     id: 'sessoes',
@@ -117,7 +117,7 @@ const PESSOAL: SettingsSection[] = [
     label: 'Sessões',
     description: 'Devices logados e encerramento de sessão.',
     keywords: ['sessões', 'devices', 'logout', 'segurança'],
-    component: stub('sessoes', 'Sessões'),
+    component: lazy(() => import('../sections/personal/SessionsSection')),
   },
   {
     id: 'senha',
@@ -125,7 +125,7 @@ const PESSOAL: SettingsSection[] = [
     label: 'Senha',
     description: 'Trocar senha ou gerenciar via provider externo.',
     keywords: ['senha', 'password', 'segurança'],
-    component: stub('senha', 'Senha'),
+    component: lazy(() => import('../sections/personal/PasswordSection')),
   },
   {
     id: 'conta',
@@ -133,7 +133,7 @@ const PESSOAL: SettingsSection[] = [
     label: 'Conta',
     description: 'Email, MFA, exclusão de conta.',
     keywords: ['conta', 'email', 'mfa', 'exclusão'],
-    component: stub('conta', 'Conta'),
+    component: lazy(() => import('../sections/personal/AccountSection')),
   },
 ];
 
