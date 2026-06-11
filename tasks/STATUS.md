@@ -16,7 +16,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F8   | 10     | 2   | 7   | 0   | 1   | 0   | 0   |
+| F8   | 10     | 2   | 7   | 0   | 0   | 1   | 0   |
 
 ## Fase 0 — Fundação
 
@@ -176,15 +176,15 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 8 — Permissions & Settings
 
-| ID     | Titulo                                                                                              | Status        | Prioridade | Depende de             |
-| ------ | --------------------------------------------------------------------------------------------------- | ------------- | ---------- | ---------------------- |
-| F8-S01 | Schema F8 — dashboard_snapshots + materialized views + departments + teams + SLA config + RLS       | 🔵 in-progress | critical   | —                      |
-| F8-S02 | Dashboard metrics service + API /dashboard/me (role-filtered) + socket + refresh jobs               | ⏸️ blocked    | high       | F8-S01                 |
-| F8-S03 | Dashboard frontend — DashboardClient + card registry (5 layouts role-aware) + alerts + drill-down   | ⏸️ blocked    | high       | F8-S02                 |
-| F8-S04 | Dashboard customização — layout pessoal (hide/reorder/período) + cards obrigatórios (admin)         | ⏸️ blocked    | medium     | F8-S02, F8-S03, F8-S05 |
-| F8-S05 | Settings panel shell — sidebar 3 níveis + busca Cmd+K + contadores + conteúdo lazy + /settings root | 🟢 available   | high       | —                      |
-| F8-S06 | Settings Pessoal — perfil/preferências/senha/sessões/notificações + API                             | ⏸️ blocked    | high       | F8-S05                 |
-| F8-S07 | Settings Workspace (org) — info/marca/membros/departamentos/times/auto-assign/horário/SLAs + API    | ⏸️ blocked    | high       | F8-S01, F8-S05         |
-| F8-S08 | Settings Workspace (dados) — tags CRUD + integração das seções existentes + audit viewer            | ⏸️ blocked    | medium     | F8-S05                 |
-| F8-S09 | Contacts API — list/search/detail/CRUD + tags + histórico de consentimento                          | 🟢 available   | high       | —                      |
-| F8-S10 | Frontend ContactsPage (CRM) — lista + detalhe + tags + consentimento + marcar conversão + nav       | ⏸️ blocked    | high       | F8-S09                 |
+| ID     | Titulo                                                                                              | Status      | Prioridade | Depende de             |
+| ------ | --------------------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------- |
+| F8-S01 | Schema F8 — dashboard_snapshots + materialized views + departments + teams + SLA config + RLS       | 🟣 review    | critical   | —                      |
+| F8-S02 | Dashboard metrics service + API /dashboard/me (role-filtered) + socket + refresh jobs               | ⏸️ blocked  | high       | F8-S01                 |
+| F8-S03 | Dashboard frontend — DashboardClient + card registry (5 layouts role-aware) + alerts + drill-down   | ⏸️ blocked  | high       | F8-S02                 |
+| F8-S04 | Dashboard customização — layout pessoal (hide/reorder/período) + cards obrigatórios (admin)         | ⏸️ blocked  | medium     | F8-S02, F8-S03, F8-S05 |
+| F8-S05 | Settings panel shell — sidebar 3 níveis + busca Cmd+K + contadores + conteúdo lazy + /settings root | 🟢 available | high       | —                      |
+| F8-S06 | Settings Pessoal — perfil/preferências/senha/sessões/notificações + API                             | ⏸️ blocked  | high       | F8-S05                 |
+| F8-S07 | Settings Workspace (org) — info/marca/membros/departamentos/times/auto-assign/horário/SLAs + API    | ⏸️ blocked  | high       | F8-S01, F8-S05         |
+| F8-S08 | Settings Workspace (dados) — tags CRUD + integração das seções existentes + audit viewer            | ⏸️ blocked  | medium     | F8-S05                 |
+| F8-S09 | Contacts API — list/search/detail/CRUD + tags + histórico de consentimento                          | 🟢 available | high       | —                      |
+| F8-S10 | Frontend ContactsPage (CRM) — lista + detalhe + tags + consentimento + marcar conversão + nav       | ⏸️ blocked  | high       | F8-S09                 |

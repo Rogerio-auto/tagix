@@ -13,6 +13,8 @@ import {
   campaigns,
   channels,
   contacts,
+  dashboardSnapshots,
+  departments,
   eventParticipants,
   events,
   flowExecutions,
@@ -23,6 +25,9 @@ import {
   kbFeedback,
   members,
   plans,
+  slaRules,
+  teamMembers,
+  teams,
   workspaces,
 } from './schema';
 
@@ -538,5 +543,113 @@ describe('RLS Calendar (F7-S01)', () => {
     for (const r of rows) {
       expect(new Date(r.start_at).getTime()).toBeGreaterThanOrEqual(threshold - 1000);
     }
+  });
+});
+
+describe('RLS Org domain (F8-S01)', () => {
+  it('departments/teams/team_members/sla_rules isolam por workspace', async () => {
+    const db = getDb(); // owner bypassa RLS no seed
+    const sfx = randomUUID().slice(0, 8);
+
+    const [depA] = await db
+      .insert(departments)
+      .values({ workspaceId: wsA, name: `Vendas ${sfx}` })
+      .returning();
+    const [depB] = await db
+      .insert(departments)
+      .values({ workspaceId: wsB, name: `Vendas ${sfx}` })
+      .returning();
+    if (!depA || !depB) throw new Error('Falha ao criar departments.');
+
+    const [teamA] = await db
+      .insert(teams)
+      .values({ workspaceId: wsA, departmentId: depA.id, name: `Time A ${sfx}` })
+      .returning();
+    const [teamB] = await db
+      .insert(teams)
+      .values({ workspaceId: wsB, departmentId: depB.id, name: `Time B ${sfx}` })
+      .returning();
+    if (!teamA || !teamB) throw new Error('Falha ao criar teams.');
+
+    await db
+      .insert(teamMembers)
+      .values({ teamId: teamA.id, memberId: memberA, workspaceId: wsA, role: 'lead' });
+
+    const [slaA] = await db
+      .insert(slaRules)
+      .values({ workspaceId: wsA, scopeType: 'workspace', firstResponseSecs: 300 })
+      .returning();
+    if (!slaA) throw new Error('Falha ao criar sla_rule A.');
+
+    // A enxerga somente os proprios; B nao enxerga nada de A.
+    const depsA = await withWorkspace(wsA, (tx) => tx.select().from(departments));
+    expect(depsA.every((d) => d.workspaceId === wsA)).toBe(true);
+    expect(depsA.some((d) => d.id === depB.id)).toBe(false);
+
+    const depsB = await withWorkspace(wsB, (tx) => tx.select().from(departments));
+    expect(depsB.some((d) => d.id === depA.id)).toBe(false);
+
+    const teamsB = await withWorkspace(wsB, (tx) => tx.select().from(teams));
+    expect(teamsB.some((t) => t.id === teamA.id)).toBe(false);
+
+    const tmA = await withWorkspace(wsA, (tx) => tx.select().from(teamMembers));
+    expect(tmA.every((tm) => tm.workspaceId === wsA)).toBe(true);
+    const tmB = await withWorkspace(wsB, (tx) => tx.select().from(teamMembers));
+    expect(tmB.some((tm) => tm.teamId === teamA.id)).toBe(false);
+
+    const slaB = await withWorkspace(wsB, (tx) => tx.select().from(slaRules));
+    expect(slaB.some((s) => s.id === slaA.id)).toBe(false);
+  });
+
+  it('sla_rules: so um default (scope_type=workspace) por workspace', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const [w] = await db
+      .insert(workspaces)
+      .values({ name: `SLA dup ${sfx}`, slug: `sla-dup-${sfx}` })
+      .returning();
+    if (!w) throw new Error('Falha ao criar workspace de SLA.');
+    await db.insert(slaRules).values({ workspaceId: w.id, scopeType: 'workspace', firstResponseSecs: 60 });
+    // Segundo default no mesmo workspace deve violar o partial unique.
+    await expect(
+      db.insert(slaRules).values({ workspaceId: w.id, scopeType: 'workspace', resolutionSecs: 120 }),
+    ).rejects.toThrow();
+    await db.delete(workspaces).where(eq(workspaces.id, w.id));
+  });
+});
+
+describe('RLS Dashboard domain (F8-S01)', () => {
+  it('dashboard_snapshots isola por workspace e faz upsert por (metric, scope)', async () => {
+    const db = getDb();
+    const [snapA] = await db
+      .insert(dashboardSnapshots)
+      .values({ workspaceId: wsA, metricKey: 'minhas_conversas_abertas', scope: {}, value: { count: 3 } })
+      .returning();
+    if (!snapA) throw new Error('Falha ao criar snapshot A.');
+    await db
+      .insert(dashboardSnapshots)
+      .values({ workspaceId: wsB, metricKey: 'minhas_conversas_abertas', scope: {}, value: { count: 9 } });
+
+    const snapsA = await withWorkspace(wsA, (tx) => tx.select().from(dashboardSnapshots));
+    expect(snapsA.every((s) => s.workspaceId === wsA)).toBe(true);
+    expect(snapsA.some((s) => s.metricKey === 'minhas_conversas_abertas')).toBe(true);
+
+    const snapsB = await withWorkspace(wsB, (tx) => tx.select().from(dashboardSnapshots));
+    expect(snapsB.some((s) => s.id === snapA.id)).toBe(false);
+
+    // UNIQUE (workspace, metric, scope) -> segundo insert do mesmo trio falha.
+    await expect(
+      db
+        .insert(dashboardSnapshots)
+        .values({ workspaceId: wsA, metricKey: 'minhas_conversas_abertas', scope: {}, value: { count: 5 } }),
+    ).rejects.toThrow();
+  });
+
+  it('materialized views mv_dashboard_* suportam REFRESH CONCURRENTLY', async () => {
+    const db = getDb();
+    // O UNIQUE index em cada MV habilita CONCURRENTLY; valida que o job (F8-S02) consegue.
+    await db.execute(sql`REFRESH MATERIALIZED VIEW CONCURRENTLY mv_dashboard_volume_24h`);
+    await db.execute(sql`REFRESH MATERIALIZED VIEW CONCURRENTLY mv_dashboard_llm_cost_month`);
+    await db.execute(sql`REFRESH MATERIALIZED VIEW CONCURRENTLY mv_dashboard_conversions_month`);
   });
 });
