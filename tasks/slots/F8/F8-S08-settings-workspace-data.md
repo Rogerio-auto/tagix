@@ -2,7 +2,7 @@
 id: F8-S08
 title: Settings Workspace (dados) — tags CRUD + integração das seções existentes + audit viewer
 phase: F8
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F8-S05]
