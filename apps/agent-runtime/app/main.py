@@ -26,6 +26,7 @@ from app.providers import OpenRouterProvider
 from app.providers.embeddings import EmbeddingsProvider
 from app.routes import run_router
 from app.routes.embed import router as embed_router
+from app.tools.calendar import register_calendar_tools
 from app.tools.registry import build_default_registry
 from app.tools.workflow import register_workflow_tools
 
@@ -45,6 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     http_client = httpx.AsyncClient(timeout=15.0)
     registry = build_default_registry(get_pool(), http_client=http_client)
     register_workflow_tools(registry, http_client)
+    register_calendar_tools(registry, http_client)
     async with lifespan_checkpointer() as checkpointer:
         provider = OpenRouterProvider()
         # Provider de embeddings (OpenAI direto) compartilhado por /internal/embed (F3-S02).
