@@ -2,12 +2,13 @@
 id: F6-S07
 title: Inbound hooks — opt-out por keyword + reply handling (mark responded + AI handoff + followup)
 phase: F6
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F6-S01]
 agent_id: backend-engineer
 claimed_at: 2026-06-11T05:14:50Z
+completed_at: 2026-06-11T05:20:04Z
 
 ---
 # F6-S07 — Inbound hooks de campanha
