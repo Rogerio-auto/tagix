@@ -94,10 +94,11 @@ export const ROLE_CAN = {
   'billing.cancel': OWNER_ONLY,
   'workspace.delete': OWNER_ONLY,
 
-  // §2.8 API keys e webhooks outbound
+  // §2.8 API keys e webhooks outbound (Settings → Dev, F9)
   'apikey.list': ADMINS,
   'apikey.create': ADMINS,
   'apikey.revoke': ADMINS,
+  'webhook.view': ADMINS,
   'webhook.edit': ADMINS,
 } as const satisfies Record<string, readonly Role[]>;
 
