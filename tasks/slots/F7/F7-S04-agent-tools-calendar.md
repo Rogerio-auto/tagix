@@ -2,10 +2,13 @@
 id: F7-S04
 title: Agent tools calendar — list_calendars + get_available_slots + schedule_event (callback Node)
 phase: F7
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on: [F7-S01, F7-S03]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T17:08:11Z
+
 ---
 # F7-S04 — Agent tools de calendar
 
