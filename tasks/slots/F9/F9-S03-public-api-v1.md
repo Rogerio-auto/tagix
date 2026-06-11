@@ -2,12 +2,13 @@
 id: F9-S03
 title: API pública v1 — send_message/template + upsert_contact + trigger_flow + conversations + OpenAPI/Swagger
 phase: F9
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: [F9-S02]
 agent_id: backend-engineer
 claimed_at: 2026-06-11T21:38:54Z
+completed_at: 2026-06-11T21:47:20Z
 
 ---
 # F9-S03 — Public API v1

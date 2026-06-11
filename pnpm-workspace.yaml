@@ -10,3 +10,5 @@ allowBuilds:
   sharp: true
   msw: false
   protobufjs: true
+  # scarf = telemetria de download; não rodar o postinstall (swagger-ui-express → F9).
+  '@scarf/scarf': false
