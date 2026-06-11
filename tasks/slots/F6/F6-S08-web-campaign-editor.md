@@ -2,7 +2,7 @@
 id: F6-S08
 title: Frontend CampaignEditor wizard (6 steps) + template picker + CSV import + send windows editor
 phase: F6
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F6-S03, F6-S04]
