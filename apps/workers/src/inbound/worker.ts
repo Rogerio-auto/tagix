@@ -29,6 +29,10 @@ import { ChannelInboundParser } from './parse';
 import { createStatusDeps } from './status';
 import { DbInboundPersistence, MqInboundFlowEnqueue, MqInboundSocketEmit } from './db-ports';
 import { MqMediaEnqueue } from './mq-ports';
+import {
+  createCampaignInboundPorts,
+  processCampaignInbound,
+} from '../campaigns-inbound/index';
 import type { InboundDeps } from './ports';
 
 /** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
@@ -78,6 +82,8 @@ export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDe
   const statusDeps = createStatusDeps(channel);
   // Hook de trigger dispatch de flows (F4-S13): avalia/dispara flows + resume waiting.
   const triggerDeps = createTriggerDispatchDeps(logger);
+  // Campaigns-inbound (F6-S07): opt-out por keyword + reply handling/handoff/followup.
+  const campaignInboundPorts = createCampaignInboundPorts({ channel, logger });
   const contactMessageHook = {
     async onContactMessage(input: {
       workspaceId: string;
@@ -97,6 +103,27 @@ export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDe
         type: input.type,
         fromContact: true,
       });
+      // So mensagens text com contato resolvido entram no processor de campanhas.
+      if (input.contactId && input.type === 'text') {
+        try {
+          await processCampaignInbound(
+            {
+              workspaceId: input.workspaceId,
+              channelId: input.channelId,
+              contactId: input.contactId,
+              conversationId: input.conversationId,
+              text: input.content,
+            },
+            { ports: campaignInboundPorts, logger },
+          );
+        } catch (err: unknown) {
+          // Falha aqui nao derruba a persistencia inbound.
+          logger.error('inbound: campaign-inbound hook falhou', {
+            conversationId: input.conversationId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
     },
   };
   const persistence = new DbInboundPersistence(
