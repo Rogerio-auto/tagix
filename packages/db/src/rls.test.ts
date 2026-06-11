@@ -4,6 +4,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb } from './client';
 import { withWorkspace } from './rls';
 import {
+  campaignDeliveries,
+  campaignRecipients,
+  campaignSteps,
+  campaigns,
+  channels,
+  contacts,
   flowExecutions,
   flows,
   flowVersions,
@@ -174,3 +180,121 @@ describe('RLS Flow Builder (F4-S01)', () => {
   });
 });
 
+
+describe('RLS Campaigns (F6-S01)', () => {
+  it('campaigns/recipients/deliveries/steps isolam por workspace', async () => {
+    const db = getDb(); // owner bypassa RLS no seed
+    const sfx = randomUUID().slice(0, 8);
+
+    const [chA] = await db
+      .insert(channels)
+      .values({ workspaceId: wsA, provider: 'meta_whatsapp', name: `WA A ${sfx}`, phoneNumberId: `pnid-a-${sfx}`, wabaId: `waba-a-${sfx}` })
+      .returning();
+    const [chB] = await db
+      .insert(channels)
+      .values({ workspaceId: wsB, provider: 'meta_whatsapp', name: `WA B ${sfx}`, phoneNumberId: `pnid-b-${sfx}`, wabaId: `waba-b-${sfx}` })
+      .returning();
+    if (!chA || !chB) throw new Error('Falha ao criar channels.');
+
+    const [ctA] = await db
+      .insert(contacts)
+      .values({ workspaceId: wsA, displayName: 'Lead A', phone: `+551199999${sfx.slice(0, 4)}` })
+      .returning();
+    if (!ctA) throw new Error('Falha ao criar contact A.');
+
+    const [campA] = await db
+      .insert(campaigns)
+      .values({ workspaceId: wsA, channelId: chA.id, name: 'Camp A', type: 'broadcast' })
+      .returning();
+    const [campB] = await db
+      .insert(campaigns)
+      .values({ workspaceId: wsB, channelId: chB.id, name: 'Camp B', type: 'broadcast' })
+      .returning();
+    if (!campA || !campB) throw new Error('Falha ao criar campaigns.');
+
+    const [stepA] = await db
+      .insert(campaignSteps)
+      .values({ campaignId: campA.id, position: 0, templateName: 'hello_world' })
+      .returning();
+    if (!stepA) throw new Error('Falha ao criar campaign_step A.');
+
+    const [recA] = await db
+      .insert(campaignRecipients)
+      .values({ workspaceId: wsA, campaignId: campA.id, contactId: ctA.id })
+      .returning();
+    if (!recA) throw new Error('Falha ao criar campaign_recipient A.');
+
+    await db.insert(campaignDeliveries).values({
+      workspaceId: wsA,
+      campaignId: campA.id,
+      recipientId: recA.id,
+      stepId: stepA.id,
+      idempotencyKey: `key-${sfx}`,
+    });
+
+    // A enxerga somente os proprios; B nao enxerga nada de A.
+    const campsA = await withWorkspace(wsA, (tx) => tx.select().from(campaigns));
+    expect(campsA.every((c) => c.workspaceId === wsA)).toBe(true);
+    expect(campsA.some((c) => c.id === campB.id)).toBe(false);
+
+    const campsB = await withWorkspace(wsB, (tx) => tx.select().from(campaigns));
+    expect(campsB.some((c) => c.id === campA.id)).toBe(false);
+
+    const recsB = await withWorkspace(wsB, (tx) => tx.select().from(campaignRecipients));
+    expect(recsB.some((r) => r.id === recA.id)).toBe(false);
+
+    const delsB = await withWorkspace(wsB, (tx) => tx.select().from(campaignDeliveries));
+    expect(delsB.some((d) => d.campaignId === campA.id)).toBe(false);
+
+    // campaign_steps nao tem workspace_id -> isolado via subquery em campaigns.
+    const stepsA = await withWorkspace(wsA, (tx) => tx.select().from(campaignSteps));
+    expect(stepsA.some((st) => st.id === stepA.id)).toBe(true);
+    const stepsB = await withWorkspace(wsB, (tx) => tx.select().from(campaignSteps));
+    expect(stepsB.some((st) => st.id === stepA.id)).toBe(false);
+  });
+
+  it('idempotency_key e UNIQUE — segundo insert do mesmo key falha', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const [ch] = await db
+      .insert(channels)
+      .values({ workspaceId: wsA, provider: 'meta_whatsapp', name: `WA idem ${sfx}`, phoneNumberId: `pnid-i-${sfx}`, wabaId: `waba-i-${sfx}` })
+      .returning();
+    const [ct] = await db
+      .insert(contacts)
+      .values({ workspaceId: wsA, displayName: 'Lead idem', phone: `+5511988${sfx.slice(0, 4)}` })
+      .returning();
+    if (!ch || !ct) throw new Error('setup');
+    const [camp] = await db
+      .insert(campaigns)
+      .values({ workspaceId: wsA, channelId: ch.id, name: 'Camp idem', type: 'broadcast' })
+      .returning();
+    if (!camp) throw new Error('setup camp');
+    const [step] = await db
+      .insert(campaignSteps)
+      .values({ campaignId: camp.id, position: 0, templateName: 'hello_world' })
+      .returning();
+    const [rec] = await db
+      .insert(campaignRecipients)
+      .values({ workspaceId: wsA, campaignId: camp.id, contactId: ct.id })
+      .returning();
+    if (!step || !rec) throw new Error('setup step/rec');
+    const key = `idem-${sfx}`;
+    await db.insert(campaignDeliveries).values({
+      workspaceId: wsA,
+      campaignId: camp.id,
+      recipientId: rec.id,
+      stepId: step.id,
+      idempotencyKey: key,
+    });
+    await expect(
+      db.insert(campaignDeliveries).values({
+        workspaceId: wsA,
+        campaignId: camp.id,
+        recipientId: rec.id,
+        stepId: step.id,
+        idempotencyKey: key,
+      }),
+    ).rejects.toThrow();
+  });
+});

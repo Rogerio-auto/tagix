@@ -197,6 +197,20 @@
       "when": 1781130362574,
       "tag": "0027_contact_tags_conversion_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1781152909825,
+      "tag": "0028_strong_riptide",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1781152954868,
+      "tag": "0029_campaigns_rls",
+      "breakpoints": true
     }
   ]
 }

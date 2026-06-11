@@ -248,6 +248,13 @@ export * from './pipeline';
 // conversion_types/conversion_events/conversion_tag_triggers (workspace-scoped).
 export * from './conversions';
 
+// --- Campaigns domain (DATA_MODEL 11 + CAMPAIGNS.md 8.4) ---
+// campaigns + steps/recipients/deliveries/metrics/followups + scheduled_followups.
+// Todas workspace-scoped (RLS direto), EXCETO campaign_steps/campaign_followups que
+// nao tem workspace_id proprio -> isoladas via subquery em campaigns (migration RLS).
+// campaign_deliveries.idempotency_key UNIQUE = sha256(campaign:recipient:step).
+export * from './campaigns';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -296,4 +303,11 @@ export const RLS_TABLES = [
   'conversion_types',
   'conversion_events',
   'conversion_tag_triggers',
+  // Campaigns domain (workspace-scoped). campaign_steps/campaign_followups sem
+  // workspace_id proprio: isoladas via subquery em campaigns (migration dedicada).
+  'campaigns',
+  'campaign_recipients',
+  'campaign_deliveries',
+  'campaign_metrics',
+  'scheduled_followups',
 ] as const;
