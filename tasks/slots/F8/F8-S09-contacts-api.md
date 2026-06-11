@@ -2,10 +2,14 @@
 id: F8-S09
 title: Contacts API — list/search/detail/CRUD + tags + histórico de consentimento
 phase: F8
-status: available
+status: review
 priority: high
 estimated_size: M
 depends_on: []
+agent_id: backend-engineer
+claimed_at: 2026-06-11T19:59:27Z
+completed_at: 2026-06-11T20:02:40Z
+
 ---
 # F8-S09 — Contacts API
 
