@@ -15,7 +15,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F7   | 7     | 0   | 4   | 0   | 0   | 0   | 3   |
+| F7   | 7     | 0   | 3   | 0   | 0   | 1   | 3   |
 
 ## Fase 0 — Fundação
 
@@ -171,4 +171,4 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F7-S04 | Agent tools calendar — list_calendars + get_available_slots + schedule_event (callback Node)                  | ⏸️ blocked | medium     | F7-S01, F7-S03 |
 | F7-S05 | Event reminders cron — scheduler 5min + notification + outbound WhatsApp opcional                             | ⏸️ blocked | medium     | F7-S01, F7-S03 |
 | F7-S06 | Frontend CalendarPage (FullCalendar month/week/day) + EventForm + nav Agenda                                  | ⏸️ blocked | high       | F7-S02, F7-S03 |
-| F7-S07 | Frontend AvailabilityRulesPage (settings → calendar) + exceções                                               | ⏸️ blocked | medium     | F7-S02         |
+| F7-S07 | Frontend AvailabilityRulesPage (settings → calendar) + exceções                                               | 🟣 review   | medium     | F7-S02         |
