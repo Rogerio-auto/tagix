@@ -2,10 +2,14 @@
 id: F7-S02
 title: API calendars + availability (rules/exceptions) + slots endpoint + permissões calendar.*
 phase: F7
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F7-S01]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T16:50:31Z
+completed_at: 2026-06-11T16:54:37Z
+
 ---
 # F7-S02 — API calendars + availability
 
