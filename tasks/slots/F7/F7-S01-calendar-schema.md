@@ -2,7 +2,7 @@
 id: F7-S01
 title: Schema Calendar (calendars/availability_rules/exceptions/events/participants) + compute_available_slots + RLS
 phase: F7
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: []
