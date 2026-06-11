@@ -24,6 +24,8 @@ import {
   kbDocuments,
   kbFeedback,
   members,
+  outboundWebhookDeliveries,
+  outboundWebhooks,
   plans,
   slaRules,
   teamMembers,
@@ -651,5 +653,96 @@ describe('RLS Dashboard domain (F8-S01)', () => {
     await db.execute(sql`REFRESH MATERIALIZED VIEW CONCURRENTLY mv_dashboard_volume_24h`);
     await db.execute(sql`REFRESH MATERIALIZED VIEW CONCURRENTLY mv_dashboard_llm_cost_month`);
     await db.execute(sql`REFRESH MATERIALIZED VIEW CONCURRENTLY mv_dashboard_conversions_month`);
+  });
+});
+
+describe('RLS Outbound webhooks (F9-S01)', () => {
+  it('outbound_webhooks e outbound_webhook_deliveries isolam por workspace', async () => {
+    const db = getDb(); // owner bypassa RLS no seed
+    const sfx = randomUUID().slice(0, 8);
+
+    const [whA] = await db
+      .insert(outboundWebhooks)
+      .values({
+        workspaceId: wsA,
+        name: `Hook A ${sfx}`,
+        url: 'https://example.test/a',
+        secretEnc: 'enc:a',
+        events: ['message.received'],
+      })
+      .returning();
+    const [whB] = await db
+      .insert(outboundWebhooks)
+      .values({
+        workspaceId: wsB,
+        name: `Hook B ${sfx}`,
+        url: 'https://example.test/b',
+        secretEnc: 'enc:b',
+        events: ['message.sent'],
+      })
+      .returning();
+    if (!whA || !whB) throw new Error('Falha ao criar outbound_webhooks.');
+
+    const [delA] = await db
+      .insert(outboundWebhookDeliveries)
+      .values({
+        webhookId: whA.id,
+        workspaceId: wsA,
+        event: 'message.received',
+        payload: { hello: 'world' },
+        nextAttemptAt: new Date(),
+      })
+      .returning();
+    if (!delA) throw new Error('Falha ao criar outbound_webhook_delivery A.');
+
+    // A enxerga somente os próprios; B não enxerga nada de A.
+    const hooksA = await withWorkspace(wsA, (tx) => tx.select().from(outboundWebhooks));
+    expect(hooksA.every((h) => h.workspaceId === wsA)).toBe(true);
+    expect(hooksA.some((h) => h.id === whB.id)).toBe(false);
+
+    const hooksB = await withWorkspace(wsB, (tx) => tx.select().from(outboundWebhooks));
+    expect(hooksB.some((h) => h.id === whA.id)).toBe(false);
+
+    const delsA = await withWorkspace(wsA, (tx) => tx.select().from(outboundWebhookDeliveries));
+    expect(delsA.every((d) => d.workspaceId === wsA)).toBe(true);
+    expect(delsA.some((d) => d.id === delA.id)).toBe(true);
+
+    const delsB = await withWorkspace(wsB, (tx) => tx.select().from(outboundWebhookDeliveries));
+    expect(delsB.some((d) => d.id === delA.id)).toBe(false);
+
+    // INSERT cross-tenant via app é barrado pelo WITH CHECK (workspace_id de B sob A).
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.insert(outboundWebhooks).values({
+          workspaceId: wsB,
+          name: 'cross',
+          url: 'https://example.test/x',
+          secretEnc: 'enc:x',
+          events: ['message.received'],
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('status CHECK rejeita valor fora do domínio', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const [wh] = await db
+      .insert(outboundWebhooks)
+      .values({
+        workspaceId: wsA,
+        name: `Hook chk ${sfx}`,
+        url: 'https://example.test/chk',
+        secretEnc: 'enc:chk',
+        events: ['message.received'],
+      })
+      .returning();
+    if (!wh) throw new Error('setup webhook');
+    await expect(
+      db.execute(sql`
+        INSERT INTO outbound_webhook_deliveries (webhook_id, workspace_id, event, payload, status)
+        VALUES (${wh.id}::uuid, ${wsA}::uuid, 'message.received', '{}'::jsonb, 'bogus')
+      `),
+    ).rejects.toThrow();
   });
 });

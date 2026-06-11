@@ -2,12 +2,13 @@
 id: F9-S01
 title: Schema outbound_webhooks + outbound_webhook_deliveries (+ verificar api_keys) + RLS
 phase: F9
-status: in-progress
+status: review
 priority: critical
 estimated_size: S
 depends_on: []
 agent_id: backend-engineer
 claimed_at: 2026-06-11T21:28:24Z
+completed_at: 2026-06-11T21:31:04Z
 
 ---
 # F9-S01 — Schema webhooks outbound

@@ -138,7 +138,10 @@ export const apiKeys = pgTable(
     createdAt: ts('created_at').notNull().defaultNow(),
     revokedAt: ts('revoked_at'),
   },
-  (t) => [index('idx_api_keys_workspace').on(t.workspaceId)],
+  (t) => [
+    // §3.3: índice parcial só de chaves ativas (lookup/listagem ignora revogadas).
+    index('idx_api_keys_workspace').on(t.workspaceId).where(sql`${t.isActive} = true`),
+  ],
 );
 
 // ─── Billing: subscriptions (§13.2) ──────────────────────────────────────────
@@ -274,6 +277,11 @@ export * from './org';
 // materialized views mv_dashboard_* ficam na migration custom (Drizzle não modela MV).
 export * from './dashboard';
 
+// --- Outbound webhooks domain (F9-S01: DATA_MODEL §14.3) ---
+// outbound_webhooks (assinaturas, secret_enc AES-256-GCM) + outbound_webhook_deliveries
+// (fila durável com retry). Ambas workspace-scoped (RLS direto).
+export * from './webhooks';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -342,4 +350,7 @@ export const RLS_TABLES = [
   'sla_rules',
   // Dashboard domain (workspace-scoped).
   'dashboard_snapshots',
+  // Outbound webhooks domain (workspace-scoped). Ambas com workspace_id próprio.
+  'outbound_webhooks',
+  'outbound_webhook_deliveries',
 ] as const;
