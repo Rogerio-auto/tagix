@@ -2,7 +2,7 @@
 id: F8-S09
 title: Contacts API — list/search/detail/CRUD + tags + histórico de consentimento
 phase: F8
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []

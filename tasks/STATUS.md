@@ -16,7 +16,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F8   | 10     | 0   | 5   | 0   | 0   | 1   | 4   |
+| F8   | 10     | 0   | 5   | 0   | 0   | 0   | 5   |
 
 ## Fase 0 — Fundação
 
@@ -186,5 +186,5 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F8-S06 | Settings Pessoal — perfil/preferências/senha/sessões/notificações + API                             | ⏸️ blocked | high       | F8-S05                 |
 | F8-S07 | Settings Workspace (org) — info/marca/membros/departamentos/times/auto-assign/horário/SLAs + API    | ⏸️ blocked | high       | F8-S01, F8-S05         |
 | F8-S08 | Settings Workspace (dados) — tags CRUD + integração das seções existentes + audit viewer            | ⏸️ blocked | medium     | F8-S05                 |
-| F8-S09 | Contacts API — list/search/detail/CRUD + tags + histórico de consentimento                          | 🟣 review   | high       | —                      |
+| F8-S09 | Contacts API — list/search/detail/CRUD + tags + histórico de consentimento                          | ✅ done     | high       | —                      |
 | F8-S10 | Frontend ContactsPage (CRM) — lista + detalhe + tags + consentimento + marcar conversão + nav       | ⏸️ blocked | high       | F8-S09                 |
