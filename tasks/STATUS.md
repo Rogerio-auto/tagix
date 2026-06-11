@@ -14,7 +14,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F6   | 9     | 0   | 1   | 0   | 0   | 1   | 7   |
+| F6   | 9     | 0   | 1   | 0   | 0   | 0   | 8   |
 
 ## Fase 0 — Fundação
 
@@ -158,4 +158,4 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F6-S06 | Followup processor — scheduled_followups persistente + tick (não setTimeout)                    | ✅ done     | medium     | F6-S01, F6-S05 |
 | F6-S07 | Inbound hooks — opt-out por keyword + reply handling (mark responded + AI handoff + followup)   | ✅ done     | high       | F6-S01         |
 | F6-S08 | Frontend CampaignEditor wizard (6 steps) + template picker + CSV import + send windows editor   | ⏸️ blocked | high       | F6-S03, F6-S04 |
-| F6-S09 | Frontend CampaignsPage + monitoring real-time + health badge                                    | 🟣 review   | high       | F6-S03         |
+| F6-S09 | Frontend CampaignsPage + monitoring real-time + health badge                                    | ✅ done     | high       | F6-S03         |

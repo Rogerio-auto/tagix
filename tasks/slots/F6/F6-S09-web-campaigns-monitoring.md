@@ -2,7 +2,7 @@
 id: F6-S09
 title: Frontend CampaignsPage + monitoring real-time + health badge
 phase: F6
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F6-S03]
