@@ -2,12 +2,13 @@
 id: F6-S08
 title: Frontend CampaignEditor wizard (6 steps) + template picker + CSV import + send windows editor
 phase: F6
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: [F6-S03, F6-S04]
 agent_id: backend-engineer
 claimed_at: 2026-06-11T05:31:22Z
+completed_at: 2026-06-11T05:36:19Z
 
 ---
 # F6-S08 — CampaignEditor (web)
