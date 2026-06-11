@@ -2,7 +2,7 @@
 id: F7-S02
 title: API calendars + availability (rules/exceptions) + slots endpoint + permissões calendar.*
 phase: F7
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F7-S01]
