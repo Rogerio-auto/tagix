@@ -2,7 +2,7 @@
 id: F8-S02
 title: Dashboard metrics service + API /dashboard/me (role-filtered) + socket + refresh jobs
 phase: F8
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F8-S01]
