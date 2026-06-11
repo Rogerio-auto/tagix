@@ -11,6 +11,7 @@ import {
   Megaphone,
   MessagesSquare,
   Settings,
+  Users,
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
@@ -36,7 +37,7 @@ const NAV: readonly NavItem[] = [
   { href: '/flows', label: 'Flows', icon: Workflow, perm: 'flow.list' },
   { href: '/campaigns', label: 'Campanhas', icon: Megaphone, perm: 'campaign.list' },
   { href: '/calendar', label: 'Agenda', icon: Calendar, perm: 'calendar.view' },
-  // Contatos (/contacts) sai do nav até ser construído (F8) — não exibir 404.
+  { href: '/contacts', label: 'Contatos', icon: Users, perm: 'contact.view' },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
