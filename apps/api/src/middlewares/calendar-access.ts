@@ -22,14 +22,6 @@ const { calendars } = schema;
 
 type CalendarRow = typeof calendars.$inferSelect;
 
-declare global {
-  namespace Express {
-    interface Request {
-      calendar?: CalendarRow;
-    }
-  }
-}
-
 const MANAGER_ROLES: ReadonlySet<Role> = new Set(['OWNER', 'ADMIN', 'SUPERVISOR']);
 const ADMIN_ROLES: ReadonlySet<Role> = new Set(['OWNER', 'ADMIN']);
 
