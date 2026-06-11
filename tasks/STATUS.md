@@ -14,7 +14,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F6   | 9     | 1   | 7   | 0   | 0   | 1   | 0   |
+| F6   | 9     | 1   | 7   | 0   | 0   | 0   | 1   |
 
 ## Fase 0 — Fundação
 
@@ -150,7 +150,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID     | Titulo                                                                                          | Status      | Prioridade | Depende de     |
 | ------ | ----------------------------------------------------------------------------------------------- | ----------- | ---------- | -------------- |
-| F6-S01 | Schema campaigns (+ steps/recipients/deliveries/metrics/followups + scheduled_followups) + RLS  | 🟣 review    | critical   | —              |
+| F6-S01 | Schema campaigns (+ steps/recipients/deliveries/metrics/followups + scheduled_followups) + RLS  | ✅ done      | critical   | —              |
 | F6-S02 | Meta error codes map + channel quality/template helpers (packages/channels)                     | 🟢 available | high       | —              |
 | F6-S03 | API campaigns — CRUD + validate (pre-flight) + activate/pause/resume + metrics/deliveries       | ⏸️ blocked  | high       | F6-S01, F6-S02 |
 | F6-S04 | API recipients (bulk CSV + bulk opt-in) + opt-in/opt-out de contato                             | ⏸️ blocked  | high       | F6-S01         |

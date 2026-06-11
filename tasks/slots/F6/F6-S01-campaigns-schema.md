@@ -2,7 +2,7 @@
 id: F6-S01
 title: Schema campaigns (+ steps/recipients/deliveries/metrics/followups + scheduled_followups) + RLS
 phase: F6
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: []
