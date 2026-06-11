@@ -2,12 +2,13 @@
 id: F6-S09
 title: Frontend CampaignsPage + monitoring real-time + health badge
 phase: F6
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F6-S03]
 agent_id: backend-engineer
 claimed_at: 2026-06-11T05:27:12Z
+completed_at: 2026-06-11T05:31:13Z
 
 ---
 # F6-S09 — CampaignsPage + monitoring (web)
