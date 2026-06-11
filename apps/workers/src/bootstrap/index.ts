@@ -20,7 +20,7 @@
 import Redis from 'ioredis';
 import { and, eq } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
-import { assertTopology, connectMq, type MqHandle } from '@hm/shared/mq';
+import { assertTopology, connectMq, consume, QUEUES, type Envelope, type MqHandle } from '@hm/shared/mq';
 import { createLogger, type Logger } from '@hm/logger';
 import { createInboundDeps, startInboundWorker, type InboundWorkerHandle } from '../inbound/index';
 import {
@@ -57,6 +57,11 @@ import {
 } from '../flows/index';
 import { startCampaignWorker, type CampaignSchedulerHandle } from '../campaigns/index';
 import {
+  startFollowupProcessor,
+  type FollowupEvent,
+  type FollowupSchedulerHandle as CampaignFollowupSchedulerHandle,
+} from '../campaigns/followups';
+import {
   createActionExecutor,
   startAutomationWorker,
   startStaleScheduler,
@@ -91,6 +96,7 @@ export interface WorkersBootstrapHandle {
   readonly flow: FlowWorkerHandle;
   readonly flowScheduler: FlowSchedulerHandle;
   readonly campaignWorker: CampaignSchedulerHandle;
+  readonly followupProcessor: { handle: CampaignFollowupSchedulerHandle };
   readonly automationWorker: AutomationWorkerHandle;
   stop(): Promise<void>;
 }
@@ -163,6 +169,21 @@ export async function startWorkers(
   // Worker-campaigns (F6-S05): tick 1min que conduz o envio das campanhas RUNNING
   // (lock por campanha + dispatch idempotente + rate adaptativo + auto-pause RED).
   const campaignWorker = startCampaignWorker({ channel, redis, logger });
+  // Followup processor (F6-S06): drain scheduler de scheduled_followups (duravel)
+  // + consumer de hm.q.campaigns que materializa campaign.followup -> scheduled_followups.
+  const followupProcessor = startFollowupProcessor({ channel, redis, logger });
+  const campaignFollowupConsumer = await connectMq();
+  await consume(campaignFollowupConsumer.channel, QUEUES.campaigns, async (envelope: Envelope) => {
+    if (envelope.type !== 'campaign.followup') return;
+    const p = envelope.payload as Partial<FollowupEvent>;
+    if (!p.campaignId || !p.recipientId || !p.event) return;
+    await followupProcessor.ports.scheduleFollowup({
+      workspaceId: envelope.workspaceId,
+      campaignId: p.campaignId,
+      recipientId: p.recipientId,
+      event: p.event,
+    });
+  });
   // Motor de automacoes de stage (F5-S06): drainer de pending_automations + cron
   // on_stale. As portas de action (add_tag/register_conversion/trigger_flow) sao
   // preenchidas conforme F5-S14/S16/flow-engine; actions sem porta vao a retry/failed.
@@ -267,6 +288,7 @@ export async function startWorkers(
       'flow',
       'flow-wakeup-scheduler',
       'campaign-scheduler',
+      'campaign-followup-processor',
       'automation-worker',
       'automation-stale-scheduler',
     ],
@@ -282,12 +304,15 @@ export async function startWorkers(
     flow,
     flowScheduler,
     campaignWorker,
+    followupProcessor,
     automationWorker,
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
       clearInterval(metricsTimer);
       await flowScheduler.stop();
       await campaignWorker.stop();
+      await followupProcessor.handle.stop();
+      await campaignFollowupConsumer.connection.close();
       await staleScheduler.stop();
       await automationWorker.stop();
       await flow.stop();
