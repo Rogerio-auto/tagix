@@ -2,7 +2,7 @@
 id: F7-S04
 title: Agent tools calendar — list_calendars + get_available_slots + schedule_event (callback Node)
 phase: F7
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F7-S01, F7-S03]
