@@ -1,14 +1,13 @@
-import { PageHeader } from '@/shared/components/layout/PageHeader';
+import { DashboardClient } from '@/features/dashboard';
 
+export const metadata = { title: 'Dashboard' };
+
+/**
+ * Dashboard root (F8-S03 / DASHBOARD.md §9.1). Server Component fino que renderiza
+ * o shell client `DashboardClient` — este carrega `/dashboard/me` (cards/alerts já
+ * filtrados por role pelo servidor), hidrata e escuta o socket. Server-driven: a
+ * página nunca decide visibilidade por role.
+ */
 export default function DashboardPage() {
-  return (
-    <>
-      <PageHeader title="Dashboard" />
-      <div className="rounded-lg border border-border bg-surface p-8">
-        <p className="font-body text-text-mid">
-          Bem-vindo ao Highermind. As métricas do workspace aparecem aqui.
-        </p>
-      </div>
-    </>
-  );
+  return <DashboardClient />;
 }
