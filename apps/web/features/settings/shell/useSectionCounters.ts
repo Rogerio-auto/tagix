@@ -46,10 +46,27 @@ export function useSectionCounters(): Record<string, CounterState | null> {
     staleTime: 60_000,
   });
 
+  // F8-S08: contadores de tags + membros (endpoints reais agora existem).
+  const tags = useQuery({
+    queryKey: ['settings-counter', 'tags'],
+    queryFn: () => api.get<{ tags: unknown[] }>('/api/tags'),
+    retry: false,
+    staleTime: 60_000,
+  });
+
+  const members = useQuery({
+    queryKey: ['settings-counter', 'members'],
+    queryFn: () => api.get<{ members: unknown[] }>('/api/members'),
+    retry: false,
+    staleTime: 60_000,
+  });
+
   return {
     canais: channels.data ? channelsCounter(channels.data.channels) : null,
     conversoes: conversionTypes.data
       ? { label: `${conversionTypes.data.conversionTypes.length} tipos` }
       : null,
+    tags: tags.data ? { label: `${tags.data.tags.length}` } : null,
+    membros: members.data ? { label: `${members.data.members.length}` } : null,
   };
 }

@@ -218,7 +218,7 @@ const WORKSPACE: SettingsSection[] = [
     description: 'Criar, editar, cor.',
     keywords: ['tags', 'etiquetas', 'rótulos'],
     permission: 'team.edit',
-    component: stub('tags', 'Tags'),
+    component: lazy(() => import('../sections/workspace-data/TagsManager')),
   },
   {
     id: 'slas',
@@ -236,7 +236,36 @@ const WORKSPACE: SettingsSection[] = [
     description: 'Logs de ações administrativas.',
     keywords: ['auditoria', 'audit', 'logs', 'histórico'],
     permission: 'workspace.edit',
-    component: stub('auditoria', 'Auditoria'),
+    component: lazy(() => import('../sections/workspace-data/AuditLogViewer')),
+  },
+  // Integração das features já construídas (F8-S08): deep-links para as páginas
+  // dedicadas (não reconstruídas dentro do shell). Canais/Conversões já existem acima.
+  {
+    id: 'agentes',
+    group: 'workspace',
+    label: 'Agentes IA',
+    description: 'Gerenciar agentes, tools, modelos e playground.',
+    keywords: ['agentes', 'ia', 'ai', 'bot', 'langgraph', 'tools', 'modelo'],
+    permission: 'agent.list',
+    externalHref: '/agents',
+  },
+  {
+    id: 'conhecimento',
+    group: 'workspace',
+    label: 'Knowledge Base',
+    description: 'Documentos e fontes de conhecimento dos agentes.',
+    keywords: ['conhecimento', 'kb', 'knowledge', 'documentos', 'rag'],
+    permission: 'kb.edit',
+    externalHref: '/knowledge',
+  },
+  {
+    id: 'pipeline-settings',
+    group: 'workspace',
+    label: 'Pipeline',
+    description: 'Funis, estágios e automações de pipeline.',
+    keywords: ['pipeline', 'funil', 'estágios', 'deals', 'vendas'],
+    permission: 'pipeline.edit',
+    externalHref: '/pipeline/settings',
   },
 ];
 

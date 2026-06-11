@@ -35,6 +35,8 @@ import { createDashboardRouter } from './routes/dashboard';
 import { createMembersMeRouter } from './routes/members/me';
 import { createWorkspaceSettingsRouter } from './routes/workspace';
 import { createOrgSettingsRouter } from './routes/org';
+import { createTagsRouter } from './routes/tags';
+import { createAuditRouter } from './routes/audit';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
@@ -100,6 +102,9 @@ export function createApp(): Express {
   // Settings workspace (F8-S07): PATCH /workspace + membros + org (depts/teams/SLA).
   app.use(createWorkspaceSettingsRouter());
   app.use(createOrgSettingsRouter());
+  // Settings dados (F8-S08): tags CRUD + audit viewer.
+  app.use(createTagsRouter());
+  app.use(createAuditRouter());
 
   // Error handler por último (Express 5 captura erros de handlers async).
   app.use(errorHandler);
