@@ -2,7 +2,7 @@
 id: F9-S06
 title: Frontend Settings → Dev — API keys (show-once) + webhooks + delivery log
 phase: F9
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F9-S04]

@@ -259,6 +259,16 @@ const WORKSPACE: SettingsSection[] = [
     permission: 'pipeline.edit',
     externalHref: '/pipeline/settings',
   },
+  // Dev (F9-S06): API keys da API pública + webhooks outbound + delivery log.
+  {
+    id: 'dev',
+    group: 'workspace',
+    label: 'Dev',
+    description: 'API keys da API pública, webhooks outbound e documentação.',
+    keywords: ['dev', 'api', 'key', 'token', 'webhook', 'webhooks', 'integração', 'swagger', 'openapi'],
+    permission: 'apikey.list',
+    component: lazy(() => import('../sections/dev/DevSection')),
+  },
 ];
 
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [...PESSOAL, ...WORKSPACE];
