@@ -2,12 +2,13 @@
 id: F7-S06
 title: Frontend CalendarPage (FullCalendar month/week/day) + EventForm + nav Agenda
 phase: F7
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: [F7-S02, F7-S03]
 agent_id: backend-engineer
 claimed_at: 2026-06-11T17:25:50Z
+completed_at: 2026-06-11T17:31:33Z
 
 ---
 # F7-S06 — CalendarPage (web)
