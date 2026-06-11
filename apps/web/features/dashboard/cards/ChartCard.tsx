@@ -1,0 +1,106 @@
+'use client';
+
+/**
+ * Card de gráfico (DASHBOARD §3.2/§3.3 — tendências). Renderiza a série do `value`
+ * com recharts (lib leve). Clicar abre o drawer de drill-down (série completa) —
+ * nunca modal full-screen (§4). Para AGENT não há ChartCard (server não envia §10).
+ *
+ * Suporta duas formas de value:
+ *  - `{ series: [{ bucket_hour, direction, message_count }] }` (volume 24h).
+ *  - `{ byType: [{ conversion_type_id, conversion_count }] }` (conversões por tipo).
+ */
+import { useMemo } from 'react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { cn } from '@/shared/lib/cn';
+import type { DashboardCard } from '../types';
+
+interface SeriesPoint {
+  label: string;
+  value: number;
+}
+
+function toPoints(card: DashboardCard): SeriesPoint[] {
+  const v = card.value;
+  if (!v) return [];
+  // volume 24h: agrega por hora; direção embutida no metric_key (inbound/outbound).
+  const series = v['series'];
+  if (Array.isArray(series)) {
+    const wantOutbound = card.key.includes('outbound');
+    return series
+      .filter((p): p is Record<string, unknown> => typeof p === 'object' && p !== null)
+      .filter((p) => (p['direction'] === 'outbound') === wantOutbound)
+      .map((p) => ({
+        label: typeof p['bucket_hour'] === 'string' ? p['bucket_hour'].slice(11, 16) : '',
+        value: typeof p['message_count'] === 'number' ? p['message_count'] : Number(p['message_count'] ?? 0),
+      }));
+  }
+  // conversões por tipo.
+  const byType = v['byType'];
+  if (Array.isArray(byType)) {
+    return byType
+      .filter((p): p is Record<string, unknown> => typeof p === 'object' && p !== null)
+      .map((p, i) => ({
+        label: `Tipo ${i + 1}`,
+        value:
+          typeof p['conversion_count'] === 'number'
+            ? p['conversion_count']
+            : Number(p['conversion_count'] ?? 0),
+      }));
+  }
+  return [];
+}
+
+interface ChartCardProps {
+  card: DashboardCard;
+  onDrill?: (card: DashboardCard) => void;
+}
+
+export function ChartCard({ card, onDrill }: ChartCardProps) {
+  const points = useMemo(() => toPoints(card), [card]);
+
+  return (
+    <button
+      type="button"
+      onClick={onDrill ? () => onDrill(card) : undefined}
+      className={cn(
+        'col-span-2 flex h-full flex-col rounded-lg border border-border bg-surface p-5 text-left transition-colors',
+        onDrill && 'hover:border-border-brand',
+      )}
+    >
+      <span className="font-body text-xs uppercase tracking-wide text-text-low">{card.label}</span>
+      <div className="mt-4 h-40 w-full">
+        {points.length === 0 ? (
+          <div className="flex h-full items-center justify-center font-body text-sm text-text-low">
+            Sem dados no período.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={points} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: 'var(--text-low)', fontSize: 11 }} />
+              <YAxis tick={{ fill: 'var(--text-low)', fontSize: 11 }} allowDecimals={false} />
+              <Tooltip
+                cursor={{ fill: 'var(--surface-2)' }}
+                contentStyle={{
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  color: 'var(--text)',
+                }}
+              />
+              <Bar dataKey="value" fill="var(--brand)" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </button>
+  );
+}
