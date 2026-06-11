@@ -2,7 +2,7 @@
 id: F6-S04
 title: API recipients (bulk CSV + bulk opt-in) + opt-in/opt-out de contato
 phase: F6
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F6-S01]
