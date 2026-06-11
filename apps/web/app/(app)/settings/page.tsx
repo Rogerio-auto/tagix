@@ -1,10 +1,17 @@
-import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
+import { SettingsPanel } from '@/features/settings/shell';
+
+export const metadata = { title: 'Configurações' };
 
 /**
- * `/settings` ainda não tem um índice próprio (o painel completo de settings é a
- * F8). Por ora redireciona para a primeira seção real, evitando 404 no item
- * "Configurações" do nav.
+ * Painel de configurações (F8-S05 / PERMISSIONS.md §5). Substitui o antigo redirect:
+ * `/settings` abre o painel 2-colunas (sidebar agrupada + conteúdo lazy da seção).
+ * `SettingsPanel` lê `?s=` via useSearchParams → exige Suspense boundary (Next 15).
  */
-export default function SettingsIndexPage() {
-  redirect('/settings/channels');
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsPanel />
+    </Suspense>
+  );
 }

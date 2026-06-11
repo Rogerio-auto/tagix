@@ -2,12 +2,13 @@
 id: F8-S05
 title: Settings panel shell — sidebar 3 níveis + busca Cmd+K + contadores + conteúdo lazy + /settings root
 phase: F8
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: []
 agent_id: backend-engineer
 claimed_at: 2026-06-11T19:41:35Z
+completed_at: 2026-06-11T19:46:18Z
 
 ---
 # F8-S05 — Settings panel shell
