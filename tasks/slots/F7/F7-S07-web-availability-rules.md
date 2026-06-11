@@ -2,7 +2,7 @@
 id: F7-S07
 title: Frontend AvailabilityRulesPage (settings → calendar) + exceções
 phase: F7
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F7-S02]
