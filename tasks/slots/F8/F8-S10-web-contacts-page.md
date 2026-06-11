@@ -2,7 +2,7 @@
 id: F8-S10
 title: Frontend ContactsPage (CRM) — lista + detalhe + tags + consentimento + marcar conversão + nav
 phase: F8
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F8-S09]
