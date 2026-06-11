@@ -110,6 +110,21 @@ export interface PipelineUpdatedPayload {
 }
 
 /**
+ * Dashboard realtime (F8-S02 / DASHBOARD.md §5/§8). O servidor reemite o estado
+ * operacional (minhas/fila/IA rodando) quando muda. `scope` carrega o recorte
+ * (`{ memberId }` p/ métrica pessoal, `{ teamId }`/`{ departmentId }` p/ supervisão);
+ * o client invalida a query do dashboard se o evento for relevante ao seu role/escopo.
+ * Filtragem por role é server-side (§8): o relay entrega à room do workspace e o
+ * client só reage a métricas do seu conjunto — nunca expõe dado fora do role.
+ */
+export interface DashboardMetricChangedPayload {
+  workspaceId: string;
+  metricKey: string;
+  scope: Record<string, string>;
+  newValue: Record<string, unknown>;
+}
+
+/**
  * Eventos emitidos do servidor para o client. Cada entrada mapeia o nome do
  * evento → assinatura do listener (convenção Socket.io `EventsMap`).
  */
@@ -131,6 +146,7 @@ export interface ServerToClient {
   'deal:stage_changed': (p: DealStageChangedPayload) => void;
   'deal:deleted': (p: DealDeletedPayload) => void;
   'pipeline:updated': (p: PipelineUpdatedPayload) => void;
+  'dashboard:metric_changed': (p: DashboardMetricChangedPayload) => void;
 }
 
 /** Nome de um evento Server→Client. */
@@ -158,4 +174,5 @@ export const SERVER_TO_CLIENT_EVENTS = [
   'deal:stage_changed',
   'deal:deleted',
   'pipeline:updated',
+  'dashboard:metric_changed',
 ] as const satisfies readonly ServerToClientEvent[];
