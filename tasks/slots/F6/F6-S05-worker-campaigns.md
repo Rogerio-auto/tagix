@@ -2,10 +2,13 @@
 id: F6-S05
 title: Worker-campaigns — tick + send window + rate adaptativo + dispatch idempotente + auto-pause RED
 phase: F6
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: L
 depends_on: [F6-S01, F6-S02]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T05:04:17Z
+
 ---
 # F6-S05 — Worker-campaigns
 
