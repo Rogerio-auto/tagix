@@ -262,6 +262,18 @@ export * from './campaigns';
 // compute_available_slots aplicada na migration custom.
 export * from './calendar';
 
+// --- Org domain (F8-S01: DASHBOARD.md §7 / PERMISSIONS.md §5) ---
+// departments/teams/team_members/sla_rules — todas workspace-scoped (RLS direto).
+// team_members tem workspace_id denormalizado (espelha contact_tags). A migration
+// custom adiciona as FKs department_id/team_id em conversations e calendars
+// (backfill: as colunas já existiam como uuid soltos).
+export * from './org';
+
+// --- Dashboard domain (F8-S01: DASHBOARD.md §5/§9.3) ---
+// dashboard_snapshots (cache de métricas 5min, workspace-scoped, RLS direto). As
+// materialized views mv_dashboard_* ficam na migration custom (Drizzle não modela MV).
+export * from './dashboard';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -323,4 +335,11 @@ export const RLS_TABLES = [
   'availability_rules',
   'availability_exceptions',
   'events',
+  // Org domain (workspace-scoped; team_members com workspace_id denormalizado).
+  'departments',
+  'teams',
+  'team_members',
+  'sla_rules',
+  // Dashboard domain (workspace-scoped).
+  'dashboard_snapshots',
 ] as const;

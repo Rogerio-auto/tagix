@@ -2,10 +2,14 @@
 id: F8-S01
 title: Schema F8 — dashboard_snapshots + materialized views + departments + teams + SLA config + RLS
 phase: F8
-status: available
+status: review
 priority: critical
 estimated_size: L
 depends_on: []
+agent_id: backend-engineer
+claimed_at: 2026-06-11T19:11:08Z
+completed_at: 2026-06-11T19:17:39Z
+
 ---
 # F8-S01 — Schema F8 (dashboard infra + org)
 
