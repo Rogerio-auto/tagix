@@ -28,7 +28,7 @@ import { registerEventHooks } from './services/event-hooks';
 import { createConversionsRouter } from './routes/conversions';
 import { createCampaignsRouter } from './routes/campaigns';
 import { createCampaignRecipientsRouter } from './routes/campaigns/recipients';
-import { createContactsOptInRouter } from './routes/contacts/opt-in';
+import { createContactsRouter } from './routes/contacts';
 import { createOnboardingRouter } from './routes/onboarding';
 import { createCalendarRouter } from './routes/calendar';
 import { createDashboardRouter } from './routes/dashboard';
@@ -84,7 +84,8 @@ export function createApp(): Express {
   app.use(createConversionsRouter());
   app.use(createCampaignsRouter());
   app.use(createCampaignRecipientsRouter());
-  app.use(createContactsOptInRouter());
+  // Contatos (F8-S09): CRUD geral + busca/filtros + tags + consentimento; inclui opt-in (F6).
+  app.use(createContactsRouter());
   // Onboarding por nicho (F5-S15): cria pipeline + agente a partir de template.
   app.use(createOnboardingRouter());
   // Calendar (F7): CRUD calendars + availability rules/exceptions + slots.
