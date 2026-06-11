@@ -2,12 +2,13 @@
 id: F9-S02
 title: API key auth middleware + rate limit por chave (Redis)
 phase: F9
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F9-S01]
 agent_id: backend-engineer
 claimed_at: 2026-06-11T21:32:13Z
+completed_at: 2026-06-11T21:37:21Z
 
 ---
 # F9-S02 — API key auth + rate limit
