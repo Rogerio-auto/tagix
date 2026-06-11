@@ -255,6 +255,13 @@ export * from './conversions';
 // campaign_deliveries.idempotency_key UNIQUE = sha256(campaign:recipient:step).
 export * from './campaigns';
 
+// --- Calendar domain (DATA_MODEL 12 + CALENDAR.md) ---
+// calendars/availability_rules/availability_exceptions/events sao workspace-scoped
+// (RLS direto). event_participants NAO tem workspace_id proprio -> isolada via
+// subquery em events (espelha campaign_steps / flow_versions). Funcao PL/pgSQL
+// compute_available_slots aplicada na migration custom.
+export * from './calendar';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -310,4 +317,10 @@ export const RLS_TABLES = [
   'campaign_deliveries',
   'campaign_metrics',
   'scheduled_followups',
+  // Calendar domain (workspace-scoped). event_participants sem workspace_id
+  // proprio: isolada via subquery em events (migration RLS dedicada).
+  'calendars',
+  'availability_rules',
+  'availability_exceptions',
+  'events',
 ] as const;

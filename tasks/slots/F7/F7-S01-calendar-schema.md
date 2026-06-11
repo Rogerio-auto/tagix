@@ -2,10 +2,14 @@
 id: F7-S01
 title: Schema Calendar (calendars/availability_rules/exceptions/events/participants) + compute_available_slots + RLS
 phase: F7
-status: available
+status: review
 priority: critical
 estimated_size: L
 depends_on: []
+agent_id: backend-engineer
+claimed_at: 2026-06-11T16:35:45Z
+completed_at: 2026-06-11T16:50:12Z
+
 ---
 # F7-S01 — Schema Calendar + função de slots
 

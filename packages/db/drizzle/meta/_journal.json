@@ -211,6 +211,20 @@
       "when": 1781152954868,
       "tag": "0029_campaigns_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1781196200988,
+      "tag": "0030_furry_supreme_intelligence",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1781196214125,
+      "tag": "0031_calendar_fn_rls",
+      "breakpoints": true
     }
   ]
 }
