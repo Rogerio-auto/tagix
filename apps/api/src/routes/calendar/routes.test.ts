@@ -38,6 +38,18 @@ describe('rotas de calendar (autorizacao)', () => {
   it('GET /api/availability/slots sem sessao -> 401', async () => {
     expect((await request(app).get('/api/availability/slots?date=2099-01-05')).status).toBe(401);
   });
+  it('GET /api/events sem sessao -> 401', async () => {
+    expect((await request(app).get('/api/events')).status).toBe(401);
+  });
+  it('POST /api/events sem sessao -> 401', async () => {
+    expect((await request(app).post('/api/events').send({})).status).toBe(401);
+  });
+  it('POST /api/events/:id/cancel sem sessao -> 401', async () => {
+    expect((await request(app).post(`/api/events/${ID}/cancel`)).status).toBe(401);
+  });
+  it('POST /api/events/:id/rsvp sem sessao -> 401', async () => {
+    expect((await request(app).post(`/api/events/${ID}/rsvp`).send({ rsvp: 'accepted' })).status).toBe(401);
+  });
 });
 
 describe('matriz de permissoes calendar.*', () => {
