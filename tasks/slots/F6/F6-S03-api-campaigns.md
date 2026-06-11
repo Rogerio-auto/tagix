@@ -2,7 +2,7 @@
 id: F6-S03
 title: API campaigns — CRUD + validate (pre-flight) + activate/pause/resume + metrics/deliveries
 phase: F6
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F6-S01, F6-S02]
