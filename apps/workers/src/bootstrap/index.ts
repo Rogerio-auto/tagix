@@ -72,6 +72,10 @@ import {
   createReminderPorts,
   startReminderScheduler,
 } from '../calendar-reminders/index';
+import {
+  startDashboardMvScheduler,
+  startDashboardSnapshotScheduler,
+} from '../dashboard-refresh/index';
 
 /** Intervalo do rollup de métricas de agentes (F2-S13); idempotente. */
 const METRICS_ROLLUP_INTERVAL_MS = 10 * 60_000;
@@ -279,6 +283,10 @@ export async function startWorkers(
     logger,
     ports: createReminderPorts({ channel, logger }),
   });
+  // Dashboard refresh (F8-S02): snapshot 5min (dashboard_snapshots) + REFRESH das
+  // materialized views mv_dashboard_* 1h. Singleton via lock Redis dedicado.
+  const dashboardSnapshot = startDashboardSnapshotScheduler({ redis, logger });
+  const dashboardMv = startDashboardMvScheduler({ redis, logger });
   const metricsTimer = setInterval(() => {
     void runAgentMetricsRollup({}, logger).catch((err: unknown) => {
       logger.error('falha no rollup de métricas de agentes', {
@@ -303,6 +311,8 @@ export async function startWorkers(
       'automation-worker',
       'automation-stale-scheduler',
       'calendar-reminders-scheduler',
+      'dashboard-snapshot-scheduler',
+      'dashboard-mv-scheduler',
     ],
   });
 
@@ -321,6 +331,8 @@ export async function startWorkers(
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
       clearInterval(metricsTimer);
+      await dashboardSnapshot.stop();
+      await dashboardMv.stop();
       await flowScheduler.stop();
       await campaignWorker.stop();
       await followupProcessor.handle.stop();

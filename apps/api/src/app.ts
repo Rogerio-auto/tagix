@@ -31,6 +31,7 @@ import { createCampaignRecipientsRouter } from './routes/campaigns/recipients';
 import { createContactsOptInRouter } from './routes/contacts/opt-in';
 import { createOnboardingRouter } from './routes/onboarding';
 import { createCalendarRouter } from './routes/calendar';
+import { createDashboardRouter } from './routes/dashboard';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
@@ -88,6 +89,8 @@ export function createApp(): Express {
   app.use(createOnboardingRouter());
   // Calendar (F7): CRUD calendars + availability rules/exceptions + slots.
   app.use(createCalendarRouter());
+  // Dashboard (F8-S02): GET /dashboard/me role-filtered + drill-down /metrics/:key.
+  app.use(createDashboardRouter());
 
   // Error handler por último (Express 5 captura erros de handlers async).
   app.use(errorHandler);
