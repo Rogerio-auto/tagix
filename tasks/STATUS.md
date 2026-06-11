@@ -14,7 +14,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F6   | 9     | 0   | 6   | 0   | 0   | 0   | 3   |
+| F6   | 9     | 0   | 5   | 0   | 0   | 1   | 3   |
 
 ## Fase 0 — Fundação
 
@@ -153,7 +153,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F6-S01 | Schema campaigns (+ steps/recipients/deliveries/metrics/followups + scheduled_followups) + RLS  | ✅ done     | critical   | —              |
 | F6-S02 | Meta error codes map + channel quality/template helpers (packages/channels)                     | ✅ done     | high       | —              |
 | F6-S03 | API campaigns — CRUD + validate (pre-flight) + activate/pause/resume + metrics/deliveries       | ✅ done     | high       | F6-S01, F6-S02 |
-| F6-S04 | API recipients (bulk CSV + bulk opt-in) + opt-in/opt-out de contato                             | ⏸️ blocked | high       | F6-S01         |
+| F6-S04 | API recipients (bulk CSV + bulk opt-in) + opt-in/opt-out de contato                             | 🟣 review   | high       | F6-S01         |
 | F6-S05 | Worker-campaigns — tick + send window + rate adaptativo + dispatch idempotente + auto-pause RED | ⏸️ blocked | critical   | F6-S01, F6-S02 |
 | F6-S06 | Followup processor — scheduled_followups persistente + tick (não setTimeout)                    | ⏸️ blocked | medium     | F6-S01, F6-S05 |
 | F6-S07 | Inbound hooks — opt-out por keyword + reply handling (mark responded + AI handoff + followup)   | ⏸️ blocked | high       | F6-S01         |
