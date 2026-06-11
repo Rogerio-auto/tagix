@@ -2,7 +2,7 @@
 id: F6-S02
 title: Meta error codes map + channel quality/template helpers (packages/channels)
 phase: F6
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: []
