@@ -2,10 +2,13 @@
 id: F6-S01
 title: Schema campaigns (+ steps/recipients/deliveries/metrics/followups + scheduled_followups) + RLS
 phase: F6
-status: available
+status: in-progress
 priority: critical
 estimated_size: L
 depends_on: []
+agent_id: backend-engineer
+claimed_at: 2026-06-11T04:34:49Z
+
 ---
 # F6-S01 — Schema Campaigns
 
