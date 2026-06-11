@@ -2,10 +2,13 @@
 id: F7-S07
 title: Frontend AvailabilityRulesPage (settings → calendar) + exceções
 phase: F7
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on: [F7-S02]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T17:00:51Z
+
 ---
 # F7-S07 — AvailabilityRulesPage (web)
 
