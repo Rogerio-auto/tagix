@@ -2,7 +2,7 @@
 id: F7-S06
 title: Frontend CalendarPage (FullCalendar month/week/day) + EventForm + nav Agenda
 phase: F7
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F7-S02, F7-S03]
