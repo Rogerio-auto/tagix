@@ -2,7 +2,7 @@
 id: F8-S03
 title: Dashboard frontend — DashboardClient + card registry (5 layouts role-aware) + alerts + drill-down
 phase: F8
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F8-S02]
