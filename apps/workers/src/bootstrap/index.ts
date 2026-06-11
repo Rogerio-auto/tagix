@@ -55,6 +55,7 @@ import {
   type FlowWorkerHandle,
   type FlowSchedulerHandle,
 } from '../flows/index';
+import { startCampaignWorker, type CampaignSchedulerHandle } from '../campaigns/index';
 import {
   createActionExecutor,
   startAutomationWorker,
@@ -89,6 +90,7 @@ export interface WorkersBootstrapHandle {
   readonly followup: FollowupSchedulerHandle;
   readonly flow: FlowWorkerHandle;
   readonly flowScheduler: FlowSchedulerHandle;
+  readonly campaignWorker: CampaignSchedulerHandle;
   readonly automationWorker: AutomationWorkerHandle;
   stop(): Promise<void>;
 }
@@ -158,6 +160,9 @@ export async function startWorkers(
   const followup = startFollowupScheduler({ redis, channel, logger });
   // Scheduler de wakeup de flows (F4-S03): re-enfileira execucoes waiting vencidas.
   const flowScheduler = startFlowWakeupScheduler({ redis, channel, logger });
+  // Worker-campaigns (F6-S05): tick 1min que conduz o envio das campanhas RUNNING
+  // (lock por campanha + dispatch idempotente + rate adaptativo + auto-pause RED).
+  const campaignWorker = startCampaignWorker({ channel, redis, logger });
   // Motor de automacoes de stage (F5-S06): drainer de pending_automations + cron
   // on_stale. As portas de action (add_tag/register_conversion/trigger_flow) sao
   // preenchidas conforme F5-S14/S16/flow-engine; actions sem porta vao a retry/failed.
@@ -261,6 +266,7 @@ export async function startWorkers(
       'followup-scheduler',
       'flow',
       'flow-wakeup-scheduler',
+      'campaign-scheduler',
       'automation-worker',
       'automation-stale-scheduler',
     ],
@@ -275,11 +281,13 @@ export async function startWorkers(
     followup,
     flow,
     flowScheduler,
+    campaignWorker,
     automationWorker,
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
       clearInterval(metricsTimer);
       await flowScheduler.stop();
+      await campaignWorker.stop();
       await staleScheduler.stop();
       await automationWorker.stop();
       await flow.stop();
