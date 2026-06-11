@@ -2,7 +2,7 @@
 id: F8-S05
 title: Settings panel shell — sidebar 3 níveis + busca Cmd+K + contadores + conteúdo lazy + /settings root
 phase: F8
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
