@@ -2,10 +2,14 @@
 id: F8-S02
 title: Dashboard metrics service + API /dashboard/me (role-filtered) + socket + refresh jobs
 phase: F8
-status: blocked
+status: review
 priority: high
 estimated_size: L
 depends_on: [F8-S01]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T19:19:22Z
+completed_at: 2026-06-11T19:31:24Z
+
 ---
 # F8-S02 — Dashboard metrics + API
 
