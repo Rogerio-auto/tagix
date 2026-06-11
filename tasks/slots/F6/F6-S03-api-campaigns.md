@@ -2,10 +2,13 @@
 id: F6-S03
 title: API campaigns — CRUD + validate (pre-flight) + activate/pause/resume + metrics/deliveries
 phase: F6
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F6-S01, F6-S02]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T04:50:46Z
+
 ---
 # F6-S03 — API Campaigns
 
