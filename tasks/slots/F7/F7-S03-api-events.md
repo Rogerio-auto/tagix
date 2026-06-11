@@ -2,7 +2,7 @@
 id: F7-S03
 title: API events (CRUD + cancel + rsvp) + event service (participants + notification seam)
 phase: F7
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F7-S01, F7-S02]
