@@ -67,6 +67,15 @@ export const ROLE_CAN = {
   'campaign.bulk_optin': ADMINS,
   'campaign.view_metrics': ['OWNER', 'ADMIN', 'SUPERVISOR', 'READONLY'],
 
+  // §2.x Calendar (CALENDAR.md §8) — ownership fino (calendar pessoal vs team) e
+  // resolvido no service layer; aqui so a AÇÃO. view=todos; manage (criar/editar/
+  // remover calendar) = MANAGERS; availability/event.edit = STAFF (dono mexe na
+  // propria agenda; READONLY nao agenda).
+  'calendar.view': ALL,
+  'calendar.manage': MANAGERS,
+  'availability.edit': STAFF,
+  'event.edit': STAFF,
+
   // §2.6 Canais / Workspace settings
   'channel.connect': ADMINS,
   'channel.disable': ADMINS,
