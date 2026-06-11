@@ -2,12 +2,13 @@
 id: F9-S06
 title: Frontend Settings → Dev — API keys (show-once) + webhooks + delivery log
 phase: F9
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F9-S04]
 agent_id: backend-engineer
 claimed_at: 2026-06-11T22:02:25Z
+completed_at: 2026-06-11T22:06:26Z
 
 ---
 # F9-S06 — Settings → Dev (web)
