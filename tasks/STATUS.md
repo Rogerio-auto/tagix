@@ -15,7 +15,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F7   | 7     | 0   | 1   | 0   | 1   | 0   | 5   |
+| F7   | 7     | 0   | 1   | 0   | 0   | 1   | 5   |
 
 ## Fase 0 — Fundação
 
@@ -163,12 +163,12 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 7 — Dashboard + Conversões
 
-| ID     | Titulo                                                                                                        | Status        | Prioridade | Depende de     |
-| ------ | ------------------------------------------------------------------------------------------------------------- | ------------- | ---------- | -------------- |
-| F7-S01 | Schema Calendar (calendars/availability_rules/exceptions/events/participants) + compute_available_slots + RLS | ✅ done        | critical   | —              |
-| F7-S02 | API calendars + availability (rules/exceptions) + slots endpoint + permissões calendar.*                      | ✅ done        | high       | F7-S01         |
-| F7-S03 | API events (CRUD + cancel + rsvp) + event service (participants + notification seam)                          | ✅ done        | high       | F7-S01, F7-S02 |
-| F7-S04 | Agent tools calendar — list_calendars + get_available_slots + schedule_event (callback Node)                  | ✅ done        | medium     | F7-S01, F7-S03 |
-| F7-S05 | Event reminders cron — scheduler 5min + notification + outbound WhatsApp opcional                             | 🔵 in-progress | medium     | F7-S01, F7-S03 |
-| F7-S06 | Frontend CalendarPage (FullCalendar month/week/day) + EventForm + nav Agenda                                  | ⏸️ blocked    | high       | F7-S02, F7-S03 |
-| F7-S07 | Frontend AvailabilityRulesPage (settings → calendar) + exceções                                               | ✅ done        | medium     | F7-S02         |
+| ID     | Titulo                                                                                                        | Status     | Prioridade | Depende de     |
+| ------ | ------------------------------------------------------------------------------------------------------------- | ---------- | ---------- | -------------- |
+| F7-S01 | Schema Calendar (calendars/availability_rules/exceptions/events/participants) + compute_available_slots + RLS | ✅ done     | critical   | —              |
+| F7-S02 | API calendars + availability (rules/exceptions) + slots endpoint + permissões calendar.*                      | ✅ done     | high       | F7-S01         |
+| F7-S03 | API events (CRUD + cancel + rsvp) + event service (participants + notification seam)                          | ✅ done     | high       | F7-S01, F7-S02 |
+| F7-S04 | Agent tools calendar — list_calendars + get_available_slots + schedule_event (callback Node)                  | ✅ done     | medium     | F7-S01, F7-S03 |
+| F7-S05 | Event reminders cron — scheduler 5min + notification + outbound WhatsApp opcional                             | 🟣 review   | medium     | F7-S01, F7-S03 |
+| F7-S06 | Frontend CalendarPage (FullCalendar month/week/day) + EventForm + nav Agenda                                  | ⏸️ blocked | high       | F7-S02, F7-S03 |
+| F7-S07 | Frontend AvailabilityRulesPage (settings → calendar) + exceções                                               | ✅ done     | medium     | F7-S02         |
