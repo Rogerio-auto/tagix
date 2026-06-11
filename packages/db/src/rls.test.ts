@@ -1,15 +1,20 @@
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb } from './client';
 import { withWorkspace } from './rls';
 import {
+  availabilityExceptions,
+  availabilityRules,
+  calendars,
   campaignDeliveries,
   campaignRecipients,
   campaignSteps,
   campaigns,
   channels,
   contacts,
+  eventParticipants,
+  events,
   flowExecutions,
   flows,
   flowVersions,
@@ -23,6 +28,7 @@ import {
 
 let wsA = '';
 let wsB = '';
+let memberA = '';
 
 beforeAll(async () => {
   const db = getDb(); // conecta como owner → bypassa RLS (setup)
@@ -42,13 +48,18 @@ beforeAll(async () => {
   wsA = a.id;
   wsB = b.id;
 
-  await db.insert(members).values({
-    workspaceId: wsA,
-    authUserId: randomUUID(),
-    email: `a-${suffix}@test.local`,
-    role: 'OWNER',
-    status: 'active',
-  });
+  const [mA] = await db
+    .insert(members)
+    .values({
+      workspaceId: wsA,
+      authUserId: randomUUID(),
+      email: `a-${suffix}@test.local`,
+      role: 'OWNER',
+      status: 'active',
+    })
+    .returning();
+  if (!mA) throw new Error('Falha ao criar member A.');
+  memberA = mA.id;
   await db.insert(members).values({
     workspaceId: wsB,
     authUserId: randomUUID(),
@@ -296,5 +307,236 @@ describe('RLS Campaigns (F6-S01)', () => {
         idempotencyKey: key,
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe('RLS Calendar (F7-S01)', () => {
+  it('calendars/availability/events isolam por workspace; event_participants via subquery', async () => {
+    const db = getDb(); // owner bypassa RLS no seed
+    const sfx = randomUUID().slice(0, 8);
+
+    const [calA] = await db
+      .insert(calendars)
+      .values({ workspaceId: wsA, name: `Cal A ${sfx}`, type: 'personal', ownerId: memberA, isDefault: true })
+      .returning();
+    const [calB] = await db
+      .insert(calendars)
+      .values({ workspaceId: wsB, name: `Cal B ${sfx}`, type: 'workspace' })
+      .returning();
+    if (!calA || !calB) throw new Error('Falha ao criar calendars.');
+
+    const [ruleA] = await db
+      .insert(availabilityRules)
+      .values({
+        workspaceId: wsA,
+        memberId: memberA,
+        name: 'Comercial',
+        dayOfWeek: 1,
+        startTime: '09:00',
+        endTime: '18:00',
+      })
+      .returning();
+    if (!ruleA) throw new Error('Falha ao criar availability_rule A.');
+
+    const [excA] = await db
+      .insert(availabilityExceptions)
+      .values({
+        workspaceId: wsA,
+        memberId: memberA,
+        startDate: '2099-01-01',
+        endDate: '2099-01-01',
+        isAvailable: false,
+        reason: 'feriado',
+      })
+      .returning();
+    if (!excA) throw new Error('Falha ao criar availability_exception A.');
+
+    const [evA] = await db
+      .insert(events)
+      .values({
+        workspaceId: wsA,
+        calendarId: calA.id,
+        title: 'Reuniao A',
+        startAt: new Date('2099-01-04T13:00:00-03:00'),
+        endAt: new Date('2099-01-04T14:00:00-03:00'),
+      })
+      .returning();
+    if (!evA) throw new Error('Falha ao criar event A.');
+
+    const [partA] = await db
+      .insert(eventParticipants)
+      .values({ eventId: evA.id, memberId: memberA, role: 'organizer' })
+      .returning();
+    if (!partA) throw new Error('Falha ao criar event_participant A.');
+
+    // A enxerga os proprios; B nao enxerga nada de A.
+    const calsA = await withWorkspace(wsA, (tx) => tx.select().from(calendars));
+    expect(calsA.every((c) => c.workspaceId === wsA)).toBe(true);
+    expect(calsA.some((c) => c.id === calB.id)).toBe(false);
+
+    const calsB = await withWorkspace(wsB, (tx) => tx.select().from(calendars));
+    expect(calsB.some((c) => c.id === calA.id)).toBe(false);
+
+    const rulesB = await withWorkspace(wsB, (tx) => tx.select().from(availabilityRules));
+    expect(rulesB.some((r) => r.id === ruleA.id)).toBe(false);
+
+    const excB = await withWorkspace(wsB, (tx) => tx.select().from(availabilityExceptions));
+    expect(excB.some((e) => e.id === excA.id)).toBe(false);
+
+    const evsB = await withWorkspace(wsB, (tx) => tx.select().from(events));
+    expect(evsB.some((e) => e.id === evA.id)).toBe(false);
+
+    // event_participants sem workspace_id -> isolado via subquery em events.
+    const partsA = await withWorkspace(wsA, (tx) => tx.select().from(eventParticipants));
+    expect(partsA.some((p) => p.id === partA.id)).toBe(true);
+    const partsB = await withWorkspace(wsB, (tx) => tx.select().from(eventParticipants));
+    expect(partsB.some((p) => p.id === partA.id)).toBe(false);
+  });
+
+  it('compute_available_slots aplica os 3 filtros: excecao, buffer de evento e min_notice', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+
+    // Member dedicado p/ isolar o calculo de outros eventos/regras do suite.
+    const [m] = await db
+      .insert(members)
+      .values({
+        workspaceId: wsA,
+        authUserId: randomUUID(),
+        email: `slots-${sfx}@test.local`,
+        role: 'AGENT',
+        status: 'active',
+      })
+      .returning();
+    if (!m) throw new Error('Falha ao criar member de slots.');
+
+    const [cal] = await db
+      .insert(calendars)
+      .values({ workspaceId: wsA, name: `Slots ${sfx}`, type: 'personal', ownerId: m.id })
+      .returning();
+    if (!cal) throw new Error('Falha ao criar calendar de slots.');
+
+    // 2099-01-05 e uma segunda-feira (DOW=1). Bem no futuro -> min_notice nao
+    // interfere nos filtros de excecao/buffer (todo o dia esta apos now()+min_notice).
+    const targetDate = '2099-01-05';
+    await db.insert(availabilityRules).values({
+      workspaceId: wsA,
+      memberId: m.id,
+      name: 'Janela',
+      dayOfWeek: 1, // segunda
+      startTime: '08:00',
+      endTime: '18:00',
+    });
+
+    // Filtro 1 — excecao bloqueando 10:00-11:00 local.
+    await db.insert(availabilityExceptions).values({
+      workspaceId: wsA,
+      memberId: m.id,
+      startDate: targetDate,
+      endDate: targetDate,
+      startTime: '10:00',
+      endTime: '11:00',
+      isAllDay: false,
+      isAvailable: false,
+      reason: 'bloqueio',
+    });
+
+    // Filtro 2 — evento 14:00-15:00 local com o member como participante.
+    // Com buffer=15min, o slot 13:00-14:00 (so cai pelo buffer) tambem some.
+    const [ev] = await db
+      .insert(events)
+      .values({
+        workspaceId: wsA,
+        calendarId: cal.id,
+        title: 'Ocupado',
+        startAt: new Date(`${targetDate}T14:00:00-03:00`),
+        endAt: new Date(`${targetDate}T15:00:00-03:00`),
+      })
+      .returning();
+    if (!ev) throw new Error('Falha ao criar evento de conflito.');
+    await db.insert(eventParticipants).values({ eventId: ev.id, memberId: m.id, role: 'organizer' });
+
+    // 60min, min_notice=30, buffer=15, ate 50 slots.
+    const res = await db.execute<{ start_at: string; end_at: string; duration_minutes: number }>(sql`
+      SELECT * FROM compute_available_slots(
+        ${wsA}::uuid, ${m.id}::uuid, ${targetDate}::date, 60, 30, 15, 50
+      )
+    `);
+    const rows = Array.from(res);
+    // Hora local (Sao_Paulo, UTC-3) de inicio de cada slot.
+    const localHours = rows.map((r) =>
+      Number(
+        new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Sao_Paulo',
+          hour: '2-digit',
+          hour12: false,
+        }).format(new Date(r.start_at)),
+      ),
+    );
+
+    // Sanidade: ha slots no dia.
+    expect(rows.length).toBeGreaterThan(0);
+    // Filtro 1: nenhum slot inicia as 10h (dentro da excecao).
+    expect(localHours).not.toContain(10);
+    // Filtro 2a: nenhum slot inicia as 14h (conflito direto com o evento).
+    expect(localHours).not.toContain(14);
+    // Filtro 2b: o slot das 13h cai SOMENTE pelo buffer (13:00-14:00 vs evento-15min=13:45) -> ausente.
+    expect(localHours).not.toContain(13);
+    // Filtro 2c: o slot das 15h cai pelo buffer (15:00-16:00 vs evento+15min=15:15) -> ausente.
+    expect(localHours).not.toContain(15);
+    // Janela valida fora dos filtros continua disponivel (ex.: 09h e 16h).
+    expect(localHours).toContain(9);
+    expect(localHours).toContain(16);
+  });
+
+  it('compute_available_slots respeita min_notice (slots no passado/janela imediata sao excluidos)', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+
+    const [m] = await db
+      .insert(members)
+      .values({
+        workspaceId: wsA,
+        authUserId: randomUUID(),
+        email: `notice-${sfx}@test.local`,
+        role: 'AGENT',
+        status: 'active',
+      })
+      .returning();
+    if (!m) throw new Error('Falha ao criar member de min_notice.');
+
+    // Janela cobrindo o dia inteiro de HOJE -> garante slots tanto antes quanto
+    // depois de now(); o filtro min_notice deve cortar tudo antes de now()+notice.
+    // DOW em Sao_Paulo (Sun=0..Sat=6) p/ casar com o calculo da funcao.
+    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+    const spWeekday = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Sao_Paulo',
+      weekday: 'short',
+    }).format(new Date());
+    const dow = Math.max(0, weekdays.indexOf(spWeekday as (typeof weekdays)[number]));
+    await db.insert(availabilityRules).values({
+      workspaceId: wsA,
+      memberId: m.id,
+      name: 'Dia inteiro',
+      dayOfWeek: dow,
+      startTime: '00:00',
+      endTime: '23:00',
+    });
+
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(
+      new Date(),
+    ); // YYYY-MM-DD
+    const minNotice = 120;
+    const res = await db.execute<{ start_at: string }>(sql`
+      SELECT * FROM compute_available_slots(
+        ${wsA}::uuid, ${m.id}::uuid, ${today}::date, 60, ${minNotice}, 15, 50
+      )
+    `);
+    const rows = Array.from(res);
+    const threshold = Date.now() + minNotice * 60 * 1000;
+    // Filtro 3: TODO slot retornado comeca em >= now()+min_notice.
+    for (const r of rows) {
+      expect(new Date(r.start_at).getTime()).toBeGreaterThanOrEqual(threshold - 1000);
+    }
   });
 });
