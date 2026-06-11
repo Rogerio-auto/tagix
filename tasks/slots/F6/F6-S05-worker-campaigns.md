@@ -2,7 +2,7 @@
 id: F6-S05
 title: Worker-campaigns — tick + send window + rate adaptativo + dispatch idempotente + auto-pause RED
 phase: F6
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: [F6-S01, F6-S02]
