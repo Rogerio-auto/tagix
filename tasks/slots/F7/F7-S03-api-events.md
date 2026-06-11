@@ -2,10 +2,14 @@
 id: F7-S03
 title: API events (CRUD + cancel + rsvp) + event service (participants + notification seam)
 phase: F7
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F7-S01, F7-S02]
+agent_id: backend-engineer
+claimed_at: 2026-06-11T16:55:54Z
+completed_at: 2026-06-11T16:58:41Z
+
 ---
 # F7-S03 — API events
 
