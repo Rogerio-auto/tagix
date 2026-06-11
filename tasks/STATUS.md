@@ -16,7 +16,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F8   | 10     | 2   | 7   | 0   | 0   | 1   | 0   |
+| F8   | 10     | 2   | 7   | 0   | 0   | 0   | 1   |
 
 ## Fase 0 — Fundação
 
@@ -178,7 +178,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID     | Titulo                                                                                              | Status      | Prioridade | Depende de             |
 | ------ | --------------------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------- |
-| F8-S01 | Schema F8 — dashboard_snapshots + materialized views + departments + teams + SLA config + RLS       | 🟣 review    | critical   | —                      |
+| F8-S01 | Schema F8 — dashboard_snapshots + materialized views + departments + teams + SLA config + RLS       | ✅ done      | critical   | —                      |
 | F8-S02 | Dashboard metrics service + API /dashboard/me (role-filtered) + socket + refresh jobs               | ⏸️ blocked  | high       | F8-S01                 |
 | F8-S03 | Dashboard frontend — DashboardClient + card registry (5 layouts role-aware) + alerts + drill-down   | ⏸️ blocked  | high       | F8-S02                 |
 | F8-S04 | Dashboard customização — layout pessoal (hide/reorder/período) + cards obrigatórios (admin)         | ⏸️ blocked  | medium     | F8-S02, F8-S03, F8-S05 |

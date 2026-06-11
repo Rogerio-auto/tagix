@@ -2,7 +2,7 @@
 id: F8-S01
 title: Schema F8 — dashboard_snapshots + materialized views + departments + teams + SLA config + RLS
 phase: F8
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: []
