@@ -2,7 +2,7 @@
 id: F9-S02
 title: API key auth middleware + rate limit por chave (Redis)
 phase: F9
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F9-S01]
