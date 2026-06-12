@@ -2,7 +2,7 @@
 id: F10-S09
 title: Documentação da API pública — site de referência (Mintlify) sobre o OpenAPI v1
 phase: F10
-status: review
+status: done
 priority: low
 estimated_size: M
 depends_on: []
