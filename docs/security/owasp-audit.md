@@ -16,7 +16,7 @@
 | A03 | Injection | OK | Drizzle parametrizado + Zod em toda input externa. Ver follow-up de versão (audit). |
 | A04 | Insecure Design | OK | Fail-fast no config; deny-by-default em CORS/CSP. |
 | A05 | Security Misconfiguration | **Endurecido neste slot** | helmet/CSP/HSTS/no-sniff/frame-guard + erro sanitizado. |
-| A06 | Vulnerable & Outdated Components | **Follow-up** | `pnpm audit`: 3 high + 1 critical (ver seção). |
+| A06 | Vulnerable & Outdated Components | **Resolvido (F10-S11)** | `pnpm audit`: 0 high/critical. Restam 2 moderate transitivos com accept-risk (ver seção). |
 | A07 | Identification & Authentication Failures | OK | Sessão + api-key com escopo; fora do escopo deste slot. |
 | A08 | Software & Data Integrity Failures | OK | Webhooks Meta com HMAC + dedup (`webhook_events`). |
 | A09 | Security Logging & Monitoring Failures | **Endurecido neste slot** | Correlation id (`hm_err_*`) + log estruturado; Sentry/OTel opt-in. |
@@ -79,12 +79,12 @@
   mensagem crua**. Dev/test anexam `detail` + `stack` para debug. Detalhe completo só
   nos logs server-side, sob o `ref`.
 
-## A06 — Vulnerable & Outdated Components (FOLLOW-UP)
+## A06 — Vulnerable & Outdated Components (RESOLVIDO EM F10-S11)
 
-`pnpm audit` em 2026-06-12 (ver seção dedicada abaixo). **3 high + 1 critical**, todas
-em dependências transitivas e/ou de dev — nenhuma introduzida por este slot. Bump fica
-como follow-up dedicado (toca `package.json` de outros pacotes, fora da fronteira deste
-slot).
+O follow-up de F10-S07 foi executado em **F10-S11**: bump das deps com vuln
+**high/critical** para as linhas corrigidas, regeneração do `pnpm-lock.yaml` e todas as
+suites de teste do monorepo verdes. Estado final: `pnpm audit` reporta **0 high/critical**
+(restam 2 moderate transitivos com accept-risk justificado — ver seção dedicada abaixo).
 
 ## A07 — Identification & Authentication Failures
 
@@ -113,42 +113,70 @@ slot).
 
 ---
 
-## `pnpm audit` — 2026-06-12
+## `pnpm audit` — baseline F10-S07 → fechamento F10-S11
 
-Comando: `pnpm audit` (monorepo inteiro). Resultado:
-`3 moderate | 3 high | 1 critical`.
+### Baseline (2026-06-12, ao iniciar F10-S11)
+
+`pnpm audit` (monorepo inteiro): `3 moderate | 5 high | 2 critical`. O lockfile derivou
+desde o registro original de F10-S07 (que listava `3 moderate | 3 high | 1 critical`),
+trazendo achados novos em `happy-dom` e `esbuild`/`vite` (transitivos de `vitest`).
 
 | Severidade | Pacote | Versão | Patched | Caminho | Advisory |
 |------------|--------|--------|---------|---------|----------|
 | critical | `vitest` | <3.2.6 | >=3.2.6 | dev (`apps/*`, `packages/*`) | GHSA-5xrq-8626-4rwp — leitura/execução de arquivo via UI server (só com `--ui`, dev-only) |
-| high | `drizzle-orm` | <0.45.2 | >=0.45.2 | runtime (`apps/api`, `apps/workers`, `packages/agents-core`) | GHSA-gpj5-g38j-94v9 — SQL injection via SQL identifier mal escapado |
-| high | `@opentelemetry/sdk-node` | <0.217.0 | >=0.217.0 | runtime (`packages/logger`) | GHSA-q7rr-3cgh-j5r3 — crash do Prometheus exporter via HTTP malformado |
-| high | `@opentelemetry/exporter-prometheus` | <0.217.0 | >=0.217.0 | runtime (`packages/logger`) | GHSA-q7rr-3cgh-j5r3 — mesmo CVE acima |
+| critical | `happy-dom` | <20.0.0 | >=20.0.0 | dev (transitivo de `vitest`; direto em `@hm/ui`) | GHSA-37j7-fg3j-429f — VM context escape → RCE |
+| high | `drizzle-orm` | <0.45.2 | >=0.45.2 | runtime (`apps/api`, `apps/workers`, `packages/agents-core`, `packages/db`, `packages/flow-engine`) | GHSA-gpj5-g38j-94v9 — SQL injection via SQL identifier mal escapado |
+| high | `happy-dom` | <20.8.9 | >=20.8.9 | dev (idem acima) | GHSA-w4gp-fjgq-3q4g — fetch usa cookies de page-origin |
+| high | `happy-dom` | >=15.10.0 <=20.8.7 | >=20.8.8 | dev (idem acima) | GHSA-6q6h-j7hj-3r64 — export names interpolados como código executável |
+| high | `@opentelemetry/sdk-node` (exporter-prometheus transitivo) | <0.217.0 | >=0.217.0 | runtime (`packages/logger`) | GHSA-q7rr-3cgh-j5r3 — crash do Prometheus exporter via HTTP malformado |
+| moderate | `vite` | <=6.4.1 | >=6.4.2 | dev (transitivo de `vitest`) | GHSA-4w7w-66w2-5vf9 — path traversal em optimized deps |
+| moderate | `esbuild` | <=0.24.2 | >=0.24.3 | dev (transitivo de `vitest` e de `drizzle-kit`) | GHSA-67mh-4wv8-2f99 — dev-server aceita requests de qualquer origem |
+| moderate | `postcss` | <8.5.10 | >=8.5.10 | dev (`apps/web>next`) | GHSA-qx2v-qp2m-jg93 — XSS via `</style>` não escapado |
 
-### Avaliação de risco
+### Bumps aplicados (F10-S11)
 
-- **`vitest` (critical):** vulnerabilidade só explorável com o **UI server** do Vitest
-  (`vitest --ui`), que **não** roda em CI nem em produção (`vitest run`). Risco efetivo
-  em prod: **nenhum**. Mitigar com bump em slot de dependências.
-- **`drizzle-orm` (high):** o vetor exige **SQL identifier dinâmico controlado por
-  input**; o codebase usa identifiers estáticos (colunas do schema) — não passamos input
-  de usuário como identifier. Risco efetivo: **baixo**. Bump recomendado (>=0.45.2).
-- **`@opentelemetry/*` (high):** afeta o **Prometheus exporter** do OTel SDK. O `/metrics`
-  da API usa **`prom-client`** (registry próprio), não o exporter do OTel SDK; o pipeline
-  OTel é opt-in por env. Exposição depende de habilitar o exporter OTLP. Risco efetivo:
-  **baixo–médio**. Bump recomendado (>=0.217.0).
+| Dep | De | Para | Pacotes tocados |
+|-----|----|----|-----------------|
+| `drizzle-orm` | `^0.38.3` | `^0.45.2` | `@hm/db`, `@hm/api`, `@hm/workers`, `@hm/agents-core`, `@hm/flow-engine` |
+| `vitest` | `^2.1.8` / `^3.0.5` | `^3.2.6` | `@hm/api`, `@hm/workers`, `@hm/db`, `@hm/agents-core`, `@hm/flow-engine`, `@hm/storage`, `@hm/ui`, `@hm/agents-client`, `@hm/channels` |
+| `@opentelemetry/sdk-node` | `^0.57.0` | `^0.219.0` | `@hm/logger` |
+| `@opentelemetry/exporter-trace-otlp-http` | `^0.57.0` | `^0.219.0` | `@hm/logger` |
+| `@opentelemetry/exporter-metrics-otlp-http` | `^0.57.0` | `^0.219.0` | `@hm/logger` |
+| `@opentelemetry/sdk-metrics` | `^1.30.0` | `^2.8.0` | `@hm/logger` |
+| `happy-dom` | `^15.11.7` | `^20.10.2` | `@hm/ui` |
 
-### Follow-up obrigatório (slot de dependências dedicado)
+- **drizzle-orm → 0.45.2:** sem breaking change observável no código. Suites do `@hm/db`
+  (RLS multi-tenant + crypto) e de todos os consumidores (api/workers/agents-core/
+  flow-engine) verdes. Typecheck verde. O vetor exigia identifier dinâmico de input — o
+  codebase usa identifiers estáticos (já era baixo risco), agora fechado de toda forma.
+- **vitest 2 → 3 (3.2.6):** **sem accept-risk** — o major 2→3 do Vitest **não** quebrou
+  nenhuma suite. Dois pacotes (`@hm/channels`, `@hm/agents-client`) já rodavam v3; os
+  `vitest.config.ts` existentes (apenas `include`/`setupFiles`/`fileParallelism`/
+  `environment`/`globals`) são compatíveis com v3 sem migração. Nenhum `*.test.ts` precisou
+  de ajuste. Toda a suite do monorepo verde em v3.2.6 (525 testes). O bump também substitui
+  o `vite`/`esbuild` transitivos por versões patched, fechando 2 moderates de borda.
+- **@opentelemetry/* → 0.219.0 + sdk-metrics 2.8.0:** o `sdk-node@0.219.0` depende de
+  `sdk-metrics@2.x` (a linha estável passou de 1.x para 2.x), então o conjunto foi
+  promovido coerentemente. `@opentelemetry/api` (`^1.9.0`) continua compatível
+  (peer `^1.3.0`). O `otel.ts` (NodeSDK + OTLP trace/metric exporters +
+  PeriodicExportingMetricReader) **não** sofreu breaking change de API: typecheck verde
+  sem tocar código de produção. O `/metrics` da API segue usando `prom-client` próprio,
+  não o exporter Prometheus do OTel.
+- **happy-dom → 20.10.2:** dep direta do `@hm/ui` (DOM emulado p/ testes de a11y) e
+  transitiva do `vitest`. Suite `@hm/ui` (`a11y.test.tsx`) verde no novo major.
 
-Estes bumps tocam `package.json` de `apps/api`, `apps/workers`, `packages/agents-core` e
-`packages/logger` — **fora da fronteira** de F10-S07 (que só permite `security.ts`,
-`error.ts` e `docs/security/**`). Abrir slot:
+### Estado final (`pnpm audit`, pós-bump)
 
-```
-- drizzle-orm     → >=0.45.2   (high, SQLi via identifier)
-- vitest          → >=3.2.6    (critical, dev-only)
-- @opentelemetry/* → >=0.217.0 (high, exporter Prometheus)
-```
+`pnpm audit`: **`2 moderate`** — **0 high / 0 critical**. Todos os CVEs high/critical do
+baseline foram fechados (drizzle-orm, vitest, happy-dom, OTel/exporter-prometheus, além
+de vite moderate).
 
-Nenhuma vulnerabilidade high/critical foi introduzida por este slot; todas são
-transitivas/pré-existentes e estão documentadas acima com avaliação de risco.
+### Accept-risk (2 moderate remanescentes)
+
+| Severidade | Pacote | Caminho | Justificativa |
+|------------|--------|---------|---------------|
+| moderate | `esbuild` <=0.24.2 | `packages/db > drizzle-kit > @esbuild-kit/* > esbuild` (e `drizzle-kit > esbuild`) | `drizzle-kit@0.30.6` fixa um `esbuild` antigo na sua cadeia. É **ferramenta de migração dev-only** (`generate`/`migrate`), **nunca** empacotada no runtime de produção e nunca expõe dev-server em CI/prod. O vetor exige rodar o dev-server do esbuild localmente. Bumpar `drizzle-kit` para uma linha que carregue esbuild patched está fora dos CVEs-alvo deste slot e arrisca o pipeline de migrations; deferido. O esbuild do `vitest` já é >=0.25 (patched). |
+| moderate | `postcss` <8.5.10 | `apps/web > next > postcss` | Transitivo de `next` em **`apps/web`** — território **proibido** para este slot (F10-S10/S12/S13). Fecha junto com o bump de `next`. Build-time/dev-only do front; sem exposição de runtime de produto. |
+
+Nenhuma vulnerabilidade high/critical permanece. Os 2 moderates remanescentes são
+transitivos, dev/build-time apenas, e fora da fronteira deste slot (drizzle-kit / apps/web).
