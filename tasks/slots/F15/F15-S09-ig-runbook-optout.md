@@ -2,7 +2,7 @@
 id: F15-S09
 title: IG App Review runbook + opt-out keyword parity + PII redact docs
 phase: F15
-status: review
+status: done
 priority: low
 estimated_size: S
 depends_on: []
