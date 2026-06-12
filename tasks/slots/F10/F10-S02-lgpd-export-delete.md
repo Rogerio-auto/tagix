@@ -2,7 +2,7 @@
 id: F10-S02
 title: LGPD — data export + delete (direito ao esquecimento)
 phase: F10
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
