@@ -2,7 +2,7 @@
 id: F10-S08
 title: Runbooks operacionais — postgres-down, restore-backup, rotate-key, waba-banned
 phase: F10
-status: in-progress
+status: review
 priority: medium
 estimated_size: S
 depends_on: []
@@ -11,6 +11,7 @@ source_docs:
   - docs/ROADMAP.md#F10-S09
   - docs/INFRASTRUCTURE.md
 claimed_at: 2026-06-12T13:54:47Z
+completed_at: 2026-06-12T13:55:02Z
 
 ---
 # F10-S08 — Runbooks operacionais
