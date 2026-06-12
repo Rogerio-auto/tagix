@@ -2,7 +2,7 @@
 id: F10-S05
 title: a11y audit + AAA contraste + navegação por teclado
 phase: F10
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F10-S04]
