@@ -3,12 +3,15 @@
 import { useMemo, useState } from 'react';
 import {
   DndContext,
+  KeyboardSensor,
   PointerSensor,
   closestCorners,
   useSensor,
   useSensors,
+  type Announcements,
   type DragEndEvent,
 } from '@dnd-kit/core';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { useToast } from '@hm/ui';
 import { HelpHint } from '@/shared/components/help';
 import { StageColumn } from './StageColumn';
@@ -44,7 +47,13 @@ export function PipelinePage(): React.JSX.Element {
   const move = useMoveDeal(pipelineId ?? '');
   useDealSocket(pipelineId);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // Paridade teclado↔mouse (UX §2.10): KeyboardSensor permite pegar (Espaço),
+  // mover (setas) e soltar (Espaço) um deal entre stages sem mouse. PointerSensor
+  // mantém o drag por mouse intacto (sem regressão).
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const stages = useMemo(
     () => [...(detail.data?.stages ?? [])].sort((a, b) => a.position - b.position),
@@ -82,6 +91,32 @@ export function PipelinePage(): React.JSX.Element {
       },
     );
   }
+
+  const dealTitle = (id: string | number): string =>
+    deals.find((d) => d.id === String(id))?.title ?? 'negócio';
+  const stageName = (data: { stageId?: string } | undefined, fallbackId?: string | number): string => {
+    const sid = data?.stageId ?? (fallbackId != null ? String(fallbackId) : undefined);
+    return stages.find((s) => s.id === sid)?.name ?? 'etapa';
+  };
+
+  // Anúncios aria-live do drag por teclado (acessibilidade do dnd — UX §2.10):
+  // o usuário ouve o que pegou, sobre qual etapa está e onde soltou.
+  const announcements: Announcements = {
+    onDragStart: ({ active }) =>
+      `Negócio "${dealTitle(active.id)}" selecionado. Use as setas para mover entre etapas e Espaço para soltar.`,
+    onDragOver: ({ active, over }) => {
+      if (!over) return undefined;
+      const overData = over.data.current as { stageId?: string } | undefined;
+      return `"${dealTitle(active.id)}" sobre a etapa "${stageName(overData, over.id)}".`;
+    },
+    onDragEnd: ({ active, over }) => {
+      if (!over) return `Movimentação de "${dealTitle(active.id)}" cancelada.`;
+      const overData = over.data.current as { stageId?: string } | undefined;
+      return `"${dealTitle(active.id)}" movido para a etapa "${stageName(overData, over.id)}".`;
+    },
+    onDragCancel: ({ active }) =>
+      `Movimentação de "${dealTitle(active.id)}" cancelada; permanece na etapa atual.`,
+  };
 
   if (pipelinesQuery.isLoading) {
     return <div className="p-6 text-sm text-text-mid">Carregando pipeline…</div>;
@@ -123,7 +158,12 @@ export function PipelinePage(): React.JSX.Element {
           ))}
         </div>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={onDragEnd}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragEnd={onDragEnd}
+          accessibility={{ announcements }}
+        >
           <div className="flex flex-1 gap-4 overflow-x-auto pb-4">
             {stages.map((stage) => (
               <StageColumn
