@@ -2,7 +2,7 @@
 id: F10-S06
 title: Performance audit + bundle optimization + Lighthouse
 phase: F10
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F10-S05]
@@ -10,6 +10,7 @@ agent_id: frontend-engineer
 source_docs:
   - docs/ROADMAP.md#F10-S06
 claimed_at: 2026-06-12T14:39:03Z
+completed_at: 2026-06-12T14:40:46Z
 
 ---
 # F10-S06 — Performance + bundle + Lighthouse
