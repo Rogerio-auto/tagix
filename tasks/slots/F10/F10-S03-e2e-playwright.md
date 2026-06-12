@@ -2,7 +2,7 @@
 id: F10-S03
 title: e2e Playwright — jornada completa (login → canal → msg → agente → flow → deal)
 phase: F10
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: []
