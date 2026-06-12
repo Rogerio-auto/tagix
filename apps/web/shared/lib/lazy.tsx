@@ -1,6 +1,6 @@
 'use client';
 
-import dynamic, { type DynamicOptions } from 'next/dynamic';
+import dynamic from 'next/dynamic';
 import type { ComponentType, ReactNode } from 'react';
 
 /**
@@ -46,14 +46,17 @@ export function lazyClient<P extends object>(
   loader: LoaderFn<P>,
   options: LazyOptions,
 ): ComponentType<P> {
-  const dynamicOptions: DynamicOptions<P> = {
-    ssr: options.ssr ?? false,
-    loading: () => <>{options.loading()}</>,
-  };
-  // `next/dynamic` aceita um loader que resolve para o componente ou `{ default }`.
-  // Normalizamos para `{ default }` para satisfazer a tipagem sem `any`.
-  return dynamic<P>(async () => {
-    const mod = await loader();
-    return 'default' in mod ? mod : { default: mod };
-  }, dynamicOptions);
+  // `next/dynamic` exige as options como OBJETO LITERAL na própria call site: o
+  // transform SWC `next-dynamic` precisa detectar `ssr: false` estaticamente, então
+  // NÃO se pode extrair para uma variável (gera "options must be an object literal").
+  // Como todos os usos aqui são libs client-only, `ssr` é sempre `false`; por isso
+  // este helper só é válido dentro de Client Components ('use client'). O loader
+  // normaliza para `{ default }` para satisfazer a tipagem sem `any`.
+  return dynamic<P>(
+    async () => {
+      const mod = await loader();
+      return 'default' in mod ? mod : { default: mod };
+    },
+    { ssr: false, loading: () => <>{options.loading()}</> },
+  );
 }

@@ -5,10 +5,10 @@ import { ReactFlowProvider } from '@xyflow/react';
 import { can } from '@hm/shared';
 import { validateFlow, type FlowValidationIssue } from '@hm/flow-engine/validation';
 import { useToast } from '@hm/ui';
-import { ErrorState, SkeletonList } from '@/shared/components/feedback';
+import { CanvasSkeleton, ErrorState, SkeletonList } from '@/shared/components/feedback';
+import { lazyClient } from '@/shared/lib/lazy';
 import { ApiError } from '@/shared/lib/api-client';
 import { useAuthStore } from '@/shared/stores/auth.store';
-import { FlowCanvas } from './canvas/FlowCanvas';
 import { ExecutionsPanel } from './canvas/ExecutionsPanel';
 import { NodePalette } from './canvas/NodePalette';
 import { ToolbarTop } from './canvas/ToolbarTop';
@@ -16,6 +16,22 @@ import { useFlow, usePublishFlow, useSaveFlow } from './hooks/useFlow';
 import { useFlowEditor } from './hooks/useFlowEditor';
 import { InspectorPanel } from './inspector/InspectorPanel';
 import { ValidationBanner } from './shared/validation-banner';
+
+/**
+ * Canvas @xyflow/react (engine de render + CSS + Background/Controls) carregado sob
+ * demanda (F10-S10): o chunk pesado do canvas sai do First Load JS de `/flows/[id]`.
+ * `ssr: false` — o ReactFlow é client-only (mede DOM, sem render no server). Enquanto
+ * baixa, o `CanvasSkeleton` ocupa a área útil (UX §3.6 — sem tela branca). O
+ * `ReactFlowProvider` e o store permanecem estáticos: o contexto existe antes do canvas
+ * hidratar, então o boundary lazy não quebra os hooks de `useReactFlow`.
+ */
+const FlowCanvas = lazyClient<Record<string, never>>(
+  () => import('./canvas/FlowCanvas').then((m) => m.FlowCanvas),
+  {
+    loading: () => <CanvasSkeleton />,
+    ssr: false,
+  },
+);
 
 /** Editor visual de um flow (F4-S10). Canvas + palette + inspector + toolbar + execucoes. */
 export function FlowEditorPage({ flowId }: { flowId: string }) {
