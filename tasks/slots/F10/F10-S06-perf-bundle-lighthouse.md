@@ -2,7 +2,7 @@
 id: F10-S06
 title: Performance audit + bundle optimization + Lighthouse
 phase: F10
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F10-S05]
