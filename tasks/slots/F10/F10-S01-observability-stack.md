@@ -2,7 +2,7 @@
 id: F10-S01
 title: Observability stack — OTLP metrics + Prometheus + Grafana + Sentry (server-side)
 phase: F10
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: []
@@ -12,6 +12,7 @@ source_docs:
   - docs/ROADMAP.md#F10-S02
   - docs/INFRASTRUCTURE.md
 claimed_at: 2026-06-12T13:55:33Z
+completed_at: 2026-06-12T13:56:23Z
 
 ---
 # F10-S01 — Observability stack (server-side)

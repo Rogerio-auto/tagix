@@ -1,0 +1,45 @@
+# Prometheus do stack de observabilidade local (dev).
+# Sobe junto com grafana + otel-collector pelo profile `observability`:
+#   docker compose -f infra/docker/docker-compose.dev.yml --profile observability up -d
+#
+# Scrape targets usam o DNS interno do compose. Os apps (api/workers) rodam
+# NATIVOS no Windows host durante o dev — por isso scrapeamos
+# `host.docker.internal` nas portas que cada processo expõe localmente.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # O próprio Prometheus.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Collector OTel (métricas OTLP convertidas para o endpoint Prometheus interno).
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8889"]
+
+  # API Express — /metrics (prom-client). Porta default do dev: 3001.
+  - job_name: hm-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:3001"]
+        labels:
+          service: hm-api
+
+  # Workers — servidor de métricas mínimo (WORKERS_METRICS_PORT, ex. 9101).
+  - job_name: hm-workers
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:9101"]
+        labels:
+          service: hm-workers
+
+  # Agent-runtime FastAPI — /metrics (prometheus_client). Porta default: 8001.
+  - job_name: hm-agent-runtime
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8001"]
+        labels:
+          service: hm-agent-runtime

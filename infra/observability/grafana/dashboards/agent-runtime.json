@@ -1,0 +1,83 @@
+{
+  "uid": "hm-agent-runtime",
+  "title": "tagix — Agent Runtime (IA)",
+  "tags": ["tagix", "agent-runtime", "ai"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Runs de agente (run/s) por resultado",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "hm-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (result) (rate(hm_agent_runtime_runs_total[5m]))",
+          "legendFormat": "{{result}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Latência de run p50 / p95 / p99 (s)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "hm-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(hm_agent_runtime_run_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(hm_agent_runtime_run_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(hm_agent_runtime_run_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Chamadas ao LLM (call/s) por modelo e resultado",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "hm-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model, result) (rate(hm_agent_runtime_llm_calls_total[5m]))",
+          "legendFormat": "{{model}} {{result}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Tokens LLM (tok/s) por tipo",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "hm-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (kind) (rate(hm_agent_runtime_llm_tokens_total[5m]))",
+          "legendFormat": "{{kind}}"
+        }
+      ]
+    }
+  ]
+}
