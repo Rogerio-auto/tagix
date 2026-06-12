@@ -2,7 +2,7 @@
 id: F10-S07
 title: Security hardening (OWASP) — headers/helmet/CORS + sanitização de erro + audit
 phase: F10
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
