@@ -1,0 +1,29 @@
+---
+title: "Enviar mensagem"
+openapi: "POST /api/v1/send_message"
+---
+
+Enfileira uma **mensagem de texto** para uma conversa existente do workspace. A
+mensagem é persistida com status `pending` e despachada para o canal de forma
+assíncrona — o `201` confirma a **aceitação**, não a entrega.
+
+**Scope exigido:** `write:messages`.
+
+<Tip>
+  Acompanhe a entrega real via webhook `message.sent` (ver
+  [Eventos](/guides/webhook-events)).
+</Tip>
+
+### Exemplo
+
+```bash
+curl -X POST https://api.highermind.com.br/api/v1/send_message \
+  -H "Authorization: Bearer hm_sua_chave_aqui" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversationId": "5e2c0a1b-1111-2222-3333-444455556666",
+    "text": "Olá! Recebemos seu pedido."
+  }'
+```
+
+Se a conversa não existir no workspace da chave, a resposta é `404 not_found`.

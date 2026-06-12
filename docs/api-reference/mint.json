@@ -1,0 +1,82 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Highermind API",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#6366F1",
+    "light": "#A5B4FC",
+    "dark": "#4F46E5",
+    "anchors": {
+      "from": "#6366F1",
+      "to": "#A5B4FC"
+    }
+  },
+  "theme": "venus",
+  "background": {
+    "style": "gradient"
+  },
+  "modeToggle": {
+    "default": "dark",
+    "isHidden": false
+  },
+  "topbarCtaButton": {
+    "name": "Dashboard",
+    "url": "https://app.highermind.com.br/settings/dev"
+  },
+  "tabs": [
+    {
+      "name": "API Reference",
+      "url": "endpoints"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Começando",
+      "pages": [
+        "introduction",
+        "guides/authentication",
+        "guides/api-keys",
+        "guides/rate-limits",
+        "guides/errors",
+        "guides/pagination"
+      ]
+    },
+    {
+      "group": "Webhooks",
+      "pages": [
+        "guides/webhooks",
+        "guides/webhook-events"
+      ]
+    },
+    {
+      "group": "Messaging",
+      "pages": [
+        "endpoints/send-message",
+        "endpoints/send-template"
+      ]
+    },
+    {
+      "group": "Contacts",
+      "pages": ["endpoints/upsert-contact"]
+    },
+    {
+      "group": "Flows",
+      "pages": ["endpoints/trigger-flow"]
+    },
+    {
+      "group": "Conversations",
+      "pages": [
+        "endpoints/list-conversations",
+        "endpoints/get-conversation"
+      ]
+    }
+  ],
+  "openapi": ["/openapi/v1.json"],
+  "footerSocials": {
+    "website": "https://highermind.com.br"
+  }
+}

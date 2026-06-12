@@ -1,0 +1,69 @@
+---
+title: "Introdução"
+description: "API pública v1 do Highermind — envie mensagens, dispare flows e leia conversas a partir dos seus sistemas."
+---
+
+A **Highermind Public API** é uma API REST que dá ao seu workspace acesso
+programático ao núcleo da plataforma: enviar mensagens e templates, gerenciar
+contatos, disparar flows e ler conversas — tudo isolado ao tenant da sua chave.
+
+<Note>
+  Esta é a **v1**, estável. Mudanças incompatíveis virão sob um novo prefixo de
+  versão (`/api/v2`), nunca sobre a v1.
+</Note>
+
+## URL base
+
+```
+https://api.highermind.com.br
+```
+
+Todos os recursos da v1 vivem sob o prefixo **`/api/v1`**. Por exemplo, enviar
+uma mensagem é um `POST` para `/api/v1/send_message`.
+
+## Especificação OpenAPI
+
+O contrato completo é gerado em runtime a partir dos schemas de validação do
+servidor — a documentação **nunca diverge** do comportamento real. Você pode
+consumir a spec diretamente:
+
+<CardGroup cols={2}>
+  <Card title="OpenAPI 3.1 (JSON)" icon="file-code" href="https://api.highermind.com.br/api/v1/openapi.json">
+    Spec OpenAPI 3.1 servida pela API. Importe no Postman, Insomnia ou seu gerador
+    de cliente preferido.
+  </Card>
+  <Card title="Swagger interativo" icon="play" href="https://api.highermind.com.br/api/v1/docs">
+    Swagger UI hospedado pela própria API para teste rápido em runtime.
+  </Card>
+</CardGroup>
+
+## Primeiros passos
+
+<Steps>
+  <Step title="Crie uma API key">
+    Em **Settings → Dev**, gere uma chave com os scopes que sua integração precisa.
+    O token (`hm_...`) é exibido **uma única vez**. Veja [Autenticação](/guides/authentication).
+  </Step>
+  <Step title="Faça sua primeira chamada">
+    Liste conversas para validar a chave:
+
+    ```bash
+    curl https://api.highermind.com.br/api/v1/conversations \
+      -H "Authorization: Bearer hm_sua_chave_aqui"
+    ```
+  </Step>
+  <Step title="Receba eventos via webhooks (opcional)">
+    Registre um endpoint em **Settings → Dev** para receber eventos de domínio
+    (mensagens, conversas, deals, conversões) assinados com HMAC. Veja
+    [Webhooks](/guides/webhooks).
+  </Step>
+</Steps>
+
+## Convenções
+
+- **Formato:** JSON em request e response (`Content-Type: application/json`).
+- **Autenticação:** header `Authorization: Bearer hm_...` (API key de workspace).
+- **Isolamento:** toda chamada opera apenas sobre os dados do workspace dono da chave.
+- **Erros:** corpo JSON padronizado `{ "error": "...", "message": "..." }`. Veja [Erros](/guides/errors).
+- **Rate limit:** por chave, configurável (padrão 60 req/min). Veja [Rate limits](/guides/rate-limits).
+- **IDs:** todos os identificadores de recurso são UUIDs.

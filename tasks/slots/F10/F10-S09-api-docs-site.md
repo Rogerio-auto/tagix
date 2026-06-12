@@ -2,15 +2,17 @@
 id: F10-S09
 title: Documentação da API pública — site de referência (Mintlify) sobre o OpenAPI v1
 phase: F10
-status: available
+status: review
 priority: low
 estimated_size: M
 depends_on: []
 agent_id: frontend-engineer
 source_docs:
   - docs/ROADMAP.md#F10-S10
----
+claimed_at: 2026-06-12T13:55:12Z
+completed_at: 2026-06-12T13:55:20Z
 
+---
 # F10-S09 — Site de documentação da API pública
 
 > **source_docs:** `docs/ROADMAP.md` F10-S10

@@ -1,0 +1,52 @@
+---
+title: "Eventos de webhook"
+description: "Catálogo dos eventos de domínio assináveis."
+---
+
+Ao registrar um webhook em **Settings → Dev**, você escolhe quais destes eventos
+quer receber. O nome do evento chega no header `x-hm-event` e em
+`_meta.event` (ver [Webhooks](/guides/webhooks)).
+
+## Catálogo
+
+| Evento                   | Disparado quando…                                          |
+| ------------------------ | ---------------------------------------------------------- |
+| `message.received`       | Uma mensagem inbound chega de um contato.                  |
+| `message.sent`           | Uma mensagem outbound é enviada com sucesso pelo canal.    |
+| `conversation.opened`    | Uma conversa é aberta.                                     |
+| `conversation.resolved`  | Uma conversa é marcada como resolvida.                     |
+| `deal.created`           | Um deal é criado no pipeline.                              |
+| `deal.stage_changed`     | Um deal muda de estágio no pipeline.                       |
+| `deal.won`               | Um deal é marcado como ganho.                              |
+| `deal.lost`              | Um deal é marcado como perdido.                            |
+| `conversion.registered`  | Uma conversão é registrada.                                |
+
+<Note>
+  Este catálogo é a fonte canônica dos eventos assináveis. Novos eventos podem
+  ser adicionados ao longo do tempo — seu handler deve ignorar com segurança
+  qualquer `event` que ainda não trate.
+</Note>
+
+## Envelope
+
+Todos os eventos compartilham o mesmo envelope: os campos de dados do evento no
+topo, mais um bloco `_meta` com `event` e `eventId` (id estável para
+deduplicação). Exemplo para `message.received`:
+
+```json
+{
+  "conversationId": "5e2c…",
+  "messageId": "0b9a…",
+  "text": "Oi, tudo bem?",
+  "_meta": {
+    "eventId": "0b9a…:received",
+    "event": "message.received"
+  }
+}
+```
+
+<Warning>
+  O formato exato dos campos de dados de cada evento pode evoluir de forma
+  retrocompatível (campos novos podem aparecer). Faça parsing tolerante e não
+  assuma a ausência de chaves extras.
+</Warning>

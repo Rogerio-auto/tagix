@@ -1,0 +1,56 @@
+---
+title: "API keys"
+description: "Crie, configure e revogue API keys em Settings → Dev. O token é exibido uma única vez."
+---
+
+As API keys são gerenciadas pela equipe do workspace na dashboard, em
+**Settings → Dev**. A API pública **não** cria nem revoga chaves — esse é um
+fluxo autenticado por sessão, com permissões de membro.
+
+## Criar uma chave
+
+Ao criar uma chave você define:
+
+| Campo                | Descrição                                                                 |
+| -------------------- | ------------------------------------------------------------------------- |
+| `name`               | Rótulo de identificação (ex.: "Integração ERP").                          |
+| `scopes`             | Um ou mais scopes (ver [Autenticação](/guides/authentication#scopes)).    |
+| `rateLimitPerMinute` | Limite de requisições por minuto da chave. Padrão **60**, máximo 10000.   |
+| `expiresAt`          | Opcional. Data de expiração; após ela a chave para de autenticar.         |
+
+<Warning>
+  **Show-once.** O token claro `hm_...` é retornado **apenas no momento da
+  criação** e nunca mais. O servidor guarda só um hash SHA-256 e um prefixo de
+  exibição. Se você perder o token, gere uma nova chave e revogue a antiga.
+</Warning>
+
+A listagem nunca expõe o token — só metadados: `keyPrefix` (display),
+`scopes`, `rateLimitPerMinute`, `isActive`, `lastUsedAt`, `expiresAt` e
+`createdAt`.
+
+## Revogar uma chave
+
+Revogar marca a chave como inativa **imediatamente** — a próxima requisição que
+usá-la recebe `401 unauthorized`. A operação é idempotente: revogar uma chave já
+revogada não faz nada.
+
+## Boas práticas
+
+<AccordionGroup>
+  <Accordion title="Trate o token como segredo">
+    Guarde-o num cofre de segredos (não no código nem em repositórios). Em
+    runtime, leia de variável de ambiente (`HM_API_KEY`).
+  </Accordion>
+  <Accordion title="Use uma chave por integração">
+    Chaves separadas isolam blast radius e rate limit, e permitem revogar uma
+    integração sem afetar as outras.
+  </Accordion>
+  <Accordion title="Defina expiração para chaves temporárias">
+    Para integrações de prazo definido (uma migração, um piloto), use `expiresAt`
+    para que a chave se invalide sozinha.
+  </Accordion>
+  <Accordion title="Rotacione periodicamente">
+    Gere uma chave nova, atualize a integração, valide e só então revogue a
+    antiga — sem janela de indisponibilidade.
+  </Accordion>
+</AccordionGroup>
