@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import {
   Background,
   Controls,
@@ -8,12 +8,23 @@ import {
   addEdge,
   useReactFlow,
   type Connection,
+  type Node,
   type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useFlowEditor } from '../hooks/useFlowEditor';
+import { useFlowEditor, type FlowEditorNode } from '../hooks/useFlowEditor';
 import { nodeTypes } from '../nodes/nodeTypes';
-import type { FlowNodeKind } from '../shared/node-catalog';
+import { NODE_CATALOG, type FlowNodeKind } from '../shared/node-catalog';
+
+/** Rótulo de SR por node (UX §2.10): tipo legível + nome configurado, se houver. */
+function nodeAriaLabel(node: Node<Record<string, unknown>>): string {
+  const kind = node.type as FlowNodeKind | undefined;
+  const meta = kind ? NODE_CATALOG[kind] : undefined;
+  const typeLabel = meta?.label ?? 'Nó';
+  const rawName = node.data?.['label'] ?? node.data?.['name'];
+  const name = typeof rawName === 'string' && rawName.trim() ? `: ${rawName.trim()}` : '';
+  return `${typeLabel}${name}. Enter ou setas selecionam; o painel lateral edita.`;
+}
 
 /**
  * Canvas ReactFlow (FLOW_BUILDER secao 9.1/9.2). DnD do palette cria node no ponto do drop;
@@ -26,6 +37,13 @@ function CanvasInner() {
 
   const nodes = useFlowEditor((s) => s.nodes);
   const edges = useFlowEditor((s) => s.edges);
+
+  // Injeta `ariaLabel` por node sem mutar o store (fonte de verdade do zustand).
+  // ReactFlow expõe esse rótulo ao leitor de tela quando o node recebe foco.
+  const a11yNodes = useMemo<FlowEditorNode[]>(
+    () => nodes.map((n) => ({ ...n, ariaLabel: nodeAriaLabel(n) })),
+    [nodes],
+  );
   const onNodesChange = useFlowEditor((s) => s.onNodesChange);
   const onEdgesChange = useFlowEditor((s) => s.onEdgesChange);
   const connect = useFlowEditor((s) => s.connect);
@@ -54,7 +72,7 @@ function CanvasInner() {
   return (
     <div ref={wrapperRef} className="h-full w-full">
       <ReactFlow
-        nodes={nodes}
+        nodes={a11yNodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
@@ -65,11 +83,20 @@ function CanvasInner() {
         }}
         onNodeClick={(_, node) => select(node.id)}
         onPaneClick={() => select(null)}
+        // a11y: nodes focáveis por Tab; setas reposicionam o node selecionado
+        // (paridade com o drag por mouse, §2.10). Enter/Espaço selecionam e
+        // alimentam o inspector via onSelectionChange — corpo do node continua
+        // sendo a ação primária (§2.1) e o drag por handle não regride (§2.2).
+        nodesFocusable
+        nodesDraggable
+        elementsSelectable
+        onSelectionChange={({ nodes: sel }) => select(sel[0]?.id ?? null)}
         onDrop={onDrop}
         onDragOver={(e) => {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'move';
         }}
+        aria-label="Canvas do flow. Use Tab para focar os nós, setas para movê-los e Enter para selecionar e abrir o painel de edição."
         fitView
         proOptions={{ hideAttribution: true }}
       >

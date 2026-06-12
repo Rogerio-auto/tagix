@@ -10,7 +10,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
-| F10   | 13     | 0   | 1   | 0   | 0   | 0   | 12   |
+| F10   | 13     | 0   | 0   | 0   | 0   | 1   | 12   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
@@ -74,21 +74,21 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 10 — Launch
 
-| ID      | Titulo                                                                                    | Status     | Prioridade | Depende de |
-| ------- | ----------------------------------------------------------------------------------------- | ---------- | ---------- | ---------- |
-| F10-S01 | Observability stack — OTLP metrics + Prometheus + Grafana + Sentry (server-side)          | ✅ done     | high       | —          |
-| F10-S02 | LGPD — data export + delete (direito ao esquecimento)                                     | ✅ done     | high       | —          |
-| F10-S03 | e2e Playwright — jornada completa (login → canal → msg → agente → flow → deal)            | ✅ done     | medium     | —          |
-| F10-S04 | Sistema de ajuda contextual inline (?) — HelpHint/HelpPanel + registry                    | ✅ done     | medium     | —          |
-| F10-S05 | a11y audit + AAA contraste + navegação por teclado                                        | ✅ done     | medium     | F10-S04    |
-| F10-S06 | Performance audit + bundle optimization + Lighthouse                                      | ✅ done     | medium     | F10-S05    |
-| F10-S07 | Security hardening (OWASP) — headers/helmet/CORS + sanitização de erro + audit            | ✅ done     | high       | —          |
-| F10-S08 | Runbooks operacionais — postgres-down, restore-backup, rotate-key, waba-banned            | ✅ done     | medium     | —          |
-| F10-S09 | Documentação da API pública — site de referência (Mintlify) sobre o OpenAPI v1            | ✅ done     | low        | —          |
-| F10-S10 | Code-split real das libs pesadas (recharts/xyflow/fullcalendar) via lazyClient            | ✅ done     | medium     | —          |
-| F10-S11 | Bump de dependências vulneráveis (OWASP A06) — drizzle-orm, OTel, vitest                  | ✅ done     | high       | —          |
-| F10-S12 | a11y das telas flagship — ChatList (setas), Pipeline (dnd-kit keyboard), ReactFlow canvas | ⏸️ blocked | medium     | F10-S10    |
-| F10-S13 | Sentry browser — error tracking do cliente web (opt-in, no-op sem DSN)                    | ✅ done     | medium     | —          |
+| ID      | Titulo                                                                                    | Status   | Prioridade | Depende de |
+| ------- | ----------------------------------------------------------------------------------------- | -------- | ---------- | ---------- |
+| F10-S01 | Observability stack — OTLP metrics + Prometheus + Grafana + Sentry (server-side)          | ✅ done   | high       | —          |
+| F10-S02 | LGPD — data export + delete (direito ao esquecimento)                                     | ✅ done   | high       | —          |
+| F10-S03 | e2e Playwright — jornada completa (login → canal → msg → agente → flow → deal)            | ✅ done   | medium     | —          |
+| F10-S04 | Sistema de ajuda contextual inline (?) — HelpHint/HelpPanel + registry                    | ✅ done   | medium     | —          |
+| F10-S05 | a11y audit + AAA contraste + navegação por teclado                                        | ✅ done   | medium     | F10-S04    |
+| F10-S06 | Performance audit + bundle optimization + Lighthouse                                      | ✅ done   | medium     | F10-S05    |
+| F10-S07 | Security hardening (OWASP) — headers/helmet/CORS + sanitização de erro + audit            | ✅ done   | high       | —          |
+| F10-S08 | Runbooks operacionais — postgres-down, restore-backup, rotate-key, waba-banned            | ✅ done   | medium     | —          |
+| F10-S09 | Documentação da API pública — site de referência (Mintlify) sobre o OpenAPI v1            | ✅ done   | low        | —          |
+| F10-S10 | Code-split real das libs pesadas (recharts/xyflow/fullcalendar) via lazyClient            | ✅ done   | medium     | —          |
+| F10-S11 | Bump de dependências vulneráveis (OWASP A06) — drizzle-orm, OTel, vitest                  | ✅ done   | high       | —          |
+| F10-S12 | a11y das telas flagship — ChatList (setas), Pipeline (dnd-kit keyboard), ReactFlow canvas | 🟣 review | medium     | F10-S10    |
+| F10-S13 | Sentry browser — error tracking do cliente web (opt-in, no-op sem DSN)                    | ✅ done   | medium     | —          |
 
 ## Fase 2 — Agent runtime + Agentes IA
 

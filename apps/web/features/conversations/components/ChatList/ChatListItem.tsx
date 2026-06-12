@@ -1,5 +1,6 @@
 'use client';
 
+import { forwardRef } from 'react';
 import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
 import { FlowExecutionsBadge } from '@/features/flow-builder/livechat';
@@ -8,6 +9,14 @@ import type { ConversationSummary } from '../../types';
 export interface ChatListItemProps {
   conversation: ConversationSummary;
   active: boolean;
+  /**
+   * Roving tabindex (UX §2.10 / WAI-ARIA list pattern): apenas o item com foco
+   * lógico participa da tab order; os demais recebem `-1` e são alcançados pelas
+   * setas ↑/↓.
+   */
+  tabIndex: number;
+  /** Marca o item focado logicamente quando navegado por teclado. */
+  focused: boolean;
 }
 
 function initials(remoteId: string): string {
@@ -22,20 +31,30 @@ function shortTime(iso: string | null): string {
   return new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
-export function ChatListItem({ conversation, active }: ChatListItemProps) {
+export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(function ChatListItem(
+  { conversation, active, tabIndex, focused },
+  ref,
+) {
   const hasUnread = conversation.unreadCount > 0;
   const time = shortTime(conversation.lastMessageAt);
 
   return (
-    <li>
+    <li role="option" aria-selected={active}>
       <Link
+        ref={ref}
         href={`/conversations/${conversation.id}`}
         aria-current={active ? 'true' : undefined}
+        tabIndex={tabIndex}
+        data-conversation-id={conversation.id}
         className={cn(
           'flex items-center gap-3 border-l-2 px-4 py-3 outline-none transition-colors',
           active
             ? 'border-brand bg-surface-3'
-            : 'border-transparent hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:shadow-glow-md',
+            : 'border-transparent hover:bg-surface-2',
+          // Foco real (focus-visible) e foco lógico do roving tabindex pintam o
+          // mesmo anel — §3.5 (focus nunca suprimido).
+          'focus-visible:bg-surface-2 focus-visible:shadow-glow-md',
+          focused && !active && 'bg-surface-2',
         )}
       >
         <div className="flex size-10 shrink-0 items-center justify-center rounded-pill bg-surface-3 font-head text-sm text-text-mid">
@@ -78,4 +97,4 @@ export function ChatListItem({ conversation, active }: ChatListItemProps) {
       </Link>
     </li>
   );
-}
+});

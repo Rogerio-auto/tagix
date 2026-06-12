@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageSquare, SearchX } from 'lucide-react';
 import { Button } from '@hm/ui';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/components/feedback';
@@ -35,6 +36,70 @@ export function ChatList({ activeConversationId }: ChatListProps) {
 
   const showSkeleton = isLoading || isDebouncing;
   const isEmpty = !showSkeleton && !isError && conversations.length === 0;
+
+  // Roving tabindex (UX §2.10): ↑/↓ movem o foco entre conversas, Enter abre
+  // (o próprio <Link> focado segue a navegação nativamente). `focusedIndex` é o
+  // item que detém o tabindex 0; -1 = nenhum foco lógico fixado ainda.
+  const itemRefs = useRef<(HTMLAnchorElement | null)[]>([]);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+
+  // Mantém o índice válido quando a lista muda (filtro/realtime) e ancora no
+  // item ativo (conversa aberta) quando existir.
+  useEffect(() => {
+    if (conversations.length === 0) {
+      setFocusedIndex(-1);
+      return;
+    }
+    setFocusedIndex((prev) => {
+      if (prev >= 0 && prev < conversations.length) return prev;
+      const activeIdx = conversations.findIndex((c) => c.id === activeConversationId);
+      return activeIdx >= 0 ? activeIdx : 0;
+    });
+  }, [conversations, activeConversationId]);
+
+  const focusItem = useCallback((index: number) => {
+    const el = itemRefs.current[index];
+    if (el) el.focus();
+  }, []);
+
+  const onKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLUListElement>) => {
+      const count = conversations.length;
+      if (count === 0) return;
+      switch (event.key) {
+        case 'ArrowDown': {
+          event.preventDefault();
+          const next = focusedIndex < 0 ? 0 : Math.min(focusedIndex + 1, count - 1);
+          setFocusedIndex(next);
+          focusItem(next);
+          break;
+        }
+        case 'ArrowUp': {
+          event.preventDefault();
+          const next = focusedIndex < 0 ? 0 : Math.max(focusedIndex - 1, 0);
+          setFocusedIndex(next);
+          focusItem(next);
+          break;
+        }
+        case 'Home': {
+          event.preventDefault();
+          setFocusedIndex(0);
+          focusItem(0);
+          break;
+        }
+        case 'End': {
+          event.preventDefault();
+          const last = count - 1;
+          setFocusedIndex(last);
+          focusItem(last);
+          break;
+        }
+        default:
+          break;
+      }
+    },
+    [conversations.length, focusedIndex, focusItem],
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -81,12 +146,33 @@ export function ChatList({ activeConversationId }: ChatListProps) {
             />
           )
         ) : (
-          <ul aria-label="Conversas" aria-live="polite">
-            {conversations.map((conv) => (
+          <ul
+            role="listbox"
+            aria-label="Conversas"
+            aria-live="polite"
+            tabIndex={focusedIndex < 0 ? 0 : -1}
+            onKeyDown={onKeyDown}
+            onFocus={(e) => {
+              // Foco entrou no <ul> vazio de roving (sem item focável ainda):
+              // delega ao primeiro item para o teclado fluir.
+              if (e.target === e.currentTarget && conversations.length > 0) {
+                const idx = focusedIndex < 0 ? 0 : focusedIndex;
+                setFocusedIndex(idx);
+                focusItem(idx);
+              }
+            }}
+            className="outline-none"
+          >
+            {conversations.map((conv, index) => (
               <ChatListItem
                 key={conv.id}
+                ref={(el) => {
+                  itemRefs.current[index] = el;
+                }}
                 conversation={conv}
                 active={conv.id === activeConversationId}
+                tabIndex={index === focusedIndex ? 0 : -1}
+                focused={index === focusedIndex}
               />
             ))}
           </ul>

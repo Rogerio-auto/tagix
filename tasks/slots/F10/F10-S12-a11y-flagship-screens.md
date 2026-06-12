@@ -2,7 +2,7 @@
 id: F10-S12
 title: a11y das telas flagship — ChatList (setas), Pipeline (dnd-kit keyboard), ReactFlow canvas
 phase: F10
-status: blocked
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F10-S10]
@@ -10,8 +10,10 @@ agent_id: frontend-engineer
 source_docs:
   - docs/a11y/keyboard-aria-checklist.md
   - docs/UX_PRINCIPLES.md
----
+claimed_at: 2026-06-12T15:38:24Z
+completed_at: 2026-06-12T15:39:43Z
 
+---
 # F10-S12 — a11y das telas flagship
 
 > **source_docs:** `docs/a11y/keyboard-aria-checklist.md` (follow-ups do F10-S05); `docs/UX_PRINCIPLES.md` §2.10
