@@ -2,15 +2,16 @@
 id: F15-S02
 title: Webhook IG ingestion — /webhooks/meta parseia entries IG + dedup + enqueue
 phase: F15
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F15-S01]
 agent_id: backend-engineer
 source_docs:
   - docs/features/INSTAGRAM.md
----
+claimed_at: 2026-06-12T23:57:21Z
 
+---
 # F15-S02 — Webhook IG ingestion (API)
 
 > **source_docs:** `docs/features/INSTAGRAM.md` §4
