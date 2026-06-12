@@ -67,7 +67,10 @@
 
   --text: #f2f5f2;
   --text-mid: #b9c2ba;
-  --text-low: #7e867f;
+  /* A11y (F10-S05): de #7e867f (4.26:1 em surface-3 — falhava AA) para #a3aca4,
+     que atinge AA em toda superfície (≥6.84:1) e AAA em bg/bg-alt/surface-inset.
+     Mesma matiz verde-acinzentada; só mais luminoso. */
+  --text-low: #a3aca4;
   --text-on-brand: #04210a;
 
   --border: #243026;
@@ -100,8 +103,12 @@
   --surface-inset: #ecf1ec;
 
   --text: #0c140d;
-  --text-mid: #4b5b4d;
-  --text-low: #7e867f;
+  /* A11y (F10-S05): de #4b5b4d (5.98:1 em surface-3 — só AA) para #414e42,
+     elevando o texto secundário/labels a AAA (≥7.25:1 em toda superfície). */
+  --text-mid: #414e42;
+  /* A11y (F10-S05): de #7e867f (3.10:1 em surface-3 — falhava até AA no claro)
+     para #4e584f, atingindo AA em toda superfície (≥6.12:1) e AAA em surface. */
+  --text-low: #4e584f;
   --text-on-brand: #04210a;
 
   --border: #d3dcd4;

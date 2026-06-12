@@ -64,8 +64,13 @@ export function CommandPalette({ commands = [] }: { commands?: Command[] }) {
     if (!open) return;
     setQuery('');
     setIndex(0);
+    // Devolve o foco a quem abriu a paleta ao fechar (WCAG 2.4.3).
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     const t = setTimeout(() => inputRef.current?.focus(), 0);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      previouslyFocused?.focus?.();
+    };
   }, [open]);
 
   useEffect(() => {
@@ -114,17 +119,26 @@ export function CommandPalette({ commands = [] }: { commands?: Command[] }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar comando…"
+            // Padrão combobox/listbox (WAI-ARIA APG): o input controla a lista e
+            // aponta o item ativo, para o leitor anunciar a navegação por setas.
+            role="combobox"
+            aria-expanded
+            aria-controls="hm-command-list"
+            aria-autocomplete="list"
+            aria-activedescendant={filtered[index] ? `hm-cmd-${filtered[index].id}` : undefined}
+            aria-label="Buscar comando"
             className="h-12 w-full bg-transparent font-body text-text outline-none placeholder:text-text-low"
           />
         </div>
-        <ul className="max-h-80 overflow-y-auto p-2">
+        <ul id="hm-command-list" role="listbox" aria-label="Comandos" className="max-h-80 overflow-y-auto p-2">
           {filtered.length === 0 && (
             <li className="px-3 py-6 text-center font-body text-sm text-text-low">Nenhum comando</li>
           )}
           {filtered.map((c, i) => (
-            <li key={c.id}>
+            <li key={c.id} id={`hm-cmd-${c.id}`} role="option" aria-selected={i === index}>
               <button
                 type="button"
+                tabIndex={-1}
                 onMouseEnter={() => setIndex(i)}
                 onClick={() => {
                   c.run();

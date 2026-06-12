@@ -61,10 +61,15 @@ export function HelpPanel({
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKey);
+    // Devolve o foco ao gatilho `?` quando o painel fecha (WCAG 2.4.3).
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     // Foca o painel ao abrir para o fluxo de teclado começar dentro dele (§2.10).
     const first = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
     first?.focus();
-    return () => document.removeEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      previouslyFocused?.focus?.();
+    };
   }, [open, onClose]);
 
   const trapTab = useCallback((e: ReactKeyboardEvent<HTMLElement>) => {

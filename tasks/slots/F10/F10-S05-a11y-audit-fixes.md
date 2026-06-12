@@ -2,7 +2,7 @@
 id: F10-S05
 title: a11y audit + AAA contraste + navegação por teclado
 phase: F10
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F10-S04]
@@ -12,6 +12,7 @@ source_docs:
   - docs/UX_PRINCIPLES.md
   - docs/DESIGN_SYSTEM.md
 claimed_at: 2026-06-12T14:28:01Z
+completed_at: 2026-06-12T14:30:06Z
 
 ---
 # F10-S05 — Accessibility audit + fixes

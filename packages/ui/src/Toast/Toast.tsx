@@ -104,6 +104,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                       <div
                         key={t.id}
                         role={t.variant === 'error' ? 'alert' : 'status'}
+                        // Erro = assertivo (interrompe); demais = polido. aria-atomic
+                        // garante que título+descrição sejam lidos como uma unidade.
+                        aria-live={t.variant === 'error' ? 'assertive' : 'polite'}
+                        aria-atomic="true"
                         className={cn(
                           'pointer-events-auto flex w-80 items-start gap-3 rounded-md border border-border border-l-4 bg-surface-2 p-3 shadow-elev-3',
                           'motion-safe:animate-[hm-toast-in_240ms_ease-out]',

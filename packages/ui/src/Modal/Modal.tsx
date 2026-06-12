@@ -34,10 +34,13 @@ export function Modal({ open, onClose, title, description, children, footer, cla
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    // Guarda o gatilho para devolver o foco ao fechar (WCAG 2.4.3 — ordem de foco).
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
+      previouslyFocused?.focus?.();
     };
   }, [open, onClose]);
 
@@ -73,6 +76,7 @@ export function Modal({ open, onClose, title, description, children, footer, cla
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : 'Diálogo'}
         aria-describedby={description ? descId : undefined}
         onKeyDown={trapTab}
         className={cn(
