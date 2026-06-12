@@ -2,7 +2,7 @@
 id: F10-S11
 title: Bump de dependências vulneráveis (OWASP A06) — drizzle-orm, OTel, vitest
 phase: F10
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
