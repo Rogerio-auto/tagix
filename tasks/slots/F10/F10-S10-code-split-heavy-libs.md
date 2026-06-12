@@ -2,7 +2,7 @@
 id: F10-S10
 title: Code-split real das libs pesadas (recharts/xyflow/fullcalendar) via lazyClient
 phase: F10
-status: available
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on: []
@@ -10,8 +10,9 @@ agent_id: frontend-engineer
 source_docs:
   - docs/performance/REPORT.md
   - docs/ROADMAP.md#F10-S06
----
+claimed_at: 2026-06-12T15:22:47Z
 
+---
 # F10-S10 — Code-split real das libs pesadas
 
 > **source_docs:** `docs/performance/REPORT.md` (§5 follow-ups); follow-up do F10-S06
