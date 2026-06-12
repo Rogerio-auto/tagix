@@ -10,7 +10,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
-| F10   | 13     | 0   | 1   | 0   | 0   | 1   | 11   |
+| F10   | 13     | 0   | 1   | 0   | 0   | 0   | 12   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
@@ -88,7 +88,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F10-S10 | Code-split real das libs pesadas (recharts/xyflow/fullcalendar) via lazyClient            | ✅ done     | medium     | —          |
 | F10-S11 | Bump de dependências vulneráveis (OWASP A06) — drizzle-orm, OTel, vitest                  | ✅ done     | high       | —          |
 | F10-S12 | a11y das telas flagship — ChatList (setas), Pipeline (dnd-kit keyboard), ReactFlow canvas | ⏸️ blocked | medium     | F10-S10    |
-| F10-S13 | Sentry browser — error tracking do cliente web (opt-in, no-op sem DSN)                    | 🟣 review   | medium     | —          |
+| F10-S13 | Sentry browser — error tracking do cliente web (opt-in, no-op sem DSN)                    | ✅ done     | medium     | —          |
 
 ## Fase 2 — Agent runtime + Agentes IA
 

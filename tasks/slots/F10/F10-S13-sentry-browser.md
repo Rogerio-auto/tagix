@@ -2,7 +2,7 @@
 id: F10-S13
 title: Sentry browser — error tracking do cliente web (opt-in, no-op sem DSN)
 phase: F10
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: []
