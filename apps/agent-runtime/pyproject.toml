@@ -16,6 +16,8 @@ dependencies = [
     "langserve>=0.3",
     "langchain-core>=0.3",
     "psycopg[binary]>=3.2",
+    "prometheus-client>=0.21",
+    "sentry-sdk[fastapi]>=2.0",
 ]
 
 [dependency-groups]

@@ -81,6 +81,13 @@ import {
 const METRICS_ROLLUP_INTERVAL_MS = 10 * 60_000;
 import { startWebhookDispatcher } from '../webhooks/index';
 import {
+  initSentry,
+  startMetricsServer,
+  stopMetricsServer,
+  flushSentry,
+} from '../observability/index';
+import { startPrivacyExportProcessor } from '../privacy/index';
+import {
   adapterFactoryByChannel,
   createAdapterFactory,
   type AdapterFactoryOptions,
@@ -122,6 +129,10 @@ export async function startWorkers(
   options: BootstrapOptions = {},
 ): Promise<WorkersBootstrapHandle> {
   const logger = options.logger ?? createLogger('info', { svc: '@hm/workers' });
+
+  // Observabilidade (F10-S01): Sentry opt-in + servidor /metrics (ambos no-op sem env).
+  initSentry();
+  startMetricsServer();
 
   // Conexão de boot: assertTopology + transporte das deps (socket/media/flow).
   const boot = await connectMq();
@@ -291,6 +302,9 @@ export async function startWorkers(
   // Dispatcher de webhooks outbound (F9-S05): drena deliveries pendentes/retrying e
   // faz o POST assinado com HMAC + retry exponencial. Singleton via lock Redis.
   const webhookDispatcher = startWebhookDispatcher({ redis, logger });
+  // Processor de export LGPD (F10-S02): drena data_export_jobs pendentes, reúne PII
+  // sob RLS e grava o artefato via @hm/storage. Singleton via lock Redis.
+  const privacyExport = startPrivacyExportProcessor({ redis, logger });
   const metricsTimer = setInterval(() => {
     void runAgentMetricsRollup({}, logger).catch((err: unknown) => {
       logger.error('falha no rollup de métricas de agentes', {
@@ -318,6 +332,7 @@ export async function startWorkers(
       'dashboard-snapshot-scheduler',
       'dashboard-mv-scheduler',
       'webhook-dispatcher',
+      'privacy-export-processor',
     ],
   });
 
@@ -336,6 +351,7 @@ export async function startWorkers(
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
       clearInterval(metricsTimer);
+      await privacyExport.stop();
       await webhookDispatcher.stop();
       await dashboardSnapshot.stop();
       await dashboardMv.stop();
@@ -355,6 +371,9 @@ export async function startWorkers(
       await inbound.stop();
       await redis.quit();
       await boot.connection.close();
+      // Observabilidade (F10-S01): para o /metrics e dá flush no Sentry por último.
+      await stopMetricsServer();
+      await flushSentry();
       logger.info('workers parados');
     },
   };

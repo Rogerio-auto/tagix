@@ -40,10 +40,19 @@ import { createAuditRouter } from './routes/audit';
 import { createDashboardLayoutRouter } from './routes/members/dashboard-layout';
 import { createV1Router } from './routes/v1';
 import { createDevRouter } from './routes/dev';
+import { createPrivacyRouter } from './routes/privacy';
+import {
+  initSentry,
+  metricsMiddleware,
+  metricsHandler,
+  sentryErrorHandler,
+} from './observability';
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
   const config = loadConfig();
+  // Observabilidade (F10-S01): Sentry opt-in (no-op sem DSN) iniciado no boot.
+  initSentry();
   const app = express();
 
   // Seam onStageChanged (F5-S06/S07): socket emit + automation scheduling.
@@ -56,6 +65,9 @@ export function createApp(): Express {
   app.use(cors({ origin: config.corsOrigin, credentials: true }));
   app.use(compression());
 
+  // Métricas (F10-S01): mede duração/contagem de toda request (antes das rotas).
+  app.use(metricsMiddleware);
+
   // Webhooks ANTES do json global: as rotas POST usam express.raw p/ HMAC Meta
   // (exige os bytes exatos recebidos). Ver routes/webhooks/index.ts.
   app.use(createWebhooksRouter());
@@ -63,6 +75,8 @@ export function createApp(): Express {
   app.use(express.json({ limit: '1mb' }));
 
   app.get('/health', healthHandler);
+  // Scrape Prometheus (F10-S01): fora de auth/api-key (rede interna).
+  app.get('/metrics', metricsHandler);
   // Endpoint interno service-to-service (runtime Python → Node): auth por token
   // compartilhado (AGENT_RUNTIME_TOKEN), NÃO por sessão de usuário. Ver F2-S07/S20.
   app.use(
@@ -110,11 +124,16 @@ export function createApp(): Express {
   // Settings dados (F8-S08): tags CRUD + audit viewer.
   app.use(createTagsRouter());
   app.use(createAuditRouter());
+  // Privacidade/LGPD (F10-S02): export assíncrono + forget (anonimização). Owner/Admin.
+  app.use(createPrivacyRouter());
   // API pública v1 (F9-S03): gated por API key + scope; OpenAPI/Swagger em /api/v1/docs.
   app.use(createV1Router());
   // Gestão Dev (F9-S04): session-authed CRUD de API keys + webhooks (Settings → Dev).
   app.use(createDevRouter());
 
+  // Sentry error handler (F10-S01) ANTES do handler central: captura a exceção
+  // (no-op sem DSN) e repassa para a resposta de erro canônica.
+  app.use(sentryErrorHandler());
   // Error handler por último (Express 5 captura erros de handlers async).
   app.use(errorHandler);
   return app;

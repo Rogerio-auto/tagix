@@ -22,6 +22,7 @@ from app.db import close_pool, get_pool, init_pool
 from app.graph import build_graph
 from app.health import router as health_router
 from app.logging import configure_logging, get_logger
+from app.observability import MetricsMiddleware, init_sentry, metrics_router
 from app.providers import OpenRouterProvider
 from app.providers.embeddings import EmbeddingsProvider
 from app.routes import run_router
@@ -39,6 +40,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(level=settings.log_level, json_logs=settings.log_json)
     logger = get_logger()
+    # Observabilidade (F10-S01): Sentry opt-in (no-op sem SENTRY_DSN_AGENT_RUNTIME).
+    init_sentry()
 
     await init_pool()
     # Cliente HTTP compartilhado dos callbacks de business tools (F2-S07/S20);
@@ -85,10 +88,13 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST"],
         allow_headers=["Authorization", "Content-Type"],
     )
+    # Métricas Prometheus (F10-S01): RED HTTP + domínio LLM, expostas em GET /metrics.
+    app.add_middleware(MetricsMiddleware)
 
     app.include_router(health_router)
     app.include_router(run_router)
     app.include_router(embed_router)
+    app.include_router(metrics_router)
 
     return app
 
