@@ -2,7 +2,7 @@
 id: F10-S08
 title: Runbooks operacionais — postgres-down, restore-backup, rotate-key, waba-banned
 phase: F10
-status: available
+status: in-progress
 priority: medium
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ agent_id: general-purpose
 source_docs:
   - docs/ROADMAP.md#F10-S09
   - docs/INFRASTRUCTURE.md
----
+claimed_at: 2026-06-12T13:54:47Z
 
+---
 # F10-S08 — Runbooks operacionais
 
 > **source_docs:** `docs/ROADMAP.md` F10-S09; `docs/INFRASTRUCTURE.md`
