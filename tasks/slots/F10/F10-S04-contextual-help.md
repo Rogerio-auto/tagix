@@ -2,7 +2,7 @@
 id: F10-S04
 title: Sistema de ajuda contextual inline (?) — HelpHint/HelpPanel + registry
 phase: F10
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: []
