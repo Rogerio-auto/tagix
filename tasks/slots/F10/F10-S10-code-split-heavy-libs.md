@@ -2,7 +2,7 @@
 id: F10-S10
 title: Code-split real das libs pesadas (recharts/xyflow/fullcalendar) via lazyClient
 phase: F10
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: []
