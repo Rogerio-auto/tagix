@@ -2,15 +2,16 @@
 id: F15-S09
 title: IG App Review runbook + opt-out keyword parity + PII redact docs
 phase: F15
-status: available
+status: in-progress
 priority: low
 estimated_size: S
 depends_on: []
 agent_id: general-purpose
 source_docs:
   - docs/features/INSTAGRAM.md
----
+claimed_at: 2026-06-12T23:54:29Z
 
+---
 # F15-S09 — IG App Review runbook + opt-out + redact
 
 > **source_docs:** `docs/features/INSTAGRAM.md` §15, §17
