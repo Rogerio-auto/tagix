@@ -19,6 +19,9 @@ export type { ModalProps } from './Modal/Modal';
 export { ToastProvider, useToast } from './Toast/Toast';
 export type { ToastOptions, ToastVariant, ToastPosition } from './Toast/Toast';
 
+export { HelpHint, HelpPanel } from './HelpHint/HelpHint';
+export type { HelpHintProps, HelpContent, HelpLink } from './HelpHint/HelpHint';
+
 export { cn } from './lib/cn';
 
 /** Aliases de compatibilidade (variante/size do Button são os contratos base). */

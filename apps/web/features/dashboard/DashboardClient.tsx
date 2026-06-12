@@ -14,6 +14,7 @@
  */
 import { useMemo, useState } from 'react';
 import { PageHeader } from '@/shared/components/layout/PageHeader';
+import { HelpHint } from '@/shared/components/help';
 import { SkeletonList } from '@/shared/components/feedback';
 import { useDashboard } from './queries';
 import { useDashboardSocket } from './useDashboardSocket';
@@ -92,7 +93,7 @@ export function DashboardClient() {
   return (
     <>
       <div className="flex items-center justify-between">
-        <PageHeader title="Dashboard" />
+        <PageHeader title="Dashboard" helpSlot={<HelpHint k="dashboard.overview" />} />
         {data && <CustomizeDashboardButton />}
       </div>
       {isLoading && <SkeletonList rows={6} />}

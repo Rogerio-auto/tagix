@@ -2,6 +2,7 @@
 
 import { Redo2, Save, Send, Undo2 } from 'lucide-react';
 import { Button } from '@hm/ui';
+import { HelpHint } from '@/shared/components/help';
 import { cn } from '@/shared/lib/cn';
 
 interface Props {
@@ -36,6 +37,7 @@ export function ToolbarTop({
     <header className="flex items-center justify-between gap-3 border-b border-border-2 bg-surface-1 px-4 py-2.5">
       <div className="flex min-w-0 items-center gap-2">
         <h1 className="truncate font-head text-sm font-semibold text-text">{flowName}</h1>
+        <HelpHint k="flow.canvas" />
         <span
           className={cn(
             'rounded-pill px-2 py-0.5 text-[11px]',
