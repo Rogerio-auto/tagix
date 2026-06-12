@@ -1,10 +1,12 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
+
+const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 export interface SheetProps {
   open: boolean;
@@ -22,6 +24,7 @@ export function Sheet({ open, onClose, title, children, widthClass = 'w-[420px]'
   // Portal só após montar: servidor e 1º render do cliente devolvem null (iguais),
   // evitando hydration mismatch; o portal entra depois no client.
   const [mounted, setMounted] = useState(false);
+  const panelRef = useRef<HTMLElement>(null);
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
@@ -30,8 +33,30 @@ export function Sheet({ open, onClose, title, children, widthClass = 'w-[420px]'
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    // Foco entra no painel ao abrir e volta ao gatilho ao fechar (WCAG 2.4.3, §2.10).
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    panelRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      previouslyFocused?.focus?.();
+    };
   }, [open, onClose]);
+
+  const trapTab = useCallback((e: ReactKeyboardEvent<HTMLElement>) => {
+    if (e.key !== 'Tab') return;
+    const nodes = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE);
+    if (!nodes || nodes.length === 0) return;
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    if (!first || !last) return;
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }, []);
 
   if (!mounted) return null;
 
@@ -46,8 +71,10 @@ export function Sheet({ open, onClose, title, children, widthClass = 'w-[420px]'
         )}
       />
       <aside
+        ref={panelRef}
         role="complementary"
         aria-label={title}
+        onKeyDown={trapTab}
         className={cn(
           'absolute inset-y-0 right-0 flex max-w-full flex-col border-l border-border bg-surface shadow-elev-4 transition-transform duration-200',
           widthClass,

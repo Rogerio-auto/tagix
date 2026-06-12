@@ -52,7 +52,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         {...props}
       />
       {message && (
-        <span id={descId} className={cn('text-sm', hasError ? 'text-danger' : 'text-text-low')}>
+        <span
+          id={descId}
+          // Erro de validação é anunciado por leitor de tela assim que aparece
+          // (UX §2.7 — feedback de ação). Hint comum permanece estático.
+          role={hasError ? 'alert' : undefined}
+          aria-live={hasError ? 'assertive' : undefined}
+          className={cn('text-sm', hasError ? 'text-danger' : 'text-text-low')}
+        >
           {message}
         </span>
       )}

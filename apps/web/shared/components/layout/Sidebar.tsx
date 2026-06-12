@@ -51,6 +51,7 @@ export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose:
         <div className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={onClose} aria-hidden />
       )}
       <aside
+        aria-label="Navegação principal"
         className={cn(
           'fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-border bg-surface',
           'transition-transform duration-200 lg:static lg:translate-x-0',
