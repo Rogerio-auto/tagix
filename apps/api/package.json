@@ -24,7 +24,7 @@
     "@supabase/supabase-js": "^2.47.10",
     "compression": "^1.7.5",
     "cors": "^2.8.5",
-    "drizzle-orm": "^0.38.3",
+    "drizzle-orm": "^0.45.2",
     "express": "^5.0.1",
     "helmet": "^8.0.0",
     "ioredis": "^5.4.2",
@@ -43,6 +43,6 @@
     "dotenv": "^16.4.7",
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",
-    "vitest": "^2.1.8"
+    "vitest": "^3.2.6"
   }
 }

@@ -20,7 +20,7 @@
     "@hm/shared": "workspace:*",
     "@hm/storage": "workspace:*",
     "@sentry/node": "^8.47.0",
-    "drizzle-orm": "^0.38.3",
+    "drizzle-orm": "^0.45.2",
     "ioredis": "^5.11.1",
     "prom-client": "^15.1.3",
     "zod": "^3.24.1"
@@ -28,6 +28,6 @@
   "devDependencies": {
     "@types/node": "^22.10.7",
     "tsx": "^4.19.2",
-    "vitest": "^2.1.8"
+    "vitest": "^3.2.6"
   }
 }
