@@ -66,7 +66,7 @@ pnpm install
 pnpm typecheck
 pnpm lint
 pnpm -r --if-present test
-pnpm audit
+pnpm audit --audit-level high
 ```
 
 ## Notas
