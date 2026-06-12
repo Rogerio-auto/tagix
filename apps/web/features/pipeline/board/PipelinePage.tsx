@@ -10,6 +10,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { useToast } from '@hm/ui';
+import { HelpHint } from '@/shared/components/help';
 import { StageColumn } from './StageColumn';
 import { useDeals, usePipelineDetail, usePipelines, useMoveDeal } from './queries';
 import { DealDetailDrawer } from '../deal';
@@ -98,18 +99,21 @@ export function PipelinePage(): React.JSX.Element {
   return (
     <div className="flex h-full flex-col gap-4 p-6">
       <header className="flex items-center justify-between gap-4">
-        <select
-          value={pipelineId}
-          onChange={(e) => setSelectedId(e.target.value)}
-          aria-label="Selecionar pipeline"
-          className="rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-text"
-        >
-          {pipelines.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            value={pipelineId}
+            onChange={(e) => setSelectedId(e.target.value)}
+            aria-label="Selecionar pipeline"
+            className="rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-text"
+          >
+            {pipelines.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <HelpHint k="pipeline.board" />
+        </div>
       </header>
 
       {detail.isLoading ? (

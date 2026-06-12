@@ -2,7 +2,7 @@
 id: F10-S04
 title: Sistema de ajuda contextual inline (?) — HelpHint/HelpPanel + registry
 phase: F10
-status: available
+status: review
 priority: medium
 estimated_size: M
 depends_on: []
@@ -10,8 +10,10 @@ agent_id: frontend-engineer
 source_docs:
   - docs/ROADMAP.md#F10-S04
   - docs/UX_PRINCIPLES.md
----
+claimed_at: 2026-06-12T14:14:04Z
+completed_at: 2026-06-12T14:14:43Z
 
+---
 # F10-S04 — Ajuda contextual inline (?)
 
 > **source_docs:** `docs/ROADMAP.md` F10-S04; `docs/UX_PRINCIPLES.md` §2.5/§3.3
