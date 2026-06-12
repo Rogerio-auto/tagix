@@ -1,0 +1,465 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Highermind Public API",
+    "version": "1.0.0",
+    "description": "API pública v1 do Highermind (tagix). Autenticação por API key de workspace; rate limit por chave."
+  },
+  "servers": [{ "url": "https://api.highermind.com.br" }],
+  "security": [{ "ApiKeyAuth": [] }],
+  "tags": [
+    { "name": "Messaging" },
+    { "name": "Contacts" },
+    { "name": "Flows" },
+    { "name": "Conversations" }
+  ],
+  "paths": {
+    "/api/v1/send_message": {
+      "post": {
+        "summary": "Envia uma mensagem de texto para uma conversa.",
+        "tags": ["Messaging"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "description": "Requer o scope `write:messages`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendMessageRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Mensagem enfileirada para envio.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/api/v1/send_template": {
+      "post": {
+        "summary": "Envia um template (HSM) para uma conversa.",
+        "tags": ["Messaging"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "description": "Requer o scope `write:templates`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendTemplateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Template enfileirado para envio.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/api/v1/upsert_contact": {
+      "post": {
+        "summary": "Cria ou atualiza um contato (upsert por id/phone/email).",
+        "tags": ["Contacts"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "description": "Requer o scope `write:contacts`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpsertContactRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contato criado ou atualizado.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ContactResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/api/v1/trigger_flow": {
+      "post": {
+        "summary": "Dispara um flow para um contato/conversa.",
+        "tags": ["Flows"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "description": "Requer o scope `write:flows`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TriggerFlowRequest" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Flow disparado; execução enfileirada.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TriggerFlowResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/api/v1/conversations": {
+      "get": {
+        "summary": "Lista conversas do workspace.",
+        "tags": ["Conversations"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "description": "Requer o scope `read:conversations`.",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["open", "pending", "closed", "resolved", "snoozed"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de conversas.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConversationsListResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/api/v1/conversations/{id}": {
+      "get": {
+        "summary": "Detalhe de uma conversa.",
+        "tags": ["Conversations"],
+        "security": [{ "ApiKeyAuth": [] }],
+        "description": "Requer o scope `read:conversations`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversa.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConversationResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "hm_<token>",
+        "description": "API key do workspace no header `Authorization: Bearer hm_...`. Crie/gerencie em Settings → Dev."
+      }
+    },
+    "responses": {
+      "InvalidRequest": {
+        "description": "Requisição inválida.",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "Unauthorized": {
+        "description": "API key ausente, inválida, expirada ou revogada.",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "Forbidden": {
+        "description": "API key sem o scope necessário.",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "NotFound": {
+        "description": "Recurso não encontrado no workspace.",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "RateLimited": {
+        "description": "Rate limit por chave excedido.",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string", "example": "unauthorized" },
+          "message": {
+            "type": "string",
+            "example": "API key inválida, expirada ou revogada."
+          }
+        },
+        "required": ["error", "message"]
+      },
+      "SendMessageRequest": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Conversa de destino (mesmo workspace da chave)."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000,
+            "example": "Olá!"
+          }
+        },
+        "required": ["conversationId", "text"]
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "conversationId": { "type": "string", "format": "uuid" },
+              "direction": { "type": "string" },
+              "viewStatus": { "type": "string" },
+              "content": { "type": ["string", "null"] },
+              "createdAt": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "conversationId",
+              "direction",
+              "viewStatus",
+              "content",
+              "createdAt"
+            ]
+          }
+        },
+        "required": ["message"]
+      },
+      "SendTemplateRequest": {
+        "type": "object",
+        "properties": {
+          "conversationId": { "type": "string", "format": "uuid" },
+          "templateName": {
+            "type": "string",
+            "minLength": 1,
+            "example": "order_confirmation"
+          },
+          "languageCode": {
+            "type": "string",
+            "minLength": 1,
+            "example": "pt_BR"
+          },
+          "components": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["header", "body", "button"]
+                },
+                "parameters": { "type": "array", "items": {} }
+              },
+              "required": ["type"]
+            }
+          }
+        },
+        "required": ["conversationId", "templateName", "languageCode"]
+      },
+      "UpsertContactRequest": {
+        "type": "object",
+        "description": "Identifique o contato por id, phone ou email (ao menos um).",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Atualiza um contato específico se informado."
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "example": "+5511999990000"
+          },
+          "email": { "type": "string", "format": "email", "maxLength": 200 },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "notes": { "type": "string", "maxLength": 5000 },
+          "language": { "type": "string", "maxLength": 16 },
+          "source": { "type": "string", "maxLength": 120 },
+          "customFields": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "ContactResponse": {
+        "type": "object",
+        "properties": {
+          "contact": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "displayName": { "type": ["string", "null"] },
+              "phone": { "type": ["string", "null"] },
+              "email": { "type": ["string", "null"] },
+              "source": { "type": ["string", "null"] },
+              "createdAt": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "displayName",
+              "phone",
+              "email",
+              "source",
+              "createdAt"
+            ]
+          },
+          "created": {
+            "type": "boolean",
+            "description": "true se um novo contato foi criado; false em update."
+          }
+        },
+        "required": ["contact", "created"]
+      },
+      "TriggerFlowRequest": {
+        "type": "object",
+        "properties": {
+          "flowId": { "type": "string", "format": "uuid" },
+          "conversationId": { "type": "string", "format": "uuid" },
+          "contactId": { "type": "string", "format": "uuid" },
+          "triggerData": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["flowId"]
+      },
+      "TriggerFlowResponse": {
+        "type": "object",
+        "properties": {
+          "executionId": { "type": "string", "format": "uuid" }
+        },
+        "required": ["executionId"]
+      },
+      "Conversation": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "channelId": { "type": "string", "format": "uuid" },
+          "status": { "type": "string" },
+          "lastMessagePreview": { "type": ["string", "null"] },
+          "lastMessageAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "createdAt": { "type": ["string", "null"], "format": "date-time" }
+        },
+        "required": [
+          "id",
+          "channelId",
+          "status",
+          "lastMessagePreview",
+          "lastMessageAt",
+          "createdAt"
+        ]
+      },
+      "ConversationsListResponse": {
+        "type": "object",
+        "properties": {
+          "conversations": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Conversation" }
+          }
+        },
+        "required": ["conversations"]
+      },
+      "ConversationResponse": {
+        "type": "object",
+        "properties": {
+          "conversation": { "$ref": "#/components/schemas/Conversation" }
+        },
+        "required": ["conversation"]
+      }
+    }
+  }
+}

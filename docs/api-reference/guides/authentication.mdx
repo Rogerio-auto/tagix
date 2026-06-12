@@ -1,0 +1,80 @@
+---
+title: "Autenticação"
+description: "Autentique cada chamada com uma API key de workspace via header Bearer."
+---
+
+A API pública autentica por **API key de workspace**. Cada chave pertence a um
+único workspace e carrega um conjunto de scopes que delimitam o que ela pode
+fazer.
+
+## Header
+
+Envie a chave no header `Authorization` usando o esquema `Bearer`:
+
+```
+Authorization: Bearer hm_xxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Toda API key começa com o prefixo **`hm_`**.
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.highermind.com.br/api/v1/conversations \
+  -H "Authorization: Bearer hm_sua_chave_aqui"
+```
+
+```ts Node (fetch)
+const res = await fetch(
+  "https://api.highermind.com.br/api/v1/conversations",
+  { headers: { Authorization: `Bearer ${process.env.HM_API_KEY}` } },
+);
+const { conversations } = await res.json();
+```
+
+```python Python (requests)
+import os, requests
+
+res = requests.get(
+    "https://api.highermind.com.br/api/v1/conversations",
+    headers={"Authorization": f"Bearer {os.environ['HM_API_KEY']}"},
+)
+res.raise_for_status()
+print(res.json()["conversations"])
+```
+
+</CodeGroup>
+
+## Isolamento por workspace
+
+O workspace-alvo é resolvido **a partir da chave**, nunca de um parâmetro. Toda
+operação roda sob o isolamento do tenant dono da chave — não há como uma chave
+ler ou escrever dados de outro workspace. Não envie nenhum `workspaceId` no corpo
+das requisições.
+
+## Scopes
+
+Cada chave carrega um subconjunto de scopes. Um endpoint exige um scope
+específico; se a chave não o tiver, a resposta é `403 forbidden`.
+
+| Scope               | Permite                                              | Endpoints                                            |
+| ------------------- | ---------------------------------------------------- | ---------------------------------------------------- |
+| `write:messages`    | Enviar mensagens de texto                            | `POST /api/v1/send_message`                          |
+| `write:templates`   | Enviar templates (HSM)                               | `POST /api/v1/send_template`                         |
+| `write:contacts`    | Criar/atualizar contatos                             | `POST /api/v1/upsert_contact`                        |
+| `write:flows`       | Disparar flows                                       | `POST /api/v1/trigger_flow`                          |
+| `read:conversations`| Ler conversas                                        | `GET /api/v1/conversations`, `GET .../{id}`          |
+
+<Tip>
+  Conceda à chave **apenas os scopes que a integração usa**. Uma chave de
+  notificação outbound, por exemplo, normalmente só precisa de `write:messages`.
+</Tip>
+
+## Respostas de falha de auth
+
+| Código | `error`        | Quando                                                        |
+| ------ | -------------- | ------------------------------------------------------------ |
+| `401`  | `unauthorized` | Header ausente/malformado, ou chave inválida/expirada/revogada |
+| `403`  | `forbidden`    | Chave válida, mas sem o scope exigido pelo endpoint          |
+
+Próximo: gerenciar o ciclo de vida das chaves em [API keys](/guides/api-keys).

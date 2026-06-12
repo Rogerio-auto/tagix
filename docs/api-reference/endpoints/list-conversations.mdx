@@ -1,0 +1,25 @@
+---
+title: "Listar conversas"
+openapi: "GET /api/v1/conversations"
+---
+
+Lista as conversas do workspace, ordenadas por **atividade mais recente**
+(`lastMessageAt` decrescente).
+
+**Scope exigido:** `read:conversations`.
+
+### Parâmetros de query
+
+- `status` — opcional. Filtra por status: `open`, `pending`, `closed`,
+  `resolved`, `snoozed`.
+- `limit` — opcional. Tamanho da página, entre `1` e `100` (padrão `50`).
+
+Veja [Paginação e filtros](/guides/pagination) para o comportamento de
+ordenação.
+
+### Exemplo
+
+```bash
+curl "https://api.highermind.com.br/api/v1/conversations?status=open&limit=25" \
+  -H "Authorization: Bearer hm_sua_chave_aqui"
+```

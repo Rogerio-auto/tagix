@@ -1,0 +1,37 @@
+---
+title: "Disparar flow"
+openapi: "POST /api/v1/trigger_flow"
+---
+
+Dispara a execução de um **flow** do workspace. A execução roda de forma
+assíncrona; a resposta `202` traz o `executionId` para acompanhamento.
+
+**Scope exigido:** `write:flows`.
+
+### Campos
+
+- `flowId` — id do flow a disparar (obrigatório). Precisa existir no workspace
+  da chave; senão a resposta é `404 not_found`.
+- `conversationId` — opcional. Conversa que dá contexto à execução.
+- `contactId` — opcional. Contato-alvo da execução.
+- `triggerData` — opcional. Objeto livre disponibilizado ao flow como dados de
+  entrada do trigger.
+
+A execução é marcada como disparada pela API (`triggeredBy: "api"`).
+
+### Exemplo
+
+```bash
+curl -X POST https://api.highermind.com.br/api/v1/trigger_flow \
+  -H "Authorization: Bearer hm_sua_chave_aqui" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "flowId": "7c1d2e3f-aaaa-bbbb-cccc-ddddeeeeffff",
+    "contactId": "5e2c0a1b-1111-2222-3333-444455556666",
+    "triggerData": { "origem": "checkout", "valor": 199.9 }
+  }'
+```
+
+```json
+{ "executionId": "9f8e7d6c-0000-1111-2222-333344445555" }
+```

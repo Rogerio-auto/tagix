@@ -1,0 +1,151 @@
+---
+title: "Webhooks"
+description: "Receba eventos de domínio no seu endpoint, assinados com HMAC-SHA256, com retry automático."
+---
+
+Webhooks entregam eventos de domínio do seu workspace (mensagens, conversas,
+deals, conversões) para um endpoint HTTP seu, em tempo quase real. O Highermind
+faz `POST` no seu endpoint sempre que um evento que você assinou acontece.
+
+## Registrar um endpoint
+
+Webhooks são configurados na dashboard, em **Settings → Dev**. Ao criar uma
+assinatura você define:
+
+| Campo      | Descrição                                                                  |
+| ---------- | -------------------------------------------------------------------------- |
+| `name`     | Rótulo da assinatura.                                                       |
+| `url`      | URL HTTPS que receberá os `POST`.                                           |
+| `events`   | Um ou mais eventos a assinar (ver [Eventos](/guides/webhook-events)).       |
+| `secret`   | Segredo HMAC. Traga o seu (≥ 16 chars) ou deixe a plataforma gerar um forte.|
+| `isActive` | Liga/desliga a entrega sem apagar a assinatura.                            |
+
+<Warning>
+  **Show-once.** O segredo só é exibido **uma vez**, na criação (ou na rotação).
+  O servidor o guarda cifrado (AES-256-GCM) e nunca mais o revela — a listagem só
+  sinaliza que há segredo. Guarde-o para verificar a assinatura das entregas.
+</Warning>
+
+## Anatomia de uma entrega
+
+Cada entrega é um `POST application/json` com estes headers:
+
+| Header                | Valor                                                          |
+| --------------------- | ------------------------------------------------------------- |
+| `Content-Type`        | `application/json`                                            |
+| `x-hm-event`          | Nome do evento (ex.: `message.received`).                     |
+| `x-hm-signature-256`  | Assinatura HMAC-SHA256 do corpo cru: `sha256=<hex>`.          |
+
+### Corpo
+
+O corpo é o `data` do evento, envelopado com um bloco `_meta`:
+
+```json
+{
+  "conversationId": "5e2c…",
+  "messageId": "0b9a…",
+  "text": "Oi, tudo bem?",
+  "_meta": {
+    "eventId": "0b9a…:received",
+    "event": "message.received"
+  }
+}
+```
+
+- `_meta.event` — o mesmo nome do header `x-hm-event`.
+- `_meta.eventId` — id **estável** da ocorrência. Use-o para deduplicar
+  (entregas podem se repetir; ver Idempotência).
+
+## Verificar a assinatura
+
+Compute o HMAC-SHA256 do **corpo bruto** (bytes exatos recebidos, antes de
+qualquer parse) usando o segredo da assinatura, e compare com o valor do header
+`x-hm-signature-256` no formato `sha256=<hex>`. Use comparação em **tempo
+constante**.
+
+<CodeGroup>
+
+```ts Node (Express)
+import express from "express";
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+const app = express();
+// IMPORTANTE: precisamos do corpo CRU para o HMAC bater.
+app.use("/webhooks/hm", express.raw({ type: "application/json" }));
+
+app.post("/webhooks/hm", (req, res) => {
+  const signature = req.header("x-hm-signature-256") ?? "";
+  const expected =
+    "sha256=" +
+    createHmac("sha256", process.env.HM_WEBHOOK_SECRET!)
+      .update(req.body) // Buffer cru
+      .digest("hex");
+
+  const a = Buffer.from(signature);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    return res.status(401).end();
+  }
+
+  const event = JSON.parse(req.body.toString("utf8"));
+  // ... processe event (idempotente por event._meta.eventId)
+  res.sendStatus(200);
+});
+```
+
+```python Python (Flask)
+import hmac, hashlib, os
+from flask import Flask, request, abort
+
+app = Flask(__name__)
+
+@app.post("/webhooks/hm")
+def hm_webhook():
+    raw = request.get_data()  # corpo cru
+    expected = "sha256=" + hmac.new(
+        os.environ["HM_WEBHOOK_SECRET"].encode(),
+        raw,
+        hashlib.sha256,
+    ).hexdigest()
+    received = request.headers.get("x-hm-signature-256", "")
+    if not hmac.compare_digest(expected, received):
+        abort(401)
+    event = request.get_json()
+    # ... processe event (idempotente por event["_meta"]["eventId"])
+    return "", 200
+```
+
+</CodeGroup>
+
+<Tip>
+  Verifique o HMAC sobre os **bytes crus** do corpo. Se você reserializar o JSON
+  (reordenando chaves, mudando espaçamento) antes de assinar, a assinatura **não**
+  vai bater.
+</Tip>
+
+## Responder
+
+Responda **`2xx`** rapidamente para confirmar o recebimento. Qualquer status
+fora de 2xx, timeout (10s) ou erro de rede é tratado como falha e dispara retry.
+Faça o trabalho pesado de forma assíncrona — não segure a resposta.
+
+## Retry e backoff
+
+Entregas que falham são reagendadas com **backoff exponencial** (base 5s, teto
+1h), até **6 tentativas** no total. Esgotadas as tentativas, a entrega é marcada
+como `failed`. Você acompanha o histórico de entregas (status, código de
+resposta, tentativas) em **Settings → Dev**.
+
+## Idempotência
+
+A mesma ocorrência pode ser entregue mais de uma vez (retry após timeout em que
+seu endpoint já processou, replay de fila). **Deduplique pelo
+`_meta.eventId`** — ele é estável por ocorrência. Trate o processamento como
+idempotente: a mesma `eventId` não deve produzir efeito duplicado.
+
+## Teste de entrega
+
+Em **Settings → Dev** você pode disparar uma **entrega de teste** síncrona para
+validar URL e assinatura. Ela envia um corpo com `event: "webhook.test"`,
+assinado com o mesmo header `x-hm-signature-256` — útil para validar seu
+verificador antes de assinar eventos reais.

@@ -1,0 +1,60 @@
+---
+title: "Erros"
+description: "Toda falha retorna um corpo JSON padronizado com um código de erro estável e uma mensagem."
+---
+
+A API usa códigos HTTP convencionais e, em toda falha, retorna um corpo JSON
+**padronizado**:
+
+```json
+{
+  "error": "unauthorized",
+  "message": "API key inválida, expirada ou revogada."
+}
+```
+
+- **`error`** — código estável, legível por máquina. Faça matching neste campo.
+- **`message`** — descrição legível por humano, para logs e debugging. Pode
+  mudar de redação; não faça parsing dela.
+
+## Códigos de status
+
+| HTTP  | `error`           | Significado                                                        |
+| ----- | ----------------- | ------------------------------------------------------------------ |
+| `400` | `invalid_request` | Corpo ou query inválidos (falha de validação do schema).           |
+| `401` | `unauthorized`    | API key ausente, malformada, inválida, expirada ou revogada.       |
+| `403` | `forbidden`       | A chave não tem o scope exigido pelo endpoint.                     |
+| `404` | `not_found`       | O recurso não existe no workspace da chave.                        |
+| `429` | `rate_limited`    | Limite de requisições por minuto excedido. Veja [Rate limits](/guides/rate-limits). |
+
+## Códigos de sucesso
+
+| HTTP  | Quando                                                                  |
+| ----- | ----------------------------------------------------------------------- |
+| `200` | Leitura bem-sucedida, ou upsert de contato concluído.                   |
+| `201` | Mensagem/template aceitos e **enfileirados** para envio.                |
+| `202` | Flow disparado; a execução roda de forma assíncrona.                    |
+| `204` | Operação sem corpo de resposta.                                         |
+
+<Note>
+  `201` e `202` indicam **aceitação assíncrona**, não entrega. Uma mensagem com
+  `201` foi enfileirada para o canal; o status real de entrega é refletido depois
+  e pode ser observado via [webhooks](/guides/webhooks) (`message.sent`).
+</Note>
+
+## Tratamento recomendado
+
+<AccordionGroup>
+  <Accordion title="4xx — erro do cliente">
+    Não faça retry cego: corrija o request. `400` indica payload inválido; `401`/`403`,
+    problema de credencial/scope; `404`, recurso inexistente naquele workspace.
+  </Accordion>
+  <Accordion title="429 — rate limit">
+    Espere o `Retry-After` (em segundos) e tente de novo com backoff. Veja
+    [Rate limits](/guides/rate-limits).
+  </Accordion>
+  <Accordion title="5xx — erro do servidor">
+    Trate como transitório: retry com backoff exponencial + jitter. Se persistir,
+    abra um chamado com o `error`/`message` e o horário da falha.
+  </Accordion>
+</AccordionGroup>

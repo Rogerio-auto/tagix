@@ -1,0 +1,64 @@
+---
+title: "Rate limits"
+description: "Cada API key tem um limite de requisições por minuto, com headers de quota em toda resposta."
+---
+
+O rate limit é aplicado **por API key**, em janelas fixas de **60 segundos**. O
+limite é o `rateLimitPerMinute` configurado na chave (padrão **60**).
+
+## Headers de quota
+
+Toda resposta autenticada inclui o estado atual da quota:
+
+| Header                | Significado                                                       |
+| --------------------- | ---------------------------------------------------------------- |
+| `X-RateLimit-Limit`   | Teto de requisições na janela (o `rateLimitPerMinute` da chave). |
+| `X-RateLimit-Remaining` | Requisições ainda disponíveis na janela atual.                 |
+| `X-RateLimit-Reset`   | Epoch (segundos) em que a janela atual zera.                     |
+
+## Quando o limite estoura
+
+Ao exceder o limite, a API responde **`429`** com o corpo:
+
+```json
+{
+  "error": "rate_limited",
+  "message": "Limite de requisições por minuto excedido para esta API key."
+}
+```
+
+A resposta também inclui o header **`Retry-After`** com o número de segundos até
+a janela zerar.
+
+<Warning>
+  O limite é por **janela fixa de 60s**, não um sliding window. A quota zera de
+  uma vez no início de cada janela — picos no limite da virada de janela são
+  possíveis.
+</Warning>
+
+## Como respeitar o limite
+
+<Steps>
+  <Step title="Leia os headers proativamente">
+    Monitore `X-RateLimit-Remaining` e desacelere antes de chegar a zero.
+  </Step>
+  <Step title="Respeite o Retry-After no 429">
+    Em caso de `429`, espere o número de segundos de `Retry-After` antes de
+    reenviar — nunca faça retry imediato em loop.
+  </Step>
+  <Step title="Use backoff exponencial com jitter">
+    Para chamadas em lote, adicione jitter ao backoff para não sincronizar
+    retries de múltiplos workers na mesma janela.
+  </Step>
+  <Step title="Peça um limite maior se necessário">
+    O `rateLimitPerMinute` é por chave e configurável (até 10000) em
+    **Settings → Dev**.
+  </Step>
+</Steps>
+
+<Note>
+  Se o serviço de rate limit (Redis) estiver indisponível, a API faz **fail-open**:
+  as requisições passam (a autenticação e o isolamento de dados continuam
+  garantidos). Não conte com isso — é um mecanismo de resiliência, não uma via de
+  contorno.
+</Note>

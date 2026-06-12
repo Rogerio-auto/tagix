@@ -1,0 +1,35 @@
+---
+title: "Enviar template"
+openapi: "POST /api/v1/send_template"
+---
+
+Enfileira um **template (HSM)** para uma conversa existente. Use para mensagens
+template aprovadas (ex.: fora da janela de 24h do WhatsApp). Como o envio de
+texto, o `201` confirma a **aceitação**, não a entrega.
+
+**Scope exigido:** `write:templates`.
+
+### Campos
+
+- `templateName` — nome do template aprovado (ex.: `order_confirmation`).
+- `languageCode` — código do idioma do template (ex.: `pt_BR`).
+- `components` — array opcional de componentes (`header` | `body` | `button`)
+  com seus `parameters`, para preencher as variáveis do template.
+
+### Exemplo
+
+```bash
+curl -X POST https://api.highermind.com.br/api/v1/send_template \
+  -H "Authorization: Bearer hm_sua_chave_aqui" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversationId": "5e2c0a1b-1111-2222-3333-444455556666",
+    "templateName": "order_confirmation",
+    "languageCode": "pt_BR",
+    "components": [
+      { "type": "body", "parameters": [{ "type": "text", "text": "#1234" }] }
+    ]
+  }'
+```
+
+Se a conversa não existir no workspace da chave, a resposta é `404 not_found`.

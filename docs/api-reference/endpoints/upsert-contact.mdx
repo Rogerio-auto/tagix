@@ -1,0 +1,40 @@
+---
+title: "Criar / atualizar contato"
+openapi: "POST /api/v1/upsert_contact"
+---
+
+Cria um contato novo ou atualiza um existente (**upsert**). A resposta indica
+qual aconteceu via o campo `created` (`true` = criado, `false` = atualizado).
+
+**Scope exigido:** `write:contacts`.
+
+### Identidade do upsert
+
+O contato-alvo é resolvido nesta ordem de precedência:
+
+1. **`id`** explícito, se informado.
+2. **`phone`** (match em contato ativo).
+3. **`email`** (match em contato ativo).
+
+Informe **ao menos um** entre `id`, `phone` ou `email` — caso contrário a
+resposta é `400 invalid_request`.
+
+<Note>
+  O update é **parcial**: só os campos presentes no corpo são sobrescritos.
+  Campos omitidos permanecem como estão (não são zerados). Em criação sem
+  `source` explícito, o `source` assume `"api"`.
+</Note>
+
+### Exemplo
+
+```bash
+curl -X POST https://api.highermind.com.br/api/v1/upsert_contact \
+  -H "Authorization: Bearer hm_sua_chave_aqui" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phone": "+5511999990000",
+    "displayName": "Ana Souza",
+    "email": "ana@example.com",
+    "customFields": { "plano": "pro" }
+  }'
+```

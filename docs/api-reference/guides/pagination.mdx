@@ -1,0 +1,48 @@
+---
+title: "Paginação e filtros"
+description: "Como o endpoint de listagem limita e ordena os resultados."
+---
+
+O único endpoint de coleção da v1 é **`GET /api/v1/conversations`**. Ele expõe
+um controle de tamanho de página e um filtro por status.
+
+## Parâmetros
+
+| Parâmetro | Tipo    | Padrão | Faixa     | Descrição                                              |
+| --------- | ------- | ------ | --------- | ------------------------------------------------------ |
+| `limit`   | inteiro | `50`   | `1`–`100` | Número máximo de conversas retornadas.                 |
+| `status`  | enum    | —      | ver abaixo| Filtra por status da conversa.                         |
+
+Valores válidos de `status`: `open`, `pending`, `closed`, `resolved`, `snoozed`.
+
+## Ordenação
+
+Os resultados são ordenados por **`lastMessageAt` decrescente** — as conversas
+com atividade mais recente primeiro.
+
+```bash
+curl "https://api.highermind.com.br/api/v1/conversations?status=open&limit=25" \
+  -H "Authorization: Bearer hm_sua_chave_aqui"
+```
+
+```json
+{
+  "conversations": [
+    {
+      "id": "5e2c…",
+      "channelId": "9a1f…",
+      "status": "open",
+      "lastMessagePreview": "Perfeito, obrigado!",
+      "lastMessageAt": "2026-06-12T14:03:11.000Z",
+      "createdAt": "2026-06-10T09:21:00.000Z"
+    }
+  ]
+}
+```
+
+<Note>
+  A v1 usa **limite + ordenação por recência**, sem cursor ou offset. Para
+  acompanhar conversas novas/atualizadas de forma contínua, prefira receber os
+  eventos via [webhooks](/guides/webhooks) (`conversation.opened`,
+  `message.received`) em vez de fazer polling na listagem.
+</Note>
