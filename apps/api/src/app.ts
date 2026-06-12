@@ -1,11 +1,10 @@
 import compression from 'compression';
-import cors from 'cors';
 import express, { type Express } from 'express';
-import helmet from 'helmet';
 import { createAuthRouter } from './auth';
 import { loadConfig } from './config';
 import { healthHandler } from './health';
 import { errorHandler } from './middlewares/error';
+import { securityMiddlewares } from './middlewares/security';
 import { createInternalToolsRouter } from './internal/tools';
 import { buildWorkflowRegistry } from './internal/tools/workflow-handlers';
 import { registerCalendarHandlers } from './internal/tools/calendar-handlers';
@@ -50,7 +49,9 @@ import {
 
 /** Monta o app Express 5 com middlewares de segurança + rotas de auth + /health. */
 export function createApp(): Express {
-  const config = loadConfig();
+  // Valida env no boot (fail-fast). A allowlist CORS é lida da env dentro do
+  // security middleware (F10-S07), não mais aqui.
+  loadConfig();
   // Observabilidade (F10-S01): Sentry opt-in (no-op sem DSN) iniciado no boot.
   initSentry();
   const app = express();
@@ -61,8 +62,8 @@ export function createApp(): Express {
   registerEventHooks();
 
   app.disable('x-powered-by');
-  app.use(helmet());
-  app.use(cors({ origin: config.corsOrigin, credentials: true }));
+  // Security hardening (F10-S07): helmet+CSP+HSTS+CORS allowlist endurecidos.
+  for (const mw of securityMiddlewares()) app.use(mw);
   app.use(compression());
 
   // Métricas (F10-S01): mede duração/contagem de toda request (antes das rotas).
