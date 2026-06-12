@@ -2,7 +2,7 @@
 id: F10-S12
 title: a11y das telas flagship — ChatList (setas), Pipeline (dnd-kit keyboard), ReactFlow canvas
 phase: F10
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F10-S10]
