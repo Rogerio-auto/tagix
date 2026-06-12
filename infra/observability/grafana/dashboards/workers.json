@@ -1,0 +1,73 @@
+{
+  "uid": "hm-workers",
+  "title": "tagix — Workers (filas & jobs)",
+  "tags": ["tagix", "workers"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Jobs processados (job/s) por worker e resultado",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "hm-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (worker, result) (rate(hm_worker_jobs_processed_total[5m]))",
+          "legendFormat": "{{worker}} {{result}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Profundidade das filas",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "hm-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "hm_worker_queue_depth",
+          "legendFormat": "{{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Retries (retry/s) por worker",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "hm-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (worker) (rate(hm_worker_job_retries_total[5m]))",
+          "legendFormat": "{{worker}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Latência de processamento p95 (s) por worker",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "hm-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, worker) (rate(hm_worker_job_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{worker}}"
+        }
+      ]
+    }
+  ]
+}
