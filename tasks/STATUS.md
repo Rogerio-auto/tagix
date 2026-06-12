@@ -10,6 +10,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ---- | ----- | --- | --- | --- | --- | --- | --- |
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
+| F10   | 9     | 7   | 2   | 0   | 0   | 0   | 0   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
@@ -70,6 +71,20 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1-S24 | API send message — POST /api/conversations/:id/messages → enqueue outbound    | ✅ done | critical   | F1-S05, F1-S07, F1-S12                 |
 | F1-S25 | Web socket client — SocketProvider + window.__hmSocket (liga o realtime)      | ✅ done | critical   | F1-S11, F0-S11                         |
 | F1-S26 | Worker bootstrap + persistência direta (@hm/db) + adapter factory             | ✅ done | critical   | F1-S04, F1-S07, F1-S10, F1-S20, F1-S21 |
+
+## Fase 10 — Launch
+
+| ID      | Titulo                                                                           | Status      | Prioridade | Depende de |
+| ------- | -------------------------------------------------------------------------------- | ----------- | ---------- | ---------- |
+| F10-S01 | Observability stack — OTLP metrics + Prometheus + Grafana + Sentry (server-side) | 🟢 available | high       | —          |
+| F10-S02 | LGPD — data export + delete (direito ao esquecimento)                            | 🟢 available | high       | —          |
+| F10-S03 | e2e Playwright — jornada completa (login → canal → msg → agente → flow → deal)   | 🟢 available | medium     | —          |
+| F10-S04 | Sistema de ajuda contextual inline (?) — HelpHint/HelpPanel + registry           | 🟢 available | medium     | —          |
+| F10-S05 | a11y audit + AAA contraste + navegação por teclado                               | ⏸️ blocked  | medium     | F10-S04    |
+| F10-S06 | Performance audit + bundle optimization + Lighthouse                             | ⏸️ blocked  | medium     | F10-S05    |
+| F10-S07 | Security hardening (OWASP) — headers/helmet/CORS + sanitização de erro + audit   | 🟢 available | high       | —          |
+| F10-S08 | Runbooks operacionais — postgres-down, restore-backup, rotate-key, waba-banned   | 🟢 available | medium     | —          |
+| F10-S09 | Documentação da API pública — site de referência (Mintlify) sobre o OpenAPI v1   | 🟢 available | low        | —          |
 
 ## Fase 2 — Agent runtime + Agentes IA
 
