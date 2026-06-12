@@ -2,7 +2,7 @@
 id: F10-S02
 title: LGPD — data export + delete (direito ao esquecimento)
 phase: F10
-status: available
+status: review
 priority: high
 estimated_size: M
 depends_on: []
@@ -11,8 +11,10 @@ source_docs:
   - docs/ROADMAP.md#F10-S05
   - docs/DATA_MODEL.md
   - docs/features/PERMISSIONS.md
----
+claimed_at: 2026-06-12T13:56:37Z
+completed_at: 2026-06-12T13:57:44Z
 
+---
 # F10-S02 — LGPD: export + delete
 
 > **source_docs:** `docs/ROADMAP.md` F10-S05; `docs/DATA_MODEL.md`; `docs/features/PERMISSIONS.md`

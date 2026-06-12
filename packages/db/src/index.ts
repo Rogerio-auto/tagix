@@ -10,5 +10,7 @@ export * as schema from './schema';
 export { RLS_TABLES } from './schema';
 export { workspacesRepo, membersRepo } from './repos';
 export { contactsRepo, conversationsRepo, messagesRepo } from './repos/livechat';
+export { dataExportJobsRepo, type DataExportJob } from './repos/privacy';
+export type { DataExportScope } from './schema/privacy';
 
 export const DB_PKG = '@hm/db' as const;

@@ -13,6 +13,7 @@ import {
   campaigns,
   channels,
   contacts,
+  dataExportJobs,
   dashboardSnapshots,
   departments,
   eventParticipants,
@@ -742,6 +743,48 @@ describe('RLS Outbound webhooks (F9-S01)', () => {
       db.execute(sql`
         INSERT INTO outbound_webhook_deliveries (webhook_id, workspace_id, event, payload, status)
         VALUES (${wh.id}::uuid, ${wsA}::uuid, 'message.received', '{}'::jsonb, 'bogus')
+      `),
+    ).rejects.toThrow();
+  });
+});
+
+describe('RLS Privacy / LGPD (F10-S02)', () => {
+  it('data_export_jobs isola por workspace (B não lê job de A)', async () => {
+    const db = getDb(); // owner bypassa RLS no seed
+
+    const [jobA] = await db
+      .insert(dataExportJobs)
+      .values({ workspaceId: wsA, requestedBy: memberA, scope: { kind: 'workspace' } })
+      .returning();
+    const [jobB] = await db
+      .insert(dataExportJobs)
+      .values({ workspaceId: wsB, scope: { kind: 'workspace' } })
+      .returning();
+    if (!jobA || !jobB) throw new Error('Falha ao criar data_export_jobs.');
+
+    // A enxerga só os próprios; B não enxerga nada de A.
+    const jobsA = await withWorkspace(wsA, (tx) => tx.select().from(dataExportJobs));
+    expect(jobsA.every((j) => j.workspaceId === wsA)).toBe(true);
+    expect(jobsA.some((j) => j.id === jobA.id)).toBe(true);
+    expect(jobsA.some((j) => j.id === jobB.id)).toBe(false);
+
+    const jobsB = await withWorkspace(wsB, (tx) => tx.select().from(dataExportJobs));
+    expect(jobsB.some((j) => j.id === jobA.id)).toBe(false);
+
+    // INSERT cross-tenant via app é barrado pelo WITH CHECK (workspace_id de B sob A).
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.insert(dataExportJobs).values({ workspaceId: wsB, scope: { kind: 'workspace' } }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('status CHECK de data_export_jobs rejeita valor fora do domínio', async () => {
+    const db = getDb();
+    await expect(
+      db.execute(sql`
+        INSERT INTO data_export_jobs (workspace_id, scope, status)
+        VALUES (${wsA}::uuid, '{"kind":"workspace"}'::jsonb, 'bogus')
       `),
     ).rejects.toThrow();
   });
