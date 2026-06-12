@@ -2,6 +2,12 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# Overrides de segurança. rollup <3.30.0 (path traversal, GHSA-mw96-cpmx-2vgc) entra
+# transitivo via @sentry/nextjs > @rollup/plugin-commonjs (build-time) — força a linha
+# corrigida. Ver docs/security/owasp-audit.md (F10-S13).
+overrides:
+  rollup: ">=3.30.0"
+
 # Aprovação de build scripts (pnpm 11). esbuild/@swc/core/sharp usam binários
 # pré-compilados (build inofensivo); msw só copia um worker (não usado) → false.
 allowBuilds:
