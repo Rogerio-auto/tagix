@@ -21,6 +21,8 @@ export type {
   SendTemplateInput,
   SendInteractiveInput,
   TemplateComponent,
+  IInstagramAdapter,
+  IgCommentReplyInput,
 } from './types';
 
 /**
@@ -50,11 +52,30 @@ export {
 // --- Parsers de webhook inbound (provider → InboundEvent[]) ---
 export { parseWhatsAppWebhook } from './meta/whatsapp/webhook.parser';
 export { parseWahaWebhook } from './waha/webhook.parser';
+export { parseInstagramWebhook } from './meta/instagram/webhook.parser';
 
 // --- Adapters ---
 export { MetaWhatsAppAdapter } from './meta/whatsapp/adapter';
 export { MetaInstagramAdapter } from './meta/instagram/adapter';
 export { WAHAAdapter } from './waha/adapter';
+
+// --- Instagram helpers (comments/stories/errors — F15-S01) ---
+export {
+  listComments,
+  replyPublic as igReplyPublicToComment,
+  replyPrivate as igReplyPrivateToComment,
+  hideComment as igHideComment,
+  deleteComment as igDeleteComment,
+  type IgCommentSummary,
+  type IgCommentActionResult,
+} from './meta/instagram/comments';
+export { downloadStoryMedia } from './meta/instagram/stories';
+export {
+  IG_ERROR_CODES,
+  IG_ERROR_MESSAGES,
+  IgInteractiveSerializeError,
+  type IgErrorCode,
+} from './meta/instagram/errors';
 
 // --- Campaigns: error->action map + Graph quality/template helpers (F6-S02) ---
 export {
