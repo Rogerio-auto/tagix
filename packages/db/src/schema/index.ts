@@ -282,6 +282,11 @@ export * from './dashboard';
 // (fila durável com retry). Ambas workspace-scoped (RLS direto).
 export * from './webhooks';
 
+// --- Privacy / LGPD domain (F10-S02) ---
+// data_export_jobs — fila durável de pedidos de export de PII (workspace-scoped, RLS
+// direto). O forget (anonimização) é síncrono na API + audit_logs (sem tabela própria).
+export * from './privacy';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -353,4 +358,6 @@ export const RLS_TABLES = [
   // Outbound webhooks domain (workspace-scoped). Ambas com workspace_id próprio.
   'outbound_webhooks',
   'outbound_webhook_deliveries',
+  // Privacy / LGPD domain (workspace-scoped). data_export_jobs com workspace_id próprio.
+  'data_export_jobs',
 ] as const;
