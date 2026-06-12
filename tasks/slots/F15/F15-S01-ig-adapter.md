@@ -2,7 +2,7 @@
 id: F15-S01
 title: IG adapter completo — parser + serializer + comments + stories + errors (channels)
 phase: F15
-status: in-progress
+status: review
 priority: critical
 estimated_size: L
 depends_on: []
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/INSTAGRAM.md
   - docs/features/LIVECHAT.md
 claimed_at: 2026-06-12T23:47:08Z
+completed_at: 2026-06-12T23:54:19Z
 
 ---
 # F15-S01 — IG adapter completo (channels)

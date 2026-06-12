@@ -209,6 +209,29 @@ export interface AdapterCapabilities {
   readonly location: boolean; // meta_whatsapp + waha
 }
 
+// --- Inputs/result de acoes de comment IG (INSTAGRAM.md 7.2) ---
+
+export interface IgCommentReplyInput {
+  readonly commentId: string;
+  readonly text: string;
+}
+
+/**
+ * Adapter Instagram: estende o contrato base com as acoes de comment/story que
+ * so existem em IG. Mantido separado de `IChannelAdapter` para nao forcar
+ * WhatsApp/WAHA a implementar metodos que nao possuem (aditivo).
+ */
+export interface IInstagramAdapter extends IChannelAdapter {
+  /** Comment-to-DM (recipient.comment_id). */
+  sendPrivateReplyToComment(input: IgCommentReplyInput, channel: Channel): Promise<SendResult>;
+  /** Reply publica (POST /{comment-id}/replies). */
+  replyPublicToComment(input: IgCommentReplyInput, channel: Channel): Promise<SendResult>;
+  /** Oculta/exibe um comment. */
+  hideComment(commentId: string, channel: Channel, hide?: boolean): Promise<void>;
+  /** Remove um comment. */
+  deleteComment(commentId: string, channel: Channel): Promise<void>;
+}
+
 /**
  * Contrato único de adapter de canal. Implementações: MetaWhatsAppAdapter
  * (F1-S08), MetaInstagramAdapter (este slot, STUB), WAHAAdapter (F1-S18).
