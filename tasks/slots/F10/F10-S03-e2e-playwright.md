@@ -2,15 +2,17 @@
 id: F10-S03
 title: e2e Playwright — jornada completa (login → canal → msg → agente → flow → deal)
 phase: F10
-status: available
+status: review
 priority: medium
 estimated_size: M
 depends_on: []
 agent_id: qa-engineer
 source_docs:
   - docs/ROADMAP.md#F10-S03
----
+claimed_at: 2026-06-12T14:14:46Z
+completed_at: 2026-06-12T14:16:17Z
 
+---
 # F10-S03 — e2e Playwright (jornada completa)
 
 > **source_docs:** `docs/ROADMAP.md` F10-S03
