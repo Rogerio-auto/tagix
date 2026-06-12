@@ -2,7 +2,7 @@
 id: F15-S01
 title: IG adapter completo — parser + serializer + comments + stories + errors (channels)
 phase: F15
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: []
