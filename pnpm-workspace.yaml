@@ -12,3 +12,5 @@ allowBuilds:
   protobufjs: true
   # scarf = telemetria de download; não rodar o postinstall (swagger-ui-express → F9).
   '@scarf/scarf': false
+  # @sentry/cli baixa o binário p/ upload de source maps (opt-in via SENTRY_AUTH_TOKEN) — F10-S13.
+  '@sentry/cli': true

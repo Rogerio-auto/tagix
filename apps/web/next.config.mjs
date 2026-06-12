@@ -28,6 +28,53 @@ function withOptionalAnalyzer(config) {
   }
 }
 
+/**
+ * Sentry OPT-IN (browser/server/edge via `@sentry/nextjs`). Mesmo padrão guardado
+ * do analyzer: o wrap só roda quando o DSN está presente E a dep está instalada.
+ *
+ * - Sem `NEXT_PUBLIC_SENTRY_DSN`: retorna o config intacto — build não muda, init
+ *   no client/server vira no-op. Zero overhead em dev/local.
+ * - Sem a dep `@sentry/nextjs` (ainda não instalada quando este slot é escrito):
+ *   o `require` lança e caímos no catch, seguindo sem o wrap em vez de quebrar.
+ * - Upload de source maps só acontece quando `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` +
+ *   `SENTRY_PROJECT` existem (build de CI/Linux). Sem token, `silent` evita ruído.
+ *
+ * @param {import('next').NextConfig} config
+ * @returns {import('next').NextConfig}
+ */
+function withOptionalSentry(config) {
+  if (!process.env.NEXT_PUBLIC_SENTRY_DSN) return config;
+  try {
+    /** @type {{ withSentryConfig: (c: import('next').NextConfig, opts: Record<string, unknown>) => import('next').NextConfig }} */
+    const { withSentryConfig } = require('@sentry/nextjs');
+    const hasUploadCreds = Boolean(
+      process.env.SENTRY_AUTH_TOKEN &&
+        process.env.SENTRY_ORG &&
+        process.env.SENTRY_PROJECT,
+    );
+    return withSentryConfig(config, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      silent: !process.env.CI,
+      // Sem credenciais de upload (dev/local), desliga a geração/upload de source
+      // maps para o build não tentar (e não falhar) o passo de release.
+      sourcemaps: { disable: !hasUploadCreds },
+      // Reduz o ruído de bundle: desativa o telemetry do plugin de build.
+      telemetry: false,
+      // Encaminha o tunnel só se configurado; mantém o ad-blocker bypass opt-in.
+      tunnelRoute: process.env.NEXT_PUBLIC_SENTRY_TUNNEL_ROUTE,
+      disableLogger: true,
+    });
+  } catch {
+    console.warn(
+      '[next.config] NEXT_PUBLIC_SENTRY_DSN definido mas @sentry/nextjs não está ' +
+        'instalado — seguindo sem o wrap do Sentry.',
+    );
+    return config;
+  }
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // `standalone` (para a imagem Docker de produção) é ativado via env no build
@@ -79,4 +126,4 @@ const nextConfig = {
   },
 };
 
-export default withOptionalAnalyzer(nextConfig);
+export default withOptionalSentry(withOptionalAnalyzer(nextConfig));

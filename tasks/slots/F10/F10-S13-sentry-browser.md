@@ -2,7 +2,7 @@
 id: F10-S13
 title: Sentry browser — error tracking do cliente web (opt-in, no-op sem DSN)
 phase: F10
-status: available
+status: review
 priority: medium
 estimated_size: S
 depends_on: []
@@ -10,8 +10,10 @@ agent_id: frontend-engineer
 source_docs:
   - docs/ROADMAP.md#F10-S02
   - tasks/slots/F10/F10-S01-observability-stack.md
----
+claimed_at: 2026-06-12T15:30:53Z
+completed_at: 2026-06-12T15:32:53Z
 
+---
 # F10-S13 — Sentry browser (web client error tracking)
 
 > **source_docs:** follow-up do F10-S01 (que cobriu Sentry server-side e deixou o browser como follow-up para não colidir com slots de frontend)

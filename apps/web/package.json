@@ -24,6 +24,7 @@
     "@hm/shared": "workspace:*",
     "@hm/ui": "workspace:*",
     "@hookform/resolvers": "^3.9.1",
+    "@sentry/nextjs": "^8.55.2",
     "@tanstack/react-query": "^5.62.11",
     "@xyflow/react": "^12.11.0",
     "lucide-react": "^0.469.0",
