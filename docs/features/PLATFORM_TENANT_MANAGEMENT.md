@@ -227,16 +227,19 @@ follow-up incremental, não bloqueia o painel.
 
 ---
 
-## 9. Decisões abertas (precisam do Rogério)
+## 9. Decisões (RESOLVIDAS — 2026-06-13)
 
-1. **Impersonation — escopo:** só **view-as read-only** (recomendado p/ MVP, risco menor) ou também
-   **act-as (escrita)** com elevação? Muda o design de segurança e o tamanho de S05/S09.
-2. **Billing — Stripe agora ou depois:** gestão **interna** de assinaturas (sem cobrança real,
-   `BILLING_ENABLED=false`) — recomendado primeiro — ou **ativar Stripe** (checkout + webhooks) já nesta fase?
-3. **Prioridade dos pilares:** ordem sugerida **A (360) + B (assinaturas) → D (playground) → C (impersonation)**.
-   A impersonation é a mais sensível; vale por último (com `/hm-security` dedicado). Concorda ou inverte?
-4. **Playground — escopo de acesso:** só platform-admin (MVP) ou também expor ao cliente no app de
-   workspace (PRD §80 sugere ambos)?
+1. **Impersonation — escopo:** ✅ **só view-as READ-ONLY** na v1. Sem act-as/escrita (fase futura).
+   Simplifica S05 (middleware só bloqueia não-GET na sessão de impersonation) e S09 (sem modo de elevação).
+2. **Billing:** ✅ **gestão INTERNA**, `BILLING_ENABLED=false` — sem Stripe, sem cobrança real, sem webhooks.
+   Atribuir plano/status/trial/override pelo painel. **Sem slot de Stripe** nesta fase.
+3. **Ordem dos pilares:** ✅ **A (360) + B (assinaturas) → D (playground) → C (impersonation)** —
+   impersonation por último, com `/hm-security` dedicado.
+4. **Playground — acesso:** ✅ **só super-admin** na v1 (testar agente de qualquer tenant pelo painel).
+   Exposição ao cliente no app de workspace = follow-up.
+
+**Impacto no escopo final:** sem slot de Stripe; impersonation (S05/S09) só read-only; entrega na ordem
+A→B→D→C. Total **~11 slots** (1 db + 5 backend + 4 frontend + 1 segurança/docs), grafo do §8 mantido.
 
 ---
 
