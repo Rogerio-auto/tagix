@@ -10,6 +10,7 @@ import { buildWorkflowRegistry } from './internal/tools/workflow-handlers';
 import { registerCalendarHandlers } from './internal/tools/calendar-handlers';
 import { createAgentsRouter } from './routes/agents';
 import { createChannelsRouter } from './routes/channels';
+import { createInstagramRouter } from './routes/instagram';
 import { createConversationsRouter } from './routes/conversations';
 import { createKnowledgeRouter } from './routes/knowledge';
 import { createKnowledgeFeedbackRouter } from './routes/knowledge/feedback';
@@ -92,6 +93,7 @@ export function createApp(): Express {
   app.use(createNotesRouter());
   app.use(createRoutingRouter());
   app.use(createChannelsRouter());
+  app.use(createInstagramRouter());
   app.use(createAgentsRouter());
   app.use(createKnowledgeRouter());
   app.use(createKnowledgeFeedbackRouter());
