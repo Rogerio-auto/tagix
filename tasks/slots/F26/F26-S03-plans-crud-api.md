@@ -2,15 +2,16 @@
 id: F26-S03
 title: Plans CRUD API — catálogo de planos (limits/features tipados, sem Stripe)
 phase: F26
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: []
 agent_id: backend-engineer
 source_docs:
   - docs/features/PLATFORM_TENANT_MANAGEMENT.md
----
+claimed_at: 2026-06-13T14:42:18Z
 
+---
 # F26-S03 — Plans CRUD API
 
 > **source_docs:** `docs/features/PLATFORM_TENANT_MANAGEMENT.md` §5.1
