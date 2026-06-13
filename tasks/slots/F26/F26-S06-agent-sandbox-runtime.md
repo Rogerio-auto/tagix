@@ -2,7 +2,7 @@
 id: F26-S06
 title: Agent sandbox — mode:'sandbox' no /run (tool-executor mock, no-persist, custo is_test)
 phase: F26
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F26-S01]
