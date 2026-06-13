@@ -2,7 +2,7 @@
 id: F26-S06
 title: Agent sandbox — mode:'sandbox' no /run (tool-executor mock, no-persist, custo is_test)
 phase: F26
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F26-S01]
@@ -11,8 +11,9 @@ source_docs:
   - docs/features/PLATFORM_TENANT_MANAGEMENT.md
   - docs/AGENTS_LANGGRAPH.md
   - docs/PRD.md
----
+claimed_at: 2026-06-13T14:56:18Z
 
+---
 # F26-S06 — Agent sandbox (agent-runtime)
 
 > **source_docs:** `docs/features/PLATFORM_TENANT_MANAGEMENT.md` §7; PRD §80
