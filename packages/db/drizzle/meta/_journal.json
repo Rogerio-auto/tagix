@@ -253,6 +253,13 @@
       "when": 1781271823545,
       "tag": "0035_woozy_toad_men",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1781361051244,
+      "tag": "0036_tired_korvac",
+      "breakpoints": true
     }
   ]
 }

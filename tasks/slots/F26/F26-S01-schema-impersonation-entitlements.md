@@ -2,7 +2,7 @@
 id: F26-S01
 title: Schema — impersonation_sessions + workspace_entitlement_overrides + llm_usage_logs.is_test
 phase: F26
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: []
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/PLATFORM_TENANT_MANAGEMENT.md
   - docs/DATA_MODEL.md
 claimed_at: 2026-06-13T14:28:35Z
+completed_at: 2026-06-13T14:32:19Z
 
 ---
 # F26-S01 — Schema da F26 (db)

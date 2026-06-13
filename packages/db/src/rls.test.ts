@@ -15,6 +15,7 @@ import {
   contacts,
   dataExportJobs,
   dashboardSnapshots,
+  workspaceEntitlementOverrides,
   departments,
   eventParticipants,
   events,
@@ -786,6 +787,39 @@ describe('RLS Privacy / LGPD (F10-S02)', () => {
         INSERT INTO data_export_jobs (workspace_id, scope, status)
         VALUES (${wsA}::uuid, '{"kind":"workspace"}'::jsonb, 'bogus')
       `),
+    ).rejects.toThrow();
+  });
+});
+
+
+describe('RLS Entitlement overrides (F26-S01)', () => {
+  it('workspace_entitlement_overrides isola por workspace (B não lê override de A)', async () => {
+    const db = getDb(); // owner bypassa RLS no seed
+
+    await db
+      .insert(workspaceEntitlementOverrides)
+      .values({ workspaceId: wsA, limits: { max_channels: 9 }, features: { instagram: true } })
+      .onConflictDoNothing();
+    await db
+      .insert(workspaceEntitlementOverrides)
+      .values({ workspaceId: wsB, limits: { max_channels: 2 }, features: {} })
+      .onConflictDoNothing();
+
+    // A só enxerga o próprio override; B não enxerga o de A.
+    const ovsA = await withWorkspace(wsA, (tx) => tx.select().from(workspaceEntitlementOverrides));
+    expect(ovsA.every((o) => o.workspaceId === wsA)).toBe(true);
+    expect(ovsA.some((o) => o.workspaceId === wsB)).toBe(false);
+
+    const ovsB = await withWorkspace(wsB, (tx) => tx.select().from(workspaceEntitlementOverrides));
+    expect(ovsB.some((o) => o.workspaceId === wsA)).toBe(false);
+
+    // INSERT cross-tenant via app é barrado pelo WITH CHECK (workspace_id de B sob A).
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx
+          .insert(workspaceEntitlementOverrides)
+          .values({ workspaceId: wsB, limits: {}, features: {} }),
+      ),
     ).rejects.toThrow();
   });
 });
