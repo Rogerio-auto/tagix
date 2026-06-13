@@ -101,6 +101,122 @@ describe('dispatchOutbound — coerência kind↔provider', () => {
   });
 });
 
+describe('dispatchOutbound — Instagram', () => {
+  function igAdapter(): IChannelAdapter {
+    const ok: SendResult = { ok: true, externalId: 'ig.mid.X' };
+    const base = okAdapter('meta_instagram');
+    return {
+      ...base,
+      sendPrivateReplyToComment: vi.fn(async () => ok),
+      replyPublicToComment: vi.fn(async () => ok),
+      hideComment: vi.fn(async () => undefined),
+      deleteComment: vi.fn(async () => undefined),
+    } as unknown as IChannelAdapter;
+  }
+
+  const igChannel: Channel = {
+    id: 'ch1',
+    workspaceId: 'ws1',
+    provider: 'meta_instagram',
+    accessToken: 'tok',
+    igUserId: 'IGUSER_1',
+  };
+
+  it('roteia ig_public_reply ao adapter', async () => {
+    const adapter = igAdapter();
+    const job = parseOutboundJob({
+      kind: 'ig_public_reply',
+      channelId: 'ch1',
+      conversationId: 'cv1',
+      messageId: 'm1',
+      commentId: 'C1',
+      text: 'obrigado!',
+    });
+    const res = await dispatchOutbound(job, igChannel, adapter);
+    expect(res.dispatched).toBe(true);
+    expect(res.result.ok).toBe(true);
+  });
+
+  it('roteia ig_private_reply (comment-to-DM)', async () => {
+    const adapter = igAdapter();
+    const job = parseOutboundJob({
+      kind: 'ig_private_reply',
+      channelId: 'ch1',
+      conversationId: 'cv1',
+      messageId: 'm1',
+      commentId: 'C1',
+      text: 'no DM',
+    });
+    const res = await dispatchOutbound(job, igChannel, adapter);
+    expect(res.dispatched).toBe(true);
+    expect(res.result.ok).toBe(true);
+  });
+
+  it('ig_hide_comment retorna ok sem externalId de mensagem', async () => {
+    const adapter = igAdapter();
+    const job = parseOutboundJob({
+      kind: 'ig_hide_comment',
+      channelId: 'ch1',
+      conversationId: 'cv1',
+      messageId: 'm1',
+      commentId: 'C1',
+    });
+    const res = await dispatchOutbound(job, igChannel, adapter);
+    expect(res.dispatched).toBe(true);
+    expect(res.result.ok).toBe(true);
+  });
+
+  it('rejeita ig_public_reply em canal WhatsApp (mismatch)', async () => {
+    const adapter = okAdapter('meta_whatsapp');
+    const job = parseOutboundJob({
+      kind: 'ig_public_reply',
+      channelId: 'ch1',
+      conversationId: 'cv1',
+      messageId: 'm1',
+      commentId: 'C1',
+      text: 'x',
+    });
+    const res = await dispatchOutbound(job, makeChannel('meta_whatsapp'), adapter);
+    expect(res.dispatched).toBe(false);
+    if (!res.result.ok) expect(res.result.errorCode).toBe('OUTBOUND_KIND_PROVIDER_MISMATCH');
+  });
+
+  it('text IG fora da janela 24h sem tag: bloqueado (nao chama adapter)', async () => {
+    const adapter = igAdapter();
+    const job = parseOutboundJob({
+      kind: 'text',
+      channelId: 'ch1',
+      conversationId: 'cv1',
+      messageId: 'm1',
+      chatId: 'IGSID_1',
+      text: 'oi',
+      lastInboundFromContactAt: Date.now() - 48 * 3_600_000,
+    });
+    const res = await dispatchOutbound(job, igChannel, adapter);
+    expect(res.dispatched).toBe(false);
+    if (!res.result.ok) expect(res.result.errorCode).toBe('IG_WINDOW_CLOSED');
+    expect(adapter.sendText).not.toHaveBeenCalled();
+  });
+
+  it('text IG fora da janela COM HUMAN_AGENT: envia com tag', async () => {
+    const adapter = igAdapter();
+    const job = parseOutboundJob({
+      kind: 'text',
+      channelId: 'ch1',
+      conversationId: 'cv1',
+      messageId: 'm1',
+      chatId: 'IGSID_1',
+      text: 'oi',
+      messageTag: 'HUMAN_AGENT',
+      lastInboundFromContactAt: Date.now() - 48 * 3_600_000,
+    });
+    const res = await dispatchOutbound(job, igChannel, adapter);
+    expect(res.dispatched).toBe(true);
+    expect(res.result.ok).toBe(true);
+    expect(adapter.sendText).toHaveBeenCalledOnce();
+  });
+});
+
 describe('runWithDistributedLock — FIFO por chave', () => {
   it('serializa e preserva ordem de chegada', async () => {
     const store = new InMemoryFifoLockStore();

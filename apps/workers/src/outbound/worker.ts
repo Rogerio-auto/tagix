@@ -20,6 +20,7 @@ import type { Logger } from '@hm/logger';
 import { runWithDistributedLock, type LockStore } from '../lock';
 import { parseOutboundJob, type OutboundJob } from './job';
 import { dispatchOutbound } from './dispatch';
+import { recordIgMessageTagUsed, recordIgWindowBlocked } from './ig-metrics';
 import { finalizeOutbound } from './finalize';
 import { runPresencePreAction } from './presence';
 import {
@@ -91,6 +92,14 @@ export async function handleOutboundEnvelope(
       await runPresencePreAction(job, channel, adapter, logger);
 
       const dispatch = await dispatchOutbound(job, channel, adapter);
+
+      // F15-S04: metricas IG (tag usada / janela bloqueada).
+      if (dispatch.dispatched && dispatch.messageTagUsed !== undefined) {
+        recordIgMessageTagUsed(dispatch.messageTagUsed);
+      }
+      if (!dispatch.dispatched && dispatch.windowBlocked === true) {
+        recordIgWindowBlocked();
+      }
 
       if (!dispatch.result.ok) {
         logger.warn('outbound: envio não concluído', {
