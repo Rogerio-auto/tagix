@@ -2,7 +2,7 @@
 id: F26-S03
 title: Plans CRUD API — catálogo de planos (limits/features tipados, sem Stripe)
 phase: F26
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
