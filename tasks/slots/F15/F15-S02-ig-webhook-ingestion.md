@@ -2,7 +2,7 @@
 id: F15-S02
 title: Webhook IG ingestion — /webhooks/meta parseia entries IG + dedup + enqueue
 phase: F15
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F15-S01]

@@ -11,7 +11,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F0   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
 | F10   | 13     | 0   | 0   | 0   | 0   | 0   | 13   |
-| F15   | 9     | 0   | 6   | 0   | 0   | 1   | 2   |
+| F15   | 9     | 0   | 6   | 0   | 0   | 0   | 3   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
@@ -96,7 +96,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ID      | Titulo                                                                                      | Status     | Prioridade | Depende de       |
 | ------- | ------------------------------------------------------------------------------------------- | ---------- | ---------- | ---------------- |
 | F15-S01 | IG adapter completo — parser + serializer + comments + stories + errors (channels)          | ✅ done     | critical   | —                |
-| F15-S02 | Webhook IG ingestion — /webhooks/meta parseia entries IG + dedup + enqueue                  | 🟣 review   | high       | F15-S01          |
+| F15-S02 | Webhook IG ingestion — /webhooks/meta parseia entries IG + dedup + enqueue                  | ✅ done     | high       | F15-S01          |
 | F15-S03 | Inbound persistence IG — worker persiste DM/story/share/comment → conv/messages/ig_comments | ⏸️ blocked | high       | F15-S01, F15-S02 |
 | F15-S04 | Outbound dispatch IG — worker envia text/media/interactive/comment + janela 24h/MESSAGE_TAG | ⏸️ blocked | high       | F15-S01          |
 | F15-S05 | IG comments/stories API — endpoints de moderação (reply pub/priv, hide, delete, list)       | ⏸️ blocked | high       | F15-S03, F15-S04 |
