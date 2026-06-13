@@ -2,15 +2,16 @@
 id: F25-S05
 title: LLM usage rollup API — gasto por workspace/modelo/dia-mês + top spenders + caps
 phase: F25
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F25-S01]
 agent_id: backend-engineer
 source_docs:
   - docs/ROADMAP.md#F2.5
----
+claimed_at: 2026-06-13T01:27:54Z
 
+---
 # F25-S05 — LLM usage rollup API
 
 > **source_docs:** `docs/ROADMAP.md` F2.5-S05
