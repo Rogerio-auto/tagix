@@ -60,3 +60,37 @@ export function formatTableCell(key: string, raw: unknown): string {
   }
   return String(raw);
 }
+
+/**
+ * §F29 Onda B — formatação de score de qualidade (0-100): "90 / 100". `null` → "—".
+ */
+export function formatScore100(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return '—';
+  return `${Math.round(value)} / 100`;
+}
+
+/**
+ * Rótulo textual do sentimento CSAT (acompanha a barra de distribuição — a11y: não
+ * depender só de cor). Faixas: ≥30 positivo, ≤-30 negativo, entre neutro.
+ */
+export function csatSentimentLabel(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return 'Sem dados';
+  if (value >= 30) return 'Positivo';
+  if (value <= -30) return 'Negativo';
+  return 'Neutro';
+}
+
+/** Rótulo legível pt-BR de uma categoria de objeção (vocab fixo §2). */
+const OBJECTION_LABELS: Record<string, string> = {
+  price: 'Preço',
+  timing: 'Momento',
+  trust: 'Confiança',
+  competitor: 'Concorrente',
+  feature_gap: 'Falta de recurso',
+  authority: 'Decisão/Autoridade',
+  other: 'Outro',
+};
+
+export function objectionCategoryLabel(category: string): string {
+  return OBJECTION_LABELS[category] ?? category;
+}

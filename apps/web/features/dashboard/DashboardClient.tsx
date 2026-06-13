@@ -55,6 +55,10 @@ const DRAWER_METRICS = new Set([
   'tokens_por_modelo_24h',
   'conversoes_por_atendente_humano',
   'conversoes_por_agente_ia',
+  // Onda B (F29): rankings de qualidade + objeções rankeadas abrem drawer.
+  'qualidade_por_agente',
+  'qualidade_por_atendente',
+  'objecoes_rankeadas',
 ]);
 
 function applyLayout(

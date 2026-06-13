@@ -2,7 +2,7 @@
 id: F29-S05
 title: Dashboard Onda B — frontend (cards qualidade/CSAT + objeções rankeadas)
 phase: F29
-status: blocked
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F29-S04]
@@ -11,8 +11,10 @@ source_docs:
   - docs/features/AGENT_QUALITY_OBJECTIONS.md
   - docs/features/DASHBOARD.md
   - docs/UX_PRINCIPLES.md
----
+claimed_at: 2026-06-13T16:43:25Z
+completed_at: 2026-06-13T16:46:56Z
 
+---
 # F29-S05 — Dashboard Onda B (frontend)
 
 > **source_docs:** `docs/features/AGENT_QUALITY_OBJECTIONS.md` §5; `docs/UX_PRINCIPLES.md`

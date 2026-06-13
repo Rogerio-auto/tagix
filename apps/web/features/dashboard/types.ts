@@ -90,3 +90,35 @@ export function readTableValue(value: MetricValue | null): TableValue | null {
   if (cols.length === 0) return null;
   return { columns: cols, rows: safeRows };
 }
+
+/**
+ * §F29 Onda B — distribuição CSAT (promoter/neutral/detractor) + sentimento médio,
+ * lida com segurança do value jsonb de `satisfacao_media`. `null` se não houver
+ * amostra (o card não renderiza — sem zero enganoso).
+ */
+export interface CsatDistribution {
+  readonly sentiment: number | null;
+  readonly promoters: number;
+  readonly neutrals: number;
+  readonly detractors: number;
+  readonly sample: number;
+}
+
+function readNum(value: MetricValue, key: string): number {
+  const v = value[key];
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+}
+
+export function readCsatDistribution(value: MetricValue | null): CsatDistribution | null {
+  if (!value) return null;
+  const sample = readNum(value, 'sample');
+  if (sample <= 0) return null;
+  const raw = value['value'];
+  return {
+    sentiment: typeof raw === 'number' && Number.isFinite(raw) ? raw : null,
+    promoters: readNum(value, 'promoters'),
+    neutrals: readNum(value, 'neutrals'),
+    detractors: readNum(value, 'detractors'),
+    sample,
+  };
+}
