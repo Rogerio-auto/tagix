@@ -5,6 +5,15 @@ import { readToken, resolveSession } from '../auth';
 
 /** Exige sessão válida; popula `req.auth` (member + workspace). */
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  // View-as (F26-S05): quando o middleware de impersonation já resolveu a sessão do
+  // admin e sobrepôs o workspace pelo ALVO (req.impersonation presente + req.auth setado),
+  // NÃO re-resolvemos — isso preservaria o contexto do tenant impersonado em vez de
+  // clobberar de volta para o workspace do admin. Fora de impersonation, comportamento
+  // inalterado (re-resolve por request).
+  if (req.impersonation && req.auth) {
+    next();
+    return;
+  }
   const token = readToken(req);
   const session = token ? await resolveSession(token) : null;
   if (!session) {
