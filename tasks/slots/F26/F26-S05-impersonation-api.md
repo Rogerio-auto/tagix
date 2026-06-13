@@ -2,7 +2,7 @@
 id: F26-S05
 title: Impersonation API + middleware — view-as READ-ONLY (time-boxed, auditado, no-secrets)
 phase: F26
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F26-S01]
