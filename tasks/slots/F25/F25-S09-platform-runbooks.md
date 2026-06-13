@@ -2,7 +2,7 @@
 id: F25-S09
 title: Runbooks de plataforma — rotate-openrouter-key + manage-workspace-agent-policy
 phase: F25
-status: available
+status: review
 priority: low
 estimated_size: S
 depends_on: []
@@ -10,8 +10,10 @@ agent_id: general-purpose
 source_docs:
   - docs/ROADMAP.md#F2.5
   - docs/INFRASTRUCTURE.md
----
+claimed_at: 2026-06-13T01:16:36Z
+completed_at: 2026-06-13T01:16:45Z
 
+---
 # F25-S09 — Runbooks de plataforma
 
 > **source_docs:** `docs/ROADMAP.md` F2.5-S06; `docs/INFRASTRUCTURE.md`
