@@ -45,6 +45,15 @@ import { createPlatformModelsRouter } from './routes/platform/models';
 import { createPlatformPoliciesRouter } from './routes/platform/policies';
 import { createPlatformSecretsRouter } from './routes/platform/secrets';
 import { createPlatformUsageRouter } from './routes/platform/usage';
+import { createPlatformWorkspacesRouter } from './routes/platform/workspaces';
+import { createPlatformPlansRouter } from './routes/platform/plans';
+import { createPlatformSubscriptionsRouter } from './routes/platform/subscriptions';
+import { createPlatformImpersonationRouter } from './routes/platform/impersonation';
+import {
+  IMPERSONATION_COOKIE,
+  impersonationMiddleware,
+} from './middlewares/impersonation';
+import { requireAuth } from './middlewares/auth';
 import {
   initSentry,
   metricsMiddleware,
@@ -91,6 +100,27 @@ export function createApp(): Express {
     }),
   );
   app.use(createAuthRouter());
+
+  // View-as / impersonation (F26-S05): quando ha um claim de impersonation no
+  // cookie, resolve a sessao do admin (requireAuth) e aplica o middleware que
+  // sobrepoe o workspace-ALVO + impoe read-only (bloqueia escrita/plataforma/
+  // secrets). Sem o cookie e NO-OP -> nao perturba nenhuma rota existente. Roda
+  // DEPOIS do auth (req.auth populado) e ANTES das rotas de workspace.
+  app.use((req, res, next) => {
+    if (!req.headers.cookie?.includes(`${IMPERSONATION_COOKIE}=`)) {
+      next();
+      return;
+    }
+    void requireAuth(req, res, (err?: unknown) => {
+      if (err) {
+        next(err);
+        return;
+      }
+      if (res.headersSent) return; // requireAuth ja respondeu 401
+      impersonationMiddleware(req, res, next);
+    });
+  });
+
   app.use(createConversationsRouter());
   app.use(createMessagesRouter());
   app.use(createWindowRouter());
@@ -146,6 +176,12 @@ export function createApp(): Express {
   app.use(createPlatformPoliciesRouter());
   app.use(createPlatformSecretsRouter());
   app.use(createPlatformUsageRouter());
+  // F26: Tenants/360, catalogo de planos, assinatura+entitlements por tenant,
+  // e sessoes de view-as. Cada router e gated por requirePlatformAdmin.
+  app.use(createPlatformWorkspacesRouter());
+  app.use(createPlatformPlansRouter());
+  app.use(createPlatformSubscriptionsRouter());
+  app.use(createPlatformImpersonationRouter());
 
   // Sentry error handler (F10-S01) ANTES do handler central: captura a exceção
   // (no-op sem DSN) e repassa para a resposta de erro canônica.
