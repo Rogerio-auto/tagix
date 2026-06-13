@@ -2,7 +2,7 @@
 id: F27-S01
 title: PageContainer primitive + token de largura de conteúdo (DS)
 phase: F27
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: []
@@ -11,6 +11,7 @@ source_docs:
   - docs/DESIGN_SYSTEM.md
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-06-13T15:20:06Z
+completed_at: 2026-06-13T15:33:32Z
 
 ---
 # F27-S01 — PageContainer + token de largura

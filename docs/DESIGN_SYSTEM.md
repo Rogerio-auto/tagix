@@ -298,6 +298,29 @@ Animação shimmer respeitando `prefers-reduced-motion`.
 
 Sidebar fixa em desktop (lg+), drawer em mobile. Tokens: `--bg`, `--surface`, `--text`. Active nav item: border-left brand + bg surface-3.
 
+### 5.1.1 Largura de conteúdo (`<PageContainer>`)
+
+O `<main>` do AppLayout **não** impõe `max-width` (só gutter lateral `px-4 lg:px-8`); em monitor ultrawide isso esticaria o conteúdo de ponta a ponta. A largura é responsabilidade do **`<PageContainer>`** (`shared/components/layout`), apoiado em tokens semânticos do preset:
+
+| Token Tailwind         | Valor    | Uso                                                        |
+|------------------------|----------|------------------------------------------------------------|
+| `max-w-content`        | `1600px` | **Default** — toda página de fluxo (lista, detalhe, dashboard, settings). |
+| `max-w-content-narrow` | `900px`  | Formulários e leitura focada (`variant="narrow"`).         |
+
+```tsx
+import { PageContainer } from '@/shared/components/layout';
+
+// default (1600px, centralizado)
+<PageContainer>{children}</PageContainer>
+// form (900px)
+<PageContainer variant="narrow">{form}</PageContainer>
+// full-bleed (sem max-width)
+<PageContainer variant="full">{canvas}</PageContainer>
+```
+
+**Exceção full-bleed:** telas que precisam ocupar toda a largura — **livechat (3 colunas), pipeline kanban, flow canvas, calendar** — usam `variant="full"` (ou não envolvem em `PageContainer`). Decisão travada: 1600px é o teto do conteúdo centralizado (monitor ultrawide; referência Linear/Stripe). O container só limita o fluxo principal; drawers/modais e a preferência de density não são afetados.
+
+
 ### 5.2 LiveChat layout (3 colunas)
 
 ```

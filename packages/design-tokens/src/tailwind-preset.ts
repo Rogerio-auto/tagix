@@ -16,6 +16,7 @@ export interface TailwindPreset {
       readonly fontFamily: Record<string, string>;
       readonly borderRadius: Record<string, string>;
       readonly boxShadow: Record<string, string>;
+      readonly maxWidth: Record<string, string>;
     };
   };
 }
@@ -70,6 +71,13 @@ export const tailwindPreset: TailwindPreset = {
         'glow-sm': 'var(--glow-sm)',
         'glow-md': 'var(--glow-md)',
         'glow-lg': 'var(--glow-lg)',
+      },
+      // Largura máxima do conteúdo centralizado (DESIGN_SYSTEM "Largura de conteúdo").
+      // `content` é o default das páginas de fluxo; `content-narrow` para forms.
+      // Telas full-bleed (livechat, kanban, flow canvas, calendar) não usam nenhum.
+      maxWidth: {
+        content: '1600px',
+        'content-narrow': '900px',
       },
     },
   },
