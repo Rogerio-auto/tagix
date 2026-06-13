@@ -2,7 +2,7 @@
 id: F25-S09
 title: Runbooks de plataforma — rotate-openrouter-key + manage-workspace-agent-policy
 phase: F25
-status: review
+status: done
 priority: low
 estimated_size: S
 depends_on: []

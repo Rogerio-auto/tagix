@@ -13,7 +13,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F10   | 13     | 0   | 0   | 0   | 0   | 0   | 13   |
 | F15   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
-| F25   | 9     | 1   | 6   | 0   | 0   | 1   | 1   |
+| F25   | 9     | 1   | 6   | 0   | 0   | 0   | 2   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
@@ -144,7 +144,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F25-S06 | Platform-admin frontend shell — route group (platform) + guard + nav                    | 🟢 available | high       | —                         |
 | F25-S07 | Páginas Modelos + Políticas (frontend) — catálogo LLM + editor de policy por workspace  | ⏸️ blocked  | medium     | F25-S02, F25-S03, F25-S06 |
 | F25-S08 | Páginas Secrets + Uso (frontend) — rotação de platform_secrets + dashboard de custo LLM | ⏸️ blocked  | medium     | F25-S04, F25-S05, F25-S06 |
-| F25-S09 | Runbooks de plataforma — rotate-openrouter-key + manage-workspace-agent-policy          | 🟣 review    | low        | —                         |
+| F25-S09 | Runbooks de plataforma — rotate-openrouter-key + manage-workspace-agent-policy          | ✅ done      | low        | —                         |
 
 ## Fase 3 — Flow Builder
 
