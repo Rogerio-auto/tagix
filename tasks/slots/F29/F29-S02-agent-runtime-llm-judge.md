@@ -2,7 +2,7 @@
 id: F29-S02
 title: LLM-judge no agent-runtime — POST /internal/evaluate
 phase: F29
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: []
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/AGENT_QUALITY_OBJECTIONS.md
   - docs/AGENTS_LANGGRAPH.md
 claimed_at: 2026-06-13T16:25:18Z
+completed_at: 2026-06-13T16:30:19Z
 
 ---
 # F29-S02 — LLM-judge (agent-runtime)
