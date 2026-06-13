@@ -120,3 +120,4 @@ drizzle/meta/_journal.json.bak
 *.bak
 *.orig
 /screenshots/
+.claude/worktrees/
