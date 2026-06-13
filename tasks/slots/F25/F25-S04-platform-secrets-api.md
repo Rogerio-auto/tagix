@@ -2,7 +2,7 @@
 id: F25-S04
 title: Platform secrets rotation API — rotaciona OpenRouter/Meta/encryption keys + auditoria
 phase: F25
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F25-S01]
@@ -10,8 +10,9 @@ agent_id: backend-engineer
 source_docs:
   - docs/ROADMAP.md#F2.5
   - docs/INFRASTRUCTURE.md
----
+claimed_at: 2026-06-13T01:26:41Z
 
+---
 # F25-S04 — Platform secrets rotation API
 
 > **source_docs:** `docs/ROADMAP.md` F2.5-S04; `docs/INFRASTRUCTURE.md` §10
