@@ -14,7 +14,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F15   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F25   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F26   | 11     | 1   | 5   | 0   | 0   | 0   | 5   |
+| F26   | 11     | 1   | 4   | 0   | 0   | 1   | 5   |
+| F27   | 3     | 1   | 2   | 0   | 0   | 0   | 0   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
@@ -156,12 +157,20 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F26-S03 | Plans CRUD API — catálogo de planos (limits/features tipados, sem Stripe)                  | ✅ done      | high       | —                |
 | F26-S04 | Subscriptions API por tenant + resolveEntitlements (plano + override)                      | ✅ done      | high       | F26-S01          |
 | F26-S05 | Impersonation API + middleware — view-as READ-ONLY (time-boxed, auditado, no-secrets)      | ✅ done      | high       | F26-S01          |
-| F26-S06 | Agent sandbox — mode:'sandbox' no /run (tool-executor mock, no-persist, custo is_test)     | ⏸️ blocked  | high       | F26-S01          |
+| F26-S06 | Agent sandbox — mode:'sandbox' no /run (tool-executor mock, no-persist, custo is_test)     | 🟣 review    | high       | F26-S01          |
 | F26-S07 | Tenants list + Workspace 360 UI (frontend platform-admin)                                  | ⏸️ blocked  | medium     | F26-S02          |
 | F26-S08 | Planos + Assinatura/Entitlements UI (frontend platform-admin)                              | ⏸️ blocked  | medium     | F26-S03, F26-S04 |
 | F26-S09 | View-as UI — botão "Ver como", banner global persistente, kill-switch, sessões ativas      | ⏸️ blocked  | medium     | F26-S05          |
 | F26-S10 | Agent Playground UI — chat de teste + trace de execução + seletor de modelo/params         | ⏸️ blocked  | medium     | F26-S06          |
 | F26-S11 | Runbooks de plataforma + revisão de segurança da impersonation                             | 🟢 available | medium     | —                |
+
+## Fase 27
+
+| ID      | Titulo                                                          | Status      | Prioridade | Depende de |
+| ------- | --------------------------------------------------------------- | ----------- | ---------- | ---------- |
+| F27-S01 | PageContainer primitive + token de largura de conteúdo (DS)     | 🟢 available | high       | —          |
+| F27-S02 | Aplicar PageContainer nas telas de lista/detalhe do grupo (app) | ⏸️ blocked  | high       | F27-S01    |
+| F27-S03 | Aplicar PageContainer em settings/forms + validar full-bleed    | ⏸️ blocked  | medium     | F27-S01    |
 
 ## Fase 3 — Flow Builder
 

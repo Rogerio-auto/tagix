@@ -63,6 +63,9 @@ class AgentRunRequest(BaseModel):
     policy_snapshot: PolicySnapshot
     tools: list[ToolDescriptor] = Field(default_factory=list)
     is_playground: bool = False
+    # F26-S06: "sandbox" liga o playground (zero side-effect + custo is_test);
+    # "live" e o default de producao. Aceito alem de is_playground por compat.
+    mode: str = "live"
     metadata: dict[str, Any] | None = None
 
 
@@ -102,7 +105,7 @@ def _initial_state(req: AgentRunRequest, *, execution_id: str, thread_id: str) -
         "contact_id": req.contact_id,
         "thread_id": thread_id,
         "execution_id": execution_id,
-        "is_playground": req.is_playground,
+        "is_playground": req.is_playground or req.mode == "sandbox",
         "policy": req.policy_snapshot,
         "user_input": req.user_input,
         "history": req.messages,
