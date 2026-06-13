@@ -24,6 +24,28 @@ export function createFlowExecutionsRouter(): Router {
   const viewGuard = [requireAuth, withRLS, requireRole('flow.list')] as const;
   const logsGuard = [requireAuth, withRLS, requireRole('flow.view_logs')] as const;
   const cancelGuard = [requireAuth, withRLS, requireRole('flow.cancel')] as const;
+  // Badge do inbox (FlowExecutionsBadge): execuções de flow de UMA conversa. Read-only e
+  // workspace-scoped por RLS — qualquer membro que vê a conversa pode ver (sem flow.list,
+  // pra não gerar 403 a atendentes). REGISTRADA ANTES de `/api/flows/:id` (crud) para o
+  // literal `executions` não cair na rota paramétrica.
+  const convExecGuard = [requireAuth, withRLS] as const;
+
+  // GET /api/flows/executions?conversationId=<uuid> — execuções de flow de uma conversa.
+  router.get('/api/flows/executions', ...convExecGuard, async (req: Request, res: Response) => {
+    const conversationId = typeof req.query['conversationId'] === 'string' ? req.query['conversationId'] : '';
+    if (!conversationId) {
+      res.json({ executions: [] });
+      return;
+    }
+    const rows = await req.scoped!((tx) =>
+      tx
+        .select()
+        .from(flowExecutions)
+        .where(eq(flowExecutions.conversationId, conversationId))
+        .orderBy(desc(flowExecutions.startedAt)),
+    );
+    res.json({ executions: rows });
+  });
 
   // GET /api/flows/:id/executions
   router.get('/api/flows/:id/executions', ...viewGuard, async (req: Request, res: Response) => {
