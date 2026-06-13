@@ -294,6 +294,11 @@ export * from './impersonation';
 // workspace_entitlement_overrides: 1:1 com workspace (PK=workspace_id) → RLS direto.
 export * from './entitlements';
 
+// --- Agent quality / CSAT / objections domain (F29 — Dashboard "Onda B") ---
+// conversation_evaluations (1/conversa, UNIQUE conversation_id) + objections
+// (N/conversa, FK evaluation_id CASCADE). Ambas workspace-scoped → RLS direto.
+export * from './evaluations';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -370,4 +375,7 @@ export const RLS_TABLES = [
   // Platform tenant management (F26). Override de entitlements não-IA por workspace
   // (PK=workspace_id → RLS direto). impersonation_sessions NÃO entra (platform-level).
   'workspace_entitlement_overrides',
+  // Agent quality / CSAT / objections domain (F29). Ambas com workspace_id próprio.
+  'conversation_evaluations',
+  'objections',
 ] as const;

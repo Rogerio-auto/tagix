@@ -13,6 +13,9 @@ import {
   campaigns,
   channels,
   contacts,
+  conversationEvaluations,
+  conversations,
+  objections,
   dataExportJobs,
   dashboardSnapshots,
   workspaceEntitlementOverrides,
@@ -820,6 +823,186 @@ describe('RLS Entitlement overrides (F26-S01)', () => {
           .insert(workspaceEntitlementOverrides)
           .values({ workspaceId: wsB, limits: {}, features: {} }),
       ),
+    ).rejects.toThrow();
+  });
+});
+
+describe('RLS Agent quality / objections (F29-S01)', () => {
+  it('conversation_evaluations e objections isolam por workspace; cross-tenant nega', async () => {
+    const db = getDb(); // owner bypassa RLS no seed
+    const sfx = randomUUID().slice(0, 8);
+
+    const [chA] = await db
+      .insert(channels)
+      .values({
+        workspaceId: wsA,
+        provider: 'meta_whatsapp',
+        name: `WA eval A ${sfx}`,
+        phoneNumberId: `pnid-ea-${sfx}`,
+        wabaId: `waba-ea-${sfx}`,
+      })
+      .returning();
+    const [chB] = await db
+      .insert(channels)
+      .values({
+        workspaceId: wsB,
+        provider: 'meta_whatsapp',
+        name: `WA eval B ${sfx}`,
+        phoneNumberId: `pnid-eb-${sfx}`,
+        wabaId: `waba-eb-${sfx}`,
+      })
+      .returning();
+    if (!chA || !chB) throw new Error('Falha ao criar channels de eval.');
+
+    const [convA] = await db
+      .insert(conversations)
+      .values({ workspaceId: wsA, channelId: chA.id, remoteId: `rem-a-${sfx}`, status: 'closed' })
+      .returning();
+    const [convB] = await db
+      .insert(conversations)
+      .values({ workspaceId: wsB, channelId: chB.id, remoteId: `rem-b-${sfx}`, status: 'closed' })
+      .returning();
+    if (!convA || !convB) throw new Error('Falha ao criar conversations de eval.');
+
+    const [evA] = await db
+      .insert(conversationEvaluations)
+      .values({
+        workspaceId: wsA,
+        conversationId: convA.id,
+        primaryMemberId: memberA,
+        handledBy: 'human',
+        qualityScore: 82,
+        sentimentScore: 40,
+        csatLabel: 'promoter',
+        judgeModel: 'openai/gpt-4o-mini',
+        judgeCostUsd: '0.000123',
+      })
+      .returning();
+    if (!evA) throw new Error('Falha ao criar conversation_evaluation A.');
+
+    const [evB] = await db
+      .insert(conversationEvaluations)
+      .values({
+        workspaceId: wsB,
+        conversationId: convB.id,
+        handledBy: 'ai',
+        qualityScore: 55,
+        judgeModel: 'openai/gpt-4o-mini',
+      })
+      .returning();
+    if (!evB) throw new Error('Falha ao criar conversation_evaluation B.');
+
+    const [objA] = await db
+      .insert(objections)
+      .values({
+        workspaceId: wsA,
+        conversationId: convA.id,
+        evaluationId: evA.id,
+        category: 'price',
+        label: 'Achou caro',
+        excerpt: 'ta muito caro',
+        resolved: false,
+      })
+      .returning();
+    if (!objA) throw new Error('Falha ao criar objection A.');
+
+    // A so enxerga os proprios; B nao enxerga nada de A.
+    const evalsA = await withWorkspace(wsA, (tx) => tx.select().from(conversationEvaluations));
+    expect(evalsA.every((e) => e.workspaceId === wsA)).toBe(true);
+    expect(evalsA.some((e) => e.id === evA.id)).toBe(true);
+    expect(evalsA.some((e) => e.id === evB.id)).toBe(false);
+
+    const evalsB = await withWorkspace(wsB, (tx) => tx.select().from(conversationEvaluations));
+    expect(evalsB.some((e) => e.id === evA.id)).toBe(false);
+
+    const objsA = await withWorkspace(wsA, (tx) => tx.select().from(objections));
+    expect(objsA.every((o) => o.workspaceId === wsA)).toBe(true);
+    expect(objsA.some((o) => o.id === objA.id)).toBe(true);
+
+    const objsB = await withWorkspace(wsB, (tx) => tx.select().from(objections));
+    expect(objsB.some((o) => o.id === objA.id)).toBe(false);
+
+    // INSERT cross-tenant via app e barrado pelo WITH CHECK (workspace_id de B sob A).
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.insert(conversationEvaluations).values({
+          workspaceId: wsB,
+          conversationId: convB.id,
+          handledBy: 'ai',
+          qualityScore: 10,
+          judgeModel: 'x',
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('UNIQUE(conversation_id): segunda avaliacao da mesma conversa falha', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const [ch] = await db
+      .insert(channels)
+      .values({
+        workspaceId: wsA,
+        provider: 'meta_whatsapp',
+        name: `WA uq ${sfx}`,
+        phoneNumberId: `pnid-uq-${sfx}`,
+        wabaId: `waba-uq-${sfx}`,
+      })
+      .returning();
+    if (!ch) throw new Error('setup channel uq');
+    const [conv] = await db
+      .insert(conversations)
+      .values({ workspaceId: wsA, channelId: ch.id, remoteId: `rem-uq-${sfx}`, status: 'resolved' })
+      .returning();
+    if (!conv) throw new Error('setup conv uq');
+    await db.insert(conversationEvaluations).values({
+      workspaceId: wsA,
+      conversationId: conv.id,
+      handledBy: 'ai',
+      qualityScore: 70,
+      judgeModel: 'm',
+    });
+    await expect(
+      db.insert(conversationEvaluations).values({
+        workspaceId: wsA,
+        conversationId: conv.id,
+        handledBy: 'ai',
+        qualityScore: 71,
+        judgeModel: 'm',
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('CHECK rejeita quality_score fora de 0..100 e csat_label invalido', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const [ch] = await db
+      .insert(channels)
+      .values({
+        workspaceId: wsA,
+        provider: 'meta_whatsapp',
+        name: `WA chk ${sfx}`,
+        phoneNumberId: `pnid-chk-${sfx}`,
+        wabaId: `waba-chk-${sfx}`,
+      })
+      .returning();
+    if (!ch) throw new Error('setup channel chk');
+    const [conv] = await db
+      .insert(conversations)
+      .values({ workspaceId: wsA, channelId: ch.id, remoteId: `rem-chk-${sfx}`, status: 'closed' })
+      .returning();
+    if (!conv) throw new Error('setup conv chk');
+    await expect(
+      db.execute(sql`
+        INSERT INTO conversation_evaluations (workspace_id, conversation_id, handled_by, quality_score, judge_model)
+        VALUES (${wsA}::uuid, ${conv.id}::uuid, 'ai', 150, 'm')
+      `),
+    ).rejects.toThrow();
+    await expect(
+      db.execute(sql`
+        INSERT INTO conversation_evaluations (workspace_id, conversation_id, handled_by, quality_score, csat_label, judge_model)
+        VALUES (${wsA}::uuid, ${conv.id}::uuid, 'ai', 50, 'bogus', 'm')
+      `),
     ).rejects.toThrow();
   });
 });

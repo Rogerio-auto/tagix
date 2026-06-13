@@ -260,6 +260,20 @@
       "when": 1781361051244,
       "tag": "0036_tired_korvac",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1781367735345,
+      "tag": "0037_bumpy_killmonger",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1781367736345,
+      "tag": "0038_f29_evaluations_rls",
+      "breakpoints": true
     }
   ]
 }
