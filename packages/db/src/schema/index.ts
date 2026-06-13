@@ -287,6 +287,13 @@ export * from './webhooks';
 // direto). O forget (anonimização) é síncrono na API + audit_logs (sem tabela própria).
 export * from './privacy';
 
+// --- Platform tenant management (F26) ---
+// impersonation_sessions: PLATFORM-LEVEL (target_workspace_id é alvo, não dono) →
+// FORA do RLS de tenant, como platform_secrets; o guard requirePlatformAdmin é a fronteira.
+export * from './impersonation';
+// workspace_entitlement_overrides: 1:1 com workspace (PK=workspace_id) → RLS direto.
+export * from './entitlements';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -360,4 +367,7 @@ export const RLS_TABLES = [
   'outbound_webhook_deliveries',
   // Privacy / LGPD domain (workspace-scoped). data_export_jobs com workspace_id próprio.
   'data_export_jobs',
+  // Platform tenant management (F26). Override de entitlements não-IA por workspace
+  // (PK=workspace_id → RLS direto). impersonation_sessions NÃO entra (platform-level).
+  'workspace_entitlement_overrides',
 ] as const;

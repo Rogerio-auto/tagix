@@ -14,7 +14,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F15   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F25   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F26   | 11     | 4   | 7   | 0   | 0   | 0   | 0   |
+| F26   | 11     | 3   | 7   | 0   | 0   | 1   | 0   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
@@ -151,7 +151,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID      | Titulo                                                                                     | Status      | Prioridade | Depende de       |
 | ------- | ------------------------------------------------------------------------------------------ | ----------- | ---------- | ---------------- |
-| F26-S01 | Schema — impersonation_sessions + workspace_entitlement_overrides + llm_usage_logs.is_test | 🟢 available | critical   | —                |
+| F26-S01 | Schema — impersonation_sessions + workspace_entitlement_overrides + llm_usage_logs.is_test | 🟣 review    | critical   | —                |
 | F26-S02 | Workspaces API — list de tenants + Workspace 360 agregado                                  | 🟢 available | high       | —                |
 | F26-S03 | Plans CRUD API — catálogo de planos (limits/features tipados, sem Stripe)                  | 🟢 available | high       | —                |
 | F26-S04 | Subscriptions API por tenant + resolveEntitlements (plano + override)                      | ⏸️ blocked  | high       | F26-S01          |

@@ -60,6 +60,11 @@ export const llmUsageLogs = pgTable(
     /** stop/length/tool_calls/content_filter. */
     finishReason: text('finish_reason'),
     metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+    /**
+     * Custo de teste do Agent Playground (F26-S06/sandbox). Separa o gasto do
+     * playground do billing real — NÃO conta no cap de produção. Default false.
+     */
+    isTest: boolean('is_test').notNull().default(false),
     createdAt: ts('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -71,6 +76,10 @@ export const llmUsageLogs = pgTable(
     index('idx_llm_usage_openrouter_generation')
       .on(t.openrouterGenerationId)
       .where(sql`${t.openrouterGenerationId} is not null`),
+    // Playground: isola o gasto de teste do billing real (rollup de produção filtra is_test=false).
+    index('idx_llm_usage_is_test_created')
+      .on(t.createdAt.desc())
+      .where(sql`${t.isTest} = true`),
     check(
       'llm_usage_logs_request_type_chk',
       sql`${t.requestType} in ('chat','transcription','vision','embedding','tts','dalle','rerank')`,

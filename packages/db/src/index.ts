@@ -12,5 +12,11 @@ export { workspacesRepo, membersRepo } from './repos';
 export { contactsRepo, conversationsRepo, messagesRepo } from './repos/livechat';
 export { dataExportJobsRepo, type DataExportJob } from './repos/privacy';
 export type { DataExportScope } from './schema/privacy';
+// Platform tenant management (F26-S01).
+export { impersonationSessionsRepo, type ImpersonationSession } from './repos/impersonation';
+export {
+  entitlementOverridesRepo,
+  type WorkspaceEntitlementOverride,
+} from './repos/entitlements';
 
 export const DB_PKG = '@hm/db' as const;
