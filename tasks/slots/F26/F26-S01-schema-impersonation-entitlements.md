@@ -2,7 +2,7 @@
 id: F26-S01
 title: Schema — impersonation_sessions + workspace_entitlement_overrides + llm_usage_logs.is_test
 phase: F26
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
