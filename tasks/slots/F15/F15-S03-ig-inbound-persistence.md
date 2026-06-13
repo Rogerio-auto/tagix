@@ -2,7 +2,7 @@
 id: F15-S03
 title: Inbound persistence IG — worker persiste DM/story/share/comment → conv/messages/ig_comments
 phase: F15
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F15-S01, F15-S02]
@@ -10,8 +10,9 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/INSTAGRAM.md
   - docs/features/LIVECHAT.md
----
+claimed_at: 2026-06-13T00:12:24Z
 
+---
 # F15-S03 — Inbound persistence IG (workers)
 
 > **source_docs:** `docs/features/INSTAGRAM.md` §3, §7, §8, §13, §14
