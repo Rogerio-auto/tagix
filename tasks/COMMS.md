@@ -43,3 +43,21 @@ Todos os 9 slots done, integrados, verdes em main. Validacao final:
 - WIRE feito: meta.ts (IG summary log, S02 — sem router novo), app.ts (createInstagramRouter, S05), parse.ts+worker.ts inbound (parseInstagramWebhook real, S03). createOutboundDeps já liga meta_instagram via adapter-factory existente.
 - DESVIOS/path: S07 escreveu em apps/web/features/channels/** (o wizard real vive ai; o files_allowed do slot apontava settings/channels/** que nao existe). S05 permissions reusam conversation.* (sem perm ig.* nova — @hm/shared fora do escopo).
 - FOLLOW-UPS honestos: (1) envio E2E real exige conta IG Business + App Review aprovada (runbook em docs/runbooks/meta-app-review-instagram.md). (2) DELETE de comment e soft (DB hidden+audit); hard-delete na Graph precisa de kind ig_delete_comment no worker outbound. (3) S08: IgCommentActions consome message.metadata.{mediaId,commentId} — o GET de mensagens precisa expor esses campos para a moderacao por-comment ficar 100% no thread (hoje degrada sem eles). (4) perms ig.comment.* dedicadas se quiser supervisor moderando.
+
+---
+
+## F25 — Super-admin de IA (orchestrator, 2026-06-12)
+
+Harness sem Task/Write/Edit/Agent → atuo como **executor único** (shell), respeitando `files_allowed` de cada slot e integrando via stash-dance.
+
+Contexto verificado antes de despachar:
+- Schema 100% ready: `llm.ts` (llmUsageLogs RLS + llmModelsWhitelist GLOBAL), `platform_secrets.ts`, `agents.ts` (workspaceAgentPolicies PK=workspace_id), `audit_logs` (actor_type já aceita 'platform_admin').
+- `getDb()` = conexão owner SEM `set local role hm_app` → ideal p/ queries cross-workspace de plataforma (sem RLS de tenant). `withWorkspace()` é só p/ tenant.
+- crypto: `encryptSecret/decryptSecret` exportados de `@hm/db` (AES-256-GCM, ENCRYPTION_KEY).
+- Sessão expõe `member.isPlatformAdmin` (publicMember + `GET /api/me`). Guard frontend (S06) chama `/api/me` server-side (getServerSession é stub sem isPlatformAdmin).
+- Tests da api batem Postgres dev real (infra up, healthy).
+
+**Onda 1 disparada:** S01 (guard, critical), S06 (shell frontend), S09 (runbooks). Disjuntos.
+
+### Desvio S06 (route group): URL `/platform/*` para evitar colisão de root
+`(app)/page.tsx` já resolve `/`. Um `(platform)/page.tsx` no root do grupo resolveria `/` também → erro Next "two parallel pages resolve to same path". As nav-items do painel já apontam `/platform/*`. Decisão: home do painel fica em `app/(platform)/platform/page.tsx` (URL `/platform`), layout do grupo em `app/(platform)/layout.tsx` (aplica a tudo sob o grupo). Consequência p/ S07/S08: as páginas ficam em `app/(platform)/platform/{models,policies,secrets,usage}/` (URLs `/platform/...`), não em `app/(platform)/{models...}`. Ajuste necessário vs. files_allowed literal — a colisão de root é constraint duro.
