@@ -18,6 +18,7 @@ import { registerWebhookEvent } from './dedup';
 import { deriveEventId } from './event-id';
 import { publishInboundMessage } from './publisher';
 import { verifyMetaSignature } from './signature';
+import { summarizeInstagramEnvelope } from './meta-instagram';
 import {
   createSubmissionDeps,
   processMetaFlowSubmission,
@@ -96,7 +97,8 @@ function parseResponseJson(value: unknown): Record<string, unknown> {
   return {};
 }
 
-const submissionDeps = createSubmissionDeps(createLogger('info', { svc: 'meta-webhook' }));
+const webhookLogger = createLogger('info', { svc: 'meta-webhook' });
+const submissionDeps = createSubmissionDeps(webhookLogger);
 
 export function createMetaWebhookRouter(): Router {
   const router = Router();
@@ -171,6 +173,15 @@ export function createMetaWebhookRouter(): Router {
               // Nao bloqueia o ack do webhook; o erro ja e logado no handler.
             }
           }
+        }
+        // F15-S02: observabilidade da ingestao IG (sem parse de dominio aqui).
+        if (provider === 'meta_instagram') {
+          const summary = summarizeInstagramEnvelope(body);
+          webhookLogger.info('webhook.instagram.ingested', {
+            igUserIds: summary.igUserIds,
+            counts: summary.counts,
+            total: summary.total,
+          });
         }
       }
 
