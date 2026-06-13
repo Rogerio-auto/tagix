@@ -272,6 +272,13 @@ export * from './calendar';
 // (backfill: as colunas já existiam como uuid soltos).
 export * from './org';
 
+// --- Inbox visibility domain (F30: LIVECHAT_OPS.md §1) ---
+// inbox_visibility_settings (1/workspace, default peer-privacy) + member_visibility_
+// overrides (visibilidade extra por membro×depto). Ambas workspace-scoped (RLS direto;
+// member_visibility_overrides com workspace_id denormalizado, espelha team_members).
+// Importadas DEPOIS de org porque referenciam departments.
+export * from './inbox';
+
 // --- Dashboard domain (F8-S01: DASHBOARD.md §5/§9.3) ---
 // dashboard_snapshots (cache de métricas 5min, workspace-scoped, RLS direto). As
 // materialized views mv_dashboard_* ficam na migration custom (Drizzle não modela MV).
@@ -365,6 +372,10 @@ export const RLS_TABLES = [
   'teams',
   'team_members',
   'sla_rules',
+  // Inbox visibility domain (F30; workspace-scoped). member_visibility_overrides com
+  // workspace_id denormalizado (espelha team_members).
+  'inbox_visibility_settings',
+  'member_visibility_overrides',
   // Dashboard domain (workspace-scoped).
   'dashboard_snapshots',
   // Outbound webhooks domain (workspace-scoped). Ambas com workspace_id próprio.

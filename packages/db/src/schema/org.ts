@@ -72,6 +72,9 @@ export const teams = pgTable(
     description: text('description'),
     // auto-assign: round_robin | least_busy | manual (DASHBOARD §7 / PERMISSIONS §5).
     autoAssignStrategy: text('auto_assign_strategy').notNull().default('manual'),
+    // Privacidade entre colegas do time (F30 / LIVECHAT_OPS §1.2): shared | private |
+    // inherit (inherit → usa inbox_visibility_settings.default_peer_visibility).
+    peerVisibility: text('peer_visibility').notNull().default('inherit'),
     isActive: text('is_active').notNull().default('active'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at'),
@@ -85,6 +88,7 @@ export const teams = pgTable(
       'teams_auto_assign_chk',
       sql`${t.autoAssignStrategy} in ('round_robin','least_busy','manual')`,
     ),
+    check('teams_peer_visibility_chk', sql`${t.peerVisibility} in ('shared','private','inherit')`),
   ],
 );
 

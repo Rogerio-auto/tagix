@@ -2,7 +2,7 @@
 id: F30-S01
 title: Foundation — schema visibilidade/peer + ai-handoff + contratos shared
 phase: F30
-status: in-progress
+status: review
 priority: critical
 estimated_size: L
 depends_on: []
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/PERMISSIONS.md
   - docs/DATA_MODEL.md
 claimed_at: 2026-06-13T17:18:28Z
+completed_at: 2026-06-13T17:33:51Z
 
 ---
 # F30-S01 — Fundação de dados + contratos da F30

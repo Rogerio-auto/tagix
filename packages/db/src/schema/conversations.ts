@@ -30,6 +30,14 @@ export const conversations = pgTable(
     kind: text('kind').notNull().default('direct'),
     status: text('status').notNull().default('open'),
     aiMode: text('ai_mode').notNull().default('off'),
+    // Handoff de IA (F30 / LIVECHAT_OPS §2): por que a IA pausou, quando e por quem.
+    aiPausedReason: text('ai_paused_reason'),
+    aiPausedAt: ts('ai_paused_at'),
+    aiPausedBy: uuid('ai_paused_by').references(() => members.id, { onDelete: 'set null' }),
+    // Base do gatilho de ociosidade: última atividade humana na conversa.
+    aiLastHumanAt: ts('ai_last_human_at'),
+    // Reengajamento agendado (cron idempotente) — null quando não há retomada pendente.
+    aiResumeAt: ts('ai_resume_at'),
     assignedTo: uuid('assigned_to').references(() => members.id, { onDelete: 'set null' }),
     // FK adicionada quando departments/teams/agents existirem (F1+/F2).
     departmentId: uuid('department_id'),
@@ -56,9 +64,18 @@ export const conversations = pgTable(
     ),
     index('idx_conversations_assigned').on(t.assignedTo).where(sql`${t.assignedTo} is not null`),
     index('idx_conversations_contact').on(t.contactId).where(sql`${t.contactId} is not null`),
+    // NB: idx_conversations_team / idx_conversations_department já existem (compostos
+    // com workspace_id, criados na migration 0033) — hot-path da list query escopada
+    // por dept/time (F30 / LIVECHAT_OPS §1). Não recriados aqui.
+    // Varredura do cron de reengajamento de IA (F30 / LIVECHAT_OPS §2).
+    index('idx_conversations_ai_resume').on(t.aiResumeAt).where(sql`${t.aiResumeAt} is not null`),
     check('conversations_kind_chk', sql`${t.kind} in ('direct','group','story_thread','comment_thread')`),
     check('conversations_status_chk', sql`${t.status} in ('open','pending','closed','resolved','snoozed')`),
     check('conversations_ai_mode_chk', sql`${t.aiMode} in ('off','on','paused')`),
+    check(
+      'conversations_ai_paused_reason_chk',
+      sql`${t.aiPausedReason} in ('human_takeover','manual') or ${t.aiPausedReason} is null`,
+    ),
     check(
       'conversations_last_from_chk',
       sql`${t.lastMessageFrom} in ('contact','member','agent','system') or ${t.lastMessageFrom} is null`,

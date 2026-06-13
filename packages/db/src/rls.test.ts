@@ -4,6 +4,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb } from './client';
 import { withWorkspace } from './rls';
 import {
+  buildVisibilityPredicate,
+  pickAutoAssignee,
+  resolvePeerVisibility,
+} from './repos/livechat';
+import {
   availabilityExceptions,
   availabilityRules,
   calendars,
@@ -25,6 +30,8 @@ import {
   flowExecutions,
   flows,
   flowVersions,
+  inboxVisibilitySettings,
+  memberVisibilityOverrides,
   kbChunks,
   kbDocuments,
   kbFeedback,
@@ -1004,5 +1011,135 @@ describe('RLS Agent quality / objections (F29-S01)', () => {
         VALUES (${wsA}::uuid, ${conv.id}::uuid, 'ai', 50, 'bogus', 'm')
       `),
     ).rejects.toThrow();
+  });
+});
+
+describe('RLS Inbox visibility (F30-S01)', () => {
+  it('inbox_visibility_settings e member_visibility_overrides isolam por workspace; cross-tenant nega', async () => {
+    const db = getDb(); // owner bypassa RLS no seed
+    const sfx = randomUUID().slice(0, 8);
+
+    // Seed em A.
+    await db
+      .insert(inboxVisibilitySettings)
+      .values({ workspaceId: wsA, defaultPeerVisibility: 'private', readonlySeesAll: false })
+      .onConflictDoNothing();
+    const [depA] = await db
+      .insert(departments)
+      .values({ workspaceId: wsA, name: `Suporte ${sfx}` })
+      .returning();
+    if (!depA) throw new Error('Falha ao criar department de visibility.');
+    const [ovA] = await db
+      .insert(memberVisibilityOverrides)
+      .values({ workspaceId: wsA, memberId: memberA, departmentId: depA.id })
+      .returning();
+    if (!ovA) throw new Error('Falha ao criar member_visibility_override A.');
+
+    // Seed em B.
+    await db
+      .insert(inboxVisibilitySettings)
+      .values({ workspaceId: wsB, defaultPeerVisibility: 'shared', readonlySeesAll: true })
+      .onConflictDoNothing();
+
+    // A só enxerga os próprios; B não enxerga nada de A.
+    const setA = await withWorkspace(wsA, (tx) => tx.select().from(inboxVisibilitySettings));
+    expect(setA.every((s) => s.workspaceId === wsA)).toBe(true);
+    expect(setA.some((s) => s.workspaceId === wsB)).toBe(false);
+
+    const setB = await withWorkspace(wsB, (tx) => tx.select().from(inboxVisibilitySettings));
+    expect(setB.some((s) => s.workspaceId === wsA)).toBe(false);
+
+    const ovsA = await withWorkspace(wsA, (tx) => tx.select().from(memberVisibilityOverrides));
+    expect(ovsA.every((o) => o.workspaceId === wsA)).toBe(true);
+    expect(ovsA.some((o) => o.departmentId === depA.id)).toBe(true);
+
+    const ovsB = await withWorkspace(wsB, (tx) => tx.select().from(memberVisibilityOverrides));
+    expect(ovsB.some((o) => o.departmentId === depA.id)).toBe(false);
+
+    // INSERT cross-tenant via app é barrado pelo WITH CHECK (workspace_id de B sob A).
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.insert(inboxVisibilitySettings).values({ workspaceId: wsB, defaultPeerVisibility: 'shared' }),
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe('LiveChat repos (F30-S01)', () => {
+  it('resolvePeerVisibility: team.peer_visibility tem precedência; inherit cai no default do workspace', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+
+    await db
+      .insert(inboxVisibilitySettings)
+      .values({ workspaceId: wsA, defaultPeerVisibility: 'private' })
+      .onConflictDoUpdate({
+        target: inboxVisibilitySettings.workspaceId,
+        set: { defaultPeerVisibility: 'private' },
+      });
+
+    const [teamShared] = await db
+      .insert(teams)
+      .values({ workspaceId: wsA, name: `Shared ${sfx}`, peerVisibility: 'shared' })
+      .returning();
+    const [teamInherit] = await db
+      .insert(teams)
+      .values({ workspaceId: wsA, name: `Inherit ${sfx}`, peerVisibility: 'inherit' })
+      .returning();
+    if (!teamShared || !teamInherit) throw new Error('Falha ao criar teams de peer-visibility.');
+
+    expect(await resolvePeerVisibility({ workspaceId: wsA, teamId: teamShared.id })).toBe('shared');
+    // inherit → default do workspace (private).
+    expect(await resolvePeerVisibility({ workspaceId: wsA, teamId: teamInherit.id })).toBe('private');
+    // sem time → default do workspace (private).
+    expect(await resolvePeerVisibility({ workspaceId: wsA, teamId: null })).toBe('private');
+  });
+
+  it('pickAutoAssignee: manual → null; least_busy escolhe membro ativo do time', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+
+    const [team] = await db
+      .insert(teams)
+      .values({ workspaceId: wsA, name: `AutoAssign ${sfx}`, autoAssignStrategy: 'least_busy' })
+      .returning();
+    if (!team) throw new Error('Falha ao criar team de auto-assign.');
+
+    const [m] = await db
+      .insert(members)
+      .values({
+        workspaceId: wsA,
+        authUserId: randomUUID(),
+        email: `assignee-${sfx}@test.local`,
+        role: 'AGENT',
+        status: 'active',
+      })
+      .returning();
+    if (!m) throw new Error('Falha ao criar member de auto-assign.');
+    await db.insert(teamMembers).values({ teamId: team.id, memberId: m.id, workspaceId: wsA });
+
+    expect(await pickAutoAssignee({ teamId: team.id, strategy: 'manual' })).toBeNull();
+    expect(await pickAutoAssignee({ teamId: team.id, strategy: 'least_busy' })).toBe(m.id);
+    // Time vazio → sem candidato.
+    const [empty] = await db
+      .insert(teams)
+      .values({ workspaceId: wsA, name: `Empty ${sfx}`, autoAssignStrategy: 'round_robin' })
+      .returning();
+    if (!empty) throw new Error('Falha ao criar team vazio.');
+    expect(await pickAutoAssignee({ teamId: empty.id, strategy: 'round_robin' })).toBeNull();
+  });
+
+  it('buildVisibilityPredicate: OWNER/ADMIN sem filtro; AGENT roda como WHERE válido', async () => {
+    // OWNER/ADMIN/READONLY → predicado trivial (sem filtro).
+    expect(
+      buildVisibilityPredicate({ memberId: memberA, role: 'OWNER', workspaceId: wsA }),
+    ).toBeDefined();
+
+    // O predicado de AGENT deve ser SQL aplicável num WHERE sem erro de sintaxe.
+    const pred = buildVisibilityPredicate({ memberId: memberA, role: 'AGENT', workspaceId: wsA });
+    const rows = await withWorkspace(wsA, (tx) =>
+      tx.select({ id: conversations.id }).from(conversations).where(pred),
+    );
+    expect(Array.isArray(rows)).toBe(true);
   });
 });

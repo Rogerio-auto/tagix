@@ -274,6 +274,20 @@
       "when": 1781367736345,
       "tag": "0038_f29_evaluations_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1781452800000,
+      "tag": "0039_f30_inbox_ai_handoff",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1781452801000,
+      "tag": "0040_f30_inbox_rls",
+      "breakpoints": true
     }
   ]
 }

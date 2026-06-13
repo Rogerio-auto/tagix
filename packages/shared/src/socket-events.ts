@@ -7,6 +7,8 @@
  * Os demais campos são tipados de forma estrita.
  */
 
+import type { AiMode, AiPausedReason } from './types/inbox';
+
 /** Status de visualização de uma mensagem (LIVECHAT.md §3.1). */
 export type ViewStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
 
@@ -52,6 +54,19 @@ export interface ConversationAssignedPayload {
 export interface ConversationRoutingChangedPayload {
   conversationId: string;
   routing: RoutingChange;
+}
+
+/** IA ligada/desligada/pausada/retomada numa conversa (F30 / LIVECHAT_OPS §2). */
+export interface ConversationAiModeChangedPayload {
+  conversationId: string;
+  aiMode: AiMode;
+  reason: AiPausedReason | null;
+}
+
+/** Mudança de status operacional da conversa (resolver/snooze/reabrir — F30). */
+export interface ConversationStateChangedPayload {
+  conversationId: string;
+  status: string;
 }
 
 export interface TypingFromContactPayload {
@@ -135,6 +150,8 @@ export interface ServerToClient {
   'conversation:updated': (p: ConversationUpdatedPayload) => void;
   'conversation:assigned': (p: ConversationAssignedPayload) => void;
   'conversation:routing_changed': (p: ConversationRoutingChangedPayload) => void;
+  'conversation:ai_mode_changed': (p: ConversationAiModeChangedPayload) => void;
+  'conversation:state_changed': (p: ConversationStateChangedPayload) => void;
   'typing:from_contact': (p: TypingFromContactPayload) => void;
   'note:mentioned': (p: NoteMentionedPayload) => void;
   'agent_execution:started': (p: AgentExecutionPayload) => void;
@@ -163,6 +180,8 @@ export const SERVER_TO_CLIENT_EVENTS = [
   'conversation:updated',
   'conversation:assigned',
   'conversation:routing_changed',
+  'conversation:ai_mode_changed',
+  'conversation:state_changed',
   'typing:from_contact',
   'note:mentioned',
   'agent_execution:started',

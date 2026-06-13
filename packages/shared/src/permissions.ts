@@ -24,6 +24,8 @@ export const ROLE_CAN = {
   'conversation.resolve': STAFF,
   'conversation.snooze': STAFF,
   'conversation.toggle_ai': STAFF,
+  // Nome canônico F30 (PERMISSIONS §2.1) — `toggle_ai` mantido por compat.
+  'conversation.ai_mode': STAFF,
   'conversation.delete_message': ADMINS,
   'conversation.export': ['OWNER', 'ADMIN', 'SUPERVISOR', 'READONLY'],
 
@@ -86,6 +88,8 @@ export const ROLE_CAN = {
   'member.remove': ADMINS,
   'department.edit': ADMINS,
   'team.edit': MANAGERS,
+  // F30 / LIVECHAT_OPS §5: gestão da política de visibilidade da inbox.
+  'inbox.visibility.manage': ADMINS,
 
   // §2.7 Billing e exclusão de workspace
   'billing.view': ADMINS,
