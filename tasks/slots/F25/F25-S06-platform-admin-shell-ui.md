@@ -2,7 +2,7 @@
 id: F25-S06
 title: Platform-admin frontend shell — route group (platform) + guard + nav
 phase: F25
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
