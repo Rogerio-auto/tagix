@@ -2,7 +2,7 @@
 id: F26-S07
 title: Tenants list + Workspace 360 UI (frontend platform-admin)
 phase: F26
-status: review
+status: done
 priority: medium
 estimated_size: L
 depends_on: [F26-S02]
