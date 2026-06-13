@@ -137,3 +137,17 @@ Validação final: pnpm typecheck OK, pnpm lint OK (após ignorar .claude/worktr
 Orchestrator rodou em worktree isolado (`agent-a196697cfa2d482b4`), F26 intocada. 5 slots implementados+validados como branches `review`, integrados por mim em `main` na ordem F28-S01→S02, F27-S01→S02→S03 (--no-ff). Conflitos SÓ em tasks/STATUS.md+COMMS.md (resolvidos --ours + sync). Validação integrada: @hm/api + @hm/web + @hm/design-tokens typecheck LIMPO; web build verde (todas as rotas, F26 platform + dashboard/layout coexistindo). Todos os 5 → done.
 
 ⚠️ ACHADO: `main` (closeout F26, 67983c4) está com `packages/db/src/seed-demo.ts` quebrando `pnpm typecheck` (TS1355/TS2352/TS2769 — drift de schema: events startAt/endAt, kb_documents) E `pnpm lint` (import `and` não usado). Esse arquivo está UNTRACKED + `packages/db/package.json` modificado, parados na árvore compartilhada — debris não-commitado da F26, NÃO tocado pela F27/F28. main está RED no nível de repo por causa disso. Precisa de fix no escopo db/F26.
+
+---
+
+## F29 decomposta (Onda B — qualidade/CSAT/objeções via LLM-judge) — 2026-06-13
+
+5 slots criados (2º terminal). Capacidade NOVA — ancorada em doc novo `docs/features/AGENT_QUALITY_OBJECTIONS.md` (método LLM-judge pós-conversa, schema, métricas). Decisões travadas: LLM-judge (OpenRouter no agent-runtime) p/ qualidade+objeções; CSAT por sentimento (sem survey ao cliente).
+
+- F29-S01 [db] conversation_evaluations + objections + RLS + repos → packages/db. **available**. blocks S03,S04.
+- F29-S02 [python] LLM-judge POST /internal/evaluate → apps/agent-runtime. **available**. blocks S03.
+- F29-S03 [backend] worker polling conversas encerradas → judge → persist + @hm/agents-client.evaluate() → apps/workers + packages/agents-client. dep S01+S02.
+- F29-S04 [backend] métricas dashboard (qualidade/CSAT/objeções rankeadas) → apps/api/services|routes/dashboard. dep S01. blocks S05.
+- F29-S05 [frontend] cards qualidade/CSAT + objeções drawer → apps/web/features/dashboard. dep S04.
+
+Roots paralelos: S01 (db) ⊥ S02 (python). Gatilho = scheduler/poll (não toca caminho de fechamento de conversa na API). main verde+pushado; packages/db estável → S01 pode arrancar.
