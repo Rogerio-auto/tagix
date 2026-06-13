@@ -2,7 +2,7 @@
 id: F15-S05
 title: IG comments/stories API — endpoints de moderação (reply pub/priv, hide, delete, list)
 phase: F15
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F15-S03, F15-S04]
@@ -10,8 +10,10 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/INSTAGRAM.md
   - docs/features/PERMISSIONS.md
----
+claimed_at: 2026-06-13T00:16:32Z
+completed_at: 2026-06-13T00:21:02Z
 
+---
 # F15-S05 — IG comments/stories API
 
 > **source_docs:** `docs/features/INSTAGRAM.md` §7, §8; `docs/features/PERMISSIONS.md`
