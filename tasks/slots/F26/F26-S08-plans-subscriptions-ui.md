@@ -2,7 +2,7 @@
 id: F26-S08
 title: Planos + Assinatura/Entitlements UI (frontend platform-admin)
 phase: F26
-status: blocked
+status: review
 priority: medium
 estimated_size: L
 depends_on: [F26-S03, F26-S04]
@@ -10,8 +10,10 @@ agent_id: frontend-engineer
 source_docs:
   - docs/features/PLATFORM_TENANT_MANAGEMENT.md
   - docs/UX_PRINCIPLES.md
----
+claimed_at: 2026-06-13T15:06:38Z
+completed_at: 2026-06-13T15:11:02Z
 
+---
 # F26-S08 — Planos + Assinatura UI
 
 > **source_docs:** `docs/features/PLATFORM_TENANT_MANAGEMENT.md` §5; `docs/UX_PRINCIPLES.md`
