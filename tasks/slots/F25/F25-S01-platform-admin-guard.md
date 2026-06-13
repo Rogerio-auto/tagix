@@ -2,7 +2,7 @@
 id: F25-S01
 title: Platform-admin guard — middleware requirePlatformAdmin (API)
 phase: F25
-status: review
+status: done
 priority: critical
 estimated_size: S
 depends_on: []
