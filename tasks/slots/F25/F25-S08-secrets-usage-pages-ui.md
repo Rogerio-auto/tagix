@@ -2,7 +2,7 @@
 id: F25-S08
 title: Páginas Secrets + Uso (frontend) — rotação de platform_secrets + dashboard de custo LLM
 phase: F25
-status: in-progress
+status: review
 priority: medium
 estimated_size: L
 depends_on: [F25-S04, F25-S05, F25-S06]
@@ -11,6 +11,7 @@ source_docs:
   - docs/ROADMAP.md#F2.5
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-06-13T01:46:16Z
+completed_at: 2026-06-13T01:48:22Z
 
 ---
 # F25-S08 — Páginas Secrets + Uso
