@@ -87,6 +87,20 @@ const nextConfig = {
   compress: true,
   // Remove o header `X-Powered-By` (superfície de fingerprint a menos).
   poweredByHeader: false,
+  // Silencia warnings benignos de "Critical dependency: the request of a dependency
+  // is an expression" / "require function ... cannot be statically extracted". Vêm do
+  // `@sentry/nextjs` → `@sentry/node` → `@opentelemetry/instrumentation` +
+  // `require-in-the-middle`, que usam require dinâmico (instrumentação APM) que o
+  // webpack não resolve estaticamente. São falsos-positivos esperados (documentados
+  // pela Sentry) — não afetam bundling nem runtime. Suprime só a EXIBIÇÃO do warning.
+  webpack: (config) => {
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings ?? []),
+      { module: /@opentelemetry\/instrumentation/ },
+      { module: /require-in-the-middle/ },
+    ];
+    return config;
+  },
   // Tree-shaking de barrel imports das libs pesadas: o Next reescreve os imports
   // de pacotes "barrel" (um index re-exportando tudo) para imports diretos do
   // submódulo usado, evitando puxar a lib inteira no bundle da rota. Mensurável
