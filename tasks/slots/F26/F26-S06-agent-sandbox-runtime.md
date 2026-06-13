@@ -2,7 +2,7 @@
 id: F26-S06
 title: Agent sandbox — mode:'sandbox' no /run (tool-executor mock, no-persist, custo is_test)
 phase: F26
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F26-S01]
@@ -12,6 +12,7 @@ source_docs:
   - docs/AGENTS_LANGGRAPH.md
   - docs/PRD.md
 claimed_at: 2026-06-13T14:56:18Z
+completed_at: 2026-06-13T14:59:54Z
 
 ---
 # F26-S06 — Agent sandbox (agent-runtime)

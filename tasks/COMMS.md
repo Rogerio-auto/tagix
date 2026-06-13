@@ -82,3 +82,26 @@ Pre-existente a F25 (arquivo de 09/jun), nao introduzido por esta fase.
 
 ### Onda 1 despachada: S01 (db) + S02 (workspaces 360) + S03 (plans CRUD) + S11 (docs)
 File-sets disjuntos: `packages/db/**` (S01) vs `apps/api/src/routes/platform/workspaces.ts`+`services/platform/workspace-360.ts` (S02) vs `apps/api/src/routes/platform/plans.ts` (S03) vs `docs/runbooks/*`+`docs/security/**` (S11). Zero overlap → paralelizáveis. S11 escreve só os 2 runbooks agora; a auditoria /hm-security da impersonation roda APÓS S05 mergear (parte final do slot). S04/S05/S06 destravam após S01 mergear+migration aplicada (onda 2). Decisões travadas §9 respeitadas: view-as read-only, billing interno sem Stripe, ordem A→B→D→C, playground só super-admin.
+
+### F26-S06 — boundary: finalize.py editado (decisão do orchestrator)
+A invariante "custo do sandbox vai com is_test=true + NÃO grava agent_executions" exige
+tocar o node de persistência `app/nodes/finalize.py`, que NÃO estava no files_allowed
+literal de S06 (run.py, sandbox/**, tests/**). finalize.py é o ÚNICO ponto onde o runtime
+persiste (agent_executions + llm_usage_logs) — neutralizá-lo é o coração do sandbox.
+Decisão: editar finalize.py de forma ADITIVA (guard `if not is_sandbox(state)` no
+agent_executions; coluna is_test no llm_usage_logs) + novo módulo `app/sandbox/__init__.py`
+(predicado único is_sandbox). run.py ganha `mode:'sandbox'` que liga is_playground.
+A fronteira de side-effect das TOOLS já existia (ToolContext.is_playground, F2) — sandbox
+só a liga. Tools de callback (send_message/register_conversion/trigger_flow) já retornam
+"(simulado)" em playground; teste prova zero rede. 140 pytest verdes (133+7).
+
+### F26 backend gotcha: drizzle envolve erro PG em `.cause` (não top-level `.code`)
+Detecção de unique_violation (23505) num route Express: o DrizzleQueryError expõe o erro
+do driver `postgres` em `err.cause.code`, NÃO em `err.code`. Checar ambos os níveis
+(`(err as {code?}).code === '23505' || err.cause?.code === '23505'`). Usado em plans.ts.
+
+### F26 wire: tenants vs workspaces — colisão de rota evitada
+A F25 (policies.ts) já expõe GET /api/platform/workspaces (seletor simples). S02 monta o
+tenant-list rico + 360 em /api/platform/tenants e /api/platform/tenants/:id (não colide).
+Subscriptions (S04) e impersonation usam /api/platform/tenants/:id/... e /api/platform/impersonation.
+Frontend S07/S08 devem consumir /api/platform/tenants.

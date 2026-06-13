@@ -28,6 +28,7 @@ from langgraph.types import StreamWriter
 
 from app.db import with_workspace
 from app.logging import get_logger
+from app.sandbox import is_sandbox
 from app.types import AgentState, ChatMessage, UsageAccumulator
 
 logger = get_logger()
@@ -100,64 +101,77 @@ async def _persist(pool: asyncpg.Pool, state: AgentState, *, reply: str) -> None
 
     workspace_id = state["workspace_id"]
     execution_id = state.get("execution_id") or state.get("thread_id")
+    sandbox = is_sandbox(state)
 
     async with pool.acquire() as conn:
         async with with_workspace(conn, workspace_id) as scoped:
-            await scoped.execute(
-                """
-                INSERT INTO agent_executions
-                    (id, workspace_id, agent_id, conversation_id, thread_id,
-                     status, current_node, state, total_tokens, total_cost_usd,
-                     updated_at, completed_at, error)
-                VALUES
-                    ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5,
-                     $6, $7, $8::jsonb, $9, $10,
-                     now(), now(), $11)
-                ON CONFLICT (id) DO UPDATE SET
-                    status         = EXCLUDED.status,
-                    current_node   = EXCLUDED.current_node,
-                    state          = EXCLUDED.state,
-                    total_tokens   = EXCLUDED.total_tokens,
-                    total_cost_usd = EXCLUDED.total_cost_usd,
-                    updated_at     = now(),
-                    completed_at   = EXCLUDED.completed_at,
-                    error          = EXCLUDED.error
-                """,
-                execution_id,
-                workspace_id,
-                state["agent_id"],
-                state.get("conversation_id"),
-                state.get("thread_id", str(execution_id)),
-                status,
-                "finalize",
-                state_json,
-                usage.total_tokens,
-                usage.total_cost_usd,
-                error_text,
-            )
+            # SANDBOX (F26-S06): nao grava a execucao de producao em agent_executions.
+            # O playground e efemero -- a inspecao do trace vem do stream SSE, nao do DB.
+            if not sandbox:
+                await scoped.execute(
+                    """
+                    INSERT INTO agent_executions
+                        (id, workspace_id, agent_id, conversation_id, thread_id,
+                         status, current_node, state, total_tokens, total_cost_usd,
+                         updated_at, completed_at, error)
+                    VALUES
+                        ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5,
+                         $6, $7, $8::jsonb, $9, $10,
+                         now(), now(), $11)
+                    ON CONFLICT (id) DO UPDATE SET
+                        status         = EXCLUDED.status,
+                        current_node   = EXCLUDED.current_node,
+                        state          = EXCLUDED.state,
+                        total_tokens   = EXCLUDED.total_tokens,
+                        total_cost_usd = EXCLUDED.total_cost_usd,
+                        updated_at     = now(),
+                        completed_at   = EXCLUDED.completed_at,
+                        error          = EXCLUDED.error
+                    """,
+                    execution_id,
+                    workspace_id,
+                    state["agent_id"],
+                    state.get("conversation_id"),
+                    state.get("thread_id", str(execution_id)),
+                    status,
+                    "finalize",
+                    state_json,
+                    usage.total_tokens,
+                    usage.total_cost_usd,
+                    error_text,
+                )
 
             # Só registra uso de LLM se houve de fato uma chamada (tokens > 0 ou
             # generation_id presente) — evita linha vazia em bloqueios pré-chamada.
             if usage.total_tokens > 0 or state.get("generation_id"):
-                metadata = {"reply_chars": len(reply)}
-                if state.get("is_playground"):
+                metadata: dict[str, Any] = {"reply_chars": len(reply)}
+                if sandbox:
                     metadata["playground"] = True
+                    # "would-do": as tools de side-effect foram mockadas (nao executadas).
+                    would_do = [
+                        tc for tc in state.get("tool_calls_executed", []) if tc
+                    ]
+                    if would_do:
+                        metadata["would_do_tool_calls"] = would_do
+                # SANDBOX: o custo do teste vai para is_test=true -> fora do cap/billing
+                # de producao (coluna da F26-S01). Em live, is_test=false.
                 await scoped.execute(
                     """
                     INSERT INTO llm_usage_logs
                         (workspace_id, agent_id, conversation_id, execution_id,
                          request_type, router, openrouter_generation_id, model,
                          prompt_tokens, completion_tokens, reasoning_tokens,
-                         total_tokens, cost_usd, finish_reason, metadata)
+                         total_tokens, cost_usd, finish_reason, is_test, metadata)
                     VALUES
                         ($1::uuid, $2::uuid, $3::uuid, $4::uuid,
                          'chat', 'openrouter', $5, $6,
                          $7, $8, $9,
-                         $10, $11, $12, $13::jsonb)
+                         $10, $11, $12, $13, $14::jsonb)
                     """,
                     workspace_id,
                     state["agent_id"],
-                    state.get("conversation_id"),
+                    # Em sandbox a conversa e efemera -> nao correlaciona com conversa real.
+                    None if sandbox else state.get("conversation_id"),
                     execution_id,
                     state.get("generation_id"),
                     (state.get("agent") or {}).get("model", ""),
@@ -167,6 +181,7 @@ async def _persist(pool: asyncpg.Pool, state: AgentState, *, reply: str) -> None
                     usage.total_tokens,
                     usage.total_cost_usd,
                     "stop" if status == "completed" else status,
+                    sandbox,
                     json.dumps(metadata),
                 )
 
