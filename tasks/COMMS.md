@@ -29,3 +29,9 @@ S01 done → desbloqueia S02, S04, S06 (paralelos, paths disjuntos: api/webhooks
 S02/S04/S06 done e em main. LIÇÃO: `vitest run <file>` NÃO typecheca; rodar `pnpm --filter <pkg> typecheck` ANTES do finish (S06 mergeou com erro de tuple-type no test → hotfix 1 commit em main). Daqui pra frente: typecheck do pacote sempre antes de finish.
 - S03 (inbound persistence) desbloqueado (deps S01+S02 done). S05 espera S03+S04. S07 espera S06. S08 espera S05.
 - Próxima onda: S03 (solo, workers/inbound) → depois S05 (api) + S07 (web) podem ir; S08 após S05.
+
+## F15 wave 3/4 — integrado (orchestrator) 2026-06-12
+S03 (inbound IG: parser real wired + story/share/postback/referral->messages + comments->ig_comments+comment_thread + metrica hm.ig.messages.received) e S05 (comments API + wire app.ts) done em main.
+- DESVIO de permissão S05: não há permission key dedicada de IG e `@hm/shared` está fora do files_allowed. Mapeei: list=conversation.view, reply(pub/priv)=conversation.assign (STAFF respondem), hide/delete=conversation.delete_message (ADMINS). Supervisor NÃO modera hide/delete (delete_message é OWNER/ADMIN). Follow-up honesto: criar perms ig.comment.* em fase futura se quiser supervisor moderando.
+- FOLLOW-UP S05: DELETE de comment é soft (marca ig_comments.hidden + audit ig.comment.delete); a exclusão DURA na Graph precisa de um kind ig_delete_comment no worker outbound (S04) — deferido (adapter.deleteComment já existe, só falta o dispatch kind).
+- Próxima onda (final): S07 (connect wizard, web/settings/channels) + S08 (inbox UI, web/conversations) — disjuntos. NENHUM worker roda pnpm build (colide .next); orchestrator faz o build autoritativo na integração.
