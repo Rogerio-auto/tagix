@@ -2,15 +2,17 @@
 id: F15-S04
 title: Outbound dispatch IG — worker envia text/media/interactive/comment + janela 24h/MESSAGE_TAG
 phase: F15
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F15-S01]
 agent_id: backend-engineer
 source_docs:
   - docs/features/INSTAGRAM.md
----
+claimed_at: 2026-06-13T00:01:17Z
+completed_at: 2026-06-13T00:05:56Z
 
+---
 # F15-S04 — Outbound dispatch IG (workers)
 
 > **source_docs:** `docs/features/INSTAGRAM.md` §5.3, §6, §14

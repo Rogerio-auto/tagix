@@ -55,6 +55,8 @@ export const outboundJobSchema = z.discriminatedUnion('kind', [
     text: z.string().min(1),
     replyToExternalId: z.string().optional(),
     messageTag: igMessageTagSchema.optional(),
+    /** Epoch-ms da ultima inbound do contato (janela 24h IG). Opcional. */
+    lastInboundFromContactAt: z.number().int().nonnegative().optional(),
   }),
   z.object({
     kind: z.literal('media'),
@@ -67,6 +69,7 @@ export const outboundJobSchema = z.discriminatedUnion('kind', [
     caption: z.string().optional(),
     replyToExternalId: z.string().optional(),
     messageTag: igMessageTagSchema.optional(),
+    lastInboundFromContactAt: z.number().int().nonnegative().optional(),
   }),
   z.object({
     kind: z.literal('template'),
@@ -82,6 +85,28 @@ export const outboundJobSchema = z.discriminatedUnion('kind', [
     chatId: z.string().min(1),
     payload: InteractivePayloadSchema,
     messageTag: igMessageTagSchema.optional(),
+    lastInboundFromContactAt: z.number().int().nonnegative().optional(),
+  }),
+  z.object({
+    kind: z.literal('ig_private_reply'),
+    ...base,
+    /** IGSID alvo (recipient.id) — opcional; o adapter usa commentId. */
+    chatId: z.string().optional(),
+    commentId: z.string().min(1),
+    text: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal('ig_public_reply'),
+    ...base,
+    commentId: z.string().min(1),
+    text: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal('ig_hide_comment'),
+    ...base,
+    commentId: z.string().min(1),
+    /** true = ocultar (default); false = reexibir. */
+    hide: z.boolean().optional(),
   }),
   z.object({
     kind: z.literal('typing_indicator'),
