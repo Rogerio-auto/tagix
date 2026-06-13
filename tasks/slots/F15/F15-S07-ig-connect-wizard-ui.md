@@ -2,7 +2,7 @@
 id: F15-S07
 title: IG connect wizard (frontend) — passo Instagram no ConnectChannelWizard
 phase: F15
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F15-S06]
