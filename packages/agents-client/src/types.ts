@@ -173,3 +173,60 @@ export const HealthResponseSchema = z.object({
 });
 
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Evaluation / LLM-judge (F29) — POST /internal/evaluate
+// ---------------------------------------------------------------------------
+
+/** Vocabulario controlado de categoria de objecao (espelha o CHECK de `objections`). */
+export const ObjectionCategorySchema = z.enum([
+  'price',
+  'timing',
+  'trust',
+  'competitor',
+  'feature_gap',
+  'authority',
+  'other',
+]);
+export type ObjectionCategory = z.infer<typeof ObjectionCategorySchema>;
+
+export const CsatLabelSchema = z.enum(['promoter', 'neutral', 'detractor']);
+export type CsatLabel = z.infer<typeof CsatLabelSchema>;
+
+export const HandledBySchema = z.enum(['ai', 'human', 'mixed']);
+export type HandledBy = z.infer<typeof HandledBySchema>;
+
+/** Uma objecao classificada pelo judge. */
+export const JudgeObjectionSchema = z.object({
+  category: ObjectionCategorySchema,
+  label: z.string().min(1),
+  excerpt: z.string().nullable().optional(),
+  resolved: z.boolean().default(false),
+});
+export type JudgeObjection = z.infer<typeof JudgeObjectionSchema>;
+
+/** Resultado estruturado e validado do LLM-judge (espelha o Pydantic `JudgeResult`). */
+export const JudgeResultSchema = z.object({
+  quality_score: z.number().int().min(0).max(100),
+  quality_rationale: z.string().nullable().optional(),
+  sentiment_score: z.number().int().min(-100).max(100).nullable().optional(),
+  csat_label: CsatLabelSchema.nullable().optional(),
+  handled_by: HandledBySchema,
+  objections: z.array(JudgeObjectionSchema).default([]),
+});
+export type JudgeResult = z.infer<typeof JudgeResultSchema>;
+
+/** Request do `POST /internal/evaluate`. snake_case no wire (Pydantic). */
+export const EvaluateRequestSchema = z.object({
+  workspace_id: z.string().min(1),
+  conversation_id: z.string().min(1),
+});
+export type EvaluateRequest = z.input<typeof EvaluateRequestSchema>;
+
+/** Resposta do `POST /internal/evaluate`: JudgeResult + modelo/custo do judge. */
+export const EvaluateResponseSchema = z.object({
+  result: JudgeResultSchema,
+  judge_model: z.string().min(1),
+  judge_cost_usd: z.number().nonnegative(),
+});
+export type EvaluateResponse = z.infer<typeof EvaluateResponseSchema>;

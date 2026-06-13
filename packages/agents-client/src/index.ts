@@ -31,6 +31,14 @@ export {
   PolicySnapshotSchema,
   ToolDescriptorSchema,
   UsageSchema,
+  // Evaluation / LLM-judge (F29).
+  EvaluateRequestSchema,
+  EvaluateResponseSchema,
+  JudgeResultSchema,
+  JudgeObjectionSchema,
+  ObjectionCategorySchema,
+  CsatLabelSchema,
+  HandledBySchema,
   // Tipos inferidos.
   type AgentRunRequest,
   type AgentRunRequestParsed,
@@ -43,6 +51,13 @@ export {
   type PolicySnapshot,
   type ToolDescriptor,
   type Usage,
+  type EvaluateRequest,
+  type EvaluateResponse,
+  type JudgeResult,
+  type JudgeObjection,
+  type ObjectionCategory,
+  type CsatLabel,
+  type HandledBy,
 } from './types';
 
 export const AGENTS_CLIENT_PKG = '@hm/agents-client' as const;

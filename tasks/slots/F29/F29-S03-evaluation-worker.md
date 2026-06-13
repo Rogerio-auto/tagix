@@ -2,7 +2,7 @@
 id: F29-S03
 title: Worker de avaliação — polling de conversas encerradas → judge → persist
 phase: F29
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F29-S01, F29-S02]
@@ -10,6 +10,7 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/AGENT_QUALITY_OBJECTIONS.md
 claimed_at: 2026-06-13T16:31:00Z
+completed_at: 2026-06-13T16:36:47Z
 
 ---
 # F29-S03 — Worker de avaliação (Node)

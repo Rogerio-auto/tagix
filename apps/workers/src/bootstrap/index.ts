@@ -76,6 +76,11 @@ import {
   startDashboardMvScheduler,
   startDashboardSnapshotScheduler,
 } from '../dashboard-refresh/index';
+import {
+  createJudgePort,
+  evaluationRuntimeConfigFromEnv,
+  startEvaluationScheduler,
+} from '../evaluation/index';
 
 /** Intervalo do rollup de métricas de agentes (F2-S13); idempotente. */
 const METRICS_ROLLUP_INTERVAL_MS = 10 * 60_000;
@@ -305,6 +310,14 @@ export async function startWorkers(
   // Processor de export LGPD (F10-S02): drena data_export_jobs pendentes, reúne PII
   // sob RLS e grava o artefato via @hm/storage. Singleton via lock Redis.
   const privacyExport = startPrivacyExportProcessor({ redis, logger });
+  // Worker de avaliacao pos-conversa (F29-S03): tick 5min que encontra conversas
+  // encerradas sem avaliacao, chama o LLM-judge (F29-S02) e persiste a qualidade/
+  // CSAT/objecoes (F29-S01). Singleton via lock Redis; reusa a config do runtime.
+  const evaluationScheduler = startEvaluationScheduler({
+    redis,
+    logger,
+    judge: createJudgePort(evaluationRuntimeConfigFromEnv()),
+  });
   const metricsTimer = setInterval(() => {
     void runAgentMetricsRollup({}, logger).catch((err: unknown) => {
       logger.error('falha no rollup de métricas de agentes', {
@@ -333,6 +346,7 @@ export async function startWorkers(
       'dashboard-mv-scheduler',
       'webhook-dispatcher',
       'privacy-export-processor',
+      'evaluation-scheduler',
     ],
   });
 
@@ -351,6 +365,7 @@ export async function startWorkers(
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
       clearInterval(metricsTimer);
+      await evaluationScheduler.stop();
       await privacyExport.stop();
       await webhookDispatcher.stop();
       await dashboardSnapshot.stop();
