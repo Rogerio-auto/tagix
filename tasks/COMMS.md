@@ -192,3 +192,16 @@ Outra(s) sessao(oes) podem estar mexendo em OUTRAS fases concorrentemente. Eu to
 ## [orchestrator:F30] 2026-06-13 — F30-S01 worker DISPATCHED
 
 claim OK (branch feat/f30-s01, commit ee4e9fd). Despachei db-engineer via claude -p --agent db-engineer (background) com brief self-contained referenciando o slot .md + LIVECHAT_OPS.md. Worker escreve+typecheck no SEU pacote (@hm/db + @hm/shared), SEM git. Eu integro. Gotchas passados: matriz ja tem conversation.resolve/snooze/toggle_ai (so adicionar ai_mode + inbox.visibility.manage); proxima migration = 0039; RLS manual p/ inbox_visibility_settings + member_visibility_overrides. Demais 9 slots seguem blocked ate S01 mergear em main.
+
+## [orchestrator:F30] 2026-06-13 — F30-S01 MERGEADO em main + lote 2 despachado
+
+S01 (fundacao) integrado em main: typecheck (13 projetos) + lint + @hm/db 28/28 VERDES; migrations 0039 (DDL) + 0040 (RLS manual) aplicadas limpas. Merge --no-ff. done + commit bookkeeping.
+ACHADO: o worker do S01 tambem editou packages/db/src/seed-demo.ts (FORA do files_allowed — era trabalho F29/dev-workspace de outra sessao). REVERTI seed-demo.ts ao HEAD antes de integrar — NAO foi mergeado. So os 15 paths do files_allowed entraram.
+
+LOTE 2 (deps = [S01] done): despacho paralelo de 5 slots com files_allowed DISJUNTOS, cada um validando SO o seu pacote:
+- S02 (backend) conversations/state.ts + app.ts — ai_mode/resolve/snooze toggle
+- S07 (backend) conversations/index.ts — enforcement de visibilidade na list (usa buildVisibilityPredicate de S01)
+- S08 (backend) org/org.ts — API de config de visibilidade + peer-privacy
+- S09 (workers) inbound/db-ports + ports — auto-assign engine (usa pickAutoAssignee de S01)
+- S05 (python) agent-runtime nodes load_context/build_prompt — retomada consciente de contexto
+Workers escrevem na arvore (sem git), eu integro 1 a 1 via stash-dance por paths. S03/S04/S06/S10 seguem depois (deps em S02/S04/S05/S07/S08).
