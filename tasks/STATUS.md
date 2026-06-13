@@ -13,7 +13,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F10   | 13     | 0   | 0   | 0   | 0   | 0   | 13   |
 | F15   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
-| F25   | 9     | 0   | 1   | 0   | 0   | 0   | 8   |
+| F25   | 9     | 0   | 0   | 0   | 0   | 1   | 8   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
@@ -134,17 +134,17 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 25
 
-| ID      | Titulo                                                                                  | Status     | Prioridade | Depende de                |
-| ------- | --------------------------------------------------------------------------------------- | ---------- | ---------- | ------------------------- |
-| F25-S01 | Platform-admin guard — middleware requirePlatformAdmin (API)                            | ✅ done     | critical   | —                         |
-| F25-S02 | LLM models catalog API — CRUD llm_models_whitelist + sync OpenRouter /models            | ✅ done     | high       | F25-S01                   |
-| F25-S03 | Workspace agent policies API — editor por workspace (allowed_models, features, caps)    | ✅ done     | high       | F25-S01                   |
-| F25-S04 | Platform secrets rotation API — rotaciona OpenRouter/Meta/encryption keys + auditoria   | ✅ done     | high       | F25-S01                   |
-| F25-S05 | LLM usage rollup API — gasto por workspace/modelo/dia-mês + top spenders + caps         | ✅ done     | high       | F25-S01                   |
-| F25-S06 | Platform-admin frontend shell — route group (platform) + guard + nav                    | ✅ done     | high       | —                         |
-| F25-S07 | Páginas Modelos + Políticas (frontend) — catálogo LLM + editor de policy por workspace  | ✅ done     | medium     | F25-S02, F25-S03, F25-S06 |
-| F25-S08 | Páginas Secrets + Uso (frontend) — rotação de platform_secrets + dashboard de custo LLM | ⏸️ blocked | medium     | F25-S04, F25-S05, F25-S06 |
-| F25-S09 | Runbooks de plataforma — rotate-openrouter-key + manage-workspace-agent-policy          | ✅ done     | low        | —                         |
+| ID      | Titulo                                                                                  | Status   | Prioridade | Depende de                |
+| ------- | --------------------------------------------------------------------------------------- | -------- | ---------- | ------------------------- |
+| F25-S01 | Platform-admin guard — middleware requirePlatformAdmin (API)                            | ✅ done   | critical   | —                         |
+| F25-S02 | LLM models catalog API — CRUD llm_models_whitelist + sync OpenRouter /models            | ✅ done   | high       | F25-S01                   |
+| F25-S03 | Workspace agent policies API — editor por workspace (allowed_models, features, caps)    | ✅ done   | high       | F25-S01                   |
+| F25-S04 | Platform secrets rotation API — rotaciona OpenRouter/Meta/encryption keys + auditoria   | ✅ done   | high       | F25-S01                   |
+| F25-S05 | LLM usage rollup API — gasto por workspace/modelo/dia-mês + top spenders + caps         | ✅ done   | high       | F25-S01                   |
+| F25-S06 | Platform-admin frontend shell — route group (platform) + guard + nav                    | ✅ done   | high       | —                         |
+| F25-S07 | Páginas Modelos + Políticas (frontend) — catálogo LLM + editor de policy por workspace  | ✅ done   | medium     | F25-S02, F25-S03, F25-S06 |
+| F25-S08 | Páginas Secrets + Uso (frontend) — rotação de platform_secrets + dashboard de custo LLM | 🟣 review | medium     | F25-S04, F25-S05, F25-S06 |
+| F25-S09 | Runbooks de plataforma — rotate-openrouter-key + manage-workspace-agent-policy          | ✅ done   | low        | —                         |
 
 ## Fase 3 — Flow Builder
 
