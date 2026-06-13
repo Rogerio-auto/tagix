@@ -2,7 +2,7 @@
 id: F25-S05
 title: LLM usage rollup API — gasto por workspace/modelo/dia-mês + top spenders + caps
 phase: F25
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F25-S01]
