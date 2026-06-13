@@ -2,7 +2,7 @@
 id: F26-S02
 title: Workspaces API — list de tenants + Workspace 360 agregado
 phase: F26
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
