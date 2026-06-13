@@ -2,7 +2,7 @@
 id: F25-S07
 title: Páginas Modelos + Políticas (frontend) — catálogo LLM + editor de policy por workspace
 phase: F25
-status: review
+status: done
 priority: medium
 estimated_size: L
 depends_on: [F25-S02, F25-S03, F25-S06]
