@@ -22,6 +22,8 @@ export type ProviderParser = (payload: unknown) => InboundEvent[];
 export interface ProviderParsers {
   readonly metaWhatsApp: ProviderParser;
   readonly waha: ProviderParser;
+  /** F15-S03: parser real do Instagram (parseInstagramWebhook de @hm/channels). */
+  readonly metaInstagram: ProviderParser;
 }
 
 // --- Helpers de narrowing (sem `any`) ---
@@ -57,11 +59,8 @@ export class ChannelInboundParser implements InboundParserPort {
       case 'waha':
         return this.parsers.waha(raw);
       case 'meta_instagram':
-        // Placeholder F1.5 (INSTAGRAM.md §5): não derruba o pipeline.
-        this.logger.warn('inbound: parsing Instagram ainda não implementado (F1.5)', {
-          provider,
-        });
-        return [];
+        // F15-S03: parser real do Instagram (DM/story/share/comment/postback/...).
+        return this.parsers.metaInstagram(raw);
       default:
         return assertNever(provider);
     }

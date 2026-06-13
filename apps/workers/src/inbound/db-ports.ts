@@ -65,6 +65,9 @@ export const FLOWS_QUEUE = 'hm.q.flows' as const;
 /** Eventos `message` de uma requisição (o que vira linha em `messages`). */
 type InboundMessageEvent = Extract<InboundEvent, { type: 'message' }>;
 
+/** Eventos `comment` IG (linha em ig_comments + comment_thread). */
+type InboundCommentEvent = Extract<InboundEvent, { type: 'comment' }>;
+
 // ─── Channel resolver (DB, cross-tenant) ──────────────────────────────────────
 
 /** Canal resolvido a partir das routing hints (o que a persistência precisa). */
@@ -310,6 +313,9 @@ export class DbInboundPersistence implements InboundPersistencePort {
     const messageEvents = events.filter((e): e is InboundMessageEvent => e.type === 'message');
     const statusEvents = events.filter((e): e is InboundStatusEvent => e.type === 'status');
     const reactionEvents = events.filter((e) => e.type === 'reaction');
+    const commentEvents = events.filter(
+      (e): e is InboundCommentEvent => e.type === 'comment',
+    );
 
     // Status (S20): cada um resolve o próprio canal/tenant — independe da
     // existência de canal para as mensagens (acks podem chegar isolados).
@@ -319,8 +325,8 @@ export class DbInboundPersistence implements InboundPersistencePort {
       statuses += 1;
     }
 
-    // Sem mensagens nem reações a persistir → só os status acima.
-    if (messageEvents.length === 0 && reactionEvents.length === 0) {
+    // Sem mensagens, comments nem reações a persistir → só os status acima.
+    if (messageEvents.length === 0 && reactionEvents.length === 0 && commentEvents.length === 0) {
       return { inserted: 0, deduped: 0, statuses, resolved: true };
     }
 
@@ -333,6 +339,17 @@ export class DbInboundPersistence implements InboundPersistencePort {
     }
 
     const { channelId, workspaceId } = channel;
+
+    // F15-S03: persiste comments IG (ig_comments + comment_thread) — independem
+    // de um message anchor de DM.
+    let commentsInserted = 0;
+    for (const comment of commentEvents) {
+      const ok = await this.persistComment(workspaceId, channelId, comment);
+      if (ok) commentsInserted += 1;
+    }
+    if (messageEvents.length === 0 && reactionEvents.length === 0) {
+      return { inserted: commentsInserted, deduped: 0, statuses, resolved: true };
+    }
 
     // Remote id do contato/conversa (estável por canal). Toda mensagem de um
     // envelope vem do mesmo contato; usamos o primeiro evento como âncora.
@@ -412,6 +429,134 @@ export class DbInboundPersistence implements InboundPersistencePort {
       statuses,
       resolved: true,
     };
+  }
+
+  /**
+   * Persiste um comment IG (F15-S03): upsert em `ig_comments` (dedup por
+   * channel+commentId), conversa kind='comment_thread' (uma por media_id x
+   * contato, via remoteId = "media:igsid"), uma linha `messages` type='comment'
+   * linkando o comment em metadata, e emite message:new. Idempotente.
+   * Retorna true se uma nova linha de mensagem foi inserida.
+   */
+  private async persistComment(
+    workspaceId: string,
+    channelId: string,
+    comment: InboundCommentEvent,
+  ): Promise<boolean> {
+    const { igComments, conversations, messages } = schema;
+    // remoteId estavel da thread: media + autor (uma conversa por post x contato).
+    const remoteId = 'cmt:' + comment.mediaId + ':' + comment.fromIgsId;
+
+    const result = await withWorkspace(workspaceId, async (tx) => {
+      // 1) Upsert ig_comments (dedup por uq_ig_comments_channel_comment).
+      await tx
+        .insert(igComments)
+        .values({
+          workspaceId,
+          channelId,
+          mediaId: comment.mediaId,
+          commentId: comment.commentId,
+          ...(comment.parentCommentId !== undefined
+            ? { parentCommentId: comment.parentCommentId }
+            : {}),
+          fromIgsid: comment.fromIgsId,
+          ...(comment.fromUsername !== undefined ? { fromUsername: comment.fromUsername } : {}),
+          ...(comment.text !== undefined ? { text: comment.text } : {}),
+          ...(comment.mediaKind !== undefined ? { mediaKind: comment.mediaKind } : {}),
+        })
+        .onConflictDoNothing({ target: [igComments.channelId, igComments.commentId] });
+
+      // 2) Conversa comment_thread (upsert por channel+remoteId).
+      const contactId = await ensureContact(tx, workspaceId, comment.fromIgsId);
+      const [existingConv] = await tx
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(and(eq(conversations.channelId, channelId), eq(conversations.remoteId, remoteId)))
+        .limit(1);
+
+      let conversationId: string;
+      if (existingConv !== undefined) {
+        conversationId = existingConv.id;
+      } else {
+        const [created] = await tx
+          .insert(conversations)
+          .values({
+            workspaceId,
+            channelId,
+            contactId,
+            remoteId,
+            kind: 'comment_thread',
+            status: 'open',
+            aiMode: 'off',
+          })
+          .onConflictDoNothing({ target: [conversations.channelId, conversations.remoteId] })
+          .returning({ id: conversations.id });
+        if (created !== undefined) {
+          conversationId = created.id;
+        } else {
+          const [row] = await tx
+            .select({ id: conversations.id })
+            .from(conversations)
+            .where(and(eq(conversations.channelId, channelId), eq(conversations.remoteId, remoteId)))
+            .limit(1);
+          if (row === undefined) {
+            throw new Error('inbound: comment_thread nao materializou.');
+          }
+          conversationId = row.id;
+        }
+      }
+
+      // 3) Linha messages type='comment' (dedup por uq_messages_external).
+      const [msg] = await tx
+        .insert(messages)
+        .values({
+          workspaceId,
+          conversationId,
+          externalId: comment.commentId,
+          direction: 'inbound',
+          senderType: 'contact',
+          type: 'comment',
+          content: comment.text ?? null,
+          viewStatus: 'delivered',
+          metadata: {
+            commentId: comment.commentId,
+            mediaId: comment.mediaId,
+            ...(comment.parentCommentId !== undefined
+              ? { parentCommentId: comment.parentCommentId }
+              : {}),
+            ...(comment.fromUsername !== undefined ? { fromUsername: comment.fromUsername } : {}),
+          },
+        })
+        .onConflictDoNothing({ target: [messages.conversationId, messages.externalId] })
+        .returning({ id: messages.id });
+
+      if (msg !== undefined) {
+        await tx
+          .update(conversations)
+          .set({
+            lastMessagePreview: (comment.text ?? '[comentario]').slice(0, 280),
+            lastMessageAt: new Date(),
+            lastMessageFrom: 'contact',
+            unreadCount: sql`${conversations.unreadCount} + 1`,
+            updatedAt: new Date(),
+          })
+          .where(eq(conversations.id, conversationId));
+      }
+
+      return { conversationId, messageId: msg?.id };
+    });
+
+    if (result.messageId === undefined) return false;
+
+    await this.socket.emitMessageNew({
+      workspaceId,
+      conversationId: result.conversationId,
+      messageId: result.messageId,
+      externalId: comment.commentId,
+      type: 'comment',
+      content: comment.text ?? null,
+    });
+    return true;
   }
 
   /**

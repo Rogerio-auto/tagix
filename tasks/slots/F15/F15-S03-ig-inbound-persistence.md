@@ -2,7 +2,7 @@
 id: F15-S03
 title: Inbound persistence IG — worker persiste DM/story/share/comment → conv/messages/ig_comments
 phase: F15
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F15-S01, F15-S02]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/INSTAGRAM.md
   - docs/features/LIVECHAT.md
 claimed_at: 2026-06-13T00:12:24Z
+completed_at: 2026-06-13T00:16:21Z
 
 ---
 # F15-S03 — Inbound persistence IG (workers)
