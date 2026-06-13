@@ -57,5 +57,20 @@ export async function buildAlerts(
     }
   }
 
+  // Cap mensal de IA consumido (ADMIN+). Origem: card cap_mensal_consumido_pct.
+  // ≥100% → critical (estourou o orçamento); ≥80% → warning (alerta antecipado).
+  const cap = byKey.get('cap_mensal_consumido_pct');
+  if (cap) {
+    const pct = num(cap.value?.['value']);
+    if (pct != null && pct >= 80) {
+      alerts.push({
+        key: 'cap_mensal_ia',
+        severity: pct >= 100 ? 'critical' : 'warning',
+        message: `Cap mensal de IA em ${pct}% do limite.`,
+        metricKey: 'cap_mensal_consumido_pct',
+      });
+    }
+  }
+
   return alerts;
 }

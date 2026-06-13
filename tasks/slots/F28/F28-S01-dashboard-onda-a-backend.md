@@ -2,15 +2,17 @@
 id: F28-S01
 title: Dashboard Onda A — métricas backend (performance atendente, rankings, IA ops)
 phase: F28
-status: available
+status: review
 priority: high
 estimated_size: L
 depends_on: []
 agent_id: backend-engineer
 source_docs:
   - docs/features/DASHBOARD.md
----
+claimed_at: 2026-06-13T15:20:07Z
+completed_at: 2026-06-13T15:30:35Z
 
+---
 # F28-S01 — Dashboard Onda A (backend)
 
 > **source_docs:** `docs/features/DASHBOARD.md` §2.1, §2.4, §2.5, §3.2

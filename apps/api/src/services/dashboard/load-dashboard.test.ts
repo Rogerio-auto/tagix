@@ -187,3 +187,66 @@ describe('dashboard: definições (puro, sem DB)', () => {
     expect(without).not.toContain('conversoes_workspace_mes');
   });
 });
+
+describe('dashboard Onda A: visibilidade por role das métricas novas (F28-S01)', () => {
+  it('performance/inbox/transferências são de supervisão+ (não vazam pro AGENT)', () => {
+    const agent = new Set(visibleMetricKeys('AGENT'));
+    const sup = new Set(visibleMetricKeys('SUPERVISOR'));
+    const admin = new Set(visibleMetricKeys('ADMIN'));
+
+    // SUP_RO: performance por atendente, inbox por canal, resolução média.
+    expect(sup.has('performance_por_atendente')).toBe(true);
+    expect(sup.has('inbox_por_canal')).toBe(true);
+    expect(sup.has('tempo_medio_resolucao_24h')).toBe(true);
+    expect(agent.has('performance_por_atendente')).toBe(false);
+    expect(agent.has('inbox_por_canal')).toBe(false);
+
+    // Transferências: SUP_UP (não READONLY no spec? — é SUP/ADMIN). AGENT não vê.
+    expect(sup.has('transferencias_24h')).toBe(true);
+    expect(agent.has('transferencias_24h')).toBe(false);
+
+    // 1ª resposta: AGENT vê (própria média); SUP+ vê do team.
+    expect(agent.has('tempo_medio_primeira_resposta_24h')).toBe(true);
+    expect(sup.has('tempo_medio_primeira_resposta_24h')).toBe(true);
+
+    // IA ops: handoffs/resoluções SUP+; latência p95/tokens/cap são ADMIN+.
+    expect(sup.has('agente_handoffs_24h')).toBe(true);
+    expect(sup.has('latencia_agente_p95_24h')).toBe(false);
+    expect(admin.has('latencia_agente_p95_24h')).toBe(true);
+    expect(admin.has('tokens_por_modelo_24h')).toBe(true);
+    expect(admin.has('cap_mensal_consumido_pct')).toBe(true);
+  });
+
+  it('rankings de conversão são SUP_UP e gated por conversion_type', () => {
+    const supWith = new Set(metricsForRole('SUPERVISOR', true).map((m) => m.key));
+    const supWithout = new Set(metricsForRole('SUPERVISOR', false).map((m) => m.key));
+    expect(supWith.has('conversoes_por_atendente_humano')).toBe(true);
+    expect(supWith.has('conversoes_por_agente_ia')).toBe(true);
+    // Sem conversion_type configurado, os rankings somem (não card vazio).
+    expect(supWithout.has('conversoes_por_atendente_humano')).toBe(false);
+    expect(supWithout.has('conversoes_por_agente_ia')).toBe(false);
+
+    // AGENT nunca vê ranking de equipe.
+    const agent = new Set(metricsForRole('AGENT', true).map((m) => m.key));
+    expect(agent.has('conversoes_por_atendente_humano')).toBe(false);
+  });
+
+  it('loadDashboard resolve os novos cards sem erro e com value/null coerente (ADMIN)', async () => {
+    const payload = await withWorkspace(ws, (tx) =>
+      loadDashboard(tx, { workspaceId: ws, memberId, role: 'ADMIN' }),
+    );
+    const keys = new Set(payload.cards.map((c) => c.key));
+    expect(keys.has('performance_por_atendente')).toBe(true);
+    expect(keys.has('tokens_por_modelo_24h')).toBe(true);
+    expect(keys.has('cap_mensal_consumido_pct')).toBe(true);
+
+    // Tabela column-aware: contrato { columns, rows }.
+    const perf = payload.cards.find((c) => c.key === 'performance_por_atendente');
+    expect(Array.isArray(perf?.value?.['columns'])).toBe(true);
+    expect(Array.isArray(perf?.value?.['rows'])).toBe(true);
+
+    // Cap sem policy definida → value null (front omite), sem lançar.
+    const cap = payload.cards.find((c) => c.key === 'cap_mensal_consumido_pct');
+    expect(cap?.value).toBeDefined();
+  });
+});
