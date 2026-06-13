@@ -2,7 +2,7 @@
 id: F25-S07
 title: Páginas Modelos + Políticas (frontend) — catálogo LLM + editor de policy por workspace
 phase: F25
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: L
 depends_on: [F25-S02, F25-S03, F25-S06]
@@ -10,8 +10,9 @@ agent_id: frontend-engineer
 source_docs:
   - docs/ROADMAP.md#F2.5
   - docs/UX_PRINCIPLES.md
----
+claimed_at: 2026-06-13T01:44:53Z
 
+---
 # F25-S07 — Páginas Modelos + Políticas
 
 > **source_docs:** `docs/ROADMAP.md` F2.5-S02/S03; `docs/UX_PRINCIPLES.md`
