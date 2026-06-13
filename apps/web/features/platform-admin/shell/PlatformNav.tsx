@@ -4,8 +4,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Boxes,
+  Bot,
+  Building2,
+  CreditCard,
+  Eye,
   HelpCircle,
   KeyRound,
+  Layers,
   ShieldCheck,
   SlidersHorizontal,
   type LucideIcon,
@@ -18,6 +23,11 @@ const ICONS: Record<PlatformNavItem['icon'], LucideIcon> = {
   policies: SlidersHorizontal,
   secrets: KeyRound,
   usage: ShieldCheck,
+  tenants: Building2,
+  plans: Layers,
+  subscriptions: CreditCard,
+  playground: Bot,
+  impersonation: Eye,
 };
 
 /** Help inline `?` (UX §3.3) — texto curto via `<details>`/title acessível,

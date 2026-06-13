@@ -49,6 +49,7 @@ import { createPlatformWorkspacesRouter } from './routes/platform/workspaces';
 import { createPlatformPlansRouter } from './routes/platform/plans';
 import { createPlatformSubscriptionsRouter } from './routes/platform/subscriptions';
 import { createPlatformImpersonationRouter } from './routes/platform/impersonation';
+import { createPlatformPlaygroundRouter } from './routes/platform/playground';
 import {
   IMPERSONATION_COOKIE,
   impersonationMiddleware,
@@ -182,6 +183,8 @@ export function createApp(): Express {
   app.use(createPlatformPlansRouter());
   app.use(createPlatformSubscriptionsRouter());
   app.use(createPlatformImpersonationRouter());
+  // F26-S10 (glue): proxy SSE do playground em sandbox (zero side-effect).
+  app.use(createPlatformPlaygroundRouter());
 
   // Sentry error handler (F10-S01) ANTES do handler central: captura a exceção
   // (no-op sem DSN) e repassa para a resposta de erro canônica.
