@@ -28,6 +28,8 @@
 import type { InboundEvent } from '@hm/channels';
 import type { Logger } from '@hm/logger';
 import { extractRoutingHints } from './parse';
+import { normalizeIgEvents } from './instagram-inbound';
+import { recordIgMessageReceived } from './ig-metrics';
 import type {
   InboundDeps,
   InboundMediaJob,
@@ -77,10 +79,28 @@ export async function runInboundPipeline(
   deps: InboundDeps,
   logger: Logger,
 ): Promise<InboundPipelineResult> {
-  const events = deps.parser.parse(provider, raw);
+  const rawEvents = deps.parser.parse(provider, raw);
+
+  // F15-S03: para Instagram, normaliza variantes (story/share/postback/referral)
+  // em eventos `message` — assim o media-enqueue e a persistencia reusam o
+  // caminho do WhatsApp. Comments seguem como evento `comment` (persistidos a
+  // parte em ig_comments + comment_thread).
+  const events =
+    provider === 'meta_instagram'
+      ? (() => {
+          const { messageEvents, commentEvents } = normalizeIgEvents(rawEvents);
+          // status/reaction originais sao preservados (persist os trata).
+          const passthrough = rawEvents.filter(
+            (e) => e.type === 'status' || e.type === 'reaction',
+          );
+          for (const m of messageEvents) recordIgMessageReceived(m.messageType);
+          for (let i = 0; i < commentEvents.length; i += 1) recordIgMessageReceived('comment');
+          return [...messageEvents, ...commentEvents, ...passthrough];
+        })()
+      : rawEvents;
 
   if (events.length === 0) {
-    // IG placeholder, evento não-suportado, ou raw sem mensagens: nada a fazer.
+    // Evento não-suportado, ou raw sem mensagens: nada a fazer.
     return { events: 0, mediaJobs: 0, persisted: false };
   }
 

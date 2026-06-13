@@ -22,7 +22,7 @@
 import { z } from 'zod';
 import { connectMq, consume, QUEUES, type Envelope, type MqHandle } from '@hm/shared/mq';
 import { CHANNEL_PROVIDERS } from '@hm/shared';
-import { parseWhatsAppWebhook, parseWahaWebhook } from '@hm/channels';
+import { parseWhatsAppWebhook, parseWahaWebhook, parseInstagramWebhook } from '@hm/channels';
 import type { Logger } from '@hm/logger';
 import { runInboundPipeline } from './pipeline';
 import { ChannelInboundParser } from './parse';
@@ -74,7 +74,7 @@ import { createTriggerDispatchDeps, dispatchTriggersForNewMessage } from '../flo
  */
 export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDeps {
   const parser = new ChannelInboundParser(
-    { metaWhatsApp: parseWhatsAppWebhook, waha: parseWahaWebhook },
+    { metaWhatsApp: parseWhatsAppWebhook, waha: parseWahaWebhook, metaInstagram: parseInstagramWebhook },
     logger,
   );
   const socket = new MqInboundSocketEmit(channel);

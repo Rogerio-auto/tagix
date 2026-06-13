@@ -161,9 +161,19 @@ describe('runInboundPipeline — mídia', () => {
 });
 
 describe('ChannelInboundParser — roteamento por provider', () => {
+  const igEvent: InboundEvent = {
+    type: 'message',
+    provider: 'meta_instagram',
+    contactRemoteId: 'IGSID',
+    externalId: 'mid.1',
+    messageType: 'text',
+    content: 'oi',
+    rawTimestamp: new Date().toISOString(),
+  };
   const parsers = {
     metaWhatsApp: vi.fn(() => [textEvent]),
     waha: vi.fn(() => []),
+    metaInstagram: vi.fn(() => [igEvent]),
   };
   const parser = new ChannelInboundParser(parsers, logger);
 
@@ -173,10 +183,11 @@ describe('ChannelInboundParser — roteamento por provider', () => {
     expect(out).toHaveLength(1);
   });
 
-  it('IG é placeholder: loga-warn e retorna vazio (sem chamar parsers reais)', () => {
+  it('delega IG ao parser de Instagram (F15-S03)', () => {
     const out = parser.parse('meta_instagram', { object: 'instagram' });
-    expect(out).toEqual([]);
-    expect(logger.warn).toHaveBeenCalled();
+    expect(parsers.metaInstagram).toHaveBeenCalledOnce();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ provider: 'meta_instagram', messageType: 'text' });
   });
 });
 
