@@ -2,7 +2,7 @@
 id: F15-S04
 title: Outbound dispatch IG — worker envia text/media/interactive/comment + janela 24h/MESSAGE_TAG
 phase: F15
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F15-S01]
