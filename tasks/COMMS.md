@@ -188,3 +188,7 @@ Achados: `packages/db/src/index.ts` não estava em files_allowed → `evaluation
 Outra(s) sessao(oes) podem estar mexendo em OUTRAS fases concorrentemente. Eu toco SOMENTE slots da F30.
 - Commitei o decomposition da F30 (10 slots + docs/features/LIVECHAT_OPS.md) em 76d76ce — paths F30-only, sem git add -A.
 - DISPATCH: F30-S01 (fundacao critica — db-engineer). Bloqueia todos os outros 9. files_allowed: packages/db (schema inbox/org/conversations/index, repos/livechat, drizzle/**, rls.test) + packages/shared (permissions, socket-events, types/inbox, index). Vou claimar e despachar o engineer.
+
+## [orchestrator:F30] 2026-06-13 — F30-S01 worker DISPATCHED
+
+claim OK (branch feat/f30-s01, commit ee4e9fd). Despachei db-engineer via claude -p --agent db-engineer (background) com brief self-contained referenciando o slot .md + LIVECHAT_OPS.md. Worker escreve+typecheck no SEU pacote (@hm/db + @hm/shared), SEM git. Eu integro. Gotchas passados: matriz ja tem conversation.resolve/snooze/toggle_ai (so adicionar ai_mode + inbox.visibility.manage); proxima migration = 0039; RLS manual p/ inbox_visibility_settings + member_visibility_overrides. Demais 9 slots seguem blocked ate S01 mergear em main.
