@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft, Check, Instagram, RefreshCw } from 'lucide-react';
 import { Button, Input, Modal, useToast } from '@hm/ui';
 import { ApiError } from '@/shared/lib/api-client';
 import { cn } from '@/shared/lib/cn';
 import { PROVIDER_META, PROVIDER_ORDER } from '../constants';
 import { isFbSdkAvailable, startFbLogin } from '../fb-login';
-import { useConnectChannel } from '../queries';
-import type { ChannelProvider, ConnectChannelInput } from '../types';
+import { useConnectChannel, useConnectInstagram, useListInstagramAccounts } from '../queries';
+import type { ChannelProvider, ConnectChannelInput, IgAccountCandidate } from '../types';
 
 type Step = 'provider' | 'connect';
 
@@ -140,7 +140,7 @@ function ConnectStep({
         <MetaWhatsAppForm submitting={connect.isPending} onSubmit={submit} />
       )}
       {provider === 'meta_instagram' && (
-        <MetaInstagramForm submitting={connect.isPending} onSubmit={submit} />
+        <MetaInstagramForm submitting={connect.isPending} onSubmit={submit} onDone={onDone} />
       )}
       {provider === 'waha' && <WahaForm submitting={connect.isPending} onSubmit={submit} />}
     </div>
@@ -247,21 +247,152 @@ function MetaWhatsAppForm({
   );
 }
 
+/**
+ * Fluxo Instagram (Embedded Signup — INSTAGRAM.md 12.1): login Meta -> lista
+ * Page+IGBA -> seleciona conta -> conecta (subscribe webhook + cria canal +
+ * mensagem de teste). Mantem fallback manual quando o SDK da Meta nao esta
+ * disponivel no ambiente.
+ */
 function MetaInstagramForm({
   submitting,
   onSubmit,
+  onDone,
 }: {
   submitting: boolean;
   onSubmit: (input: ConnectChannelInput) => void;
+  onDone: () => void;
 }) {
+  const { toast } = useToast();
+  const listAccounts = useListInstagramAccounts();
+  const connectIg = useConnectInstagram();
+
+  const [accounts, setAccounts] = useState<IgAccountCandidate[] | null>(null);
+  const [selected, setSelected] = useState<IgAccountCandidate | null>(null);
   const [name, setName] = useState('');
+
   const [igUsername, setIgUsername] = useState('');
   const [igUserId, setIgUserId] = useState('');
   const [fbPageId, setFbPageId] = useState('');
   const [accessToken, setAccessToken] = useState('');
 
-  const valid = name.trim() && igUserId.trim() && fbPageId.trim() && accessToken.trim();
+  const handleToken = async (token: string) => {
+    try {
+      const res = await listAccounts.mutateAsync({ userAccessToken: token });
+      setAccounts(res.accounts);
+      if (res.accounts.length === 0) {
+        toast({
+          variant: 'error',
+          title: 'Nenhuma conta elegivel',
+          description: 'Vincule uma conta Instagram Business ou Creator a uma Pagina do Facebook.',
+        });
+      }
+    } catch {
+      toast({
+        variant: 'error',
+        title: 'Falha ao listar contas',
+        description: 'Nao foi possivel consultar suas Paginas na Meta. Tente o modo manual.',
+      });
+    }
+  };
 
+  const connectSelected = async () => {
+    if (!selected || !name.trim()) return;
+    try {
+      const res = await connectIg.mutateAsync({
+        name: name.trim(),
+        pageId: selected.pageId,
+        pageAccessToken: selected.pageAccessToken,
+        igUserId: selected.igUserId,
+        igUsername: selected.igUsername,
+        igAccountType: selected.igAccountType,
+      });
+      toast({
+        variant: 'success',
+        title: 'Instagram conectado',
+        description: res.testMessageSent ? 'Canal ativo e mensagem de teste enviada.' : 'Canal ativo.',
+      });
+      onDone();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Tente novamente.';
+      toast({ variant: 'error', title: 'Falha ao conectar Instagram', description: message });
+    }
+  };
+
+  if (accounts !== null && accounts.length > 0) {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="font-body text-sm text-text-mid">
+          Selecione a conta do Instagram que deseja conectar.
+        </p>
+        <div className="flex flex-col gap-2">
+          {accounts.map((acc) => {
+            const active = selected?.igUserId === acc.igUserId;
+            return (
+              <button
+                key={acc.igUserId}
+                type="button"
+                onClick={() => {
+                  setSelected(acc);
+                  if (!name.trim()) {
+                    setName(acc.igUsername ? '@' + acc.igUsername : (acc.pageName ?? ''));
+                  }
+                }}
+                className={cn(
+                  'flex items-center gap-3 rounded-md border px-4 py-3 text-left outline-none transition-colors duration-200',
+                  active
+                    ? 'border-accent bg-surface-2'
+                    : 'border-border bg-surface-inset hover:border-border-2 hover:bg-surface-2',
+                  'focus-visible:shadow-glow-md',
+                )}
+              >
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-surface text-text-mid">
+                  <Instagram className="size-5" aria-hidden />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-head text-sm font-semibold text-text">
+                    {acc.igUsername ? '@' + acc.igUsername : acc.igUserId}
+                  </span>
+                  <span className="block font-body text-xs text-text-low">
+                    {acc.pageName ?? 'Pagina do Facebook'}
+                    {acc.igAccountType ? ' - ' + acc.igAccountType : ''}
+                  </span>
+                </span>
+                {active && <Check className="ml-auto size-4 text-accent" aria-hidden />}
+              </button>
+            );
+          })}
+        </div>
+        {selected && (
+          <Input label="Nome do canal" value={name} onChange={(e) => setName(e.target.value)} required />
+        )}
+        <div className="mt-1 flex justify-between gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            leftIcon={<RefreshCw className="size-3.5" aria-hidden />}
+            onClick={() => {
+              setAccounts(null);
+              setSelected(null);
+            }}
+          >
+            Recomecar
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            loading={connectIg.isPending}
+            disabled={!selected || !name.trim()}
+            leftIcon={<Check className="size-4" aria-hidden />}
+            onClick={() => void connectSelected()}
+          >
+            Conectar e testar
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const valid = name.trim() && igUserId.trim() && fbPageId.trim() && accessToken.trim();
   return (
     <form
       className="flex flex-col gap-3"
@@ -278,32 +409,15 @@ function MetaInstagramForm({
         });
       }}
     >
-      <MetaLoginNotice provider="meta_instagram" onCredentials={setAccessToken} />
-      {/* TODO(F1+): passos específicos de Instagram (escolher conta IG + página
-          do Facebook vinculada) dependem do Embedded Signup da Meta — STUBADOS.
-          Por ora, o usuário informa ig_user_id e fb_page_id manualmente. */}
+      <MetaLoginNotice provider="meta_instagram" onCredentials={(token) => void handleToken(token)} />
       <p className="rounded-md border border-border-2 bg-surface-inset px-3 py-2 font-body text-xs text-text-low">
-        A seleção automática da conta do Instagram e da página do Facebook chega com o login da
-        Meta. Por enquanto, informe os identificadores manualmente.
+        Apos entrar com a Meta, escolha a Pagina e a conta Instagram Business/Creator vinculada. Sem
+        login disponivel? Informe os identificadores manualmente abaixo.
       </p>
       <Input label="Nome do canal" value={name} onChange={(e) => setName(e.target.value)} required />
-      <Input
-        label="@usuário (opcional)"
-        value={igUsername}
-        onChange={(e) => setIgUsername(e.target.value)}
-      />
-      <Input
-        label="IG User ID"
-        value={igUserId}
-        onChange={(e) => setIgUserId(e.target.value)}
-        required
-      />
-      <Input
-        label="Facebook Page ID"
-        value={fbPageId}
-        onChange={(e) => setFbPageId(e.target.value)}
-        required
-      />
+      <Input label="@usuario (opcional)" value={igUsername} onChange={(e) => setIgUsername(e.target.value)} />
+      <Input label="IG User ID" value={igUserId} onChange={(e) => setIgUserId(e.target.value)} required />
+      <Input label="Facebook Page ID" value={fbPageId} onChange={(e) => setFbPageId(e.target.value)} required />
       <Input
         label="Token de acesso"
         type="password"
@@ -312,7 +426,7 @@ function MetaInstagramForm({
         hint="Cifrado no servidor; nunca exibido novamente."
         required
       />
-      <SubmitRow submitting={submitting} disabled={!valid} />
+      <SubmitRow submitting={submitting || listAccounts.isPending} disabled={!valid} />
     </form>
   );
 }

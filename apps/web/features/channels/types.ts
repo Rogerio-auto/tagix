@@ -50,3 +50,25 @@ export type ConnectChannelInput =
       wahaSessionId: string;
       apiKey: string;
     };
+
+/** Conta IG candidata (Page+IGBA) retornada por POST /api/channels/instagram/accounts. */
+export interface IgAccountCandidate {
+  pageId: string;
+  pageName?: string;
+  pageAccessToken: string;
+  igUserId: string;
+  igUsername?: string;
+  igAccountType?: 'business' | 'creator';
+}
+
+/** Payload de POST /api/channels/instagram/connect (wizard Embedded Signup). */
+export interface IgConnectInput {
+  name: string;
+  pageId: string;
+  pageAccessToken: string;
+  igUserId: string;
+  igUsername?: string;
+  igAccountType?: 'business' | 'creator';
+  appSecret?: string;
+  testRecipientIgsid?: string;
+}
