@@ -2,7 +2,7 @@
 id: F25-S02
 title: LLM models catalog API — CRUD llm_models_whitelist + sync OpenRouter /models
 phase: F25
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F25-S01]
@@ -10,8 +10,9 @@ agent_id: backend-engineer
 source_docs:
   - docs/ROADMAP.md#F2.5
   - docs/AGENTS_LANGGRAPH.md
----
+claimed_at: 2026-06-13T01:24:15Z
 
+---
 # F25-S02 — LLM models catalog API
 
 > **source_docs:** `docs/ROADMAP.md` F2.5-S02; `docs/AGENTS_LANGGRAPH.md`
