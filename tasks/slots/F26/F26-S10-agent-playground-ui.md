@@ -2,7 +2,7 @@
 id: F26-S10
 title: Agent Playground UI — chat de teste + trace de execução + seletor de modelo/params
 phase: F26
-status: review
+status: done
 priority: medium
 estimated_size: L
 depends_on: [F26-S06]
