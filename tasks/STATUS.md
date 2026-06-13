@@ -16,7 +16,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F25   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F26   | 11     | 1   | 4   | 0   | 0   | 0   | 6   |
 | F27   | 3     | 1   | 2   | 0   | 0   | 0   | 0   |
-| F28   | 2     | 1   | 0   | 0   | 1   | 0   | 0   |
+| F28   | 2     | 1   | 0   | 0   | 0   | 1   | 0   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
@@ -175,10 +175,10 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 28
 
-| ID      | Titulo                                                                        | Status        | Prioridade | Depende de |
-| ------- | ----------------------------------------------------------------------------- | ------------- | ---------- | ---------- |
-| F28-S01 | Dashboard Onda A — métricas backend (performance atendente, rankings, IA ops) | 🟢 available   | high       | —          |
-| F28-S02 | Dashboard Onda A — frontend (TableCard rico, rankings, cards IA)              | 🔵 in-progress | high       | F28-S01    |
+| ID      | Titulo                                                                        | Status      | Prioridade | Depende de |
+| ------- | ----------------------------------------------------------------------------- | ----------- | ---------- | ---------- |
+| F28-S01 | Dashboard Onda A — métricas backend (performance atendente, rankings, IA ops) | 🟢 available | high       | —          |
+| F28-S02 | Dashboard Onda A — frontend (TableCard rico, rankings, cards IA)              | 🟣 review    | high       | F28-S01    |
 
 ## Fase 3 — Flow Builder
 

@@ -2,7 +2,7 @@
 id: F28-S02
 title: Dashboard Onda A — frontend (TableCard rico, rankings, cards IA)
 phase: F28
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F28-S01]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/DASHBOARD.md
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-06-13T15:38:01Z
+completed_at: 2026-06-13T15:41:07Z
 
 ---
 # F28-S02 — Dashboard Onda A (frontend)

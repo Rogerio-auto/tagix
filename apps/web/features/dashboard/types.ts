@@ -55,3 +55,38 @@ export interface DrillDetail {
   readonly metricKey: string;
   readonly detail: MetricValue;
 }
+
+/**
+ * Contrato column-aware dos cards `table` da Onda A (F28-S01). O servidor descreve
+ * as colunas (label/align) e as linhas; o front renderiza genérico, sem hardcode de
+ * schema. As linhas trazem chaves arbitrárias referenciadas por `column.key`.
+ */
+export type TableColumnAlign = 'left' | 'right' | 'center';
+
+export interface TableColumn {
+  readonly key: string;
+  readonly label: string;
+  readonly align?: TableColumnAlign;
+}
+
+export interface TableValue {
+  readonly columns: TableColumn[];
+  readonly rows: Record<string, unknown>[];
+}
+
+/** Lê com segurança o contrato `{columns, rows}` de um value jsonb; null se ausente. */
+export function readTableValue(value: MetricValue | null): TableValue | null {
+  if (!value) return null;
+  const columns = value['columns'];
+  const rows = value['rows'];
+  if (!Array.isArray(columns) || !Array.isArray(rows)) return null;
+  const cols = columns.filter(
+    (c): c is TableColumn =>
+      typeof c === 'object' && c !== null && typeof (c as { key?: unknown }).key === 'string',
+  );
+  const safeRows = rows.filter(
+    (r): r is Record<string, unknown> => typeof r === 'object' && r !== null,
+  );
+  if (cols.length === 0) return null;
+  return { columns: cols, rows: safeRows };
+}
