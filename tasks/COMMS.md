@@ -151,3 +151,24 @@ Orchestrator rodou em worktree isolado (`agent-a196697cfa2d482b4`), F26 intocada
 - F29-S05 [frontend] cards qualidade/CSAT + objeções drawer → apps/web/features/dashboard. dep S04.
 
 Roots paralelos: S01 (db) ⊥ S02 (python). Gatilho = scheduler/poll (não toca caminho de fechamento de conversa na API). main verde+pushado; packages/db estável → S01 pode arrancar.
+
+## F29 — execução isolada em worktree (agent-a3d4a1fa835ce7d9c), 2026-06-13
+
+Worktree dedicado (isolation: worktree); base resetada para `main` (10f297e) para herdar os 5 slots F29 (estavam 1 commit à frente do checkout do worktree). NÃO mergeei em main — todos os slots parados em `finish` (review). Eu (Rogério) integro depois.
+
+Resultado: 5/5 slots em REVIEW, todos verdes.
+- F29-S01 (db, feat/f29-s01, 0e84086): schema conversation_evaluations + objections + RLS (migrations 0037 tabelas / 0038 RLS) + repo + rls.test. `pnpm --filter @hm/db test` = 24 verdes (3 novos F29 incl. cross-tenant deny + UNIQUE + CHECK).
+- F29-S02 (python, feat/f29-s02, b33da4c): /internal/evaluate (LLM-judge OpenRouter, JSON forçado, temp 0) + app/evaluation/* + llm_usage_logs(request_type='evaluation'). `ruff` + `pytest` = 156 verdes (16 novos). Judge real NÃO exercido em CI (mock httpx) — E2E real precisa key.
+- F29-S03 (workers+agents-client, feat/f29-s03, e1df5f3): scheduler 5min idempotente (lock Redis) → judge → persist eval+objections em tx RLS + @hm/agents-client.evaluate() (Zod). `pnpm --filter @hm/workers test` = 177 verdes (4 novos: persist, idempotência, falha-não-persiste).
+- F29-S04 (api dashboard, feat/f29-s04, caa9bf8): 5 métricas (qualidade média/por agente/por atendente, CSAT, objeções rankeadas) + drill-down objeções por categoria. `pnpm --filter @hm/api test` = 311 verdes (3 novos de visibilidade/role + dados).
+- F29-S05 (web dashboard, feat/f29-s05, b442d96): CsatCard (distribuição promoter/neutral/detractor) + score/100 + drawer objeções 2-níveis (categoria→exemplos). `pnpm --filter @hm/web build` verde. Zero hex.
+
+### Achados load-bearing
+- **`packages/db/src/index.ts` NÃO está em files_allowed de NENHUM slot F29.** Logo `evaluationsRepo` (criado em S01) não é exportado do barrel `@hm/db`. S03 (worker) e S04 (dashboard) consomem via `schema.*` direto (padrão já usado por todos os workers/dashboard) — sem violação de fronteira. O repo de S01 fica disponível mas não re-exportado; OK (S04 escreve queries próprias, S03 escreve schema direto). Quem integrar e quiser expor `evaluationsRepo` precisa tocar `src/index.ts` à parte.
+- **Bug de janela do worker:** conversas `closed/resolved` podem ter `updated_at = NULL` (coluna sem default no insert). O LEFT-JOIN-sem-avaliação usa `coalesce(c.updated_at, c.created_at)` na janela de lookback — senão conversas recém-encerradas nunca seriam avaliadas. (corrigido em S03)
+- **Nomes reais de schema:** `conversation_evaluations` (UNIQUE conversation_id, handled_by/quality_score/sentiment_score/csat_label/judge_model/judge_cost_usd numeric(12,6)/raw jsonb) + `objections` (FK evaluation_id CASCADE, category CHECK vocab fixo). `agent_id`/`primary_member_id` vêm de `conversations.agent_id`/`conversations.assigned_to` (o judge só opina em handled_by).
+- **Contrato do judge (S02→S03→S04):** `EvaluateResponse = { result: JudgeResult, judge_model, judge_cost_usd }`. JudgeResult = quality_score 0-100, quality_rationale?, sentiment_score -100..100|null, csat_label?, handled_by, objections[]. Espelhado em Zod (`@hm/agents-client`) e Pydantic.
+- **Drill-down de objeções:** rota `/api/dashboard/metrics/objecoes_rankeadas?param=<categoria>` → exemplos (excerpt+resolved). Categoria inválida = 404/unknown (anti-exfiltração). Sem param = ranking.
+- **Migrations:** geradas no worktree (estado = main, F26 incluída) → 0037 (tabelas) + 0038 (RLS manual). Journal `_journal.json` + snapshots 0037/0038 commitados. Aplicadas no Postgres dev local (tagix-dev-postgres-1) limpo.
+
+NÃO toquei main / F26 / F27 / F28. NÃO mergeei. NÃO rodei `done`/`sync` que afete STATUS compartilhado de main.
