@@ -19,7 +19,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F28   | 2     | 0   | 0   | 0   | 0   | 0   | 2   |
 | F29   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F30   | 10     | 0   | 9   | 0   | 0   | 1   | 0   |
+| F30   | 10     | 0   | 9   | 0   | 0   | 0   | 1   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -208,7 +208,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID      | Titulo                                                                | Status     | Prioridade | Depende de                |
 | ------- | --------------------------------------------------------------------- | ---------- | ---------- | ------------------------- |
-| F30-S01 | Foundation — schema visibilidade/peer + ai-handoff + contratos shared | 🟣 review   | critical   | —                         |
+| F30-S01 | Foundation — schema visibilidade/peer + ai-handoff + contratos shared | ✅ done     | critical   | —                         |
 | F30-S02 | API de estado da conversa — status + ai_mode toggle                   | ⏸️ blocked | high       | F30-S01                   |
 | F30-S03 | Inbox UI — cockpit no painel + header espelho + filtros               | ⏸️ blocked | high       | F30-S01, F30-S02, F30-S07 |
 | F30-S04 | IA handoff — auto-pausa ao humano responder                           | ⏸️ blocked | high       | F30-S01, F30-S02          |

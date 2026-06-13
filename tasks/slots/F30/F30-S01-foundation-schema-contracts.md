@@ -2,7 +2,7 @@
 id: F30-S01
 title: Foundation — schema visibilidade/peer + ai-handoff + contratos shared
 phase: F30
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: []
