@@ -13,6 +13,8 @@ import type { DashboardLayoutPreferences, DashboardPayload, DrillDetail } from '
 export const dashboardKeys = {
   me: ['dashboard', 'me'] as const,
   metric: (key: string) => ['dashboard', 'metric', key] as const,
+  metricParam: (key: string, param: string) =>
+    ['dashboard', 'metric', key, param] as const,
 };
 
 const REFETCH_MS = 5 * 60 * 1000;
@@ -26,11 +28,17 @@ export function useDashboard() {
   });
 }
 
-export function useMetricDetail(metricKey: string | null) {
+export function useMetricDetail(metricKey: string | null, param?: string | null) {
   return useQuery({
-    queryKey: dashboardKeys.metric(metricKey ?? '__none__'),
+    queryKey:
+      param != null
+        ? dashboardKeys.metricParam(metricKey ?? '__none__', param)
+        : dashboardKeys.metric(metricKey ?? '__none__'),
     enabled: metricKey !== null,
-    queryFn: () => api.get<DrillDetail>(`/api/dashboard/metrics/${metricKey}`),
+    queryFn: () => {
+      const suffix = param != null ? `?param=${encodeURIComponent(param)}` : '';
+      return api.get<DrillDetail>(`/api/dashboard/metrics/${metricKey}${suffix}`);
+    },
   });
 }
 

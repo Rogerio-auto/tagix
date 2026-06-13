@@ -13,11 +13,24 @@ import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import type { DashboardCard } from '../types';
-import { formatBRLFromCents, formatDuration, formatInt, formatPercent, formatUSD, readNumber } from '../format';
+import {
+  formatBRLFromCents,
+  formatDuration,
+  formatInt,
+  formatPercent,
+  formatScore100,
+  formatUSD,
+  readNumber,
+} from '../format';
+import { CsatCard } from './CsatCard';
 
 function displayValue(card: DashboardCard): string {
   const v = card.value;
   if (!v) return '—';
+  // §F29: qualidade média é um score 0-100 → "90 / 100".
+  if (card.key === 'qualidade_resposta_media') {
+    return formatScore100(readNumber(v, 'value'));
+  }
   // Contrato Onda A (F28-S01): { value, unit } — duração (s), latência (ms) ou % .
   const value = readNumber(v, 'value');
   if (value !== null) {
@@ -71,6 +84,10 @@ interface StatCardProps {
 }
 
 export function StatCard({ card, onDrill }: StatCardProps) {
+  // §F29: CSAT tem render próprio (distribuição promoter/neutral/detractor).
+  if (card.key === 'satisfacao_media') {
+    return <CsatCard card={card} />;
+  }
   const value = displayValue(card);
   const interactive = Boolean(card.drillHref) || Boolean(onDrill);
   const tone = statTone(card);
