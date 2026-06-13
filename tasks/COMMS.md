@@ -105,3 +105,21 @@ A F25 (policies.ts) já expõe GET /api/platform/workspaces (seletor simples). S
 tenant-list rico + 360 em /api/platform/tenants e /api/platform/tenants/:id (não colide).
 Subscriptions (S04) e impersonation usam /api/platform/tenants/:id/... e /api/platform/impersonation.
 Frontend S07/S08 devem consumir /api/platform/tenants.
+
+---
+
+## F27 + F28 criadas (2º terminal — layout + dashboard) — 2026-06-13
+
+Segundo terminal (paralelo à F26). Decompostas via /hm-tasks. **Disjuntas da F26** — não tocam `packages/db`, `apps/api/src/{routes,services}/platform/**`, nem `apps/web/{features/platform-admin,app/(platform)}/**`.
+
+**F27 — Estruturação de layout (ultrawide, frontend-only):**
+- F27-S01 [frontend] PageContainer + token `max-w-content` (1600px) no preset DS + doc → `apps/web/shared/components/layout/**`, `packages/design-tokens/src/tailwind-preset.ts`, `docs/DESIGN_SYSTEM.md`. **available**.
+- F27-S02 [frontend] aplica container nas shells lista/detalhe → `apps/web/app/(app)/{page,agents,campaigns,contacts,conversions,knowledge,flows}/...page.tsx`. dep S01.
+- F27-S03 [frontend] aplica em settings/forms + pipeline/settings → `apps/web/app/(app)/{settings/**,pipeline/settings}/page.tsx`. dep S01.
+- Full-bleed preservado (conversations, pipeline board, flows/[id], calendar). S02⊥S03 (paths disjuntos).
+
+**F28 — Dashboard Onda A (métricas já documentadas no DASHBOARD.md, faltavam):**
+- F28-S01 [backend] performance por atendente + rankings conversões (humano/IA) + métricas operacionais IA → `apps/api/src/{services,routes}/dashboard/**`. **available**. Query viva/snapshot, **zero packages/db** (otimização MV deferida p/ pós-F26-S01).
+- F28-S02 [frontend] TableCard column-aware + rankings + cards IA + drill-down drawer → `apps/web/features/dashboard/**`. dep S01.
+
+Onda B (qualidade resposta / CSAT / objeções via LLM-judge) = fase F29, será decomposta depois (depende de F26-S01 mergear; toca packages/db + agent-runtime).
