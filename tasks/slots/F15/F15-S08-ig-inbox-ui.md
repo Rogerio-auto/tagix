@@ -2,7 +2,7 @@
 id: F15-S08
 title: IG inbox UI — ícone/filtro de canal, comment thread, story mention card, composer 24h/tag
 phase: F15
-status: review
+status: done
 priority: medium
 estimated_size: L
 depends_on: [F15-S05]
