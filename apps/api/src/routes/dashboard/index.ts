@@ -21,6 +21,12 @@ const metricKeySchema = z
   .trim()
   .regex(/^[a-z0-9_]{1,64}$/, 'metric_key inválido');
 
+// Parâmetro opcional do drill-down (ex.: categoria de objeção). Mesmo formato seguro.
+const drillParamSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z0-9_]{1,64}$/);
+
 export function createDashboardRouter(): Router {
   const router = Router();
   const guard = [requireAuth, withRLS] as const;
@@ -46,12 +52,20 @@ export function createDashboardRouter(): Router {
       return;
     }
     const auth = req.auth!;
+    const rawParam = req.query['param'] ?? req.query['category'];
+    const paramParsed =
+      typeof rawParam === 'string' ? drillParamSchema.safeParse(rawParam) : null;
+    if (typeof rawParam === 'string' && paramParsed && !paramParsed.success) {
+      res.status(400).json({ error: 'invalid_param' });
+      return;
+    }
     const result = await req.scoped!((tx) =>
       drillDown(tx, {
         workspaceId: auth.workspace.id,
         memberId: auth.member.id,
         role: auth.member.role as Role,
         metricKey: parsed.data,
+        param: paramParsed?.success ? paramParsed.data : undefined,
       }),
     );
     switch (result.kind) {

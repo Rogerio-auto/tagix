@@ -56,6 +56,11 @@ import {
   capMensalConsumidoPct,
   conversoesPorAtendenteHumano,
   conversoesPorAgenteIa,
+  qualidadeRespostaMedia,
+  qualidadePorAgente,
+  qualidadePorAtendente,
+  satisfacaoMedia,
+  objecoesRankeadas,
   type MetricValue,
 } from './queries';
 import { buildAlerts, type DashboardAlert } from './alerts';
@@ -178,6 +183,17 @@ async function resolveValue(
       return conversoesPorAtendenteHumano(tx);
     case 'conversoes_por_agente_ia':
       return conversoesPorAgenteIa(tx);
+    // ── §F29 Onda B — qualidade / CSAT / objeções ──
+    case 'qualidade_resposta_media':
+      return qualidadeRespostaMedia(tx);
+    case 'qualidade_por_agente':
+      return qualidadePorAgente(tx);
+    case 'qualidade_por_atendente':
+      return qualidadePorAtendente(tx);
+    case 'satisfacao_media':
+      return satisfacaoMedia(tx);
+    case 'objecoes_rankeadas':
+      return objecoesRankeadas(tx);
     default:
       return null;
   }

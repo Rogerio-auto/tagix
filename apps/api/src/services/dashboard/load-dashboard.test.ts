@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb, schema, withWorkspace } from '@hm/db';
 import type { Role } from '@hm/shared';
 import { loadDashboard, visibleMetricKeys } from './load-dashboard';
+import { drillDown } from './drill-down';
 import { metricsForRole } from './definitions';
 
 const { workspaces, members, contacts, conversations, channels, conversionTypes, plans } = schema;
@@ -248,5 +249,162 @@ describe('dashboard Onda A: visibilidade por role das métricas novas (F28-S01)'
     // Cap sem policy definida → value null (front omite), sem lançar.
     const cap = payload.cards.find((c) => c.key === 'cap_mensal_consumido_pct');
     expect(cap?.value).toBeDefined();
+  });
+});
+
+describe('dashboard Onda B: qualidade / CSAT / objeções (F29-S04)', () => {
+  it('métricas qualitativas são de supervisão+ (não vazam pro AGENT — §10)', () => {
+    const agent = new Set(visibleMetricKeys('AGENT'));
+    const sup = new Set(visibleMetricKeys('SUPERVISOR'));
+    const admin = new Set(visibleMetricKeys('ADMIN'));
+    const readonly = new Set(visibleMetricKeys('READONLY'));
+
+    // SUP_RO: qualidade média/por agente/por atendente + CSAT. READONLY informativo.
+    for (const key of [
+      'qualidade_resposta_media',
+      'qualidade_por_agente',
+      'qualidade_por_atendente',
+      'satisfacao_media',
+    ]) {
+      expect(sup.has(key)).toBe(true);
+      expect(admin.has(key)).toBe(true);
+      expect(readonly.has(key)).toBe(true);
+      // AGENT nunca vê avaliação de pares.
+      expect(agent.has(key)).toBe(false);
+    }
+
+    // objeções rankeadas: SUP_UP (ação) — não READONLY, não AGENT.
+    expect(sup.has('objecoes_rankeadas')).toBe(true);
+    expect(admin.has('objecoes_rankeadas')).toBe(true);
+    expect(readonly.has('objecoes_rankeadas')).toBe(false);
+    expect(agent.has('objecoes_rankeadas')).toBe(false);
+  });
+
+  it('loadDashboard resolve as métricas Onda B com value null sem dados (SUPERVISOR)', async () => {
+    const payload = await withWorkspace(ws, (tx) =>
+      loadDashboard(tx, { workspaceId: ws, memberId, role: 'SUPERVISOR' }),
+    );
+    const keys = new Set(payload.cards.map((c) => c.key));
+    expect(keys.has('qualidade_resposta_media')).toBe(true);
+    expect(keys.has('satisfacao_media')).toBe(true);
+    expect(keys.has('qualidade_por_agente')).toBe(true);
+
+    // Sem avaliação no workspace de teste → value null (front omite, não zero enganoso).
+    const qual = payload.cards.find((c) => c.key === 'qualidade_resposta_media');
+    expect(qual?.value).toBeNull();
+    const csat = payload.cards.find((c) => c.key === 'satisfacao_media');
+    expect(csat?.value).toBeNull();
+  });
+
+  it('métricas Onda B refletem avaliações semeadas (stat + tabelas + drill-down)', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    // Workspace isolado para asserts deterministicos de média/distribuição.
+    const [w] = await db
+      .insert(schema.workspaces)
+      .values({ name: `OndaB ${sfx}`, slug: `ondab-${sfx}` })
+      .returning();
+    if (!w) throw new Error('ws');
+    try {
+      const [mem] = await db
+        .insert(members)
+        .values({
+          workspaceId: w.id,
+          authUserId: randomUUID(),
+          email: `ondab-${sfx}@t.local`,
+          role: 'AGENT',
+          status: 'active',
+        })
+        .returning();
+      const [ch] = await db
+        .insert(channels)
+        .values({
+          workspaceId: w.id,
+          provider: 'meta_whatsapp',
+          name: `WA ob ${sfx}`,
+          phoneNumberId: `pnid-ob-${sfx}`,
+          wabaId: `waba-ob-${sfx}`,
+        })
+        .returning();
+      if (!mem || !ch) throw new Error('seed');
+      const [conv] = await db
+        .insert(conversations)
+        .values({ workspaceId: w.id, channelId: ch.id, remoteId: `rem-ob-${sfx}`, status: 'closed' })
+        .returning();
+      if (!conv) throw new Error('conv');
+      const [evaluation] = await db
+        .insert(schema.conversationEvaluations)
+        .values({
+          workspaceId: w.id,
+          conversationId: conv.id,
+          primaryMemberId: mem.id,
+          handledBy: 'human',
+          qualityScore: 90,
+          sentimentScore: 50,
+          csatLabel: 'promoter',
+          judgeModel: 'm',
+        })
+        .returning();
+      if (!evaluation) throw new Error('eval');
+      await db.insert(schema.objections).values({
+        workspaceId: w.id,
+        conversationId: conv.id,
+        evaluationId: evaluation.id,
+        category: 'price',
+        label: 'Achou caro',
+        excerpt: 'ta caro',
+        resolved: true,
+      });
+
+      const payload = await withWorkspace(w.id, (tx) =>
+        loadDashboard(tx, { workspaceId: w.id, memberId: mem.id, role: 'ADMIN' }),
+      );
+      const qual = payload.cards.find((c) => c.key === 'qualidade_resposta_media');
+      expect(qual?.value?.['value']).toBe(90);
+      expect(qual?.value?.['sample']).toBe(1);
+
+      const csat = payload.cards.find((c) => c.key === 'satisfacao_media');
+      expect(csat?.value?.['promoters']).toBe(1);
+      expect(csat?.value?.['value']).toBe(50);
+
+      const porAtendente = payload.cards.find((c) => c.key === 'qualidade_por_atendente');
+      expect(Array.isArray(porAtendente?.value?.['rows'])).toBe(true);
+      expect((porAtendente?.value?.['rows'] as unknown[]).length).toBe(1);
+
+      const obj = payload.cards.find((c) => c.key === 'objecoes_rankeadas');
+      const objRows = obj?.value?.['rows'] as { categoria: string; pct_resolvida: number }[];
+      expect(objRows[0]?.categoria).toBe('price');
+      expect(objRows[0]?.pct_resolvida).toBe(100);
+
+      // Drill-down: exemplos da categoria 'price' (excerpt visível no drawer).
+      const drill = await withWorkspace(w.id, (tx) =>
+        drillDown(tx, {
+          workspaceId: w.id,
+          memberId: mem.id,
+          role: 'ADMIN',
+          metricKey: 'objecoes_rankeadas',
+          param: 'price',
+        }),
+      );
+      expect(drill.kind).toBe('ok');
+      if (drill.kind === 'ok') {
+        const rows = drill.detail['rows'] as { excerpt: string | null }[];
+        expect(rows[0]?.excerpt).toBe('ta caro');
+      }
+
+      // Categoria inválida no drill-down → unknown_metric (não exfiltra).
+      const bad = await withWorkspace(w.id, (tx) =>
+        drillDown(tx, {
+          workspaceId: w.id,
+          memberId: mem.id,
+          role: 'ADMIN',
+          metricKey: 'objecoes_rankeadas',
+          param: 'weather',
+        }),
+      );
+      expect(bad.kind).toBe('unknown_metric');
+    } finally {
+      await db.delete(schema.workspaces).where(eq(schema.workspaces.id, w.id));
+    }
   });
 });
