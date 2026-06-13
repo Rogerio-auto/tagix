@@ -15,7 +15,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
 | F25   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F26   | 11     | 1   | 4   | 0   | 0   | 0   | 6   |
-| F27   | 3     | 0   | 1   | 0   | 1   | 1   | 0   |
+| F27   | 3     | 0   | 1   | 0   | 0   | 2   | 0   |
 | F28   | 2     | 1   | 1   | 0   | 0   | 0   | 0   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
@@ -167,11 +167,11 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 27
 
-| ID      | Titulo                                                          | Status        | Prioridade | Depende de |
-| ------- | --------------------------------------------------------------- | ------------- | ---------- | ---------- |
-| F27-S01 | PageContainer primitive + token de largura de conteúdo (DS)     | 🟣 review      | high       | —          |
-| F27-S02 | Aplicar PageContainer nas telas de lista/detalhe do grupo (app) | ⏸️ blocked    | high       | F27-S01    |
-| F27-S03 | Aplicar PageContainer em settings/forms + validar full-bleed    | 🔵 in-progress | medium     | F27-S01    |
+| ID      | Titulo                                                          | Status     | Prioridade | Depende de |
+| ------- | --------------------------------------------------------------- | ---------- | ---------- | ---------- |
+| F27-S01 | PageContainer primitive + token de largura de conteúdo (DS)     | 🟣 review   | high       | —          |
+| F27-S02 | Aplicar PageContainer nas telas de lista/detalhe do grupo (app) | ⏸️ blocked | high       | F27-S01    |
+| F27-S03 | Aplicar PageContainer em settings/forms + validar full-bleed    | 🟣 review   | medium     | F27-S01    |
 
 ## Fase 28
 

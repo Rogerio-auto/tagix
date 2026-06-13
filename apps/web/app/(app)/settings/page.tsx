@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { SettingsPanel } from '@/features/settings/shell';
+import { PageContainer } from '@/shared/components/layout';
 
 export const metadata = { title: 'Configurações' };
 
@@ -11,7 +12,9 @@ export const metadata = { title: 'Configurações' };
 export default function SettingsPage() {
   return (
     <Suspense fallback={null}>
-      <SettingsPanel />
+      <PageContainer>
+        <SettingsPanel />
+      </PageContainer>
     </Suspense>
   );
 }
