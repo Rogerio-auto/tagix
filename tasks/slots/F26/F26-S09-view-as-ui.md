@@ -2,7 +2,7 @@
 id: F26-S09
 title: View-as UI — botão "Ver como", banner global persistente, kill-switch, sessões ativas
 phase: F26
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F26-S05]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/PLATFORM_TENANT_MANAGEMENT.md
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-06-13T15:11:24Z
+completed_at: 2026-06-13T15:14:34Z
 
 ---
 # F26-S09 — View-as UI (read-only)

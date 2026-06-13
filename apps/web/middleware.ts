@@ -3,10 +3,18 @@ import { SESSION_COOKIE } from '@/shared/lib/session';
 
 const PUBLIC_PREFIXES = ['/login', '/reset-password'];
 
+/** Cookie de claim de view-as (espelha IMPERSONATION_COOKIE da API, F26-S05). */
+const IMPERSONATION_COOKIE = 'hm_impersonation';
+
 export function middleware(req: NextRequest): NextResponse {
   const { pathname } = req.nextUrl;
   const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
   const hasSession = Boolean(req.cookies.get(SESSION_COOKIE)?.value);
+  // View-as (F26-S09): reconhece o claim de impersonation no edge (aditivo). A sessao
+  // normal (hm_session) continua sendo a fonte de auth; o read-only e imposto pela API
+  // (middleware de impersonation). Aqui so propagamos a presenca do claim p/ telemetria
+  // futura, sem regredir a auth de workspace nem o guard de /platform (F25).
+  const isImpersonating = Boolean(req.cookies.get(IMPERSONATION_COOKIE)?.value);
 
   if (!isPublic && !hasSession) {
     const url = req.nextUrl.clone();
@@ -26,7 +34,9 @@ export function middleware(req: NextRequest): NextResponse {
     }
   }
 
-  return NextResponse.next();
+  const res = NextResponse.next();
+  if (isImpersonating) res.headers.set('x-hm-impersonating', '1');
+  return res;
 }
 
 export const config = {
