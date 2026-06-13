@@ -44,6 +44,18 @@ import {
   readSnapshot,
   readVolume24h,
   valorTotalPipeline,
+  performancePorAtendente,
+  tempoMedioPrimeiraResposta24h,
+  tempoMedioResolucao24h,
+  inboxPorCanal,
+  transferencias24h,
+  agenteHandoffs24h,
+  agenteResolucoes24h,
+  latenciaAgenteP9524h,
+  tokensPorModelo24h,
+  capMensalConsumidoPct,
+  conversoesPorAtendenteHumano,
+  conversoesPorAgenteIa,
   type MetricValue,
 } from './queries';
 import { buildAlerts, type DashboardAlert } from './alerts';
@@ -134,6 +146,38 @@ async function resolveValue(
       return novosContatosMes(tx);
     case 'contatos_total_workspace':
       return contatosTotalWorkspace(tx);
+    // ── Atendimento / performance (Onda A) ──
+    case 'performance_por_atendente':
+      return performancePorAtendente(tx, workspaceId);
+    case 'tempo_medio_primeira_resposta_24h':
+      // AGENT vê só a própria média; SUP+ vê o workspace/team.
+      return tempoMedioPrimeiraResposta24h(
+        tx,
+        workspaceId,
+        m.scope === 'personal' ? memberId : undefined,
+      );
+    case 'tempo_medio_resolucao_24h':
+      return tempoMedioResolucao24h(tx, workspaceId);
+    case 'inbox_por_canal':
+      return inboxPorCanal(tx);
+    case 'transferencias_24h':
+      return transferencias24h(tx);
+    // ── Agentes IA — operacional (Onda A) ──
+    case 'agente_handoffs_24h':
+      return agenteHandoffs24h(tx);
+    case 'agente_resolucoes_24h':
+      return agenteResolucoes24h(tx);
+    case 'latencia_agente_p95_24h':
+      return latenciaAgenteP9524h(tx, workspaceId);
+    case 'tokens_por_modelo_24h':
+      return tokensPorModelo24h(tx, workspaceId);
+    case 'cap_mensal_consumido_pct':
+      return capMensalConsumidoPct(tx, workspaceId);
+    // ── Conversões — ranking (Onda A) ──
+    case 'conversoes_por_atendente_humano':
+      return conversoesPorAtendenteHumano(tx);
+    case 'conversoes_por_agente_ia':
+      return conversoesPorAgenteIa(tx);
     default:
       return null;
   }
