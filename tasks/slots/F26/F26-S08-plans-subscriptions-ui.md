@@ -2,7 +2,7 @@
 id: F26-S08
 title: Planos + Assinatura/Entitlements UI (frontend platform-admin)
 phase: F26
-status: review
+status: done
 priority: medium
 estimated_size: L
 depends_on: [F26-S03, F26-S04]
