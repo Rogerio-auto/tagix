@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # LLM router (consumido em F2-S04)
     openrouter_api_key: str = Field(alias="OPENROUTER_API_KEY")
 
+    # LLM-judge de avaliacao pos-conversa (F29-S02). Modelo barato e configuravel;
+    # roteado pelo MESMO OpenRouter. O custo vai a llm_usage_logs(request_type=evaluation).
+    judge_model: str = Field(default="openai/gpt-4o-mini", alias="JUDGE_MODEL")
+
     # Embeddings — OpenAI DIRETO (text-embedding-3-small, 1536 dims; F3-S02).
     # OpenRouter NÃO roteia embeddings; dimensão é contrato rígido com vector(1536).
     openai_api_key: str = Field(alias="OPENAI_API_KEY")

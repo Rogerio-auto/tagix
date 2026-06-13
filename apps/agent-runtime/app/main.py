@@ -27,6 +27,7 @@ from app.providers import OpenRouterProvider
 from app.providers.embeddings import EmbeddingsProvider
 from app.routes import run_router
 from app.routes.embed import router as embed_router
+from app.routes.evaluate import router as evaluate_router
 from app.tools.calendar import register_calendar_tools
 from app.tools.registry import build_default_registry
 from app.tools.workflow import register_workflow_tools
@@ -55,6 +56,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Provider de embeddings (OpenAI direto) compartilhado por /internal/embed (F3-S02).
         embeddings_provider = EmbeddingsProvider()
         app.state.embeddings_provider = embeddings_provider
+        # LLM-judge (F29-S02): reusa o MESMO OpenRouter provider; modelo configuravel.
+        app.state.judge_provider = provider
+        app.state.judge_model = settings.judge_model
         app.state.graph = build_graph(
             tool_registry=registry,
             checkpointer=checkpointer,
@@ -94,6 +98,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(run_router)
     app.include_router(embed_router)
+    app.include_router(evaluate_router)
     app.include_router(metrics_router)
 
     return app
