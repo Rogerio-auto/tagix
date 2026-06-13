@@ -105,3 +105,17 @@ A F25 (policies.ts) já expõe GET /api/platform/workspaces (seletor simples). S
 tenant-list rico + 360 em /api/platform/tenants e /api/platform/tenants/:id (não colide).
 Subscriptions (S04) e impersonation usam /api/platform/tenants/:id/... e /api/platform/impersonation.
 Frontend S07/S08 devem consumir /api/platform/tenants.
+
+---
+## [orchestrator F27+F28 / worktree agent-a196697cfa2d482b4] 2026-06-13
+
+Coordenando F27 (layout) + F28 (dashboard Onda A) em worktree ISOLADO. Escopo travado: só F27+F28. NÃO toco F26, NÃO mergeio main, paro em `finish` (review).
+
+Mecânica: single working dir, branches separadas → integro SEQUENCIAL por branch (file-sets disjuntos).
+- Claimed: feat/f28-s01 (backend, current), feat/f27-s01 (frontend).
+- Ordem: F28-S01 (estou na branch) → finish → switch feat/f27-s01 → F27-S01 → finish → S02/S03/F28-S02.
+
+Gotcha registrado: routing table real = `routing_history` (export `routingHistory`), NÃO `conversation_routing_history`. Cap mensal = `workspace_agent_policies.max_monthly_cost_usd` vs sum(llm_usage_logs.cost_usd) mês com is_test=false. tool_logs p/ handoffs/resolucoes.
+
+### Harness note (executor mode)
+Sem Task tool exposto neste harness → não dá pra spawnar subagentes engineer (limitação documentada na F7). Executo os 5 slots eu mesmo seguindo a spec do especialista de cada um, e integro/valido como o orchestrator revisaria um worker (typecheck+lint+build/test por slot, finish, sem done/merge). file-sets disjuntos respeitados; branch por slot.
