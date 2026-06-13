@@ -2,7 +2,7 @@
 id: F26-S11
 title: Runbooks de plataforma + revisão de segurança da impersonation
 phase: F26
-status: in-progress
+status: review
 priority: medium
 depends_on: []
 estimated_size: S
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/PLATFORM_TENANT_MANAGEMENT.md
   - docs/features/PERMISSIONS.md
 claimed_at: 2026-06-13T15:20:55Z
+completed_at: 2026-06-13T15:25:06Z
 
 ---
 # F26-S11 — Runbooks + security review
