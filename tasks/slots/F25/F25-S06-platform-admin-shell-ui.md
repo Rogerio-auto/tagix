@@ -2,7 +2,7 @@
 id: F25-S06
 title: Platform-admin frontend shell — route group (platform) + guard + nav
 phase: F25
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: []
@@ -11,8 +11,9 @@ source_docs:
   - docs/ROADMAP.md#F2.5
   - docs/UX_PRINCIPLES.md
   - docs/DESIGN_SYSTEM.md
----
+claimed_at: 2026-06-13T01:16:53Z
 
+---
 # F25-S06 — Platform-admin frontend shell
 
 > **source_docs:** `docs/ROADMAP.md` F2.5-S01; `docs/UX_PRINCIPLES.md`; `docs/DESIGN_SYSTEM.md`
