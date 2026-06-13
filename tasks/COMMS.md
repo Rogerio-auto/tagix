@@ -75,3 +75,10 @@ local e NUNCA foi commitado — clone limpo teria build quebrado (modulo ausente
 Exposto ao tentar versionar a UI `features/platform-admin/secrets/`. Fix: negacoes no
 .gitignore para diretorios de fonte chamados "secrets" + commit do modulo orfao.
 Pre-existente a F25 (arquivo de 09/jun), nao introduzido por esta fase.
+
+---
+
+## F26 — Platform Tenant Management (orchestrator) — 2026-06-13
+
+### Onda 1 despachada: S01 (db) + S02 (workspaces 360) + S03 (plans CRUD) + S11 (docs)
+File-sets disjuntos: `packages/db/**` (S01) vs `apps/api/src/routes/platform/workspaces.ts`+`services/platform/workspace-360.ts` (S02) vs `apps/api/src/routes/platform/plans.ts` (S03) vs `docs/runbooks/*`+`docs/security/**` (S11). Zero overlap → paralelizáveis. S11 escreve só os 2 runbooks agora; a auditoria /hm-security da impersonation roda APÓS S05 mergear (parte final do slot). S04/S05/S06 destravam após S01 mergear+migration aplicada (onda 2). Decisões travadas §9 respeitadas: view-as read-only, billing interno sem Stripe, ordem A→B→D→C, playground só super-admin.
