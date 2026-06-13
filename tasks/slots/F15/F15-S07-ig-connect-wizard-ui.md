@@ -2,7 +2,7 @@
 id: F15-S07
 title: IG connect wizard (frontend) — passo Instagram no ConnectChannelWizard
 phase: F15
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on: [F15-S06]
@@ -10,8 +10,9 @@ agent_id: frontend-engineer
 source_docs:
   - docs/features/INSTAGRAM.md
   - docs/UX_PRINCIPLES.md
----
+claimed_at: 2026-06-13T00:22:24Z
 
+---
 # F15-S07 — IG connect wizard (frontend)
 
 > **source_docs:** `docs/features/INSTAGRAM.md` §12.1; `docs/UX_PRINCIPLES.md`
