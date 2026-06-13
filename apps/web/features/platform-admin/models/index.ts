@@ -1,0 +1,1 @@
+export { ModelsCatalog } from './ModelsCatalog';
