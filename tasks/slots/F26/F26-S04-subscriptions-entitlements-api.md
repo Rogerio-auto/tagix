@@ -2,15 +2,16 @@
 id: F26-S04
 title: Subscriptions API por tenant + resolveEntitlements (plano + override)
 phase: F26
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F26-S01]
 agent_id: backend-engineer
 source_docs:
   - docs/features/PLATFORM_TENANT_MANAGEMENT.md
----
+claimed_at: 2026-06-13T14:47:11Z
 
+---
 # F26-S04 — Subscriptions + Entitlements API
 
 > **source_docs:** `docs/features/PLATFORM_TENANT_MANAGEMENT.md` §5.2/§5.3
