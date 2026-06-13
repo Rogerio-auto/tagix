@@ -56,13 +56,16 @@ describe('listInstagramAccounts', () => {
 
 describe('subscribeInstagramWebhook', () => {
   it('faz POST em /{pageId}/subscribed_apps com os campos IG', async () => {
-    const post = vi.fn(async () => ({ success: true }));
-    const graph = mockGraph({ post });
+    const post = vi.fn(
+      async (_path: string, _body: Record<string, unknown>, _token: string) => ({ success: true }),
+    );
+    const graph = mockGraph({ post: post as unknown as GraphClient['post'] });
     await subscribeInstagramWebhook(graph, 'PAGE_1', 'PAGE_TOKEN');
     expect(post).toHaveBeenCalledOnce();
     const call = post.mock.calls[0];
     expect(call?.[0]).toBe('PAGE_1/subscribed_apps');
-    expect(String((call?.[1] as { subscribed_fields: string }).subscribed_fields)).toContain('comments');
+    const body = call?.[1] as { subscribed_fields: string } | undefined;
+    expect(String(body?.subscribed_fields)).toContain('comments');
   });
 });
 
