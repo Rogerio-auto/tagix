@@ -26,6 +26,9 @@ export * from './auth';
 // --- Tipos de mensagem interativa (LiveChat) ---
 export * from './types/interactive';
 
+// --- Contratos de Inbox/visibilidade + handoff de IA (F30 / LIVECHAT_OPS) ---
+export * from './types/inbox';
+
 // --- Eventos Socket.io Server→Client (LIVECHAT.md §6, tipos puros) ---
 export * from './socket-events';
 

@@ -2,7 +2,7 @@
 id: F30-S01
 title: Foundation — schema visibilidade/peer + ai-handoff + contratos shared
 phase: F30
-status: available
+status: review
 priority: critical
 estimated_size: L
 depends_on: []
@@ -11,8 +11,10 @@ source_docs:
   - docs/features/LIVECHAT_OPS.md
   - docs/features/PERMISSIONS.md
   - docs/DATA_MODEL.md
----
+claimed_at: 2026-06-13T17:18:28Z
+completed_at: 2026-06-13T17:33:51Z
 
+---
 # F30-S01 — Fundação de dados + contratos da F30
 
 > **source_docs:** `docs/features/LIVECHAT_OPS.md` §1/§2/§5; `docs/features/PERMISSIONS.md` §2.1
