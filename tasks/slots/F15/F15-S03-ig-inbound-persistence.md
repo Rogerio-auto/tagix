@@ -2,7 +2,7 @@
 id: F15-S03
 title: Inbound persistence IG — worker persiste DM/story/share/comment → conv/messages/ig_comments
 phase: F15
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F15-S01, F15-S02]
