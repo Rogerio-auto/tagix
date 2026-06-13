@@ -2,7 +2,7 @@
 id: F25-S02
 title: LLM models catalog API — CRUD llm_models_whitelist + sync OpenRouter /models
 phase: F25
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F25-S01]
