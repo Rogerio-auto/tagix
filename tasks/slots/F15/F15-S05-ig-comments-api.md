@@ -2,7 +2,7 @@
 id: F15-S05
 title: IG comments/stories API — endpoints de moderação (reply pub/priv, hide, delete, list)
 phase: F15
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F15-S03, F15-S04]
