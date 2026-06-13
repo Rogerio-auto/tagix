@@ -61,3 +61,8 @@ Contexto verificado antes de despachar:
 
 ### Desvio S06 (route group): URL `/platform/*` para evitar colisão de root
 `(app)/page.tsx` já resolve `/`. Um `(platform)/page.tsx` no root do grupo resolveria `/` também → erro Next "two parallel pages resolve to same path". As nav-items do painel já apontam `/platform/*`. Decisão: home do painel fica em `app/(platform)/platform/page.tsx` (URL `/platform`), layout do grupo em `app/(platform)/layout.tsx` (aplica a tudo sob o grupo). Consequência p/ S07/S08: as páginas ficam em `app/(platform)/platform/{models,policies,secrets,usage}/` (URLs `/platform/...`), não em `app/(platform)/{models...}`. Ajuste necessário vs. files_allowed literal — a colisão de root é constraint duro.
+
+### Onda 3 (S07 Modelos/Politicas + S08 Secrets/Uso) — gotchas
+- **Barrel client-safe:** `features/platform-admin/lib/index.ts` NAO reexporta `guard.ts` (server-only, next/headers). Client components importam o barrel; o layout server importa `./guard` direto. Senao o build quebra ("importing next/headers in a Client Component").
+- **LlmModel pricing e number|null** (a API S02 serializa numeric->number), nao string.
+- **WasmHash crash no build:** `next build` morreu com "Cannot read properties of undefined (reading 'length')" em WasmHash._updateWithBuffer (cache webpack stale, Node 24). Fix: `rm -rf apps/web/.next/cache` e rebuildar. NAO e erro de codigo.
