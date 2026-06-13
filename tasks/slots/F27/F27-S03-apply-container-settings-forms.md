@@ -2,7 +2,7 @@
 id: F27-S03
 title: Aplicar PageContainer em settings/forms + validar full-bleed
 phase: F27
-status: blocked
+status: review
 priority: medium
 estimated_size: XS
 depends_on: [F27-S01]
@@ -10,8 +10,10 @@ agent_id: frontend-engineer
 source_docs:
   - docs/DESIGN_SYSTEM.md
   - docs/UX_PRINCIPLES.md
----
+claimed_at: 2026-06-13T15:36:12Z
+completed_at: 2026-06-13T15:37:32Z
 
+---
 # F27-S03 — Aplicar PageContainer (settings/forms) + verificação full-bleed
 
 > **source_docs:** `docs/DESIGN_SYSTEM.md` (subseção "Largura de conteúdo", F27-S01); `docs/UX_PRINCIPLES.md`
