@@ -25,6 +25,10 @@ export interface MessageItem {
   viewStatus: string;
   mediaUrl: string | null;
   createdAt: string;
+  /** F15-S08: id externo (= commentId em mensagens IG type='comment'). Opcional. */
+  externalId?: string | null;
+  /** F15-S08: metadados IG (mediaId/commentId/parentCommentId). Opcional. */
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface ConversationFilters {

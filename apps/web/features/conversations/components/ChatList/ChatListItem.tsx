@@ -4,6 +4,7 @@ import { forwardRef } from 'react';
 import Link from 'next/link';
 import { cn } from '@/shared/lib/cn';
 import { FlowExecutionsBadge } from '@/features/flow-builder/livechat';
+import { ConversationKindBadge } from '../IgComments/ConversationKindBadge';
 import type { ConversationSummary } from '../../types';
 
 export interface ChatListItemProps {
@@ -71,7 +72,10 @@ export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(fun
             >
               {conversation.remoteId}
             </p>
-            {time && <time className="shrink-0 font-body text-xs text-text-low">{time}</time>}
+            <div className="flex shrink-0 items-center gap-1.5">
+              <ConversationKindBadge kind={conversation.kind} />
+              {time && <time className="font-body text-xs text-text-low">{time}</time>}
+            </div>
           </div>
           <div className="flex items-center justify-between gap-2">
             <p
