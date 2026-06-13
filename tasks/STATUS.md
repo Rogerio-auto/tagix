@@ -17,7 +17,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F26   | 11     | 0   | 0   | 0   | 0   | 0   | 11   |
 | F27   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F28   | 2     | 0   | 0   | 0   | 0   | 0   | 2   |
-| F29   | 5     | 0   | 2   | 0   | 0   | 3   | 0   |
+| F29   | 5     | 0   | 1   | 0   | 1   | 3   | 0   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
@@ -183,13 +183,13 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 29
 
-| ID      | Titulo                                                                  | Status     | Prioridade | Depende de       |
-| ------- | ----------------------------------------------------------------------- | ---------- | ---------- | ---------------- |
-| F29-S01 | Schema — conversation_evaluations + objections + RLS + repos            | 🟣 review   | critical   | —                |
-| F29-S02 | LLM-judge no agent-runtime — POST /internal/evaluate                    | 🟣 review   | high       | —                |
-| F29-S03 | Worker de avaliação — polling de conversas encerradas → judge → persist | 🟣 review   | high       | F29-S01, F29-S02 |
-| F29-S04 | Dashboard Onda B — métricas backend (qualidade, CSAT, objeções)         | ⏸️ blocked | high       | F29-S01          |
-| F29-S05 | Dashboard Onda B — frontend (cards qualidade/CSAT + objeções rankeadas) | ⏸️ blocked | medium     | F29-S04          |
+| ID      | Titulo                                                                  | Status        | Prioridade | Depende de       |
+| ------- | ----------------------------------------------------------------------- | ------------- | ---------- | ---------------- |
+| F29-S01 | Schema — conversation_evaluations + objections + RLS + repos            | 🟣 review      | critical   | —                |
+| F29-S02 | LLM-judge no agent-runtime — POST /internal/evaluate                    | 🟣 review      | high       | —                |
+| F29-S03 | Worker de avaliação — polling de conversas encerradas → judge → persist | 🟣 review      | high       | F29-S01, F29-S02 |
+| F29-S04 | Dashboard Onda B — métricas backend (qualidade, CSAT, objeções)         | 🔵 in-progress | high       | F29-S01          |
+| F29-S05 | Dashboard Onda B — frontend (cards qualidade/CSAT + objeções rankeadas) | ⏸️ blocked    | medium     | F29-S04          |
 
 ## Fase 3 — Flow Builder
 
