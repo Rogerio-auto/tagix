@@ -24,8 +24,8 @@ export interface LlmModel {
   readonly supportsTools: boolean;
   readonly supportsVision: boolean;
   readonly supportsStreaming: boolean;
-  readonly pricingPromptPer1m: string | null;
-  readonly pricingCompletionPer1m: string | null;
+  readonly pricingPromptPer1m: number | null;
+  readonly pricingCompletionPer1m: number | null;
   readonly isActive: boolean;
   readonly defaultPlanKeys: readonly string[];
   readonly notes: string | null;

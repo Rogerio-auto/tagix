@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
-import { resolvePlatformAdmin } from '@/features/platform-admin/lib';
+import { resolvePlatformAdmin } from '@/features/platform-admin/lib/guard';
 import { PlatformShell } from '@/features/platform-admin/shell';
 
 /**
