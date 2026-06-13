@@ -1,4 +1,5 @@
 import { AgentDetail } from '@/features/agents/detail/AgentDetail';
+import { PageContainer } from '@/shared/components/layout';
 
 export const metadata = {
   title: 'Detalhe do agente',
@@ -15,5 +16,9 @@ export default async function AgentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <AgentDetail agentId={id} />;
+  return (
+    <PageContainer>
+      <AgentDetail agentId={id} />
+    </PageContainer>
+  );
 }

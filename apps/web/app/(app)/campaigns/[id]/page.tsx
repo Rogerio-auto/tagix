@@ -1,4 +1,5 @@
 import { CampaignDetailPage } from '@/features/campaigns/list';
+import { PageContainer } from '@/shared/components/layout';
 
 export const metadata = { title: 'Campanha' };
 
@@ -8,5 +9,9 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }): Promise<React.JSX.Element> {
   const { id } = await params;
-  return <CampaignDetailPage campaignId={id} />;
+  return (
+    <PageContainer>
+      <CampaignDetailPage campaignId={id} />
+    </PageContainer>
+  );
 }

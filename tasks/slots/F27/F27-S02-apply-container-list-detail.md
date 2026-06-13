@@ -2,7 +2,7 @@
 id: F27-S02
 title: Aplicar PageContainer nas telas de lista/detalhe do grupo (app)
 phase: F27
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: [F27-S01]
@@ -11,6 +11,7 @@ source_docs:
   - docs/DESIGN_SYSTEM.md
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-06-13T15:34:45Z
+completed_at: 2026-06-13T15:36:06Z
 
 ---
 # F27-S02 — Aplicar PageContainer (lista/detalhe)

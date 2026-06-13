@@ -1,4 +1,5 @@
 import { DashboardClient } from '@/features/dashboard';
+import { PageContainer } from '@/shared/components/layout';
 
 export const metadata = { title: 'Dashboard' };
 
@@ -9,5 +10,9 @@ export const metadata = { title: 'Dashboard' };
  * página nunca decide visibilidade por role.
  */
 export default function DashboardPage() {
-  return <DashboardClient />;
+  return (
+    <PageContainer>
+      <DashboardClient />
+    </PageContainer>
+  );
 }
