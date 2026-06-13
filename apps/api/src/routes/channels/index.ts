@@ -14,7 +14,14 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, asc, eq } from 'drizzle-orm';
 import { encryptSecret, schema } from '@hm/db';
+import { GraphClient } from '@hm/channels';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
+import {
+  IgConnectError,
+  listInstagramAccounts,
+  subscribeInstagramWebhook,
+  sendInstagramTestMessage,
+} from '../../services/channels/instagram-connect';
 
 /**
  * Campos de canal seguros para devolver ao cliente. NUNCA inclui colunas de
@@ -77,6 +84,24 @@ const connectSchema = z.discriminatedUnion('provider', [
 ]);
 
 const disableSchema = z.object({ isActive: z.boolean() });
+
+/** Wizard IG: lista contas a partir do user access token do Embedded Signup. */
+const igAccountsSchema = z.object({
+  userAccessToken: z.string().trim().min(1),
+});
+
+/** Wizard IG: conecta a conta escolhida (subscribe + create + token cifrado + test). */
+const igConnectSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  pageId: z.string().trim().min(1).max(64),
+  pageAccessToken: z.string().trim().min(1),
+  igUserId: z.string().trim().min(1).max(64),
+  igUsername: z.string().trim().min(1).max(120).optional(),
+  igAccountType: z.enum(['business', 'creator']).optional(),
+  appSecret: z.string().trim().min(1).optional(),
+  /** IGSID alvo da mensagem de teste (default: o proprio dono). Opcional. */
+  testRecipientIgsid: z.string().trim().min(1).max(64).optional(),
+});
 
 /** Narrowing de `req.params['x']` (string | string[] no @types/express 5). */
 function param(req: Request, key: string): string {
@@ -235,6 +260,114 @@ export function createChannelsRouter(): Router {
         return;
       }
       res.status(204).end();
+    },
+  );
+
+  // --- Wizard Instagram (Embedded Signup / Tech Provider — INSTAGRAM.md 12.1) ---
+
+  // POST /api/channels/instagram/accounts — lista Page+IGBA a partir do user token.
+  router.post(
+    '/api/channels/instagram/accounts',
+    requireAuth,
+    withRLS,
+    requireRole('channel.connect'),
+    async (req: Request, res: Response) => {
+      const parsed = igAccountsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ message: 'userAccessToken obrigatorio.' });
+        return;
+      }
+      try {
+        const accounts = await listInstagramAccounts(new GraphClient(), parsed.data.userAccessToken);
+        // Nunca devolve o pageAccessToken em claro? Ele e necessario no proximo passo;
+        // o frontend o reenvia ao /connect. Mantido apenas em transito (TLS), nunca logado.
+        res.json({
+          accounts: accounts.map((a) => ({
+            pageId: a.pageId,
+            pageName: a.pageName,
+            pageAccessToken: a.pageAccessToken,
+            igUserId: a.igUserId,
+            igUsername: a.igUsername,
+            igAccountType: a.igAccountType,
+          })),
+        });
+      } catch (err: unknown) {
+        if (err instanceof IgConnectError) {
+          res.status(422).json({ code: err.code, message: err.message });
+          return;
+        }
+        res.status(502).json({ code: 'IG_CONNECT_GRAPH_ERROR', message: 'Falha ao consultar a Meta. Tente novamente.' });
+      }
+    },
+  );
+
+  // POST /api/channels/instagram/connect — subscribe webhook + cria canal + test.
+  router.post(
+    '/api/channels/instagram/connect',
+    requireAuth,
+    withRLS,
+    requireRole('channel.connect'),
+    async (req: Request, res: Response) => {
+      const parsed = igConnectSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ message: 'Dados de conexao Instagram invalidos.' });
+        return;
+      }
+      const input = parsed.data;
+      const workspaceId = req.auth!.workspace.id;
+      const graph = new GraphClient();
+
+      // 1) Subscreve Page+IGBA no webhook do app (idempotente do lado Meta).
+      try {
+        await subscribeInstagramWebhook(graph, input.pageId, input.pageAccessToken);
+      } catch (err: unknown) {
+        const message = err instanceof IgConnectError ? err.message : 'Falha ao subscrever o webhook na Meta.';
+        res.status(502).json({ code: 'IG_CONNECT_SUBSCRIBE_FAILED', message });
+        return;
+      }
+
+      // 2) Cria o canal + cifra o token (mesmo padrao WA). Tudo sob RLS.
+      const created = await req.scoped!(async (tx) => {
+        const [channel] = await tx
+          .insert(schema.channels)
+          .values({
+            workspaceId,
+            provider: 'meta_instagram',
+            name: input.name,
+            displayHandle: input.igUsername ?? null,
+            igUserId: input.igUserId,
+            igUsername: input.igUsername ?? null,
+            igAccountType: input.igAccountType ?? null,
+            fbPageId: input.pageId,
+            isActive: true,
+          })
+          .returning(PUBLIC_CHANNEL_COLUMNS);
+        if (!channel) throw new Error('Falha ao criar canal Instagram.');
+
+        await tx.insert(schema.channelSecrets).values({
+          channelId: channel.id,
+          accessTokenEnc: encryptSecret(input.pageAccessToken),
+          appSecretEnc: input.appSecret ? encryptSecret(input.appSecret) : null,
+        });
+        return channel;
+      });
+
+      // 3) Mensagem de teste (best-effort — nao bloqueia a criacao do canal).
+      let testMessageSent = false;
+      if (input.testRecipientIgsid !== undefined) {
+        try {
+          testMessageSent = await sendInstagramTestMessage(
+            graph,
+            input.igUserId,
+            input.testRecipientIgsid,
+            input.pageAccessToken,
+          );
+        } catch {
+          testMessageSent = false;
+        }
+      }
+
+      res.status(201).json({ channel: created, testMessageSent });
     },
   );
 

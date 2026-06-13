@@ -2,7 +2,7 @@
 id: F15-S06
 title: IG connect backend — Embedded Signup + seleção Page/IGBA + webhook subscription + test msg
 phase: F15
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F15-S01]
@@ -10,6 +10,7 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/INSTAGRAM.md
 claimed_at: 2026-06-13T00:06:18Z
+completed_at: 2026-06-13T00:09:56Z
 
 ---
 # F15-S06 — IG connect backend (API)
