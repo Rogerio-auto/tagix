@@ -2,7 +2,7 @@
 id: F26-S05
 title: Impersonation API + middleware — view-as READ-ONLY (time-boxed, auditado, no-secrets)
 phase: F26
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F26-S01]
@@ -10,8 +10,10 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/PLATFORM_TENANT_MANAGEMENT.md
   - docs/features/PERMISSIONS.md
----
+claimed_at: 2026-06-13T14:50:54Z
+completed_at: 2026-06-13T14:54:33Z
 
+---
 # F26-S05 — Impersonation API + middleware (view-as read-only)
 
 > **source_docs:** `docs/features/PLATFORM_TENANT_MANAGEMENT.md` §6
