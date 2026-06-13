@@ -59,7 +59,13 @@ playwright/.cache/
 !.env.*.example
 *.pem
 *.key
+# `secrets/` protege diretorios de MATERIAL secreto (chaves/credenciais).
 secrets/
+# Excecoes: diretorios de CODIGO-FONTE chamados "secrets" (UI/rotas do painel de
+# super-admin F25-S04/S08) — NAO contem segredos, sao componentes/routers. Versionar.
+!apps/web/features/platform-admin/secrets/
+!apps/web/app/**/secrets/
+!apps/api/src/secrets/
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Docker / infra local

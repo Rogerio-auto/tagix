@@ -66,3 +66,12 @@ Contexto verificado antes de despachar:
 - **Barrel client-safe:** `features/platform-admin/lib/index.ts` NAO reexporta `guard.ts` (server-only, next/headers). Client components importam o barrel; o layout server importa `./guard` direto. Senao o build quebra ("importing next/headers in a Client Component").
 - **LlmModel pricing e number|null** (a API S02 serializa numeric->number), nao string.
 - **WasmHash crash no build:** `next build` morreu com "Cannot read properties of undefined (reading 'length')" em WasmHash._updateWithBuffer (cache webpack stale, Node 24). Fix: `rm -rf apps/web/.next/cache` e rebuildar. NAO e erro de codigo.
+
+### ACHADO CRITICO durante onda 3: `apps/api/src/secrets/index.ts` orfao
+A regra `.gitignore` `secrets/` (material secreto) tambem ignorava diretorios de
+CODIGO chamados "secrets". Consequencia: `apps/api/src/secrets/index.ts`
+(`loadPlatformSecrets`, importado por index.ts/app.ts/webhooks) existia so no disco
+local e NUNCA foi commitado — clone limpo teria build quebrado (modulo ausente).
+Exposto ao tentar versionar a UI `features/platform-admin/secrets/`. Fix: negacoes no
+.gitignore para diretorios de fonte chamados "secrets" + commit do modulo orfao.
+Pre-existente a F25 (arquivo de 09/jun), nao introduzido por esta fase.
