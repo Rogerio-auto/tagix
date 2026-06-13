@@ -2,7 +2,7 @@
 id: F15-S06
 title: IG connect backend — Embedded Signup + seleção Page/IGBA + webhook subscription + test msg
 phase: F15
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F15-S01]
