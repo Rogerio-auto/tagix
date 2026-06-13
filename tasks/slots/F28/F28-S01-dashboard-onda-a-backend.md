@@ -2,7 +2,7 @@
 id: F28-S01
 title: Dashboard Onda A — métricas backend (performance atendente, rankings, IA ops)
 phase: F28
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: []

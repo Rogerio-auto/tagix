@@ -2,7 +2,7 @@
 id: F27-S01
 title: PageContainer primitive + token de largura de conteúdo (DS)
 phase: F27
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: []

@@ -2,7 +2,7 @@
 id: F28-S02
 title: Dashboard Onda A — frontend (TableCard rico, rankings, cards IA)
 phase: F28
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F28-S01]

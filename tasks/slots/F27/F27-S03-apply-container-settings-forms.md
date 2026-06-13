@@ -2,7 +2,7 @@
 id: F27-S03
 title: Aplicar PageContainer em settings/forms + validar full-bleed
 phase: F27
-status: review
+status: done
 priority: medium
 estimated_size: XS
 depends_on: [F27-S01]
