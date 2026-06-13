@@ -2,7 +2,7 @@
 id: F26-S07
 title: Tenants list + Workspace 360 UI (frontend platform-admin)
 phase: F26
-status: blocked
+status: review
 priority: medium
 estimated_size: L
 depends_on: [F26-S02]
@@ -10,8 +10,10 @@ agent_id: frontend-engineer
 source_docs:
   - docs/features/PLATFORM_TENANT_MANAGEMENT.md
   - docs/UX_PRINCIPLES.md
----
+claimed_at: 2026-06-13T15:02:57Z
+completed_at: 2026-06-13T15:06:29Z
 
+---
 # F26-S07 — Tenants + Workspace 360 UI
 
 > **source_docs:** `docs/features/PLATFORM_TENANT_MANAGEMENT.md` §4; `docs/UX_PRINCIPLES.md`
