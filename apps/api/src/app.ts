@@ -41,6 +41,10 @@ import { createDashboardLayoutRouter } from './routes/members/dashboard-layout';
 import { createV1Router } from './routes/v1';
 import { createDevRouter } from './routes/dev';
 import { createPrivacyRouter } from './routes/privacy';
+import { createPlatformModelsRouter } from './routes/platform/models';
+import { createPlatformPoliciesRouter } from './routes/platform/policies';
+import { createPlatformSecretsRouter } from './routes/platform/secrets';
+import { createPlatformUsageRouter } from './routes/platform/usage';
 import {
   initSentry,
   metricsMiddleware,
@@ -133,6 +137,15 @@ export function createApp(): Express {
   app.use(createV1Router());
   // Gestão Dev (F9-S04): session-authed CRUD de API keys + webhooks (Settings → Dev).
   app.use(createDevRouter());
+
+  // Super-admin de plataforma (F2.5/F25): catálogo de modelos, políticas por
+  // workspace, rotação de secrets e rollup de custo LLM. Cada router já é gated
+  // internamente por requirePlatformAdmin (F25-S01) — fronteira única da camada
+  // de plataforma (sem RLS de tenant). Acima de workspace.
+  app.use(createPlatformModelsRouter());
+  app.use(createPlatformPoliciesRouter());
+  app.use(createPlatformSecretsRouter());
+  app.use(createPlatformUsageRouter());
 
   // Sentry error handler (F10-S01) ANTES do handler central: captura a exceção
   // (no-op sem DSN) e repassa para a resposta de erro canônica.
