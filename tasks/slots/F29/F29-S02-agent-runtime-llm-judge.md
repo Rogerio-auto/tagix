@@ -2,7 +2,7 @@
 id: F29-S02
 title: LLM-judge no agent-runtime — POST /internal/evaluate
 phase: F29
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: []
@@ -10,8 +10,9 @@ agent_id: python-engineer
 source_docs:
   - docs/features/AGENT_QUALITY_OBJECTIONS.md
   - docs/AGENTS_LANGGRAPH.md
----
+claimed_at: 2026-06-13T16:25:18Z
 
+---
 # F29-S02 — LLM-judge (agent-runtime)
 
 > **source_docs:** `docs/features/AGENT_QUALITY_OBJECTIONS.md` §2; `docs/AGENTS_LANGGRAPH.md`
