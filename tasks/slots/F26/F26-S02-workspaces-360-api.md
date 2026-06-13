@@ -2,15 +2,17 @@
 id: F26-S02
 title: Workspaces API — list de tenants + Workspace 360 agregado
 phase: F26
-status: available
+status: review
 priority: high
 estimated_size: M
 depends_on: []
 agent_id: backend-engineer
 source_docs:
   - docs/features/PLATFORM_TENANT_MANAGEMENT.md
----
+claimed_at: 2026-06-13T14:32:34Z
+completed_at: 2026-06-13T14:42:04Z
 
+---
 # F26-S02 — Workspaces / 360 API
 
 > **source_docs:** `docs/features/PLATFORM_TENANT_MANAGEMENT.md` §4
