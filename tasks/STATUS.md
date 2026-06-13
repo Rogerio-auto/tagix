@@ -13,7 +13,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F10   | 13     | 0   | 0   | 0   | 0   | 0   | 13   |
 | F15   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
-| F25   | 9     | 0   | 4   | 0   | 0   | 1   | 4   |
+| F25   | 9     | 0   | 4   | 0   | 0   | 0   | 5   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
@@ -138,7 +138,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ------- | --------------------------------------------------------------------------------------- | ---------- | ---------- | ------------------------- |
 | F25-S01 | Platform-admin guard — middleware requirePlatformAdmin (API)                            | ✅ done     | critical   | —                         |
 | F25-S02 | LLM models catalog API — CRUD llm_models_whitelist + sync OpenRouter /models            | ✅ done     | high       | F25-S01                   |
-| F25-S03 | Workspace agent policies API — editor por workspace (allowed_models, features, caps)    | 🟣 review   | high       | F25-S01                   |
+| F25-S03 | Workspace agent policies API — editor por workspace (allowed_models, features, caps)    | ✅ done     | high       | F25-S01                   |
 | F25-S04 | Platform secrets rotation API — rotaciona OpenRouter/Meta/encryption keys + auditoria   | ⏸️ blocked | high       | F25-S01                   |
 | F25-S05 | LLM usage rollup API — gasto por workspace/modelo/dia-mês + top spenders + caps         | ⏸️ blocked | high       | F25-S01                   |
 | F25-S06 | Platform-admin frontend shell — route group (platform) + guard + nav                    | ✅ done     | high       | —                         |

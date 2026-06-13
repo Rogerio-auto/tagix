@@ -2,7 +2,7 @@
 id: F25-S03
 title: Workspace agent policies API — editor por workspace (allowed_models, features, caps)
 phase: F25
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F25-S01]
