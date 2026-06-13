@@ -180,3 +180,16 @@ de vite moderate).
 
 Nenhuma vulnerabilidade high/critical permanece. Os 2 moderates remanescentes são
 transitivos, dev/build-time apenas, e fora da fronteira deste slot (drizzle-kit / apps/web).
+
+### Atualização pós-F15 (2026-06-13) — novo high `esbuild` (accept-risk)
+
+`pnpm audit` passou a reportar **`1 low | 3 moderate | 1 high`**. A F15 (Instagram) **não
+alterou nenhuma dependência** (`git diff f875305..HEAD` em todo `package.json`/lockfile =
+vazio) — o `high` é uma **advisory recém-publicada** sobre um dev-dep pré-existente.
+
+| Severidade | Pacote | Caminho | Decisão |
+|------------|--------|---------|---------|
+| **high** | `esbuild` >=0.17.0 <0.28.1 (GHSA-gv7w-rqvm-qjhr — "Missing binary integrity verification in **Deno**") | `apps/api > tsx > esbuild`; `apps/api > vitest > vite > esbuild` (72 paths) | **Accept-risk.** (1) A advisory é **específica de Deno** — o projeto roda **Node**, o vetor não se aplica. (2) `esbuild` é **dev/build-time only** (tsx/vitest/vite) — nunca no bundle de runtime de produção. (3) Patched só em `>=0.28.1`, incompatível com `vite@6`/`vitest@3` (que fixam `esbuild ^0.24`); um override **quebraria toda a toolchain de build/test**. Forçar seria temerário por um achado inaplicável ao ambiente. Reavaliar quando vite/vitest subirem o range de esbuild. |
+
+Estado aceito pós-F15: **0 high/critical *aplicáveis ao runtime de produção*** — o único
+high é dev-tooling Deno-specific. Os demais moderates/low seguem a justificativa acima.
