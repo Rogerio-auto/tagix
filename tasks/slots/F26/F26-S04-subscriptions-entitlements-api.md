@@ -2,7 +2,7 @@
 id: F26-S04
 title: Subscriptions API por tenant + resolveEntitlements (plano + override)
 phase: F26
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F26-S01]
