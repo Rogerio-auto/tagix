@@ -2,7 +2,7 @@
 id: F26-S11
 title: Runbooks de plataforma + revisão de segurança da impersonation
 phase: F26
-status: review
+status: done
 priority: medium
 depends_on: []
 estimated_size: S
