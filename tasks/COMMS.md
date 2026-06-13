@@ -129,3 +129,11 @@ Onda 1 (db+backend+docs): S01 (schema: impersonation_sessions platform-level + w
 WIRE (glue): app.ts monta os 5 routers de plataforma (workspaces/plans/subscriptions/impersonation/playground) gated por requirePlatformAdmin + impersonationMiddleware após auth, antes das rotas de workspace; nav-items+PlatformNav ganharam os 5 links.
 HOTFIX integração: requireAuth agora honra req.impersonation (não re-resolve a sessão do admin), senão o override de workspace-alvo do view-as era clobberado pelo requireAuth per-router → view-as agora lê dados do tenant alvo end-to-end. As invariantes de segurança (read-only/no-secrets/no-platform/audit) já valiam independente disso.
 Validação final: pnpm typecheck OK, pnpm lint OK (após ignorar .claude/worktrees no eslint), pnpm -r test OK (db21/api305/workers173/channels67/flow44/agents-core26/agents-client17/ui6/storage1), pnpm --filter @hm/web build OK (6 rotas F26), agent-runtime 140 pytest + ruff OK, pnpm audit high = só o esbuild dev-only accept-risk (sem regressão).
+
+---
+
+## F27 + F28 INTEGRADAS em main (2º terminal) — 2026-06-13
+
+Orchestrator rodou em worktree isolado (`agent-a196697cfa2d482b4`), F26 intocada. 5 slots implementados+validados como branches `review`, integrados por mim em `main` na ordem F28-S01→S02, F27-S01→S02→S03 (--no-ff). Conflitos SÓ em tasks/STATUS.md+COMMS.md (resolvidos --ours + sync). Validação integrada: @hm/api + @hm/web + @hm/design-tokens typecheck LIMPO; web build verde (todas as rotas, F26 platform + dashboard/layout coexistindo). Todos os 5 → done.
+
+⚠️ ACHADO: `main` (closeout F26, 67983c4) está com `packages/db/src/seed-demo.ts` quebrando `pnpm typecheck` (TS1355/TS2352/TS2769 — drift de schema: events startAt/endAt, kb_documents) E `pnpm lint` (import `and` não usado). Esse arquivo está UNTRACKED + `packages/db/package.json` modificado, parados na árvore compartilhada — debris não-commitado da F26, NÃO tocado pela F27/F28. main está RED no nível de repo por causa disso. Precisa de fix no escopo db/F26.
