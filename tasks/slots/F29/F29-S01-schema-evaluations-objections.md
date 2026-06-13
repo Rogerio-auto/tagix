@@ -2,7 +2,7 @@
 id: F29-S01
 title: Schema — conversation_evaluations + objections + RLS + repos
 phase: F29
-status: available
+status: review
 priority: critical
 estimated_size: M
 depends_on: []
@@ -10,8 +10,10 @@ agent_id: db-engineer
 source_docs:
   - docs/features/AGENT_QUALITY_OBJECTIONS.md
   - docs/DATA_MODEL.md
----
+claimed_at: 2026-06-13T16:16:22Z
+completed_at: 2026-06-13T16:24:13Z
 
+---
 # F29-S01 — Schema da Onda B (db)
 
 > **source_docs:** `docs/features/AGENT_QUALITY_OBJECTIONS.md` §3; `docs/DATA_MODEL.md`
