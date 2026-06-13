@@ -49,6 +49,12 @@ const DRAWER_METRICS = new Set([
   'conversoes_por_tipo',
   'inbox_por_departamento',
   'conversoes_minhas_mes',
+  // Onda A (F28): tabelas column-aware com detalhe + link por linha no drawer.
+  'performance_por_atendente',
+  'inbox_por_canal',
+  'tokens_por_modelo_24h',
+  'conversoes_por_atendente_humano',
+  'conversoes_por_agente_ia',
 ]);
 
 function applyLayout(
@@ -77,8 +83,9 @@ export function DashboardClient() {
 
   const grouped = useMemo(() => {
     if (!data) return [];
+    const withData = data.cards.filter((c) => c.value !== null);
     const ordered = applyLayout(
-      data.cards,
+      withData,
       data.layoutPreferences.hidden,
       data.layoutPreferences.order,
     );

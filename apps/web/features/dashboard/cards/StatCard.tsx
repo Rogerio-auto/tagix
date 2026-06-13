@@ -13,11 +13,20 @@ import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import type { DashboardCard } from '../types';
-import { formatBRLFromCents, formatInt, formatUSD, readNumber } from '../format';
+import { formatBRLFromCents, formatDuration, formatInt, formatPercent, formatUSD, readNumber } from '../format';
 
 function displayValue(card: DashboardCard): string {
   const v = card.value;
   if (!v) return '—';
+  // Contrato Onda A (F28-S01): { value, unit } — duração (s), latência (ms) ou % .
+  const value = readNumber(v, 'value');
+  if (value !== null) {
+    const unit = typeof v['unit'] === 'string' ? (v['unit'] as string) : '';
+    if (unit === 's') return formatDuration(value);
+    if (unit === '%') return formatPercent(value);
+    if (unit === 'ms') return `${formatInt(value)} ms`;
+    return formatInt(value);
+  }
   const cents = readNumber(v, 'valueCents');
   const usd = readNumber(v, 'costUsd');
   const count = readNumber(v, 'count');
@@ -30,6 +39,32 @@ function displayValue(card: DashboardCard): string {
   return '—';
 }
 
+/**
+ * Estado de alerta de um card stat (Onda A). Hoje só `cap_mensal_consumido_pct`:
+ * ≥100% danger, ≥80% warn, abaixo neutro. Mapeia para tokens DS (sem hex).
+ */
+type StatTone = 'neutral' | 'warn' | 'danger';
+
+function statTone(card: DashboardCard): StatTone {
+  if (card.key !== 'cap_mensal_consumido_pct') return 'neutral';
+  const pct = readNumber(card.value, 'value');
+  if (pct === null) return 'neutral';
+  if (pct >= 100) return 'danger';
+  if (pct >= 80) return 'warn';
+  return 'neutral';
+}
+
+const TONE_BORDER: Record<StatTone, string> = {
+  neutral: 'border-border',
+  warn: 'border-warn/50',
+  danger: 'border-danger/60',
+};
+const TONE_VALUE: Record<StatTone, string> = {
+  neutral: 'text-text',
+  warn: 'text-warn',
+  danger: 'text-danger',
+};
+
 interface StatCardProps {
   card: DashboardCard;
   onDrill?: (card: DashboardCard) => void;
@@ -38,11 +73,13 @@ interface StatCardProps {
 export function StatCard({ card, onDrill }: StatCardProps) {
   const value = displayValue(card);
   const interactive = Boolean(card.drillHref) || Boolean(onDrill);
+  const tone = statTone(card);
 
   const inner = (
     <div
       className={cn(
-        'group flex h-full flex-col justify-between rounded-lg border border-border bg-surface p-5 transition-colors',
+        'group flex h-full flex-col justify-between rounded-lg border bg-surface p-5 transition-colors',
+        TONE_BORDER[tone],
         interactive && 'hover:border-border-brand hover:bg-surface-2',
       )}
     >
@@ -55,7 +92,7 @@ export function StatCard({ card, onDrill }: StatCardProps) {
           />
         )}
       </div>
-      <span className="mt-3 font-price text-2xl text-text">{value}</span>
+      <span className={cn('mt-3 font-price text-2xl', TONE_VALUE[tone])}>{value}</span>
     </div>
   );
 
