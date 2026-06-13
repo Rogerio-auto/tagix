@@ -14,6 +14,43 @@ import { ContactInfoPanel } from './ContactInfoPanel';
 import { TypingIndicator } from './TypingIndicator';
 import { MessageBubble } from './MessageBubble';
 import { MessageStatusReceipts } from './MessageBubble/status';
+import { IgCommentActions, type IgComment } from './IgComments';
+import { can } from '@hm/shared';
+import { useAuthStore } from '@/shared/stores/auth.store';
+
+
+/** Constroi um IgComment a partir do metadata de uma mensagem type='comment'. */
+function igCommentFromMessage(m: {
+  externalId?: string | null;
+  metadata?: Record<string, unknown> | null;
+  content: string | null;
+  createdAt: string;
+}): { comment: IgComment; mediaId: string } | null {
+  const meta = m.metadata ?? {};
+  const commentId =
+    typeof meta['commentId'] === 'string' ? (meta['commentId'] as string) : (m.externalId ?? null);
+  const mediaId = typeof meta['mediaId'] === 'string' ? (meta['mediaId'] as string) : null;
+  if (commentId === null || mediaId === null) return null;
+  const parentCommentId =
+    typeof meta['parentCommentId'] === 'string' ? (meta['parentCommentId'] as string) : null;
+  const fromUsername =
+    typeof meta['fromUsername'] === 'string' ? (meta['fromUsername'] as string) : null;
+  return {
+    mediaId,
+    comment: {
+      id: commentId,
+      mediaId,
+      commentId,
+      parentCommentId,
+      fromIgsid: null,
+      fromUsername,
+      text: m.content,
+      mediaKind: null,
+      hidden: false,
+      createdAt: m.createdAt,
+    },
+  };
+}
 
 export function ConversationsLayout({ conversationId }: { conversationId?: string }) {
   const [infoOpen, setInfoOpen] = useState(false);
@@ -66,6 +103,8 @@ function ConversationPanel({
 }) {
   const messages = useMessages(conversationId);
   const { joinConversation, leaveConversation } = useSocket();
+  const role = useAuthStore((st) => st.auth?.role);
+  const canModerateComments = role ? can(role, 'conversation.delete_message') : false;
 
   // Entra na room realtime da conversa aberta (recebe message:new, typing, status…).
   useEffect(() => {
@@ -98,11 +137,25 @@ function ConversationPanel({
           <SkeletonList rows={5} />
         ) : messages.data && messages.data.messages.length > 0 ? (
           <ul className="flex flex-col gap-3">
-            {messages.data.messages.map((m) => (
-              <li key={m.id}>
-                <MessageBubble message={m} />
-              </li>
-            ))}
+            {messages.data.messages.map((m) => {
+              const ig =
+                m.type === 'comment' || m.type === 'comment_reply'
+                  ? igCommentFromMessage(m)
+                  : null;
+              return (
+                <li key={m.id} className="flex flex-col gap-1.5">
+                  <MessageBubble message={m} />
+                  {ig && (
+                    <IgCommentActions
+                      comment={ig.comment}
+                      mediaId={ig.mediaId}
+                      canModerate={canModerateComments}
+                      className="pl-1"
+                    />
+                  )}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="py-8 text-center font-body text-sm text-text-low">

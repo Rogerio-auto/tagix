@@ -2,7 +2,7 @@
 id: F15-S08
 title: IG inbox UI — ícone/filtro de canal, comment thread, story mention card, composer 24h/tag
 phase: F15
-status: in-progress
+status: review
 priority: medium
 estimated_size: L
 depends_on: [F15-S05]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/INSTAGRAM.md
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-06-13T00:27:29Z
+completed_at: 2026-06-13T00:34:12Z
 
 ---
 # F15-S08 — IG inbox UI (frontend)
