@@ -2,7 +2,7 @@
 id: F26-S10
 title: Agent Playground UI — chat de teste + trace de execução + seletor de modelo/params
 phase: F26
-status: in-progress
+status: review
 priority: medium
 estimated_size: L
 depends_on: [F26-S06]
@@ -12,6 +12,7 @@ source_docs:
   - docs/PRD.md
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-06-13T15:15:18Z
+completed_at: 2026-06-13T15:18:27Z
 
 ---
 # F26-S10 — Agent Playground UI
