@@ -11,6 +11,8 @@ export default tseslint.config(
       '**/.next/**',
       '**/next-env.d.ts',
       '**/coverage/**',
+      // Worktrees efêmeras do harness multi-agente (clones do repo) não são fonte.
+      '**/.claude/**',
       // Python (agent-runtime): virtualenv e caches não são JS do monorepo.
       '**/.venv/**',
       '**/__pycache__/**',
