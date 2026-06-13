@@ -2,7 +2,7 @@
 id: F29-S03
 title: Worker de avaliação — polling de conversas encerradas → judge → persist
 phase: F29
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F29-S01, F29-S02]

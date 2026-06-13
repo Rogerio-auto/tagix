@@ -2,7 +2,7 @@
 id: F29-S05
 title: Dashboard Onda B — frontend (cards qualidade/CSAT + objeções rankeadas)
 phase: F29
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F29-S04]

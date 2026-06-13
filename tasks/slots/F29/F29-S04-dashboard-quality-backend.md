@@ -2,7 +2,7 @@
 id: F29-S04
 title: Dashboard Onda B — métricas backend (qualidade, CSAT, objeções)
 phase: F29
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F29-S01]

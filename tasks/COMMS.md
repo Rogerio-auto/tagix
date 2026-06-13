@@ -172,3 +172,11 @@ Resultado: 5/5 slots em REVIEW, todos verdes.
 - **Migrations:** geradas no worktree (estado = main, F26 incluída) → 0037 (tabelas) + 0038 (RLS manual). Journal `_journal.json` + snapshots 0037/0038 commitados. Aplicadas no Postgres dev local (tagix-dev-postgres-1) limpo.
 
 NÃO toquei main / F26 / F27 / F28. NÃO mergeei. NÃO rodei `done`/`sync` que afete STATUS compartilhado de main.
+
+---
+
+## F29 INTEGRADA em main (2º terminal) — 2026-06-13
+
+Orchestrator em worktree isolado (a3d4a1fa), F26/F27/F28 intocadas. 5 slots implementados+validados, integrados por mim em main na ordem S01→S05 (--no-ff, encadeadas, merges limpos — zero conflito de código). main primário tinha avançado p/ 71d4636 (fix flows do outro terminal, disjunto). Validação INTEGRADA verde: typecheck+lint (todos), @hm/db 24, @hm/api 311, @hm/workers 177, web build, python ruff+pytest 156. Migrations 0037/0038 aplicadas no Postgres dev. Todos os 5 → done.
+
+Achados: `packages/db/src/index.ts` não estava em files_allowed → `evaluationsRepo` consumido via `schema.*` direto (padrão do repo); worker usa `coalesce(updated_at, created_at)` na janela (updated_at pode ser NULL). Judge real (OpenRouter) NÃO exercido em CI — precisa OPENROUTER_API_KEY + JUDGE_MODEL no runtime (E2E manual).

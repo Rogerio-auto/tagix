@@ -2,7 +2,7 @@
 id: F29-S01
 title: Schema — conversation_evaluations + objections + RLS + repos
 phase: F29
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []

@@ -2,7 +2,7 @@
 id: F29-S02
 title: LLM-judge no agent-runtime — POST /internal/evaluate
 phase: F29
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
