@@ -18,6 +18,8 @@ import {
   tokensPorModelo24h,
   conversoesPorAtendenteHumano,
   conversoesPorAgenteIa,
+  objecoesRankeadas,
+  objecoesExemplos,
   type MetricValue,
 } from './queries';
 
@@ -32,7 +34,19 @@ export interface DrillArgs {
   readonly memberId: string;
   readonly role: Role;
   readonly metricKey: string;
+  /** Parâmetro opcional do drill-down (ex.: categoria de objeção). */
+  readonly param?: string;
 }
+
+const OBJECTION_CATEGORIES = new Set([
+  'price',
+  'timing',
+  'trust',
+  'competitor',
+  'feature_gap',
+  'authority',
+  'other',
+]);
 
 export async function drillDown(tx: DbTx, args: DrillArgs): Promise<DrillResult> {
   const metric = METRIC_BY_KEY.get(args.metricKey);
@@ -84,6 +98,22 @@ export async function drillDown(tx: DbTx, args: DrillArgs): Promise<DrillResult>
         metricKey: metric.key,
         detail: await conversoesPorAgenteIa(tx),
       };
+    case 'objecoes_rankeadas': {
+      // Com `param` (categoria válida) → exemplos (excerpt) daquela objeção (drawer).
+      // Sem param → o próprio ranking (tabela). Categoria inválida → unknown (evita
+      // exfiltração por categoria arbitrária).
+      if (args.param !== undefined) {
+        if (!OBJECTION_CATEGORIES.has(args.param)) return { kind: 'unknown_metric' };
+        return {
+          kind: 'ok',
+          metricKey: metric.key,
+          detail: await objecoesExemplos(tx, args.param),
+        };
+      }
+      const ranked = await objecoesRankeadas(tx);
+      if (ranked === null) return { kind: 'no_detail' };
+      return { kind: 'ok', metricKey: metric.key, detail: ranked };
+    }
     default:
       // Métricas escalares cujo drill-down é navegação (§4 drillHref), não série.
       return { kind: 'no_detail' };

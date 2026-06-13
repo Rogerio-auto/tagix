@@ -375,6 +375,54 @@ export const METRIC_DEFINITIONS: readonly MetricDefinition[] = [
     requiresConversionType: true,
     drillHref: () => `/conversions?group_by=agent&period=mes`,
   },
+  // ── §F29 Onda B — qualidade de atendimento / CSAT / objeções (LLM-judge) ──────
+  // Métricas qualitativas a partir de conversation_evaluations / objections.
+  // qualidade→agentes, CSAT→atendimento, objeções→negócio (AGENT_QUALITY_OBJECTIONS §5).
+  {
+    key: 'qualidade_resposta_media',
+    label: 'Qualidade média (30d)',
+    category: 'agentes',
+    roles: SUP_RO,
+    cadence: 'snapshot_5min',
+    scope: 'workspace',
+    cardType: 'stat',
+  },
+  {
+    key: 'qualidade_por_agente',
+    label: 'Qualidade por agente IA',
+    category: 'agentes',
+    roles: SUP_RO,
+    cadence: 'snapshot_5min',
+    scope: 'workspace',
+    cardType: 'table',
+  },
+  {
+    key: 'qualidade_por_atendente',
+    label: 'Qualidade por atendente',
+    category: 'agentes',
+    roles: SUP_RO,
+    cadence: 'snapshot_5min',
+    scope: 'team',
+    cardType: 'table',
+  },
+  {
+    key: 'satisfacao_media',
+    label: 'Satisfação (CSAT, 30d)',
+    category: 'atendimento',
+    roles: SUP_RO,
+    cadence: 'snapshot_5min',
+    scope: 'workspace',
+    cardType: 'stat',
+  },
+  {
+    key: 'objecoes_rankeadas',
+    label: 'Objeções mais frequentes (30d)',
+    category: 'negocio',
+    roles: SUP_UP,
+    cadence: 'snapshot_5min',
+    scope: 'workspace',
+    cardType: 'table',
+  },
 ];
 
 /** Índice por key para lookup O(1). */

@@ -12,7 +12,7 @@
  * O valor de cada métrica é um objeto jsonb-like (`{ count }`, `{ valueCents }`,
  * série, breakdown). A forma por metric_key é validada no load (não aqui).
  */
-import { and, count, desc, eq, gte, inArray, isNull, isNotNull, sql, sum } from 'drizzle-orm';
+import { and, avg, count, desc, eq, gte, inArray, isNull, isNotNull, sql, sum } from 'drizzle-orm';
 import { schema, type DbTx } from '@hm/db';
 
 const {
@@ -29,6 +29,8 @@ const {
   llmUsageLogs,
   routingHistory,
   workspaceAgentPolicies,
+  conversationEvaluations,
+  objections,
 } = schema;
 
 export type MetricValue = Record<string, unknown>;
@@ -544,6 +546,189 @@ export async function conversoesPorAgenteIa(tx: DbTx): Promise<TableMetricValue>
       nome: r.nome ?? 'Sem agente',
       conversoes: Number(r.conversoes ?? 0),
       valor_cents: Number(r.valorCents ?? 0),
+    })),
+  };
+}
+
+// ─── §F29 Onda B — qualidade / CSAT / objeções (conversation_evaluations / objections) ──
+// Janela padrão de 30 dias. `null` quando não há avaliação na janela (o front omite o
+// card vazio em vez de exibir zero enganoso — DASHBOARD §10). Tudo sob RLS do tx.
+
+/** Início da janela de 30 dias atrás (UTC). */
+function start30dAgo(now = new Date()): Date {
+  return new Date(now.getTime() - 30 * 24 * 3600000);
+}
+
+/** Qualidade média (avg quality_score) 30d. `null` sem avaliação na janela. */
+export async function qualidadeRespostaMedia(tx: DbTx): Promise<MetricValue | null> {
+  const since = start30dAgo();
+  const [row] = await tx
+    .select({ media: avg(conversationEvaluations.qualityScore), amostra: count() })
+    .from(conversationEvaluations)
+    .where(gte(conversationEvaluations.evaluatedAt, since));
+  const amostra = Number(row?.amostra ?? 0);
+  if (amostra === 0) return null;
+  return { value: row?.media == null ? null : Math.round(Number(row.media)), sample: amostra };
+}
+
+/** Satisfação (CSAT) 30d: sentimento médio + distribuição promoter/neutral/detractor. */
+export async function satisfacaoMedia(tx: DbTx): Promise<MetricValue | null> {
+  const since = start30dAgo();
+  const [row] = await tx
+    .select({
+      mediaSent: avg(conversationEvaluations.sentimentScore),
+      promoters: sql<number>`count(*) filter (where ${conversationEvaluations.csatLabel} = 'promoter')::int`,
+      neutrals: sql<number>`count(*) filter (where ${conversationEvaluations.csatLabel} = 'neutral')::int`,
+      detractors: sql<number>`count(*) filter (where ${conversationEvaluations.csatLabel} = 'detractor')::int`,
+      amostra: sql<number>`count(*) filter (where ${conversationEvaluations.csatLabel} is not null)::int`,
+    })
+    .from(conversationEvaluations)
+    .where(gte(conversationEvaluations.evaluatedAt, since));
+  const amostra = Number(row?.amostra ?? 0);
+  if (amostra === 0) return null;
+  return {
+    value: row?.mediaSent == null ? null : Math.round(Number(row.mediaSent)),
+    promoters: Number(row?.promoters ?? 0),
+    neutrals: Number(row?.neutrals ?? 0),
+    detractors: Number(row?.detractors ?? 0),
+    sample: amostra,
+  };
+}
+
+/** Qualidade média por agente IA (ranking 30d). `null` sem avaliação com agente. */
+export async function qualidadePorAgente(tx: DbTx): Promise<TableMetricValue | null> {
+  const since = start30dAgo();
+  const rows = await tx
+    .select({
+      agentId: conversationEvaluations.agentId,
+      nome: agents.name,
+      media: avg(conversationEvaluations.qualityScore),
+      amostra: count(),
+    })
+    .from(conversationEvaluations)
+    .leftJoin(agents, eq(conversationEvaluations.agentId, agents.id))
+    .where(
+      and(
+        gte(conversationEvaluations.evaluatedAt, since),
+        isNotNull(conversationEvaluations.agentId),
+      ),
+    )
+    .groupBy(conversationEvaluations.agentId, agents.name)
+    .orderBy(desc(avg(conversationEvaluations.qualityScore)));
+  if (rows.length === 0) return null;
+  return {
+    columns: [
+      { key: 'nome', label: 'Agente IA' },
+      { key: 'qualidade_media', label: 'Qualidade média', align: 'right' },
+      { key: 'avaliacoes', label: 'Avaliações', align: 'right' },
+    ],
+    rows: rows.map((r) => ({
+      agentId: r.agentId,
+      nome: r.nome ?? 'Sem agente',
+      qualidade_media: r.media == null ? null : Math.round(Number(r.media)),
+      avaliacoes: Number(r.amostra ?? 0),
+    })),
+  };
+}
+
+/** Qualidade média por atendente humano (ranking 30d). `null` sem avaliação humana. */
+export async function qualidadePorAtendente(tx: DbTx): Promise<TableMetricValue | null> {
+  const since = start30dAgo();
+  const rows = await tx
+    .select({
+      memberId: conversationEvaluations.primaryMemberId,
+      nome: members.name,
+      media: avg(conversationEvaluations.qualityScore),
+      amostra: count(),
+    })
+    .from(conversationEvaluations)
+    .leftJoin(members, eq(conversationEvaluations.primaryMemberId, members.id))
+    .where(
+      and(
+        gte(conversationEvaluations.evaluatedAt, since),
+        isNotNull(conversationEvaluations.primaryMemberId),
+      ),
+    )
+    .groupBy(conversationEvaluations.primaryMemberId, members.name)
+    .orderBy(desc(avg(conversationEvaluations.qualityScore)));
+  if (rows.length === 0) return null;
+  return {
+    columns: [
+      { key: 'nome', label: 'Atendente' },
+      { key: 'qualidade_media', label: 'Qualidade média', align: 'right' },
+      { key: 'avaliacoes', label: 'Avaliações', align: 'right' },
+    ],
+    rows: rows.map((r) => ({
+      memberId: r.memberId,
+      nome: r.nome ?? 'Sem nome',
+      qualidade_media: r.media == null ? null : Math.round(Number(r.media)),
+      avaliacoes: Number(r.amostra ?? 0),
+    })),
+  };
+}
+
+/** Objeções rankeadas por categoria (30d): total + % resolvida. `null` sem objeção. */
+export async function objecoesRankeadas(tx: DbTx): Promise<TableMetricValue | null> {
+  const since = start30dAgo();
+  const rows = await tx
+    .select({
+      categoria: objections.category,
+      total: count(),
+      resolvidas: sql<number>`count(*) filter (where ${objections.resolved})::int`,
+    })
+    .from(objections)
+    .where(gte(objections.occurredAt, since))
+    .groupBy(objections.category)
+    .orderBy(desc(count()));
+  if (rows.length === 0) return null;
+  return {
+    columns: [
+      { key: 'categoria', label: 'Categoria' },
+      { key: 'total', label: 'Ocorrências', align: 'right' },
+      { key: 'pct_resolvida', label: '% resolvida', align: 'right' },
+    ],
+    rows: rows.map((r) => {
+      const total = Number(r.total ?? 0);
+      const resolvidas = Number(r.resolvidas ?? 0);
+      return {
+        categoria: r.categoria,
+        total,
+        resolvidas,
+        pct_resolvida: total === 0 ? 0 : Math.round((resolvidas / total) * 100),
+      };
+    }),
+  };
+}
+
+/** Exemplos de objeção de uma categoria (drill-down: excerpt + estado resolvida). */
+export async function objecoesExemplos(
+  tx: DbTx,
+  categoria: string,
+  limit = 10,
+): Promise<TableMetricValue> {
+  const since = start30dAgo();
+  const rows = await tx
+    .select({
+      label: objections.label,
+      excerpt: objections.excerpt,
+      resolved: objections.resolved,
+      occurredAt: objections.occurredAt,
+    })
+    .from(objections)
+    .where(and(eq(objections.category, categoria), gte(objections.occurredAt, since)))
+    .orderBy(desc(objections.occurredAt))
+    .limit(limit);
+  return {
+    columns: [
+      { key: 'label', label: 'Objeção' },
+      { key: 'excerpt', label: 'Trecho' },
+      { key: 'resolvida', label: 'Resolvida' },
+    ],
+    rows: rows.map((r) => ({
+      label: r.label,
+      excerpt: r.excerpt,
+      resolvida: r.resolved,
+      occurred_at: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt),
     })),
   };
 }
