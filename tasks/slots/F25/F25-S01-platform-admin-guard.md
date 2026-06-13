@@ -2,7 +2,7 @@
 id: F25-S01
 title: Platform-admin guard — middleware requirePlatformAdmin (API)
 phase: F25
-status: in-progress
+status: review
 priority: critical
 estimated_size: S
 depends_on: []
@@ -11,6 +11,7 @@ source_docs:
   - docs/ROADMAP.md#F2.5
   - docs/features/PERMISSIONS.md
 claimed_at: 2026-06-13T01:13:25Z
+completed_at: 2026-06-13T01:16:25Z
 
 ---
 # F25-S01 — Platform-admin guard (API)
