@@ -21,9 +21,12 @@ import { parseSseStream } from './sse';
 import {
   AgentRunRequestSchema,
   AgentStreamEventSchema,
+  EvaluateResponseSchema,
   HealthResponseSchema,
   type AgentRunRequest,
   type AgentStreamEvent,
+  type EvaluateRequest,
+  type EvaluateResponse,
   type HealthResponse,
 } from './types';
 
@@ -55,6 +58,7 @@ const DEFAULTS = {
 
 const RUN_PATH = '/run';
 const HEALTH_PATH = '/health';
+const EVALUATE_PATH = '/internal/evaluate';
 
 export interface AgentsClient {
   /**
@@ -67,6 +71,13 @@ export interface AgentsClient {
   health(): Promise<HealthResponse>;
   /** Cancela uma execução em voo pelo seu `executionId` (thread_id). */
   cancel(executionId: string): Promise<void>;
+  /**
+   * Avalia uma conversa encerrada via LLM-judge (F29). POST /internal/evaluate.
+   * Devolve o JudgeResult validado + modelo/custo. Lança `AgentRuntimeError`
+   * (http) em 4xx/5xx — o worker (F29-S03) trata 422 (saída inválida) como
+   * "reprograma, não persiste".
+   */
+  evaluate(req: EvaluateRequest): Promise<EvaluateResponse>;
 }
 
 export function createAgentsClient(config: AgentsClientConfig): AgentsClient {
@@ -179,7 +190,32 @@ export function createAgentsClient(config: AgentsClientConfig): AgentsClient {
     }
   }
 
-  return { run, health, cancel };
+  async function evaluate(req: EvaluateRequest): Promise<EvaluateResponse> {
+    const res = await fetchWithTimeout(
+      url(EVALUATE_PATH),
+      {
+        method: 'POST',
+        headers: authHeaders({ 'content-type': 'application/json' }),
+        body: JSON.stringify(req),
+      },
+      requestTimeoutMs,
+    );
+    const body = await safeBody(res);
+    if (!res.ok) {
+      throw AgentRuntimeError.http(res.status, body);
+    }
+    const parsed = EvaluateResponseSchema.safeParse(body);
+    if (!parsed.success) {
+      throw AgentRuntimeError.contract(
+        `invalid evaluate response: ${parsed.error.message}`,
+        parsed.error,
+        body,
+      );
+    }
+    return parsed.data;
+  }
+
+  return { run, health, cancel, evaluate };
 }
 
 /** Parseia um frame `data:` em `AgentStreamEvent` validado, ou lança tipado. */
