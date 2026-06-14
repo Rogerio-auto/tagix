@@ -22,11 +22,12 @@ import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { desc, eq } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { assertConversationVisible, schema } from '@hm/db';
 import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import type {
   ConversationAssignedPayload,
   ConversationRoutingChangedPayload,
+  Role,
 } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
@@ -119,14 +120,25 @@ export function createRoutingRouter(): Router {
         res.status(400).json({ message: 'id ausente.' });
         return;
       }
-      const history = await req.scoped!((tx) =>
-        tx
+      const memberId = req.auth!.member.id;
+      const role = req.auth!.member.role as Role;
+      const workspaceId = req.auth!.workspace.id;
+      // Guard de visibilidade por-conversa (S07.1): histórico só para quem enxerga a conversa.
+      const history = await req.scoped!(async (tx) => {
+        if (!(await assertConversationVisible(tx, { memberId, role, workspaceId }, conversationId))) {
+          return null;
+        }
+        return tx
           .select()
           .from(schema.routingHistory)
           .where(eq(schema.routingHistory.conversationId, conversationId))
           .orderBy(desc(schema.routingHistory.createdAt))
-          .limit(200),
-      );
+          .limit(200);
+      });
+      if (history === null) {
+        res.status(404).json({ message: 'Conversa não encontrada.' });
+        return;
+      }
       res.json({ history });
     },
   );
@@ -149,8 +161,20 @@ export function createRoutingRouter(): Router {
       const { memberId } = parsed.data;
       const workspaceId = req.auth!.workspace.id;
       const actorMemberId = req.auth!.member.id;
+      const actorRole = req.auth!.member.role as Role;
 
       const result = await req.scoped!(async (tx) => {
+        // Guard de visibilidade por-conversa (S07.1): só roteia conversa visível
+        // ao ator (fecha SUPERVISOR agindo fora dos depts que lidera). 404 = não confirma.
+        if (
+          !(await assertConversationVisible(
+            tx,
+            { memberId: actorMemberId, role: actorRole, workspaceId },
+            conversationId,
+          ))
+        ) {
+          return null;
+        }
         const [conversation] = await tx
           .select({
             assignedTo: schema.conversations.assignedTo,
@@ -238,8 +262,20 @@ export function createRoutingRouter(): Router {
       const { memberId, departmentId, reason } = parsed.data;
       const workspaceId = req.auth!.workspace.id;
       const actorMemberId = req.auth!.member.id;
+      const actorRole = req.auth!.member.role as Role;
 
       const result = await req.scoped!(async (tx) => {
+        // Guard de visibilidade por-conversa (S07.1): só transfere conversa visível
+        // ao ator (fecha SUPERVISOR agindo fora dos depts que lidera). 404 = não confirma.
+        if (
+          !(await assertConversationVisible(
+            tx,
+            { memberId: actorMemberId, role: actorRole, workspaceId },
+            conversationId,
+          ))
+        ) {
+          return null;
+        }
         const [conversation] = await tx
           .select({
             assignedTo: schema.conversations.assignedTo,

@@ -26,7 +26,7 @@ import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { assertConversationVisible, schema } from '@hm/db';
 import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import {
   AiModeSchema,
@@ -154,6 +154,11 @@ export function createConversationStateRouter(): Router {
       }
 
       const result = await req.scoped!(async (tx) => {
+        // Guard de visibilidade por-conversa (S07.1): fecha SUPERVISOR agindo fora
+        // dos depts que lidera. 404 (não confirma) precede o 403 de escopo do AGENT.
+        if (!(await assertConversationVisible(tx, { memberId, role, workspaceId }, conversationId))) {
+          return { notFound: true } as const;
+        }
         const [conversation] = await tx
           .select({ assignedTo: schema.conversations.assignedTo })
           .from(schema.conversations)
@@ -226,6 +231,11 @@ export function createConversationStateRouter(): Router {
       const now = new Date();
 
       const result = await req.scoped!(async (tx) => {
+        // Guard de visibilidade por-conversa (S07.1): fecha SUPERVISOR agindo fora
+        // dos depts que lidera. 404 (não confirma) precede o 403 de escopo do AGENT.
+        if (!(await assertConversationVisible(tx, { memberId, role: role as Role, workspaceId }, conversationId))) {
+          return { notFound: true } as const;
+        }
         const [conversation] = await tx
           .select({ assignedTo: schema.conversations.assignedTo })
           .from(schema.conversations)

@@ -19,6 +19,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ─── Mocks de infra ───────────────────────────────────────────────────────────
 
+// Guard de visibilidade por-conversa (S07.1) — controlável por teste; default visível.
+const { assertVisibleMock } = vi.hoisted(() => ({ assertVisibleMock: vi.fn() }));
+
 const sendToQueueMock = vi.fn();
 const connectMqMock = vi.fn().mockResolvedValue({
   channel: { sendToQueue: sendToQueueMock },
@@ -71,6 +74,7 @@ vi.mock('@hm/db', () => ({
       workspaceId: 'workspaceId',
     },
   },
+  assertConversationVisible: assertVisibleMock,
 }));
 
 // ─── Mock de auth ─────────────────────────────────────────────────────────────
@@ -160,6 +164,7 @@ function authedPost(path: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   lastConvUpdate = null;
+  assertVisibleMock.mockResolvedValue(true);
   convRow = {
     channelId: '00000000-0000-0000-0000-000000000a01',
     remoteId: '+5511999990001',
@@ -184,6 +189,18 @@ describe('POST /api/conversations/:id/messages', () => {
       type: 'text',
     });
     expect(res.status).toBe(404);
+  });
+
+  it('S07.1: conversa invisível ao remetente → 404 (IDOR de escrita fechado)', async () => {
+    // A conversa existe no tenant, mas está fora da visibilidade do membro.
+    assertVisibleMock.mockResolvedValue(false);
+    const res = await authedPost(`/api/conversations/${CONV_ID}/messages`).send({
+      content: 'mensagem indevida',
+      type: 'text',
+    });
+    expect(res.status).toBe(404);
+    // Nada foi enfileirado nem persistido (guard precede a escrita).
+    expect(lastConvUpdate).toBeNull();
   });
 
   it('body sem content de texto → 400', async () => {
