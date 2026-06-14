@@ -1,16 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Info, MessageSquare } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import { useSocket } from '@/shared/realtime';
 import { EmptyState, SkeletonList } from '@/shared/components/feedback';
 import { HelpPanel } from '@/shared/components/help';
-import { useMessages } from '../queries';
+import { useMessages, useConversationDetail } from '../queries';
 import { ConversationsHelp } from '../help';
 import { ChatList } from './ChatList';
 import { MessageComposer } from './MessageComposer';
-import { FlowExecutionsBadge, ManualFlowsQuickbar } from '@/features/flow-builder/livechat';
+import { ManualFlowsQuickbar } from '@/features/flow-builder/livechat';
 import { ContactInfoPanel } from './ContactInfoPanel';
+import { ConversationHeader } from './ConversationHeader';
 import { TypingIndicator } from './TypingIndicator';
 import { MessageBubble } from './MessageBubble';
 import { MessageStatusReceipts } from './MessageBubble/status';
@@ -55,6 +56,11 @@ function igCommentFromMessage(m: {
 export function ConversationsLayout({ conversationId }: { conversationId?: string }) {
   const [infoOpen, setInfoOpen] = useState(false);
 
+  // Fecha o painel ao trocar de conversa (UX §2.3 — não acumula contexto stale).
+  useEffect(() => {
+    setInfoOpen(false);
+  }, [conversationId]);
+
   return (
     <div className="flex h-[calc(100dvh-7rem)] overflow-hidden rounded-lg border border-border">
       {/* Coluna 1 — lista (F1-S14: filtros/busca/unread/real-time) */}
@@ -73,6 +79,7 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
         {conversationId ? (
           <ConversationPanel
             conversationId={conversationId}
+            infoOpen={infoOpen}
             onToggleInfo={() => setInfoOpen((v) => !v)}
           />
         ) : (
@@ -86,7 +93,7 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
         )}
       </section>
 
-      {/* Coluna 3 — info do contato (toggle) */}
+      {/* Coluna 3 — cockpit (toggle) */}
       {infoOpen && conversationId && (
         <ContactInfoPanel conversationId={conversationId} onClose={() => setInfoOpen(false)} />
       )}
@@ -96,12 +103,15 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
 
 function ConversationPanel({
   conversationId,
+  infoOpen,
   onToggleInfo,
 }: {
   conversationId: string;
+  infoOpen: boolean;
   onToggleInfo: () => void;
 }) {
   const messages = useMessages(conversationId);
+  const { data: detailData } = useConversationDetail(conversationId);
   const { joinConversation, leaveConversation } = useSocket();
   const role = useAuthStore((st) => st.auth?.role);
   const canModerateComments = role ? can(role, 'conversation.delete_message') : false;
@@ -114,20 +124,13 @@ function ConversationPanel({
 
   return (
     <>
-      <header className="flex h-14 items-center justify-between gap-3 border-b border-border px-4">
-        <span className="font-head font-semibold text-text">Conversa</span>
-        <div className="flex items-center gap-2">
-          <FlowExecutionsBadge conversationId={conversationId} />
-          <button
-            type="button"
-            onClick={onToggleInfo}
-            aria-label="Informações do contato"
-            className="rounded-sm p-2 text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md"
-          >
-            <Info className="size-5" />
-          </button>
-        </div>
-      </header>
+      {/* Header espelho condicional (F30-S03) — ações somem quando painel aberto */}
+      <ConversationHeader
+        conversationId={conversationId}
+        detail={detailData?.conversation}
+        panelOpen={infoOpen}
+        onTogglePanel={onToggleInfo}
+      />
 
       {/* Recibos em tempo real (F1-S20): patcha o viewStatus no cache ao chegar status_changed. */}
       <MessageStatusReceipts conversationId={conversationId} />

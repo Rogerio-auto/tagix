@@ -1,5 +1,19 @@
 'use client';
 
+/**
+ * Filtros da ChatList (F30-S03 / LIVECHAT_OPS §3).
+ *
+ * Estende os filtros existentes (status/responsável/canal) com:
+ *  - Departamento e Time — coerentes com a política de visibilidade.
+ *
+ * Os filtros dept/time são entregues via props opcionais (departments/teams) com
+ * callbacks dedicados (onDeptChange/onTeamChange), desacoplados do
+ * ChatListFilterState para não depender do slot S10 (useChatList.ts).
+ *
+ * UX §2.10: selects navegáveis por teclado; focus ring visível.
+ * DS v2: zero hex hardcoded, tokens semânticos.
+ */
+
 import { Search, X } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import type { ChatListFilterState } from '../../hooks/useChatList';
@@ -48,6 +62,25 @@ export interface ChatListFiltersProps {
   onChange: <K extends keyof ChatListFilterState>(key: K, value: ChatListFilterState[K]) => void;
   hasActiveFilters: boolean;
   onReset: () => void;
+
+  /**
+   * F30-S03: departamentos disponíveis para filtro (política de visibilidade).
+   * Quando ausente ou vazio, o select de dept não é exibido.
+   */
+  departments?: ReadonlyArray<{ id: string; name: string }>;
+  /** Departamento atualmente selecionado (id ou vazio). */
+  selectedDept?: string;
+  /** Callback disparado ao selecionar/limpar departamento. */
+  onDeptChange?: (deptId: string) => void;
+
+  /**
+   * F30-S03: times disponíveis para filtro. Quando ausente ou vazio, não exibido.
+   */
+  teams?: ReadonlyArray<{ id: string; name: string }>;
+  /** Time atualmente selecionado (id ou vazio). */
+  selectedTeam?: string;
+  /** Callback disparado ao selecionar/limpar time. */
+  onTeamChange?: (teamId: string) => void;
 }
 
 export function ChatListFilters({
@@ -55,7 +88,17 @@ export function ChatListFilters({
   onChange,
   hasActiveFilters,
   onReset,
+  departments,
+  selectedDept = '',
+  onDeptChange,
+  teams,
+  selectedTeam = '',
+  onTeamChange,
 }: ChatListFiltersProps) {
+  const hasDepts = departments && departments.length > 0;
+  const hasTeams = teams && teams.length > 0;
+  const hasExtraFilters = Boolean(selectedDept || selectedTeam);
+
   return (
     <div className="flex flex-col gap-2 border-b border-border-2 px-3 py-3">
       {/* Busca */}
@@ -78,7 +121,7 @@ export function ChatListFilters({
         />
       </div>
 
-      {/* Selects + reset */}
+      {/* Selects principais + filtros F30 + reset */}
       <div className="flex flex-wrap items-center gap-2">
         {SELECT_FILTERS.map((f) => {
           const value = filters[f.key];
@@ -106,10 +149,64 @@ export function ChatListFilters({
           );
         })}
 
-        {hasActiveFilters && (
+        {/* F30-S03: Filtro por departamento */}
+        {hasDepts && (
+          <select
+            value={selectedDept}
+            onChange={(e) => onDeptChange?.(e.target.value)}
+            aria-label="Departamento"
+            className={cn(
+              'h-8 rounded-pill border px-3 font-body text-xs outline-none transition-colors',
+              'focus-visible:shadow-glow-md',
+              selectedDept
+                ? 'border-brand bg-surface-3 text-text'
+                : 'border-border-2 bg-surface-2 text-text-mid hover:text-text',
+            )}
+          >
+            <option value="" className="bg-surface text-text">
+              Todos departs.
+            </option>
+            {departments!.map((d) => (
+              <option key={d.id} value={d.id} className="bg-surface text-text">
+                {d.name}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* F30-S03: Filtro por time */}
+        {hasTeams && (
+          <select
+            value={selectedTeam}
+            onChange={(e) => onTeamChange?.(e.target.value)}
+            aria-label="Time"
+            className={cn(
+              'h-8 rounded-pill border px-3 font-body text-xs outline-none transition-colors',
+              'focus-visible:shadow-glow-md',
+              selectedTeam
+                ? 'border-brand bg-surface-3 text-text'
+                : 'border-border-2 bg-surface-2 text-text-mid hover:text-text',
+            )}
+          >
+            <option value="" className="bg-surface text-text">
+              Todos times
+            </option>
+            {teams!.map((t) => (
+              <option key={t.id} value={t.id} className="bg-surface text-text">
+                {t.name}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {(hasActiveFilters || hasExtraFilters) && (
           <button
             type="button"
-            onClick={onReset}
+            onClick={() => {
+              onReset();
+              onDeptChange?.('');
+              onTeamChange?.('');
+            }}
             className={cn(
               'inline-flex h-8 items-center gap-1 rounded-pill px-2.5',
               'font-body text-xs text-text-low outline-none transition-colors',

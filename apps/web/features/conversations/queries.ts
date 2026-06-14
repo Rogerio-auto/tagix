@@ -2,7 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/shared/lib/api-client';
-import type { ConversationFilters, ConversationSummary, MessageItem } from './types';
+import type {
+  ConversationDetail,
+  ConversationFilters,
+  ConversationSummary,
+  MessageItem,
+} from './types';
 
 function toQuery(filters: ConversationFilters): string {
   const params = new URLSearchParams();
@@ -16,14 +21,38 @@ function toQuery(filters: ConversationFilters): string {
 export function useConversations(filters: ConversationFilters = {}) {
   return useQuery({
     queryKey: ['conversations', filters],
-    queryFn: () => api.get<{ conversations: ConversationSummary[] }>(`/api/conversations${toQuery(filters)}`),
+    queryFn: () =>
+      api.get<{ conversations: ConversationSummary[] }>(`/api/conversations${toQuery(filters)}`),
+  });
+}
+
+/** Chave de cache de uma conversa individual. Fonte única compartilhada pelo cockpit. */
+export function conversationDetailKey(conversationId: string) {
+  return ['conversation', conversationId, 'detail'] as const;
+}
+
+/**
+ * Detalhe completo de uma conversa (status, aiMode, assignedTo, departmentId…).
+ * Usa GET /api/conversations/:id. Habilitado somente quando conversationId existe.
+ * F30-S03: alimenta o cockpit do ContactInfoPanel.
+ */
+export function useConversationDetail(conversationId: string | undefined) {
+  return useQuery({
+    queryKey: conversationDetailKey(conversationId ?? ''),
+    queryFn: () =>
+      api.get<{ conversation: ConversationDetail }>(
+        `/api/conversations/${conversationId}`,
+      ),
+    enabled: Boolean(conversationId),
+    staleTime: 10_000,
   });
 }
 
 export function useMessages(conversationId: string | undefined) {
   return useQuery({
     queryKey: ['conversation', conversationId, 'messages'],
-    queryFn: () => api.get<{ messages: MessageItem[] }>(`/api/conversations/${conversationId}/messages`),
+    queryFn: () =>
+      api.get<{ messages: MessageItem[] }>(`/api/conversations/${conversationId}/messages`),
     enabled: Boolean(conversationId),
   });
 }
@@ -115,6 +144,78 @@ export function useSendMessage() {
 
     onSettled: (_data, _err, input) => {
       void queryClient.invalidateQueries({ queryKey: messagesKey(input.conversationId) });
+    },
+  });
+}
+
+// ── Status mutation (F30-S03 / LIVECHAT_OPS §2) ───────────────────────────────
+
+export interface ChangeStatusInput {
+  conversationId: string;
+  status: 'open' | 'pending' | 'resolved' | 'snoozed';
+  snoozedUntil?: string; // ISO date string
+}
+
+interface ChangeStatusResult {
+  conversationId: string;
+  status: string;
+  snoozedUntil: string | null;
+}
+
+/**
+ * Muta o status operacional da conversa (resolver / snooze / reabrir / pendente).
+ * POST /api/conversations/:id/status. Invalida o detalhe e a lista.
+ * UX §2.7: botão em loading durante a chamada.
+ */
+export function useChangeStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation<ChangeStatusResult, Error, ChangeStatusInput>({
+    mutationFn: ({ conversationId, status, snoozedUntil }) =>
+      api.post<ChangeStatusResult>(`/api/conversations/${conversationId}/status`, {
+        status,
+        ...(snoozedUntil ? { snoozedUntil } : {}),
+      }),
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: conversationDetailKey(input.conversationId),
+      });
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+  });
+}
+
+// ── AI Mode mutation (F30-S03 / LIVECHAT_OPS §2) ─────────────────────────────
+
+import type { AiMode } from '@hm/shared';
+
+export interface ChangeAiModeInput {
+  conversationId: string;
+  aiMode: AiMode;
+}
+
+interface ChangeAiModeResult {
+  conversationId: string;
+  aiMode: AiMode;
+  reason: string | null;
+}
+
+/**
+ * Liga / desliga / pausa a IA numa conversa (handoff consciente).
+ * POST /api/conversations/:id/ai-mode. Invalida o detalhe e a lista.
+ * UX §2.7: feedback imediato via loading state no botão.
+ */
+export function useChangeAiMode() {
+  const queryClient = useQueryClient();
+
+  return useMutation<ChangeAiModeResult, Error, ChangeAiModeInput>({
+    mutationFn: ({ conversationId, aiMode }) =>
+      api.post<ChangeAiModeResult>(`/api/conversations/${conversationId}/ai-mode`, { aiMode }),
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: conversationDetailKey(input.conversationId),
+      });
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
   });
 }

@@ -1,7 +1,19 @@
 'use client';
 
+/**
+ * Item da ChatList — conversa na sidebar (F1-S14 / F30-S03).
+ *
+ * F30-S03: badge de IA (on/paused) visível no item.
+ *  - `aiMode='on'`    → ponto verde com ícone Bot (IA ativa).
+ *  - `aiMode='paused'`→ ponto amarelo com ícone Bot (atendente assumiu).
+ *
+ * UX §2.10: roving tabindex; §3.5: focus ring nunca suprimido.
+ * DS v2: zero hex hardcoded, tokens semânticos.
+ */
+
 import { forwardRef } from 'react';
 import Link from 'next/link';
+import { Bot } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { FlowExecutionsBadge } from '@/features/flow-builder/livechat';
 import { ConversationKindBadge } from '../IgComments/ConversationKindBadge';
@@ -30,6 +42,29 @@ function shortTime(iso: string | null): string {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return '';
   return new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Badge de estado da IA — on (verde) ou paused (âmbar). */
+function AiBadge({ aiMode }: { aiMode: string }) {
+  if (aiMode !== 'on' && aiMode !== 'paused') return null;
+
+  const isPaused = aiMode === 'paused';
+  return (
+    <span
+      aria-label={isPaused ? 'IA pausada — atendente assumiu' : 'IA ativa'}
+      title={isPaused ? 'IA pausada — atendente assumiu' : 'IA ativa'}
+      className={cn(
+        'inline-flex items-center gap-0.5 rounded-pill px-1.5 py-0.5',
+        'font-body text-[10px] font-medium leading-none',
+        isPaused
+          ? 'bg-warning/15 text-warning'
+          : 'bg-success/15 text-success',
+      )}
+    >
+      <Bot className="size-2.5" aria-hidden />
+      {isPaused ? 'Pausada' : 'IA'}
+    </span>
+  );
 }
 
 export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(function ChatListItem(
@@ -86,7 +121,11 @@ export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(fun
             >
               {conversation.lastMessagePreview ?? 'Sem mensagens'}
             </p>
-            <FlowExecutionsBadge conversationId={conversation.id} interactive={false} />
+            <div className="flex shrink-0 items-center gap-1.5">
+              {/* F30-S03: badge de IA (on/paused) */}
+              <AiBadge aiMode={conversation.aiMode} />
+              <FlowExecutionsBadge conversationId={conversation.id} interactive={false} />
+            </div>
           </div>
         </div>
 
