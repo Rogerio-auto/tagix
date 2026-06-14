@@ -572,3 +572,81 @@ describe('Cache key isolada por membro', () => {
     expect(adminIds).toContain(convDeptB);
   });
 });
+
+// ─── S07.1 — guard de visibilidade por-conversa (endpoints por-id) ────────────
+//
+// Fecha o IDOR: a lista esconde a linha, mas o ACESSO por id também precisa negar
+// quem não enxerga a conversa (read e write). 404 = não confirma existência.
+describe('S07.1 — visibilidade nos endpoints por-id (404 para invisível)', () => {
+  // AGENT A não enxerga convDeptA_Private_AgentB (mesmo time private, conv do colega).
+  describe('AGENT A em conversa do colega (private) → 404', () => {
+    it('GET /:id/messages → 404', async () => {
+      const res = await request(app)
+        .get(`/api/conversations/${convDeptA_Private_AgentB}/messages`)
+        .set('Cookie', agentACookie);
+      expect(res.status).toBe(404);
+    });
+
+    it('GET /:id/notes → 404', async () => {
+      const res = await request(app)
+        .get(`/api/conversations/${convDeptA_Private_AgentB}/notes`)
+        .set('Cookie', agentACookie);
+      expect(res.status).toBe(404);
+    });
+
+    it('GET /:id/window → 404', async () => {
+      const res = await request(app)
+        .get(`/api/conversations/${convDeptA_Private_AgentB}/window`)
+        .set('Cookie', agentACookie);
+      expect(res.status).toBe(404);
+    });
+
+    it('GET /:id/routing/history → 404', async () => {
+      const res = await request(app)
+        .get(`/api/conversations/${convDeptA_Private_AgentB}/routing/history`)
+        .set('Cookie', agentACookie);
+      expect(res.status).toBe(404);
+    });
+
+    it('POST /:id/assign → 404 (write-path fechado, sem efeito)', async () => {
+      const res = await request(app)
+        .post(`/api/conversations/${convDeptA_Private_AgentB}/assign`)
+        .set('Cookie', agentACookie)
+        .send({ memberId: agentAMemberId });
+      expect(res.status).toBe(404);
+    });
+
+    it('POST /:id/transfer → 404 (write-path fechado, sem efeito)', async () => {
+      const res = await request(app)
+        .post(`/api/conversations/${convDeptA_Private_AgentB}/transfer`)
+        .set('Cookie', agentACookie)
+        .send({ departmentId: deptBId });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  // SUPERVISOR lidera só o dept A → não enxerga convDeptB.
+  it('SUPERVISOR em conversa de dept que não lidera (dept B) → 404 (messages)', async () => {
+    const res = await request(app)
+      .get(`/api/conversations/${convDeptB}/messages`)
+      .set('Cookie', supCookie);
+    expect(res.status).toBe(404);
+  });
+
+  // Controles positivos: quem enxerga acessa normalmente.
+  it('AGENT A na sua própria conversa private → 200 (messages)', async () => {
+    const res = await request(app)
+      .get(`/api/conversations/${convDeptA_Private_AgentA}/messages`)
+      .set('Cookie', agentACookie);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('messages');
+  });
+
+  it('ADMIN vê qualquer conversa do workspace → 200 (notes em convDeptB)', async () => {
+    const res = await request(app)
+      .get(`/api/conversations/${convDeptB}/notes`)
+      .set('Cookie', adminCookie);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('notes');
+  });
+});

@@ -16,6 +16,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ─── Mocks de infra ───────────────────────────────────────────────────────────
 
+// Guard de visibilidade por-conversa (S07.1) — controlável por teste; default visível.
+const { assertVisibleMock } = vi.hoisted(() => ({ assertVisibleMock: vi.fn() }));
+
 const sendToQueueMock = vi.fn();
 const connectMqMock = vi.fn().mockResolvedValue({
   channel: { sendToQueue: sendToQueueMock },
@@ -51,6 +54,7 @@ vi.mock('@hm/db', () => ({
       updatedAt: 'updatedAt',
     },
   },
+  assertConversationVisible: assertVisibleMock,
 }));
 
 // ─── Mock de auth ─────────────────────────────────────────────────────────────
@@ -138,6 +142,7 @@ function makeApp() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  assertVisibleMock.mockResolvedValue(true);
   convRow = { assignedTo: MEMBER_AGENT };
   mockAuth = { role: 'OWNER', memberId: MEMBER_OWNER };
 });
@@ -212,6 +217,17 @@ describe('POST /api/conversations/:id/status', () => {
       .post(`/api/conversations/${CONV_ID}/status`)
       .set('x-test-auth', '1')
       .send({ status: 'resolved' });
+    expect(res.status).toBe(404);
+  });
+
+  it('S07.1: SUPERVISOR em conversa invisível (fora dos depts que lidera) → 404', async () => {
+    mockAuth = { role: 'SUPERVISOR', memberId: MEMBER_OTHER };
+    assertVisibleMock.mockResolvedValue(false);
+    const res = await request(makeApp())
+      .post(`/api/conversations/${CONV_ID}/status`)
+      .set('x-test-auth', '1')
+      .send({ status: 'resolved' });
+    // 404 (não confirma existência), precede o 403 de escopo do AGENT.
     expect(res.status).toBe(404);
   });
 
@@ -306,6 +322,16 @@ describe('POST /api/conversations/:id/ai-mode', () => {
 
   it('conversa não encontrada → 404', async () => {
     convRow = null;
+    const res = await request(makeApp())
+      .post(`/api/conversations/${CONV_ID}/ai-mode`)
+      .set('x-test-auth', '1')
+      .send({ aiMode: 'on' });
+    expect(res.status).toBe(404);
+  });
+
+  it('S07.1: conversa invisível ao membro → 404 (ai-mode)', async () => {
+    mockAuth = { role: 'SUPERVISOR', memberId: MEMBER_OTHER };
+    assertVisibleMock.mockResolvedValue(false);
     const res = await request(makeApp())
       .post(`/api/conversations/${CONV_ID}/ai-mode`)
       .set('x-test-auth', '1')

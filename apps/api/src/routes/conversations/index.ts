@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, desc, eq, ilike, lt, sql, type SQL } from 'drizzle-orm';
-import { buildVisibilityPredicate, schema } from '@hm/db';
+import { assertConversationVisible, buildVisibilityPredicate, schema } from '@hm/db';
 import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { cached, getVersion } from '../../cache';
@@ -133,16 +133,28 @@ export function createConversationsRouter(): Router {
       return;
     }
     const { before, limit = 50 } = parsed.data;
+    const memberId = req.auth!.member.id;
+    const role = req.auth!.member.role as Role;
+    const workspaceId = req.auth!.workspace.id;
     const base = eq(schema.messages.conversationId, conversationId);
     const where = before ? and(base, lt(schema.messages.createdAt, before)) : base;
-    const messages = await req.scoped!((tx) =>
-      tx
+    // Guard de visibilidade por-conversa (S07.1): a lista esconde, o acesso por id
+    // também precisa negar quem não enxerga a conversa. 404 = não confirma existência.
+    const messages = await req.scoped!(async (tx) => {
+      if (!(await assertConversationVisible(tx, { memberId, role, workspaceId }, conversationId))) {
+        return null;
+      }
+      return tx
         .select()
         .from(schema.messages)
         .where(where)
         .orderBy(desc(schema.messages.createdAt))
-        .limit(limit),
-    );
+        .limit(limit);
+    });
+    if (messages === null) {
+      res.status(404).json({ message: 'Conversa não encontrada.' });
+      return;
+    }
     res.json({ messages });
   });
 

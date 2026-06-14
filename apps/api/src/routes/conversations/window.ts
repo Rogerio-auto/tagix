@@ -16,8 +16,9 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { and, desc, eq } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { assertConversationVisible, schema } from '@hm/db';
 import type { IgMessageTag } from '@hm/channels';
+import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
 /** Provider técnico do canal (espelha channels_provider_chk). */
@@ -109,7 +110,15 @@ export function createWindowRouter(): Router {
         return;
       }
 
+      const memberId = req.auth!.member.id;
+      const role = req.auth!.member.role as Role;
+      const workspaceId = req.auth!.workspace.id;
+
       const result = await req.scoped!(async (tx) => {
+        // Guard de visibilidade por-conversa (S07.1): nega quem não enxerga a conversa.
+        if (!(await assertConversationVisible(tx, { memberId, role, workspaceId }, conversationId))) {
+          return null;
+        }
         // Provider vem do canal da conversa (RLS-escopado por workspace).
         const [conv] = await tx
           .select({ provider: schema.channels.provider })

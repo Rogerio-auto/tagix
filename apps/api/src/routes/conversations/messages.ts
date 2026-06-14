@@ -28,9 +28,9 @@ import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { assertConversationVisible, schema } from '@hm/db';
 import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
-import type { AiMode, ConversationAiModeChangedPayload } from '@hm/shared';
+import type { AiMode, ConversationAiModeChangedPayload, Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { publishOutboundJob } from '../../mq/outbound-publisher';
 
@@ -221,11 +221,24 @@ export function createMessagesRouter(): Router {
 
       const workspaceId = req.auth!.workspace.id;
       const senderMemberId = req.auth!.member.id;
+      const senderRole = req.auth!.member.role as Role;
 
       // Persiste a mensagem `pending` sob RLS, validando que a conversa existe no
       // tenant (RLS escopa a query — conversa de outro workspace some).
       // F30-S04: na mesma transação aplica a lógica de auto-pausa de IA.
       const result = await req.scoped!(async (tx) => {
+        // Guard de visibilidade por-conversa (S07.1): fecha o IDOR de escrita — não
+        // basta a conversa existir no tenant, precisa ser visível ao remetente
+        // (senão um membro enviaria ao contato de outro time/depto). 404 = não confirma.
+        if (
+          !(await assertConversationVisible(
+            tx,
+            { memberId: senderMemberId, role: senderRole, workspaceId },
+            conversationId,
+          ))
+        ) {
+          return null;
+        }
         const [conversation] = await tx
           .select({
             channelId: schema.conversations.channelId,

@@ -1,6 +1,6 @@
 import type { PeerVisibility, Role } from '@hm/shared';
 import { type SQL, and, desc, eq, lt, sql } from 'drizzle-orm';
-import { getDb } from '../client';
+import { getDb, type DbTx } from '../client';
 import { contacts, conversations, inboxVisibilitySettings, messages, teams } from '../schema';
 
 export const contactsRepo = {
@@ -92,6 +92,35 @@ export function buildVisibilityPredicate(ctx: VisibilityContext): SQL {
   )`;
 
   return sql`(${deptVisible} and ${peerOk})`;
+}
+
+/**
+ * Guard de visibilidade por-conversa (S07.1). Reusa `buildVisibilityPredicate`
+ * no nível de RECURSO para fechar o IDOR dos endpoints por-id: a lista esconde
+ * a linha, mas o acesso por id também precisa negar quem não enxerga a conversa.
+ *
+ * Roda DENTRO da transação `withWorkspace` (RLS já escopa o tenant); o predicado
+ * adiciona o escopo intra-tenant (depts + peer-privacy). Retorna `false` quando a
+ * conversa não existe OU está fora da visibilidade do membro — o caller deve
+ * responder **404** (não 403) para não confirmar a existência do recurso.
+ */
+export async function assertConversationVisible(
+  tx: DbTx,
+  ctx: VisibilityContext,
+  conversationId: string,
+): Promise<boolean> {
+  const [row] = await tx
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.id, conversationId),
+        eq(conversations.workspaceId, ctx.workspaceId),
+        buildVisibilityPredicate(ctx),
+      ),
+    )
+    .limit(1);
+  return row != null;
 }
 
 /** Identifica uma conversa para resolver a privacidade entre colegas (eixo 2). */

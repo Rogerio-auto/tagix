@@ -18,8 +18,9 @@ import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { assertConversationVisible, schema } from '@hm/db';
 import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
+import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
 /** Fila de relay do socket (mesma constante de `apps/api/src/socket/relay.ts`). */
@@ -110,14 +111,26 @@ export function createNotesRouter(): Router {
         res.status(400).json({ message: 'id ausente.' });
         return;
       }
-      const notes = await req.scoped!((tx) =>
-        tx
+      const memberId = req.auth!.member.id;
+      const role = req.auth!.member.role as Role;
+      const workspaceId = req.auth!.workspace.id;
+      // Guard de visibilidade por-conversa (S07.1): notas internas só para quem
+      // enxerga a conversa. 404 = não confirma existência.
+      const notes = await req.scoped!(async (tx) => {
+        if (!(await assertConversationVisible(tx, { memberId, role, workspaceId }, conversationId))) {
+          return null;
+        }
+        return tx
           .select()
           .from(schema.conversationNotes)
           .where(eq(schema.conversationNotes.conversationId, conversationId))
           .orderBy(desc(schema.conversationNotes.createdAt))
-          .limit(200),
-      );
+          .limit(200);
+      });
+      if (notes === null) {
+        res.status(404).json({ message: 'Conversa não encontrada.' });
+        return;
+      }
       res.json({ notes });
     },
   );
@@ -140,16 +153,17 @@ export function createNotesRouter(): Router {
       const { body } = parsed.data;
       const requested = [...new Set(parsed.data.mentions ?? [])];
       const authorMemberId = req.auth!.member.id;
+      const role = req.auth!.member.role as Role;
       const workspaceId = req.auth!.workspace.id;
 
       const created = await req.scoped!(async (tx) => {
-        // A conversa precisa existir no tenant (RLS já garante o escopo).
-        const [conversation] = await tx
-          .select({ id: schema.conversations.id })
-          .from(schema.conversations)
-          .where(eq(schema.conversations.id, conversationId))
-          .limit(1);
-        if (!conversation) return null;
+        // Guard de visibilidade por-conversa (S07.1): só cria nota em conversa
+        // visível ao autor (não basta existir no tenant). 404 = não confirma.
+        if (
+          !(await assertConversationVisible(tx, { memberId: authorMemberId, role, workspaceId }, conversationId))
+        ) {
+          return null;
+        }
 
         // Resolve mentions válidas: só membros existentes do workspace.
         let mentions: string[] = [];

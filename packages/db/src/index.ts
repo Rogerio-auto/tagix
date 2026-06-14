@@ -14,6 +14,7 @@ export {
   conversationsRepo,
   messagesRepo,
   buildVisibilityPredicate,
+  assertConversationVisible,
   resolvePeerVisibility,
   pickAutoAssignee,
 } from './repos/livechat';
