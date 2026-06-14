@@ -2,7 +2,7 @@
 id: F30-S02
 title: API de estado da conversa — status + ai_mode toggle
 phase: F30
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F30-S01]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/LIVECHAT.md
   - docs/features/PERMISSIONS.md
 claimed_at: 2026-06-14T14:39:14Z
+completed_at: 2026-06-14T15:52:10Z
 
 ---
 # F30-S02 — Conversation state API (status + ai_mode)
