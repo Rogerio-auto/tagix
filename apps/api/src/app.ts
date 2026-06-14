@@ -17,6 +17,7 @@ import { createKnowledgeFeedbackRouter } from './routes/knowledge/feedback';
 import { createMessagesRouter } from './routes/conversations/messages';
 import { createNotesRouter } from './routes/conversations/notes';
 import { createRoutingRouter } from './routes/conversations/routing';
+import { createConversationStateRouter } from './routes/conversations/state';
 import { createWindowRouter } from './routes/conversations/window';
 import { createWebhooksRouter } from './routes/webhooks';
 import { createFlowSubmissionsRouter } from './routes/flows/submissions';
@@ -127,6 +128,9 @@ export function createApp(): Express {
   app.use(createWindowRouter());
   app.use(createNotesRouter());
   app.use(createRoutingRouter());
+  // Estado operacional da conversa (F30-S02): status (resolver/snooze/reabrir) +
+  // toggle de ai_mode (on/off/paused) com handoff consciente.
+  app.use(createConversationStateRouter());
   app.use(createChannelsRouter());
   app.use(createInstagramRouter());
   app.use(createAgentsRouter());
