@@ -82,6 +82,32 @@ export interface MediaEnqueuePort {
   enqueue(job: InboundMediaJob): Promise<void>;
 }
 
+/**
+ * Estratégia de distribuição do time-alvo (espelha `teams.auto_assign_strategy`,
+ * LIVECHAT_OPS.md §4). `manual` → conversa entra na fila sem owner.
+ */
+export type AutoAssignStrategy = 'round_robin' | 'least_busy' | 'manual';
+
+/** Estratégia automática (exclui `manual`) — a única que dispara o picker. */
+export type AutoAssignAutomatic = Exclude<AutoAssignStrategy, 'manual'>;
+
+/** Entrada do picker de auto-assign (F30-S09): time-alvo + estratégia automática. */
+export interface AutoAssignPick {
+  readonly teamId: string;
+  readonly strategy: AutoAssignAutomatic;
+}
+
+/**
+ * Porta de seleção do atendente no auto-assign do inbound (F30-S09 / LIVECHAT_OPS
+ * §4). Devolve o `member_id` escolhido (round_robin/least_busy) ou `null` quando o
+ * time não tem candidato ativo. A escolha em si mora no `@hm/db` (S01,
+ * `pickAutoAssignee`) para manter o SQL de rodízio/carga no repo; a impl. default
+ * (`db-ports.ts`) espelha essa query. Injetável para teste sem DB.
+ */
+export interface InboundAutoAssignPort {
+  pick(input: AutoAssignPick): Promise<string | null>;
+}
+
 /** Contadores observáveis do que a persistência aplicou (log/teste/métrica). */
 export interface PersistInboundResult {
   /** Mensagens efetivamente inseridas (exclui as deduplicadas). */

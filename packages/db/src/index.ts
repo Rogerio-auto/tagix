@@ -9,7 +9,14 @@ export { encryptSecret, decryptSecret } from './crypto';
 export * as schema from './schema';
 export { RLS_TABLES } from './schema';
 export { workspacesRepo, membersRepo } from './repos';
-export { contactsRepo, conversationsRepo, messagesRepo } from './repos/livechat';
+export {
+  contactsRepo,
+  conversationsRepo,
+  messagesRepo,
+  pickAutoAssignee,
+  type AutoAssignInput,
+  type AutoAssignStrategy,
+} from './repos/livechat';
 export { dataExportJobsRepo, type DataExportJob } from './repos/privacy';
 export type { DataExportScope } from './schema/privacy';
 // Platform tenant management (F26-S01).
