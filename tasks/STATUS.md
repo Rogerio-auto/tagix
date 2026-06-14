@@ -215,7 +215,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F30-S05 | Agent-runtime — retomada consciente de contexto (handoff)             | 🟣 review   | high       | F30-S01                   |
 | F30-S06 | Gatilhos de reengajamento da IA — cron (ocioso/fora-horário)          | ⏸️ blocked | medium     | F30-S01, F30-S04, F30-S05 |
 | F30-S07 | Enforcement de visibilidade na lista de conversas                     | ⏸️ blocked | critical   | F30-S01                   |
-| F30-S08 | API de configuração de visibilidade + peer-privacy                    | ⏸️ blocked | high       | F30-S01                   |
+| F30-S08 | API de configuração de visibilidade + peer-privacy                    | 🟣 review   | high       | F30-S01                   |
 | F30-S09 | Auto-assign engine no inbound (round-robin/least-busy)                | ⏸️ blocked | high       | F30-S01                   |
 | F30-S10 | Settings UI — visibilidade + peer-privacy por time                    | ⏸️ blocked | medium     | F30-S08                   |
 
