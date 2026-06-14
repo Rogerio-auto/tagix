@@ -33,7 +33,7 @@
  */
 import { Buffer } from 'node:buffer';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { getDb, schema, withWorkspace } from '@hm/db';
+import { getDb, pickAutoAssignee, schema, withWorkspace } from '@hm/db';
 import { makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import type {
   ChannelProvider,
@@ -141,12 +141,17 @@ export interface InboundMessageNewEmit {
 }
 
 /**
- * Porta de socket do inbound: emite `message:new` e `typing:from_contact`
- * (presença do contato, S21). Implementação default publica no
- * `hm.q.socket.relay` (consumido por `relay.ts`).
+ * Porta de socket do inbound: emite `message:new`, `typing:from_contact`
+ * (presença do contato, S21) e `conversation:assigned` (F30-S09).
+ * Implementação default publica no `hm.q.socket.relay` (consumido por `relay.ts`).
  */
 export interface InboundSocketPort extends ContactPresenceEmitPort {
   emitMessageNew(input: InboundMessageNewEmit): Promise<void>;
+  /** Emite `conversation:assigned` ao workspace (F30-S09). */
+  emitConversationAssigned(
+    workspaceId: string,
+    payload: ConversationAssignedPayload,
+  ): Promise<void>;
 }
 
 /** Publica `{ event, target:{conversationId}, data }` no relay → room conversation:{id}. */
@@ -197,6 +202,21 @@ export class MqInboundSocketEmit implements InboundSocketPort {
       'typing:from_contact',
       payload.conversationId,
       payload,
+    );
+    await Promise.resolve();
+  }
+
+  async emitConversationAssigned(
+    workspaceId: string,
+    payload: ConversationAssignedPayload,
+  ): Promise<void> {
+    relayEnvelope(
+      this.channel,
+      workspaceId,
+      'conversation:assigned',
+      payload.conversationId,
+      payload,
+      { workspace: true },
     );
     await Promise.resolve();
   }
@@ -251,6 +271,19 @@ export class MqInboundFlowEnqueue implements InboundFlowEnqueuePort {
   }
 }
 
+// ─── Auto-assign (F30-S09) ────────────────────────────────────────────────────
+
+/**
+ * Implementação default do picker de auto-assign: delega para `pickAutoAssignee`
+ * do repo `@hm/db` (round_robin/least_busy via SQL; `manual` → null).
+ * Injetável para teste sem DB.
+ */
+export class DbInboundAutoAssign implements InboundAutoAssignPort {
+  async pick(input: AutoAssignPick): Promise<string | null> {
+    return pickAutoAssignee({ teamId: input.teamId, strategy: input.strategy });
+  }
+}
+
 // ─── Persistence (@hm/db + withWorkspace, RLS) ────────────────────────────────
 
 /** Snapshot do contato/conversa resolvido dentro do tenant. */
@@ -258,6 +291,10 @@ interface ResolvedConversation {
   readonly contactId: string;
   readonly conversationId: string;
   readonly aiMode: string;
+  /** `assigned_to` no momento do upsert; null se não atribuída. */
+  readonly assignedTo: string | null;
+  /** `team_id` da conversa; null se sem time. */
+  readonly teamId: string | null;
 }
 
 /** Linha inserida em `messages` (para o socket pós-persist). */
@@ -311,6 +348,7 @@ export class DbInboundPersistence implements InboundPersistencePort {
     private readonly logger: Logger,
     private readonly channels: InboundChannelResolver = new DbInboundChannelResolver(),
     private readonly contactMessageHook?: InboundContactMessageHook,
+    private readonly autoAssign: InboundAutoAssignPort = new DbInboundAutoAssign(),
   ) {}
 
   async persist(request: PersistInboundRequest): Promise<PersistInboundResult> {
@@ -367,6 +405,7 @@ export class DbInboundPersistence implements InboundPersistencePort {
     }
     const remoteId = anchor.contactRemoteId;
 
+    const autoAssignPort = this.autoAssign;
     const outcome = await withWorkspace(workspaceId, async (tx) => {
       const resolved = await ensureConversation(tx, workspaceId, channelId, remoteId);
       const inserted = await insertMessages(
@@ -378,8 +417,48 @@ export class DbInboundPersistence implements InboundPersistencePort {
       if (inserted.length > 0) {
         await bumpConversation(tx, resolved.conversationId, messageEvents, inserted.length);
       }
-      return { resolved, inserted };
+
+      // F30-S09: auto-assign quando a conversa está sem owner e o time-alvo tem
+      // estratégia automática. Só tenta na primeira vez (assignedTo === null).
+      let autoAssignedTo: string | null = null;
+      if (resolved.assignedTo === null && resolved.teamId !== null) {
+        const teamRow = await tx
+          .select({ strategy: schema.teams.autoAssignStrategy })
+          .from(schema.teams)
+          .where(eq(schema.teams.id, resolved.teamId))
+          .limit(1);
+        const strategy = teamRow[0]?.strategy ?? 'manual';
+        if (strategy !== 'manual') {
+          const assignee = await autoAssignPort.pick({
+            teamId: resolved.teamId,
+            strategy: strategy as AutoAssignAutomatic,
+          });
+          if (assignee !== null) {
+            await tx
+              .update(schema.conversations)
+              .set({ assignedTo: assignee })
+              .where(eq(schema.conversations.id, resolved.conversationId));
+            await tx.insert(schema.routingHistory).values({
+              workspaceId,
+              conversationId: resolved.conversationId,
+              action: 'auto_assign',
+              toMemberId: assignee,
+            });
+            autoAssignedTo = assignee;
+          }
+        }
+      }
+
+      return { resolved, inserted, autoAssignedTo };
     });
+
+    // F30-S09: emite conversation:assigned ao workspace quando auto-assign ocorreu.
+    if (outcome.autoAssignedTo !== null) {
+      await this.socket.emitConversationAssigned(workspaceId, {
+        conversationId: outcome.resolved.conversationId,
+        assignedTo: outcome.autoAssignedTo,
+      });
+    }
 
     // Pós-persist (fora da transação): socket + flow conhecem os UUIDs.
     for (const msg of outcome.inserted) {
@@ -619,6 +698,8 @@ async function ensureConversation(
       id: conversations.id,
       contactId: conversations.contactId,
       aiMode: conversations.aiMode,
+      assignedTo: conversations.assignedTo,
+      teamId: conversations.teamId,
     })
     .from(conversations)
     .where(and(eq(conversations.channelId, channelId), eq(conversations.remoteId, remoteId)))
@@ -629,7 +710,13 @@ async function ensureConversation(
     if (existing.contactId === null) {
       await tx.update(conversations).set({ contactId }).where(eq(conversations.id, existing.id));
     }
-    return { contactId, conversationId: existing.id, aiMode: existing.aiMode };
+    return {
+      contactId,
+      conversationId: existing.id,
+      aiMode: existing.aiMode,
+      assignedTo: existing.assignedTo ?? null,
+      teamId: existing.teamId ?? null,
+    };
   }
 
   // 2) Cria contato + conversa. Race entre dois consumidores do mesmo envelope é
@@ -648,10 +735,21 @@ async function ensureConversation(
       aiMode: 'off',
     })
     .onConflictDoNothing({ target: [conversations.channelId, conversations.remoteId] })
-    .returning({ id: conversations.id, aiMode: conversations.aiMode });
+    .returning({
+      id: conversations.id,
+      aiMode: conversations.aiMode,
+      assignedTo: conversations.assignedTo,
+      teamId: conversations.teamId,
+    });
 
   if (created !== undefined) {
-    return { contactId, conversationId: created.id, aiMode: created.aiMode };
+    return {
+      contactId,
+      conversationId: created.id,
+      aiMode: created.aiMode,
+      assignedTo: created.assignedTo ?? null,
+      teamId: created.teamId ?? null,
+    };
   }
 
   // Conflito (outro consumidor inseriu primeiro): reseleciona.
@@ -660,6 +758,8 @@ async function ensureConversation(
       id: conversations.id,
       contactId: conversations.contactId,
       aiMode: conversations.aiMode,
+      assignedTo: conversations.assignedTo,
+      teamId: conversations.teamId,
     })
     .from(conversations)
     .where(and(eq(conversations.channelId, channelId), eq(conversations.remoteId, remoteId)))
@@ -672,6 +772,8 @@ async function ensureConversation(
     contactId: row.contactId ?? contactId,
     conversationId: row.id,
     aiMode: row.aiMode,
+    assignedTo: row.assignedTo ?? null,
+    teamId: row.teamId ?? null,
   };
 }
 

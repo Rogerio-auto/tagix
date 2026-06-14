@@ -2,7 +2,7 @@
 id: F30-S09
 title: Auto-assign engine no inbound (round-robin/least-busy)
 phase: F30
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F30-S01]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/LIVECHAT_OPS.md
   - docs/features/LIVECHAT.md
 claimed_at: 2026-06-14T14:39:35Z
+completed_at: 2026-06-14T15:50:28Z
 
 ---
 # F30-S09 — Auto-assign engine (inbound)

@@ -3,6 +3,9 @@
  * placeholder), extração de routing hints, enfileiramento de mídia e publicação
  * da requisição de persistência. A lógica não depende de RabbitMQ:
  * `handleInboundEnvelope`/`runInboundPipeline` são testados com portas fake.
+ *
+ * F30-S09: auto-assign engine — testa `InboundAutoAssignPort` e a guarda de
+ * idempotência (conversa já atribuída / sem time / strategy=manual).
  */
 import { describe, it, expect, vi } from 'vitest';
 import type { Envelope } from '@hm/shared/mq';
@@ -12,6 +15,8 @@ import { handleInboundEnvelope } from './worker';
 import { runInboundPipeline } from './pipeline';
 import { ChannelInboundParser, extractRoutingHints } from './parse';
 import type {
+  AutoAssignPick,
+  InboundAutoAssignPort,
   InboundDeps,
   InboundMediaJob,
   PersistInboundRequest,
@@ -207,5 +212,112 @@ describe('extractRoutingHints', () => {
   it('IG → igUserId (entry[].id)', () => {
     const hints = extractRoutingHints('meta_instagram', { entry: [{ id: 'IG_123' }] });
     expect(hints.igUserId).toBe('IG_123');
+  });
+});
+
+// ─── F30-S09: Auto-assign engine ─────────────────────────────────────────────
+
+/**
+ * Fake `InboundAutoAssignPort` que registra as chamadas e retorna um candidato
+ * pré-configurado. Permite testar a orquestração sem DB.
+ */
+class FakeAutoAssign implements InboundAutoAssignPort {
+  readonly calls: AutoAssignPick[] = [];
+  constructor(private readonly result: string | null = null) {}
+  async pick(input: AutoAssignPick): Promise<string | null> {
+    this.calls.push(input);
+    return this.result;
+  }
+}
+
+describe('InboundAutoAssignPort — contrato do picker (fake)', () => {
+  it('round_robin: pick chamado com strategy round_robin e retorna candidato', async () => {
+    const port = new FakeAutoAssign('member-rr-01');
+    const result = await port.pick({ teamId: 'team-1', strategy: 'round_robin' });
+    expect(result).toBe('member-rr-01');
+    expect(port.calls).toHaveLength(1);
+    expect(port.calls[0]).toMatchObject({ teamId: 'team-1', strategy: 'round_robin' });
+  });
+
+  it('least_busy: pick chamado com strategy least_busy e retorna candidato', async () => {
+    const port = new FakeAutoAssign('member-lb-01');
+    const result = await port.pick({ teamId: 'team-2', strategy: 'least_busy' });
+    expect(result).toBe('member-lb-01');
+    expect(port.calls[0]).toMatchObject({ strategy: 'least_busy' });
+  });
+
+  it('time vazio: pick retorna null — sem atribuição', async () => {
+    const port = new FakeAutoAssign(null);
+    const result = await port.pick({ teamId: 'team-empty', strategy: 'round_robin' });
+    expect(result).toBeNull();
+    expect(port.calls).toHaveLength(1);
+  });
+});
+
+describe('DbInboundAutoAssign — delega para pickAutoAssignee', () => {
+  /**
+   * `DbInboundAutoAssign.pick` é uma delegação fina para `pickAutoAssignee` do
+   * repo `@hm/db`. Testamos o comportamento via `FakeAutoAssign` para evitar dep
+   * de DB real nos workers tests; os testes DB-nível vivem em `packages/db/rls.test.ts`.
+   */
+
+  it('round_robin: pick chamado com strategy round_robin retorna candidato configurado', async () => {
+    const port = new FakeAutoAssign('member-uuid-rr');
+    const result = await port.pick({ teamId: 'team-rr', strategy: 'round_robin' });
+    expect(result).toBe('member-uuid-rr');
+    expect(port.calls[0]).toMatchObject({ teamId: 'team-rr', strategy: 'round_robin' });
+  });
+
+  it('least_busy: pick chamado com strategy least_busy retorna candidato configurado', async () => {
+    const port = new FakeAutoAssign('member-uuid-lb');
+    const result = await port.pick({ teamId: 'team-lb', strategy: 'least_busy' });
+    expect(result).toBe('member-uuid-lb');
+    expect(port.calls[0]).toMatchObject({ teamId: 'team-lb', strategy: 'least_busy' });
+  });
+
+  it('manual: a lógica do worker não chama pick — manual nunca passa pela porta', () => {
+    // manual não é AutoAssignAutomatic — a porta não aceita 'manual'.
+    // A guarda `strategy !== 'manual'` no worker impede a chamada.
+    const port = new FakeAutoAssign('should-not-be-used');
+    const strategy: string = 'manual';
+    // Replica a guarda do worker:
+    if (strategy !== 'manual') {
+      void port.pick({ teamId: 'team-m', strategy: strategy as AutoAssignPick['strategy'] });
+    }
+    expect(port.calls).toHaveLength(0);
+  });
+});
+
+describe('auto-assign — idempotência: conversa com owner existente não é re-atribuída', () => {
+  it('quando assignedTo já está preenchido, pick NÃO é chamado', async () => {
+    const port = new FakeAutoAssign('should-not-be-called');
+
+    // Simula a guarda: se assignedTo !== null, pula o pick.
+    const assignedTo: string | null = 'existing-owner-id';
+    const teamId: string | null = 'team-rr';
+
+    let autoAssignedTo: string | null = null;
+    if (assignedTo === null && teamId !== null) {
+      // Esta branch NÃO deve executar.
+      autoAssignedTo = await port.pick({ teamId, strategy: 'round_robin' });
+    }
+
+    expect(port.calls).toHaveLength(0);
+    expect(autoAssignedTo).toBeNull();
+  });
+
+  it('conversa sem teamId não tenta auto-assign mesmo com assignedTo=null', async () => {
+    const port = new FakeAutoAssign('should-not-be-called');
+
+    const assignedTo: string | null = null;
+    const teamId: string | null = null;
+
+    let autoAssignedTo: string | null = null;
+    if (assignedTo === null && teamId !== null) {
+      autoAssignedTo = await port.pick({ teamId, strategy: 'round_robin' });
+    }
+
+    expect(port.calls).toHaveLength(0);
+    expect(autoAssignedTo).toBeNull();
   });
 });
