@@ -14,13 +14,23 @@
  * `messageTag` (janela 24h Instagram) é repassado ao job e — quando presente —
  * registrado em `audit_logs` (envio fora da janela é ação auditável).
  *
+ * F30-S04 — auto-pausa de IA no handoff humano:
+ *  - Quando o sender é membro humano (não agente), se `ai_mode='on'`, seta
+ *    `ai_mode='paused'`, `ai_paused_reason='human_takeover'`, `ai_paused_at=now()`,
+ *    `ai_paused_by=<member>`, `ai_last_human_at=now()` na mesma transação.
+ *  - Se já `paused` ou `off`, apenas atualiza `ai_last_human_at` (idempotente).
+ *  - Emite `conversation:ai_mode_changed` via relay best-effort quando a IA pausa.
+ *
  * Router NÃO montado aqui — o orchestrator monta `createMessagesRouter()` em
  * `apps/api/src/app.ts`.
  */
+import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { schema } from '@hm/db';
+import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
+import type { AiMode, ConversationAiModeChangedPayload } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { publishOutboundJob } from '../../mq/outbound-publisher';
 
@@ -83,6 +93,7 @@ function mediaKindFor(type: string): MediaKind | null {
 interface ResolvedConversation {
   readonly channelId: string;
   readonly remoteId: string;
+  readonly aiMode: string;
 }
 
 /**
@@ -126,6 +137,52 @@ function buildOutboundJob(args: {
   };
 }
 
+// ── Relay AMQP (best-effort, mesma estratégia de state.ts) ────────────────────
+
+/** Fila de relay do socket (mesma constante de `apps/api/src/socket/relay.ts`). */
+const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
+
+/** Handle AMQP lazy singleton por processo. */
+let mqHandlePromise: Promise<MqHandle> | null = null;
+
+async function getMqHandle(): Promise<MqHandle> {
+  mqHandlePromise ??= connectMq();
+  try {
+    return await mqHandlePromise;
+  } catch (err) {
+    mqHandlePromise = null;
+    throw err;
+  }
+}
+
+/**
+ * Publica `conversation:ai_mode_changed` na fila de relay do socket.
+ * Best-effort: se o broker não estiver disponível o erro é silenciado —
+ * a persistência já está commitada quando chegamos aqui.
+ */
+async function emitAiModeChanged(
+  workspaceId: string,
+  conversationId: string,
+  aiMode: AiMode,
+): Promise<void> {
+  const { channel } = await getMqHandle();
+  const payload: ConversationAiModeChangedPayload = {
+    conversationId,
+    aiMode,
+    reason: 'human_takeover',
+  };
+  const envelope = makeEnvelope('socket.relay', workspaceId, {
+    event: 'conversation:ai_mode_changed' as const,
+    target: { conversationId, workspace: true },
+    data: payload,
+  });
+  channel.sendToQueue(SOCKET_RELAY_QUEUE, Buffer.from(JSON.stringify(envelope)), {
+    persistent: true,
+    contentType: 'application/json',
+  });
+  await Promise.resolve();
+}
+
 export function createMessagesRouter(): Router {
   const router = Router();
   // Enviar mensagem é ação de staff (READONLY não envia). Sem permissão dedicada
@@ -167,11 +224,13 @@ export function createMessagesRouter(): Router {
 
       // Persiste a mensagem `pending` sob RLS, validando que a conversa existe no
       // tenant (RLS escopa a query — conversa de outro workspace some).
+      // F30-S04: na mesma transação aplica a lógica de auto-pausa de IA.
       const result = await req.scoped!(async (tx) => {
         const [conversation] = await tx
           .select({
             channelId: schema.conversations.channelId,
             remoteId: schema.conversations.remoteId,
+            aiMode: schema.conversations.aiMode,
           })
           .from(schema.conversations)
           .where(eq(schema.conversations.id, conversationId))
@@ -210,7 +269,40 @@ export function createMessagesRouter(): Router {
           });
         }
 
-        return { conversation, message };
+        // F30-S04 — auto-pausa de IA ao humano responder.
+        // Narrows: aiMode vem do DB como `text` (string); o check constraint garante
+        // o domínio ('off'|'on'|'paused'), mas o TS ainda vê `string` — comparamos
+        // diretamente com a literal para manter strict sem cast.
+        const now = new Date();
+        let aiPausedByHandoff = false;
+
+        if (conversation.aiMode === 'on') {
+          // Transição on → paused (human_takeover). Seta todos os campos de pausa.
+          await tx
+            .update(schema.conversations)
+            .set({
+              aiMode: 'paused',
+              aiPausedReason: 'human_takeover',
+              aiPausedAt: now,
+              aiPausedBy: senderMemberId,
+              aiLastHumanAt: now,
+              updatedAt: now,
+            })
+            .where(eq(schema.conversations.id, conversationId));
+          aiPausedByHandoff = true;
+        } else {
+          // Já paused ou off: apenas registra a atividade humana (base de S06).
+          // Não regride: paused não vira on; off não muda.
+          await tx
+            .update(schema.conversations)
+            .set({
+              aiLastHumanAt: now,
+              updatedAt: now,
+            })
+            .where(eq(schema.conversations.id, conversationId));
+        }
+
+        return { conversation, message, aiPausedByHandoff };
       });
 
       if (!result) {
@@ -218,7 +310,7 @@ export function createMessagesRouter(): Router {
         return;
       }
 
-      const { conversation, message } = result;
+      const { conversation, message, aiPausedByHandoff } = result;
 
       // Enfileira o envio real. Shape EXATO de `parseOutboundJob` (worker valida).
       // Best-effort em falha de broker: a mensagem já está `pending` e a UI já
@@ -232,6 +324,13 @@ export function createMessagesRouter(): Router {
         mediaKind,
       });
       await publishOutboundJob(workspaceId, job);
+
+      // F30-S04: emite evento de handoff se a IA acabou de pausar (best-effort).
+      if (aiPausedByHandoff) {
+        await Promise.allSettled([
+          emitAiModeChanged(workspaceId, conversationId, 'paused'),
+        ]);
+      }
 
       res.status(201).json({ message });
     },
