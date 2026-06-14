@@ -2,7 +2,7 @@
 id: F30-S08
 title: API de configuração de visibilidade + peer-privacy
 phase: F30
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F30-S01]
@@ -10,8 +10,9 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/LIVECHAT_OPS.md
   - docs/features/PERMISSIONS.md
----
+claimed_at: 2026-06-14T14:39:33Z
 
+---
 # F30-S08 — Visibility settings API
 
 > **source_docs:** `docs/features/LIVECHAT_OPS.md` §1/§5; `PERMISSIONS.md` §4.2
