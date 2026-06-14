@@ -2,7 +2,7 @@
 id: F30-S06
 title: Gatilhos de reengajamento da IA — cron (ocioso/fora-horário)
 phase: F30
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F30-S01, F30-S04, F30-S05]

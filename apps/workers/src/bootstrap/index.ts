@@ -40,8 +40,10 @@ import {
   runAgentMetricsRollup,
   startAgentWorker,
   startFollowupScheduler,
+  startReengagementScheduler,
   type AgentWorkerHandle,
   type FollowupSchedulerHandle,
+  type ReengagementSchedulerHandle,
 } from '../agents/index';
 import {
   createKbIngestDeps,
@@ -114,6 +116,7 @@ export interface WorkersBootstrapHandle {
   readonly agent: AgentWorkerHandle;
   readonly kbIngest: KbIngestWorkerHandle;
   readonly followup: FollowupSchedulerHandle;
+  readonly reengagement: ReengagementSchedulerHandle;
   readonly flow: FlowWorkerHandle;
   readonly flowScheduler: FlowSchedulerHandle;
   readonly campaignWorker: CampaignSchedulerHandle;
@@ -189,6 +192,9 @@ export async function startWorkers(
     maxRetriesPerRequest: 1,
   });
   const followup = startFollowupScheduler({ redis, channel, logger });
+  // Scheduler de reengajamento da IA (F30-S06): retoma conversas em handoff ociosas
+  // ou quando a janela de horário comercial reabre; idempotente via Redis lock.
+  const reengagement = startReengagementScheduler({ redis, channel, logger });
   // Scheduler de wakeup de flows (F4-S03): re-enfileira execucoes waiting vencidas.
   const flowScheduler = startFlowWakeupScheduler({ redis, channel, logger });
   // Worker-campaigns (F6-S05): tick 1min que conduz o envio das campanhas RUNNING
@@ -335,6 +341,7 @@ export async function startWorkers(
       'agent',
       'kb-ingest',
       'followup-scheduler',
+      'reengagement-scheduler',
       'flow',
       'flow-wakeup-scheduler',
       'campaign-scheduler',
@@ -357,6 +364,7 @@ export async function startWorkers(
     agent,
     kbIngest,
     followup,
+    reengagement,
     flow,
     flowScheduler,
     campaignWorker,
@@ -378,6 +386,7 @@ export async function startWorkers(
       await staleScheduler.stop();
       await automationWorker.stop();
       await flow.stop();
+      await reengagement.stop();
       followup.stop();
       await kbIngest.stop();
       await agent.stop();
