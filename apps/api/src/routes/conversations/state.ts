@@ -37,6 +37,7 @@ import {
   type ConversationAiModeChangedPayload,
   type ConversationStateChangedPayload,
   type Permission,
+  type Role,
 } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
@@ -141,7 +142,8 @@ export function createConversationStateRouter(): Router {
         return;
       }
       const { status, snoozedUntil } = parsed.data;
-      const role = req.auth!.member.role;
+      // member.role vem do DB (text) — narrowamos para Role (mesmo padrão de auth.ts).
+      const role = req.auth!.member.role as Role;
       const memberId = req.auth!.member.id;
       const workspaceId = req.auth!.workspace.id;
 
