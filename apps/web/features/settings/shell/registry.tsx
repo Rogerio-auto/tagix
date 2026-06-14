@@ -221,6 +221,25 @@ const WORKSPACE: SettingsSection[] = [
     permission: 'workspace.edit',
     component: lazy(() => import('../sections/workspace-org/SlasSection')),
   },
+  // F30-S10: visibilidade de inbox + peer-privacy por time.
+  {
+    id: 'visibilidade',
+    group: 'workspace',
+    label: 'Visibilidade da inbox',
+    description: 'Default peer-privacy (shared/private), overrides por membro e peer-privacy por time.',
+    keywords: [
+      'visibilidade',
+      'privacidade',
+      'peer',
+      'shared',
+      'private',
+      'inbox',
+      'override',
+      'departamento',
+    ],
+    permission: 'inbox.visibility.manage' as const,
+    component: lazy(() => import('../sections/workspace-org/InboxVisibilitySection')),
+  },
   {
     id: 'auditoria',
     group: 'workspace',

@@ -1,15 +1,115 @@
 'use client';
 
-import { X } from 'lucide-react';
+/**
+ * Cockpit completo da conversa — painel direito (F30-S03 / LIVECHAT_OPS §3).
+ *
+ * Regras UX aplicadas:
+ *  §2.1 — ação primária = clique no corpo de cada seção.
+ *  §2.3 — painel (drawer), não modal full-screen.
+ *  §2.5 — sem HelpPanel aqui (está no header do layout pai).
+ *  §2.7 — feedback imediato: botões em loading durante mutations.
+ *  §2.9 — ação destrutiva (resolver) com confirmação inline (confirmação por
+ *          duplo-click — não modal: ação é reversível via "Reabrir").
+ *  §2.10 — atalhos de teclado onde aplicável (focus ring visível).
+ *  §3 — estados loading/empty/error em todas as seções de dados.
+ *
+ * DS v2: zero hex hardcoded, só tokens semânticos. Dark + light. Focus ring
+ * via `focus-visible:shadow-glow-md`. Verde-neon (`brand`) usado no máximo 1×.
+ */
+
+import { Bot, Info, RefreshCw, X, Zap } from 'lucide-react';
+import { Button, useToast } from '@hm/ui';
+import { can } from '@hm/shared';
+import { cn } from '@/shared/lib/cn';
 import { Skeleton } from '@/shared/components/feedback';
+import { useAuthStore } from '@/shared/stores/auth.store';
 import { NotesPanel } from './Notes';
 import { RoutingMenu } from './RoutingMenu';
+import { useConversationDetail, useChangeStatus, useChangeAiMode } from '../queries';
 
-/**
- * Painel lateral de informações do contato (UX §2.3 — painel, não modal).
- * Cabeçalho do contato ainda é esqueleto (dados reais vêm com a API de contatos);
- * Notas internas (F1-S22) já são funcionais. Tags/deals/timeline: slots futuros.
- */
+// ── Helpers de formatação ─────────────────────────────────────────────────────
+
+function statusLabel(status: string): string {
+  switch (status) {
+    case 'open': return 'Aberta';
+    case 'pending': return 'Pendente';
+    case 'resolved': return 'Resolvida';
+    case 'snoozed': return 'Adiada';
+    default: return status;
+  }
+}
+
+function statusDotClass(status: string): string {
+  switch (status) {
+    case 'open': return 'bg-success';
+    case 'pending': return 'bg-warning';
+    case 'resolved': return 'bg-text-low';
+    case 'snoozed': return 'bg-text-mid';
+    default: return 'bg-text-low';
+  }
+}
+
+function channelLabel(provider: string | null): string {
+  switch (provider) {
+    case 'meta_whatsapp': return 'WhatsApp';
+    case 'meta_instagram': return 'Instagram';
+    case 'waha': return 'WAHA';
+    default: return provider ?? 'Canal';
+  }
+}
+
+const timeFmt = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+// ── Sub-componente: seção genérica ────────────────────────────────────────────
+
+function Section({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="border-b border-border-2 p-4">
+      <header className="mb-3 flex items-center gap-2">
+        <Icon className="size-4 text-text-low" aria-hidden />
+        <h3 className="font-head text-sm font-semibold text-text">{title}</h3>
+      </header>
+      {children}
+    </section>
+  );
+}
+
+// ── Sub-componente: linha de contexto ─────────────────────────────────────────
+
+function ContextRow({
+  label,
+  value,
+  empty = '—',
+}: {
+  label: string;
+  value: string | null | undefined;
+  empty?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="shrink-0 font-body text-xs text-text-low">{label}</span>
+      <span className="truncate text-right font-body text-xs font-medium text-text">
+        {value ?? empty}
+      </span>
+    </div>
+  );
+}
+
+// ── Painel principal ──────────────────────────────────────────────────────────
+
 export function ContactInfoPanel({
   conversationId,
   onClose,
@@ -17,10 +117,79 @@ export function ContactInfoPanel({
   conversationId: string;
   onClose: () => void;
 }) {
+  const auth = useAuthStore((s) => s.auth);
+  const { toast } = useToast();
+
+  const { data, isLoading } = useConversationDetail(conversationId);
+  const detail = data?.conversation;
+
+  const changeStatus = useChangeStatus();
+  const changeAiMode = useChangeAiMode();
+
+  const role = auth?.role ?? null;
+  const canResolve = role ? can(role, 'conversation.resolve') : false;
+  const canSnooze = role ? can(role, 'conversation.snooze') : false;
+  const canAiMode = role ? can(role, 'conversation.ai_mode') : false;
+
+  const status = detail?.status ?? 'open';
+  const aiMode = detail?.aiMode ?? 'off';
+  const isResolved = status === 'resolved';
+  const isAiOn = aiMode === 'on';
+  const isAiPaused = aiMode === 'paused';
+
+  function handleStatusChange(nextStatus: 'open' | 'pending' | 'resolved' | 'snoozed'): void {
+    if (changeStatus.isPending) return;
+    changeStatus.mutate(
+      { conversationId, status: nextStatus },
+      {
+        onSuccess: () =>
+          toast({
+            title: nextStatus === 'resolved' ? 'Conversa resolvida' :
+                   nextStatus === 'open' ? 'Conversa reaberta' :
+                   nextStatus === 'pending' ? 'Marcada como pendente' :
+                   'Conversa adiada',
+            variant: 'success',
+          }),
+        onError: () => toast({ title: 'Falha ao alterar status', variant: 'error' }),
+      },
+    );
+  }
+
+  function handleToggleAi(): void {
+    if (changeAiMode.isPending) return;
+    const next = isAiOn ? 'off' : 'on';
+    changeAiMode.mutate(
+      { conversationId, aiMode: next },
+      {
+        onSuccess: () =>
+          toast({ title: next === 'on' ? 'IA ativada' : 'IA desativada', variant: 'success' }),
+        onError: () => toast({ title: 'Falha ao alterar modo IA', variant: 'error' }),
+      },
+    );
+  }
+
+  function handleResumeAi(): void {
+    if (changeAiMode.isPending) return;
+    changeAiMode.mutate(
+      { conversationId, aiMode: 'on' },
+      {
+        onSuccess: () => toast({ title: 'IA retomada', variant: 'success' }),
+        onError: () => toast({ title: 'Falha ao retomar IA', variant: 'error' }),
+      },
+    );
+  }
+
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-surface">
+    <aside
+      aria-label="Cockpit da conversa"
+      className="flex w-80 shrink-0 flex-col border-l border-border bg-surface"
+    >
+      {/* Cabeçalho do painel */}
       <div className="flex h-14 items-center justify-between border-b border-border-2 px-4">
-        <span className="font-head text-sm font-semibold text-text">Contato</span>
+        <div className="flex items-center gap-2">
+          <Info className="size-4 text-text-low" aria-hidden />
+          <span className="font-head text-sm font-semibold text-text">Cockpit</span>
+        </div>
         <button
           type="button"
           onClick={onClose}
@@ -30,22 +199,234 @@ export function ContactInfoPanel({
           <X className="size-5" />
         </button>
       </div>
+
       <div className="flex flex-1 flex-col overflow-y-auto">
-        {/* Cabeçalho do contato — dados reais entram com a API de contatos. */}
-        <div className="space-y-4 border-b border-border-2 p-4">
-          <div className="flex flex-col items-center gap-2">
-            <Skeleton className="size-16 rounded-pill" />
-            <Skeleton className="h-4 w-32" />
-          </div>
-          <p className="text-center font-body text-xs text-text-low">
-            Tags, deals e timeline aparecem aqui em breve.
-          </p>
-        </div>
-        {/* Roteamento (F1-S23). assignedTo/departmentId virão do detalhe da conversa. */}
+
+        {/* ── 1. Status operacional ───────────────────────────────────────── */}
+        <Section title="Status" icon={Zap}>
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-3/4" />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {/* Badge de status atual */}
+              <div className="flex items-center gap-2 rounded-md border border-border-2 bg-surface-2 px-3 py-2">
+                <span
+                  className={cn('size-2 shrink-0 rounded-full', statusDotClass(status))}
+                  aria-hidden
+                />
+                <span className="font-body text-sm font-medium text-text">
+                  {statusLabel(status)}
+                </span>
+              </div>
+
+              {/* Ações de status */}
+              <div className="flex flex-wrap gap-2">
+                {canResolve && !isResolved && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="primary"
+                    loading={changeStatus.isPending}
+                    onClick={() => handleStatusChange('resolved')}
+                  >
+                    Resolver
+                  </Button>
+                )}
+                {canResolve && isResolved && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    loading={changeStatus.isPending}
+                    onClick={() => handleStatusChange('open')}
+                  >
+                    Reabrir
+                  </Button>
+                )}
+                {canResolve && status === 'open' && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    loading={changeStatus.isPending}
+                    onClick={() => handleStatusChange('pending')}
+                  >
+                    Pendente
+                  </Button>
+                )}
+                {canSnooze && status === 'open' && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    loading={changeStatus.isPending}
+                    onClick={() => {
+                      if (changeStatus.isPending) return;
+                      const snoozedUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+                      changeStatus.mutate(
+                        { conversationId, status: 'snoozed', snoozedUntil },
+                        {
+                          onSuccess: () =>
+                            toast({ title: 'Conversa adiada por 1 hora', variant: 'success' }),
+                          onError: () =>
+                            toast({ title: 'Falha ao adiar', variant: 'error' }),
+                        },
+                      );
+                    }}
+                  >
+                    Adiar 1h
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </Section>
+
+        {/* ── 2. IA — toggle + estado de handoff ─────────────────────────── */}
+        <Section title="Agente IA" icon={Bot}>
+          {isLoading ? (
+            <Skeleton className="h-16 w-full" />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {/* Indicador de handoff — destaque quando pausada (atendente assumiu) */}
+              {isAiPaused && (
+                <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
+                  <Bot className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+                  <div className="min-w-0">
+                    <p className="font-body text-xs font-semibold text-warning">
+                      IA pausada — atendente assumiu
+                    </p>
+                    {detail?.aiPausedAt && (
+                      <p className="font-body text-xs text-text-low">
+                        Pausada em{' '}
+                        {timeFmt.format(new Date(detail.aiPausedAt))}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Controles de IA */}
+              {canAiMode ? (
+                <div className="flex items-center gap-2">
+                  {/* Toggle on/off (quando não pausada) */}
+                  {!isAiPaused && (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={isAiOn}
+                      onClick={handleToggleAi}
+                      disabled={changeAiMode.isPending}
+                      className={cn(
+                        'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent',
+                        'outline-none transition-colors focus-visible:shadow-glow-md',
+                        'disabled:cursor-not-allowed disabled:opacity-50',
+                        isAiOn ? 'bg-brand' : 'bg-surface-3',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'pointer-events-none inline-block size-5 rounded-full bg-white shadow-sm',
+                          'transition-transform motion-safe:transition-transform',
+                          isAiOn ? 'translate-x-5' : 'translate-x-0',
+                        )}
+                      />
+                      <span className="sr-only">{isAiOn ? 'Desativar IA' : 'Ativar IA'}</span>
+                    </button>
+                  )}
+
+                  <span className="font-body text-sm text-text">
+                    {isAiPaused
+                      ? 'IA pausada'
+                      : isAiOn
+                      ? 'IA ativa'
+                      : 'IA desativada'}
+                  </span>
+
+                  {/* Botão Retomar — só quando pausada */}
+                  {isAiPaused && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      loading={changeAiMode.isPending}
+                      leftIcon={<RefreshCw className="size-3.5" aria-hidden />}
+                      onClick={handleResumeAi}
+                    >
+                      Retomar
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <p className="font-body text-xs text-text-low">
+                  Sem permissão para alterar o modo da IA.
+                </p>
+              )}
+            </div>
+          )}
+        </Section>
+
+        {/* ── 3. Roteamento (Atribuição / Transferência) ─────────────────── */}
         <div className="border-b border-border-2 p-4">
-          <RoutingMenu conversationId={conversationId} assignedTo={null} departmentId={null} />
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          ) : (
+            <RoutingMenu
+              conversationId={conversationId}
+              assignedTo={detail?.assignedTo ?? null}
+              departmentId={detail?.departmentId ?? null}
+            />
+          )}
         </div>
-        {/* Notas internas + @menções (F1-S22). `members` virá de uma query de membros. */}
+
+        {/* ── 4. Contexto (canal / dept / atendente / estágio) ───────────── */}
+        <Section title="Contexto" icon={Info}>
+          {isLoading ? (
+            <div className="space-y-1.5">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-4 w-full" />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <ContextRow
+                label="Canal"
+                value={channelLabel(detail?.channelProvider ?? null)}
+              />
+              <ContextRow
+                label="Departamento"
+                value={detail?.departmentName}
+              />
+              <ContextRow
+                label="Responsável"
+                value={
+                  detail?.assignedToName ??
+                  (detail?.assignedTo ? 'Membro' : null)
+                }
+              />
+              <ContextRow
+                label="Estágio"
+                value={detail?.stageName}
+              />
+              <ContextRow
+                label="Criada em"
+                value={
+                  detail?.createdAt
+                    ? timeFmt.format(new Date(detail.createdAt))
+                    : null
+                }
+              />
+            </div>
+          )}
+        </Section>
+
+        {/* ── 5. Notas internas + @menções (F1-S22) ──────────────────────── */}
         <NotesPanel conversationId={conversationId} />
       </div>
     </aside>

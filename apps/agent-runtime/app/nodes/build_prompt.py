@@ -25,6 +25,46 @@ logger = get_logger()
 
 _MAX_HISTORY = 12
 
+# Rótulos legíveis por autoria (LIVECHAT_OPS §2). `ai` é a própria IA em turnos
+# anteriores; `human` é o atendente que assumiu; `contact` é o cliente.
+_AUTHOR_LABELS: dict[str, str] = {
+    "contact": "Cliente",
+    "human": "Atendente humano",
+    "ai": "IA (você, em turnos anteriores)",
+    "system": "Sistema",
+}
+
+# Diretriz curta e objetiva de retomada (enxuta de propósito — custo/tokens).
+_HANDOFF_DIRECTIVE = (
+    "RETOMADA DE CONVERSA: um atendente humano assumiu parte desta conversa. "
+    "Retome com consciência disso — não repita o que o humano já disse nem reinicie "
+    "o atendimento do zero. Conforme o caso, encerre, faça follow-up do que ficou "
+    "pendente ou reengaje o cliente."
+)
+
+
+def _handoff_block(conversation: dict[str, Any]) -> str | None:
+    """Bloco de handoff: diretriz + histórico rotulado por autoria.
+
+    Retorna `None` quando NÃO houve atendimento humano na thread (fluxo normal: zero
+    injeção, zero regressão). Quando houve, devolve a diretriz e o transcript recente
+    com a autoria de cada mensagem rotulada (`human|ai|contact`).
+    """
+    if not conversation.get("human_takeover"):
+        return None
+
+    lines = [_HANDOFF_DIRECTIVE]
+    authored = conversation.get("authored_history") or []
+    rendered = [
+        f"[{_AUTHOR_LABELS.get(m.get('author_role'), 'Desconhecido')}] {content}"
+        for m in authored
+        if (content := (m.get("content") or "").strip())
+    ]
+    if rendered:
+        lines.append("Histórico recente, com a autoria de cada mensagem:")
+        lines.extend(rendered)
+    return "\n".join(lines)
+
 
 def _system_prompt(state: AgentState) -> str:
     agent = state.get("agent") or {}
@@ -58,6 +98,9 @@ def _system_prompt(state: AgentState) -> str:
                 "(comment-to-DM). Não esconda comentários a menos que sejam "
                 "claramente spam ou ofensivos."
             )
+        handoff = _handoff_block(conversation)
+        if handoff:
+            parts.append(handoff)
 
     tools = state.get("tools") or []
     if tools:

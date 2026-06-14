@@ -2,7 +2,7 @@
 id: F30-S05
 title: Agent-runtime — retomada consciente de contexto (handoff)
 phase: F30
-status: blocked
+status: done
 priority: high
 estimated_size: M
 depends_on: [F30-S01]
@@ -10,8 +10,10 @@ agent_id: python-engineer
 source_docs:
   - docs/features/LIVECHAT_OPS.md
   - docs/ARCHITECTURE.md
----
+claimed_at: 2026-06-14T14:39:26Z
+completed_at: 2026-06-14T15:35:32Z
 
+---
 # F30-S05 — Retomada consciente de contexto no agent-runtime
 
 > **source_docs:** `docs/features/LIVECHAT_OPS.md` §2
