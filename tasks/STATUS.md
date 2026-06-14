@@ -19,7 +19,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F28   | 2     | 0   | 0   | 0   | 0   | 0   | 2   |
 | F29   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F30   | 10     | 0   | 8   | 0   | 1   | 0   | 1   |
+| F30   | 10     | 0   | 8   | 0   | 0   | 1   | 1   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -206,18 +206,18 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 30
 
-| ID      | Titulo                                                                | Status        | Prioridade | Depende de                |
-| ------- | --------------------------------------------------------------------- | ------------- | ---------- | ------------------------- |
-| F30-S01 | Foundation — schema visibilidade/peer + ai-handoff + contratos shared | ✅ done        | critical   | —                         |
-| F30-S02 | API de estado da conversa — status + ai_mode toggle                   | ⏸️ blocked    | high       | F30-S01                   |
-| F30-S03 | Inbox UI — cockpit no painel + header espelho + filtros               | ⏸️ blocked    | high       | F30-S01, F30-S02, F30-S07 |
-| F30-S04 | IA handoff — auto-pausa ao humano responder                           | 🔵 in-progress | high       | F30-S01, F30-S02          |
-| F30-S05 | Agent-runtime — retomada consciente de contexto (handoff)             | ⏸️ blocked    | high       | F30-S01                   |
-| F30-S06 | Gatilhos de reengajamento da IA — cron (ocioso/fora-horário)          | ⏸️ blocked    | medium     | F30-S01, F30-S04, F30-S05 |
-| F30-S07 | Enforcement de visibilidade na lista de conversas                     | ⏸️ blocked    | critical   | F30-S01                   |
-| F30-S08 | API de configuração de visibilidade + peer-privacy                    | ⏸️ blocked    | high       | F30-S01                   |
-| F30-S09 | Auto-assign engine no inbound (round-robin/least-busy)                | ⏸️ blocked    | high       | F30-S01                   |
-| F30-S10 | Settings UI — visibilidade + peer-privacy por time                    | ⏸️ blocked    | medium     | F30-S08                   |
+| ID      | Titulo                                                                | Status     | Prioridade | Depende de                |
+| ------- | --------------------------------------------------------------------- | ---------- | ---------- | ------------------------- |
+| F30-S01 | Foundation — schema visibilidade/peer + ai-handoff + contratos shared | ✅ done     | critical   | —                         |
+| F30-S02 | API de estado da conversa — status + ai_mode toggle                   | ⏸️ blocked | high       | F30-S01                   |
+| F30-S03 | Inbox UI — cockpit no painel + header espelho + filtros               | ⏸️ blocked | high       | F30-S01, F30-S02, F30-S07 |
+| F30-S04 | IA handoff — auto-pausa ao humano responder                           | 🟣 review   | high       | F30-S01, F30-S02          |
+| F30-S05 | Agent-runtime — retomada consciente de contexto (handoff)             | ⏸️ blocked | high       | F30-S01                   |
+| F30-S06 | Gatilhos de reengajamento da IA — cron (ocioso/fora-horário)          | ⏸️ blocked | medium     | F30-S01, F30-S04, F30-S05 |
+| F30-S07 | Enforcement de visibilidade na lista de conversas                     | ⏸️ blocked | critical   | F30-S01                   |
+| F30-S08 | API de configuração de visibilidade + peer-privacy                    | ⏸️ blocked | high       | F30-S01                   |
+| F30-S09 | Auto-assign engine no inbound (round-robin/least-busy)                | ⏸️ blocked | high       | F30-S01                   |
+| F30-S10 | Settings UI — visibilidade + peer-privacy por time                    | ⏸️ blocked | medium     | F30-S08                   |
 
 ## Fase 4 — Campaigns
 
