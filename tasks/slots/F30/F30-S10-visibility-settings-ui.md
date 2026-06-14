@@ -2,7 +2,7 @@
 id: F30-S10
 title: Settings UI — visibilidade + peer-privacy por time
 phase: F30
-status: blocked
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F30-S08]
@@ -11,8 +11,10 @@ source_docs:
   - docs/features/LIVECHAT_OPS.md
   - docs/features/PERMISSIONS.md
   - docs/UX_PRINCIPLES.md
----
+claimed_at: 2026-06-14T17:13:16Z
+completed_at: 2026-06-14T17:23:20Z
 
+---
 # F30-S10 — Settings UI de visibilidade
 
 > **source_docs:** `docs/features/LIVECHAT_OPS.md` §1/§3; `PERMISSIONS.md` §4.2/§5; `UX_PRINCIPLES.md` §2/§4

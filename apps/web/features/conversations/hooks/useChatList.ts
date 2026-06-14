@@ -11,6 +11,10 @@ export interface ChatListFilterState {
   assigned: string;
   provider: string;
   search: string;
+  /** F30-S10: filtro por departamento (ID). Mapeado para query param `dept`. */
+  dept: string;
+  /** F30-S10: filtro por time (ID). Mapeado para query param `team`. */
+  team: string;
 }
 
 export const CHAT_LIST_INITIAL_FILTERS: ChatListFilterState = {
@@ -18,6 +22,8 @@ export const CHAT_LIST_INITIAL_FILTERS: ChatListFilterState = {
   assigned: '',
   provider: '',
   search: '',
+  dept: '',
+  team: '',
 };
 
 function timeOf(conv: ConversationSummary): number {
@@ -31,11 +37,23 @@ function byRecency(a: ConversationSummary, b: ConversationSummary): number {
   return timeOf(b) - timeOf(a);
 }
 
-function toFilters(state: ChatListFilterState, search: string): ConversationFilters {
-  const filters: ConversationFilters = {};
+/**
+ * Projeta o estado de filtros local para o contrato `ConversationFilters` da query.
+ * Campos `dept` e `team` (F30-S10) são query params de escopo de visibilidade aceitos
+ * pelo GET /api/conversations do S07 — adicionados com intersecção de tipo para não
+ * modificar `ConversationFilters` fora do `files_allowed` deste slot.
+ */
+function toFilters(
+  state: ChatListFilterState,
+  search: string,
+): ConversationFilters & { dept?: string; team?: string } {
+  const filters: ConversationFilters & { dept?: string; team?: string } = {};
   if (state.status) filters.status = state.status;
   if (state.assigned) filters.assigned = state.assigned;
   if (state.provider) filters.provider = state.provider;
+  // F30-S10: escopo de visibilidade — repassados como query params ao GET escopado (S07).
+  if (state.dept) filters.dept = state.dept;
+  if (state.team) filters.team = state.team;
   if (search.trim()) filters.search = search.trim();
   return filters;
 }
@@ -87,7 +105,8 @@ export function useChatList(): UseChatListResult {
   const resetFilters = (): void => setFilters(CHAT_LIST_INITIAL_FILTERS);
 
   const hasActiveFilters = Boolean(
-    filters.status || filters.assigned || filters.provider || filters.search,
+    filters.status || filters.assigned || filters.provider || filters.search ||
+    filters.dept || filters.team,
   );
 
   return {

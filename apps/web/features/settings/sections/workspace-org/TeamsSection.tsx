@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { Button, Input, useToast } from '@hm/ui';
+import type { TeamPeerVisibility } from '@hm/shared';
 import { selectClass } from '../personal/components';
 import {
   useCreateTeam,
@@ -11,10 +12,11 @@ import {
   useMembers,
   useRemoveTeamMember,
   useSetTeamMember,
+  useSetTeamPeerVisibility,
   useTeams,
 } from './queries';
 
-/** Times: CRUD + alocação de membros + estratégia de auto-assign por time. */
+/** Times: CRUD + alocação de membros + estratégia de auto-assign por time + peer-privacy (F30-S10). */
 export default function TeamsSection(): React.JSX.Element {
   const { toast } = useToast();
   const teamsQuery = useTeams();
@@ -24,6 +26,7 @@ export default function TeamsSection(): React.JSX.Element {
   const remove = useDeleteTeam();
   const setMember = useSetTeamMember();
   const removeMember = useRemoveTeamMember();
+  const setPeerVisibility = useSetTeamPeerVisibility();
 
   const [name, setName] = useState('');
   const [deptId, setDeptId] = useState('');
@@ -112,6 +115,35 @@ export default function TeamsSection(): React.JSX.Element {
                 ))}
                 {t.members.length === 0 && <span className="text-xs text-text-low">Sem membros.</span>}
               </div>
+              {/* Peer-privacy por time (F30-S10) */}
+              <div className="mb-3 flex items-center gap-2">
+                <label className="text-xs text-text-low" htmlFor={`peer-vis-${t.id}`}>
+                  Peer-privacy:
+                </label>
+                <select
+                  id={`peer-vis-${t.id}`}
+                  value={t.peerVisibility ?? 'inherit'}
+                  onChange={(e) => {
+                    const peerVisibility = e.target.value as TeamPeerVisibility;
+                    setPeerVisibility.mutate(
+                      { teamId: t.id, peerVisibility },
+                      {
+                        onSuccess: () =>
+                          toast({ variant: 'success', title: `Peer-privacy do time "${t.name}" atualizado.` }),
+                        onError: (e) =>
+                          toast({ variant: 'error', title: e.message }),
+                      },
+                    );
+                  }}
+                  className={selectClass}
+                  aria-label={`Peer-privacy do time ${t.name}`}
+                >
+                  <option value="inherit">Inherit (padrão do workspace)</option>
+                  <option value="shared">Shared — visível para o time</option>
+                  <option value="private">Private — cada um só as suas</option>
+                </select>
+              </div>
+
               {candidates.length > 0 && (
                 <div className="flex items-center gap-2">
                   <select
