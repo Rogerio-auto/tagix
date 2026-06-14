@@ -212,7 +212,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F30-S02 | API de estado da conversa — status + ai_mode toggle                   | 🟣 review   | high       | F30-S01                   |
 | F30-S03 | Inbox UI — cockpit no painel + header espelho + filtros               | ⏸️ blocked | high       | F30-S01, F30-S02, F30-S07 |
 | F30-S04 | IA handoff — auto-pausa ao humano responder                           | ⏸️ blocked | high       | F30-S01, F30-S02          |
-| F30-S05 | Agent-runtime — retomada consciente de contexto (handoff)             | ⏸️ blocked | high       | F30-S01                   |
+| F30-S05 | Agent-runtime — retomada consciente de contexto (handoff)             | 🟣 review   | high       | F30-S01                   |
 | F30-S06 | Gatilhos de reengajamento da IA — cron (ocioso/fora-horário)          | ⏸️ blocked | medium     | F30-S01, F30-S04, F30-S05 |
 | F30-S07 | Enforcement de visibilidade na lista de conversas                     | ⏸️ blocked | critical   | F30-S01                   |
 | F30-S08 | API de configuração de visibilidade + peer-privacy                    | ⏸️ blocked | high       | F30-S01                   |
