@@ -69,6 +69,32 @@ export {
   type FollowupSchedulerHandle,
 } from './followup';
 
+// Reengajamento de IA por cron (F30-S06) — idle/fora-de-horário; scheduler singleton via Redis lock.
+export {
+  runReengagementTick,
+  startReengagementScheduler,
+  isWithinBusinessHours,
+  reengagementMarkKey,
+  idleMinutesFromEnv,
+  reengagementTickMsFromEnv,
+  acquireReengagementLock,
+  REENGAGEMENT_LOCK_KEY,
+  REENGAGEMENT_LOCK_TTL_MS,
+  REENGAGEMENT_FLOWS_QUEUE,
+  REENGAGEMENT_RUN_TYPE,
+  DEFAULT_REENGAGEMENT_TICK_MS,
+  DEFAULT_IDLE_MINUTES,
+  type ReengagementDeps,
+  type ReengagementTickOptions,
+  type ReengagementTickResult,
+  type ReengagementSchedulerOptions,
+  type ReengagementSchedulerHandle,
+  type ReengagementRedis,
+  type EligibleReengagementConversation,
+  type ReengagementReason,
+  type ReleaseLock,
+} from './reengagement';
+
 // Buffer de agregação (F2-S12) — infra pronta; ativação no worker é follow-up.
 export {
   createAggregationBuffer,
