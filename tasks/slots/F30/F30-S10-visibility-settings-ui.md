@@ -2,7 +2,7 @@
 id: F30-S10
 title: Settings UI — visibilidade + peer-privacy por time
 phase: F30
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F30-S08]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/PERMISSIONS.md
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-06-14T17:13:16Z
+completed_at: 2026-06-14T17:23:20Z
 
 ---
 # F30-S10 — Settings UI de visibilidade
