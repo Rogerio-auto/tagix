@@ -38,6 +38,7 @@ import { makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import type {
   ChannelProvider,
   ContactPresence,
+  ConversationAssignedPayload,
   ServerToClientEvent,
   TypingFromContactPayload,
 } from '@hm/shared';
@@ -47,6 +48,9 @@ import type { Logger } from '@hm/logger';
 import { handleStatusEvent, type InboundStatusEvent, type StatusDeps } from './status';
 import { emitContactPresence, type ContactPresenceEmitPort } from '../outbound/presence';
 import type {
+  AutoAssignAutomatic,
+  AutoAssignPick,
+  InboundAutoAssignPort,
   InboundPersistencePort,
   PersistInboundRequest,
   PersistInboundResult,
@@ -152,10 +156,12 @@ function relayEnvelope(
   event: ServerToClientEvent,
   conversationId: string,
   data: unknown,
+  opts?: { readonly workspace?: boolean },
 ): void {
+  const target = opts?.workspace === true ? { conversationId, workspace: true } : { conversationId };
   const envelope = makeEnvelope('socket.relay', workspaceId, {
     event,
-    target: { conversationId },
+    target,
     data,
   });
   channel.sendToQueue(SOCKET_RELAY_QUEUE, Buffer.from(JSON.stringify(envelope)), {
