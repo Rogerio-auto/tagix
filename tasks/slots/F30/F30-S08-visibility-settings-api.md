@@ -2,7 +2,7 @@
 id: F30-S08
 title: API de configuração de visibilidade + peer-privacy
 phase: F30
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F30-S01]

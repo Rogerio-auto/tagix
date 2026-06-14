@@ -2,7 +2,7 @@
 id: F30-S05
 title: Agent-runtime — retomada consciente de contexto (handoff)
 phase: F30
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F30-S01]

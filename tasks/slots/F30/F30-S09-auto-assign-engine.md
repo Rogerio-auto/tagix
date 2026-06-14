@@ -2,7 +2,7 @@
 id: F30-S09
 title: Auto-assign engine no inbound (round-robin/least-busy)
 phase: F30
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F30-S01]

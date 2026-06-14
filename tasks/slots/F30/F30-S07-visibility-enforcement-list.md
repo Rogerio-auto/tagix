@@ -2,7 +2,7 @@
 id: F30-S07
 title: Enforcement de visibilidade na lista de conversas
 phase: F30
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F30-S01]

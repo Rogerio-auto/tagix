@@ -2,7 +2,7 @@
 id: F30-S02
 title: API de estado da conversa — status + ai_mode toggle
 phase: F30
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F30-S01]
