@@ -2,7 +2,7 @@
 id: F30-S03
 title: Inbox UI — cockpit no painel + header espelho + filtros
 phase: F30
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F30-S01, F30-S02, F30-S07]

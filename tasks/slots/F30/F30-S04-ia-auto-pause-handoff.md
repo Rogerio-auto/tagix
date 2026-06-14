@@ -2,7 +2,7 @@
 id: F30-S04
 title: IA handoff — auto-pausa ao humano responder
 phase: F30
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F30-S01, F30-S02]

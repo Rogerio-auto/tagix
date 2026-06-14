@@ -2,7 +2,7 @@
 id: F30-S10
 title: Settings UI — visibilidade + peer-privacy por time
 phase: F30
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F30-S08]
