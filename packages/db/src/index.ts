@@ -13,10 +13,11 @@ export {
   contactsRepo,
   conversationsRepo,
   messagesRepo,
+  buildVisibilityPredicate,
+  resolvePeerVisibility,
   pickAutoAssignee,
-  type AutoAssignInput,
-  type AutoAssignStrategy,
 } from './repos/livechat';
+export type { VisibilityContext, PeerVisibilityInput, AutoAssignInput, AutoAssignStrategy } from './repos/livechat';
 export { dataExportJobsRepo, type DataExportJob } from './repos/privacy';
 export type { DataExportScope } from './schema/privacy';
 // Platform tenant management (F26-S01).
