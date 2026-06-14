@@ -2,7 +2,7 @@
 id: F30-S04
 title: IA handoff — auto-pausa ao humano responder
 phase: F30
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F30-S01, F30-S02]
@@ -10,8 +10,10 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/LIVECHAT_OPS.md
   - docs/features/LIVECHAT.md
----
+claimed_at: 2026-06-14T17:13:07Z
+completed_at: 2026-06-14T17:19:25Z
 
+---
 # F30-S04 — Auto-pausa da IA no handoff humano
 
 > **source_docs:** `docs/features/LIVECHAT_OPS.md` §2; `LIVECHAT.md` §3
