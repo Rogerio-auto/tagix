@@ -5,6 +5,7 @@ import { MessageSquare, SearchX } from 'lucide-react';
 import { Button } from '@hm/ui';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/components/feedback';
 import { useChatList } from '../../hooks/useChatList';
+import { useDepartments, useTeams } from '@/features/settings/sections/workspace-org/queries';
 import { ChatListFilters } from './ChatListFilters';
 import { ChatListItem } from './ChatListItem';
 
@@ -33,6 +34,11 @@ export function ChatList({ activeConversationId }: ChatListProps) {
     isError,
     refetch,
   } = useChatList();
+
+  // F30: fontes de dados dos filtros de distribuição (dept/time) — o backend já
+  // escopa a lista por visibilidade (S07); aqui só alimentamos os selects (S03/S10).
+  const departments = useDepartments().data?.departments ?? [];
+  const teams = useTeams().data?.teams ?? [];
 
   const showSkeleton = isLoading || isDebouncing;
   const isEmpty = !showSkeleton && !isError && conversations.length === 0;
@@ -108,6 +114,12 @@ export function ChatList({ activeConversationId }: ChatListProps) {
         onChange={setFilter}
         hasActiveFilters={hasActiveFilters}
         onReset={resetFilters}
+        departments={departments}
+        selectedDept={filters.dept}
+        onDeptChange={(deptId) => setFilter('dept', deptId)}
+        teams={teams}
+        selectedTeam={filters.team}
+        onTeamChange={(teamId) => setFilter('team', teamId)}
       />
 
       <div className="flex-1 overflow-y-auto">
