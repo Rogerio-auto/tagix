@@ -2,7 +2,7 @@
 id: F30-S03
 title: Inbox UI — cockpit no painel + header espelho + filtros
 phase: F30
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: [F30-S01, F30-S02, F30-S07]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/LIVECHAT.md
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-06-14T17:12:58Z
+completed_at: 2026-06-14T17:24:31Z
 
 ---
 # F30-S03 — Inbox UI (cockpit + header espelho + filtros)
