@@ -2,15 +2,16 @@
 id: F30-S06
 title: Gatilhos de reengajamento da IA — cron (ocioso/fora-horário)
 phase: F30
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on: [F30-S01, F30-S04, F30-S05]
 agent_id: backend-engineer
 source_docs:
   - docs/features/LIVECHAT_OPS.md
----
+claimed_at: 2026-06-14T17:27:15Z
 
+---
 # F30-S06 — Reengajamento da IA por gatilho (cron)
 
 > **source_docs:** `docs/features/LIVECHAT_OPS.md` §2
