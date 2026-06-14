@@ -2,7 +2,7 @@
 id: F30-S07
 title: Enforcement de visibilidade na lista de conversas
 phase: F30
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F30-S01]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/LIVECHAT_OPS.md
   - docs/features/PERMISSIONS.md
 claimed_at: 2026-06-14T15:35:06Z
+completed_at: 2026-06-14T15:48:48Z
 
 ---
 # F30-S07 — Visibility enforcement (scoped list + filtros)
