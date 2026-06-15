@@ -2,7 +2,7 @@
 id: F31-S01
 title: Bridge de saída real do flow (FlowOutboundMessage → OutboundJob)
 phase: F31
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
