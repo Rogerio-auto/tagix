@@ -20,7 +20,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F29   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F30   | 11     | 0   | 0   | 0   | 0   | 0   | 11   |
-| F31   | 12     | 0   | 9   | 0   | 0   | 0   | 3   |
+| F31   | 12     | 0   | 8   | 0   | 0   | 1   | 3   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -226,7 +226,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ID      | Titulo                                                                     | Status     | Prioridade | Depende de                                                                      |
 | ------- | -------------------------------------------------------------------------- | ---------- | ---------- | ------------------------------------------------------------------------------- |
 | F31-S01 | Bridge de saída real do flow (FlowOutboundMessage → OutboundJob)           | ✅ done     | critical   | —                                                                               |
-| F31-S02 | Node de mensagem rico (texto / mídia / voz / áudio-arquivo)                | ⏸️ blocked | high       | F31-S01                                                                         |
+| F31-S02 | Node de mensagem rico (texto / mídia / voz / áudio-arquivo)                | 🟣 review   | high       | F31-S01                                                                         |
 | F31-S03 | Infra de contexto — helpers-context + VariablesPicker completos            | ✅ done     | high       | —                                                                               |
 | F31-S04 | Inspector interactive completo (botões reply/url/phone + listas)           | ⏸️ blocked | high       | F31-S01, F31-S03                                                                |
 | F31-S05 | Inspector http_request completo (headers/body/retry/map-resposta)          | ⏸️ blocked | medium     | F31-S03                                                                         |
