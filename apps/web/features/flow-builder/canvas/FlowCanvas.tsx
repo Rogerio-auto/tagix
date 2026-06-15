@@ -8,6 +8,7 @@ import {
   addEdge,
   useReactFlow,
   type Connection,
+  type Edge,
   type Node,
   type ReactFlowInstance,
 } from '@xyflow/react';
@@ -39,7 +40,6 @@ function CanvasInner() {
   const edges = useFlowEditor((s) => s.edges);
 
   // Injeta `ariaLabel` por node sem mutar o store (fonte de verdade do zustand).
-  // ReactFlow expõe esse rótulo ao leitor de tela quando o node recebe foco.
   const a11yNodes = useMemo<FlowEditorNode[]>(
     () => nodes.map((n) => ({ ...n, ariaLabel: nodeAriaLabel(n) })),
     [nodes],
@@ -49,6 +49,7 @@ function CanvasInner() {
   const connect = useFlowEditor((s) => s.connect);
   const addNode = useFlowEditor((s) => s.addNode);
   const select = useFlowEditor((s) => s.select);
+  const deleteNodes = useFlowEditor((s) => s.deleteNodes);
 
   const onConnect = useCallback(
     (conn: Connection) => {
@@ -69,6 +70,29 @@ function CanvasInner() {
     [addNode, screenToFlowPosition],
   );
 
+  /**
+   * onBeforeDelete: intercept keyboard Delete/Backspace — filter out trigger nodes so they
+   * can never be deleted via keyboard shortcut (guard: §F32-S01).
+   */
+  const onBeforeDelete = useCallback(
+    async ({ nodes: nodesToDelete, edges: edgesToDelete }: { nodes: Node[]; edges: Edge[] }) => {
+      const deletable = nodesToDelete.filter((n) => n.type !== 'trigger');
+      return { nodes: deletable, edges: edgesToDelete };
+    },
+    [],
+  );
+
+  /**
+   * onNodesDelete: propagate confirmed deletions to the zustand store for persistence.
+   * ReactFlow has already removed them from its internal state; we sync our store.
+   */
+  const onNodesDelete = useCallback(
+    (deletedNodes: Node[]) => {
+      deleteNodes(deletedNodes.map((n) => n.id));
+    },
+    [deleteNodes],
+  );
+
   return (
     <div ref={wrapperRef} className="h-full w-full">
       <ReactFlow
@@ -83,10 +107,11 @@ function CanvasInner() {
         }}
         onNodeClick={(_, node) => select(node.id)}
         onPaneClick={() => select(null)}
+        // Delete/Backspace remove selected node (trigger guard via onBeforeDelete)
+        deleteKeyCode={['Delete', 'Backspace']}
+        onBeforeDelete={onBeforeDelete}
+        onNodesDelete={onNodesDelete}
         // a11y: nodes focáveis por Tab; setas reposicionam o node selecionado
-        // (paridade com o drag por mouse, §2.10). Enter/Espaço selecionam e
-        // alimentam o inspector via onSelectionChange — corpo do node continua
-        // sendo a ação primária (§2.1) e o drag por handle não regride (§2.2).
         nodesFocusable
         nodesDraggable
         elementsSelectable

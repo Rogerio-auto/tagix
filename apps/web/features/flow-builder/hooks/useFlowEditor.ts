@@ -35,6 +35,8 @@ interface FlowEditorState {
   addNode: (kind: FlowNodeKind, position: { x: number; y: number }) => void;
   updateNodeData: (id: string, data: Record<string, unknown>) => void;
   select: (id: string | null) => void;
+  /** Remove nodes by id. Nodes with type 'trigger' are silently skipped (guard). */
+  deleteNodes: (ids: string[]) => void;
   undo: () => void;
   redo: () => void;
   markSaved: () => void;
@@ -102,6 +104,37 @@ export const useFlowEditor = create<FlowEditorState>((set, get) => ({
     })),
 
   select: (id) => set({ selectedNodeId: id }),
+
+  deleteNodes: (ids) =>
+    set((s) => {
+      // Guard: never delete trigger nodes
+      const deletable = ids.filter((id) => {
+        const node = s.nodes.find((n) => n.id === id);
+        return node && node.type !== 'trigger';
+      });
+      if (deletable.length === 0) return s;
+
+      const deletableSet = new Set(deletable);
+      const nextNodes = applyNodeChanges(
+        deletable.map((id) => ({ type: 'remove' as const, id })),
+        s.nodes,
+      );
+      // Remove orphaned edges whose source or target was deleted
+      const nextEdges = s.edges.filter(
+        (e) => !deletableSet.has(e.source) && !deletableSet.has(e.target),
+      );
+      // Deselect if current selection was deleted
+      const selectedNodeId = deletableSet.has(s.selectedNodeId ?? '') ? null : s.selectedNodeId;
+
+      return {
+        past: [...s.past, snapshot(s)],
+        future: [],
+        nodes: nextNodes,
+        edges: nextEdges,
+        selectedNodeId,
+        dirty: true,
+      };
+    }),
 
   undo: () =>
     set((s) => {
