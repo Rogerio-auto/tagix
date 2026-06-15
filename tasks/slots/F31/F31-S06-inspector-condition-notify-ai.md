@@ -2,7 +2,7 @@
 id: F31-S06
 title: Inspectors condition (pickers+business-hours), external_notify e ai_action
 phase: F31
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F31-S01, F31-S03]
