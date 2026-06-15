@@ -2,7 +2,7 @@
 id: F33-S02
 title: Bridge interactive + template no outbound-publisher do flow
 phase: F33
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
