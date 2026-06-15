@@ -2,15 +2,18 @@
 id: F31-S06
 title: Inspectors condition (pickers+business-hours), external_notify e ai_action
 phase: F31
-status: blocked
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F31-S01, F31-S03]
 blocks: []
 source_docs:
   - docs/features/FLOW_BUILDER.md
----
+agent_id: backend-engineer
+claimed_at: 2026-06-15T13:10:04Z
+completed_at: 2026-06-15T13:10:42Z
 
+---
 # F31-S06 — Inspectors condition + external_notify + ai_action
 
 ## Objetivo

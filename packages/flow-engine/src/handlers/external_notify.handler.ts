@@ -17,16 +17,27 @@ import { interpolate } from '../utils/interpolate';
 import type { FlowExecutionContext, FlowHandlerResult } from '../types';
 import type { FlowHandler } from '../types';
 
-const externalNotifySchema = z.object({
-  target: z.enum(['RESPONSIBLE', 'ENTITY_CUSTOMER', 'FLOW_CONTACT', 'CUSTOM']),
-  channelId: z.string().uuid(),
-  customPhone: z.string().optional(),
-  text: z.string().optional(),
-  mediaUrl: z.string().optional(),
-  mediaType: z.string().optional(),
-  waitForResponse: z.boolean().optional(),
-  timeoutMinutes: z.number().min(0).optional(),
-});
+const externalNotifySchema = z
+  .object({
+    target: z.enum(['RESPONSIBLE', 'ENTITY_CUSTOMER', 'FLOW_CONTACT', 'CUSTOM']),
+    channelId: z.string().uuid(),
+    customPhone: z.string().optional(),
+    text: z.string().optional(),
+    mediaUrl: z.string().optional(),
+    mediaType: z.string().optional(),
+    waitForResponse: z.boolean().optional(),
+    timeoutMinutes: z.number().min(0).optional(),
+  })
+  .superRefine((data, ctx) => {
+    // Target CUSTOM exige um telefone livre (E.164). Os demais resolvem por variavel.
+    if (data.target === 'CUSTOM' && !data.customPhone?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['customPhone'],
+        message: 'customPhone obrigatorio quando o destino e CUSTOM',
+      });
+    }
+  });
 
 function resolvePhone(
   ctx: FlowExecutionContext,
