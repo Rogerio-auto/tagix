@@ -2,7 +2,7 @@
 id: F31-S02
 title: Node de mensagem rico (texto / mídia / voz / áudio-arquivo)
 phase: F31
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F31-S01]
