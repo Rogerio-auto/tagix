@@ -20,7 +20,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F29   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F30   | 11     | 0   | 0   | 0   | 0   | 0   | 11   |
-| F31   | 12     | 0   | 2   | 0   | 0   | 1   | 9   |
+| F31   | 12     | 0   | 2   | 0   | 0   | 0   | 10   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -234,7 +234,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F31-S07 | Triggers configuráveis (tipo editável + trigger_config UI)                 | ✅ done     | high       | F31-S03                                                                         |
 | F31-S08 | Scaffold dos novos nodes + limpeza do catálogo (espinha)                   | ✅ done     | high       | F31-S03                                                                         |
 | F31-S09 | Nodes set_variable + input (variáveis & captura validada)                  | ✅ done     | medium     | F31-S08, F31-S01                                                                |
-| F31-S10 | Nodes assign + template/HSM (atendimento)                                  | 🟣 review   | medium     | F31-S08, F31-S01                                                                |
+| F31-S10 | Nodes assign + template/HSM (atendimento)                                  | ✅ done     | medium     | F31-S08, F31-S01                                                                |
 | F31-S11 | Nodes ab_split + go_to_flow + UI de register_conversion                    | ⏸️ blocked | medium     | F31-S08                                                                         |
 | F31-S12 | Docs FLOW_BUILDER + e2e Playwright do builder v2                           | ⏸️ blocked | medium     | F31-S01, F31-S02, F31-S04, F31-S05, F31-S06, F31-S07, F31-S09, F31-S10, F31-S11 |
 

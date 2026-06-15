@@ -2,7 +2,7 @@
 id: F31-S10
 title: Nodes assign + template/HSM (atendimento)
 phase: F31
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F31-S08, F31-S01]
