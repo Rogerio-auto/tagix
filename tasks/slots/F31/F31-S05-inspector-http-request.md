@@ -2,7 +2,7 @@
 id: F31-S05
 title: Inspector http_request completo (headers/body/retry/map-resposta)
 phase: F31
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F31-S03]
