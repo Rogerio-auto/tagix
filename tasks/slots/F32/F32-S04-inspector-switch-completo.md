@@ -2,7 +2,7 @@
 id: F32-S04
 title: Inspector switch completo — case management + edges dinâmicas
 phase: F32
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: []
