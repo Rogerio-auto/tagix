@@ -2,7 +2,7 @@
 id: F31-S09
 title: Nodes set_variable + input (variáveis & captura validada)
 phase: F31
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F31-S08, F31-S01]
