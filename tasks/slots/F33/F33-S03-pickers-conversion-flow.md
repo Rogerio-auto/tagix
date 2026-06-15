@@ -2,7 +2,7 @@
 id: F33-S03
 title: ConversionTypePicker + FlowPicker nos inspectors
 phase: F33
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: []
