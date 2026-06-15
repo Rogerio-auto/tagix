@@ -2,13 +2,15 @@
 id: F32-S01
 title: Delete node — teclado + botão + guard trigger
 phase: F32
-status: available
+status: in-progress
 priority: high
 estimated_size: S
 depends_on: []
 blocks: []
 source_docs:
   - docs/features/FLOW_BUILDER.md
+agent_id: backend-engineer
+claimed_at: 2026-06-15T21:26:37Z
 
 ---
 # F32-S01 — Delete node UI
