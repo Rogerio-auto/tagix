@@ -2,7 +2,7 @@
 id: F32-S05
 title: Inspector meta_flow completo (body, flowToken, screen, payload)
 phase: F32
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: []

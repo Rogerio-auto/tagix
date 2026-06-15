@@ -103,7 +103,7 @@ export function SwitchInspector({ nodeId }: { nodeId: string }) {
               onClick={() => removeCase(index)}
               disabled={cases.length <= 1}
               aria-label="Remover caso"
-              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border-2 bg-surface-2 text-text-low transition-colors hover:border-destructive hover:text-destructive focus:outline-none disabled:opacity-30"
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border-2 bg-surface-2 text-text-low transition-colors hover:border-danger hover:text-danger focus:outline-none disabled:opacity-30"
             >
               <Trash2 className="size-3.5" aria-hidden />
             </button>

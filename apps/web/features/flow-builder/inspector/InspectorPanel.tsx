@@ -50,7 +50,7 @@ export function InspectorPanel() {
             }}
             disabled={isTrigger}
             aria-label={isTrigger ? 'O gatilho não pode ser excluído' : 'Excluir node'}
-            className="flex size-7 items-center justify-center rounded-md border border-border-2 bg-surface-2 text-muted-foreground transition-colors hover:border-destructive hover:text-destructive focus:border-destructive focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex size-7 items-center justify-center rounded-md border border-border-2 bg-surface-2 text-text-low transition-colors hover:border-danger hover:text-danger focus:border-danger focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Trash2 className="size-3.5" aria-hidden />
           </button>
