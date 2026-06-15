@@ -48,7 +48,7 @@ export const flowEditorService = {
   get: (id: string) => api.get<{ flow: FlowDetail; versions: FlowVersion[] }>(`/api/flows/${id}`),
   update: (
     id: string,
-    patch: Partial<Pick<FlowDetail, 'name' | 'nodes' | 'edges' | 'triggerConfig'>>,
+    patch: Partial<Pick<FlowDetail, 'name' | 'nodes' | 'edges' | 'triggerType' | 'triggerConfig'>>,
   ) => api.put<{ flow: FlowDetail }>(`/api/flows/${id}`, patch),
   publish: (id: string) => api.post<{ flow: FlowDetail }>(`/api/flows/${id}/publish`),
   executions: (id: string) =>

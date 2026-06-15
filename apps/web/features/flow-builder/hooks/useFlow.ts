@@ -18,7 +18,13 @@ export function useFlow(id: string) {
 export function useSaveFlow(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (patch: { name?: string; nodes: EditorNode[]; edges: EditorEdge[] }) =>
+    mutationFn: (patch: {
+      name?: string;
+      nodes: EditorNode[];
+      edges: EditorEdge[];
+      triggerType?: string;
+      triggerConfig?: Record<string, unknown>;
+    }) =>
       flowEditorService.update(id, patch),
     onSuccess: () => void qc.invalidateQueries({ queryKey: editorKeys.detail(id) }),
   });

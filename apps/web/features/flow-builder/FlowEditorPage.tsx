@@ -17,6 +17,8 @@ import { useFlowEditor } from './hooks/useFlowEditor';
 import { InspectorPanel } from './inspector/InspectorPanel';
 import { ValidationBanner } from './shared/validation-banner';
 import { FlowHelpersAutoProvider } from './shared/helpers-context';
+import type { FlowNodeKind } from './shared/node-catalog';
+import { readTriggerConfig, readTriggerType } from './nodes/trigger/config';
 
 /**
  * Canvas @xyflow/react (engine de render + CSS + Background/Controls) carregado sob
@@ -60,7 +62,15 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
   // Carrega o flow no store ao montar / trocar de id.
   useEffect(() => {
     if (flow.data?.flow) {
-      load(flow.data.flow.nodes, flow.data.flow.edges);
+      // Hidrata o node `trigger` com triggerType/triggerConfig das colunas do flow
+      // (o editor persiste nodes/edges; o tipo/config vivem em colunas dedicadas).
+      const { triggerType, triggerConfig } = flow.data.flow;
+      const hydrated = flow.data.flow.nodes.map((n) =>
+        n.type === 'trigger'
+          ? { ...n, data: { ...(n.data ?? {}), triggerType, triggerConfig } }
+          : n,
+      );
+      load(hydrated, flow.data.flow.edges);
     }
   }, [flow.data?.flow, load]);
 
@@ -81,10 +91,23 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
     }).issues as FlowValidationIssue[];
   }, [nodes, edges]);
 
+  // Deriva triggerType/triggerConfig do node `trigger` para o PUT (a API valida ambos).
+  const deriveTrigger = (
+    persistableNodes: { type: FlowNodeKind; data: Record<string, unknown> }[],
+  ): { triggerType: string; triggerConfig: Record<string, unknown> } | null => {
+    const triggerNode = persistableNodes.find((n) => n.type === 'trigger');
+    if (!triggerNode) return null;
+    return {
+      triggerType: readTriggerType(triggerNode.data),
+      triggerConfig: readTriggerConfig(triggerNode.data),
+    };
+  };
+
   const handleSave = async () => {
     const { nodes: pNodes, edges: pEdges } = toPersistable();
+    const trigger = deriveTrigger(pNodes);
     try {
-      await save.mutateAsync({ nodes: pNodes, edges: pEdges });
+      await save.mutateAsync({ nodes: pNodes, edges: pEdges, ...(trigger ?? {}) });
       markSaved();
       toast({ variant: 'success', title: 'Flow salvo' });
     } catch (err) {
@@ -102,8 +125,9 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
     }
     // Salva antes de publicar (a API publica o estado persistido).
     const { nodes: pNodes, edges: pEdges } = toPersistable();
+    const trigger = deriveTrigger(pNodes);
     try {
-      await save.mutateAsync({ nodes: pNodes, edges: pEdges });
+      await save.mutateAsync({ nodes: pNodes, edges: pEdges, ...(trigger ?? {}) });
       markSaved();
       await publish.mutateAsync();
       toast({ variant: 'success', title: 'Flow publicado' });
