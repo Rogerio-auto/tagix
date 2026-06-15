@@ -1,9 +1,11 @@
 /**
- * Registry dos 15 handlers de node (FLOW_BUILDER.md §3.3).
+ * Registry dos 22 handlers de node (FLOW_BUILDER.md §3.3).
  *
- * S02 e DONO deste arquivo (scaffold-then-fill): os slots de handler (F4-S04/05/06)
- * preenchem APENAS `handlers/*.handler.ts` — nunca a registry. `FlowNodeType` deriva
- * das chaves; `satisfies` garante cobertura exaustiva dos 15 tipos em compile-time.
+ * S02 e DONO deste arquivo (scaffold-then-fill): os slots de handler preenchem APENAS
+ * `handlers/*.handler.ts` — nunca a registry. `FlowNodeType` deriva das chaves; o check
+ * `Record` garante cobertura exaustiva dos 22 tipos em compile-time. Os 6 kinds novos
+ * (set_variable/input/assign/template/ab_split/go_to_flow) entram como stubs na F31-S08;
+ * S09/S10/S11 preenchem a logica real.
  */
 import { triggerHandler } from './handlers/trigger.handler';
 import { messageHandler } from './handlers/message.handler';
@@ -21,6 +23,12 @@ import { registerConversionHandler } from './handlers/register_conversion.handle
 import { changeStatusHandler } from './handlers/change_status.handler';
 import { httpRequestHandler } from './handlers/http_request.handler';
 import { externalNotifyHandler } from './handlers/external_notify.handler';
+import { setVariableHandler } from './handlers/set_variable.handler';
+import { inputHandler } from './handlers/input.handler';
+import { assignHandler } from './handlers/assign.handler';
+import { templateHandler } from './handlers/template.handler';
+import { abSplitHandler } from './handlers/ab_split.handler';
+import { goToFlowHandler } from './handlers/go_to_flow.handler';
 import type { FlowExecutionContext, FlowHandlerResult, RegisteredFlowHandler } from './types';
 
 export const handlerRegistry = {
@@ -40,6 +48,12 @@ export const handlerRegistry = {
   http_request: httpRequestHandler,
   external_notify: externalNotifyHandler,
   meta_flow: metaFlowHandler,
+  set_variable: setVariableHandler,
+  input: inputHandler,
+  assign: assignHandler,
+  template: templateHandler,
+  ab_split: abSplitHandler,
+  go_to_flow: goToFlowHandler,
 } as const;
 
 // Garantia em compile-time de que TODO valor da registry e um handler (schema+execute),
@@ -51,7 +65,7 @@ type HandlerShape = {
 const _registryCheck: Record<keyof typeof handlerRegistry, HandlerShape> = handlerRegistry;
 void _registryCheck;
 
-/** Uniao literal dos 16 tipos de node suportados. */
+/** Uniao literal dos 22 tipos de node suportados. */
 export type FlowNodeType = keyof typeof handlerRegistry;
 
 /** Resolve o handler de um node.type, ou `undefined` se desconhecido. */
@@ -62,5 +76,5 @@ export function getHandler(nodeType: string): RegisteredFlowHandler | undefined 
   return erasedRegistry[nodeType];
 }
 
-/** Os 15 tipos como array (UI/validacao). */
+/** Os 22 tipos como array (UI/validacao). */
 export const FLOW_NODE_TYPES = Object.keys(handlerRegistry) as FlowNodeType[];

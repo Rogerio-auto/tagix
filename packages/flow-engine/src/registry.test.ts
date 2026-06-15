@@ -18,12 +18,18 @@ const EXPECTED = [
   'change_status',
   'http_request',
   'external_notify',
+  'set_variable',
+  'input',
+  'assign',
+  'template',
+  'ab_split',
+  'go_to_flow',
 ];
 
 describe('handlerRegistry', () => {
-  it('cobre os 16 tipos de node', () => {
+  it('cobre os 22 tipos de node', () => {
     expect(FLOW_NODE_TYPES.slice().sort()).toEqual(EXPECTED.slice().sort());
-    expect(Object.keys(handlerRegistry)).toHaveLength(16);
+    expect(Object.keys(handlerRegistry)).toHaveLength(22);
   });
 
   it('getHandler resolve handler conhecido e undefined p/ desconhecido', () => {

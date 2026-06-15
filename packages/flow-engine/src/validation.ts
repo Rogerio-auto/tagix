@@ -45,6 +45,11 @@ const KNOWN_VAR_ROOTS = new Set([
   'waiting_for_response',
   'customer_phone',
   'responsible_phone',
+  // F31-S08: raizes dos novos nodes (set_variable -> `vars.*`; input -> `input.*`;
+  // ab_split -> `ab_variant`). S09/S11 firmam os shapes; aqui evitam falso-positivo.
+  'vars',
+  'input',
+  'ab_variant',
 ]);
 
 /** Conjunto alcancavel a partir do node inicial (BFS pelas edges dirigidas). */

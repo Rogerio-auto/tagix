@@ -1,22 +1,32 @@
 /**
- * Catalogo dos 15 tipos de node do Flow Builder (FLOW_BUILDER.md secao 4.1). Fonte unica de
+ * Catalogo dos 22 tipos de node do Flow Builder (FLOW_BUILDER.md secao 4.1). Fonte unica de
  * label/categoria/icon/edges para palette, registry e inspector. O `nodeTypes` registry
- * (canvas) e dono de S10; S11 preenche a UI rica de cada node em `nodes/<tipo>/`.
+ * (canvas) e dono de S10; as pastas `nodes/<tipo>/` trazem a UI rica de cada node.
+ *
+ * F31-S08 (ESPINHA): adiciona register_conversion + 6 kinds novos
+ * (set_variable/input/assign/template/ab_split/go_to_flow) como stubs; S09/S10/S11 preenchem.
  */
 import {
+  ArrowRightCircle,
   Bot,
   Clock,
+  FileText,
   GitBranch,
   Globe,
+  Keyboard,
   ListChecks,
   MessageSquare,
   MousePointerClick,
   Play,
   Send,
+  Shuffle,
   Split,
   Tag,
   Tags,
+  Target,
   ToggleLeft,
+  UserPlus,
+  Variable,
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
@@ -36,7 +46,14 @@ export type FlowNodeKind =
   | 'move_stage'
   | 'change_status'
   | 'http_request'
-  | 'external_notify';
+  | 'external_notify'
+  | 'register_conversion'
+  | 'set_variable'
+  | 'input'
+  | 'assign'
+  | 'template'
+  | 'ab_split'
+  | 'go_to_flow';
 
 export type NodeCategory = 'start' | 'output' | 'timing' | 'logic' | 'system' | 'external';
 
@@ -130,7 +147,6 @@ export const NODE_CATALOG: Record<FlowNodeKind, NodeMeta> = {
     category: 'system',
     icon: Tag,
     edges: ['default'],
-    deferred: true,
   },
   remove_tag: {
     kind: 'remove_tag',
@@ -138,7 +154,6 @@ export const NODE_CATALOG: Record<FlowNodeKind, NodeMeta> = {
     category: 'system',
     icon: Tags,
     edges: ['default'],
-    deferred: true,
   },
   move_stage: {
     kind: 'move_stage',
@@ -146,7 +161,55 @@ export const NODE_CATALOG: Record<FlowNodeKind, NodeMeta> = {
     category: 'system',
     icon: GitBranch,
     edges: ['default'],
-    deferred: true,
+  },
+  register_conversion: {
+    kind: 'register_conversion',
+    label: 'Registrar conversao',
+    category: 'system',
+    icon: Target,
+    edges: ['default'],
+  },
+  set_variable: {
+    kind: 'set_variable',
+    label: 'Definir variavel',
+    category: 'system',
+    icon: Variable,
+    edges: ['default'],
+  },
+  input: {
+    kind: 'input',
+    label: 'Capturar resposta',
+    category: 'timing',
+    icon: Keyboard,
+    edges: ['response', 'timeout'],
+  },
+  assign: {
+    kind: 'assign',
+    label: 'Atribuir conversa',
+    category: 'system',
+    icon: UserPlus,
+    edges: ['default'],
+  },
+  template: {
+    kind: 'template',
+    label: 'Template / HSM',
+    category: 'output',
+    icon: FileText,
+    edges: ['default'],
+  },
+  ab_split: {
+    kind: 'ab_split',
+    label: 'Teste A/B',
+    category: 'logic',
+    icon: Shuffle,
+    edges: ['a', 'b'],
+  },
+  go_to_flow: {
+    kind: 'go_to_flow',
+    label: 'Ir para flow',
+    category: 'logic',
+    icon: ArrowRightCircle,
+    edges: ['default'],
   },
 };
 
