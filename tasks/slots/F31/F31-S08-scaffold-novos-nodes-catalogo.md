@@ -2,15 +2,18 @@
 id: F31-S08
 title: Scaffold dos novos nodes + limpeza do catálogo (espinha)
 phase: F31
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F31-S03]
 blocks: [F31-S09, F31-S10, F31-S11]
 source_docs:
   - docs/features/FLOW_BUILDER.md
----
+agent_id: backend-engineer
+claimed_at: 2026-06-15T13:04:09Z
+completed_at: 2026-06-15T13:05:37Z
 
+---
 # F31-S08 — Scaffold dos novos nodes + limpeza do catálogo
 
 ## Objetivo

@@ -19,6 +19,13 @@ import { MoveStageInspector } from './move_stage/MoveStageInspector';
 import { ChangeStatusInspector } from './change_status/ChangeStatusInspector';
 import { HttpRequestInspector } from './http_request/HttpRequestInspector';
 import { ExternalNotifyInspector } from './external_notify/ExternalNotifyInspector';
+import { RegisterConversionInspector } from './register_conversion/RegisterConversionInspector';
+import { SetVariableInspector } from './set_variable/SetVariableInspector';
+import { InputInspector } from './input/InputInspector';
+import { AssignInspector } from './assign/AssignInspector';
+import { TemplateInspector } from './template/TemplateInspector';
+import { AbSplitInspector } from './ab_split/AbSplitInspector';
+import { GoToFlowInspector } from './go_to_flow/GoToFlowInspector';
 import type { FlowNodeKind } from '../shared/node-catalog';
 
 export const nodeInspectors: Record<FlowNodeKind, (props: { nodeId: string }) => React.ReactNode> =
@@ -38,4 +45,11 @@ export const nodeInspectors: Record<FlowNodeKind, (props: { nodeId: string }) =>
     change_status: ChangeStatusInspector,
     http_request: HttpRequestInspector,
     external_notify: ExternalNotifyInspector,
+    register_conversion: RegisterConversionInspector,
+    set_variable: SetVariableInspector,
+    input: InputInspector,
+    assign: AssignInspector,
+    template: TemplateInspector,
+    ab_split: AbSplitInspector,
+    go_to_flow: GoToFlowInspector,
   };
