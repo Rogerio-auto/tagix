@@ -2,7 +2,7 @@
 id: F31-S12
 title: Docs FLOW_BUILDER + e2e Playwright do builder v2
 phase: F31
-status: in-progress
+status: review
 priority: medium
 estimated_size: S
 depends_on: [F31-S01, F31-S02, F31-S04, F31-S05, F31-S06, F31-S07, F31-S09, F31-S10, F31-S11]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/FLOW_BUILDER.md
 agent_id: backend-engineer
 claimed_at: 2026-06-15T20:01:33Z
+completed_at: 2026-06-15T20:07:43Z
 
 ---
 # F31-S12 — Docs + e2e do Flow Builder v2
