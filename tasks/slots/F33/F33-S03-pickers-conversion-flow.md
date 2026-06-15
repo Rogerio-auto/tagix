@@ -2,7 +2,7 @@
 id: F33-S03
 title: ConversionTypePicker + FlowPicker nos inspectors
 phase: F33
-status: in-progress
+status: review
 priority: medium
 estimated_size: S
 depends_on: []
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/FLOW_BUILDER.md
 agent_id: backend-engineer
 claimed_at: 2026-06-15T21:57:17Z
+completed_at: 2026-06-15T22:00:38Z
 
 ---
 # F33-S03 — ConversionTypePicker + FlowPicker
