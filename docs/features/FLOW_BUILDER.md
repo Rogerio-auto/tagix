@@ -78,22 +78,37 @@ import { messageHandler } from './handlers/message.handler.js';
 // ... etc
 
 export const handlerRegistry = {
+  // start
   trigger: triggerHandler,
+  // output
   message: messageHandler,
   interactive: interactiveHandler,
+  meta_flow: metaFlowHandler,
+  template: templateHandler,
+  // timing
   wait: waitHandler,
   wait_for_response: waitForResponseHandler,
+  input: inputHandler,
+  // logic
   condition: conditionHandler,
   switch: switchHandler,
+  ab_split: abSplitHandler,
+  go_to_flow: goToFlowHandler,
+  // system
   ai_action: aiActionHandler,
   add_tag: addTagHandler,
   remove_tag: removeTagHandler,
   move_stage: moveStageHandler,
   change_status: changeStatusHandler,
+  assign: assignHandler,
+  set_variable: setVariableHandler,
+  register_conversion: registerConversionHandler,
+  // external
   http_request: httpRequestHandler,
   external_notify: externalNotifyHandler,
-  meta_flow: metaFlowHandler,
-} as const satisfies Record<string, FlowHandler<any>>;
+} as const;
+
+export type FlowNodeType = keyof typeof handlerRegistry; // 22 tipos
 
 export type FlowNodeType = keyof typeof handlerRegistry;
 ```
@@ -150,27 +165,34 @@ export const messageHandler: FlowHandler<z.infer<typeof messageSchema>> = {
 
 ---
 
-## 4. Os 14 node types
+## 4. Os 22 node types (v2 — F31)
 
-### 4.1 Tabela completa
+### 4.1 Tabela completa (22 node types v2)
 
-| Tipo | Categoria | Função | Edge handles | Side effects |
+| Tipo | Categoria | Funcao | Edge handles | Side effects |
 |---|---|---|---|---|
-| `trigger` | start | nó inicial; identifica trigger | default | nenhum |
-| `message` | output | envia mensagem (texto/mídia/áudio/voz) | default | publish outbound |
+| `trigger` | start | no inicial; identifica trigger | default | nenhum |
+| `message` | output | envia mensagem (texto/midia/audio/voz) | default | publish outbound |
 | `interactive` | output | envia interactive buttons/list | default | publish outbound |
 | `meta_flow` | output | dispara WhatsApp Flow (Meta) | default | publish outbound |
+| `template` | output | envia HSM/template aprovado; reabre janela 24h WA | default | publish outbound (seam: publisher precisa suporte HSM) |
 | `wait` | timing | espera N minutos | default | persist `next_step_at` |
-| `wait_for_response` | input | envia opcional + aguarda resposta | response, timeout | persist waiting state |
-| `condition` | logic | binary HAS_TAG, IN_STAGE, BUSINESS_HOURS, HAS_VALUE, MSG_CONTAINS, MSG_EQUALS | true, false | nenhum |
-| `switch` | logic | multi-branch baseado em variable | dynamic edges | nenhum |
-| `ai_action` | system | controla agente IA da conversa (ACTIVATE/DEACTIVATE/TRANSFER) | default | update `conversations.ai_mode`, `agent_id` |
+| `wait_for_response` | timing | envia opcional + aguarda resposta | response, timeout | persist waiting state |
+| `input` | timing | envia prompt + valida resposta tipada (text/email/phone/number/date) + retry | response, timeout | persist waiting state; grava `input.<var>` |
+| `condition` | logic | binary: HAS_TAG, IN_STAGE, BUSINESS_HOURS, HAS_VALUE, MSG_CONTAINS, MSG_EQUALS | true, false | nenhum |
+| `switch` | logic | multi-branch baseado em variavel | edges por case | nenhum |
+| `ab_split` | logic | distribui por peso proporcional (roulette wheel) | edges por key de variante | nenhum |
+| `go_to_flow` | logic | encadeia para outro flow ativo (guard MAX_DEPTH=5 anti-loop) | nenhuma (encerra exec atual) | cria nova `flow_execution`; worker enfileira via `_goto_flow_execution_id` |
+| `ai_action` | system | controla agente IA (ACTIVATE/DEACTIVATE/TRANSFER) | default | update `conversations.ai_mode`, `agent_id` |
 | `add_tag` | system | adiciona tag ao contato | default | insert `contact_tags` |
 | `remove_tag` | system | remove tag | default | delete `contact_tags` |
-| `move_stage` | system | move deal pra stage | default | update `deals.stage_id` + insert `deal_history` |
+| `move_stage` | system | move deal para stage | default | update `deals.stage_id` + insert `deal_history` |
 | `change_status` | system | muda status da conversa | default | update `conversations.status` |
-| `http_request` | external | HTTP GET/POST/PUT/PATCH/DELETE | success, error | nenhum (armazena response em variables) |
-| `external_notify` | external | envia msg pra terceiro (responsável, cliente externo, custom phone) | default (ou response/timeout se wait) | publish outbound em outra conversa + opcionalmente persist waiting |
+| `assign` | system | atribui conversa (specific/round_robin/least_busy) | default | update `conversations.assigned_to` + insert `routing_history` |
+| `set_variable` | system | grava variavel no namespace `vars.*` com interpolacao e coercao de tipo | default | merge em `flow_executions.variables` |
+| `register_conversion` | system | registra conversao (idempotente same-day via unique constraint) | default | insert `conversion_events` |
+| `http_request` | external | HTTP GET/POST/PUT/PATCH/DELETE | success, error | nenhum (armazena response em `webhook_response`) |
+| `external_notify` | external | envia msg a terceiro (responsavel, contato externo, custom phone) | default (ou response/timeout se wait) | publish outbound em outra conversa |
 
 ### 4.2 Wait_for_response biestável
 
@@ -325,7 +347,12 @@ Escopo (`variables` JSONB):
 - `deal.*` — se flow é trigger de stage_change
 - `last_response`, `last_response_type` — após wait_for_response
 - `webhook_response.*` — após http_request
-- Custom keys adicionadas por handlers
+- `input.<variable>` — resposta validada pelo node `input` (ex.: `{{input.email}}`)
+- `vars.<variable>` — variavel definida por `set_variable` (ex.: `{{vars.cidade}}`)
+- `webhook_response.*` — apos http_request
+- `_flow_depth` — profundidade de encadeamento de go_to_flow (incrementa a cada hop)
+- `_goto_flow_execution_id` — ID da execucao criada por go_to_flow (worker enfileira)
+- Custom keys adicionadas por outros handlers
 
 ---
 
