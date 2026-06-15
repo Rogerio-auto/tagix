@@ -2,13 +2,16 @@
 id: F32-S04
 title: Inspector switch completo — case management + edges dinâmicas
 phase: F32
-status: available
+status: review
 priority: medium
 estimated_size: M
 depends_on: []
 blocks: []
 source_docs:
   - docs/features/FLOW_BUILDER.md
+agent_id: backend-engineer
+claimed_at: 2026-06-15T21:31:38Z
+completed_at: 2026-06-15T21:32:48Z
 
 ---
 # F32-S04 — Inspector switch completo
