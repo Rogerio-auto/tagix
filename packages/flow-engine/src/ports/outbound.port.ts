@@ -1,8 +1,14 @@
 /**
  * Outbound port. As mutacoes de conversa (ai_mode/status) sao DB puro sob RLS — a engine
- * as possui. Ja sendMessage/sendPresence dependem do pipeline de envio (workers, F4-S03):
- * recebem um publisher injetado; o default loga e nao envia (handlers de output sao stubs
- * ate F4-S04). Mantem o contrato estavel sem acoplar a engine ao transporte de mensagens.
+ * as possui. Ja sendMessage/sendPresence dependem do pipeline de envio: recebem um
+ * `OutboundPublisher` injetado.
+ *
+ * F31-S01: em PRODUCAO o worker de flows injeta um publisher real
+ * (`apps/workers/src/flows/outbound-publisher.ts`) que persiste a message `pending` sob
+ * RLS, resolve midia via storage e enfileira o `OutboundJob` em `hm.q.outbound` — ou seja,
+ * um flow agora ENVIA mensagem de verdade. O `noopPublisher` continua sendo o default
+ * (engine pura / testes / API sem worker): mantem o contrato estavel sem acoplar a engine
+ * ao transporte de mensagens.
  */
 import { eq } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';

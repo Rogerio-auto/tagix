@@ -49,12 +49,37 @@ export type RegisteredFlowHandler = {
   execute(node: FlowNode<unknown>, ctx: FlowExecutionContext): Promise<FlowHandlerResult>;
 };
 
-/** Mensagem outbound emitida por um handler (message/interactive/meta_flow/external_notify). */
+/**
+ * Tipo de midia enviavel por um flow. Espelha `outboundMediaKindSchema` do worker
+ * outbound (`apps/workers/src/outbound/job.ts`) e o dominio de `messages.type`.
+ */
+export type FlowOutboundMediaKind = 'image' | 'video' | 'audio' | 'voice' | 'document' | 'sticker';
+
+/**
+ * Mensagem outbound emitida por um handler (message/interactive/meta_flow/external_notify).
+ *
+ * Contrato rico (F31-S01): cobre texto, midia (imagem/video/documento via
+ * `mediaStorageKey` + `mediaType` MIME + `caption`) e audio (`audioMessageKind`:
+ * `voice` = nota de voz | `audio_file` = arquivo encaminhado). O publisher real
+ * resolve `mediaStorageKey` -> URL publica temporaria no envio. Todos os campos
+ * de midia sao opcionais: handlers de texto seguem inalterados.
+ */
 export interface FlowOutboundMessage {
   readonly conversationId: string;
+  /** Texto da mensagem (ja interpolado pelo handler). */
   readonly text?: string;
+  /** Chave do objeto no storage; resolvida para URL publica temporaria no envio. */
   readonly mediaStorageKey?: string;
+  /** MIME do objeto de midia (ex.: `image/png`, `video/mp4`, `application/pdf`). */
   readonly mediaType?: string;
+  /**
+   * Tipo de midia explicito. Se ausente, e derivado de `audioMessageKind` (audio)
+   * ou do prefixo de `mediaType` (image/video/audio/document).
+   */
+  readonly mediaKind?: FlowOutboundMediaKind;
+  /** Legenda da midia (imagem/video/documento). */
+  readonly caption?: string;
+  /** Audio: nota de voz (`voice`) vs arquivo de audio encaminhado (`audio_file`). */
   readonly audioMessageKind?: 'voice' | 'audio_file';
   /** payload interactive/meta cru, repassado ao adapter do canal. */
   readonly interactivePayload?: Record<string, unknown>;
