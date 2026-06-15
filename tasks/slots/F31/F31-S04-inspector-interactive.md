@@ -2,7 +2,7 @@
 id: F31-S04
 title: Inspector interactive completo (botões reply/url/phone + listas)
 phase: F31
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F31-S01, F31-S03]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/FLOW_BUILDER.md
 agent_id: backend-engineer
 claimed_at: 2026-06-15T13:06:45Z
+completed_at: 2026-06-15T13:09:13Z
 
 ---
 # F31-S04 — Inspector interactive completo
