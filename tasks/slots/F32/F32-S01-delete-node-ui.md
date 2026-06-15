@@ -2,7 +2,7 @@
 id: F32-S01
 title: Delete node — teclado + botão + guard trigger
 phase: F32
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: []
