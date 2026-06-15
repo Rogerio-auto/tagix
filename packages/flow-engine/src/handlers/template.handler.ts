@@ -1,19 +1,14 @@
 /**
- * Handler `template` (F31-S10). Envia um template/HSM aprovado (WhatsApp Business),
- * que reabre a janela de 24h. Carrega `templateName` + `languageCode` + parametros
- * por componente (header/body/button), todos interpolados com as variaveis da
- * execucao.
+ * Handler `template` (F31-S10, bridge fechada em F33-S02). Envia um template/HSM
+ * aprovado (WhatsApp Business), que reabre a janela de 24h. Carrega `templateName`
+ * + `languageCode` + parametros por componente (header/body/button), todos
+ * interpolados com as variaveis da execucao.
  *
- * SEAM CONHECIDO (relatar ao orchestrator): `FlowOutboundMessage` (F31-S01) cobre
- * texto/midia, mas NAO tem variante de template, e o publisher S01 trata
- * `interactivePayload` como no-op conservador. Aqui montamos o payload de template
- * no shape do Cloud API (`{ kind:'template', template:{ name, language, components } }`)
- * e enviamos via `ctx.sendMessage({ interactivePayload })` — a estrutura fica
- * correta e versionada, mas o ENVIO REAL so ocorre quando o S01 ganhar:
- *   1) uma variante `template` em `FlowOutboundMessage` (ou parsing do
- *      `interactivePayload.kind === 'template'`); e
- *   2) o publisher montando um `OutboundJob` kind='template' para o adapter Meta.
- * Ate la, o handler valida a config e e idempotente/no-op downstream.
+ * DESIGN: monta o payload de template no shape interno
+ * `{ kind:'template', template:{ name, language:{ code }, components } }` e
+ * envia via `ctx.sendMessage({ interactivePayload })`. O `outbound-publisher` do
+ * worker detecta `kind === 'template'`, extrai os campos e publica
+ * `OutboundJob { kind:'template', templateName, languageCode, components }`.
  */
 import { z } from 'zod';
 import { interpolate } from '../utils/interpolate';
