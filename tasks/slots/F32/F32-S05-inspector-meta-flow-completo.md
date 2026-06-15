@@ -2,13 +2,16 @@
 id: F32-S05
 title: Inspector meta_flow completo (body, flowToken, screen, payload)
 phase: F32
-status: available
+status: review
 priority: medium
 estimated_size: S
 depends_on: []
 blocks: []
 source_docs:
   - docs/features/FLOW_BUILDER.md
+agent_id: backend-engineer
+claimed_at: 2026-06-15T21:33:00Z
+completed_at: 2026-06-15T21:34:59Z
 
 ---
 # F32-S05 — Inspector meta_flow completo
