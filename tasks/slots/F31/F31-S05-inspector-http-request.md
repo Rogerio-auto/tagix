@@ -2,15 +2,17 @@
 id: F31-S05
 title: Inspector http_request completo (headers/body/retry/map-resposta)
 phase: F31
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on: [F31-S03]
 blocks: []
 source_docs:
   - docs/features/FLOW_BUILDER.md
----
+agent_id: backend-engineer
+claimed_at: 2026-06-15T13:09:22Z
 
+---
 # F31-S05 — Inspector http_request completo
 
 ## Objetivo
