@@ -225,3 +225,14 @@ GOTCHA confirmado: board nao flipa blocked->available mesmo com deps done; claim
 Onda B: 6 slots com files_allowed DISJUNTOS (node dirs + handlers proprios; S08 dona da espinha registry/validation/catalog/nodeTypes/nodeInspectors). Despacho paralelo via background agents:
 - S02 message rico, S04 interactive, S05 http_request, S06 condition/notify/ai, S07 triggers, S08 scaffold+catalogo.
 S08 NAO colide com S02/S04/S05/S06/S07 (dirs/spine diferentes); S08 nunca paralelo com S09/S10/S11. Integro 1 a 1 via stash-dance por paths. Onda C (S09/S10/S11) abre apos S08.
+
+## [orchestrator:F31] 2026-06-15 — Onda B INTEGRADA (6/6) + Onda C (3 slots) despachada
+
+Onda B toda mergeada em main; pnpm typecheck 13 projetos VERDE; @hm/flow-engine 44 testes + @hm/workers 217 verdes a cada merge.
+- S08 (scaffold): registry 16->22 handlers; 7 kinds novos no catalogo; deferred removido. FIX de integracao: registry.test.ts (fora do files_allowed do slot) atualizado 16->22.
+- S02 (message rico), S05 (http_request), S06 (condition/notify/ai), S07 (triggers): verdes diretos.
+- S04 (interactive): FIX de integracao no handler — z.preprocess+default quebravam o contrato z.ZodType<T> do FlowHandler (input!=output). Troquei por z.discriminatedUnion puro (sem ZodEffects no shape); superRefine mantido (preserva input==output). Perda: compat com botao legado {id,title} sem type (inspector novo sempre grava type).
+SEAM fechado pelo orchestrator: FlowHelpersAutoProvider montado em FlowEditorPage.tsx (commit dedicado).
+SEAMS abertos repassados: (a) endpoint /api/flows/media/signed-url backend p/ upload de midia do node message (S02 degrada p/ key manual); (b) interactivePayload/external_notify ainda no-op no publisher do S01 (precisa traducao p/ InteractivePayloadSchema do job); (c) S07 SAVE-sync/LOAD-hydrate de triggerType/triggerConfig em FlowEditorPage/useFlow/services (fechando a seguir).
+
+Onda C (deps S08 done): S09 (set_variable/input), S10 (assign/template), S11 (ab_split/go_to_flow + UI register_conversion). Disjuntos (handlers+dirs proprios). Sobrescrevem os stubs do S08 mantendo export names. Despacho paralelo via background agents; integro 1 a 1.
