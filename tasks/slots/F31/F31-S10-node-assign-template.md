@@ -2,7 +2,7 @@
 id: F31-S10
 title: Nodes assign + template/HSM (atendimento)
 phase: F31
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on: [F31-S08, F31-S01]
@@ -10,8 +10,10 @@ blocks: []
 source_docs:
   - docs/features/FLOW_BUILDER.md
   - docs/features/PERMISSIONS.md
----
+agent_id: backend-engineer
+claimed_at: 2026-06-15T19:55:08Z
 
+---
 # F31-S10 — Nodes assign + template/HSM
 
 ## Objetivo
