@@ -213,3 +213,15 @@ Plano aprovado: ~/.claude/plans/encapsulated-juggling-fern.md. 12 slots em tasks
 - F31-S03 [high] frontend-engineer — helpers-context + VariablesPicker + pickers/**. files: apps/web/features/flow-builder/shared/helpers-context.tsx + inspector/{VariablesPicker.tsx,pickers/**}. Desbloqueia S04/S05/S06/S07/S08.
 
 files_allowed 100% disjuntos (flow-engine+workers vs apps/web/features/flow-builder). Despacho via background agents; cada um escreve+typecheck SO no seu pacote, SEM git. Eu integro via stash-dance por paths explicitos (proibido git add -A). Onda B (S02/S04/S05/S06/S07/S08) abre apos S01+S03 em main.
+
+## [orchestrator:F31] 2026-06-15 — Onda A INTEGRADA + Onda B (6 slots) despachada
+
+Onda A mergeada em main, typecheck 13 projetos VERDE:
+- F31-S01 (bridge outbound real): merge 35c8353; @hm/workers 217 testes + @hm/flow-engine 44 testes verdes; outbound-publisher.test.ts 12 testes. Follow-up do agente: interactive/meta_flow/external_notify ainda no-op no publisher (precisam traducao p/ InteractivePayloadSchema do job) — repassado a S04/S06.
+- F31-S03 (helpers-context + pickers + VariablesPicker): merge; 9 dominios, 9 pickers + Combobox, FlowHelpersAutoProvider self-fetching. SEAM ABERTO: FlowEditorPage.tsx precisa montar <FlowHelpersAutoProvider> (orchestrator fecha na integracao da Onda B/S08).
+
+GOTCHA confirmado: board nao flipa blocked->available mesmo com deps done; claim manual valida deps de verdade. Deps de S02/S04/S05/S06/S07/S08 (S01/S03) satisfeitas.
+
+Onda B: 6 slots com files_allowed DISJUNTOS (node dirs + handlers proprios; S08 dona da espinha registry/validation/catalog/nodeTypes/nodeInspectors). Despacho paralelo via background agents:
+- S02 message rico, S04 interactive, S05 http_request, S06 condition/notify/ai, S07 triggers, S08 scaffold+catalogo.
+S08 NAO colide com S02/S04/S05/S06/S07 (dirs/spine diferentes); S08 nunca paralelo com S09/S10/S11. Integro 1 a 1 via stash-dance por paths. Onda C (S09/S10/S11) abre apos S08.

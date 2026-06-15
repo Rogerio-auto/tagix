@@ -1,0 +1,16 @@
+=== CONTRATO COMUM F31 Onda B (todos os slots de inspector/node) ===
+Voce e engineer do tagix Flow Builder v2. Padrao world-class, DS v2 dark-first (tokens semanticos de @hm/design-tokens; ZERO hex em JSX), TS strict, ZERO `any` (unknown+Zod). Aplica UX_PRINCIPLES (docs/): pickers pesquisaveis no lugar de id-em-texto-cru; preview/WYSIWYG; estados de erro DS v2; validacao no submit.
+
+REGRAS DE EXECUCAO (harness sem worktree):
+- Escreva APENAS nos arquivos do files_allowed do SEU slot. NAO rode git. NAO rode pnpm install.
+- Validacao: tente rodar; se o harness bloquear pnpm/tsc, faca revisao manual rigorosa e relate (o orchestrator roda a validacao na integracao).
+- Se precisar tocar algo fora do files_allowed, PARE e relate o seam. NAO edite fora.
+- NAO escreva relatorio .md; responda no output: arquivos escritos, validacao, seams.
+
+PADROES DO REPO (ja existem no main):
+- Inspector pattern: 'use client'; useFlowEditor((s)=>s.nodes) + s.updateNodeData(nodeId, patch); node = nodes.find(n=>n.id===nodeId). data = (node.data ?? {}) as Record<string,unknown>. set = (patch)=>update(nodeId, patch).
+- Campos: import { Field, TextField, TextAreaField, SelectField } from '../inspector-fields' (DS v2 prontos).
+- PICKERS (do F31-S03, ja em main): import { AgentPicker, ChannelPicker, TagPicker, StagePicker, PipelinePicker, ConversionTypePicker, MemberPicker, MetaFlowPicker, CustomFieldPicker, Combobox } from '@/features/flow-builder/inspector/pickers'. PickerProps: { value: string|undefined; onChange:(v:string)=>void; label?; hint?; placeholder?; disabled? }. StagePicker/CustomFieldPicker aceitam pipelineId? para filtrar. CustomFieldPicker value = custom field KEY. MetaFlowPicker aceita valor livre. Dados vem de useFlowHelpers() (provider FlowHelpersAutoProvider). USE OS PICKERS no lugar de id cru.
+- VariablesPicker: import { VariablesPicker } from '../../inspector/VariablesPicker'; <VariablesPicker onPick={(token)=>...} /> insere {{...}}.
+- Handlers (packages/flow-engine/src/handlers/*.handler.ts): { schema: zod, async execute(node, ctx) }. ctx.sendMessage(FlowOutboundMessage)/ctx.sendPresence/ctx.setConversationAi/ctx.setConversationStatus + ctx.variables. interpolate(text, ctx.variables) de '../utils/interpolate'. Retorno { status:'SUCCESS'|'ERROR'|..., error? }.
+- FlowOutboundMessage (F31-S01, ja em main): { conversationId; text?; mediaStorageKey?; mediaType?(mime); mediaKind?(image|video|audio|voice|document|sticker); caption?; audioMessageKind?('voice'|'audio_file'); interactivePayload? }. ctx.sendMessage agora ENVIA DE VERDADE em prod (texto/midia funcionam; interactivePayload ainda e no-op conservador no publisher — ver follow-up S01: precisa traducao p/ InteractivePayloadSchema do job).
