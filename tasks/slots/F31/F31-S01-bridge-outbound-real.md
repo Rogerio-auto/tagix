@@ -2,15 +2,18 @@
 id: F31-S01
 title: Bridge de saída real do flow (FlowOutboundMessage → OutboundJob)
 phase: F31
-status: available
+status: review
 priority: critical
 estimated_size: M
 depends_on: []
 blocks: [F31-S02, F31-S04, F31-S06, F31-S09, F31-S10]
 source_docs:
   - docs/features/FLOW_BUILDER.md
----
+agent_id: backend-engineer
+claimed_at: 2026-06-15T12:45:38Z
+completed_at: 2026-06-15T12:46:53Z
 
+---
 # F31-S01 — Bridge de saída real do flow
 
 ## Objetivo

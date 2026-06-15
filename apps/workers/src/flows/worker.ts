@@ -24,8 +24,14 @@ import {
   type Envelope,
   type MqHandle,
 } from '@hm/shared/mq';
-import { createFlowEngine, createQueuePort, type FlowEngineApi } from '@hm/flow-engine';
+import {
+  createFlowEngine,
+  createOutboundPort,
+  createQueuePort,
+  type FlowEngineApi,
+} from '@hm/flow-engine';
 import type { Logger } from '@hm/logger';
+import { createOutboundPublisher } from './outbound-publisher';
 
 type MqChannel = MqHandle['channel'];
 
@@ -39,7 +45,10 @@ export interface FlowWorkerDeps {
 
 /**
  * Liga uma engine cujo queue port publica de verdade em `hm.q.flow.execution` pelo
- * `channel` AMQP injetado (re-enqueue de steps). Usado pelo bootstrap.
+ * `channel` AMQP injetado (re-enqueue de steps) E cujo outbound port envia mensagem de
+ * verdade (F31-S01): `createOutboundPublisher` persiste a message `pending` sob RLS,
+ * resolve midia via storage e enfileira o `OutboundJob` em `hm.q.outbound`. Usado pelo
+ * bootstrap.
  */
 export function createFlowWorkerDeps(channel: MqChannel, logger: Logger): FlowWorkerDeps {
   const queue = createQueuePort({
@@ -47,7 +56,8 @@ export function createFlowWorkerDeps(channel: MqChannel, logger: Logger): FlowWo
       publish(channel, routingKey, envelope);
     },
   });
-  const engine = createFlowEngine({ queue });
+  const outbound = createOutboundPort(createOutboundPublisher({ logger }));
+  const engine = createFlowEngine({ queue, outbound });
   return { engine, logger };
 }
 
