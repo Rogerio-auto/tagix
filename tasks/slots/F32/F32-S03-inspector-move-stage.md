@@ -2,13 +2,15 @@
 id: F32-S03
 title: Inspector move_stage com PipelinePicker + StagePicker
 phase: F32
-status: available
+status: in-progress
 priority: high
 estimated_size: S
 depends_on: []
 blocks: []
 source_docs:
   - docs/features/FLOW_BUILDER.md
+agent_id: backend-engineer
+claimed_at: 2026-06-15T21:30:33Z
 
 ---
 # F32-S03 — Inspector move_stage
