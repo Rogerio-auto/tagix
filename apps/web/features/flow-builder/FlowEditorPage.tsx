@@ -16,6 +16,7 @@ import { useFlow, usePublishFlow, useSaveFlow } from './hooks/useFlow';
 import { useFlowEditor } from './hooks/useFlowEditor';
 import { InspectorPanel } from './inspector/InspectorPanel';
 import { ValidationBanner } from './shared/validation-banner';
+import { FlowHelpersAutoProvider } from './shared/helpers-context';
 
 /**
  * Canvas @xyflow/react (engine de render + CSS + Background/Controls) carregado sob
@@ -138,6 +139,7 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
 
   return (
     <ReactFlowProvider>
+      <FlowHelpersAutoProvider>
       <div className="flex h-[calc(100vh-3.5rem)] flex-col">
         <ToolbarTop
           flowName={flow.data.flow.name}
@@ -172,6 +174,7 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
           <InspectorPanel />
         </div>
       </div>
+      </FlowHelpersAutoProvider>
     </ReactFlowProvider>
   );
 }
