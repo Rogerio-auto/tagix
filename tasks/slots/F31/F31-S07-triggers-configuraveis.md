@@ -2,7 +2,7 @@
 id: F31-S07
 title: Triggers configuráveis (tipo editável + trigger_config UI)
 phase: F31
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F31-S03]
