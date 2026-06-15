@@ -21,7 +21,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F30   | 11     | 0   | 0   | 0   | 0   | 0   | 11   |
 | F31   | 12     | 0   | 0   | 0   | 0   | 0   | 12   |
-| F32   | 5     | 4   | 0   | 0   | 1   | 0   | 0   |
+| F32   | 5     | 4   | 0   | 0   | 0   | 1   | 0   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -241,13 +241,13 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 32
 
-| ID      | Titulo                                                          | Status        | Prioridade | Depende de |
-| ------- | --------------------------------------------------------------- | ------------- | ---------- | ---------- |
-| F32-S01 | Delete node — teclado + botão + guard trigger                   | 🔵 in-progress | high       | —          |
-| F32-S02 | Inspectors add_tag + remove_tag com TagPicker real              | 🟢 available   | high       | —          |
-| F32-S03 | Inspector move_stage com PipelinePicker + StagePicker           | 🟢 available   | high       | —          |
-| F32-S04 | Inspector switch completo — case management + edges dinâmicas   | 🟢 available   | medium     | —          |
-| F32-S05 | Inspector meta_flow completo (body, flowToken, screen, payload) | 🟢 available   | medium     | —          |
+| ID      | Titulo                                                          | Status      | Prioridade | Depende de |
+| ------- | --------------------------------------------------------------- | ----------- | ---------- | ---------- |
+| F32-S01 | Delete node — teclado + botão + guard trigger                   | 🟣 review    | high       | —          |
+| F32-S02 | Inspectors add_tag + remove_tag com TagPicker real              | 🟢 available | high       | —          |
+| F32-S03 | Inspector move_stage com PipelinePicker + StagePicker           | 🟢 available | high       | —          |
+| F32-S04 | Inspector switch completo — case management + edges dinâmicas   | 🟢 available | medium     | —          |
+| F32-S05 | Inspector meta_flow completo (body, flowToken, screen, payload) | 🟢 available | medium     | —          |
 
 ## Fase 4 — Campaigns
 
