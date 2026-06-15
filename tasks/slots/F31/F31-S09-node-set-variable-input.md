@@ -2,15 +2,18 @@
 id: F31-S09
 title: Nodes set_variable + input (variáveis & captura validada)
 phase: F31
-status: blocked
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F31-S08, F31-S01]
 blocks: []
 source_docs:
   - docs/features/FLOW_BUILDER.md
----
+agent_id: backend-engineer
+claimed_at: 2026-06-15T19:51:10Z
+completed_at: 2026-06-15T19:54:35Z
 
+---
 # F31-S09 — Nodes set_variable + input
 
 ## Objetivo
