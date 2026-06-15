@@ -2,13 +2,15 @@
 id: F33-S01
 title: go_to_flow — enqueue step do flow filho no dispatcher
 phase: F33
-status: available
+status: in-progress
 priority: high
 estimated_size: S
 depends_on: []
 blocks: []
 source_docs:
   - docs/features/FLOW_BUILDER.md
+agent_id: backend-engineer
+claimed_at: 2026-06-15T21:52:12Z
 
 ---
 # F33-S01 — go_to_flow enqueue fix
