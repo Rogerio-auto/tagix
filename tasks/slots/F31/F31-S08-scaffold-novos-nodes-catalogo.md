@@ -2,7 +2,7 @@
 id: F31-S08
 title: Scaffold dos novos nodes + limpeza do catálogo (espinha)
 phase: F31
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F31-S03]
