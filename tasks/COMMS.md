@@ -248,3 +248,15 @@ SEAMS DOCUMENTADOS (nao fazem parte do escopo da F31):
 - go_to_flow.handler: worker precisa ler _goto_flow_execution_id apos o step e enfileirar o step do flow alvo. A execucao e CRIADA corretamente; so o enfileiramento falta.
 
 F31 COMPLETA: 12/12 slots done. Flow Builder v2 com 22 node types, bridge outbound real, inspectors ricos, VariablesPicker, validacao de flow, registro de conversoes, encadeamento de flows, testes A/B por peso, captura tipada de respostas.
+
+---
+## F33 — Flow Engine Seams Closure (2026-06-15)
+
+Orchestrator: claude-sonnet-4-6
+Slots: F33-S01 (go_to_flow enqueue), F33-S02 (bridge interactive+template), F33-S03 (ConversionTypePicker + FlowPicker)
+Files não se sobrepõem → execução sequencial na mesma árvore (sem worktrees).
+
+Plano:
+1. claim S01 → implementar → commit → finish → merge → done
+2. claim S02 → implementar → commit → finish → merge → done
+3. claim S03 → implementar → commit → finish → merge → done

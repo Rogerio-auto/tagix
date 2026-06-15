@@ -22,6 +22,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F30   | 11     | 0   | 0   | 0   | 0   | 0   | 11   |
 | F31   | 12     | 0   | 0   | 0   | 0   | 0   | 12   |
 | F32   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
+| F33   | 3     | 3   | 0   | 0   | 0   | 0   | 0   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -248,6 +249,14 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F32-S03 | Inspector move_stage com PipelinePicker + StagePicker           | ✅ done | high       | —          |
 | F32-S04 | Inspector switch completo — case management + edges dinâmicas   | ✅ done | medium     | —          |
 | F32-S05 | Inspector meta_flow completo (body, flowToken, screen, payload) | ✅ done | medium     | —          |
+
+## Fase 33
+
+| ID      | Titulo                                                      | Status      | Prioridade | Depende de |
+| ------- | ----------------------------------------------------------- | ----------- | ---------- | ---------- |
+| F33-S01 | go_to_flow — enqueue step do flow filho no dispatcher       | 🟢 available | high       | —          |
+| F33-S02 | Bridge interactive + template no outbound-publisher do flow | 🟢 available | high       | —          |
+| F33-S03 | ConversionTypePicker + FlowPicker nos inspectors            | 🟢 available | medium     | —          |
 
 ## Fase 4 — Campaigns
 
