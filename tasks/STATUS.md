@@ -22,7 +22,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F30   | 11     | 0   | 0   | 0   | 0   | 0   | 11   |
 | F31   | 12     | 0   | 0   | 0   | 0   | 0   | 12   |
 | F32   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
-| F33   | 3     | 2   | 0   | 0   | 1   | 0   | 0   |
+| F33   | 3     | 2   | 0   | 0   | 0   | 1   | 0   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -252,11 +252,11 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 33
 
-| ID      | Titulo                                                      | Status        | Prioridade | Depende de |
-| ------- | ----------------------------------------------------------- | ------------- | ---------- | ---------- |
-| F33-S01 | go_to_flow — enqueue step do flow filho no dispatcher       | 🔵 in-progress | high       | —          |
-| F33-S02 | Bridge interactive + template no outbound-publisher do flow | 🟢 available   | high       | —          |
-| F33-S03 | ConversionTypePicker + FlowPicker nos inspectors            | 🟢 available   | medium     | —          |
+| ID      | Titulo                                                      | Status      | Prioridade | Depende de |
+| ------- | ----------------------------------------------------------- | ----------- | ---------- | ---------- |
+| F33-S01 | go_to_flow — enqueue step do flow filho no dispatcher       | 🟣 review    | high       | —          |
+| F33-S02 | Bridge interactive + template no outbound-publisher do flow | 🟢 available | high       | —          |
+| F33-S03 | ConversionTypePicker + FlowPicker nos inspectors            | 🟢 available | medium     | —          |
 
 ## Fase 4 — Campaigns
 
