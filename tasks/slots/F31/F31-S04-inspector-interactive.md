@@ -2,7 +2,7 @@
 id: F31-S04
 title: Inspector interactive completo (botões reply/url/phone + listas)
 phase: F31
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F31-S01, F31-S03]
