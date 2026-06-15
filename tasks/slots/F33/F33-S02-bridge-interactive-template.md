@@ -2,7 +2,7 @@
 id: F33-S02
 title: Bridge interactive + template no outbound-publisher do flow
 phase: F33
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: []
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/FLOW_BUILDER.md
 agent_id: backend-engineer
 claimed_at: 2026-06-15T21:54:30Z
+completed_at: 2026-06-15T21:56:59Z
 
 ---
 # F33-S02 — Bridge interactive + template
