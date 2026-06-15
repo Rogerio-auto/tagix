@@ -2,7 +2,7 @@
 id: F31-S03
 title: Infra de contexto — helpers-context + VariablesPicker completos
 phase: F31
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
