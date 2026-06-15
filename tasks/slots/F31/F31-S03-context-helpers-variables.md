@@ -2,15 +2,17 @@
 id: F31-S03
 title: Infra de contexto — helpers-context + VariablesPicker completos
 phase: F31
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: []
 blocks: [F31-S04, F31-S05, F31-S06, F31-S07, F31-S08]
 source_docs:
   - docs/features/FLOW_BUILDER.md
----
+agent_id: backend-engineer
+claimed_at: 2026-06-15T12:47:13Z
 
+---
 # F31-S03 — Infra de contexto (pickers & variáveis)
 
 ## Objetivo
