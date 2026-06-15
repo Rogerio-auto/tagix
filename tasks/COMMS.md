@@ -236,3 +236,15 @@ SEAM fechado pelo orchestrator: FlowHelpersAutoProvider montado em FlowEditorPag
 SEAMS abertos repassados: (a) endpoint /api/flows/media/signed-url backend p/ upload de midia do node message (S02 degrada p/ key manual); (b) interactivePayload/external_notify ainda no-op no publisher do S01 (precisa traducao p/ InteractivePayloadSchema do job); (c) S07 SAVE-sync/LOAD-hydrate de triggerType/triggerConfig em FlowEditorPage/useFlow/services (fechando a seguir).
 
 Onda C (deps S08 done): S09 (set_variable/input), S10 (assign/template), S11 (ab_split/go_to_flow + UI register_conversion). Disjuntos (handlers+dirs proprios). Sobrescrevem os stubs do S08 mantendo export names. Despacho paralelo via background agents; integro 1 a 1.
+
+## [orchestrator:F31] 2026-06-15 -- Onda C INTEGRADA (4/4) + F31 COMPLETA 12/12
+
+S09 (set_variable+input), S10 (assign+template), S11 (ab_split+go_to_flow+register_conversion UI), S12 (docs+e2e) integrados em main sequencialmente. pnpm typecheck 13 projetos VERDE; pnpm lint VERDE; @hm/flow-engine 44 testes VERDES.
+
+ACHADO CRITICO (ZodDefault): handlers S09/S10 gerados pelo S08 usavam z.default() no schema -- quebravam FlowHandler<T> (invariancia ZodType<T>: _input != _output). FIX: trocar z.default() por z.optional() + ?? no corpo do execute (mesmo padrao dos handlers anteriores). Zero regressao.
+
+SEAMS DOCUMENTADOS (nao fazem parte do escopo da F31):
+- template.handler: publisher precisa de kind=template no OutboundJob (hoje o interactivePayload de template e no-op no publisher S01)
+- go_to_flow.handler: worker precisa ler _goto_flow_execution_id apos o step e enfileirar o step do flow alvo. A execucao e CRIADA corretamente; so o enfileiramento falta.
+
+F31 COMPLETA: 12/12 slots done. Flow Builder v2 com 22 node types, bridge outbound real, inspectors ricos, VariablesPicker, validacao de flow, registro de conversoes, encadeamento de flows, testes A/B por peso, captura tipada de respostas.
