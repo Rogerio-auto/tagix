@@ -196,3 +196,44 @@ describe('cancelFlowExecution', () => {
     expect(patches).toHaveLength(0);
   });
 });
+
+describe('go_to_flow enqueue (F33-S01)', () => {
+  const CHILD_EX = '33333333-3333-3333-3333-333333333333';
+
+  it('enfileira o step do flow filho quando handler retorna _goto_flow_execution_id', async () => {
+    const exec = makeExec();
+    // O handler go_to_flow retorna SUCCESS com os marcadores nas variables.
+    const { deps, enqueued, patches } = makeDeps(exec, {
+      result: {
+        status: 'SUCCESS' as const,
+        variables: {
+          _goto_flow_execution_id: CHILD_EX,
+          _goto_flow_initiated: true,
+        },
+      },
+    });
+    await processFlowStepScoped(deps, WS, EX);
+
+    // Deve ter enfileirado 2 vezes: o proximo step do flow pai + o primeiro step do filho.
+    expect(enqueued).toHaveLength(2);
+    expect(enqueued).toContainEqual({ workspaceId: WS, executionId: CHILD_EX });
+
+    // As vars persistidas NAO devem conter as flags internas.
+    const patch = patches.find((p) => p.patch.variables !== undefined);
+    expect(patch?.patch.variables).not.toHaveProperty('_goto_flow_execution_id');
+    expect(patch?.patch.variables).not.toHaveProperty('_goto_flow_initiated');
+  });
+
+  it('nao enfileira flow filho quando handler nao retorna _goto_flow_execution_id (flowId ausente)', async () => {
+    const exec = makeExec();
+    // go_to_flow sem flowId retorna SUCCESS simples (no-op).
+    const { deps, enqueued } = makeDeps(exec, {
+      result: { status: 'SUCCESS' as const },
+    });
+    await processFlowStepScoped(deps, WS, EX);
+
+    // Apenas o step do flow pai e enfileirado (avanco normal).
+    expect(enqueued).toHaveLength(1);
+    expect(enqueued[0]).toEqual({ workspaceId: WS, executionId: EX });
+  });
+});

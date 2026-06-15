@@ -178,7 +178,23 @@ async function runStep(deps: FlowEngineDeps, exec: LoadedExecution): Promise<voi
   });
 
   const resultVars = 'variables' in result ? result.variables : undefined;
-  const mergedVars = resultVars ? { ...variables, ...resultVars } : variables;
+  const rawMergedVars = resultVars ? { ...variables, ...resultVars } : variables;
+
+  // Extrai marcadores de encadeamento (go_to_flow) antes de persistir as vars.
+  // Limpar aqui garante idempotencia: re-entrega do job nao dispara o filho duas vezes.
+  const gotoFlowExecutionId =
+    typeof rawMergedVars['_goto_flow_execution_id'] === 'string'
+      ? (rawMergedVars['_goto_flow_execution_id'] as string)
+      : undefined;
+  const mergedVars =
+    gotoFlowExecutionId !== undefined
+      ? (({ _goto_flow_execution_id: _a, _goto_flow_initiated: _b, ...rest }) => rest)(
+          rawMergedVars as Record<string, unknown> & {
+            _goto_flow_execution_id: string;
+            _goto_flow_initiated: unknown;
+          },
+        )
+      : rawMergedVars;
 
   if (result.status === 'WAITING') {
     await deps.db.patchExecution(exec.workspaceId, exec.executionId, {
@@ -203,6 +219,17 @@ async function runStep(deps: FlowEngineDeps, exec: LoadedExecution): Promise<voi
 
   const target = nextNodeId(exec.edges, node.id, result.edgeHandle);
   await advance(deps, exec, target, mergedVars);
+
+  // Apos completar (ou transicionar) o step do flow atual, enfileira o primeiro step
+  // do flow filho criado pelo handler go_to_flow.  A flag foi removida das vars
+  // persistidas acima — re-entrega do job outbound nao dispara o filho novamente.
+  if (gotoFlowExecutionId !== undefined) {
+    deps.logger.log('info', 'dispatcher: enfileirando step do flow filho (go_to_flow)', {
+      parentExecutionId: exec.executionId,
+      childExecutionId: gotoFlowExecutionId,
+    });
+    await deps.queue.enqueueStep({ workspaceId: exec.workspaceId, executionId: gotoFlowExecutionId });
+  }
 }
 
 function readFallbackHandle(node: FlowNode): string | undefined {

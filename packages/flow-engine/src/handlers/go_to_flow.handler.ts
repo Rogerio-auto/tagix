@@ -1,6 +1,6 @@
 /**
- * Handler `go_to_flow` (F31-S11). Encerra a execucao atual e transfere o contato
- * para outro flow publicado do workspace.
+ * Handler `go_to_flow` (F31-S11, fechado em F33-S01). Encerra a execucao atual e
+ * transfere o contato para outro flow publicado do workspace.
  *
  * DESIGN:
  *   1. Guard de profundidade: le `_flow_depth` das variables; se >= MAX_DEPTH (5),
@@ -9,19 +9,10 @@
  *      register_conversion e outros handlers system-authoritative), propagando
  *      conversationId/contactId e incrementando `_flow_depth`.
  *   3. Grava `_goto_flow_execution_id` + `_goto_flow_initiated` nas variables da
- *      execucao corrente para que o dispatcher (worker) a enfileire apos o step.
- *   4. Retorna SUCCESS sem edge — o dispatcher completa a execucao atual.
- *
- * SEAM ABERTO: o dispatcher (apps/workers/src/flows/worker.ts) ainda nao le
- * `_goto_flow_execution_id` e nao enfileira o step do flow alvo. A criacao da
- * execucao ja ocorre corretamente; o worker precisa de uma linha apos runStep:
- *
- *   const newExId = exec.variables['_goto_flow_execution_id'];
- *   if (typeof newExId === 'string') {
- *     await deps.queue.enqueueStep({ workspaceId: exec.workspaceId, executionId: newExId });
- *   }
- *
- * Ate esse wire ser adicionado, o flow alvo fica criado mas nao e executado.
+ *      execucao corrente.
+ *   4. Retorna SUCCESS sem edge — o dispatcher extrai os marcadores, os remove das
+ *      vars persistidas (idempotencia) e enfileira o primeiro step do flow filho
+ *      apos completar o step atual.
  */
 import { z } from 'zod';
 import { and, desc, eq } from 'drizzle-orm';
