@@ -2,7 +2,7 @@
 id: F31-S11
 title: Nodes ab_split + go_to_flow + UI de register_conversion
 phase: F31
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F31-S08]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/FLOW_BUILDER.md
 agent_id: backend-engineer
 claimed_at: 2026-06-15T19:56:32Z
+completed_at: 2026-06-15T20:00:47Z
 
 ---
 # F31-S11 — Nodes ab_split + go_to_flow + register_conversion (UI)
