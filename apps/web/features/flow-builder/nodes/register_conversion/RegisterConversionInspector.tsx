@@ -1,16 +1,34 @@
 'use client';
 
-// Inspector 'register_conversion' (F31-S11). Registra uma conversao no workspace.
-// O handler ja existe desde F5-S14; este inspector fecha o last-mile de UI.
-// Campos: tipo de conversao (picker), valor em centavos (opcional, exigido quando
-// conversionType.valueRequired=true), nota livre.
+// Inspector 'register_conversion' (F31-S11, pickers fechados em F33-S03).
+// Substitui o TextField de chave crua por ConversionTypePicker que consome
+// GET /api/conversion-types via useFlowHelpers() (ja carregado pelo
+// FlowHelpersAutoProvider do editor). Salva conversionTypeKey (a key do tipo,
+// nao o id — o handler register_conversion usa key para lookup).
+import { useMemo } from 'react';
 import { useFlowEditor } from '../../hooks/useFlowEditor';
 import { Field, NumberField, TextField } from '../inspector-fields';
+import { Combobox, type ComboboxOption } from '../../inspector/pickers/Combobox';
+import { useFlowHelpers } from '../../shared/helpers-context';
 
 export function RegisterConversionInspector({ nodeId }: { nodeId: string }) {
   const nodes = useFlowEditor((s) => s.nodes);
   const update = useFlowEditor((s) => s.updateNodeData);
   const node = nodes.find((n) => n.id === nodeId);
+  const { conversionTypes, isLoading } = useFlowHelpers();
+
+  const options = useMemo<ComboboxOption[]>(
+    () =>
+      conversionTypes.map((ct) => ({
+        // Salva a key (nao o id) — e o que o handler register_conversion espera.
+        value: ct.key,
+        label: ct.name,
+        hint: ct.key,
+        color: ct.color,
+      })),
+    [conversionTypes],
+  );
+
   if (!node) return null;
 
   const d = (node.data ?? {}) as Record<string, unknown>;
@@ -20,29 +38,19 @@ export function RegisterConversionInspector({ nodeId }: { nodeId: string }) {
   const valueCents = d['valueCents'] as number | undefined;
   const note = (d['note'] as string) ?? '';
 
-  // Derivar o tipo de conversao selecionado para mostrar hint de valor obrigatorio.
-  // O picker expoe o `value` = conversionType.id, mas o handler usa `key`.
-  // Como o picker usa o ID internamente e o handler usa a key, precisamos de um seam:
-  // a UI salva `conversionTypeKey` (a key do tipo), e o picker e usado como seletor
-  // por label (sem filtro por id). Para simplificar, o campo e um texto livre com hint.
-  // TODO: quando o picker expuser a key diretamente, substituir o TextField pelo
-  // ConversionTypePicker com `onChange((id) => set({ conversionTypeKey: lookupKey(id) }))`.
-
-  const conversionTypeEmpty = conversionTypeKey.trim().length === 0;
-
   return (
     <div className="flex flex-col gap-4">
-      <TextField
-        label="Chave do tipo de conversão"
-        value={conversionTypeKey}
-        placeholder="ex.: visita, compra, lead_qualificado"
-        hint='Chave exata do tipo de conversão cadastrado em Configurações → Conversões.'
-        onChange={(v) => set({ conversionTypeKey: v })}
+      <Combobox
+        label="Tipo de conversão"
+        value={conversionTypeKey || undefined}
+        onChange={(key) => set({ conversionTypeKey: key })}
+        options={options}
+        loading={isLoading}
+        placeholder="Selecionar tipo…"
+        searchPlaceholder="Buscar tipo de conversão…"
+        emptyLabel={isLoading ? 'Carregando…' : 'Nenhum tipo cadastrado'}
+        hint="Cadastre tipos em Configurações → Conversões."
       />
-
-      {conversionTypeEmpty && (
-        <span className="text-[11px] text-warning">Informe a chave do tipo de conversão.</span>
-      )}
 
       <NumberField
         label="Valor (centavos, opcional)"
