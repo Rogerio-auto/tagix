@@ -20,7 +20,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F29   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F3   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F30   | 11     | 0   | 0   | 0   | 0   | 0   | 11   |
-| F31   | 12     | 0   | 10   | 0   | 1   | 0   | 1   |
+| F31   | 12     | 0   | 10   | 0   | 0   | 1   | 1   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -223,20 +223,20 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 31
 
-| ID      | Titulo                                                                     | Status        | Prioridade | Depende de                                                                      |
-| ------- | -------------------------------------------------------------------------- | ------------- | ---------- | ------------------------------------------------------------------------------- |
-| F31-S01 | Bridge de saída real do flow (FlowOutboundMessage → OutboundJob)           | ✅ done        | critical   | —                                                                               |
-| F31-S02 | Node de mensagem rico (texto / mídia / voz / áudio-arquivo)                | ⏸️ blocked    | high       | F31-S01                                                                         |
-| F31-S03 | Infra de contexto — helpers-context + VariablesPicker completos            | 🔵 in-progress | high       | —                                                                               |
-| F31-S04 | Inspector interactive completo (botões reply/url/phone + listas)           | ⏸️ blocked    | high       | F31-S01, F31-S03                                                                |
-| F31-S05 | Inspector http_request completo (headers/body/retry/map-resposta)          | ⏸️ blocked    | medium     | F31-S03                                                                         |
-| F31-S06 | Inspectors condition (pickers+business-hours), external_notify e ai_action | ⏸️ blocked    | medium     | F31-S01, F31-S03                                                                |
-| F31-S07 | Triggers configuráveis (tipo editável + trigger_config UI)                 | ⏸️ blocked    | high       | F31-S03                                                                         |
-| F31-S08 | Scaffold dos novos nodes + limpeza do catálogo (espinha)                   | ⏸️ blocked    | high       | F31-S03                                                                         |
-| F31-S09 | Nodes set_variable + input (variáveis & captura validada)                  | ⏸️ blocked    | medium     | F31-S08, F31-S01                                                                |
-| F31-S10 | Nodes assign + template/HSM (atendimento)                                  | ⏸️ blocked    | medium     | F31-S08, F31-S01                                                                |
-| F31-S11 | Nodes ab_split + go_to_flow + UI de register_conversion                    | ⏸️ blocked    | medium     | F31-S08                                                                         |
-| F31-S12 | Docs FLOW_BUILDER + e2e Playwright do builder v2                           | ⏸️ blocked    | medium     | F31-S01, F31-S02, F31-S04, F31-S05, F31-S06, F31-S07, F31-S09, F31-S10, F31-S11 |
+| ID      | Titulo                                                                     | Status     | Prioridade | Depende de                                                                      |
+| ------- | -------------------------------------------------------------------------- | ---------- | ---------- | ------------------------------------------------------------------------------- |
+| F31-S01 | Bridge de saída real do flow (FlowOutboundMessage → OutboundJob)           | ✅ done     | critical   | —                                                                               |
+| F31-S02 | Node de mensagem rico (texto / mídia / voz / áudio-arquivo)                | ⏸️ blocked | high       | F31-S01                                                                         |
+| F31-S03 | Infra de contexto — helpers-context + VariablesPicker completos            | 🟣 review   | high       | —                                                                               |
+| F31-S04 | Inspector interactive completo (botões reply/url/phone + listas)           | ⏸️ blocked | high       | F31-S01, F31-S03                                                                |
+| F31-S05 | Inspector http_request completo (headers/body/retry/map-resposta)          | ⏸️ blocked | medium     | F31-S03                                                                         |
+| F31-S06 | Inspectors condition (pickers+business-hours), external_notify e ai_action | ⏸️ blocked | medium     | F31-S01, F31-S03                                                                |
+| F31-S07 | Triggers configuráveis (tipo editável + trigger_config UI)                 | ⏸️ blocked | high       | F31-S03                                                                         |
+| F31-S08 | Scaffold dos novos nodes + limpeza do catálogo (espinha)                   | ⏸️ blocked | high       | F31-S03                                                                         |
+| F31-S09 | Nodes set_variable + input (variáveis & captura validada)                  | ⏸️ blocked | medium     | F31-S08, F31-S01                                                                |
+| F31-S10 | Nodes assign + template/HSM (atendimento)                                  | ⏸️ blocked | medium     | F31-S08, F31-S01                                                                |
+| F31-S11 | Nodes ab_split + go_to_flow + UI de register_conversion                    | ⏸️ blocked | medium     | F31-S08                                                                         |
+| F31-S12 | Docs FLOW_BUILDER + e2e Playwright do builder v2                           | ⏸️ blocked | medium     | F31-S01, F31-S02, F31-S04, F31-S05, F31-S06, F31-S07, F31-S09, F31-S10, F31-S11 |
 
 ## Fase 4 — Campaigns
 
