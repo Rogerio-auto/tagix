@@ -205,3 +205,11 @@ LOTE 2 (deps = [S01] done): despacho paralelo de 5 slots com files_allowed DISJU
 - S09 (workers) inbound/db-ports + ports — auto-assign engine (usa pickAutoAssignee de S01)
 - S05 (python) agent-runtime nodes load_context/build_prompt — retomada consciente de contexto
 Workers escrevem na arvore (sem git), eu integro 1 a 1 via stash-dance por paths. S03/S04/S06/S10 seguem depois (deps em S02/S04/S05/S07/S08).
+
+## [orchestrator:F31] 2026-06-15 — Flow Builder v2 arrancada: Onda A (S01 + S03) em paralelo
+
+Plano aprovado: ~/.claude/plans/encapsulated-juggling-fern.md. 12 slots em tasks/slots/F31/. plan-batch confirmou lote inicial sem colisao de files_allowed:
+- F31-S01 [critical] backend-engineer — Bridge outbound real (CAMINHO CRITICO; desbloqueia S02/S04/S06/S09/S10). files: packages/flow-engine/src/{types.ts,ports/outbound.port.ts} + apps/workers/src/flows/{outbound-publisher.ts,worker.ts,outbound-publisher.test.ts}.
+- F31-S03 [high] frontend-engineer — helpers-context + VariablesPicker + pickers/**. files: apps/web/features/flow-builder/shared/helpers-context.tsx + inspector/{VariablesPicker.tsx,pickers/**}. Desbloqueia S04/S05/S06/S07/S08.
+
+files_allowed 100% disjuntos (flow-engine+workers vs apps/web/features/flow-builder). Despacho via background agents; cada um escreve+typecheck SO no seu pacote, SEM git. Eu integro via stash-dance por paths explicitos (proibido git add -A). Onda B (S02/S04/S05/S06/S07/S08) abre apos S01+S03 em main.
