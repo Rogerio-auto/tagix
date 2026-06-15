@@ -2,15 +2,17 @@
 id: F31-S02
 title: Node de mensagem rico (texto / mídia / voz / áudio-arquivo)
 phase: F31
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F31-S01]
 blocks: []
 source_docs:
   - docs/features/FLOW_BUILDER.md
----
+agent_id: backend-engineer
+claimed_at: 2026-06-15T13:05:56Z
 
+---
 # F31-S02 — Node de mensagem rico
 
 ## Objetivo
