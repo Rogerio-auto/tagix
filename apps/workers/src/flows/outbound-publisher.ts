@@ -244,13 +244,94 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
 
   return {
     async publishMessage(workspaceId, message) {
-      // interactive/meta_flow/external_notify ainda nao tem traducao para OutboundJob
-      // (payloads ricos != InteractivePayloadSchema do worker). Degradacao conservadora:
-      // no-op logado, preservando o comportamento anterior (era no-op) sem enfileirar
-      // job que falharia o parseOutboundJob. Ver REPORT (follow-up).
+      // ── interactive / template payload (F33-S02) ─────────────────────────────────
       if (message.interactivePayload) {
-        logger.warn('flow-outbound: interactivePayload sem bridge — no-op', {
+        const ip = message.interactivePayload;
+        const kind = typeof ip['kind'] === 'string' ? ip['kind'] : undefined;
+
+        if (kind === 'buttons' || kind === 'list') {
+          // Mensagem interativa (botoes / lista): persiste + publica kind='interactive'.
+          if (!message.conversationId) return;
+          const target = await persistence.persistOutboundMessage({
+            workspaceId,
+            conversationId: message.conversationId,
+            type: 'interactive',
+            content: null,
+            mediaUrl: null,
+            mediaMime: null,
+            mediaCaption: null,
+          });
+          if (!target) {
+            logger.warn('flow-outbound: conversa inexistente/invisivel (interactive) — no-op', {
+              conversationId: message.conversationId,
+            });
+            return;
+          }
+          await publishJob(workspaceId, {
+            kind: 'interactive',
+            channelId: target.channelId,
+            conversationId: message.conversationId,
+            messageId: target.messageId,
+            chatId: target.remoteId,
+            // O InteractivePayloadSchema usa o discriminador 'type'; o handler envia
+            // 'kind' como alias — normalizamos aqui para que o parseOutboundJob valide.
+            payload: { ...ip, type: kind },
+          });
+          return;
+        }
+
+        if (kind === 'template') {
+          // Template HSM: extrai campos do envelope montado pelo template.handler.
+          const tmpl = typeof ip['template'] === 'object' && ip['template'] !== null
+            ? (ip['template'] as Record<string, unknown>)
+            : undefined;
+          const templateName = typeof tmpl?.['name'] === 'string' ? tmpl['name'] : undefined;
+          const lang = typeof tmpl?.['language'] === 'object' && tmpl?.['language'] !== null
+            ? (tmpl['language'] as Record<string, unknown>)
+            : undefined;
+          const languageCode = typeof lang?.['code'] === 'string' ? lang['code'] : undefined;
+          const components = Array.isArray(tmpl?.['components']) ? tmpl['components'] : [];
+
+          if (!templateName || !languageCode || !message.conversationId) {
+            logger.warn('flow-outbound: template sem nome/languageCode/conversationId — no-op', {
+              conversationId: message.conversationId,
+              templateName,
+              languageCode,
+            });
+            return;
+          }
+          const target = await persistence.persistOutboundMessage({
+            workspaceId,
+            conversationId: message.conversationId,
+            type: 'template',
+            content: templateName,
+            mediaUrl: null,
+            mediaMime: null,
+            mediaCaption: null,
+          });
+          if (!target) {
+            logger.warn('flow-outbound: conversa inexistente/invisivel (template) — no-op', {
+              conversationId: message.conversationId,
+            });
+            return;
+          }
+          await publishJob(workspaceId, {
+            kind: 'template',
+            channelId: target.channelId,
+            conversationId: message.conversationId,
+            messageId: target.messageId,
+            chatId: target.remoteId,
+            templateName,
+            languageCode,
+            components,
+          });
+          return;
+        }
+
+        // Kind desconhecido: no-op logado (meta_flow, external_notify, etc.).
+        logger.warn('flow-outbound: interactivePayload kind desconhecido — no-op', {
           conversationId: message.conversationId,
+          kind,
         });
         return;
       }

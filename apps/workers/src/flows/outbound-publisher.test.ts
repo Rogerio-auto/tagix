@@ -182,11 +182,52 @@ describe('createOutboundPublisher.publishMessage', () => {
     expect(h.jobs).toHaveLength(0);
   });
 
-  it('interactivePayload → no-op conservador (sem bridge ainda)', async () => {
+  it('interactivePayload kind=buttons → persiste + publica job interactive', async () => {
     const h = makeHarness();
     await h.publisher.publishMessage('ws-1', {
       conversationId: 'conv-1',
-      interactivePayload: { kind: 'buttons', body: 'Escolha', buttons: [] },
+      interactivePayload: {
+        kind: 'buttons',
+        body: 'Escolha uma opcao',
+        buttons: [{ id: 'btn1', text: 'Opcao 1' }],
+      },
+    });
+    expect(h.jobs).toHaveLength(1);
+    const job = parseOutboundJob(h.jobs[0]);
+    expect(job.kind).toBe('interactive');
+    if (job.kind === 'interactive') {
+      expect(job.payload.type).toBe('buttons');
+    }
+  });
+
+  it('interactivePayload kind=template → persiste + publica job template', async () => {
+    const h = makeHarness();
+    await h.publisher.publishMessage('ws-1', {
+      conversationId: 'conv-1',
+      interactivePayload: {
+        kind: 'template',
+        template: {
+          name: 'boas_vindas',
+          language: { code: 'pt_BR' },
+          components: [{ type: 'body', parameters: [{ type: 'text', text: 'Joao' }] }],
+        },
+      },
+    });
+    expect(h.jobs).toHaveLength(1);
+    const job = parseOutboundJob(h.jobs[0]);
+    expect(job.kind).toBe('template');
+    if (job.kind === 'template') {
+      expect(job.templateName).toBe('boas_vindas');
+      expect(job.languageCode).toBe('pt_BR');
+      expect(job.components).toHaveLength(1);
+    }
+  });
+
+  it('interactivePayload kind desconhecido → no-op logado', async () => {
+    const h = makeHarness();
+    await h.publisher.publishMessage('ws-1', {
+      conversationId: 'conv-1',
+      interactivePayload: { kind: 'meta_flow', payload: {} },
     });
     expect(h.jobs).toHaveLength(0);
   });
