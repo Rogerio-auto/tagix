@@ -2,7 +2,7 @@
 id: F32-S02
 title: Inspectors add_tag + remove_tag com TagPicker real
 phase: F32
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: []
