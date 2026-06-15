@@ -2,7 +2,7 @@
 id: F32-S03
 title: Inspector move_stage com PipelinePicker + StagePicker
 phase: F32
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: []
