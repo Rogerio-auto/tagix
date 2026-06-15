@@ -2,13 +2,16 @@
 id: F32-S02
 title: Inspectors add_tag + remove_tag com TagPicker real
 phase: F32
-status: available
+status: review
 priority: high
 estimated_size: S
 depends_on: []
 blocks: []
 source_docs:
   - docs/features/FLOW_BUILDER.md
+agent_id: backend-engineer
+claimed_at: 2026-06-15T21:29:35Z
+completed_at: 2026-06-15T21:30:13Z
 
 ---
 # F32-S02 — Inspectors add_tag + remove_tag
