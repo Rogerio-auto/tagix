@@ -10,9 +10,11 @@ import { CalendarPlus } from 'lucide-react';
 import { Button } from '@hm/ui';
 import { can, type Role } from '@hm/shared';
 import { useAuthStore } from '@/shared/stores/auth.store';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useCalendars, useEvents } from './queries';
 import { EventForm } from './EventForm';
 import { EventDetailModal } from './EventDetailModal';
+import { MobileAgenda } from './MobileAgenda';
 import type { EventRow, EventType } from './types';
 
 // Cores de evento por tipo via tokens DS v2 (var(--…)) — zero hex em JSX.
@@ -28,6 +30,7 @@ const TYPE_COLOR: Record<EventType, string> = {
 export function CalendarPage(): React.JSX.Element {
   const role = useAuthStore((st) => st.auth?.role) as Role | undefined;
   const canEdit = role ? can(role, 'event.edit') : false;
+  const { isMobile } = useBreakpoint();
 
   const calendarsQuery = useCalendars();
   const calendars = useMemo(() => calendarsQuery.data?.calendars ?? [], [calendarsQuery.data]);
@@ -82,6 +85,63 @@ export function CalendarPage(): React.JSX.Element {
     setSlotStart(null);
     setSlotEnd(null);
     setFormOpen(true);
+  }
+
+  if (isMobile) {
+    return (
+      <div className="flex h-full flex-col gap-3 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-lg font-semibold text-text">Agenda</h1>
+          <select
+            value={selectedCalendarId}
+            onChange={(e) => setSelectedCalendarId(e.target.value)}
+            className="h-10 max-w-[55%] rounded-md border border-border bg-surface-2 px-3 text-sm text-text outline-none focus-visible:border-border-brand"
+            aria-label="Filtrar por calendário"
+          >
+            <option value="">Todos</option>
+            {calendars.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <MobileAgenda
+          calendarId={selectedCalendarId}
+          canEdit={canEdit}
+          onOpenEvent={(id) => setDetailId(id)}
+          onCreateForDay={(start, end) => openCreate(start, end)}
+        />
+
+        {canEdit && (
+          // Ação primária na zona do polegar (MOBILE_UX §1 thumb-first), acima da safe-area.
+          <div className="pb-safe sticky bottom-0">
+            <Button variant="primary" className="w-full touch-target" onClick={() => openCreate()}>
+              <CalendarPlus className="size-4" />
+              Novo evento
+            </Button>
+          </div>
+        )}
+
+        <EventForm
+          open={formOpen}
+          onClose={() => setFormOpen(false)}
+          calendars={calendars}
+          defaultCalendarId={selectedCalendarId || undefined}
+          defaultStart={slotStart}
+          defaultEnd={slotEnd}
+          event={editEvent}
+        />
+
+        <EventDetailModal
+          eventId={detailId}
+          onClose={() => setDetailId(null)}
+          canEdit={canEdit}
+          onEdit={onEditFromDetail}
+        />
+      </div>
+    );
   }
 
   return (

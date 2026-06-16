@@ -1,7 +1,10 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { CalendarClock, MapPin, Link2 } from 'lucide-react';
 import { Button, Modal, useToast } from '@hm/ui';
+import { Sheet } from '@/shared/components/Sheet';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useCancelEvent, useEventDetail } from './queries';
 import type { EventRow } from './types';
 
@@ -31,9 +34,17 @@ export interface EventDetailModalProps {
 
 export function EventDetailModal(props: EventDetailModalProps): React.JSX.Element {
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const detail = useEventDetail(props.eventId);
   const cancel = useCancelEvent();
   const event = detail.data?.event ?? null;
+  // Confirmação inline proporcional (UX §2.9) antes do cancelamento destrutivo.
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+
+  // Reseta a confirmação a cada (re)abertura para outro evento.
+  useEffect(() => {
+    setConfirmingCancel(false);
+  }, [props.eventId]);
 
   function doCancel(): void {
     if (!event) return;
@@ -48,30 +59,40 @@ export function EventDetailModal(props: EventDetailModalProps): React.JSX.Elemen
 
   const isCancelled = event?.status === 'cancelled';
 
-  return (
-    <Modal
-      open={Boolean(props.eventId)}
-      onClose={props.onClose}
-      title={event?.title ?? 'Evento'}
-      footer={
-        props.canEdit && event && !isCancelled ? (
-          <div className="flex justify-between gap-2">
-            <Button variant="danger" onClick={doCancel} disabled={cancel.isPending}>
+  const footer =
+    props.canEdit && event && !isCancelled ? (
+      confirmingCancel ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-text-mid">Cancelar este evento? Os participantes serão notificados.</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setConfirmingCancel(false)} disabled={cancel.isPending}>
+              Voltar
+            </Button>
+            <Button variant="danger" onClick={doCancel} disabled={cancel.isPending} loading={cancel.isPending}>
               Cancelar evento
             </Button>
-            <Button variant="secondary" onClick={() => props.onEdit(event)}>
-              Editar
-            </Button>
           </div>
-        ) : (
-          <div className="flex justify-end">
-            <Button variant="ghost" onClick={props.onClose}>
-              Fechar
-            </Button>
-          </div>
-        )
-      }
-    >
+        </div>
+      ) : (
+        <div className="flex justify-between gap-2">
+          <Button variant="danger" onClick={() => setConfirmingCancel(true)}>
+            Cancelar evento
+          </Button>
+          <Button variant="secondary" onClick={() => props.onEdit(event)}>
+            Editar
+          </Button>
+        </div>
+      )
+    ) : (
+      <div className="flex justify-end">
+        <Button variant="ghost" onClick={props.onClose}>
+          Fechar
+        </Button>
+      </div>
+    );
+
+  const body = (
+    <>
       {detail.isLoading ? (
         <p className="text-sm text-text-low">Carregando…</p>
       ) : !event ? (
@@ -107,6 +128,24 @@ export function EventDetailModal(props: EventDetailModalProps): React.JSX.Elemen
           {event.description && <p className="text-text-mid">{event.description}</p>}
         </div>
       )}
+    </>
+  );
+
+  const open = Boolean(props.eventId);
+  const title = event?.title ?? 'Evento';
+
+  // Mobile: detalhe em bottom-sheet (MOBILE_UX §2.3 — drawer/modal → sheet).
+  if (isMobile) {
+    return (
+      <Sheet open={open} onClose={props.onClose} variant="bottom" title={title} footer={footer}>
+        {body}
+      </Sheet>
+    );
+  }
+
+  return (
+    <Modal open={open} onClose={props.onClose} title={title} footer={footer}>
+      {body}
     </Modal>
   );
 }

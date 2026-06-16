@@ -4,6 +4,8 @@ export { CalendarPage } from './CalendarPage';
 export { LazyCalendarPage } from './LazyCalendarPage';
 export { EventForm } from './EventForm';
 export { EventDetailModal } from './EventDetailModal';
+// Visão agenda/dia do mobile (F36-S07). Gate por `isMobile` dentro da CalendarPage.
+export { MobileAgenda } from './MobileAgenda';
 export {
   useCalendars,
   useEvents,
