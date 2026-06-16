@@ -9,6 +9,8 @@ import {
   resolvePeerVisibility,
 } from './repos/livechat';
 import {
+  agentDepartments,
+  agents,
   availabilityExceptions,
   availabilityRules,
   calendars,
@@ -1141,5 +1143,91 @@ describe('LiveChat repos (F30-S01)', () => {
       tx.select({ id: conversations.id }).from(conversations).where(pred),
     );
     expect(Array.isArray(rows)).toBe(true);
+  });
+});
+
+describe('RLS Agent departments (F34-S01)', () => {
+  it('agent_departments isola por workspace; cross-tenant nega', async () => {
+    const db = getDb(); // owner bypassa RLS no seed
+    const sfx = randomUUID().slice(0, 8);
+
+    // Seed em A: agente + departamento + vínculo (entrada).
+    const [agentA] = await db
+      .insert(agents)
+      .values({ workspaceId: wsA, name: `Agente A ${sfx}`, systemPrompt: 'a' })
+      .returning();
+    const [depA] = await db
+      .insert(departments)
+      .values({ workspaceId: wsA, name: `Dept A ${sfx}` })
+      .returning();
+    if (!agentA || !depA) throw new Error('Falha ao criar agent/department A.');
+    await db
+      .insert(agentDepartments)
+      .values({ agentId: agentA.id, departmentId: depA.id, workspaceId: wsA, isDefault: true });
+
+    // Seed em B.
+    const [agentB] = await db
+      .insert(agents)
+      .values({ workspaceId: wsB, name: `Agente B ${sfx}`, systemPrompt: 'b' })
+      .returning();
+    const [depB] = await db
+      .insert(departments)
+      .values({ workspaceId: wsB, name: `Dept B ${sfx}` })
+      .returning();
+    if (!agentB || !depB) throw new Error('Falha ao criar agent/department B.');
+    await db
+      .insert(agentDepartments)
+      .values({ agentId: agentB.id, departmentId: depB.id, workspaceId: wsB, isDefault: true });
+
+    // A só enxerga os próprios; B não enxerga nada de A.
+    const linksA = await withWorkspace(wsA, (tx) => tx.select().from(agentDepartments));
+    expect(linksA.every((l) => l.workspaceId === wsA)).toBe(true);
+    expect(linksA.some((l) => l.agentId === agentA.id && l.departmentId === depA.id)).toBe(true);
+    expect(linksA.some((l) => l.agentId === agentB.id)).toBe(false);
+
+    const linksB = await withWorkspace(wsB, (tx) => tx.select().from(agentDepartments));
+    expect(linksB.some((l) => l.agentId === agentA.id)).toBe(false);
+
+    // INSERT cross-tenant via app é barrado pelo WITH CHECK (workspace_id de B sob A).
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx
+          .insert(agentDepartments)
+          .values({ agentId: agentB.id, departmentId: depB.id, workspaceId: wsB }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('índice parcial único: dois defaults no mesmo departamento falham', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+
+    const [dep] = await db
+      .insert(departments)
+      .values({ workspaceId: wsA, name: `Dept uq ${sfx}` })
+      .returning();
+    const [ag1] = await db
+      .insert(agents)
+      .values({ workspaceId: wsA, name: `Ag1 ${sfx}`, systemPrompt: 'p' })
+      .returning();
+    const [ag2] = await db
+      .insert(agents)
+      .values({ workspaceId: wsA, name: `Ag2 ${sfx}`, systemPrompt: 'p' })
+      .returning();
+    if (!dep || !ag1 || !ag2) throw new Error('setup default-per-dept');
+
+    await db
+      .insert(agentDepartments)
+      .values({ agentId: ag1.id, departmentId: dep.id, workspaceId: wsA, isDefault: true });
+    // Segundo default no mesmo dept (outro agente) deve violar o partial unique.
+    await expect(
+      db
+        .insert(agentDepartments)
+        .values({ agentId: ag2.id, departmentId: dep.id, workspaceId: wsA, isDefault: true }),
+    ).rejects.toThrow();
+    // Mas um não-default no mesmo dept é permitido (vários agentes por dept).
+    await db
+      .insert(agentDepartments)
+      .values({ agentId: ag2.id, departmentId: dep.id, workspaceId: wsA, isDefault: false });
   });
 });

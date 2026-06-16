@@ -306,6 +306,12 @@ export * from './entitlements';
 // (N/conversa, FK evaluation_id CASCADE). Ambas workspace-scoped → RLS direto.
 export * from './evaluations';
 
+// --- Agent ↔ Department routing (F34-S01: AGENT_DEPARTMENT_ROUTING_PLAN §4.1) ---
+// agent_departments: join N:N agente↔departamento (workspace_id denormalizado →
+// RLS direto; espelha team_members). is_default = agente de entrada por dept
+// (índice parcial único). Importado DEPOIS de agents e org (referencia ambos).
+export * from './agent_departments';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -389,4 +395,6 @@ export const RLS_TABLES = [
   // Agent quality / CSAT / objections domain (F29). Ambas com workspace_id próprio.
   'conversation_evaluations',
   'objections',
+  // Agent ↔ Department routing (F34). Join N:N com workspace_id denormalizado → RLS direto.
+  'agent_departments',
 ] as const;

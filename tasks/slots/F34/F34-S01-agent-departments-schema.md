@@ -2,7 +2,7 @@
 id: F34-S01
 title: Schema agent_departments (N:N agente↔departamento) + RLS + repo
 phase: F34
-status: available
+status: review
 priority: critical
 estimated_size: S
 depends_on: []
@@ -14,6 +14,9 @@ blocks:
 source_docs:
   - docs/features/AGENT_DEPARTMENT_ROUTING_PLAN.md
 agent_id: db-engineer
+claimed_at: 2026-06-16T02:54:14Z
+completed_at: 2026-06-16T03:00:45Z
+
 ---
 # F34-S01 — Schema agent_departments
 
