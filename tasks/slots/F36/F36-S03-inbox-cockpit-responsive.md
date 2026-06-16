@@ -2,7 +2,7 @@
 id: F36-S03
 title: Inbox/cockpit responsivo — pilha de views + sheets
 phase: F36
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on:
