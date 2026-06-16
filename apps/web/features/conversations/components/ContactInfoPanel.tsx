@@ -115,9 +115,16 @@ function ContextRow({
 export function ContactInfoPanel({
   conversationId,
   onClose,
+  embedded = false,
 }: {
   conversationId: string;
   onClose: () => void;
+  /**
+   * `true` quando o painel é renderizado dentro de um `Sheet` (mobile): o Sheet
+   * já fornece chrome (título, X, scroll, safe-area), então suprimimos o `<aside>`
+   * e o cabeçalho próprios — só o conteúdo das seções. Desktop mantém o `<aside>`.
+   */
+  embedded?: boolean;
 }) {
   const auth = useAuthStore((s) => s.auth);
   const { toast } = useToast();
@@ -182,29 +189,8 @@ export function ContactInfoPanel({
     );
   }
 
-  return (
-    <aside
-      aria-label="Cockpit da conversa"
-      className="flex w-80 shrink-0 flex-col border-l border-border bg-surface"
-    >
-      {/* Cabeçalho do painel */}
-      <div className="flex h-14 items-center justify-between border-b border-border-2 px-4">
-        <div className="flex items-center gap-2">
-          <Info className="size-4 text-text-low" aria-hidden />
-          <span className="font-head text-sm font-semibold text-text">Cockpit</span>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fechar painel"
-          className="rounded-sm p-1.5 text-text-low outline-none hover:text-text focus-visible:shadow-glow-md"
-        >
-          <X className="size-5" />
-        </button>
-      </div>
-
-      <div className="flex flex-1 flex-col overflow-y-auto">
-
+  const sections = (
+    <>
         {/* ── 1. Status operacional ───────────────────────────────────────── */}
         <Section title="Status" icon={Zap}>
           {isLoading ? (
@@ -421,7 +407,38 @@ export function ContactInfoPanel({
 
         {/* ── 5. Notas internas + @menções (F1-S22) ──────────────────────── */}
         <NotesPanel conversationId={conversationId} />
+    </>
+  );
+
+  // Mobile: o cockpit é renderizado dentro de um `Sheet` (chrome + scroll +
+  // safe-area vêm do Sheet). Aqui devolvemos só as seções, sem `<aside>`.
+  if (embedded) {
+    return sections;
+  }
+
+  // Desktop: terceira coluna fixa com cabeçalho e scroll próprios.
+  return (
+    <aside
+      aria-label="Cockpit da conversa"
+      className="flex w-80 shrink-0 flex-col border-l border-border bg-surface"
+    >
+      {/* Cabeçalho do painel */}
+      <div className="flex h-14 items-center justify-between border-b border-border-2 px-4">
+        <div className="flex items-center gap-2">
+          <Info className="size-4 text-text-low" aria-hidden />
+          <span className="font-head text-sm font-semibold text-text">Cockpit</span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Fechar painel"
+          className="rounded-sm p-1.5 text-text-low outline-none hover:text-text focus-visible:shadow-glow-md"
+        >
+          <X className="size-5" />
+        </button>
       </div>
+
+      <div className="flex flex-1 flex-col overflow-y-auto">{sections}</div>
     </aside>
   );
 }

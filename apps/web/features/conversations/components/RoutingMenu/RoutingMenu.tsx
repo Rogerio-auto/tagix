@@ -13,6 +13,8 @@ import {
 import { Button, useToast } from '@hm/ui';
 import { can, type Permission } from '@hm/shared';
 import { cn } from '@/shared/lib/cn';
+import { Sheet } from '@/shared/components/Sheet';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { useAssignConversation, useRoutingTargets, useTransferConversation } from './queries';
 import { RoutingHistoryList } from './RoutingHistoryList';
@@ -49,6 +51,7 @@ export function RoutingMenu({
 }) {
   const auth = useAuthStore((s) => s.auth);
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('menu');
   const [showHistory, setShowHistory] = useState(false);
@@ -90,9 +93,9 @@ export function RoutingMenu({
     [members, assignedTo],
   );
 
-  // Fecha o menu ao clicar fora (mantém o histórico, que é seção separada).
+  // Click-outside só fecha o dropdown desktop; no mobile o Sheet se fecha sozinho.
   useEffect(() => {
-    if (!open) return;
+    if (!open || isMobile) return;
     function onPointerDown(event: PointerEvent): void {
       if (!containerRef.current?.contains(event.target as Node)) {
         setOpen(false);
@@ -101,7 +104,7 @@ export function RoutingMenu({
     }
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [open]);
+  }, [open, isMobile]);
 
   function resetAndClose(): void {
     setOpen(false);
@@ -152,6 +155,62 @@ export function RoutingMenu({
       },
     );
   }
+
+  // Conteúdo do fluxo de transferência — compartilhado entre o dropdown desktop
+  // e o Sheet mobile (só o container muda; mode/reason/queries são os mesmos).
+  const transferContent = (
+    <>
+      {mode === 'menu' && (
+        <>
+          <MenuButton
+            icon={UserPlus}
+            label="Transferir para membro"
+            disabled={transferableMembers.length === 0}
+            touch={isMobile}
+            onClick={() => setMode('transfer_member')}
+          />
+          <MenuButton
+            icon={Building2}
+            label="Transferir para departamento"
+            disabled={departments.length === 0}
+            touch={isMobile}
+            onClick={() => setMode('transfer_department')}
+          />
+        </>
+      )}
+
+      {mode === 'transfer_member' && (
+        <TransferList
+          ariaLabel="Selecionar membro destino"
+          reason={reason}
+          onReasonChange={setReason}
+          pending={pending}
+          touch={isMobile}
+          options={transferableMembers.map((m) => ({
+            id: m.id,
+            label: m.name?.trim() || m.email,
+          }))}
+          onPick={handleTransferMember}
+          onBack={() => setMode('menu')}
+        />
+      )}
+
+      {mode === 'transfer_department' && (
+        <TransferList
+          ariaLabel="Selecionar departamento destino"
+          reason={reason}
+          onReasonChange={setReason}
+          pending={pending}
+          touch={isMobile}
+          options={departments
+            .filter((d) => d.id !== departmentId)
+            .map((d) => ({ id: d.id, label: d.name }))}
+          onPick={handleTransferDepartment}
+          onBack={() => setMode('menu')}
+        />
+      )}
+    </>
+  );
 
   return (
     <section aria-label="Roteamento da conversa" className="flex flex-col gap-3">
@@ -214,58 +273,28 @@ export function RoutingMenu({
             )}
           </div>
 
-          {open && canTransfer && (
-            <div
-              role="menu"
-              className="z-10 flex flex-col gap-1 rounded-md border border-border bg-surface-2 p-1 shadow-glow-md"
-            >
-              {mode === 'menu' && (
-                <>
-                  <MenuButton
-                    icon={UserPlus}
-                    label="Transferir para membro"
-                    disabled={transferableMembers.length === 0}
-                    onClick={() => setMode('transfer_member')}
-                  />
-                  <MenuButton
-                    icon={Building2}
-                    label="Transferir para departamento"
-                    disabled={departments.length === 0}
-                    onClick={() => setMode('transfer_department')}
-                  />
-                </>
+          {/* Mobile: o fluxo de transferência vive num bottom-sheet (toque);
+              desktop: dropdown ancorado. A lógica/queries são idênticas. */}
+          {isMobile
+            ? canTransfer && (
+                <Sheet
+                  open={open}
+                  onClose={resetAndClose}
+                  title="Transferir conversa"
+                  variant="bottom"
+                >
+                  {transferContent}
+                </Sheet>
+              )
+            : open &&
+              canTransfer && (
+                <div
+                  role="menu"
+                  className="z-10 flex flex-col gap-1 rounded-md border border-border bg-surface-2 p-1 shadow-glow-md"
+                >
+                  {transferContent}
+                </div>
               )}
-
-              {mode === 'transfer_member' && (
-                <TransferList
-                  ariaLabel="Selecionar membro destino"
-                  reason={reason}
-                  onReasonChange={setReason}
-                  pending={pending}
-                  options={transferableMembers.map((m) => ({
-                    id: m.id,
-                    label: m.name?.trim() || m.email,
-                  }))}
-                  onPick={handleTransferMember}
-                  onBack={() => setMode('menu')}
-                />
-              )}
-
-              {mode === 'transfer_department' && (
-                <TransferList
-                  ariaLabel="Selecionar departamento destino"
-                  reason={reason}
-                  onReasonChange={setReason}
-                  pending={pending}
-                  options={departments
-                    .filter((d) => d.id !== departmentId)
-                    .map((d) => ({ id: d.id, label: d.name }))}
-                  onPick={handleTransferDepartment}
-                  onBack={() => setMode('menu')}
-                />
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -300,11 +329,14 @@ function MenuButton({
   icon: Icon,
   label,
   disabled,
+  touch = false,
   onClick,
 }: {
   icon: typeof UserPlus;
   label: string;
   disabled?: boolean;
+  /** Alvo de toque ≥44px e tipografia maior no mobile. */
+  touch?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -314,12 +346,13 @@ function MenuButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-body text-sm outline-none',
+        'flex w-full items-center gap-2 rounded-sm text-left font-body outline-none',
+        touch ? 'touch-target rounded-md px-3 text-base' : 'px-2 py-1.5 text-sm',
         'text-text-mid hover:bg-surface-3 hover:text-text focus-visible:shadow-glow-md',
         'disabled:cursor-not-allowed disabled:opacity-50',
       )}
     >
-      <Icon className="size-3.5 text-text-low" aria-hidden />
+      <Icon className={cn('text-text-low', touch ? 'size-5' : 'size-3.5')} aria-hidden />
       <span className="truncate">{label}</span>
     </button>
   );
@@ -331,6 +364,7 @@ function TransferList({
   reason,
   onReasonChange,
   pending,
+  touch = false,
   onPick,
   onBack,
 }: {
@@ -339,6 +373,8 @@ function TransferList({
   reason: string;
   onReasonChange: (value: string) => void;
   pending: boolean;
+  /** Alvos de toque ≥44px e tipografia maior no mobile. */
+  touch?: boolean;
   onPick: (id: string) => void;
   onBack: () => void;
 }) {
@@ -347,7 +383,10 @@ function TransferList({
       <button
         type="button"
         onClick={onBack}
-        className="self-start font-body text-xs text-text-low underline-offset-4 outline-none hover:text-text-mid focus-visible:shadow-glow-md"
+        className={cn(
+          'self-start font-body text-text-low underline-offset-4 outline-none hover:text-text-mid focus-visible:shadow-glow-md',
+          touch ? 'py-2 text-sm' : 'text-xs',
+        )}
       >
         ← Voltar
       </button>
@@ -358,9 +397,16 @@ function TransferList({
         placeholder="Motivo (opcional)"
         aria-label="Motivo da transferência"
         onChange={(e) => onReasonChange(e.target.value)}
-        className="w-full rounded-sm border border-border bg-surface-inset px-2 py-1.5 font-body text-sm text-text outline-none placeholder:text-text-low focus:border-brand focus:shadow-glow-sm"
+        className={cn(
+          'w-full rounded-sm border border-border bg-surface-inset px-2 font-body text-text outline-none placeholder:text-text-low focus:border-brand focus:shadow-glow-sm',
+          touch ? 'py-2.5 text-base' : 'py-1.5 text-sm',
+        )}
       />
-      <ul role="listbox" aria-label={ariaLabel} className="max-h-48 overflow-y-auto">
+      <ul
+        role="listbox"
+        aria-label={ariaLabel}
+        className={cn('overflow-y-auto', touch ? 'max-h-[50dvh]' : 'max-h-48')}
+      >
         {options.map((opt) => (
           <li key={opt.id} role="option" aria-selected={false}>
             <button
@@ -368,12 +414,16 @@ function TransferList({
               disabled={pending}
               onClick={() => onPick(opt.id)}
               className={cn(
-                'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-body text-sm outline-none',
+                'flex w-full items-center gap-2 rounded-sm text-left font-body outline-none',
+                touch ? 'touch-target rounded-md px-3 text-base' : 'px-2 py-1.5 text-sm',
                 'text-text-mid hover:bg-surface-3 hover:text-text focus-visible:shadow-glow-md',
                 'disabled:cursor-not-allowed disabled:opacity-50',
               )}
             >
-              <Check className="size-3.5 shrink-0 text-text-low opacity-0" aria-hidden />
+              <Check
+                className={cn('shrink-0 text-text-low opacity-0', touch ? 'size-5' : 'size-3.5')}
+                aria-hidden
+              />
               <span className="truncate">{opt.label}</span>
             </button>
           </li>

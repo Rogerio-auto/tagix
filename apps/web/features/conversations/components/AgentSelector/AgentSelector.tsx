@@ -22,6 +22,8 @@ import { Bot, Check, ChevronDown } from 'lucide-react';
 import { useToast } from '@hm/ui';
 import { cn } from '@/shared/lib/cn';
 import { Skeleton } from '@/shared/components/feedback';
+import { Sheet } from '@/shared/components/Sheet';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useConversationAgent, useAssignAgent } from '../../queries';
 import { useAgentChangedSocket } from '../../hooks/useAgentChangedSocket';
 
@@ -33,6 +35,7 @@ export interface AgentSelectorProps {
 
 export function AgentSelector({ conversationId, canAssign }: AgentSelectorProps) {
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -42,15 +45,15 @@ export function AgentSelector({ conversationId, canAssign }: AgentSelectorProps)
   // Reflete trocas de agente vindas de outros operadores sem reload (UX realtime).
   useAgentChangedSocket(canAssign ? conversationId : undefined);
 
-  // Fecha o dropdown ao clicar fora.
+  // Click-outside só fecha o dropdown desktop; no mobile a lista vive num Sheet.
   useEffect(() => {
-    if (!open) return;
+    if (!open || isMobile) return;
     function onPointerDown(event: PointerEvent): void {
       if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
     }
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [open]);
+  }, [open, isMobile]);
 
   if (!canAssign) return null;
 
@@ -119,44 +122,85 @@ export function AgentSelector({ conversationId, canAssign }: AgentSelectorProps)
         <p className="font-body text-xs text-danger">Não foi possível carregar os agentes.</p>
       )}
 
-      {open && (
-        <div
-          role="listbox"
-          aria-label="Selecionar agente"
-          className="z-10 max-h-56 overflow-y-auto rounded-md border border-border bg-surface-2 p-1 shadow-glow-md"
-        >
+      {/* Mobile: lista de candidatos num full-sheet (toque); desktop: dropdown. */}
+      {isMobile ? (
+        <Sheet open={open} onClose={() => setOpen(false)} title="Selecionar agente" variant="bottom">
           {candidates.length === 0 ? (
-            <p className="px-2 py-2 font-body text-xs text-text-low">
+            <p className="py-4 font-body text-sm text-text-low">
               Nenhum agente elegível ao departamento desta conversa.
             </p>
           ) : (
-            candidates.map((agent) => {
-              const isCurrent = agent.id === currentId;
-              return (
-                <button
-                  key={agent.id}
-                  type="button"
-                  role="option"
-                  aria-selected={isCurrent}
-                  disabled={assign.isPending}
-                  onClick={() => handlePick(agent.id)}
-                  className={cn(
-                    'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-body text-sm outline-none',
-                    'hover:bg-surface-3 focus-visible:shadow-glow-md',
-                    'disabled:cursor-not-allowed disabled:opacity-50',
-                    isCurrent ? 'text-text' : 'text-text-mid hover:text-text',
-                  )}
-                >
-                  <Check
-                    className={cn('size-3.5 shrink-0 text-text', isCurrent ? 'opacity-100' : 'opacity-0')}
-                    aria-hidden
-                  />
-                  <span className="truncate">{agent.name}</span>
-                </button>
-              );
-            })
+            <ul role="listbox" aria-label="Selecionar agente" className="flex flex-col gap-1 pb-2">
+              {candidates.map((agent) => {
+                const isCurrent = agent.id === currentId;
+                return (
+                  <li key={agent.id} role="option" aria-selected={isCurrent}>
+                    <button
+                      type="button"
+                      disabled={assign.isPending}
+                      onClick={() => handlePick(agent.id)}
+                      className={cn(
+                        'touch-target flex w-full items-center gap-3 rounded-md px-3 text-left font-body text-base outline-none',
+                        'hover:bg-surface-2 focus-visible:shadow-glow-md',
+                        'disabled:cursor-not-allowed disabled:opacity-50',
+                        isCurrent ? 'text-text' : 'text-text-mid',
+                      )}
+                    >
+                      <Check
+                        className={cn(
+                          'size-5 shrink-0 text-brand',
+                          isCurrent ? 'opacity-100' : 'opacity-0',
+                        )}
+                        aria-hidden
+                      />
+                      <span className="truncate">{agent.name}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           )}
-        </div>
+        </Sheet>
+      ) : (
+        open && (
+          <div
+            role="listbox"
+            aria-label="Selecionar agente"
+            className="z-10 max-h-56 overflow-y-auto rounded-md border border-border bg-surface-2 p-1 shadow-glow-md"
+          >
+            {candidates.length === 0 ? (
+              <p className="px-2 py-2 font-body text-xs text-text-low">
+                Nenhum agente elegível ao departamento desta conversa.
+              </p>
+            ) : (
+              candidates.map((agent) => {
+                const isCurrent = agent.id === currentId;
+                return (
+                  <button
+                    key={agent.id}
+                    type="button"
+                    role="option"
+                    aria-selected={isCurrent}
+                    disabled={assign.isPending}
+                    onClick={() => handlePick(agent.id)}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-body text-sm outline-none',
+                      'hover:bg-surface-3 focus-visible:shadow-glow-md',
+                      'disabled:cursor-not-allowed disabled:opacity-50',
+                      isCurrent ? 'text-text' : 'text-text-mid hover:text-text',
+                    )}
+                  >
+                    <Check
+                      className={cn('size-3.5 shrink-0 text-text', isCurrent ? 'opacity-100' : 'opacity-0')}
+                      aria-hidden
+                    />
+                    <span className="truncate">{agent.name}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        )
       )}
     </div>
   );
