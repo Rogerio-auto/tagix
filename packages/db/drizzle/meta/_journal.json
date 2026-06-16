@@ -288,6 +288,20 @@
       "when": 1781452801000,
       "tag": "0040_f30_inbox_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1781452802000,
+      "tag": "0041_f34_agent_departments",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1781452803000,
+      "tag": "0042_f34_agent_departments_rls",
+      "breakpoints": true
     }
   ]
 }

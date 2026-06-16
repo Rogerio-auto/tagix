@@ -2,6 +2,9 @@ import { and, eq } from 'drizzle-orm';
 import { getDb } from '../client';
 import { members, workspaces } from '../schema';
 
+// Repo de roteamento agente↔departamento (F34-S01).
+export * from './agent_departments';
+
 export const workspacesRepo = {
   async findById(id: string) {
     const [row] = await getDb().select().from(workspaces).where(eq(workspaces.id, id));
