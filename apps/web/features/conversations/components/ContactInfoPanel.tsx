@@ -26,6 +26,7 @@ import { useAuthStore } from '@/shared/stores/auth.store';
 import { NotesPanel } from './Notes';
 import { RoutingMenu } from './RoutingMenu';
 import { AgentSelector } from './AgentSelector';
+import { SnoozeMenu } from './SnoozeMenu';
 import { useConversationDetail, useChangeStatus, useChangeAiMode } from '../queries';
 
 // ── Helpers de formatação ─────────────────────────────────────────────────────
@@ -260,27 +261,11 @@ export function ContactInfoPanel({
                   </Button>
                 )}
                 {canSnooze && status === 'open' && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    loading={changeStatus.isPending}
-                    onClick={() => {
-                      if (changeStatus.isPending) return;
-                      const snoozedUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-                      changeStatus.mutate(
-                        { conversationId, status: 'snoozed', snoozedUntil },
-                        {
-                          onSuccess: () =>
-                            toast({ title: 'Conversa adiada por 1 hora', variant: 'success' }),
-                          onError: () =>
-                            toast({ title: 'Falha ao adiar', variant: 'error' }),
-                        },
-                      );
-                    }}
-                  >
-                    Adiar 1h
-                  </Button>
+                  <SnoozeMenu
+                    conversationId={conversationId}
+                    variant="button"
+                    disabled={changeStatus.isPending}
+                  />
                 )}
               </div>
             </div>
@@ -293,10 +278,21 @@ export function ContactInfoPanel({
             <Skeleton className="h-16 w-full" />
           ) : (
             <div className="flex flex-col gap-3">
-              {/* Agente atual + troca manual (F34-S04) — só quem pode atribuir agente. */}
-              {canAssignAgent && (
+              {/* Agente atual + troca manual (F34-S04). Quem pode atribuir vê o
+                  seletor; os demais veem o agente atual em read-only. */}
+              {canAssignAgent ? (
                 <AgentSelector conversationId={conversationId} canAssign={canAssignAgent} />
-              )}
+              ) : detail?.agentName ? (
+                <div className="flex flex-col gap-1">
+                  <span className="font-body text-xs text-text-low">Agente responsável</span>
+                  <div className="flex items-center gap-2 rounded-md border border-border-2 bg-surface-2 px-3 py-2">
+                    <Bot className="size-4 shrink-0 text-text-low" aria-hidden />
+                    <span className="truncate font-body text-sm font-medium text-text">
+                      {detail.agentName}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
 
               {/* Indicador de handoff — destaque quando pausada (atendente assumiu) */}
               {isAiPaused && (
@@ -402,20 +398,10 @@ export function ContactInfoPanel({
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
+              {/* Responsável + Departamento vivem na seção Roteamento (sem duplicar). */}
               <ContextRow
                 label="Canal"
                 value={channelLabel(detail?.channelProvider ?? null)}
-              />
-              <ContextRow
-                label="Departamento"
-                value={detail?.departmentName}
-              />
-              <ContextRow
-                label="Responsável"
-                value={
-                  detail?.assignedToName ??
-                  (detail?.assignedTo ? 'Membro' : null)
-                }
               />
               <ContextRow
                 label="Estágio"

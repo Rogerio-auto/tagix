@@ -588,6 +588,8 @@ describe('GET /api/conversations/:id — detalhe (cockpit)', () => {
     expect(conv).toHaveProperty('channelProvider');
     expect(conv).toHaveProperty('departmentName');
     expect(conv).toHaveProperty('assignedToName');
+    expect(conv).toHaveProperty('agentName');
+    expect(conv).toHaveProperty('stageName');
   });
 
   it('conversa inexistente → 404', async () => {

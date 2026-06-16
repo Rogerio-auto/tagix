@@ -39,6 +39,9 @@ export interface ConversationDetail {
   assignedToName: string | null;
   departmentId: string | null;
   departmentName: string | null;
+  /** Agente de IA atual da conversa (id + nome) — read-only no cockpit. */
+  agentId: string | null;
+  agentName: string | null;
   /** Stage do pipeline (exibição de contexto). */
   stageName: string | null;
   unreadCount: number;

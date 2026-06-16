@@ -15,12 +15,13 @@
  * - Focus ring visível (`focus-visible:shadow-glow-md`).
  */
 
-import { Bot, CheckCheck, Clock, Info, RefreshCw } from 'lucide-react';
+import { Bot, CheckCheck, Info, RefreshCw } from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
 import { can } from '@hm/shared';
 import { cn } from '@/shared/lib/cn';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { FlowExecutionsBadge } from '@/features/flow-builder/livechat';
+import { SnoozeMenu } from '../SnoozeMenu';
 import { useChangeStatus, useChangeAiMode } from '../../queries';
 import type { ConversationDetail } from '../../types';
 
@@ -64,6 +65,7 @@ export function ConversationHeader({
 
   const role = auth?.role ?? null;
   const canResolve = role ? can(role, 'conversation.resolve') : false;
+  const canSnooze = role ? can(role, 'conversation.snooze') : false;
   const canAiMode = role ? can(role, 'conversation.ai_mode') : false;
 
   const status = detail?.status ?? 'open';
@@ -187,30 +189,13 @@ export function ConversationHeader({
           </Button>
         )}
 
-        {/* Snooze */}
-        {canResolve && status === 'open' && (
-          <button
-            type="button"
-            aria-label="Adiar conversa"
-            title="Adiar conversa"
-            className={cn(
-              'rounded-sm p-2 text-text-low outline-none transition-colors',
-              'hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md',
-            )}
-            onClick={() => {
-              // Snooze por 1 hora (placeholder — implementação futura de date picker)
-              const snoozedUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-              changeStatus.mutate(
-                { conversationId, status: 'snoozed', snoozedUntil },
-                {
-                  onSuccess: () => toast({ title: 'Conversa adiada por 1 hora', variant: 'success' }),
-                  onError: () => toast({ title: 'Falha ao adiar', variant: 'error' }),
-                },
-              );
-            }}
-          >
-            <Clock className="size-5" />
-          </button>
+        {/* Snooze — menu de durações reais (1h / 3h / amanhã / próxima semana) */}
+        {canSnooze && status === 'open' && (
+          <SnoozeMenu
+            conversationId={conversationId}
+            variant="icon"
+            disabled={changeStatus.isPending}
+          />
         )}
 
         {/* Resolver / Reabrir */}

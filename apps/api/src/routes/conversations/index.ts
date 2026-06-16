@@ -188,14 +188,28 @@ export function createConversationsRouter(): Router {
           channelProvider: schema.channels.provider,
           assignedToName: schema.members.name,
           departmentName: schema.departments.name,
+          agentName: schema.agents.name,
         })
         .from(schema.conversations)
         .innerJoin(schema.channels, eq(schema.conversations.channelId, schema.channels.id))
         .leftJoin(schema.members, eq(schema.conversations.assignedTo, schema.members.id))
         .leftJoin(schema.departments, eq(schema.conversations.departmentId, schema.departments.id))
+        .leftJoin(schema.agents, eq(schema.conversations.agentId, schema.agents.id))
         .where(eq(schema.conversations.id, conversationId))
         .limit(1);
-      return row ?? null;
+      if (!row) return null;
+
+      // Estágio: a conversa não referencia stage; vem do deal vinculado a ela
+      // (deals.conversation_id). Pega o mais recente + o nome do stage.
+      const [deal] = await tx
+        .select({ stageName: schema.stages.name })
+        .from(schema.deals)
+        .innerJoin(schema.stages, eq(schema.deals.stageId, schema.stages.id))
+        .where(eq(schema.deals.conversationId, conversationId))
+        .orderBy(desc(schema.deals.createdAt))
+        .limit(1);
+
+      return { ...row, stageName: deal?.stageName ?? null };
     });
 
     if (detail === null) {
@@ -220,9 +234,11 @@ export function createConversationsRouter(): Router {
         assignedToName: detail.assignedToName,
         departmentId: c.departmentId,
         departmentName: detail.departmentName,
-        // stageName: a conversa não referencia stage diretamente (vem de deals).
-        // Exposto como null por ora — o cockpit já degrada para "—".
-        stageName: null,
+        // Agente de IA atual + nome (read-only no cockpit p/ quem não pode trocar).
+        agentId: c.agentId,
+        agentName: detail.agentName,
+        // Estágio do deal vinculado à conversa (null se não houver deal).
+        stageName: detail.stageName,
         unreadCount: c.unreadCount,
         lastMessageAt: c.lastMessageAt,
         createdAt: c.createdAt,
