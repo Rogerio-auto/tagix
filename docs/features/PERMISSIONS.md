@@ -44,6 +44,7 @@ Tabela autoritativa. Quando o código fizer `requireRole([...])`, consulta isso.
 | Marcar conversa resolved | ✅ | ✅ | ✅ | ✅ (das suas) | ❌ |
 | Snooze | ✅ | ✅ | ✅ | ✅ (das suas) | ❌ |
 | Ligar/desligar IA (`ai_mode`) | ✅ | ✅ | ✅ | ✅ (das suas) | ❌ |
+| Trocar agente de IA da conversa (`assign_agent`) | ✅ | ✅ | ✅ | ✅ (das suas) | ❌ |
 | Excluir mensagem (LGPD) | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Export histórico | ✅ | ✅ | ✅ | ❌ | ✅ |
 

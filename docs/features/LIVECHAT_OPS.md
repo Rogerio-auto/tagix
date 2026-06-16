@@ -66,11 +66,39 @@ team_id ausente   → workspace.default_peer_visibility
   - **Ocioso** — após N minutos sem atividade humana (default 60min, configurável) → IA reengaja com contexto.
   - **Finalização/wrap-up** — IA pode encerrar/resumir após o humano sair.
 
+### 2.1 Troca manual do agente de IA no cockpit (F34)
+
+Quando o workspace tem mais de um agente de IA atendendo um mesmo departamento, o
+operador pode **trocar qual agente atende a conversa** direto do cockpit — sem
+esperar uma transferência autônoma (LLM) nem mexer no editor de agentes.
+
+- **Onde:** seção "Agente IA" do `ContactInfoPanel` → componente `AgentSelector`. Mostra
+  o **agente atual nomeado** (não só "IA on/off") e um dropdown com os agentes
+  **elegíveis ao(s) departamento(s)** da conversa.
+- **Endpoints** (`apps/api/src/routes/conversations/agent.ts`):
+  - `GET  /api/conversations/:id/agent` → `{ currentAgentId, currentAgentName, candidates[] }`.
+    Candidatos = agentes ativos que atendem algum departamento da conversa (vínculo N:N
+    `agent_departments`); conversa sem departamento → fallback para todos os agentes ativos.
+  - `POST /api/conversations/:id/agent` `{ agentId }` → fixa `conversation.agent_id` (sticky),
+    garante `ai_mode='on'` e **limpa pausa pendente** (`ai_paused_*` → null), re-engaja a IA
+    enfileirando `flow.run.requested` em `hm.q.flows` e emite o socket `conversation:agent_changed`.
+    Agente fora dos candidatos → `422`.
+- **Permissão:** `conversation.assign_agent` (D4) — OWNER/ADMIN/SUPERVISOR em qualquer conversa
+  visível; **AGENT só nas atribuídas a ele**; READONLY nunca. O guard de visibilidade por-conversa
+  (`assertConversationVisible`, padrão F30-S07.1) retorna **404 antes do 403** de escopo do AGENT,
+  para não vazar a existência de conversas fora do escopo.
+- **Realtime:** outros operadores na conversa recebem `conversation:agent_changed` e o seletor
+  reflete a troca sem reload (`useAgentChangedSocket`).
+
+> A transferência **autônoma** IA→IA (o próprio agente decide passar a conversa para um par
+> via tool `transfer_to_agent`) é documentada em `AGENTS_LANGGRAPH.md`. A troca aqui é a
+> manual, conduzida pelo operador.
+
 ---
 
 ## 3. Cockpit de atendimento (UI)
 
-- **Painel direito = centro de comando completo** (`ContactInfoPanel`), referência ≥ Chatwoot/Intercom/Kommo: status (resolver/snooze/reabrir), atribuir/pegar/transferir, toggle IA + estado de handoff, contexto (canal, departamento, atendente, estágio), histórico de routing, notas.
+- **Painel direito = centro de comando completo** (`ContactInfoPanel`), referência ≥ Chatwoot/Intercom/Kommo: status (resolver/snooze/reabrir), atribuir/pegar/transferir, toggle IA + estado de handoff, **troca manual do agente de IA** (`AgentSelector`, §2.1), contexto (canal, departamento, atendente, estágio), histórico de routing, notas.
 - **Header = espelho condicional.** Os atalhos de ação aparecem no header **apenas quando o painel direito está fechado**; ao abrir o painel, o header esconde as ações (zero duplicação) e o painel assume tudo.
 - **Filtros de inbox** por departamento / time / atendente, coerentes com a política de visibilidade.
 
@@ -95,6 +123,7 @@ Toda atribuição automática grava `routing_history` (`action='auto_assign'`) e
 | `conversation.resolve` | OWNER, ADMIN, SUPERVISOR, AGENT (das suas) |
 | `conversation.snooze` | OWNER, ADMIN, SUPERVISOR, AGENT (das suas) |
 | `conversation.ai_mode` | OWNER, ADMIN, SUPERVISOR, AGENT (das suas) — `PERMISSIONS.md §2.1` |
+| `conversation.assign_agent` | OWNER, ADMIN, SUPERVISOR, AGENT (das suas) — `PERMISSIONS.md §2.1` (F34-S04, D4) |
 | `inbox.visibility.manage` | OWNER, ADMIN |
 
 ---

@@ -23,7 +23,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F31   | 12     | 0   | 0   | 0   | 0   | 0   | 12   |
 | F32   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F33   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
-| F34   | 7     | 1   | 0   | 0   | 0   | 0   | 6   |
+| F34   | 7     | 0   | 0   | 0   | 0   | 1   | 6   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -261,15 +261,15 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 34
 
-| ID      | Titulo                                                                 | Status      | Prioridade | Depende de |
-| ------- | ---------------------------------------------------------------------- | ----------- | ---------- | ---------- |
-| F34-S01 | Schema agent_departments (N:N agente↔departamento) + RLS + repo        | ✅ done      | critical   | —          |
-| F34-S02 | Config de departamentos no editor de agente (API + UI)                 | ✅ done      | high       | —          |
-| F34-S03 | Resolução department-aware do agente em loadContext                    | ✅ done      | high       | —          |
-| F34-S04 | Troca manual de agente no cockpit (endpoint + UI + socket + permissão) | ✅ done      | high       | —          |
-| F34-S05 | Tool transfer_to_agent — handler Node + authz de alvo + re-engaje      | ✅ done      | medium     | —          |
-| F34-S06 | Runtime — tool transfer_to_agent, diretriz de prompt e contexto IA→IA  | ✅ done      | medium     | —          |
-| F34-S07 | E2E + docs do roteamento agente↔departamento e handoff                 | 🟢 available | medium     | —          |
+| ID      | Titulo                                                                 | Status   | Prioridade | Depende de |
+| ------- | ---------------------------------------------------------------------- | -------- | ---------- | ---------- |
+| F34-S01 | Schema agent_departments (N:N agente↔departamento) + RLS + repo        | ✅ done   | critical   | —          |
+| F34-S02 | Config de departamentos no editor de agente (API + UI)                 | ✅ done   | high       | —          |
+| F34-S03 | Resolução department-aware do agente em loadContext                    | ✅ done   | high       | —          |
+| F34-S04 | Troca manual de agente no cockpit (endpoint + UI + socket + permissão) | ✅ done   | high       | —          |
+| F34-S05 | Tool transfer_to_agent — handler Node + authz de alvo + re-engaje      | ✅ done   | medium     | —          |
+| F34-S06 | Runtime — tool transfer_to_agent, diretriz de prompt e contexto IA→IA  | ✅ done   | medium     | —          |
+| F34-S07 | E2E + docs do roteamento agente↔departamento e handoff                 | 🟣 review | medium     | —          |
 
 ## Fase 4 — Campaigns
 
