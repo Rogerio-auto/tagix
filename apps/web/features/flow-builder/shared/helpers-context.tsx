@@ -151,7 +151,7 @@ export function FlowHelpersAutoProvider({ children }: { children: ReactNode }) {
   const membersQ = useMembers();
   const pipelinesQ = usePipelines();
 
-  const pipelineRows = pipelinesQ.data?.pipelines ?? [];
+  const pipelineRows = pipelinesQ.data?.data ?? [];
 
   // Stages vivem no detalhe de cada pipeline (a lista não os traz). Buscamos em
   // paralelo e com cache compartilhado pela mesma chave do board.
