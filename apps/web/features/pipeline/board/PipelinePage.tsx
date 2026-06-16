@@ -12,13 +12,15 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { useToast } from '@hm/ui';
+import { Plus } from 'lucide-react';
+import { Button, useToast } from '@hm/ui';
 import { HelpHint } from '@/shared/components/help';
 import { StageColumn } from './StageColumn';
 import { useDeals, usePipelineDetail, usePipelines, useMoveDeal } from './queries';
 import { DealDetailDrawer } from '../deal';
 import type { CustomFieldDef } from '../custom-fields';
 import { useDealSocket } from './useDealSocket';
+import { CreatePipelineModal } from '../settings/CreatePipelineModal';
 import type { Deal, Stage } from './types';
 
 /** Validação client-side de transition rule (espelho de §4.2): só checa
@@ -38,8 +40,10 @@ export function PipelinePage(): React.JSX.Element {
   const pipelinesQuery = usePipelines();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [openDealId, setOpenDealId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const pipelines = pipelinesQuery.data?.data ?? [];
+  const meta = pipelinesQuery.data?.meta;
   const pipelineId = selectedId ?? pipelines[0]?.id;
 
   const detail = usePipelineDetail(pipelineId);
@@ -123,11 +127,34 @@ export function PipelinePage(): React.JSX.Element {
   }
   if (pipelines.length === 0) {
     return (
-      <div className="p-6">
-        <p className="text-sm text-text-mid">
-          Nenhum pipeline ainda. Crie um a partir de um nicho no onboarding.
-        </p>
-      </div>
+      <>
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="flex size-12 items-center justify-center rounded-full bg-surface-raised">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-6 text-text-low" aria-hidden>
+                <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
+                <path d="M7 7h.01" />
+              </svg>
+            </div>
+            <h2 className="text-base font-semibold text-text">Nenhuma pipeline criada ainda</h2>
+            <p className="text-sm text-text-mid">
+              Crie sua primeira pipeline de vendas para comecar a organizar seus deals.
+            </p>
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="size-4" />
+              Criar pipeline
+            </Button>
+          </div>
+        </div>
+        <CreatePipelineModal
+          open={showCreate}
+          onClose={() => setShowCreate(false)}
+          onCreated={(newId) => {
+            setShowCreate(false);
+            setSelectedId(newId);
+          }}
+        />
+      </>
     );
   }
 
@@ -147,8 +174,22 @@ export function PipelinePage(): React.JSX.Element {
               </option>
             ))}
           </select>
+          {meta && pipelines.length >= 2 && (
+            <span className="text-xs text-text-low">
+              {meta.current} / {meta.limit} pipelines
+            </span>
+          )}
           <HelpHint k="pipeline.board" />
         </div>
+        <Button
+          variant="secondary"
+          onClick={() => setShowCreate(true)}
+          disabled={meta ? meta.current >= meta.limit : false}
+          title={meta && meta.current >= meta.limit ? "Limite de " + meta.limit + " pipelines atingido. Exclua uma para criar outra." : undefined}
+        >
+          <Plus className="size-4" />
+          Nova pipeline
+        </Button>
       </header>
 
       {detail.isLoading ? (
@@ -176,6 +217,15 @@ export function PipelinePage(): React.JSX.Element {
           </div>
         </DndContext>
       )}
+
+      <CreatePipelineModal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreated={(newId) => {
+          setShowCreate(false);
+          setSelectedId(newId);
+        }}
+      />
 
       <DealDetailDrawer
         dealId={openDealId}

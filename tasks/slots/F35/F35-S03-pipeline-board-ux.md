@@ -2,13 +2,16 @@
 id: F35-S03
 title: Board — seletor de pipeline melhorado + empty state + CTA criar
 phase: F35
-status: blocked
+status: review
 priority: medium
 estimated_size: S
 depends_on: [F35-S01]
 blocks: []
 source_docs:
   - docs/features/PIPELINE.md
+agent_id: backend-engineer
+claimed_at: 2026-06-16T13:41:35Z
+completed_at: 2026-06-16T13:43:01Z
 
 ---
 # F35-S03 — Board UX: seletor + empty state + CTA criar
