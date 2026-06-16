@@ -2,13 +2,15 @@
 id: F35-S01
 title: CRUD de pipelines na Settings + mutations reutilizáveis
 phase: F35
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: []
 blocks: [F35-S03]
 source_docs:
   - docs/features/PIPELINE.md
+agent_id: backend-engineer
+claimed_at: 2026-06-16T13:31:50Z
 
 ---
 # F35-S01 — CRUD de pipelines na Settings
