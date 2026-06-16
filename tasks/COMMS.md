@@ -260,3 +260,26 @@ Plano:
 1. claim S01 → implementar → commit → finish → merge → done
 2. claim S02 → implementar → commit → finish → merge → done
 3. claim S03 → implementar → commit → finish → merge → done
+
+## F35 — Pipeline CRUD para usuário final (orchestrator, 2026-06-16)
+
+### Análise pré-dispatch
+
+Backend (pipelines.ts): GET /api/pipelines retorna `{ pipelines: rows }` (não `data`). POST não tem limite. Nenhum teste existe.
+Frontend (board/queries.ts): `usePipelines()` lê `response.pipelines`. `PipelineSettingsPage.tsx`: só gerencia stages, pipeline é imutável (dropdown sem criar/deletar).
+`apps/web/features/pipeline/settings/`: queries.ts (stage mutations), index.ts, PipelineSettingsPage.tsx. Nenhum componente de CRUD de pipeline existe.
+
+### Decisões de fronteira
+
+- S02 muda shape de GET de `{ pipelines }` para `{ data, meta }` — S01 deve ajustar `usePipelines()` para ler `response.data`. S03 herda isso pronto.
+- POST `/api/pipelines` não aceita `template` — frontend (S01) faz 2 chamadas: create pipeline → create stages. Endpoint de stages já existe.
+- `<CreatePipelineModal>` extraído como componente separado em `apps/web/features/pipeline/settings/CreatePipelineModal.tsx` (dentro do files_allowed de S01), exportado pelo `settings/index.ts`. S03 importa de lá.
+- S03 bloqueado até S01 done (depende do modal compartilhado).
+
+### Wave 1 — paralelo (2026-06-16)
+- **F35-S01** [web, M] CRUD settings + mutations reutilizáveis → frontend-engineer. Files: `apps/web/features/pipeline/board/queries.ts`, `apps/web/features/pipeline/settings/**`
+- **F35-S02** [api, XS] Limite 10 + meta no GET → backend-engineer. Files: `apps/api/src/routes/pipeline/pipelines.ts`, `apps/api/src/routes/pipeline/pipelines.test.ts`
+- Disjuntos: apps/web vs apps/api — zero overlap.
+
+### Wave 2 — sequencial após S01 done
+- **F35-S03** [web, S] Board UX (empty state + CTA + chip) → frontend-engineer.
