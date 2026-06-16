@@ -2,7 +2,7 @@
 id: F34-S03
 title: Resolução department-aware do agente em loadContext
 phase: F34
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on:
