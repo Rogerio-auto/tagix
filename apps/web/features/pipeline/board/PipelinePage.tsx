@@ -39,7 +39,7 @@ export function PipelinePage(): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [openDealId, setOpenDealId] = useState<string | null>(null);
 
-  const pipelines = pipelinesQuery.data?.pipelines ?? [];
+  const pipelines = pipelinesQuery.data?.data ?? [];
   const pipelineId = selectedId ?? pipelines[0]?.id;
 
   const detail = usePipelineDetail(pipelineId);

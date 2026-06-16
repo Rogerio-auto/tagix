@@ -15,10 +15,15 @@ export const pipelineKeys = {
   deals: (pipelineId: string) => ['deals', pipelineId] as const,
 };
 
+export interface PipelineListResponse {
+  data: Pipeline[];
+  meta: { limit: number; current: number };
+}
+
 export function usePipelines() {
   return useQuery({
     queryKey: pipelineKeys.list(),
-    queryFn: () => api.get<{ pipelines: Pipeline[] }>('/api/pipelines'),
+    queryFn: () => api.get<PipelineListResponse>('/api/pipelines'),
   });
 }
 
@@ -78,6 +83,60 @@ export function useMoveDeal(pipelineId: string) {
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: key });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline CRUD mutations (F35-S01) — reutilizadas por Settings e Board
+// ---------------------------------------------------------------------------
+
+export interface CreatePipelineInput {
+  name: string;
+}
+
+export interface UpdatePipelineInput {
+  name: string;
+}
+
+/** Erro retornado pelo backend quando o workspace atingiu o limite de pipelines. */
+export interface PipelineLimitError {
+  error: 'pipeline_limit_reached';
+  current: number;
+  max: number;
+}
+
+export function useCreatePipeline() {
+  const qc = useQueryClient();
+  return useMutation<{ pipeline: Pipeline }, Error & { body?: PipelineLimitError }, CreatePipelineInput>({
+    mutationFn: (input) => api.post<{ pipeline: Pipeline }>('/api/pipelines', input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: pipelineKeys.list() });
+    },
+  });
+}
+
+export function useUpdatePipeline() {
+  const qc = useQueryClient();
+  return useMutation<
+    { pipeline: Pipeline },
+    Error,
+    { id: string } & UpdatePipelineInput
+  >({
+    mutationFn: ({ id, name }) => api.put<{ pipeline: Pipeline }>(`/api/pipelines/${id}`, { name }),
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: pipelineKeys.list() });
+      void qc.invalidateQueries({ queryKey: pipelineKeys.detail(vars.id) });
+    },
+  });
+}
+
+export function useDeletePipeline() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, { id: string }>({
+    mutationFn: ({ id }) => api.delete<void>(`/api/pipelines/${id}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: pipelineKeys.list() });
     },
   });
 }
