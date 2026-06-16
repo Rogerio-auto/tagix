@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { Button, Input, Modal, useToast } from '@hm/ui';
+import { Sheet } from '@/shared/components/Sheet';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useCreateEvent, useUpdateEvent } from './queries';
 import type { CalendarRow, EventRow, EventType } from './types';
 
@@ -44,6 +46,7 @@ export interface EventFormProps {
 
 export function EventForm(props: EventFormProps): React.JSX.Element {
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const create = useCreateEvent();
   const update = useUpdateEvent();
   const isEdit = Boolean(props.event);
@@ -112,23 +115,20 @@ export function EventForm(props: EventFormProps): React.JSX.Element {
     }
   }
 
-  return (
-    <Modal
-      open={props.open}
-      onClose={props.onClose}
-      title={isEdit ? 'Editar evento' : 'Novo evento'}
-      footer={
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={props.onClose} disabled={pending}>
-            Cancelar
-          </Button>
-          <Button variant="primary" onClick={submit} disabled={!valid || pending}>
-            {isEdit ? 'Salvar' : 'Criar'}
-          </Button>
-        </div>
-      }
-    >
-      <div className="flex flex-col gap-3">
+  const formTitle = isEdit ? 'Editar evento' : 'Novo evento';
+  const footer = (
+    <div className="flex justify-end gap-2">
+      <Button variant="ghost" onClick={props.onClose} disabled={pending}>
+        Cancelar
+      </Button>
+      <Button variant="primary" onClick={submit} disabled={!valid || pending} loading={pending}>
+        {isEdit ? 'Salvar' : 'Criar'}
+      </Button>
+    </div>
+  );
+
+  const body = (
+    <div className="flex flex-col gap-3">
         <Field label="Título">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Reunião com…" />
         </Field>
@@ -178,6 +178,21 @@ export function EventForm(props: EventFormProps): React.JSX.Element {
           />
         </Field>
       </div>
+  );
+
+  // Mobile: form em bottom-sheet (denso → full) na zona do polegar (MOBILE_UX §2.3).
+  // Desktop: mantém o Modal de wizard/criação (UX §2.3).
+  if (isMobile) {
+    return (
+      <Sheet open={props.open} onClose={props.onClose} variant="full" title={formTitle} footer={footer}>
+        {body}
+      </Sheet>
+    );
+  }
+
+  return (
+    <Modal open={props.open} onClose={props.onClose} title={formTitle} footer={footer}>
+      {body}
     </Modal>
   );
 }
