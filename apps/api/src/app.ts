@@ -18,6 +18,7 @@ import { createMessagesRouter } from './routes/conversations/messages';
 import { createNotesRouter } from './routes/conversations/notes';
 import { createRoutingRouter } from './routes/conversations/routing';
 import { createConversationStateRouter } from './routes/conversations/state';
+import { createConversationAgentRouter } from './routes/conversations/agent';
 import { createWindowRouter } from './routes/conversations/window';
 import { createWebhooksRouter } from './routes/webhooks';
 import { createFlowSubmissionsRouter } from './routes/flows/submissions';
@@ -131,6 +132,9 @@ export function createApp(): Express {
   // Estado operacional da conversa (F30-S02): status (resolver/snooze/reabrir) +
   // toggle de ai_mode (on/off/paused) com handoff consciente.
   app.use(createConversationStateRouter());
+  // Troca manual do agente de IA da conversa (F34-S04): GET candidatos + POST troca,
+  // gated por conversation.assign_agent, re-engaja via hm.q.flows e emite socket.
+  app.use(createConversationAgentRouter());
   app.use(createChannelsRouter());
   app.use(createInstagramRouter());
   app.use(createAgentsRouter());

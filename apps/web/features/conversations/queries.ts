@@ -219,3 +219,68 @@ export function useChangeAiMode() {
     },
   });
 }
+
+// ── Agente da conversa (F34-S04 / AGENT_DEPARTMENT_ROUTING_PLAN D4) ───────────
+
+/** Candidato a atender a conversa (agente ativo elegível ao departamento). */
+export interface AgentCandidate {
+  id: string;
+  name: string;
+}
+
+interface ConversationAgentResult {
+  currentAgentId: string | null;
+  currentAgentName: string | null;
+  candidates: AgentCandidate[];
+}
+
+/** Chave de cache do agente atual + candidatos de uma conversa. */
+export function conversationAgentKey(conversationId: string) {
+  return ['conversation', conversationId, 'agent'] as const;
+}
+
+/**
+ * Agente de IA atual da conversa + candidatos elegíveis ao(s) departamento(s).
+ * GET /api/conversations/:id/agent. Gated por `conversation.assign_agent` no
+ * backend; o caller deve habilitar apenas quando o role tiver a permissão.
+ */
+export function useConversationAgent(conversationId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: conversationAgentKey(conversationId ?? ''),
+    queryFn: () =>
+      api.get<ConversationAgentResult>(`/api/conversations/${conversationId}/agent`),
+    enabled: Boolean(conversationId) && enabled,
+    staleTime: 30_000,
+  });
+}
+
+export interface AssignAgentInput {
+  conversationId: string;
+  agentId: string;
+}
+
+interface AssignAgentResult {
+  conversationId: string;
+  agentId: string;
+}
+
+/**
+ * Troca o agente de IA que atende a conversa (re-engaja a IA no backend).
+ * POST /api/conversations/:id/agent. Invalida o agente, o detalhe e a lista.
+ * UX §2.7: o seletor entra em loading durante a mutation.
+ */
+export function useAssignAgent() {
+  const queryClient = useQueryClient();
+
+  return useMutation<AssignAgentResult, Error, AssignAgentInput>({
+    mutationFn: ({ conversationId, agentId }) =>
+      api.post<AssignAgentResult>(`/api/conversations/${conversationId}/agent`, { agentId }),
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: conversationAgentKey(input.conversationId) });
+      void queryClient.invalidateQueries({
+        queryKey: conversationDetailKey(input.conversationId),
+      });
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+  });
+}
