@@ -71,12 +71,14 @@ export function ChartCard({ card, onDrill }: ChartCardProps) {
       type="button"
       onClick={onDrill ? () => onDrill(card) : undefined}
       className={cn(
-        'col-span-2 flex h-full flex-col rounded-lg border border-border bg-surface p-5 text-left transition-colors',
+        'flex h-full flex-col rounded-lg border border-border bg-surface p-4 text-left transition-colors sm:p-5',
         onDrill && 'hover:border-border-brand',
       )}
     >
       <span className="font-head text-sm font-medium text-text">{card.label}</span>
-      <div className="mt-4 h-52 w-full">
+      {/* Altura por breakpoint; largura 100% via ResponsiveContainer — nunca
+          estoura a viewport no mobile (F36-S06 / MOBILE_UX §1.7). */}
+      <div className="mt-4 h-56 w-full sm:h-52">
         {points.length === 0 ? (
           <div className="flex h-full items-center justify-center font-body text-sm text-text-low">
             Sem dados no período.

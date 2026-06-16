@@ -2,7 +2,7 @@
 id: F36-S06
 title: Dashboard responsivo — grid→coluna + charts responsivos
 phase: F36
-status: available
+status: review
 priority: medium
 estimated_size: S
 depends_on:
@@ -12,6 +12,9 @@ blocks:
 source_docs:
   - docs/features/MOBILE_RESPONSIVE_PLAN.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-16T20:34:45Z
+completed_at: 2026-06-16T20:38:40Z
+
 ---
 # F36-S06 — Dashboard responsivo
 

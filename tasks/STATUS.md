@@ -25,7 +25,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F33   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F34   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F35   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
-| F36   | 14     | 8   | 1   | 0   | 0   | 0   | 5   |
+| F36   | 14     | 7   | 1   | 0   | 0   | 1   | 5   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -290,7 +290,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F36-S03 | Inbox/cockpit responsivo — pilha de views + sheets                  | ✅ done      | high       | —          |
 | F36-S04 | Pipeline/kanban responsivo — seletor de estágio + lista             | ✅ done      | high       | —          |
 | F36-S05 | Padrão Tabela→Cards + filtros em sheet (primitivo + contatos)       | ✅ done      | high       | —          |
-| F36-S06 | Dashboard responsivo — grid→coluna + charts responsivos             | 🟢 available | medium     | —          |
+| F36-S06 | Dashboard responsivo — grid→coluna + charts responsivos             | 🟣 review    | medium     | —          |
 | F36-S07 | Calendário responsivo — agenda/dia no mobile                        | 🟢 available | medium     | —          |
 | F36-S08 | Agentes responsivos — lista + detalhe com abas                      | 🟢 available | medium     | —          |
 | F36-S09 | Campanhas responsivas — lista + wizard + monitoring                 | 🟢 available | medium     | —          |
