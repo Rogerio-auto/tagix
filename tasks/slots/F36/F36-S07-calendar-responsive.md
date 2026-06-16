@@ -2,7 +2,7 @@
 id: F36-S07
 title: Calendário responsivo — agenda/dia no mobile
 phase: F36
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on:
@@ -13,6 +13,7 @@ source_docs:
   - docs/features/MOBILE_RESPONSIVE_PLAN.md
 agent_id: frontend-engineer
 claimed_at: 2026-06-16T20:39:23Z
+completed_at: 2026-06-16T20:45:17Z
 
 ---
 # F36-S07 — Calendário responsivo
