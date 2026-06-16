@@ -2,7 +2,7 @@
 id: F35-S01
 title: CRUD de pipelines na Settings + mutations reutilizáveis
 phase: F35
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
