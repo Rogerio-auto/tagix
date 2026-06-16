@@ -24,7 +24,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F32   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F33   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F34   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F35   | 3     | 2   | 1   | 0   | 0   | 0   | 0   |
+| F35   | 3     | 1   | 1   | 0   | 1   | 0   | 0   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -274,11 +274,11 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 35
 
-| ID      | Titulo                                                          | Status      | Prioridade | Depende de |
-| ------- | --------------------------------------------------------------- | ----------- | ---------- | ---------- |
-| F35-S01 | CRUD de pipelines na Settings + mutations reutilizáveis         | 🟢 available | high       | —          |
-| F35-S02 | Limite máximo de pipelines por workspace (backend)              | 🟢 available | high       | —          |
-| F35-S03 | Board — seletor de pipeline melhorado + empty state + CTA criar | ⏸️ blocked  | medium     | F35-S01    |
+| ID      | Titulo                                                          | Status        | Prioridade | Depende de |
+| ------- | --------------------------------------------------------------- | ------------- | ---------- | ---------- |
+| F35-S01 | CRUD de pipelines na Settings + mutations reutilizáveis         | 🟢 available   | high       | —          |
+| F35-S02 | Limite máximo de pipelines por workspace (backend)              | 🔵 in-progress | high       | —          |
+| F35-S03 | Board — seletor de pipeline melhorado + empty state + CTA criar | ⏸️ blocked    | medium     | F35-S01    |
 
 ## Fase 4 — Campaigns
 
