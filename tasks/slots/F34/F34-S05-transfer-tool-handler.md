@@ -2,7 +2,7 @@
 id: F34-S05
 title: Tool transfer_to_agent — handler Node + authz de alvo + re-engaje
 phase: F34
-status: available
+status: review
 priority: medium
 estimated_size: M
 depends_on:
@@ -14,6 +14,9 @@ source_docs:
   - docs/features/AGENT_DEPARTMENT_ROUTING_PLAN.md
   - docs/AGENTS_LANGGRAPH.md
 agent_id: backend-engineer
+claimed_at: 2026-06-16T04:20:04Z
+completed_at: 2026-06-16T04:24:25Z
+
 ---
 # F34-S05 — Handler transfer_to_agent
 
