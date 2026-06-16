@@ -336,14 +336,31 @@ Se você não conseguir listar nenhuma consideração de UX no slot, o slot não
 
 ---
 
-## 8. Anti-padrões NÃO listados aqui (genéricos)
+## 8. Mobile é cidadão de primeira classe
 
-Padrões já universais (cobrir como "óbvio") — não preciso enumerar:
+> **Mudança de postura (F36).** O v1 deste doc tratava mobile como "fase 2"
+> (responsive opcional). **Não é mais.** O produto tem que ser excepcional no
+> celular — em TODAS as telas. Mobile não é o desktop encolhido: é o mesmo produto
+> redesenhado para o toque e a mão única, com a mesma identidade DS v2.
 
-- Sem responsive em mobile (default: app desktop-first; mobile é fase 2 com PWA).
-- Bytes pesados sem code splitting (Next.js cobre automático).
-- Inputs sem `<label>` (acessibilidade básica).
-- Cores duras sem contraste AA mínimo (DS v2 enforça).
+Os padrões mobile (thumb-first, pilha de views, drawer→**sheet**, tabela→cards,
+gestos, safe-area, alvos de toque, PWA) vivem em **`docs/MOBILE_UX.md`** — leitura
+obrigatória para qualquer slot de frontend, junto com este doc. Pontos-chave:
+
+- **Drawer → sheet (§2.3 no mobile).** Abaixo de `md` (768px) o drawer lateral vira
+  **bottom-/full-sheet** (componente `@/shared/components/Sheet`): handle de arraste,
+  `Esc`/swipe-down/backdrop, focus-trap + restauração de foco.
+- **Thumb-first.** Ação primária na zona do polegar (rodapé), nav primária = bottom
+  tab bar. Alvos ≥ 44×44px (`.touch-target`); inputs ≥ 16px (evita zoom iOS);
+  safe-area (`.pb-safe`/`.pt-safe`/…) nas bordas do device.
+- **Corte canônico (D4).** Estrutura/comportamento que muda no mobile usa
+  `useBreakpoint().isMobile` (`@/shared/hooks`), não número solto nem `window.innerWidth`.
+- **Continuidade.** Mesmos tokens, mesma identidade dark-first. Animações
+  `motion-safe` < 250ms; orçamento de performance mobile (Lighthouse mobile ≥ 90).
+
+Genéricos universais (cobrir como "óbvio", sem enumerar): code splitting por rota
+(Next.js cobre automático), inputs sem `<label>` (a11y básica), cores sem contraste
+AA mínimo (DS v2 enforça).
 
 ---
 
@@ -354,6 +371,8 @@ Padrões já universais (cobrir como "óbvio") — não preciso enumerar:
 - ❌ Anúncios in-app de novidades (changelog feature)
 - ❌ A/B testing de UI
 - ❌ Tradução pra outros idiomas além de pt-BR (i18n estrutura preparada, mas só pt-BR no MVP)
+- ❌ Edição estrutural do Flow canvas no celular (degradação honesta — mobile é
+  inspecionar/operar; desenhar grafo fica em ≥ tablet; ver `MOBILE_UX.md §2`)
 
 ---
 

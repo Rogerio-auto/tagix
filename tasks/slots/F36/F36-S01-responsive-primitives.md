@@ -2,7 +2,7 @@
 id: F36-S01
 title: Primitivos responsivos — Sheet, useBreakpoint, safe-area, MOBILE_UX
 phase: F36
-status: available
+status: review
 priority: critical
 estimated_size: M
 depends_on: []
@@ -19,6 +19,9 @@ source_docs:
   - docs/features/MOBILE_RESPONSIVE_PLAN.md
   - docs/UX_PRINCIPLES.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-16T19:11:42Z
+completed_at: 2026-06-16T19:16:46Z
+
 ---
 # F36-S01 — Primitivos responsivos
 
