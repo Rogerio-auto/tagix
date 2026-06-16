@@ -27,5 +27,13 @@ export {
   entitlementOverridesRepo,
   type WorkspaceEntitlementOverride,
 } from './repos/entitlements';
+// Agent ↔ department routing (F34-S01).
+export {
+  agentDepartmentsRepo,
+  type AgentDepartment,
+  type AgentDepartmentItem,
+  type DepartmentLink,
+  type AgentLink,
+} from './repos/agent_departments';
 
 export const DB_PKG = '@hm/db' as const;
