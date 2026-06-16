@@ -24,8 +24,69 @@ vi.mock('@hm/agents-core', () => ({
   estimateCostUsd: (...args: unknown[]) => estimateCostUsdMock(...args),
 }));
 
+// ─── Mock de @hm/db (RLS) para os testes de DbAgentRunStore.loadContext ───────
+//
+// `withWorkspace(id, fn)` chama `fn(tx)` com um fake de `tx` controlável. O fake
+// de `tx.select()` devolve, em ordem, as linhas empilhadas em `selectQueue`
+// (1ª chamada = conversa, 2ª = agente, etc.); `tx.update()` registra os UPDATEs
+// em `updateCalls`. `agentDepartmentsRepo.getDefaultAgentForDepartment` é um spy.
+
+interface UpdateCall {
+  readonly set: Record<string, unknown>;
+}
+
+let selectQueue: unknown[][] = [];
+let updateCalls: UpdateCall[] = [];
+const getDefaultAgentForDepartmentMock = vi.fn(
+  async (..._args: unknown[]): Promise<string | null> => null,
+);
+
+function makeTx(): unknown {
+  const chain = (rows: unknown[]): unknown => ({
+    from: () => chain(rows),
+    where: () => chain(rows),
+    orderBy: () => chain(rows),
+    limit: () => Promise.resolve(rows),
+  });
+  return {
+    select: () => chain(selectQueue.shift() ?? []),
+    update: () => ({
+      set: (set: Record<string, unknown>) => {
+        updateCalls.push({ set });
+        return { where: () => Promise.resolve() };
+      },
+    }),
+  };
+}
+
+vi.mock('@hm/db', () => ({
+  withWorkspace: (_id: string, fn: (tx: unknown) => Promise<unknown>) => fn(makeTx()),
+  agentDepartmentsRepo: {
+    getDefaultAgentForDepartment: (...args: unknown[]) =>
+      getDefaultAgentForDepartmentMock(...args),
+  },
+  schema: {
+    conversations: {
+      id: 'id',
+      remoteId: 'remote_id',
+      channelId: 'channel_id',
+      aiMode: 'ai_mode',
+      agentId: 'agent_id',
+      departmentId: 'department_id',
+    },
+    agents: { id: 'id', status: 'status' },
+    messages: {
+      conversationId: 'conversation_id',
+      externalId: 'external_id',
+      direction: 'direction',
+      content: 'content',
+      createdAt: 'created_at',
+    },
+  },
+}));
+
 // Import APÓS o mock.
-const { runAgent } = await import('./run');
+const { runAgent, DbAgentRunStore } = await import('./run');
 const { handleAgentEnvelope } = await import('./worker');
 const { AgentRuntimeError } = await import('@hm/agents-client');
 
@@ -149,6 +210,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   resolvePolicyMock.mockResolvedValue(resolved());
   estimateCostUsdMock.mockReturnValue(0.001);
+  selectQueue = [];
+  updateCalls = [];
+  getDefaultAgentForDepartmentMock.mockResolvedValue(null);
 });
 
 describe('runAgent — cost-guard', () => {
@@ -298,5 +362,96 @@ describe('handleAgentEnvelope — filtro de type + parse', () => {
       payload: { conversationId: CONV }, // faltam channelId/contactId/provider
     };
     await expect(handleAgentEnvelope(envelope, { deps: deps(), logger })).resolves.toBeUndefined();
+  });
+});
+
+// ─── F34-S03: resolução department-aware do agente em DbAgentRunStore ──────────
+
+describe('DbAgentRunStore.loadContext — resolução department-aware (F34-S03)', () => {
+  const DEPT = '00000000-0000-0000-0000-0000000000d1';
+  const DEPT_AGENT = '00000000-0000-0000-0000-0000000000a2';
+  const trigger = {
+    conversationId: CONV,
+    contactId: 'c1',
+    channelId: 'ch1',
+    provider: 'waha' as const,
+  };
+
+  /** Linhas de conversa + agente + trigger-input + histórico, na ordem dos selects. */
+  function queueResolution(conv: Record<string, unknown>, agentId: string | null): void {
+    selectQueue = [
+      [conv], // 1) conversa
+      ...(agentId !== null ? [[{ id: agentId, status: 'active' }]] : []), // 2) agente
+      [{ content: 'oi' }], // 3) loadTriggerInput (fallback inbound)
+      [], // 4) loadHistory
+    ];
+  }
+
+  it('(a) conversa com agent_id setado → mantém (sticky, sem tocar departamento)', async () => {
+    queueResolution(
+      {
+        remoteId: '5511999',
+        channelId: 'ch1',
+        aiMode: 'on',
+        agentId: AGENT,
+        departmentId: DEPT,
+      },
+      AGENT,
+    );
+
+    const ctxLoaded = await new DbAgentRunStore().loadContext(WS, trigger);
+
+    expect(ctxLoaded?.agentId).toBe(AGENT);
+    // agent_id já fixado → não consulta o departamento nem persiste.
+    expect(getDefaultAgentForDepartmentMock).not.toHaveBeenCalled();
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it('(b) sem agent_id mas department_id com default → resolve o default e persiste (sticky)', async () => {
+    getDefaultAgentForDepartmentMock.mockResolvedValue(DEPT_AGENT);
+    queueResolution(
+      {
+        remoteId: '5511999',
+        channelId: 'ch1',
+        aiMode: 'on',
+        agentId: null,
+        departmentId: DEPT,
+      },
+      DEPT_AGENT,
+    );
+
+    const ctxLoaded = await new DbAgentRunStore().loadContext(WS, trigger);
+
+    expect(ctxLoaded?.agentId).toBe(DEPT_AGENT);
+    expect(getDefaultAgentForDepartmentMock).toHaveBeenCalledOnce();
+    expect(getDefaultAgentForDepartmentMock.mock.calls[0]?.[1]).toBe(DEPT);
+    // Persistência sticky do agente resolvido na conversa.
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0]?.set).toEqual({ agentId: DEPT_AGENT });
+  });
+
+  it('(c) sem agent_id e sem departamento → fallback atual (null, sem persistir)', async () => {
+    selectQueue = [
+      [{ remoteId: '5511999', channelId: 'ch1', aiMode: 'on', agentId: null, departmentId: null }],
+    ];
+
+    const ctxLoaded = await new DbAgentRunStore().loadContext(WS, trigger);
+
+    expect(ctxLoaded).toBeNull();
+    expect(getDefaultAgentForDepartmentMock).not.toHaveBeenCalled();
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it('(c2) department_id presente mas sem default → fallback atual (null, sem persistir)', async () => {
+    getDefaultAgentForDepartmentMock.mockResolvedValue(null);
+    selectQueue = [
+      [{ remoteId: '5511999', channelId: 'ch1', aiMode: 'on', agentId: null, departmentId: DEPT }],
+    ];
+
+    const ctxLoaded = await new DbAgentRunStore().loadContext(WS, trigger);
+
+    expect(ctxLoaded).toBeNull();
+    expect(getDefaultAgentForDepartmentMock).toHaveBeenCalledOnce();
+    expect(updateCalls).toHaveLength(0);
   });
 });

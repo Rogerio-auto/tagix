@@ -27,8 +27,8 @@
  * agents-client / enqueue) são injetadas para o handler ser testável sem
  * RabbitMQ, sem Postgres e sem o runtime Python.
  */
-import { and, desc, eq } from 'drizzle-orm';
-import { schema, withWorkspace } from '@hm/db';
+import { and, desc, eq, isNull } from 'drizzle-orm';
+import { agentDepartmentsRepo, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import type { Logger } from '@hm/logger';
 import {
@@ -446,8 +446,21 @@ export async function runAgent(
 
 /**
  * Store default via `@hm/db`. Toda leitura/escrita roda sob RLS
- * (`withWorkspace`). Resolve o agente da conversa por `conversations.agent_id`;
- * o texto do gatilho é a última mensagem inbound da conversa (`triggerExternalId`
+ * (`withWorkspace`). Resolução do agente da conversa (F34-S03, department-aware):
+ *
+ *   1. `conversations.agent_id` já setado  → usa ele (sticky; transferências de
+ *      S04/S05 e turnos anteriores persistem aqui).
+ *   2. `conversations.department_id` não-nulo → agente de entrada do departamento
+ *      (`agentDepartmentsRepo.getDefaultAgentForDepartment`, S01). Achou → usa e
+ *      **persiste** em `conversations.agent_id` (sticky) na MESMA transação RLS,
+ *      para turnos seguintes e para o cockpit (S04) exibir.
+ *   3. Sem dept / dept sem default → sem agente resolvível → `null` (skip, ack).
+ *
+ * A persistência sticky é idempotente sob concorrência: o `UPDATE` filtra por
+ * `agent_id IS NULL`, então um segundo turno que corra em paralelo vê o agente já
+ * setado e não sobrescreve.
+ *
+ * O texto do gatilho é a última mensagem inbound da conversa (`triggerExternalId`
  * quando presente, senão a mais recente).
  */
 export class DbAgentRunStore implements AgentRunStore {
@@ -464,20 +477,50 @@ export class DbAgentRunStore implements AgentRunStore {
           channelId: conversations.channelId,
           aiMode: conversations.aiMode,
           agentId: conversations.agentId,
+          departmentId: conversations.departmentId,
         })
         .from(conversations)
         .where(eq(conversations.id, trigger.conversationId))
         .limit(1);
 
-      if (conv === undefined || conv.agentId === null) return null;
+      if (conv === undefined) return null;
+
+      // Resolução do agente (department-aware, F34-S03).
+      // 1. Sticky: `agent_id` já fixado na conversa tem precedência absoluta.
+      // 2. Senão, agente de entrada (`is_default`) do departamento da conversa.
+      // 3. Senão, sem agente resolvível → skip (comportamento atual).
+      let resolvedAgentId = conv.agentId;
+      let resolvedFromDepartment = false;
+      if (resolvedAgentId === null && conv.departmentId !== null) {
+        resolvedAgentId = await agentDepartmentsRepo.getDefaultAgentForDepartment(
+          tx,
+          conv.departmentId,
+        );
+        resolvedFromDepartment = resolvedAgentId !== null;
+      }
+
+      if (resolvedAgentId === null) return null;
 
       const [agent] = await tx
         .select({ id: agents.id, status: agents.status })
         .from(agents)
-        .where(eq(agents.id, conv.agentId))
+        .where(eq(agents.id, resolvedAgentId))
         .limit(1);
 
       if (agent === undefined) return null;
+
+      // Persistência sticky: quando o agente veio do departamento (não estava
+      // fixado), grava-o na conversa na MESMA transação RLS. O filtro
+      // `agent_id IS NULL` mantém a escrita idempotente sob concorrência — um
+      // turno paralelo que já tenha fixado o agente não é sobrescrito.
+      if (resolvedFromDepartment) {
+        await tx
+          .update(conversations)
+          .set({ agentId: agent.id })
+          .where(
+            and(eq(conversations.id, trigger.conversationId), isNull(conversations.agentId)),
+          );
+      }
 
       const userInput = await loadTriggerInput(tx, trigger);
       const history = await loadHistory(tx, trigger.conversationId);
