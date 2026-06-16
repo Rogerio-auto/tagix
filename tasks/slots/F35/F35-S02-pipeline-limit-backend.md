@@ -2,7 +2,7 @@
 id: F35-S02
 title: Limite máximo de pipelines por workspace (backend)
 phase: F35
-status: review
+status: done
 priority: high
 estimated_size: XS
 depends_on: []
