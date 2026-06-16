@@ -25,7 +25,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F33   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F34   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F35   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
-| F36   | 14     | 7   | 5   | 0   | 0   | 1   | 1   |
+| F36   | 14     | 7   | 5   | 0   | 0   | 0   | 2   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -286,7 +286,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ID      | Titulo                                                              | Status      | Prioridade | Depende de |
 | ------- | ------------------------------------------------------------------- | ----------- | ---------- | ---------- |
 | F36-S01 | Primitivos responsivos — Sheet, useBreakpoint, safe-area, MOBILE_UX | ✅ done      | critical   | —          |
-| F36-S02 | Casca mobile (bottom nav + drawer) + PWA instalável                 | 🟣 review    | critical   | —          |
+| F36-S02 | Casca mobile (bottom nav + drawer) + PWA instalável                 | ✅ done      | critical   | —          |
 | F36-S03 | Inbox/cockpit responsivo — pilha de views + sheets                  | 🟢 available | high       | —          |
 | F36-S04 | Pipeline/kanban responsivo — seletor de estágio + lista             | 🟢 available | high       | —          |
 | F36-S05 | Padrão Tabela→Cards + filtros em sheet (primitivo + contatos)       | 🟢 available | high       | —          |
