@@ -64,6 +64,7 @@ class _FakeConn:
         if "FROM messages" in query:
             # O node ordena DESC e re-inverte; devolvemos como o DB devolveria (DESC).
             return list(reversed(self._message_rows))
+        # F34-S06: a query de pares (`FROM agent_departments`) — sem pares neste fake.
         return []
 
 
@@ -90,7 +91,7 @@ def _policy() -> PolicySnapshot:
     )
 
 
-def _agent_row() -> dict[str, Any]:
+def _agent_row(*, allow_handoff: bool = False) -> dict[str, Any]:
     return {
         "id": "11111111-1111-1111-1111-111111111111",
         "name": "Vendedor",
@@ -98,6 +99,7 @@ def _agent_row() -> dict[str, Any]:
         "model_params": {},
         "system_prompt": "Você é um vendedor.",
         "model_supports_vision": False,
+        "allow_handoff": allow_handoff,
     }
 
 
@@ -111,8 +113,12 @@ def _conversation_row(*, ai_paused_reason: str | None = None) -> dict[str, Any]:
     }
 
 
-def _msg(sender_type: str, content: str) -> dict[str, Any]:
-    return {"sender_type": sender_type, "content": content}
+def _msg(sender_type: str, content: str, *, sender_agent_id: str | None = None) -> dict[str, Any]:
+    return {
+        "sender_type": sender_type,
+        "sender_agent_id": sender_agent_id,
+        "content": content,
+    }
 
 
 def _state(*, conversation_id: str | None) -> AgentState:

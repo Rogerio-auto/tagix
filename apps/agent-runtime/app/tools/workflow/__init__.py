@@ -26,6 +26,10 @@ from app.tools.workflow.register_conversion import (
     RegisterConversionArgs,
     RegisterConversionTool,
 )
+from app.tools.workflow.transfer_to_agent import (
+    TransferToAgentArgs,
+    TransferToAgentTool,
+)
 from app.tools.workflow.transfer_to_human import (
     TransferToHumanArgs,
     TransferToHumanTool,
@@ -42,6 +46,8 @@ __all__ = [
     "MoveDealStageTool",
     "RegisterConversionArgs",
     "RegisterConversionTool",
+    "TransferToAgentArgs",
+    "TransferToAgentTool",
     "TransferToHumanArgs",
     "TransferToHumanTool",
     "build_workflow_tools",
@@ -51,6 +57,7 @@ __all__ = [
 # Classes de tool de workflow, em ordem estável (determinismo de boot/diagnóstico).
 _WORKFLOW_TOOL_CLASSES: tuple[type[Tool], ...] = (
     TransferToHumanTool,
+    TransferToAgentTool,
     EscalateTool,
     MarkResolvedTool,
     ChangeConversationStatusTool,

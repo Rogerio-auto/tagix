@@ -26,11 +26,13 @@ logger = get_logger()
 _MAX_HISTORY = 12
 
 # Rótulos legíveis por autoria (LIVECHAT_OPS §2). `ai` é a própria IA em turnos
-# anteriores; `human` é o atendente que assumiu; `contact` é o cliente.
+# anteriores; `ai_other` é OUTRO agente de IA que atendeu antes (handoff IA→IA, F34);
+# `human` é o atendente que assumiu; `contact` é o cliente.
 _AUTHOR_LABELS: dict[str, str] = {
     "contact": "Cliente",
     "human": "Atendente humano",
     "ai": "IA (você, em turnos anteriores)",
+    "ai_other": "Outro agente de IA",
     "system": "Sistema",
 }
 
@@ -40,6 +42,15 @@ _HANDOFF_DIRECTIVE = (
     "Retome com consciência disso — não repita o que o humano já disse nem reinicie "
     "o atendimento do zero. Conforme o caso, encerre, faça follow-up do que ficou "
     "pendente ou reengaje o cliente."
+)
+
+# Diretriz curta de transferência IA→IA (F34-S06). Acionável: o LLM decide e chama
+# `transfer_to_agent`. A authz de alvo (same-dept) + `max_iterations` contêm abuso.
+_HANDOFF_TO_AGENT_DIRECTIVE = (
+    "TRANSFERÊNCIA PARA OUTRO AGENTE: se o assunto é melhor atendido por um dos "
+    "agentes abaixo, use a ferramenta `transfer_to_agent` com o `targetAgentId` dele "
+    "e um `reason` curto. Só transfira quando for claramente o agente certo; depois de "
+    "transferir, não responda mais. Não transfira de volta para si mesmo nem em loop."
 )
 
 
@@ -63,6 +74,42 @@ def _handoff_block(conversation: dict[str, Any]) -> str | None:
     if rendered:
         lines.append("Histórico recente, com a autoria de cada mensagem:")
         lines.extend(rendered)
+    return "\n".join(lines)
+
+
+def _peer_line(peer: dict[str, Any]) -> str | None:
+    """Uma linha de par: nome + departamento + 1 linha de "quando usar".
+
+    Formato enxuto (custo/tokens): `- Nome (Departamento) [id: <uuid>]: <quando usar>`.
+    O `id` é o `targetAgentId` que o LLM deve passar à tool. Sem nome/id → ignora.
+    """
+    name = (peer.get("name") or "").strip()
+    agent_id = (peer.get("id") or "").strip()
+    if not name or not agent_id:
+        return None
+    department = (peer.get("department") or "").strip()
+    when = (peer.get("description") or "").strip()
+    dept_part = f" ({department})" if department else ""
+    when_part = f": {when}" if when else ""
+    return f"- {name}{dept_part} [id: {agent_id}]{when_part}"
+
+
+def _handoff_to_agent_block(agent: dict[str, Any]) -> str | None:
+    """Bloco de transferência IA→IA: diretriz + lista de pares (F34-S06).
+
+    Retorna `None` quando o handoff não está habilitado de fato (`allow_handoff` falso
+    ou sem pares — o `load_context` já aplica o gate, então `handoff_peers` vazio =
+    nada a injetar). Sem regressão no fluxo sem handoff.
+    """
+    if not agent.get("allow_handoff"):
+        return None
+    peers = agent.get("handoff_peers") or []
+    peer_lines = [line for p in peers if (line := _peer_line(p))]
+    if not peer_lines:
+        return None
+
+    lines = [_HANDOFF_TO_AGENT_DIRECTIVE, "Agentes disponíveis para transferência:"]
+    lines.extend(peer_lines)
     return "\n".join(lines)
 
 
@@ -101,6 +148,12 @@ def _system_prompt(state: AgentState) -> str:
         handoff = _handoff_block(conversation)
         if handoff:
             parts.append(handoff)
+
+    # Transferência autônoma IA→IA (F34-S06): diretriz + pares disponíveis. Independe de
+    # `conversation` (vem do `agent`, populado por load_context). Nada quando OFF.
+    handoff_to_agent = _handoff_to_agent_block(agent)
+    if handoff_to_agent:
+        parts.append(handoff_to_agent)
 
     tools = state.get("tools") or []
     if tools:
