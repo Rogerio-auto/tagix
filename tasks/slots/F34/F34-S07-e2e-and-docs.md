@@ -2,7 +2,7 @@
 id: F34-S07
 title: E2E + docs do roteamento agente↔departamento e handoff
 phase: F34
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on:
@@ -16,6 +16,7 @@ source_docs:
   - docs/features/AGENT_DEPARTMENT_ROUTING_PLAN.md
 agent_id: qa-engineer
 claimed_at: 2026-06-16T04:34:16Z
+completed_at: 2026-06-16T04:49:44Z
 
 ---
 # F34-S07 — E2E + docs
