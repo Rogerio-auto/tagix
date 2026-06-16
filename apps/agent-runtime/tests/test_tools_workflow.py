@@ -32,6 +32,7 @@ from app.tools.workflow import (
 
 _ALL_KEYS = {
     "transfer_to_human",
+    "transfer_to_agent",
     "escalate",
     "mark_resolved",
     "change_conversation_status",
@@ -131,9 +132,7 @@ async def test_mark_resolved_envelope() -> None:
 async def test_change_conversation_status_envelope() -> None:
     captured: dict[str, object] = {}
     tool = ChangeConversationStatusTool(client=_client(_ok_handler(captured)))
-    result = await tool.execute(
-        {"target_status": "pending", "note": "aguardando cliente"}, _ctx()
-    )
+    result = await tool.execute({"target_status": "pending", "note": "aguardando cliente"}, _ctx())
     assert result.ok is True
     assert str(captured["url"]).endswith("/internal/tools/change_conversation_status")
     assert captured["body"]["args"] == {  # type: ignore[index]
@@ -223,9 +222,7 @@ async def test_register_conversion_allowed_by_default_when_flag_absent() -> None
 async def test_register_conversion_surfaces_node_not_supported() -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
         # Pré-F5: Node responde "não suportado ainda".
-        return httpx.Response(
-            200, json={"ok": False, "error": "Conversões ainda não suportadas."}
-        )
+        return httpx.Response(200, json={"ok": False, "error": "Conversões ainda não suportadas."})
 
     tool = RegisterConversionTool(client=_client(handler))
     result = await tool.execute({"type_key": "sale"}, _ctx())

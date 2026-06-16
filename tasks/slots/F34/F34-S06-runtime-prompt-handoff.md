@@ -2,7 +2,7 @@
 id: F34-S06
 title: Runtime — tool transfer_to_agent, diretriz de prompt e contexto IA→IA
 phase: F34
-status: available
+status: review
 priority: medium
 estimated_size: M
 depends_on:
@@ -14,6 +14,9 @@ source_docs:
   - docs/features/AGENT_DEPARTMENT_ROUTING_PLAN.md
   - docs/AGENTS_LANGGRAPH.md
 agent_id: python-engineer
+claimed_at: 2026-06-16T04:25:15Z
+completed_at: 2026-06-16T04:33:18Z
+
 ---
 # F34-S06 — Runtime: prompt + handoff IA→IA
 
