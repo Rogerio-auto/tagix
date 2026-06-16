@@ -2,7 +2,7 @@
 id: F36-S07
 title: Calendário responsivo — agenda/dia no mobile
 phase: F36
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on:
