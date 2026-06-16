@@ -26,10 +26,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }, [hydrateAuth]);
 
   return (
-    <div className="flex min-h-dvh bg-bg">
+    <div className="flex h-dvh bg-bg">
       <SkipLink />
       <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         <TopBar onMenu={() => setMobileOpen(true)} />
         {/* tabIndex={-1} torna o <main> alvo programático do skip-link sem entrar
             na ordem natural de Tab (WCAG 2.4.1). */}

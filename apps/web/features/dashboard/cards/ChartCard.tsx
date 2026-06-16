@@ -75,8 +75,8 @@ export function ChartCard({ card, onDrill }: ChartCardProps) {
         onDrill && 'hover:border-border-brand',
       )}
     >
-      <span className="font-body text-xs uppercase tracking-wide text-text-low">{card.label}</span>
-      <div className="mt-4 h-40 w-full">
+      <span className="font-head text-sm font-medium text-text">{card.label}</span>
+      <div className="mt-4 h-52 w-full">
         {points.length === 0 ? (
           <div className="flex h-full items-center justify-center font-body text-sm text-text-low">
             Sem dados no período.

@@ -13,6 +13,15 @@
  * (chart/table e métricas pessoais) abrem o drawer lateral — nunca modal (§4).
  */
 import { useMemo, useState } from 'react';
+import {
+  Bot,
+  Layers,
+  Megaphone,
+  MessageSquare,
+  Briefcase,
+  TrendingUp,
+  type LucideIcon,
+} from 'lucide-react';
 import { PageHeader } from '@/shared/components/layout/PageHeader';
 import { HelpHint } from '@/shared/components/help';
 import { SkeletonList } from '@/shared/components/feedback';
@@ -33,6 +42,15 @@ const CATEGORY_LABEL: Record<MetricCategory, string> = {
   negocio: 'Negócio',
 };
 
+const CATEGORY_ICON: Record<MetricCategory, LucideIcon> = {
+  atendimento: MessageSquare,
+  conversoes: TrendingUp,
+  pipeline: Layers,
+  campanhas: Megaphone,
+  agentes: Bot,
+  negocio: Briefcase,
+};
+
 const CATEGORY_ORDER: MetricCategory[] = [
   'atendimento',
   'conversoes',
@@ -41,6 +59,7 @@ const CATEGORY_ORDER: MetricCategory[] = [
   'agentes',
   'negocio',
 ];
+
 
 /** Métricas cujo drill-down é por drawer (têm detalhe compacto), não navegação. */
 const DRAWER_METRICS = new Set([
@@ -114,33 +133,55 @@ export function DashboardClient() {
         </div>
       )}
       {data && (
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-10">
           <AlertsBanner alerts={data.alerts} />
           {grouped.length === 0 && (
             <div className="rounded-lg border border-border bg-surface p-8">
               <p className="font-body text-text-mid">Nenhuma métrica disponível ainda.</p>
             </div>
           )}
-          {grouped.map((group) => (
-            <section key={group.category} className="flex flex-col gap-3">
-              <h2 className="font-head text-sm uppercase tracking-wide text-text-low">
-                {CATEGORY_LABEL[group.category]}
-              </h2>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                {group.cards.map((card) => {
-                  const wantsDrawer = DRAWER_METRICS.has(card.key);
-                  return (
-                    <div
-                      key={card.key}
-                      className={cardSpan(card.cardType) === 2 ? 'col-span-2' : 'col-span-1'}
-                    >
-                      {renderCard(card, wantsDrawer ? onDrill : undefined)}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
+          {grouped.map((group) => {
+            const Icon = CATEGORY_ICON[group.category];
+            const statCards = group.cards.filter((c) => cardSpan(c.cardType) === 1);
+            const wideCards = group.cards.filter((c) => cardSpan(c.cardType) === 2);
+            return (
+              <section key={group.category} className="flex flex-col gap-4">
+                {/* Cabeçalho da seção */}
+                <div className="flex items-center gap-2 border-l-2 border-brand pl-3">
+                  <Icon size={14} className="text-text-low" />
+                  <h2 className="font-head text-xs font-semibold uppercase tracking-widest text-text-low">
+                    {CATEGORY_LABEL[group.category]}
+                  </h2>
+                </div>
+                {/* Stat cards — grade compacta */}
+                {statCards.length > 0 && (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {statCards.map((card) => {
+                      const wantsDrawer = DRAWER_METRICS.has(card.key);
+                      return (
+                        <div key={card.key}>
+                          {renderCard(card, wantsDrawer ? onDrill : undefined)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Cards largos (chart/table) — própria linha, até 2 por row */}
+                {wideCards.length > 0 && (
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    {wideCards.map((card) => {
+                      const wantsDrawer = DRAWER_METRICS.has(card.key);
+                      return (
+                        <div key={card.key}>
+                          {renderCard(card, wantsDrawer ? onDrill : undefined)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
       <DrillDownDrawer card={drillCard} onClose={() => setDrillCard(null)} />

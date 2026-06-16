@@ -10,9 +10,37 @@
  * existe porque o server o enviou, mas o número ainda não foi computado).
  */
 import Link from 'next/link';
-import { ArrowUpRight } from 'lucide-react';
+import {
+  ArrowUpRight,
+  Award,
+  BarChart3,
+  Bot,
+  Clock,
+  DollarSign,
+  MessageSquare,
+  Shield,
+  Star,
+  TrendingUp,
+  Users,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import type { DashboardCard } from '../types';
+
+function metricIcon(key: string): LucideIcon {
+  if (/volume|inbound|outbound|mensagem/.test(key)) return MessageSquare;
+  if (/tempo|tme|tmr|duracao|latencia/.test(key)) return Clock;
+  if (/conversao|conversoes/.test(key)) return TrendingUp;
+  if (/satisfacao|csat|nps/.test(key)) return Star;
+  if (/qualidade/.test(key)) return Award;
+  if (/custo|token|cap_mensal/.test(key)) return Zap;
+  if (/valor|receita|faturamento|cents/.test(key)) return DollarSign;
+  if (/objecao/.test(key)) return Shield;
+  if (/agente|ia/.test(key)) return Bot;
+  if (/atendente|membro|equipe/.test(key)) return Users;
+  return BarChart3;
+}
 import {
   formatBRLFromCents,
   formatDuration,
@@ -92,24 +120,33 @@ export function StatCard({ card, onDrill }: StatCardProps) {
   const interactive = Boolean(card.drillHref) || Boolean(onDrill);
   const tone = statTone(card);
 
+  const Icon = metricIcon(card.key);
+
   const inner = (
     <div
       className={cn(
-        'group flex h-full flex-col justify-between rounded-lg border bg-surface p-5 transition-colors',
+        'group flex h-full flex-col gap-4 rounded-lg border bg-surface p-4 transition-colors',
         TONE_BORDER[tone],
         interactive && 'hover:border-border-brand hover:bg-surface-2',
       )}
     >
-      <div className="flex items-start justify-between">
-        <span className="font-body text-xs uppercase tracking-wide text-text-low">{card.label}</span>
+      {/* Topo: ícone + seta de drill */}
+      <div className="flex items-center justify-between">
+        <span className="flex size-7 items-center justify-center rounded-md bg-surface-3 text-text-low">
+          <Icon size={14} />
+        </span>
         {interactive && (
           <ArrowUpRight
-            size={16}
+            size={14}
             className="text-text-low opacity-0 transition-opacity group-hover:opacity-100"
           />
         )}
       </div>
-      <span className={cn('mt-3 font-price text-2xl', TONE_VALUE[tone])}>{value}</span>
+      {/* Valor + label */}
+      <div className="flex flex-col gap-0.5">
+        <span className={cn('font-price text-2xl leading-none', TONE_VALUE[tone])}>{value}</span>
+        <span className="font-body text-xs text-text-low">{card.label}</span>
+      </div>
     </div>
   );
 
