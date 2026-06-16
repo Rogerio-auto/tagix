@@ -2,7 +2,7 @@
 id: F36-S04
 title: Pipeline/kanban responsivo — seletor de estágio + lista
 phase: F36
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on:

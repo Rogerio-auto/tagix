@@ -25,7 +25,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F33   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F34   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F35   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
-| F36   | 14     | 5   | 5   | 0   | 0   | 1   | 3   |
+| F36   | 14     | 5   | 5   | 0   | 0   | 0   | 4   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -288,7 +288,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F36-S01 | Primitivos responsivos — Sheet, useBreakpoint, safe-area, MOBILE_UX | ✅ done      | critical   | —          |
 | F36-S02 | Casca mobile (bottom nav + drawer) + PWA instalável                 | ✅ done      | critical   | —          |
 | F36-S03 | Inbox/cockpit responsivo — pilha de views + sheets                  | ✅ done      | high       | —          |
-| F36-S04 | Pipeline/kanban responsivo — seletor de estágio + lista             | 🟣 review    | high       | —          |
+| F36-S04 | Pipeline/kanban responsivo — seletor de estágio + lista             | ✅ done      | high       | —          |
 | F36-S05 | Padrão Tabela→Cards + filtros em sheet (primitivo + contatos)       | 🟢 available | high       | —          |
 | F36-S06 | Dashboard responsivo — grid→coluna + charts responsivos             | 🟢 available | medium     | —          |
 | F36-S07 | Calendário responsivo — agenda/dia no mobile                        | 🟢 available | medium     | —          |
