@@ -12,3 +12,47 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Primitivos mobile (F36-S01). Ver docs/MOBILE_UX.md.
+ * Sem hex hardcoded — só env() do device e tokens DS via @theme.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/* Safe-area (notch / barra de gestos do iOS/Android). Cada utilitária aplica o
+ * inset do device APENAS no lado correspondente, somando ao padding existente. */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+/* Conveniência: garante um mínimo + o inset do device (ex.: rodapé fixo). */
+@utility pb-safe-4 {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+@utility pt-safe-4 {
+  padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+}
+
+/* Alvo de toque mínimo 44×44px (UX mobile §4.5 / MOBILE_UX). Aplicar em ícones-
+ * botão e ações compactas para garantir ergonomia no toque. */
+@utility touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Inputs com 16px no mobile evitam o auto-zoom do iOS ao focar o campo.
+ * Aplicado globalmente abaixo de `md`; no desktop o DS controla o tamanho. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
