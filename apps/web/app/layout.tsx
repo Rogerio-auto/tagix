@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Chakra_Petch, Manrope, Orbitron, Rajdhani } from 'next/font/google';
 import { Providers } from './providers';
 import './globals.css';
@@ -12,6 +12,35 @@ const display = Orbitron({ subsets: ['latin'], weight: ['600', '700', '800'], va
 export const metadata: Metadata = {
   title: 'Highermind',
   description: 'Atendimento ao cliente, vendas conversacionais e automação.',
+  // PWA: manifest gerado por app/manifest.ts (Next injeta o <link rel="manifest">).
+  manifest: '/manifest.webmanifest',
+  applicationName: 'Highermind',
+  appleWebApp: {
+    capable: true,
+    title: 'Highermind',
+    // Combina com o tema dark-first; a barra de status some no standalone.
+    statusBarStyle: 'black-translucent',
+  },
+  icons: {
+    icon: [
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
+};
+
+// viewport-fit=cover é o que habilita env(safe-area-inset-*) (notch/barra de
+// gestos) usado pelos utilitários .pt-safe/.pb-safe do shell mobile (S01).
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  // theme-color por esquema: pinta a barra do navegador/standalone com --bg.
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)', color: '#050505' },
+    { media: '(prefers-color-scheme: light)', color: '#f4f7f4' },
+  ],
 };
 
 // Aplica o tema antes do hydrate para não piscar (DESIGN_SYSTEM §9.4).

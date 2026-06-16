@@ -1,18 +1,23 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Sidebar } from './Sidebar';
+import { BottomNav } from './BottomNav';
 import { SkipLink } from './SkipLink';
 import { TopBar } from './TopBar';
 import { CommandPalette } from '@/shared/components/command';
 import { useUIStore } from '@/shared/stores/ui.store';
 import { useAuthStore } from '@/shared/stores/auth.store';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 
 export function AppLayout({ children }: { children: ReactNode }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
   const hydrate = useUIStore((s) => s.hydrate);
   const hydrateAuth = useAuthStore((s) => s.hydrate);
+  // Regra de ouro do MOBILE_UX: a ESTRUTURA do chrome (Sidebar vs BottomNav)
+  // alterna por `isMobile`, não por classe Tailwind `md:` (que só montaria/
+  // ocultaria via CSS, mantendo ambas no DOM). SSR-safe: snapshot mobile primeiro.
+  const { isMobile } = useBreakpoint();
 
   // Restaura a preferência de density persistida.
   useEffect(() => {
@@ -28,14 +33,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-dvh bg-bg">
       <SkipLink />
-      <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-        <TopBar onMenu={() => setMobileOpen(true)} />
+      {!isMobile && <Sidebar />}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <TopBar compact={isMobile} />
         {/* tabIndex={-1} torna o <main> alvo programático do skip-link sem entrar
             na ordem natural de Tab (WCAG 2.4.1). */}
-        <main id="main-content" tabIndex={-1} className="flex-1 px-4 py-6 outline-none lg:px-8">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 overflow-y-auto px-4 py-6 outline-none lg:px-8"
+        >
           {children}
         </main>
+        {isMobile && <BottomNav />}
       </div>
       {/* Paleta de comandos global (⌘/Ctrl+K) — montada uma vez aqui. */}
       <CommandPalette />
