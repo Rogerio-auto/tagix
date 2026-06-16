@@ -15,7 +15,10 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { Plus } from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
 import { HelpHint } from '@/shared/components/help';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { StageColumn } from './StageColumn';
+import { MobileBoard } from './MobileBoard';
+import { MobileDealSheet } from './MobileDealSheet';
 import { useDeals, usePipelineDetail, usePipelines, useMoveDeal } from './queries';
 import { DealDetailDrawer } from '../deal';
 import type { CustomFieldDef } from '../custom-fields';
@@ -37,6 +40,7 @@ function transitionBlocked(stages: Stage[], deal: Deal, toStageId: string): stri
 
 export function PipelinePage(): React.JSX.Element {
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const pipelinesQuery = usePipelines();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [openDealId, setOpenDealId] = useState<string | null>(null);
@@ -74,6 +78,18 @@ export function PipelinePage(): React.JSX.Element {
     return map;
   }, [stages, deals]);
 
+  // Move um deal de stage com feedback de erro (§2.7). Fonte única reusada pelo
+  // drag (desktop) e pela ação explícita "Mover para…" (mobile, §2.2).
+  const moveDeal = (dealId: string, toStageId: string): void => {
+    move.mutate(
+      { dealId, stageId: toStageId },
+      {
+        onError: (err) =>
+          toast({ variant: 'error', title: err.message || 'Falha ao mover o negócio.' }),
+      },
+    );
+  };
+
   function onDragEnd(event: DragEndEvent): void {
     const dealId = String(event.active.id);
     const overData = event.over?.data.current as { stageId?: string } | undefined;
@@ -87,13 +103,7 @@ export function PipelinePage(): React.JSX.Element {
       toast({ variant: 'warn', title: blocked });
       return;
     }
-    move.mutate(
-      { dealId, stageId: toStageId },
-      {
-        onError: (err) =>
-          toast({ variant: 'error', title: err.message || 'Falha ao mover o negócio.' }),
-      },
-    );
+    moveDeal(dealId, toStageId);
   }
 
   const dealTitle = (id: string | number): string =>
@@ -193,11 +203,28 @@ export function PipelinePage(): React.JSX.Element {
       </header>
 
       {detail.isLoading ? (
-        <div className="flex gap-4">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-64 w-72 animate-pulse rounded-lg bg-surface-raised" />
-          ))}
-        </div>
+        isMobile ? (
+          <div className="flex flex-col gap-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-20 animate-pulse rounded-lg bg-surface-raised" />
+            ))}
+          </div>
+        ) : (
+          <div className="flex gap-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="h-64 w-72 animate-pulse rounded-lg bg-surface-raised" />
+            ))}
+          </div>
+        )
+      ) : isMobile ? (
+        // Mobile: kanban horizontal+drag é inviável no toque → seletor de estágio
+        // + lista vertical + mover por ação explícita (MOBILE_UX §2 "Kanban").
+        <MobileBoard
+          stages={stages}
+          dealsByStage={dealsByStage}
+          onOpenDeal={setOpenDealId}
+          onMoveDeal={moveDeal}
+        />
       ) : (
         <DndContext
           sensors={sensors}
@@ -227,12 +254,21 @@ export function PipelinePage(): React.JSX.Element {
         }}
       />
 
-      <DealDetailDrawer
-        dealId={openDealId}
-        canEdit
-        customFieldDefs={(detail.data?.pipeline.settings.custom_fields as CustomFieldDef[] | undefined) ?? []}
-        onClose={() => setOpenDealId(null)}
-      />
+      {isMobile ? (
+        <MobileDealSheet
+          dealId={openDealId}
+          canEdit
+          customFieldDefs={(detail.data?.pipeline.settings.custom_fields as CustomFieldDef[] | undefined) ?? []}
+          onClose={() => setOpenDealId(null)}
+        />
+      ) : (
+        <DealDetailDrawer
+          dealId={openDealId}
+          canEdit
+          customFieldDefs={(detail.data?.pipeline.settings.custom_fields as CustomFieldDef[] | undefined) ?? []}
+          onClose={() => setOpenDealId(null)}
+        />
+      )}
     </div>
   );
 }

@@ -2,6 +2,8 @@
 export { PipelinePage } from './PipelinePage';
 export { StageColumn } from './StageColumn';
 export { DealCard } from './DealCard';
+export { MobileBoard } from './MobileBoard';
+export { MobileDealSheet } from './MobileDealSheet';
 export {
   pipelineKeys,
   usePipelines,
