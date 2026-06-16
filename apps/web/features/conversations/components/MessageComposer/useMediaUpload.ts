@@ -45,7 +45,11 @@ export function mediaFromFile(file: File): PendingMedia {
 export function useMediaUpload() {
   const [uploading, setUploading] = useState(false);
 
-  const uploadMock = process.env['NEXT_PUBLIC_UPLOAD_MOCK'] === 'true';
+  // Guard duplo: a flag só ativa fora de produção. NODE_ENV é inlined pelo Next
+  // no bundle, então o bundler pode tree-shake o branch em prod.
+  const uploadMock =
+    process.env['NODE_ENV'] !== 'production' &&
+    process.env['NEXT_PUBLIC_UPLOAD_MOCK'] === 'true';
 
   const upload = useCallback(
     async (media: PendingMedia): Promise<string> => {

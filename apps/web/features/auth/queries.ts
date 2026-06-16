@@ -24,9 +24,11 @@ export function useLogin() {
   });
 }
 
-// O endpoint real de reset de senha ainda não existe; o mock mantém o fluxo
-// navegável até ele chegar. Defina NEXT_PUBLIC_AUTH_MOCK=false para forçar o real.
-const AUTH_MOCK = process.env['NEXT_PUBLIC_AUTH_MOCK'] !== 'false';
+// Mock só ativo em dev explicitamente. Em produção (NODE_ENV=production) nunca
+// aplica, independente da env: impede que a flag vaze comportamento em prod.
+const AUTH_MOCK =
+  process.env['NODE_ENV'] !== 'production' &&
+  process.env['NEXT_PUBLIC_AUTH_MOCK'] !== 'false';
 
 export function useRequestReset() {
   return useMutation({

@@ -60,6 +60,10 @@ function withOptionalSentry(config) {
       // Sem credenciais de upload (dev/local), desliga a geração/upload de source
       // maps para o build não tentar (e não falhar) o passo de release.
       sourcemaps: { disable: !hasUploadCreds },
+      // Remove os arquivos .map do bundle público após o upload para o Sentry:
+      // DevTools do browser vê código minificado; o painel do Sentry mantém os
+      // stack traces legíveis. Protege código-fonte de engenharia reversa.
+      hideSourceMaps: true,
       // Reduz o ruído de bundle: desativa o telemetry do plugin de build.
       telemetry: false,
       // Encaminha o tunnel só se configurado; mantém o ad-blocker bypass opt-in.
@@ -81,6 +85,11 @@ const nextConfig = {
   // Linux/CI. No Windows local fica off: o passo de symlink do standalone falha
   // com EPERM sem Modo de Desenvolvedor/admin, e standalone não é usado em dev.
   output: process.env.BUILD_STANDALONE === 'true' ? 'standalone' : undefined,
+  // Não emitir source maps no bundle público do browser. O Sentry sobe os maps
+  // via `hideSourceMaps: true` no withSentryConfig abaixo e depois os remove
+  // do bundle servido — DevTools mostra código minificado, painel Sentry mostra
+  // o original. Explicitar aqui impede regressão mesmo sem o Sentry ativo.
+  productionBrowserSourceMaps: false,
   // Pacotes do monorepo são TS-source — Next transpila.
   transpilePackages: ['@hm/ui', '@hm/design-tokens', '@hm/shared'],
   // Compressão gzip no server Next (produção self-hosted atrás do proxy).
