@@ -2,7 +2,7 @@
 id: F34-S04
 title: Troca manual de agente no cockpit (endpoint + UI + socket + permissão)
 phase: F34
-status: available
+status: in-progress
 priority: high
 estimated_size: L
 depends_on:
@@ -13,6 +13,8 @@ source_docs:
   - docs/features/AGENT_DEPARTMENT_ROUTING_PLAN.md
   - docs/features/LIVECHAT_OPS.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-16T04:05:18Z
+
 ---
 # F34-S04 — Troca manual no cockpit
 
