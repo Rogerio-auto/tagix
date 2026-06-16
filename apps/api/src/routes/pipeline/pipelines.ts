@@ -4,14 +4,18 @@
  * Endpoints sob /api/pipelines, RLS via req.scoped. Schemas Zod dos jsonb
  * (automation_rules/transition_rules/custom_fields) vivem aqui e sao reusados
  * por stages.ts (contrato unico, espelha @hm/db pipeline.ts).
+ *
+ * F35-S02: limite de 10 pipelines por workspace enforçado no POST; GET expoe meta.
  */
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { schema } from '@hm/db';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
-const { pipelines, stages } = schema;
+const { pipelines, stages, workspaceEntitlementOverrides } = schema;
+
+const DEFAULT_PIPELINE_LIMIT = 10;
 
 export function param(req: Request, key: string): string {
   const raw = req.params[key];
@@ -116,11 +120,23 @@ export function createPipelinesRouter(): Router {
   const viewGuard = [requireAuth, withRLS, requireRole('pipeline.view')] as const;
   const editGuard = [requireAuth, withRLS, requireRole('pipeline.edit')] as const;
 
+  // GET /api/pipelines — retorna { data, meta: { limit, current } } (F35-S02)
   router.get('/api/pipelines', ...viewGuard, async (req: Request, res: Response) => {
-    const rows = await req.scoped!((tx) =>
-      tx.select().from(pipelines).orderBy(asc(pipelines.createdAt)),
+    const workspaceId = req.auth!.workspace.id;
+    const [rows, overrideRows] = await req.scoped!((tx) =>
+      Promise.all([
+        tx.select().from(pipelines).orderBy(asc(pipelines.createdAt)),
+        tx
+          .select({ limits: workspaceEntitlementOverrides.limits })
+          .from(workspaceEntitlementOverrides)
+          .where(eq(workspaceEntitlementOverrides.workspaceId, workspaceId))
+          .limit(1),
+      ]),
     );
-    res.json({ pipelines: rows });
+    const rawLimit = overrideRows[0]?.limits?.['max_pipelines'];
+    const limit =
+      typeof rawLimit === 'number' && rawLimit > 0 ? rawLimit : DEFAULT_PIPELINE_LIMIT;
+    res.json({ data: rows, meta: { limit, current: rows.length } });
   });
 
   router.get('/api/pipelines/:id', ...viewGuard, async (req: Request, res: Response) => {
@@ -142,6 +158,7 @@ export function createPipelinesRouter(): Router {
     res.json(result);
   });
 
+  // POST /api/pipelines — enforça limite por workspace (F35-S02)
   router.post('/api/pipelines', ...editGuard, async (req: Request, res: Response) => {
     const parsed = createPipelineSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -149,8 +166,31 @@ export function createPipelinesRouter(): Router {
       return;
     }
     const workspaceId = req.auth!.workspace.id;
-    const [created] = await req.scoped!((tx) =>
-      tx
+
+    const outcome = await req.scoped!(async (tx) => {
+      // 1. Ler limite do workspace (override ou default 10)
+      const [overrideRow] = await tx
+        .select({ limits: workspaceEntitlementOverrides.limits })
+        .from(workspaceEntitlementOverrides)
+        .where(eq(workspaceEntitlementOverrides.workspaceId, workspaceId))
+        .limit(1);
+      const rawLimit = overrideRow?.limits?.['max_pipelines'];
+      const limit =
+        typeof rawLimit === 'number' && rawLimit > 0 ? rawLimit : DEFAULT_PIPELINE_LIMIT;
+
+      // 2. Contar pipelines existentes no workspace
+      const [countRow] = await tx
+        .select({ count: sql`count(*)` })
+        .from(pipelines)
+        .where(eq(pipelines.workspaceId, workspaceId));
+      const current = Number(countRow?.count ?? 0);
+
+      if (current >= limit) {
+        return { ok: false as const, current, limit };
+      }
+
+      // 3. Inserir normalmente
+      const [created] = await tx
         .insert(pipelines)
         .values({
           workspaceId,
@@ -161,9 +201,20 @@ export function createPipelinesRouter(): Router {
           isActive: parsed.data.isActive ?? true,
           settings: parsed.data.settings ?? {},
         })
-        .returning(),
-    );
-    res.status(201).json({ pipeline: created });
+        .returning();
+      return { ok: true as const, pipeline: created };
+    });
+
+    if (!outcome.ok) {
+      res.status(422).json({
+        error: 'pipeline_limit_reached',
+        current: outcome.current,
+        max: outcome.limit,
+      });
+      return;
+    }
+
+    res.status(201).json({ pipeline: outcome.pipeline });
   });
 
   router.put('/api/pipelines/:id', ...editGuard, async (req: Request, res: Response) => {
