@@ -23,6 +23,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F31   | 12     | 0   | 0   | 0   | 0   | 0   | 12   |
 | F32   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F33   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
+| F34   | 7     | 1   | 6   | 0   | 0   | 0   | 0   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -257,6 +258,18 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F33-S01 | go_to_flow — enqueue step do flow filho no dispatcher       | ✅ done | high       | —          |
 | F33-S02 | Bridge interactive + template no outbound-publisher do flow | ✅ done | high       | —          |
 | F33-S03 | ConversionTypePicker + FlowPicker nos inspectors            | ✅ done | medium     | —          |
+
+## Fase 34
+
+| ID      | Titulo                                                                 | Status      | Prioridade | Depende de |
+| ------- | ---------------------------------------------------------------------- | ----------- | ---------- | ---------- |
+| F34-S01 | Schema agent_departments (N:N agente↔departamento) + RLS + repo        | 🟢 available | critical   | —          |
+| F34-S02 | Config de departamentos no editor de agente (API + UI)                 | ⏸️ blocked  | high       | —          |
+| F34-S03 | Resolução department-aware do agente em loadContext                    | ⏸️ blocked  | high       | —          |
+| F34-S04 | Troca manual de agente no cockpit (endpoint + UI + socket + permissão) | ⏸️ blocked  | high       | —          |
+| F34-S05 | Tool transfer_to_agent — handler Node + authz de alvo + re-engaje      | ⏸️ blocked  | medium     | —          |
+| F34-S06 | Runtime — tool transfer_to_agent, diretriz de prompt e contexto IA→IA  | ⏸️ blocked  | medium     | —          |
+| F34-S07 | E2E + docs do roteamento agente↔departamento e handoff                 | ⏸️ blocked  | medium     | —          |
 
 ## Fase 4 — Campaigns
 
