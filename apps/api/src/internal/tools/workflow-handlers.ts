@@ -27,6 +27,7 @@ import type { DbTx } from '@hm/db';
 import { registerConversion as registerConversionEvent } from '../../routes/conversions';
 import { moveDealToStage, TransitionError } from '../../routes/deals';
 import { and, desc, isNull } from 'drizzle-orm';
+import { transferToAgent } from './agent-transfer-handlers';
 
 function fail(error: string): ToolHandlerResult {
   return { ok: false, error };
@@ -258,6 +259,7 @@ const moveDealStage: ToolHandler = async (env, tx) => {
 export function buildWorkflowRegistry(): ToolHandlerRegistry {
   return createDefaultRegistry()
     .register('transfer_to_human', transferToHuman)
+    .register('transfer_to_agent', transferToAgent)
     .register('escalate', escalate)
     .register('mark_resolved', markResolved)
     .register('change_conversation_status', changeConversationStatus)
