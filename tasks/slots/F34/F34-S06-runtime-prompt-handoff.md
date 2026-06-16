@@ -2,7 +2,7 @@
 id: F34-S06
 title: Runtime — tool transfer_to_agent, diretriz de prompt e contexto IA→IA
 phase: F34
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on:
