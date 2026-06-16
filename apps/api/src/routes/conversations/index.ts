@@ -120,6 +120,45 @@ export function createConversationsRouter(): Router {
   });
 
   /**
+   * GET /api/conversations/routing-targets — membros + departamentos elegíveis
+   * como alvo de atribuição/transferência (cockpit RoutingMenu, F1-S23).
+   *
+   * Gated por `conversation.assign` (STAFF — mesmo tier de `conversation.transfer`):
+   * quem pode rotear vê a lista de colegas + departamentos. Sem este endpoint o
+   * RoutingMenu não tinha de onde popular os alvos de transferência — só existiam
+   * `/api/members` e `/api/departments`, gated por permissão de EDIÇÃO (OWNER/ADMIN),
+   * inacessíveis ao SUPERVISOR/AGENT que rota. Precede a rota `/:id` (senão o
+   * detalhe captura `routing-targets` como id).
+   */
+  router.get(
+    '/api/conversations/routing-targets',
+    requireAuth,
+    withRLS,
+    requireRole('conversation.assign'),
+    async (req: Request, res: Response) => {
+      const data = await req.scoped!(async (tx) => {
+        const memberRows = await tx
+          .select({
+            id: schema.members.id,
+            name: schema.members.name,
+            email: schema.members.email,
+            avatarUrl: schema.members.avatarUrl,
+          })
+          .from(schema.members)
+          .where(eq(schema.members.status, 'active'))
+          .orderBy(schema.members.name);
+        const deptRows = await tx
+          .select({ id: schema.departments.id, name: schema.departments.name })
+          .from(schema.departments)
+          .where(eq(schema.departments.isActive, 'active'))
+          .orderBy(schema.departments.name);
+        return { members: memberRows, departments: deptRows };
+      });
+      res.json(data);
+    },
+  );
+
+  /**
    * GET /api/conversations/:id — detalhe completo da conversa (cockpit F30-S03).
    *
    * Enriquece a linha de `conversations` com o provider do canal + os nomes de

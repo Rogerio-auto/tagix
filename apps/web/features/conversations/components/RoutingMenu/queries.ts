@@ -2,7 +2,32 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/shared/lib/api-client';
-import type { AssignInput, RoutingHistoryEntry, TransferInput } from './types';
+import type {
+  AssignInput,
+  AssignableMember,
+  RoutingDepartment,
+  RoutingHistoryEntry,
+  TransferInput,
+} from './types';
+
+interface RoutingTargetsResult {
+  members: AssignableMember[];
+  departments: RoutingDepartment[];
+}
+
+/**
+ * Membros + departamentos elegíveis como alvo de atribuição/transferência.
+ * GET /api/conversations/routing-targets (gated por `conversation.assign`).
+ * Habilitar só quando o menu abre (lazy) — o caller passa `enabled`.
+ */
+export function useRoutingTargets(enabled: boolean) {
+  return useQuery({
+    queryKey: ['conversations', 'routing-targets'] as const,
+    queryFn: () => api.get<RoutingTargetsResult>('/api/conversations/routing-targets'),
+    enabled,
+    staleTime: 60_000,
+  });
+}
 
 /** Chave de cache da trilha de roteamento de uma conversa (fonte única). */
 export function routingHistoryKey(conversationId: string) {

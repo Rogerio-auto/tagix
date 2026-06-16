@@ -598,6 +598,31 @@ describe('GET /api/conversations/:id — detalhe (cockpit)', () => {
   });
 });
 
+// ─── GET /api/conversations/routing-targets — alvos de roteamento (cockpit) ────
+describe('GET /api/conversations/routing-targets', () => {
+  it('sem sessão → 401', async () => {
+    expect((await request(app).get('/api/conversations/routing-targets')).status).toBe(401);
+  });
+
+  it('STAFF → 200 com members[] + departments[]', async () => {
+    const res = await request(app)
+      .get('/api/conversations/routing-targets')
+      .set('Cookie', adminCookie);
+    expect(res.status).toBe(200);
+    const body = res.body as { members: unknown[]; departments: unknown[] };
+    expect(Array.isArray(body.members)).toBe(true);
+    expect(Array.isArray(body.departments)).toBe(true);
+  });
+
+  it('não é capturado pela rota /:id (precedência de rota)', async () => {
+    // Se /:id viesse antes, "routing-targets" seria tratado como id → 404.
+    const res = await request(app)
+      .get('/api/conversations/routing-targets')
+      .set('Cookie', adminCookie);
+    expect(res.status).not.toBe(404);
+  });
+});
+
 // ─── S07.1 — guard de visibilidade por-conversa (endpoints por-id) ────────────
 //
 // Fecha o IDOR: a lista esconde a linha, mas o ACESSO por id também precisa negar

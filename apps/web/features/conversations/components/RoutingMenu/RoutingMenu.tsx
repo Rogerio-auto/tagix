@@ -14,7 +14,7 @@ import { Button, useToast } from '@hm/ui';
 import { can, type Permission } from '@hm/shared';
 import { cn } from '@/shared/lib/cn';
 import { useAuthStore } from '@/shared/stores/auth.store';
-import { useAssignConversation, useTransferConversation } from './queries';
+import { useAssignConversation, useRoutingTargets, useTransferConversation } from './queries';
 import { RoutingHistoryList } from './RoutingHistoryList';
 import type { AssignableMember, RoutingDepartment } from './types';
 
@@ -37,12 +37,13 @@ export function RoutingMenu({
   conversationId,
   assignedTo,
   departmentId,
-  members = [],
-  departments = [],
+  members: propMembers,
+  departments: propDepartments,
 }: {
   conversationId: string;
   assignedTo: string | null;
   departmentId: string | null;
+  /** Override (testes). Em produção o menu busca os alvos sozinho ao abrir. */
   members?: readonly AssignableMember[];
   departments?: readonly RoutingDepartment[];
 }) {
@@ -62,6 +63,15 @@ export function RoutingMenu({
   const allowed = (perm: Permission) => (role ? can(role, perm) : false);
   const canAssign = allowed('conversation.assign');
   const canTransfer = allowed('conversation.transfer');
+
+  // O menu só monta com o cockpit aberto; busca os alvos quando o papel pode
+  // rotear (popula tanto os pickers quanto os rótulos de responsável/depto atuais).
+  // Props sobrescrevem (testes).
+  const targets = useRoutingTargets(canAssign || canTransfer);
+  const members: readonly AssignableMember[] =
+    propMembers && propMembers.length > 0 ? propMembers : (targets.data?.members ?? []);
+  const departments: readonly RoutingDepartment[] =
+    propDepartments && propDepartments.length > 0 ? propDepartments : (targets.data?.departments ?? []);
 
   const membersById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
   const departmentsById = useMemo(
