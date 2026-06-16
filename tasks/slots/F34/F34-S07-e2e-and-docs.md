@@ -2,7 +2,7 @@
 id: F34-S07
 title: E2E + docs do roteamento agente↔departamento e handoff
 phase: F34
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on:
