@@ -2,7 +2,7 @@
 id: F34-S05
 title: Tool transfer_to_agent — handler Node + authz de alvo + re-engaje
 phase: F34
-status: blocked
+status: available
 priority: medium
 estimated_size: M
 depends_on:

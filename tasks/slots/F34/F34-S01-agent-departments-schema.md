@@ -2,7 +2,7 @@
 id: F34-S01
 title: Schema agent_departments (N:N agente↔departamento) + RLS + repo
 phase: F34
-status: review
+status: done
 priority: critical
 estimated_size: S
 depends_on: []

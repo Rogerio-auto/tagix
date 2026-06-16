@@ -2,7 +2,7 @@
 id: F34-S02
 title: Config de departamentos no editor de agente (API + UI)
 phase: F34
-status: blocked
+status: available
 priority: high
 estimated_size: M
 depends_on:
