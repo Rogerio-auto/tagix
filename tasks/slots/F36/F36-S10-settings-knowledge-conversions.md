@@ -2,7 +2,7 @@
 id: F36-S10
 title: Settings + Knowledge + Conversões responsivos
 phase: F36
-status: blocked
+status: available
 priority: medium
 estimated_size: M
 depends_on:

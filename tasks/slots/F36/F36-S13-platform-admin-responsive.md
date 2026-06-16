@@ -2,7 +2,7 @@
 id: F36-S13
 title: Platform admin legível/operável no mobile
 phase: F36
-status: blocked
+status: available
 priority: low
 estimated_size: M
 depends_on:

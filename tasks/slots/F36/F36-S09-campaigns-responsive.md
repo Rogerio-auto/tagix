@@ -2,7 +2,7 @@
 id: F36-S09
 title: Campanhas responsivas — lista + wizard + monitoring
 phase: F36
-status: blocked
+status: available
 priority: medium
 estimated_size: M
 depends_on:
