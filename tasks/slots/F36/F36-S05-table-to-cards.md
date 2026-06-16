@@ -2,7 +2,7 @@
 id: F36-S05
 title: Padrão Tabela→Cards + filtros em sheet (primitivo + contatos)
 phase: F36
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on:
@@ -16,6 +16,8 @@ blocks:
 source_docs:
   - docs/features/MOBILE_RESPONSIVE_PLAN.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-16T20:27:57Z
+
 ---
 # F36-S05 — Tabela→Cards
 
