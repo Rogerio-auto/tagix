@@ -2,7 +2,7 @@
 id: F36-S03
 title: Inbox/cockpit responsivo — pilha de views + sheets
 phase: F36
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on:
@@ -14,6 +14,7 @@ source_docs:
   - docs/features/LIVECHAT_OPS.md
 agent_id: frontend-engineer
 claimed_at: 2026-06-16T20:14:19Z
+completed_at: 2026-06-16T20:21:42Z
 
 ---
 # F36-S03 — Cockpit responsivo
