@@ -7,6 +7,8 @@ import { Button, useToast } from '@hm/ui';
 import { can, type Role } from '@hm/shared';
 import { MarkConversionButton } from '@/features/conversions';
 import { cn } from '@/shared/lib/cn';
+import { Sheet } from '@/shared/components/Sheet';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useAssignTag, useContact, useRemoveTag, useTags } from './queries';
 import type { ConsentEntry } from './types';
 
@@ -45,6 +47,7 @@ export function ContactDetailDrawer({
 }: ContactDetailDrawerProps): React.JSX.Element | null {
   const [tab, setTab] = useState<Tab>('dados');
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const detail = useContact(contactId);
   const tagsQuery = useTags();
   const assignTag = useAssignTag();
@@ -60,65 +63,43 @@ export function ContactDetailDrawer({
     (t) => !(data?.tags ?? []).some((ct) => ct.id === t.id),
   );
 
-  return (
+  const actions = (canEdit && c) || c ? (
+    <div className="flex items-center gap-2">
+      {canEdit && c && (
+        <Button variant="secondary" onClick={() => onEdit(c.id)}>
+          <Pencil className="size-4" />
+          Editar
+        </Button>
+      )}
+      {c && <MarkConversionButton contactId={c.id} variant="secondary" />}
+    </div>
+  ) : null;
+
+  const tabsNav = (
+    <nav className="flex gap-1 overflow-x-auto" role="tablist">
+      {TABS.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={tab === t.id}
+          onClick={() => setTab(t.id)}
+          className={cn(
+            'shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+            tab === t.id
+              ? 'border-brand text-text'
+              : 'border-transparent text-text-low hover:text-text',
+          )}
+        >
+          {t.label}
+        </button>
+      ))}
+    </nav>
+  );
+
+  const detailBody = (
     <>
-      <div className="fixed inset-0 z-40 bg-black/60" onClick={onClose} aria-hidden />
-      <aside
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-surface"
-        role="dialog"
-        aria-label="Detalhe do contato"
-      >
-        <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-          <div className="min-w-0">
-            <h2 className="truncate font-head text-base font-semibold text-text">
-              {c?.displayName ?? (detail.isLoading ? 'Carregando…' : 'Contato')}
-            </h2>
-            {c?.phone && <p className="truncate text-xs text-text-low">{c.phone}</p>}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="rounded-sm p-1 text-text-low hover:text-text"
-          >
-            <X className="size-5" />
-          </button>
-        </header>
-
-        <div className="flex items-center gap-2 border-b border-border px-5 py-3">
-          {canEdit && c && (
-            <Button variant="secondary" onClick={() => onEdit(c.id)}>
-              <Pencil className="size-4" />
-              Editar
-            </Button>
-          )}
-          {c && (
-            <MarkConversionButton contactId={c.id} variant="secondary" />
-          )}
-        </div>
-
-        <nav className="flex gap-1 border-b border-border px-3" role="tablist">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.id}
-              onClick={() => setTab(t.id)}
-              className={cn(
-                'border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-                tab === t.id
-                  ? 'border-brand text-text'
-                  : 'border-transparent text-text-low hover:text-text',
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          {detail.isLoading && <p className="text-sm text-text-low">Carregando…</p>}
+      {detail.isLoading && <p className="text-sm text-text-low">Carregando…</p>}
           {detail.isError && (
             <p className="text-sm text-danger">Falha ao carregar contato.</p>
           )}
@@ -290,7 +271,57 @@ export function ContactDetailDrawer({
           {data && tab === 'consentimento' && (
             <ConsentTimeline entries={data.consent} optIn={data.marketingOptIn} />
           )}
-        </div>
+    </>
+  );
+
+  const heading = c?.displayName ?? (detail.isLoading ? 'Carregando…' : 'Contato');
+
+  // Mobile (< md): detalhe em full-`Sheet` (UX §2.3 — drawer vira sheet).
+  if (isMobile) {
+    return (
+      <Sheet
+        open
+        onClose={onClose}
+        variant="full"
+        title={heading}
+        ariaLabel="Detalhe do contato"
+        footer={actions}
+      >
+        <div className="-mx-5 mb-3 border-b border-border px-3">{tabsNav}</div>
+        {detailBody}
+      </Sheet>
+    );
+  }
+
+  // Desktop (md+): drawer lateral inalterado.
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/60" onClick={onClose} aria-hidden />
+      <aside
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-surface"
+        role="dialog"
+        aria-label="Detalhe do contato"
+      >
+        <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="truncate font-head text-base font-semibold text-text">{heading}</h2>
+            {c?.phone && <p className="truncate text-xs text-text-low">{c.phone}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar"
+            className="rounded-sm p-1 text-text-low hover:text-text"
+          >
+            <X className="size-5" />
+          </button>
+        </header>
+
+        {actions && <div className="border-b border-border px-5 py-3">{actions}</div>}
+
+        <div className="border-b border-border px-3">{tabsNav}</div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">{detailBody}</div>
       </aside>
     </>
   );
