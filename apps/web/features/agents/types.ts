@@ -38,6 +38,24 @@ export interface Agent {
   enabledChannelIds: string[] | null;
   createdAt: string;
   updatedAt: string | null;
+  /**
+   * Departamentos que o agente atende (F34-S02). Presente no GET de detalhe e nas
+   * respostas de create/update; ausente na listagem (`GET /api/agents`).
+   */
+  departments?: AgentDepartmentLink[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Vínculo agente↔departamento (F34-S02)                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Associação agente↔departamento (N:N). `isDefault` marca o agente DE ENTRADA
+ * daquele departamento — no máximo 1 por departamento (garantido pela API).
+ */
+export interface AgentDepartmentLink {
+  departmentId: string;
+  isDefault: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -142,4 +160,6 @@ export interface CreateAgentInput {
    * é seguro enviar mesmo antes do wiring de materialização.
    */
   answers?: Record<string, TemplateAnswerValue>;
+  /** Departamentos que o agente atende + qual é o de entrada (F34-S02). */
+  departments?: AgentDepartmentLink[];
 }

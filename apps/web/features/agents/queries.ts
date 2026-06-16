@@ -31,7 +31,38 @@ export const queryKeys = {
   detail: (id: string) => [...queryKeys.all, 'detail', id] as const,
   models: () => [...queryKeys.all, 'models'] as const,
   templates: () => [...queryKeys.all, 'templates'] as const,
+  /** Departamentos do workspace (compartilhada com settings/workspace-org). */
+  departments: () => ['departments'] as const,
 };
+
+/* ------------------------------------------------------------------ */
+/* Departamentos do workspace (para o seletor agente↔dept, F34-S02)   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Departamento do workspace como vem de `GET /api/departments`. `isActive` é
+ * `text('active'|'archived')` (NÃO boolean) — espelha o shape de
+ * settings/workspace-org. Filtramos `active` no consumidor (DepartmentsField).
+ */
+export interface WorkspaceDepartment {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: string;
+}
+
+/**
+ * Lista os departamentos do workspace. Reusa o endpoint existente de
+ * settings/workspace-org (não há fetch novo) e a mesma `queryKey` para
+ * compartilhar cache entre as features.
+ */
+export function useWorkspaceDepartments(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.departments(),
+    enabled,
+    queryFn: () => api.get<{ departments: WorkspaceDepartment[] }>('/api/departments'),
+  });
+}
 
 /* ------------------------------------------------------------------ */
 /* Lista + detalhe                                                     */

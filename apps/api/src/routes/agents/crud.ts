@@ -28,7 +28,8 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm';
-import { schema, type DbTx } from '@hm/db';
+import { agentDepartmentsRepo, schema, type DbTx } from '@hm/db';
+import type { AgentDepartmentItem, DepartmentLink } from '@hm/db';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
 const AGENT_STATUSES = ['active', 'inactive', 'archived'] as const;
@@ -78,6 +79,65 @@ const agentBehaviorSchema = z.object({
 });
 
 /**
+ * Vínculo agente↔departamento (F34-S02). N:N: cada item liga o agente a um
+ * departamento; `isDefault` marca o agente DE ENTRADA daquele departamento.
+ *
+ * Regras app-side (defesa em profundidade — o índice parcial único do schema é a
+ * garantia final): sem departamentos repetidos no mesmo payload e no máximo 1
+ * default por departamento. Como cada `departmentId` aparece no máximo 1×, a
+ * unicidade de departamento já garante ≤ 1 default por dept dentro do payload.
+ */
+const agentDepartmentSchema = z.object({
+  departmentId: z.string().uuid(),
+  isDefault: z.boolean().default(false),
+});
+
+const departmentsSchema = z
+  .array(agentDepartmentSchema)
+  .max(100)
+  .superRefine((items, ctx) => {
+    const seen = new Set<string>();
+    for (const item of items) {
+      if (seen.has(item.departmentId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Departamento repetido no conjunto.',
+        });
+        return;
+      }
+      seen.add(item.departmentId);
+    }
+  });
+
+/**
+ * Valida que todos os departamentos referenciados existem, são do workspace e
+ * estão ATIVOS (`is_active = 'active'`, não arquivados). Roda dentro da `tx`
+ * RLS-escopada, então só enxerga departamentos do tenant corrente.
+ */
+async function assertDepartmentsValid(
+  tx: DbTx,
+  items: AgentDepartmentItem[],
+): Promise<void> {
+  if (items.length === 0) return;
+  const ids = items.map((i) => i.departmentId);
+  const rows = await tx
+    .select({ id: schema.departments.id })
+    .from(schema.departments)
+    .where(
+      and(
+        inArray(schema.departments.id, ids),
+        eq(schema.departments.isActive, 'active'),
+      ),
+    );
+  const valid = new Set(rows.map((r) => r.id));
+  for (const id of ids) {
+    if (!valid.has(id)) {
+      throw new HttpError(400, 'Departamento inválido, arquivado ou de outro workspace.');
+    }
+  }
+}
+
+/**
  * Criação. Dois modos:
  *  - a partir de template (`templateId`): `systemPrompt`/`model` herdam do template
  *    se omitidos; cria `agent_tools` default das `default_tools` do template.
@@ -87,12 +147,14 @@ const agentBehaviorSchema = z.object({
 const createSchema = agentBehaviorSchema.extend({
   name: z.string().trim().min(1).max(120),
   templateId: z.string().uuid().optional(),
+  departments: departmentsSchema.optional(),
 });
 
 const updateSchema = agentBehaviorSchema
   .extend({
     name: z.string().trim().min(1).max(120).optional(),
     status: z.enum(AGENT_STATUSES).optional(),
+    departments: departmentsSchema.optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Nenhum campo para atualizar.' });
 
@@ -148,14 +210,21 @@ export function createAgentsCrudRouter(): Router {
       res.status(400).json({ message: 'id ausente.' });
       return;
     }
-    const [agent] = await req.scoped!((tx) =>
-      tx.select(PUBLIC_AGENT_COLUMNS).from(schema.agents).where(eq(schema.agents.id, id)).limit(1),
-    );
-    if (!agent) {
+    const result = await req.scoped!(async (tx) => {
+      const [agent] = await tx
+        .select(PUBLIC_AGENT_COLUMNS)
+        .from(schema.agents)
+        .where(eq(schema.agents.id, id))
+        .limit(1);
+      if (!agent) return null;
+      const departments = await agentDepartmentsRepo.listDepartmentsForAgent(tx, agent.id);
+      return { agent, departments };
+    });
+    if (!result) {
       res.status(404).json({ message: 'Agente não encontrado.' });
       return;
     }
-    res.json({ agent });
+    res.json({ agent: { ...result.agent, departments: result.departments } });
   });
 
   // POST /api/agents — cria agente (do zero ou a partir de template).
@@ -254,7 +323,19 @@ export function createAgentsCrudRouter(): Router {
           }
         }
 
-        return agent;
+        // F34-S02: vínculos agente↔departamento (N:N) na MESMA transação.
+        let departments: DepartmentLink[] = [];
+        if (input.departments !== undefined) {
+          const items: AgentDepartmentItem[] = input.departments;
+          await assertDepartmentsValid(tx, items);
+          await agentDepartmentsRepo.setAgentDepartments(tx, workspaceId, agent.id, items);
+          departments = items.map((i) => ({
+            departmentId: i.departmentId,
+            isDefault: i.isDefault,
+          }));
+        }
+
+        return { ...agent, departments };
       });
 
       res.status(201).json({ agent: created });
@@ -280,6 +361,7 @@ export function createAgentsCrudRouter(): Router {
       return;
     }
     const input = parsed.data;
+    const workspaceId = req.auth!.workspace.id;
 
     // TODO(F2-S09): se `input.model` presente, validar contra resolvePolicy(workspaceId).
     const patch: Record<string, unknown> = { updatedAt: new Date() };
@@ -303,18 +385,41 @@ export function createAgentsCrudRouter(): Router {
       if (input[key] !== undefined) patch[key] = input[key];
     }
 
-    const [updated] = await req.scoped!((tx) =>
-      tx
-        .update(schema.agents)
-        .set(patch)
-        .where(eq(schema.agents.id, id))
-        .returning(PUBLIC_AGENT_COLUMNS),
-    );
-    if (!updated) {
-      res.status(404).json({ message: 'Agente não encontrado.' });
-      return;
+    try {
+      // Update do agente + replace-all dos departamentos na MESMA transação
+      // (F34-S02) — atomicidade entre config e roteamento.
+      const result = await req.scoped!(async (tx) => {
+        const [updated] = await tx
+          .update(schema.agents)
+          .set(patch)
+          .where(eq(schema.agents.id, id))
+          .returning(PUBLIC_AGENT_COLUMNS);
+        if (!updated) return null;
+
+        // `departments` ausente = não mexe nos vínculos; presente (incl. `[]`) =
+        // substitui o conjunto inteiro.
+        if (input.departments !== undefined) {
+          const items: AgentDepartmentItem[] = input.departments;
+          await assertDepartmentsValid(tx, items);
+          await agentDepartmentsRepo.setAgentDepartments(tx, workspaceId, updated.id, items);
+        }
+
+        const departments = await agentDepartmentsRepo.listDepartmentsForAgent(tx, updated.id);
+        return { ...updated, departments };
+      });
+
+      if (!result) {
+        res.status(404).json({ message: 'Agente não encontrado.' });
+        return;
+      }
+      res.json({ agent: result });
+    } catch (err) {
+      if (err instanceof HttpError) {
+        res.status(err.status).json({ message: err.message });
+        return;
+      }
+      throw err;
     }
-    res.json({ agent: updated });
   });
 
   // PATCH /api/agents/:id/status — ativa/desativa/arquiva (atalho de toggle).
