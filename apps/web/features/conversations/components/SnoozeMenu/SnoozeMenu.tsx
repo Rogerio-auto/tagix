@@ -14,6 +14,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Clock } from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
 import { cn } from '@/shared/lib/cn';
+import { Sheet } from '@/shared/components/Sheet';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useChangeStatus } from '../../queries';
 
 interface SnoozeOption {
@@ -67,18 +69,21 @@ export interface SnoozeMenuProps {
 
 export function SnoozeMenu({ conversationId, variant = 'button', disabled }: SnoozeMenuProps) {
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const changeStatus = useChangeStatus();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
+  // Click-outside só vale para o dropdown desktop; no mobile o Sheet gerencia o
+  // próprio fechamento (backdrop/Esc/swipe).
   useEffect(() => {
-    if (!open) return;
+    if (!open || isMobile) return;
     function onPointerDown(event: PointerEvent): void {
       if (!ref.current?.contains(event.target as Node)) setOpen(false);
     }
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [open]);
+  }, [open, isMobile]);
 
   function pick(option: SnoozeOption): void {
     if (changeStatus.isPending) return;
@@ -132,32 +137,58 @@ export function SnoozeMenu({ conversationId, variant = 'button', disabled }: Sno
         </Button>
       )}
 
-      {open && (
-        <div
-          role="menu"
-          aria-label="Adiar por"
-          className={cn(
-            'absolute right-0 z-20 mt-1 min-w-44 rounded-md border border-border bg-surface-2 p-1 shadow-glow-md',
-            variant === 'icon' ? 'top-full' : 'bottom-full mb-1',
-          )}
-        >
-          {SNOOZE_OPTIONS.map((option) => (
-            <button
-              key={option.label}
-              type="button"
-              role="menuitem"
-              disabled={changeStatus.isPending}
-              onClick={() => pick(option)}
-              className={cn(
-                'flex w-full items-center rounded-sm px-2 py-1.5 text-left font-body text-sm text-text-mid outline-none',
-                'hover:bg-surface-3 hover:text-text focus-visible:shadow-glow-md',
-                'disabled:cursor-not-allowed disabled:opacity-50',
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+      {/* Mobile: opções em bottom-sheet (toque); desktop: dropdown ancorado. */}
+      {isMobile ? (
+        <Sheet open={open} onClose={() => setOpen(false)} title="Adiar por" variant="bottom">
+          <ul className="flex flex-col gap-1 pb-2" role="menu" aria-label="Adiar por">
+            {SNOOZE_OPTIONS.map((option) => (
+              <li key={option.label}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={changeStatus.isPending}
+                  onClick={() => pick(option)}
+                  className={cn(
+                    'touch-target flex w-full items-center rounded-md px-3 text-left font-body text-base text-text outline-none',
+                    'hover:bg-surface-2 focus-visible:shadow-glow-md',
+                    'disabled:cursor-not-allowed disabled:opacity-50',
+                  )}
+                >
+                  <Clock className="mr-3 size-5 shrink-0 text-text-low" aria-hidden />
+                  {option.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Sheet>
+      ) : (
+        open && (
+          <div
+            role="menu"
+            aria-label="Adiar por"
+            className={cn(
+              'absolute right-0 z-20 mt-1 min-w-44 rounded-md border border-border bg-surface-2 p-1 shadow-glow-md',
+              variant === 'icon' ? 'top-full' : 'bottom-full mb-1',
+            )}
+          >
+            {SNOOZE_OPTIONS.map((option) => (
+              <button
+                key={option.label}
+                type="button"
+                role="menuitem"
+                disabled={changeStatus.isPending}
+                onClick={() => pick(option)}
+                className={cn(
+                  'flex w-full items-center rounded-sm px-2 py-1.5 text-left font-body text-sm text-text-mid outline-none',
+                  'hover:bg-surface-3 hover:text-text focus-visible:shadow-glow-md',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )
       )}
     </div>
   );
