@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/shared/lib/api-client';
-import type { Agent } from '../types';
+import type { Agent, AgentDepartmentLink } from '../types';
 import { queryKeys } from '../queries';
 import type { AgentMetric, AgentToolState } from './types';
 
@@ -49,6 +49,11 @@ export interface UpdateAgentInput {
   replyIfIdleSec?: number | null;
   allowHandoff?: boolean;
   ignoreGroupMessages?: boolean;
+  /**
+   * Conjunto completo de departamentos do agente (replace-all, F34-S02). Quando
+   * presente, substitui TODOS os vínculos; `[]` desvincula. Omitir não mexe.
+   */
+  departments?: AgentDepartmentLink[];
 }
 
 /** Salva a config do agente. Invalida o detalhe no sucesso. */

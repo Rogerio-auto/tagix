@@ -2,7 +2,7 @@
 id: F34-S02
 title: Config de departamentos no editor de agente (API + UI)
 phase: F34
-status: available
+status: review
 priority: high
 estimated_size: M
 depends_on:
@@ -12,6 +12,9 @@ blocks:
 source_docs:
   - docs/features/AGENT_DEPARTMENT_ROUTING_PLAN.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-16T03:50:08Z
+completed_at: 2026-06-16T03:59:46Z
+
 ---
 # F34-S02 — Config agente↔departamento
 

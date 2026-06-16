@@ -1,16 +1,24 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Save } from 'lucide-react';
 import { z } from 'zod';
 import { Button, Card, Input, useToast } from '@hm/ui';
 import { Field, Select, Textarea, Toggle } from '@/features/agents/wizard/fields';
+import { DepartmentsField } from '@/features/agents/DepartmentsField';
 import { ApiError } from '@/shared/lib/api-client';
 import { useAgentModels } from '../queries';
-import type { Agent } from '../types';
+import type { Agent, AgentDepartmentLink } from '../types';
 import { useUpdateAgent, type UpdateAgentInput } from './queries';
+
+/** Igualdade estrutural de dois conjuntos de departamentos (ordem-insensível). */
+function departmentsEqual(a: AgentDepartmentLink[], b: AgentDepartmentLink[]): boolean {
+  if (a.length !== b.length) return false;
+  const byId = new Map(b.map((d) => [d.departmentId, d.isDefault]));
+  return a.every((d) => byId.get(d.departmentId) === d.isDefault);
+}
 
 /**
  * Form de configuração do agente (UX §2 / DS v2). RHF + Zod (`zodResolver`).
@@ -78,21 +86,36 @@ export function ConfigTab({ agent, canEdit }: { agent: Agent; canEdit: boolean }
 
   const defaults = useMemo(() => toDefaults(agent), [agent]);
 
+  // Departamentos vivem fora do RHF (estrutura de array N:N). Estado controlado +
+  // dirty-tracking próprio, combinado ao dirty do form abaixo.
+  const agentDepartments = useMemo<AgentDepartmentLink[]>(
+    () => agent.departments ?? [],
+    [agent.departments],
+  );
+  const [departments, setDepartments] = useState<AgentDepartmentLink[]>(agentDepartments);
+  const departmentsDirty = !departmentsEqual(departments, agentDepartments);
+
   const {
     control,
     register,
     handleSubmit,
     reset,
-    formState: { errors, isDirty },
+    formState: { errors, isDirty: formDirty },
   } = useForm<ConfigForm>({
     resolver: zodResolver(configSchema),
     defaultValues: defaults,
   });
 
+  const isDirty = formDirty || departmentsDirty;
+
   // Resincroniza quando o agente muda (ex.: refetch após save em outra aba).
   useEffect(() => {
     reset(defaults);
   }, [defaults, reset]);
+
+  useEffect(() => {
+    setDepartments(agentDepartments);
+  }, [agentDepartments]);
 
   const onSubmit = handleSubmit(async (values) => {
     // Reconstrói modelParams preservando chaves desconhecidas + aplicando os
@@ -123,11 +146,14 @@ export function ConfigTab({ agent, canEdit }: { agent: Agent; canEdit: boolean }
       maxBatchMessages: values.maxBatchMessages,
       allowHandoff: values.allowHandoff,
       ignoreGroupMessages: values.ignoreGroupMessages,
+      // Só envia o conjunto de departamentos quando mudou (replace-all no backend).
+      ...(departmentsDirty ? { departments } : {}),
     };
 
     try {
       const { agent: saved } = await update.mutateAsync(payload);
       reset(toDefaults(saved));
+      setDepartments(saved.departments ?? departments);
       toast({ variant: 'success', title: 'Configuração salva', description: saved.name });
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Tente novamente.';
@@ -323,13 +349,28 @@ export function ConfigTab({ agent, canEdit }: { agent: Agent; canEdit: boolean }
         />
       </Card>
 
+      <Card elevation={1} className="flex flex-col gap-5 p-5">
+        <div>
+          <h2 className="font-head text-base font-semibold text-text">Departamentos</h2>
+          <p className="mt-1 font-body text-sm text-text-low">
+            Quais departamentos este agente atende. Marque um como{' '}
+            <span className="font-medium text-text-mid">agente de entrada</span> para que ele receba
+            a primeira mensagem desse departamento.
+          </p>
+        </div>
+        <DepartmentsField value={departments} onChange={setDepartments} disabled={readOnly} />
+      </Card>
+
       {canEdit && (
         <div className="flex items-center justify-end gap-3 border-t border-border-2 pt-4">
           {isDirty && (
             <Button
               type="button"
               variant="ghost"
-              onClick={() => reset(defaults)}
+              onClick={() => {
+                reset(defaults);
+                setDepartments(agentDepartments);
+              }}
               disabled={update.isPending}
             >
               Descartar

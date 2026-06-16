@@ -4,12 +4,14 @@ import { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { Button, Input, Modal, useToast } from '@hm/ui';
 import { ApiError } from '@/shared/lib/api-client';
+import { DepartmentsField } from '../DepartmentsField';
 import {
   useAgentModels,
   useAgentTemplates,
   useCreateAgent,
 } from '../queries';
 import type {
+  AgentDepartmentLink,
   AgentTemplate,
   CreateAgentInput,
   TemplateAnswerValue,
@@ -26,8 +28,9 @@ export interface AgentCreationWizardProps {
   onClose: () => void;
 }
 
-const STEPS = ['Template', 'Detalhes', 'Modelo'] as const;
-type StepIndex = 0 | 1 | 2;
+const STEPS = ['Template', 'Detalhes', 'Modelo', 'Departamentos'] as const;
+type StepIndex = 0 | 1 | 2 | 3;
+const LAST_STEP: StepIndex = 3;
 
 /** Uma resposta está "vazia" (para validar `required`). */
 function isEmptyAnswer(value: TemplateAnswerValue | undefined): boolean {
@@ -64,6 +67,7 @@ export function AgentCreationWizard({ open, onClose }: AgentCreationWizardProps)
   const [answers, setAnswers] = useState<Record<string, TemplateAnswerValue>>({});
   const [answerErrors, setAnswerErrors] = useState<Record<string, string>>({});
   const [model, setModel] = useState<string>();
+  const [departments, setDepartments] = useState<AgentDepartmentLink[]>([]);
 
   const templates = templatesQuery.data ?? [];
   const models = useMemo(() => modelsQuery.data ?? [], [modelsQuery.data]);
@@ -77,6 +81,7 @@ export function AgentCreationWizard({ open, onClose }: AgentCreationWizardProps)
     setAnswers({});
     setAnswerErrors({});
     setModel(undefined);
+    setDepartments([]);
   };
 
   const handleClose = () => {
@@ -128,7 +133,7 @@ export function AgentCreationWizard({ open, onClose }: AgentCreationWizardProps)
 
   const goNext = () => {
     if (step === 1 && !validateDetails()) return;
-    setStep((s) => (Math.min(s + 1, 2) as StepIndex));
+    setStep((s) => (Math.min(s + 1, LAST_STEP) as StepIndex));
   };
 
   const goBack = () => setStep((s) => (Math.max(s - 1, 0) as StepIndex));
@@ -152,6 +157,7 @@ export function AgentCreationWizard({ open, onClose }: AgentCreationWizardProps)
       templateId: template.id,
       ...(model ? { model } : {}),
       ...(Object.keys(payloadAnswers).length > 0 ? { answers: payloadAnswers } : {}),
+      ...(departments.length > 0 ? { departments } : {}),
     };
 
     try {
@@ -219,6 +225,17 @@ export function AgentCreationWizard({ open, onClose }: AgentCreationWizardProps)
           />
         )}
 
+        {step === 3 && (
+          <div className="flex flex-col gap-3">
+            <p className="font-body text-sm text-text-mid">
+              Em quais departamentos este agente atende? Marque um como{' '}
+              <span className="font-medium text-text">agente de entrada</span> para que ele receba a
+              primeira mensagem. Opcional — você pode configurar depois.
+            </p>
+            <DepartmentsField value={departments} onChange={setDepartments} />
+          </div>
+        )}
+
         <div className="mt-1 flex items-center justify-between border-t border-border-2 pt-4">
           {step > 0 ? (
             <Button
@@ -233,7 +250,7 @@ export function AgentCreationWizard({ open, onClose }: AgentCreationWizardProps)
             <span />
           )}
 
-          {step < 2 ? (
+          {step < LAST_STEP ? (
             <Button
               variant="primary"
               disabled={step === 0 ? !template : false}
