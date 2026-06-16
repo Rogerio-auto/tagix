@@ -573,6 +573,31 @@ describe('Cache key isolada por membro', () => {
   });
 });
 
+// ─── GET /api/conversations/:id — detalhe do cockpit (F30-S03) ────────────────
+describe('GET /api/conversations/:id — detalhe (cockpit)', () => {
+  it('ADMIN em conversa visível → 200 com os campos do cockpit', async () => {
+    const res = await request(app)
+      .get(`/api/conversations/${convDeptB}`)
+      .set('Cookie', adminCookie);
+    expect(res.status).toBe(200);
+    const conv = (res.body as { conversation: Record<string, unknown> }).conversation;
+    expect(conv['id']).toBe(convDeptB);
+    // Campos consumidos pelo ContactInfoPanel / ConversationHeader.
+    expect(conv).toHaveProperty('status');
+    expect(conv).toHaveProperty('aiMode');
+    expect(conv).toHaveProperty('channelProvider');
+    expect(conv).toHaveProperty('departmentName');
+    expect(conv).toHaveProperty('assignedToName');
+  });
+
+  it('conversa inexistente → 404', async () => {
+    const res = await request(app)
+      .get('/api/conversations/00000000-0000-0000-0000-000000000000')
+      .set('Cookie', adminCookie);
+    expect(res.status).toBe(404);
+  });
+});
+
 // ─── S07.1 — guard de visibilidade por-conversa (endpoints por-id) ────────────
 //
 // Fecha o IDOR: a lista esconde a linha, mas o ACESSO por id também precisa negar
@@ -583,6 +608,13 @@ describe('S07.1 — visibilidade nos endpoints por-id (404 para invisível)', ()
     it('GET /:id/messages → 404', async () => {
       const res = await request(app)
         .get(`/api/conversations/${convDeptA_Private_AgentB}/messages`)
+        .set('Cookie', agentACookie);
+      expect(res.status).toBe(404);
+    });
+
+    it('GET /:id (detalhe) → 404', async () => {
+      const res = await request(app)
+        .get(`/api/conversations/${convDeptA_Private_AgentB}`)
         .set('Cookie', agentACookie);
       expect(res.status).toBe(404);
     });

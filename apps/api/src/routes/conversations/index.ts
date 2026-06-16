@@ -119,6 +119,79 @@ export function createConversationsRouter(): Router {
     res.json({ conversations: rows });
   });
 
+  /**
+   * GET /api/conversations/:id — detalhe completo da conversa (cockpit F30-S03).
+   *
+   * Enriquece a linha de `conversations` com o provider do canal + os nomes de
+   * responsável (member) e departamento — os campos que o `ContactInfoPanel` e o
+   * `ConversationHeader` consomem via `useConversationDetail`. Guard de
+   * visibilidade por-conversa (S07.1): 404 = não confirma existência a quem não
+   * enxerga a conversa, precedendo qualquer vazamento de estado.
+   */
+  router.get('/api/conversations/:id', ...guard, async (req: Request, res: Response) => {
+    const rawId = req.params['id'];
+    const conversationId = typeof rawId === 'string' ? rawId : '';
+    if (!conversationId) {
+      res.status(400).json({ message: 'id ausente.' });
+      return;
+    }
+    const memberId = req.auth!.member.id;
+    const role = req.auth!.member.role as Role;
+    const workspaceId = req.auth!.workspace.id;
+
+    const detail = await req.scoped!(async (tx) => {
+      if (!(await assertConversationVisible(tx, { memberId, role, workspaceId }, conversationId))) {
+        return null;
+      }
+      const [row] = await tx
+        .select({
+          conversation: schema.conversations,
+          channelProvider: schema.channels.provider,
+          assignedToName: schema.members.name,
+          departmentName: schema.departments.name,
+        })
+        .from(schema.conversations)
+        .innerJoin(schema.channels, eq(schema.conversations.channelId, schema.channels.id))
+        .leftJoin(schema.members, eq(schema.conversations.assignedTo, schema.members.id))
+        .leftJoin(schema.departments, eq(schema.conversations.departmentId, schema.departments.id))
+        .where(eq(schema.conversations.id, conversationId))
+        .limit(1);
+      return row ?? null;
+    });
+
+    if (detail === null) {
+      res.status(404).json({ message: 'Conversa não encontrada.' });
+      return;
+    }
+
+    const c = detail.conversation;
+    res.json({
+      conversation: {
+        id: c.id,
+        contactId: c.contactId,
+        channelId: c.channelId,
+        channelProvider: detail.channelProvider,
+        remoteId: c.remoteId,
+        kind: c.kind,
+        status: c.status,
+        aiMode: c.aiMode,
+        aiPausedReason: c.aiPausedReason,
+        aiPausedAt: c.aiPausedAt,
+        assignedTo: c.assignedTo,
+        assignedToName: detail.assignedToName,
+        departmentId: c.departmentId,
+        departmentName: detail.departmentName,
+        // stageName: a conversa não referencia stage diretamente (vem de deals).
+        // Exposto como null por ora — o cockpit já degrada para "—".
+        stageName: null,
+        unreadCount: c.unreadCount,
+        lastMessageAt: c.lastMessageAt,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      },
+    });
+  });
+
   // GET /api/conversations/:id/messages — página por cursor (created_at desc).
   router.get('/api/conversations/:id/messages', ...guard, async (req: Request, res: Response) => {
     const parsed = messagesQuery.safeParse(req.query);
