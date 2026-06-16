@@ -283,3 +283,11 @@ Frontend (board/queries.ts): `usePipelines()` lê `response.pipelines`. `Pipelin
 
 ### Wave 2 — sequencial após S01 done
 - **F35-S03** [web, S] Board UX (empty state + CTA + chip) → frontend-engineer.
+
+### F35 — COMPLETA 3/3 (orchestrator, 2026-06-16)
+Todos os 3 slots done, integrados, verdes em main.
+- pnpm typecheck: verde (13 projetos). pnpm lint: verde. pnpm --filter @hm/api test: 426/426 verdes.
+- SEAMS fechados: GET /api/pipelines shape quebrou (pipelines→data) — corrigido em PipelinePage + helpers-context (consumidores fora do files_allowed de S01 mas necessário).
+- CreatePipelineModal extraído em settings/ e reutilizado no board (S03). DeletePipelineDialog com confirmacao de nome exato.
+- Backend: limite via workspaceEntitlementOverrides.limits.max_pipelines (override) ou default 10.
+- Gotcha: helpers-context.tsx em flow-builder/ também consumia response.pipelines — corrigido na integração do S01.
