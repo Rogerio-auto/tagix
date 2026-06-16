@@ -164,6 +164,12 @@ export function createDealAttachmentsRouter(storage: AttachmentStorage): Router 
     async (req: Request, res: Response) => {
       const dealId = param(req, 'id');
       const attId = param(req, 'attId');
+      // attId malformado (não-UUID) → 404 (não confirma o recurso) em vez de deixar o
+      // Postgres lançar `invalid input syntax for type uuid` e virar 500.
+      if (!z.string().uuid().safeParse(attId).success) {
+        res.sendStatus(404);
+        return;
+      }
       const removed = await req.scoped!(async (tx) => {
         const [row] = await tx
           .delete(dealAttachments)

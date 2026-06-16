@@ -5,6 +5,7 @@ import { loadConfig } from './config';
 import { healthHandler } from './health';
 import { errorHandler } from './middlewares/error';
 import { securityMiddlewares } from './middlewares/security';
+import { uuidParamGuard } from './middlewares/uuid-params';
 import { createInternalToolsRouter } from './internal/tools';
 import { buildWorkflowRegistry } from './internal/tools/workflow-handlers';
 import { registerCalendarHandlers } from './internal/tools/calendar-handlers';
@@ -123,6 +124,11 @@ export function createApp(): Express {
       impersonationMiddleware(req, res, next);
     });
   });
+
+  // Guard de path-params UUID (route-audit): id malformado em posição de :id-UUID
+  // → 404 limpo (contrato IDOR), evitando que o Postgres lance e vire 500. Atua só
+  // em /api/* e ignora segmentos estáticos/literais (me, current, models, …).
+  app.use(uuidParamGuard);
 
   app.use(createConversationsRouter());
   app.use(createMessagesRouter());

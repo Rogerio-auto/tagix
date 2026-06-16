@@ -385,6 +385,12 @@ export function createContactsCrudRouter(): Router {
   router.delete('/api/contacts/:id/tags/:tagId', ...editGuard, async (req: Request, res: Response) => {
     const id = param(req, 'id');
     const tagId = param(req, 'tagId');
+    // tagId malformado (não-UUID) → 404 (não confirma o recurso) em vez de deixar o
+    // Postgres lançar `invalid input syntax for type uuid` e virar 500.
+    if (!z.string().uuid().safeParse(tagId).success) {
+      res.sendStatus(404);
+      return;
+    }
     const [removed] = await req.scoped!((tx) =>
       tx
         .delete(contactTags)
