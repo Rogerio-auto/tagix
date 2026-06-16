@@ -1,17 +1,22 @@
 'use client';
 
 /**
- * Drawer lateral de drill-down (DASHBOARD §4 — drawer no lugar de modal full-screen,
+ * Drill-down de métrica (DASHBOARD §4 — detalhe no lugar de modal full-screen,
  * UX §2.3). Abre sobre o dashboard mostrando o detalhe da métrica
  * (`GET /dashboard/metrics/:key`). Se a métrica não tem detalhe próprio (204), o
  * card já navega via Link e este drawer nem é acionado.
  *
- * Usa o `Sheet` compartilhado (mesma base dos detalhes de KB/flows).
+ * `md+`: drawer lateral (mesma base dos detalhes de KB/flows). `< md` (F36-S06):
+ * vira **full-sheet** mobile (`@/shared/components/Sheet`, MOBILE_UX §3) — conteúdo
+ * denso (tabelas column-aware) ganha a tela inteira em vez de espremer num drawer
+ * estreito. Corte por `useBreakpoint().isMobile` (nunca número solto, MOBILE_UX §4).
  */
 import { useState } from 'react';
 import Link from 'next/link';
-import { Sheet } from '@/shared/components/help/Sheet';
+import { Sheet as SideDrawer } from '@/shared/components/help/Sheet';
+import { Sheet as MobileSheet } from '@/shared/components/Sheet';
 import { SkeletonList } from '@/shared/components/feedback';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useMetricDetail } from './queries';
 import type { DashboardCard, TableColumn } from './types';
 import { readTableValue } from './types';
@@ -23,23 +28,38 @@ interface DrillDownDrawerProps {
 }
 
 export function DrillDownDrawer({ card, onClose }: DrillDownDrawerProps) {
+  const { isMobile } = useBreakpoint();
   const detail = useMetricDetail(card?.key ?? null);
 
+  const body = (
+    <>
+      {detail.isLoading && <SkeletonList rows={5} />}
+      {detail.isError && (
+        <p className="font-body text-sm text-text-low">Não foi possível carregar o detalhe.</p>
+      )}
+      {detail.data &&
+        (card?.key === 'objecoes_rankeadas' ? (
+          <ObjectionsDrillBody detail={detail.data.detail} />
+        ) : (
+          <DetailBody metricKey={detail.data.metricKey} detail={detail.data.detail} />
+        ))}
+    </>
+  );
+
+  // < md: full-sheet (conteúdo denso na tela inteira, MOBILE_UX §2 — Dashboard).
+  if (isMobile) {
+    return (
+      <MobileSheet open={card !== null} onClose={onClose} variant="full" title={card?.label ?? ''}>
+        {body}
+      </MobileSheet>
+    );
+  }
+
+  // md+: drawer lateral, layout desktop intacto.
   return (
-    <Sheet open={card !== null} onClose={onClose} title={card?.label ?? ''} widthClass="w-[480px]">
-      <div className="p-5">
-        {detail.isLoading && <SkeletonList rows={5} />}
-        {detail.isError && (
-          <p className="font-body text-sm text-text-low">Não foi possível carregar o detalhe.</p>
-        )}
-        {detail.data &&
-          (card?.key === 'objecoes_rankeadas' ? (
-            <ObjectionsDrillBody detail={detail.data.detail} />
-          ) : (
-            <DetailBody metricKey={detail.data.metricKey} detail={detail.data.detail} />
-          ))}
-      </div>
-    </Sheet>
+    <SideDrawer open={card !== null} onClose={onClose} title={card?.label ?? ''} widthClass="w-[480px]">
+      <div className="p-5">{body}</div>
+    </SideDrawer>
   );
 }
 
@@ -73,6 +93,7 @@ function ColumnAwareTable({
   rows: Record<string, unknown>[];
 }) {
   return (
+    <div className="-mx-1 overflow-x-auto">
     <table className="w-full text-sm">
       <thead>
         <tr className="border-b border-border-2">
@@ -120,6 +141,7 @@ function ColumnAwareTable({
         })}
       </tbody>
     </table>
+    </div>
   );
 }
 

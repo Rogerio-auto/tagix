@@ -153,9 +153,11 @@ export function DashboardClient() {
                     {CATEGORY_LABEL[group.category]}
                   </h2>
                 </div>
-                {/* Stat cards — grade compacta */}
+                {/* Stat cards — grade compacta. < 400px: 1 coluna full-width
+                    (legibilidade/alvo > densidade); a partir daí 2/3/4 cols.
+                    sm+/lg+ inalterados (md+ intacto). F36-S06 / MOBILE_UX §2. */}
                 {statCards.length > 0 && (
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
                     {statCards.map((card) => {
                       const wantsDrawer = DRAWER_METRICS.has(card.key);
                       return (

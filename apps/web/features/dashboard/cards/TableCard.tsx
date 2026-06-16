@@ -65,7 +65,7 @@ export function TableCard({ card, onDrill }: TableCardProps): React.JSX.Element 
       type="button"
       onClick={onDrill ? () => onDrill(card) : undefined}
       className={cn(
-        'col-span-2 flex h-full flex-col rounded-lg border border-border bg-surface p-5 text-left transition-colors',
+        'flex h-full flex-col rounded-lg border border-border bg-surface p-4 text-left transition-colors sm:p-5',
         onDrill && 'hover:border-border-brand',
       )}
     >
@@ -73,7 +73,10 @@ export function TableCard({ card, onDrill }: TableCardProps): React.JSX.Element 
       {rows.length === 0 || columns.length === 0 ? (
         <p className="mt-4 font-body text-sm text-text-low">Sem dados.</p>
       ) : (
-        <table className="mt-3 w-full text-sm">
+        // Scroll horizontal contido: no mobile (card full-width) tabelas largas
+        // rolam dentro do card em vez de estourar a viewport (F36-S06).
+        <div className="-mx-1 mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-2">
               {columns.map((col) => (
@@ -108,6 +111,7 @@ export function TableCard({ card, onDrill }: TableCardProps): React.JSX.Element 
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </button>
   );
