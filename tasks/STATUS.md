@@ -25,6 +25,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F33   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F34   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F35   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
+| F36   | 14     | 1   | 13   | 0   | 0   | 0   | 0   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -279,6 +280,25 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F35-S01 | CRUD de pipelines na Settings + mutations reutilizáveis         | ✅ done | high       | —          |
 | F35-S02 | Limite máximo de pipelines por workspace (backend)              | ✅ done | high       | —          |
 | F35-S03 | Board — seletor de pipeline melhorado + empty state + CTA criar | ✅ done | medium     | F35-S01    |
+
+## Fase 36
+
+| ID      | Titulo                                                              | Status      | Prioridade | Depende de |
+| ------- | ------------------------------------------------------------------- | ----------- | ---------- | ---------- |
+| F36-S01 | Primitivos responsivos — Sheet, useBreakpoint, safe-area, MOBILE_UX | 🟢 available | critical   | —          |
+| F36-S02 | Casca mobile (bottom nav + drawer) + PWA instalável                 | ⏸️ blocked  | critical   | —          |
+| F36-S03 | Inbox/cockpit responsivo — pilha de views + sheets                  | ⏸️ blocked  | high       | —          |
+| F36-S04 | Pipeline/kanban responsivo — seletor de estágio + lista             | ⏸️ blocked  | high       | —          |
+| F36-S05 | Padrão Tabela→Cards + filtros em sheet (primitivo + contatos)       | ⏸️ blocked  | high       | —          |
+| F36-S06 | Dashboard responsivo — grid→coluna + charts responsivos             | ⏸️ blocked  | medium     | —          |
+| F36-S07 | Calendário responsivo — agenda/dia no mobile                        | ⏸️ blocked  | medium     | —          |
+| F36-S08 | Agentes responsivos — lista + detalhe com abas                      | ⏸️ blocked  | medium     | —          |
+| F36-S09 | Campanhas responsivas — lista + wizard + monitoring                 | ⏸️ blocked  | medium     | —          |
+| F36-S10 | Settings + Knowledge + Conversões responsivos                       | ⏸️ blocked  | medium     | —          |
+| F36-S11 | Flow Builder mobile — inspecionar/operar (read-first)               | ⏸️ blocked  | medium     | —          |
+| F36-S12 | Auth (login/reset) — polish mobile                                  | ⏸️ blocked  | low        | —          |
+| F36-S13 | Platform admin legível/operável no mobile                           | ⏸️ blocked  | low        | —          |
+| F36-S14 | QA mobile + audit de UX + performance (fechamento)                  | ⏸️ blocked  | medium     | —          |
 
 ## Fase 4 — Campaigns
 
