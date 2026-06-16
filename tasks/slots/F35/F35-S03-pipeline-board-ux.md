@@ -2,7 +2,7 @@
 id: F35-S03
 title: Board — seletor de pipeline melhorado + empty state + CTA criar
 phase: F35
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F35-S01]
