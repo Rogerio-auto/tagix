@@ -2,7 +2,7 @@
 id: F36-S02
 title: Casca mobile (bottom nav + drawer) + PWA instalável
 phase: F36
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on:
@@ -12,6 +12,8 @@ blocks:
 source_docs:
   - docs/features/MOBILE_RESPONSIVE_PLAN.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-16T19:18:10Z
+
 ---
 # F36-S02 — Casca mobile + PWA
 
