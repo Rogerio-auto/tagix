@@ -403,6 +403,7 @@ apps/agent-runtime/app/tools/
 │   └── schedule_event.py        # callback HTTP para Node (cria event + notifica)
 ├── workflow/
 │   ├── transfer_to_human.py     # callback HTTP para Node
+│   ├── transfer_to_agent.py     # callback HTTP para Node — handoff IA→IA (F34)
 │   ├── escalate_to_supervisor.py
 │   ├── trigger_flow.py
 │   ├── mark_resolved.py
@@ -528,6 +529,7 @@ Mesmas categorias e ferramentas seed do v1 (replicadas em Python):
 | key | descrição | aprovação humana? |
 |---|---|---|
 | `transfer_to_human` | Marca `conversation.ai_mode='off'` + assigna | não |
+| `transfer_to_agent` | Handoff IA→IA: passa a conversa para outro agente de IA do mesmo dept (vide §7.6) | não (authz de alvo é a salvaguarda) |
 | `escalate_to_supervisor` | Cria notificação para SUPERVISOR | não |
 | `trigger_flow` | Dispara `flows` por `key` | sim, se configurado |
 | `mark_resolved` | Fecha conversa (status='resolved') | sim, sempre |
@@ -542,6 +544,58 @@ Mesmas categorias e ferramentas seed do v1 (replicadas em Python):
 | `private_reply_to_comment` | Comment-to-DM | não |
 | `hide_comment` | Esconde comment | sim, por default |
 | `delete_comment` | Deleta comment | sim, sempre |
+
+### 7.6 Roteamento agente ↔ departamento + handoff IA→IA (F34)
+
+Um agente de IA não é mais "o agente único do workspace": ele é **vinculado a um ou mais
+departamentos** (N:N) e a conversa resolve para o agente certo conforme o departamento dela.
+Quando um departamento tem vários agentes, eles podem **alternar entre si** de forma
+**autônoma** (via prompt, esta seção) e **manual** (cockpit, vide `LIVECHAT_OPS.md §2.1`).
+
+**Vínculo agente ↔ departamento (N:N).** Tabela `agent_departments(agent_id, department_id,
+workspace_id, is_default, created_at)` com RLS por `workspace_id` e `is_default` marcando o
+**agente de ENTRADA** daquele departamento (no máximo 1 default por dept, via índice parcial
+único). O owner gerencia isso no editor de agente (4º passo "Departamentos"). Repo: `agentDepartmentsRepo`
+(`listDepartmentsForAgent`, `listAgentsForDepartment`, `getDefaultAgentForDepartment`,
+`setAgentDepartments`, `areAgentsInSameDepartment`).
+
+**Resolução por departamento** (`loadContext`, worker de agentes). Ordem:
+1. `conversation.agent_id` já setado → usa ele (**sticky**: transferências e troca manual persistem aqui).
+2. Senão, resolve pelo `conversation.department_id` → **agente default daquele dept** (`is_default`).
+3. Fallback: sem dept ou sem default → agente default do workspace (comportamento legado).
+4. **Persiste** o agente resolvido em `conversation.agent_id` (sticky) — turnos seguintes e o cockpit
+   passam a ver o mesmo agente.
+
+**Tool `transfer_to_agent`** (autônoma, IA→IA). Workflow tool com callback Node — *single source
+of truth* do efeito de negócio no Node (`apps/api/src/internal/tools/agent-transfer-handlers.ts`);
+o lado Python (`apps/agent-runtime/app/tools/workflow/transfer_to_agent.py`) só declara metadados + `Args`.
+
+- **Contrato de args** (Zod `transferToAgentArgs` é a fonte da verdade; o Pydantic casa 1:1 em
+  camelCase de wire): `{ targetAgentId: string (uuid), reason?: string (1..500) }`.
+- **Authz de alvo (salvaguarda do sistema):** a tool roda server-to-server (token de runtime, não
+  por membro humano), então a salvaguarda não é uma permissão de role — é
+  `agentDepartmentsRepo.areAgentsInSameDepartment(agentAtual, targetAgent)`. O agente atual só
+  transfere para agentes que **compartilham ≥1 departamento** com ele. Destino fora disso é
+  rejeitado **sem efeito**. (Escalonamento cross-dept fica como TODO honesto até existir flag de
+  departamento-destino — vide D3.)
+- **Efeito (se elegível):** fixa `conversation.agent_id = targetAgentId` (sticky), reativa
+  `ai_mode='on'` e limpa pausa pendente (`ai_paused_*` → null), re-engaja enfileirando
+  `flow.run.requested` em `hm.q.flows`. **Idempotente:** transferir para o agente já atual é no-op
+  gracioso (sem mutação, sem enqueue). O `content` devolvido instrui a IA a parar de responder.
+- **NÃO confundir** com `conversation.assign_agent`: aquela é a troca **manual** pelo operador no
+  cockpit (matriz de roles, `LIVECHAT_OPS.md §2.1`); esta é a transferência **autônoma** decidida
+  pela LLM.
+
+**Diretriz de prompt + lista de pares** (`build_prompt`). Quando `agent.allow_handoff=true` **e** o
+agente tem pares no(s) dept(s), o `build_prompt` injeta um bloco que instrui a usar
+`transfer_to_agent` com o `targetAgentId` do par certo, seguido da lista de pares disponíveis
+(nome, id, departamento e quando transferir). O `load_context` aplica o gate antes — sem
+`allow_handoff` ou sem pares, nada é injetado (zero regressão no fluxo sem handoff).
+
+**Contexto IA→IA.** O histórico rotula a autoria de cada turno. Além de `human | ai | contact`, há o
+rótulo **`ai_other` → "Outro agente de IA"** (F34): quando outro agente de IA atendeu parte da
+conversa antes do handoff, o agente que assume vê o histórico atribuído corretamente e retoma com
+consciência — exatamente como já fazia no handoff IA→humano.
 
 ---
 

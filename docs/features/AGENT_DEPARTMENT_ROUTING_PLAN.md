@@ -1,9 +1,23 @@
-# Roteamento Agente-de-IA ↔ Departamento + Handoff Multi-Agente — Levantamento & Plano
+# Roteamento Agente-de-IA ↔ Departamento + Handoff Multi-Agente — Plano & Entrega
 
-> **Data:** 2026-06-15
+> **Data:** 2026-06-15 (plano) · **Entregue:** 2026-06-16 (F34 S01–S07)
 > **Origem:** pedido do founder — no LiveChat, o owner deve poder definir **qual departamento cada agente de IA atende** (N:N — um agente pode atender vários departamentos); quando um departamento tem múltiplos agentes, eles devem poder **alternar entre si** de forma **autônoma (via prompt)** e **manual (no cockpit)**.
 > **Decisão travada:** vínculo **N:N** (um agente → vários departamentos).
-> **Método:** auditoria do código atual, verificada em arquivo. Status: **levantamento + plano para aprovação**; decomposição em slots vem **após** aprovação.
+> **Status:** ✅ **IMPLEMENTADO** — fase **F34** decomposta e entregue (S01–S07). As lacunas L1–L5 estão fechadas e as decisões abertas D1–D4 foram travadas (vide §3 e §6). Docs de referência: `AGENTS_LANGGRAPH.md §7.6`, `LIVECHAT_OPS.md §2.1`, `PERMISSIONS.md §2.1`.
+
+---
+
+## 0. Estado de entrega (F34)
+
+| Slot | Escopo | Estado |
+|---|---|---|
+| **S01** | `agent_departments` (schema + migration + RLS + `agentDepartmentsRepo`) | ✅ |
+| **S02** | Editor de agente: multi-select de departamentos + default-por-dept (API + UI settings) | ✅ |
+| **S03** | Resolução department-aware em `loadContext` (+ persist sticky + fallback) | ✅ |
+| **S04** | Transferência **manual**: `POST/GET /api/conversations/:id/agent` + socket `conversation:agent_changed` + `AgentSelector` no cockpit | ✅ |
+| **S05** | Transferência **autônoma**: tool `transfer_to_agent` (Node) + authz de alvo same-dept | ✅ |
+| **S06** | Runtime: diretriz de prompt com pares + contexto de handoff IA→IA (`ai_other`) | ✅ |
+| **S07** | e2e (config → resolução por dept → troca manual) + consolidação de docs | ✅ |
 
 ---
 
@@ -11,13 +25,13 @@
 
 A fundação existe: **departamentos/teams** (F8), **conversa carrega `department_id`/`team_id`/`agent_id`/`ai_mode`**, **toggle de IA on/off/paused** no cockpit (F30), **runtime de agentes** (F2) com resolução de agente por conversa e **handoff IA→humano** com contexto de retomada.
 
-Faltam **4 peças** para a feature:
-1. **Vínculo agente↔departamento** (não existe — `agents` não tem nenhuma referência a departamento).
-2. **Resolução do agente por departamento** (hoje a conversa resolve para um agente único/default do workspace, sem olhar o departamento).
-3. **Transferência autônoma IA→IA via prompt** (não existe — só há IA→humano).
-4. **Transferência manual no cockpit** (não existe — o header só liga/desliga a IA, e nem mostra qual agente está atendendo).
+Faltavam **4 peças** — **todas entregues na F34** (vide §0):
+1. **Vínculo agente↔departamento** — ✅ tabela N:N `agent_departments` (S01).
+2. **Resolução do agente por departamento** — ✅ `loadContext` department-aware + sticky (S03).
+3. **Transferência autônoma IA→IA via prompt** — ✅ tool `transfer_to_agent` + diretriz + contexto `ai_other` (S05/S06).
+4. **Transferência manual no cockpit** — ✅ `GET/POST /api/conversations/:id/agent` + `AgentSelector` (S04).
 
-Nenhuma dessas depende de infra externa da Meta — é 100% trabalho de código nosso.
+Nenhuma dessas dependeu de infra externa da Meta — foi 100% trabalho de código nosso.
 
 ---
 
@@ -37,22 +51,27 @@ Nenhuma dessas depende de infra externa da Meta — é 100% trabalho de código 
 
 ---
 
-## 3. Levantamento — o que FALTA (lacunas)
+## 3. Lacunas — diagnóstico original e como foram fechadas
 
-### L1 — Vínculo agente ↔ departamento 🔴
-`agents` só tem `enabled_channel_ids`. Não há nenhuma forma de dizer "o agente X atende os departamentos A e B". Sem isso, nada do resto se sustenta.
+### L1 — Vínculo agente ↔ departamento ✅ (S01)
+Diagnóstico: `agents` só tinha `enabled_channel_ids`; sem forma de dizer "o agente X atende os depts A e B".
+**Entregue:** tabela N:N `agent_departments` (RLS por `workspace_id`, `is_default` = agente de entrada do dept, índice parcial único de 1 default/dept) + `agentDepartmentsRepo`.
 
-### L2 — Resolução do agente por departamento 🔴
-`loadContext` resolve o agente da conversa (provavelmente `conversation.agent_id` → fallback default do workspace). Não há lógica "pegue o agente de entrada do departamento desta conversa". Também não há regra de qual agente engaja a **primeira** mensagem quando o departamento tem vários.
+### L2 — Resolução do agente por departamento ✅ (S03)
+Diagnóstico: `loadContext` resolvia para o agente único/default do workspace, sem olhar o dept.
+**Entregue:** resolução department-aware em `loadContext` — `conversation.agent_id` sticky → default do dept (`is_default`) → fallback workspace, com **persist** do agente resolvido (sticky). Detalhe em `AGENTS_LANGGRAPH.md §7.6`.
 
-### L3 — Transferência autônoma IA→IA 🔴
-Não existe tool que permita ao agente passar a conversa para outro agente, nem diretriz de prompt que liste os pares disponíveis. O `allow_handoff` existe mas só conceitualmente. O encanamento de contexto de handoff (`build_prompt.py`) hoje só cobre IA→humano.
+### L3 — Transferência autônoma IA→IA ✅ (S05 + S06)
+Diagnóstico: não havia tool de handoff IA→IA, nem diretriz de prompt, nem rótulo de "outro agente de IA" no contexto.
+**Entregue:** tool `transfer_to_agent` (Node single-source-of-truth, authz de alvo same-dept, idempotente) + diretriz de prompt com lista de pares (`build_prompt`, gated por `allow_handoff`) + rótulo de contexto `ai_other` ("Outro agente de IA").
 
-### L4 — Transferência manual no cockpit 🔴
-O `ConversationHeader`/cockpit liga/desliga a IA, mas **não mostra qual agente está atendendo** nem permite **trocar** o agente. Não há endpoint `POST /conversations/:id/agent`.
+### L4 — Transferência manual no cockpit ✅ (S04)
+Diagnóstico: o cockpit ligava/desligava a IA mas não mostrava nem trocava o agente; faltava o endpoint.
+**Entregue:** `GET/POST /api/conversations/:id/agent` (gated por `conversation.assign_agent`, guard de visibilidade por-conversa, 404-antes-de-403) + socket `conversation:agent_changed` + `AgentSelector` no `ContactInfoPanel`. Detalhe em `LIVECHAT_OPS.md §2.1`.
 
-### L5 — UI de configuração (owner) 🟠
-Não há onde o owner associe agentes a departamentos (nem no editor de agente, nem na `DepartmentsSection`).
+### L5 — UI de configuração (owner) ✅ (S02)
+Diagnóstico: não havia onde o owner associasse agentes a departamentos.
+**Entregue:** editor de agente (wizard 4º passo "Departamentos" + ConfigTab) aceita/retorna `departments: { departmentId, isDefault }[]`; API em `apps/api/src/routes/agents/crud.ts`.
 
 ---
 
@@ -91,9 +110,9 @@ Estender a resolução em `loadContext` (e/ou um passo antes do `runAgent`):
 
 ---
 
-## 5. Decomposição preliminar em slots (para validar — detalhe vem no /hm-tasks)
+## 5. Decomposição em slots (executada — vide §0 para o estado de entrega)
 
-Proposta de fase **F34 — Roteamento Agente↔Departamento & Handoff Multi-Agente** (F32/F33 já foram usadas pelo Flow Builder).
+Fase **F34 — Roteamento Agente↔Departamento & Handoff Multi-Agente** (F32/F33 já foram usadas pelo Flow Builder). Todos os slots abaixo foram entregues (S01–S07).
 
 **Onda A — fundação (schema + config)**
 - **S01** `agent_departments` (schema + migration + RLS + repo) `[db]`
@@ -114,9 +133,9 @@ Dependência raiz: **S01 destrava tudo**. Ondas B e C podem correr em paralelo a
 
 ---
 
-## 6. Decisões abertas (confirmar na aprovação)
+## 6. Decisões travadas (implementadas na F34)
 
-- **D1 — Prompt por departamento:** v1 = um `system_prompt` por agente + contexto do dept em runtime *(recomendado)* vs prompt/override por (agente, dept) já agora.
-- **D2 — Agente de entrada quando o dept tem vários:** agente default designado por dept *(recomendado)* vs rodízio/menos-ocupado.
-- **D3 — Escopo da transferência autônoma:** dentro do dept + escalonar p/ outro dept quando configurado *(recomendado)* vs só dentro do mesmo dept.
-- **D4 — Permissão da troca manual:** reusar `conversation.ai_mode` vs criar `conversation.assign_agent` dedicada *(recomendado p/ auditoria mais limpa)*.
+- **D1 — Prompt por departamento:** ✅ **travada no recomendado** — um `system_prompt` por agente + contexto do dept injetado em runtime. Override de prompt por (agente, dept) fica para depois, se necessário.
+- **D2 — Agente de entrada quando o dept tem vários:** ✅ **travada no recomendado** — **agente default designado por dept** (`agent_departments.is_default`). Rodízio/menos-ocupado não foi adotado para o engate inicial da IA (segue espelhando o auto-assign de humanos só na distribuição de conversas, não na escolha do agente de IA).
+- **D3 — Escopo da transferência autônoma:** ✅ **travada (conservadora):** **só dentro do mesmo departamento** (authz de alvo `areAgentsInSameDepartment`). O escalonamento cross-dept fica como TODO honesto no handler até existir flag de departamento-destino — sem afrouxar a authz agora.
+- **D4 — Permissão da troca manual:** ✅ **travada no recomendado** — permissão dedicada **`conversation.assign_agent`** (auditoria mais limpa que reusar `conversation.ai_mode`). Registrada em `PERMISSIONS.md §2.1`.
