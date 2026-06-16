@@ -2,7 +2,7 @@
 id: F36-S01
 title: Primitivos responsivos — Sheet, useBreakpoint, safe-area, MOBILE_UX
 phase: F36
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []

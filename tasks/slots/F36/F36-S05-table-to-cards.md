@@ -2,7 +2,7 @@
 id: F36-S05
 title: Padrão Tabela→Cards + filtros em sheet (primitivo + contatos)
 phase: F36
-status: blocked
+status: available
 priority: high
 estimated_size: M
 depends_on:

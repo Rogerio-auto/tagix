@@ -2,7 +2,7 @@
 id: F36-S02
 title: Casca mobile (bottom nav + drawer) + PWA instalável
 phase: F36
-status: blocked
+status: available
 priority: critical
 estimated_size: M
 depends_on:

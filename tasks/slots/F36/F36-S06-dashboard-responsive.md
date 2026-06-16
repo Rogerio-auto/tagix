@@ -2,7 +2,7 @@
 id: F36-S06
 title: Dashboard responsivo — grid→coluna + charts responsivos
 phase: F36
-status: blocked
+status: available
 priority: medium
 estimated_size: S
 depends_on:
