@@ -2,7 +2,7 @@
 id: F34-S04
 title: Troca manual de agente no cockpit (endpoint + UI + socket + permissão)
 phase: F34
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on:
