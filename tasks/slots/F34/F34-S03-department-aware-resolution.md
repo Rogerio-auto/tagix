@@ -2,7 +2,7 @@
 id: F34-S03
 title: Resolução department-aware do agente em loadContext
 phase: F34
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on:
@@ -13,6 +13,7 @@ source_docs:
   - docs/features/AGENT_DEPARTMENT_ROUTING_PLAN.md
 agent_id: backend-engineer
 claimed_at: 2026-06-16T04:00:47Z
+completed_at: 2026-06-16T04:04:33Z
 
 ---
 # F34-S03 — Resolução por departamento
