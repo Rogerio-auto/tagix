@@ -69,6 +69,17 @@ export interface ConversationStateChangedPayload {
   status: string;
 }
 
+/**
+ * Troca manual do agente de IA que atende a conversa (F34-S04 / AGENT_DEPARTMENT
+ * _ROUTING_PLAN D4). `agentName` viaja no payload para o cockpit refletir o nome
+ * sem refetch; `null` é defensivo (agente removido entre persistência e relay).
+ */
+export interface ConversationAgentChangedPayload {
+  conversationId: string;
+  agentId: string;
+  agentName: string | null;
+}
+
 export interface TypingFromContactPayload {
   conversationId: string;
   presence: ContactPresence;
@@ -152,6 +163,7 @@ export interface ServerToClient {
   'conversation:routing_changed': (p: ConversationRoutingChangedPayload) => void;
   'conversation:ai_mode_changed': (p: ConversationAiModeChangedPayload) => void;
   'conversation:state_changed': (p: ConversationStateChangedPayload) => void;
+  'conversation:agent_changed': (p: ConversationAgentChangedPayload) => void;
   'typing:from_contact': (p: TypingFromContactPayload) => void;
   'note:mentioned': (p: NoteMentionedPayload) => void;
   'agent_execution:started': (p: AgentExecutionPayload) => void;
@@ -182,6 +194,7 @@ export const SERVER_TO_CLIENT_EVENTS = [
   'conversation:routing_changed',
   'conversation:ai_mode_changed',
   'conversation:state_changed',
+  'conversation:agent_changed',
   'typing:from_contact',
   'note:mentioned',
   'agent_execution:started',

@@ -26,6 +26,11 @@ export const ROLE_CAN = {
   'conversation.toggle_ai': STAFF,
   // Nome canônico F30 (PERMISSIONS §2.1) — `toggle_ai` mantido por compat.
   'conversation.ai_mode': STAFF,
+  // F34-S04 (D4): troca manual do agente de IA que atende a conversa. AÇÃO liberada
+  // a OWNER/ADMIN/SUPERVISOR em qualquer conversa visível e ao AGENT (escopo fino
+  // "só nas suas" aplicado no service layer, igual ai_mode/resolve). READONLY nunca.
+  // TODO(F34-S07): consolidar em docs/features/PERMISSIONS.md §2.
+  'conversation.assign_agent': STAFF,
   'conversation.delete_message': ADMINS,
   'conversation.export': ['OWNER', 'ADMIN', 'SUPERVISOR', 'READONLY'],
 

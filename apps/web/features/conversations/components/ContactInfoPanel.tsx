@@ -25,6 +25,7 @@ import { Skeleton } from '@/shared/components/feedback';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { NotesPanel } from './Notes';
 import { RoutingMenu } from './RoutingMenu';
+import { AgentSelector } from './AgentSelector';
 import { useConversationDetail, useChangeStatus, useChangeAiMode } from '../queries';
 
 // ── Helpers de formatação ─────────────────────────────────────────────────────
@@ -130,6 +131,7 @@ export function ContactInfoPanel({
   const canResolve = role ? can(role, 'conversation.resolve') : false;
   const canSnooze = role ? can(role, 'conversation.snooze') : false;
   const canAiMode = role ? can(role, 'conversation.ai_mode') : false;
+  const canAssignAgent = role ? can(role, 'conversation.assign_agent') : false;
 
   const status = detail?.status ?? 'open';
   const aiMode = detail?.aiMode ?? 'off';
@@ -291,6 +293,11 @@ export function ContactInfoPanel({
             <Skeleton className="h-16 w-full" />
           ) : (
             <div className="flex flex-col gap-3">
+              {/* Agente atual + troca manual (F34-S04) — só quem pode atribuir agente. */}
+              {canAssignAgent && (
+                <AgentSelector conversationId={conversationId} canAssign={canAssignAgent} />
+              )}
+
               {/* Indicador de handoff — destaque quando pausada (atendente assumiu) */}
               {isAiPaused && (
                 <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
