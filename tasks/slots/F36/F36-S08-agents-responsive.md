@@ -2,7 +2,7 @@
 id: F36-S08
 title: Agentes responsivos — lista + detalhe com abas
 phase: F36
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on:
