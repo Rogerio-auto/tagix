@@ -73,7 +73,7 @@ export function ConversionTypesSettings(): React.JSX.Element {
                     })
                   }
                   aria-label="Remover tipo"
-                  className="text-text-low hover:text-danger"
+                  className="touch-target grid place-items-center rounded-md text-text-low outline-none hover:text-danger focus-visible:shadow-glow-md"
                 >
                   <Trash2 className="size-4" />
                 </button>
@@ -81,7 +81,7 @@ export function ConversionTypesSettings(): React.JSX.Element {
             ))
           )}
 
-          <div className="flex items-end gap-2 border-t border-border-subtle pt-3">
+          <div className="flex flex-col gap-3 border-t border-border-subtle pt-3 sm:flex-row sm:items-end">
             <div className="flex flex-1 flex-col gap-1.5">
               <label className="text-xs text-text-low" htmlFor="ct-label">
                 Novo tipo
@@ -93,7 +93,7 @@ export function ConversionTypesSettings(): React.JSX.Element {
                 onChange={(e) => setLabel(e.target.value)}
               />
             </div>
-            <label className="flex items-center gap-1.5 pb-2 text-xs text-text-mid">
+            <label className="flex items-center gap-1.5 text-sm text-text-mid sm:pb-2 sm:text-xs">
               <input
                 type="checkbox"
                 checked={valueRequired}
@@ -102,7 +102,12 @@ export function ConversionTypesSettings(): React.JSX.Element {
               />
               Exige valor
             </label>
-            <Button variant="secondary" disabled={!label.trim() || create.isPending} onClick={add}>
+            <Button
+              variant="secondary"
+              className="w-full sm:w-auto"
+              disabled={!label.trim() || create.isPending}
+              onClick={add}
+            >
               <Plus className="size-4" />
               Adicionar
             </Button>

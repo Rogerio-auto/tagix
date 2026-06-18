@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Archive, RefreshCw } from 'lucide-react';
 import { Button, Input, useToast } from '@hm/ui';
-import { Sheet } from '@/shared/components/help/Sheet';
+import { Sheet as Drawer } from '@/shared/components/help/Sheet';
+import { Sheet as MobileSheet } from '@/shared/components/Sheet';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { SkeletonList } from '@/shared/components/feedback';
 import { ApiError } from '@/shared/lib/api-client';
 import {
@@ -29,6 +32,7 @@ export function DocumentDetailDrawer({
   onClose: () => void;
 }) {
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const detail = useKbDocument(documentId ?? undefined);
   const update = useUpdateKbDocument();
   const reprocess = useReprocessKbDocument();
@@ -97,13 +101,8 @@ export function DocumentDetailDrawer({
 
   const doc = detail.data?.document;
 
-  return (
-    <Sheet
-      open={documentId !== null}
-      onClose={onClose}
-      title={doc?.title ?? 'Documento'}
-      widthClass="w-[560px]"
-    >
+  const body: ReactNode = (
+    <>
       {detail.isLoading ? (
         <SkeletonList rows={5} />
       ) : !doc ? (
@@ -143,12 +142,18 @@ export function DocumentDetailDrawer({
                 Visível para os agentes
               </label>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="primary" loading={update.isPending} onClick={() => void save()}>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <Button
+                  variant="primary"
+                  className="w-full sm:w-auto"
+                  loading={update.isPending}
+                  onClick={() => void save()}
+                >
                   Salvar
                 </Button>
                 <Button
                   variant="secondary"
+                  className="w-full sm:w-auto"
                   leftIcon={<RefreshCw className="size-4" aria-hidden />}
                   loading={reprocess.isPending}
                   onClick={() => void doReprocess()}
@@ -157,6 +162,7 @@ export function DocumentDetailDrawer({
                 </Button>
                 <Button
                   variant="ghost"
+                  className="w-full sm:w-auto"
                   leftIcon={<Archive className="size-4" aria-hidden />}
                   loading={archive.isPending}
                   onClick={() => void doArchive()}
@@ -195,6 +201,31 @@ export function DocumentDetailDrawer({
           </div>
         </div>
       )}
-    </Sheet>
+    </>
+  );
+
+  // Mobile: full-sheet (conteúdo denso, UX §2.3). Desktop: drawer lateral.
+  if (isMobile) {
+    return (
+      <MobileSheet
+        open={documentId !== null}
+        onClose={onClose}
+        variant="full"
+        title={doc?.title ?? 'Documento'}
+      >
+        {body}
+      </MobileSheet>
+    );
+  }
+
+  return (
+    <Drawer
+      open={documentId !== null}
+      onClose={onClose}
+      title={doc?.title ?? 'Documento'}
+      widthClass="w-[560px]"
+    >
+      {body}
+    </Drawer>
   );
 }

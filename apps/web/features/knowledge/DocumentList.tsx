@@ -22,7 +22,7 @@ export function DocumentList({
               type="button"
               onClick={() => onSelect(doc.id)}
               className={cn(
-                'flex w-full items-center justify-between gap-4 px-4 py-3 text-left outline-none transition-colors',
+                'touch-target flex w-full items-center justify-between gap-4 px-4 py-3 text-left outline-none transition-colors',
                 'hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:shadow-glow-sm',
               )}
             >
