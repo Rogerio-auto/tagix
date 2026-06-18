@@ -7,6 +7,8 @@ import { schema, withWorkspace } from '@hm/db';
 import { SESSION_COOKIE, resolveSession, type SessionContext } from '../auth';
 import { loadConfig } from '../config';
 import { startSocketRelay } from './relay';
+import { wireSupportRealtime } from '../services/support-realtime';
+import { registerSupportSocketHandlers } from '../sockets/support';
 
 interface SocketData {
   session?: SessionContext;
@@ -43,6 +45,9 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
     console.error('[socket] falha ao iniciar relay RabbitMQ:', err);
   });
 
+  // F38: liga o seam de eventos de suporte ao emit em processo (rooms support:*).
+  wireSupportRealtime(io);
+
   io.use((socket, next) => {
     void (async () => {
       const token = parseCookie(socket.handshake.headers.cookie ?? '', SESSION_COOKIE);
@@ -65,6 +70,13 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
     const wsRoom = `ws:${session.workspace.id}`;
     socket.join([wsRoom, `member:${session.member.id}`]);
     io.to(wsRoom).emit('member:online', { memberId: session.member.id });
+
+    // F38: handlers de suporte (join autorizado por visibilidade; platform → support:platform).
+    registerSupportSocketHandlers(socket, {
+      workspaceId: session.workspace.id,
+      memberId: session.member.id,
+      isPlatformAdmin: session.member.isPlatformAdmin,
+    });
 
     // Rooms por conversa: o client pede join ao abrir uma conversa. Verifica posse
     // no workspace (RLS) ANTES de entrar — uma room `conversation:<id>` recebe
