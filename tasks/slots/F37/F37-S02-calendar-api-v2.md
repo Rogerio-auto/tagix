@@ -2,7 +2,7 @@
 id: F37-S02
 title: Calendar 2.0 — API (visibilidade + recorrência + provisionamento)
 phase: F37
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on:
@@ -13,6 +13,8 @@ blocks:
 source_docs:
   - docs/features/CALENDAR_V2_PLAN.md
 agent_id: backend-engineer
+claimed_at: 2026-06-18T00:50:36Z
+
 ---
 # F37-S02 — API Calendar 2.0
 
