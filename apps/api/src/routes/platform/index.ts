@@ -5,3 +5,4 @@
  * este barrel agrega só os novos da F38 para manter o app.ts enxuto.
  */
 export { createPlatformHelpRouter } from './help';
+export { createPlatformSupportRouter } from './support';

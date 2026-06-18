@@ -55,7 +55,7 @@ import { createPlatformPlansRouter } from './routes/platform/plans';
 import { createPlatformSubscriptionsRouter } from './routes/platform/subscriptions';
 import { createPlatformImpersonationRouter } from './routes/platform/impersonation';
 import { createPlatformPlaygroundRouter } from './routes/platform/playground';
-import { createPlatformHelpRouter } from './routes/platform';
+import { createPlatformHelpRouter, createPlatformSupportRouter } from './routes/platform';
 import {
   IMPERSONATION_COOKIE,
   impersonationMiddleware,
@@ -209,6 +209,8 @@ export function createApp(): Express {
   app.use(createPlatformPlaygroundRouter());
   // F38: CMS da Central de Ajuda (gated por requirePlatformAdmin).
   app.use(createPlatformHelpRouter());
+  // F38: inbox de suporte cross-workspace (gated por requirePlatformAdmin).
+  app.use(createPlatformSupportRouter());
 
   // Sentry error handler (F10-S01) ANTES do handler central: captura a exceção
   // (no-op sem DSN) e repassa para a resposta de erro canônica.
