@@ -4,6 +4,7 @@ import {
   Calendar,
   GitBranch,
   LayoutDashboard,
+  LifeBuoy,
   Megaphone,
   MessagesSquare,
   Settings,
@@ -39,6 +40,7 @@ export const NAV: readonly NavItem[] = [
   { href: '/campaigns', label: 'Campanhas', icon: Megaphone, perm: 'campaign.list' },
   { href: '/calendar', label: 'Agenda', icon: Calendar, perm: 'calendar.view' },
   { href: '/contacts', label: 'Contatos', icon: Users, perm: 'contact.view' },
+  { href: '/help', label: 'Ajuda', icon: LifeBuoy },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
