@@ -1,7 +1,79 @@
 # Feature — CALENDAR (Agendamentos)
 
 > **Domínio:** Calendários, regras de disponibilidade, eventos, tools para agente IA marcar reunião
-> **Pacotes:** `apps/api/src/routes/calendar`, `apps/web/src/features/calendar`, `packages/agents/src/tools/calendar`
+> **Pacotes:** `apps/api/src/routes/calendar`, `apps/web/features/calendar`, `packages/agents/src/tools/calendar`
+> **Versão do modelo:** **2.0** (F37) — multi-calendário com visibilidade por membro, overlay estilo
+> Google Calendar, recorrência simples e provisionamento automático. As seções 2.0 abaixo (esp. §0)
+> têm precedência sobre o texto de MVP histórico que sobrou nas seções seguintes.
+
+---
+
+## 0. Calendar 2.0 (F37) — visibilidade, multi-calendário, recorrência
+
+> Auditoria de privacidade desta entrega: `docs/audits/CALENDAR_V2_AUDIT.md`. Plano/levantamento:
+> `docs/features/CALENDAR_V2_PLAN.md`.
+
+### 0.1 Visibilidade por membro (privacidade) 🔒
+
+Antes da 2.0, `GET /api/calendars` retornava **todos** os calendários do workspace e `GET /api/events`
+sem filtro retornava **todos os eventos** — a RLS escopa por workspace, não por calendário, então um
+membro comum via o pessoal de colegas (vazamento **L1**). A 2.0 escopa lista e eventos por
+`calendarRepo.accessibleCalendarIds` (fonte de verdade) + `requireCalendarAccess` (ownership fino):
+
+| Tipo de calendário | Quem vê |
+|---|---|
+| `workspace` ("Empresa") | **todos** os membros do workspace |
+| `personal` | o **dono** (`owner_id`); **OWNER/ADMIN** veem **todos** os pessoais; **SUPERVISOR** vê os pessoais dos integrantes dos times que **lidera** (`team_members.role='lead'`) |
+| `team` | membros do time (`team_members`, F8) + SUPERVISOR dos times que lidera |
+
+`accessibleCalendarIds` (`packages/db/src/repos/calendar.ts`) resolve esse conjunto sob a transação
+RLS-escopada. As listas usam `inArray(events.calendarId, accessibleIds)`; o overlay `calendarIds`
+é a **interseção** entre o pedido e o acessível (um id inacessível é silenciosamente descartado).
+
+> **⚠️ Pendência conhecida (ver auditoria §4):** `GET /api/events/:id` ainda **não** intersecta com
+> `accessibleCalendarIds` — vaza o detalhe (read-only) de eventos de calendários inacessíveis. Fix
+> previsto no slot dono (S02). Mutações (PUT/cancel/RSVP) **estão** protegidas por `canMutateEvent`.
+
+### 0.2 Multi-calendário & overlay (UI)
+
+Trilha lateral (estilo Google Calendar, DS v2) com grupos **Meu calendário · Empresa · Times ·
+(OWNER/ADMIN) Pessoas**. Cada item é uma linha-checkbox com **cor própria** (`calendars.color`,
+DATA da API — nunca hex literal em JSX) e liga/desliga independente; vários calendários sobrepostos
+ao mesmo tempo. A seleção persiste **por membro** em `localStorage` (`hm:calendar:selection:<memberId>`)
+para não vazar entre contas no mesmo browser. Eventos coloridos pelo calendário de origem + legenda.
+Default **semana** (timeGrid); arraste-pra-criar, arraste-pra-mover e redimensionar (só para quem
+pode editar o evento: criador ou admin). Mobile: a trilha vira **sheet** (F37-S04), reconciliando a
+agenda mobile (F36-S07).
+
+### 0.3 Provisionamento automático
+
+`GET /api/calendars` provisiona de forma **lazy e idempotente** (no primeiro acesso de cada membro):
+- **1 calendário `personal`** por membro (`ensurePersonalCalendar`, identidade `(workspace, personal, owner_id)`),
+- **1 calendário `workspace`** "Empresa" default (`ensureWorkspaceCalendar`, identidade `(workspace, workspace)`).
+
+Evento criado sem `calendarId` cai no **pessoal do criador** (o event-service resolve/provisiona).
+
+### 0.4 Recorrência (RRULE simplificado)
+
+Eventos podem repetir via `recurrenceRule` + `recurrenceUntil`. Gramática aceita (`calendar-recurrence.ts`):
+
+```
+FREQ=DAILY|WEEKLY[;INTERVAL=n][;BYDAY=MO,WE,...][;UNTIL=ISO]
+```
+
+O **mestre** persiste a regra; `GET /api/events` com janela `from`/`to` **expande** a série em
+ocorrências virtuais com id sintético `evt:<masterId>:<startISO>` (`recurrenceParentId` aponta o
+mestre). Sem janela definida, séries abertas **não** são materializadas (devolve só o mestre).
+Abrir/editar/mover uma ocorrência opera sobre o **mestre** (edição de série na v1 — documentado).
+O form 2.0 expõe presets (Não se repete · Todos os dias · Toda semana · Dias úteis · Dias específicos)
++ "Repetir até". `BYDAY` inválido ou `FREQ` não suportado → **400** na API.
+
+### 0.5 Endpoints 2.0 (delta sobre §7)
+
+- `GET /api/calendars` — provisiona pessoal+Empresa e lista **só os acessíveis** (filtro `?type=`).
+- `GET /api/events?calendarIds=a,b&from=&to=&contact=` — escopado por acessíveis; `calendarIds` CSV
+  ou repetido = overlay; recorrência expandida na janela. `calendar` (singular, legado) ainda aceito.
+- `POST`/`PUT /api/events` — aceitam `recurrenceRule`/`recurrenceUntil`.
 
 ---
 
@@ -31,6 +103,11 @@ Sistema de agendamento interno permite:
 ## 3. Cálculo de slots disponíveis
 
 ### 3.1 Função PL/pgSQL `compute_available_slots`
+
+> **⚠️ Histórico — superado pela migration (gotcha F7).** O SQL abaixo é o **rascunho do spec**.
+> A função realmente aplicada vive na migration de F7 (corrige o bug do spec, ver memória
+> `tagix-f7-decomposition`). Use a migration como fonte de verdade; este bloco fica só como
+> referência de intenção (buffer, min-notice, timezone do workspace).
 
 Replica + melhora do v1 (`020_compute_available_slots.sql`):
 
@@ -397,7 +474,8 @@ Middleware `requireCalendarAccess` chamado em rotas relevantes.
 
 - Google Calendar sync (CalDAV): fase 2.
 - Outlook sync: fase 2.
-- Recurring events (RRULE): fase 2 — MVP só single events.
+- ~~Recurring events (RRULE): fase 2 — MVP só single events.~~ **Entregue na 2.0 (F37)** — RRULE
+  simplificado (DAILY/WEEKLY + BYDAY + UNTIL), expandido na janela. Ver §0.4.
 - Meeting URL auto-gen (Jitsi/Zoom integration): fase 2.
 - Booking page pública (Calendly-like com URL compartilhável): fase 2.
 - Multi-timezone display per attendee: fase 2.
