@@ -2,7 +2,7 @@
 id: F37-S02
 title: Calendar 2.0 — API (visibilidade + recorrência + provisionamento)
 phase: F37
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on:
