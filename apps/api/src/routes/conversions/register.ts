@@ -7,7 +7,8 @@
  *
  * Resolve o conversion_type por key (dentro do workspace), valida valor
  * obrigatorio (value_required), e trata o dedup same-day (uq_conv_events_dedup)
- * de forma idempotente: retorna { deduped: true } em vez de estourar.
+ * de forma idempotente via ON CONFLICT DO NOTHING (sem envenenar a tx RLS):
+ * retorna { deduped: true } em vez de estourar 500.
  *
  * Roda SEMPRE dentro de uma transacao RLS (`tx` injetado pelo caller).
  */
@@ -120,10 +121,22 @@ export async function registerConversion(
         occurredAt: input.occurredAt ?? new Date(),
         metadata: input.metadata ?? {},
       })
+      // Dedup same-day (uq_conv_events_dedup, indice parcial por expressao):
+      // resolve o conflito NO Postgres em vez de deixar o INSERT estourar
+      // unique_violation. Sem ON CONFLICT, o erro aborta a transacao RLS inteira
+      // (25P02) -> qualquer statement seguinte na mesma tx vira 500. Bare
+      // onConflictDoNothing() cobre QUALQUER unique arc — em conversion_events
+      // os unicos sao a PK (uuid defaultRandom, nunca colide) e o indice de
+      // dedup; nesta versao do drizzle o target tipado nao aceita expressao
+      // (IndexColumn = PgColumn), entao o bare e a forma correta e type-safe.
+      // Retorna 0 linhas no conflito -> { deduped }; a tx segue viva.
+      .onConflictDoNothing()
       .returning();
     if (!event) return { kind: 'deduped' };
     return { kind: 'created', event };
   } catch (err: unknown) {
+    // Defense-in-depth: o ON CONFLICT acima cobre o caso normal; este catch
+    // so dispara para violacoes de unicidade fora do indice de dedup.
     if (isUniqueViolation(err)) return { kind: 'deduped' };
     throw err;
   }
