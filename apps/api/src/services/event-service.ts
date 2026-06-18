@@ -10,7 +10,7 @@
  * commit, e o seam dispara DEPOIS (best-effort, não derruba a operação).
  */
 import { and, eq } from 'drizzle-orm';
-import { schema, type DbTx } from '@hm/db';
+import { calendarRepo, schema, type DbTx } from '@hm/db';
 
 const { events, eventParticipants, calendars } = schema;
 
@@ -64,7 +64,12 @@ async function emitEventChanged(event: EventChangeEvent): Promise<void> {
 
 export interface CreateEventInput {
   readonly workspaceId: string;
-  readonly calendarId: string;
+  /**
+   * Calendar de destino. `null`/ausente → default = o calendário PESSOAL do criador
+   * (provisionado on-demand). Só resolve o pessoal quando o ator é um member; agente/
+   * system/api SEM calendarId é erro (não têm pessoal).
+   */
+  readonly calendarId?: string | null;
   readonly title: string;
   readonly startAt: Date;
   readonly endAt: Date;
@@ -78,6 +83,9 @@ export interface CreateEventInput {
   readonly metadata?: Record<string, unknown>;
   /** Members extras a participar (além do organizer = dono do calendar). */
   readonly memberIds?: readonly string[];
+  /** Recorrência (RRULE simplificado) — persistida; expansão é na query da API. */
+  readonly recurrenceRule?: string | null;
+  readonly recurrenceUntil?: Date | null;
 }
 
 /** Erro de domínio do event-service. Mapeado a 4xx pelas rotas. */
@@ -107,11 +115,27 @@ export async function createEvent(
     throw new EventServiceError('invalid_range', 'endAt deve ser depois de startAt.', 422);
   }
 
+  // Resolve o calendar de destino. Ausente + ator member → pessoal do criador
+  // (provisionado on-demand, idempotente). Ausente + ator não-member → erro.
+  let calendarId = input.calendarId ?? null;
+  if (!calendarId) {
+    if (actor.type === 'member' && actor.memberId) {
+      const personal = await calendarRepo.ensurePersonalCalendar(
+        tx,
+        input.workspaceId,
+        actor.memberId,
+      );
+      calendarId = personal.id;
+    } else {
+      throw new EventServiceError('calendar_required', 'calendarId é obrigatório.', 400);
+    }
+  }
+
   // O calendar precisa existir no workspace (sob RLS já está isolado).
   const [calendar] = await tx
     .select({ id: calendars.id, ownerId: calendars.ownerId })
     .from(calendars)
-    .where(eq(calendars.id, input.calendarId));
+    .where(eq(calendars.id, calendarId));
   if (!calendar) {
     throw new EventServiceError('calendar_not_found', 'Calendar inexistente no workspace.', 404);
   }
@@ -120,7 +144,7 @@ export async function createEvent(
     .insert(events)
     .values({
       workspaceId: input.workspaceId,
-      calendarId: input.calendarId,
+      calendarId: calendar.id,
       title: input.title,
       type: input.type ?? 'meeting',
       startAt: input.startAt,
@@ -134,6 +158,8 @@ export async function createEvent(
       conversationId: input.conversationId ?? null,
       createdBy: actor.type === 'member' ? (actor.memberId ?? null) : null,
       createdByAgentId: actor.type === 'agent' ? (actor.agentId ?? null) : null,
+      recurrenceRule: input.recurrenceRule ?? null,
+      recurrenceUntil: input.recurrenceUntil ?? null,
       metadata: input.metadata ?? {},
     })
     .returning();

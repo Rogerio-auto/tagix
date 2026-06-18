@@ -2,7 +2,8 @@
  * API de eventos (CALENDAR.md §7). RLS via req.scoped, input via Zod. Criação
  * centralizada no event-service (ponto único reusado pelo agente em F7-S04).
  *
- *   GET    /api/events                lista (filtros: calendar, from, to, contact) (calendar.view)
+ *   GET    /api/events                lista escopada por calendários acessíveis     (calendar.view)
+ *                                     (calendarIds overlay, from/to, contact; recorrência expandida)
  *   POST   /api/events                cria                                          (event.edit)
  *   GET    /api/events/:id            detalhe + participantes                       (calendar.view)
  *   PUT    /api/events/:id            update                                        (event.edit)
@@ -13,8 +14,8 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { and, asc, eq, gte, lte, type SQL } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { and, asc, eq, gte, inArray, isNotNull, lte, or, type SQL } from 'drizzle-orm';
+import { calendarRepo, schema } from '@hm/db';
 import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import {
@@ -23,6 +24,7 @@ import {
   createEvent,
   setRsvp,
 } from '../../services/event-service';
+import { expandOccurrences } from '../../services/calendar-recurrence';
 
 const { events, eventParticipants } = schema;
 
@@ -35,9 +37,20 @@ function param(req: Request, key: string): string {
 
 const eventTypeEnum = z.enum(['meeting', 'demo', 'follow_up', 'task', 'reminder', 'other']);
 
+// RRULE simplificado aceito pela API (espelha calendar-recurrence.ts):
+//   FREQ=DAILY|WEEKLY[;INTERVAL=n][;BYDAY=MO,WE,...][;UNTIL=ISO]
+const RRULE_RE =
+  /^FREQ=(DAILY|WEEKLY)(;INTERVAL=\d+)?(;BYDAY=(MO|TU|WE|TH|FR|SA|SU)(,(MO|TU|WE|TH|FR|SA|SU))*)?(;UNTIL=[^;]+)?$/;
+
+const recurrenceRuleSchema = z
+  .string()
+  .trim()
+  .max(200)
+  .regex(RRULE_RE, 'recurrenceRule inválido (use FREQ=DAILY|WEEKLY[;INTERVAL=n][;BYDAY=...][;UNTIL=ISO])');
+
 const createSchema = z
   .object({
-    calendarId: z.string().uuid(),
+    calendarId: z.string().uuid().optional(),
     title: z.string().trim().min(1).max(300),
     startAt: z.string().datetime({ offset: true }),
     endAt: z.string().datetime({ offset: true }),
@@ -50,6 +63,8 @@ const createSchema = z
     conversationId: z.string().uuid().nullish(),
     memberIds: z.array(z.string().uuid()).max(50).optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
+    recurrenceRule: recurrenceRuleSchema.nullish(),
+    recurrenceUntil: z.string().datetime({ offset: true }).nullish(),
   })
   .refine((d) => new Date(d.startAt) < new Date(d.endAt), {
     message: 'startAt deve ser antes de endAt',
@@ -65,7 +80,24 @@ const updateSchema = z.object({
   description: z.string().trim().max(5000).nullish(),
   location: z.string().trim().max(500).nullish(),
   meetingUrl: z.string().url().max(1000).nullish(),
+  recurrenceRule: recurrenceRuleSchema.nullish(),
+  recurrenceUntil: z.string().datetime({ offset: true }).nullish(),
 });
+
+/** calendarIds=a,b (CSV) ou repetido (?calendarIds=a&calendarIds=b). UUIDs válidos. */
+function parseCalendarIds(raw: unknown): string[] {
+  const flat: string[] = [];
+  const push = (v: unknown): void => {
+    if (typeof v !== 'string') return;
+    for (const part of v.split(',')) {
+      const id = part.trim();
+      if (id) flat.push(id);
+    }
+  };
+  if (Array.isArray(raw)) raw.forEach(push);
+  else push(raw);
+  return Array.from(new Set(flat));
+}
 
 const rsvpSchema = z.object({
   rsvp: z.enum(['pending', 'accepted', 'declined', 'tentative']),
@@ -80,24 +112,83 @@ export function createEventsRouter(): Router {
   const viewGuard = [requireAuth, withRLS, requireRole('calendar.view')] as const;
   const editGuard = [requireAuth, withRLS, requireRole('event.edit')] as const;
 
+  // GET /api/events?calendarIds=a,b&from&to&contact
+  //
+  // Visibilidade (fecha o vazamento L1): SEMPRE escopa por `accessibleCalendarIds`
+  // (S01). Sem `calendarIds` = TODOS os acessíveis (retrocompat: NÃO "todos do
+  // workspace"). Com `calendarIds` = overlay = a interseção entre o pedido e o
+  // acessível (um id inacessível é silenciosamente descartado, nunca vaza).
+  //
+  // Recorrência: eventos com `recurrenceRule` são expandidos em ocorrências virtuais
+  // dentro da janela [from, to] (ids sintéticos `evt:<id>:<startISO>`). Sem janela,
+  // expande a partir do startAt do mestre até um teto interno (sem `to` → não expande
+  // séries abertas: devolve só o mestre).
   router.get('/api/events', ...viewGuard, async (req: Request, res: Response) => {
-    const calendarId = typeof req.query['calendar'] === 'string' ? req.query['calendar'] : undefined;
+    const legacyCalendar =
+      typeof req.query['calendar'] === 'string' ? req.query['calendar'] : undefined;
+    const requestedRaw = req.query['calendarIds'];
+    const requested = parseCalendarIds(
+      requestedRaw ?? (legacyCalendar ? [legacyCalendar] : undefined),
+    );
     const contactId = typeof req.query['contact'] === 'string' ? req.query['contact'] : undefined;
     const from = typeof req.query['from'] === 'string' ? new Date(req.query['from']) : null;
     const to = typeof req.query['to'] === 'string' ? new Date(req.query['to']) : null;
-    const conds: SQL[] = [];
-    if (calendarId) conds.push(eq(events.calendarId, calendarId));
-    if (contactId) conds.push(eq(events.contactId, contactId));
-    if (from && !Number.isNaN(from.getTime())) conds.push(gte(events.startAt, from));
-    if (to && !Number.isNaN(to.getTime())) conds.push(lte(events.startAt, to));
-    const rows = await req.scoped!((tx) =>
-      tx
+    const validFrom = from && !Number.isNaN(from.getTime()) ? from : null;
+    const validTo = to && !Number.isNaN(to.getTime()) ? to : null;
+
+    const member = req.auth!.member;
+
+    const rows = await req.scoped!(async (tx) => {
+      const accessibleIds = await calendarRepo.accessibleCalendarIds(tx, {
+        memberId: member.id,
+        role: member.role as Role,
+      });
+      // Overlay: interseção pedido ∩ acessível. Sem pedido = todos os acessíveis.
+      const scopedIds =
+        requested.length > 0
+          ? requested.filter((id) => accessibleIds.includes(id))
+          : accessibleIds;
+      if (scopedIds.length === 0) return [];
+
+      const conds: SQL[] = [inArray(events.calendarId, scopedIds)];
+      if (contactId) conds.push(eq(events.contactId, contactId));
+      // Filtro de janela: inclui eventos que INTERSECTAM [from, to] (não só start ≥ from),
+      // e SEMPRE inclui mestres recorrentes (recurrenceRule != null) p/ expandir depois.
+      const windowConds: (SQL | undefined)[] = [];
+      if (validTo) windowConds.push(lte(events.startAt, validTo));
+      if (validFrom) windowConds.push(gte(events.endAt, validFrom));
+      if (windowConds.length > 0) {
+        const windowMatch = and(...windowConds);
+        // Mestres recorrentes (recurrenceRule != null) sobrevivem ao filtro de janela
+        // mesmo que o mestre esteja fora dela; a expansão recorta na janela em memória.
+        conds.push(or(windowMatch, isNotNull(events.recurrenceRule))!);
+      }
+
+      return tx
         .select()
         .from(events)
-        .where(conds.length ? and(...conds) : undefined)
-        .orderBy(asc(events.startAt)),
-    );
-    res.json({ events: rows });
+        .where(and(...conds))
+        .orderBy(asc(events.startAt));
+    });
+
+    // Expansão de recorrência na janela. Sem janela definida não expandimos séries
+    // (evita materializar séries abertas); devolvemos o mestre como está.
+    const expandFrom = validFrom ?? (validTo ? new Date(0) : null);
+    const expandTo = validTo ?? (validFrom ? new Date(8640000000000000) : null);
+
+    const out: (typeof events.$inferSelect)[] = [];
+    for (const row of rows) {
+      if (row.recurrenceRule && expandFrom && expandTo) {
+        out.push(...expandOccurrences(row, expandFrom, expandTo));
+      } else if (row.recurrenceRule && (!expandFrom || !expandTo)) {
+        // Sem janela: não expande série aberta — devolve o mestre.
+        out.push(row);
+      } else {
+        out.push(row);
+      }
+    }
+    out.sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+    res.json({ events: out });
   });
 
   router.post('/api/events', ...editGuard, async (req: Request, res: Response) => {
@@ -114,7 +205,8 @@ export function createEventsRouter(): Router {
           tx,
           {
             workspaceId,
-            calendarId: d.calendarId,
+            // Ausente → o service resolve o pessoal do criador (provisiona se preciso).
+            calendarId: d.calendarId ?? null,
             title: d.title,
             startAt: new Date(d.startAt),
             endAt: new Date(d.endAt),
@@ -127,6 +219,8 @@ export function createEventsRouter(): Router {
             conversationId: d.conversationId ?? null,
             memberIds: d.memberIds,
             metadata: d.metadata,
+            recurrenceRule: d.recurrenceRule ?? null,
+            recurrenceUntil: d.recurrenceUntil ? new Date(d.recurrenceUntil) : null,
           },
           { type: 'member', memberId: req.auth!.member.id },
         ),
@@ -182,6 +276,11 @@ export function createEventsRouter(): Router {
       if (d.description !== undefined) patch['description'] = d.description;
       if (d.location !== undefined) patch['location'] = d.location;
       if (d.meetingUrl !== undefined) patch['meetingUrl'] = d.meetingUrl;
+      // Recorrência: edição da SÉRIE (v1 aplica à série inteira — documentado).
+      if (d.recurrenceRule !== undefined) patch['recurrenceRule'] = d.recurrenceRule;
+      if (d.recurrenceUntil !== undefined) {
+        patch['recurrenceUntil'] = d.recurrenceUntil ? new Date(d.recurrenceUntil) : null;
+      }
 
       const nextStart = d.startAt ? new Date(d.startAt) : event.startAt;
       const nextEnd = d.endAt ? new Date(d.endAt) : event.endAt;

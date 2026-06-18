@@ -14,8 +14,9 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { and, asc, desc, eq, gte, lte } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { and, asc, desc, eq, gte, inArray, lte } from 'drizzle-orm';
+import { calendarRepo, schema } from '@hm/db';
+import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { requireCalendarAccess } from '../../middlewares/calendar-access';
 
@@ -48,15 +49,33 @@ export function createCalendarsRouter(): Router {
   const viewGuard = [requireAuth, withRLS, requireRole('calendar.view')] as const;
   const manageGuard = [requireAuth, withRLS, requireRole('calendar.manage')] as const;
 
+  // Lista APENAS os calendarios visiveis ao membro (fecha o vazamento L1: antes
+  // retornava TODOS do workspace, expondo o pessoal de colegas). Provisiona de forma
+  // lazy e idempotente o calendario pessoal do membro + o "Empresa" no primeiro acesso.
   router.get('/api/calendars', ...viewGuard, async (req: Request, res: Response) => {
     const typeFilter = typeof req.query['type'] === 'string' ? req.query['type'] : undefined;
-    const rows = await req.scoped!((tx) =>
-      tx
+    const member = req.auth!.member;
+    const workspaceId = req.auth!.workspace.id;
+
+    const rows = await req.scoped!(async (tx) => {
+      // Provisionamento lazy (idempotente): garante o pessoal do membro + o "Empresa".
+      await calendarRepo.ensurePersonalCalendar(tx, workspaceId, member.id);
+      await calendarRepo.ensureWorkspaceCalendar(tx, workspaceId);
+
+      const accessibleIds = await calendarRepo.accessibleCalendarIds(tx, {
+        memberId: member.id,
+        role: member.role as Role,
+      });
+      if (accessibleIds.length === 0) return [];
+
+      const conds = [inArray(calendars.id, accessibleIds)];
+      if (typeFilter) conds.push(eq(calendars.type, typeFilter));
+      return tx
         .select()
         .from(calendars)
-        .where(typeFilter ? eq(calendars.type, typeFilter) : undefined)
-        .orderBy(desc(calendars.isDefault), asc(calendars.name)),
-    );
+        .where(and(...conds))
+        .orderBy(desc(calendars.isDefault), asc(calendars.name));
+    });
     res.json({ calendars: rows });
   });
 
