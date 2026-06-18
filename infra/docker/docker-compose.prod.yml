@@ -258,7 +258,7 @@ services:
       labels:
         - "traefik.enable=true"
         - "traefik.http.services.leadium_landing.loadbalancer.server.port=80"
-        - "traefik.http.routers.leadium_landing.rule=Host(`leadium.com.br`) || Host(`www.leadium.com.br`)"
+        - "traefik.http.routers.leadium_landing.rule=Host(`leadium.com.br`)"
         - "traefik.http.routers.leadium_landing.entrypoints=websecure"
         - "traefik.http.routers.leadium_landing.tls.certresolver=letsencrypt"
         - "traefik.http.routers.leadium_landing.service=leadium_landing"
