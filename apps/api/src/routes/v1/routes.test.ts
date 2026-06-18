@@ -20,7 +20,7 @@ import { createV1Router } from './index';
 import express from 'express';
 import request from 'supertest';
 
-const { workspaces, channels, contacts, conversations, messages, flows, flowVersions, apiKeys } =
+const { workspaces, channels, contacts, conversations, messages, flows, flowVersions, apiKeys, pipelines, stages, deals, conversionTypes, calendars } =
   schema;
 
 const ALL_SCOPES = [
@@ -29,6 +29,14 @@ const ALL_SCOPES = [
   'write:contacts',
   'write:flows',
   'read:conversations',
+  'read:contacts',
+  'read:deals',
+  'write:deals',
+  'read:conversions',
+  'write:conversions',
+  'read:flows',
+  'read:calendar',
+  'write:calendar',
 ];
 
 let app: express.Express;
@@ -37,6 +45,11 @@ let wsB = '';
 let convA = '';
 let convB = '';
 let flowA = '';
+let contactA = '';
+let dealA = '';
+let stageOpenA = '';
+let stageWonA = '';
+let calendarA = '';
 let tokenA = ''; // chave de A com todos os scopes
 let tokenNoScope = ''; // chave de A sem scopes
 
@@ -102,6 +115,50 @@ beforeAll(async () => {
     triggerConfig: {},
   });
 
+  // Contato de A (para deals/conversões/contacts).
+  const [ct] = await db
+    .insert(contacts)
+    .values({ workspaceId: wsA, displayName: 'Contato API', phone: `+5511944${sfx.slice(0, 4)}`, source: 'seed' })
+    .returning();
+  if (!ct) throw new Error('contact');
+  contactA = ct.id;
+
+  // Pipeline + 2 stages (open -> won) em A.
+  const [pl] = await db.insert(pipelines).values({ workspaceId: wsA, name: 'Funil A', isDefault: true }).returning();
+  if (!pl) throw new Error('pipeline');
+  const [stOpen] = await db
+    .insert(stages)
+    .values({ workspaceId: wsA, pipelineId: pl.id, name: 'Aberto', position: 0 })
+    .returning();
+  const [stWon] = await db
+    .insert(stages)
+    .values({ workspaceId: wsA, pipelineId: pl.id, name: 'Ganho', position: 1, isWon: true })
+    .returning();
+  if (!stOpen || !stWon) throw new Error('stages');
+  stageOpenA = stOpen.id;
+  stageWonA = stWon.id;
+
+  const [dl] = await db
+    .insert(deals)
+    .values({ workspaceId: wsA, pipelineId: pl.id, stageId: stOpen.id, contactId: ct.id, title: 'Deal API', valueCents: 10000 })
+    .returning();
+  if (!dl) throw new Error('deal');
+  dealA = dl.id;
+
+  // Tipo de conversão "venda" em A.
+  await db
+    .insert(conversionTypes)
+    .values({ workspaceId: wsA, key: 'venda', label: 'Venda', valueRequired: false })
+    .returning();
+
+  // Calendar de A (workspace) para create_event.
+  const [cal] = await db
+    .insert(calendars)
+    .values({ workspaceId: wsA, name: 'Empresa A', type: 'workspace', isDefault: true })
+    .returning();
+  if (!cal) throw new Error('calendar');
+  calendarA = cal.id;
+
   tokenA = await seedKey(wsA, ALL_SCOPES);
   tokenNoScope = await seedKey(wsA, []);
 
@@ -132,13 +189,22 @@ describe('OpenAPI spec', () => {
     expect(paths).toContain('/api/v1/trigger_flow');
     expect(paths).toContain('/api/v1/conversations');
     expect(paths).toContain('/api/v1/conversations/{id}');
+    expect(paths).toContain('/api/v1/contacts');
+    expect(paths).toContain('/api/v1/contacts/{id}');
+    expect(paths).toContain('/api/v1/messages/media');
+    expect(paths).toContain('/api/v1/deals');
+    expect(paths).toContain('/api/v1/deals/{id}');
+    expect(paths).toContain('/api/v1/deals/{id}/move');
+    expect(paths).toContain('/api/v1/conversions');
+    expect(paths).toContain('/api/v1/flows');
+    expect(paths).toContain('/api/v1/events');
     expect(doc.components?.securitySchemes?.['ApiKeyAuth']).toBeDefined();
   });
 
   it('serve a spec em /api/v1/openapi.json sem exigir chave', async () => {
     const res = await request(app).get('/api/v1/openapi.json');
     expect(res.status).toBe(200);
-    expect(res.body.info.title).toBe('Highermind Public API');
+    expect(res.body.info.title).toBe('Leadium API');
   });
 });
 
@@ -262,5 +328,144 @@ describe('conversations', () => {
 
     const cross = await request(app).get(`/api/v1/conversations/${convB}`).set(bearer(tokenA));
     expect(cross.status).toBe(404);
+  });
+});
+
+describe('contacts (F38-S12)', () => {
+  it('lista só contatos do workspace da chave', async () => {
+    const res = await request(app).get('/api/v1/contacts').set(bearer(tokenA));
+    expect(res.status).toBe(200);
+    const ids = res.body.contacts.map((c: { id: string }) => c.id);
+    expect(ids).toContain(contactA);
+  });
+
+  it('GET :id retorna o contato; 404 com scope mas id inexistente', async () => {
+    const ok = await request(app).get(`/api/v1/contacts/${contactA}`).set(bearer(tokenA));
+    expect(ok.status).toBe(200);
+    expect(ok.body.contact.id).toBe(contactA);
+    const miss = await request(app).get(`/api/v1/contacts/${randomUUID()}`).set(bearer(tokenA));
+    expect(miss.status).toBe(404);
+  });
+
+  it('403 sem o scope read:contacts', async () => {
+    const res = await request(app).get('/api/v1/contacts').set(bearer(tokenNoScope));
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('send_media (F38-S12)', () => {
+  it('201 + persiste mensagem de mídia pending', async () => {
+    const res = await request(app)
+      .post('/api/v1/messages/media')
+      .set(bearer(tokenA))
+      .send({ conversationId: convA, mediaKind: 'image', mediaUrl: 'https://cdn.test/x.png', mime: 'image/png', caption: 'foto' });
+    expect(res.status).toBe(201);
+    expect(res.body.message.type).toBe('image');
+    const [row] = await getDb().select().from(messages).where(eq(messages.id, res.body.message.id));
+    expect(row?.mediaUrl).toBe('https://cdn.test/x.png');
+    expect(row?.viewStatus).toBe('pending');
+  });
+
+  it('404 ao mirar conversa de outro workspace', async () => {
+    const res = await request(app)
+      .post('/api/v1/messages/media')
+      .set(bearer(tokenA))
+      .send({ conversationId: convB, mediaKind: 'image', mediaUrl: 'https://cdn.test/y.png', mime: 'image/png' });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('deals (F38-S12)', () => {
+  it('lista só deals do workspace da chave', async () => {
+    const res = await request(app).get('/api/v1/deals').set(bearer(tokenA));
+    expect(res.status).toBe(200);
+    expect(res.body.deals.map((d: { id: string }) => d.id)).toContain(dealA);
+  });
+
+  it('GET :id retorna o deal; move troca o stage', async () => {
+    const get = await request(app).get(`/api/v1/deals/${dealA}`).set(bearer(tokenA));
+    expect(get.status).toBe(200);
+    expect(get.body.deal.stageId).toBe(stageOpenA);
+
+    const mv = await request(app)
+      .post(`/api/v1/deals/${dealA}/move`)
+      .set(bearer(tokenA))
+      .send({ stageId: stageWonA });
+    expect(mv.status).toBe(200);
+    expect(mv.body.deal.stageId).toBe(stageWonA);
+    expect(mv.body.fromStageId).toBe(stageOpenA);
+  });
+
+  it('404 ao mover deal inexistente', async () => {
+    const res = await request(app)
+      .post(`/api/v1/deals/${randomUUID()}/move`)
+      .set(bearer(tokenA))
+      .send({ stageId: stageWonA });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('conversions (F38-S12)', () => {
+  it('cria conversão (201) e deduplica no mesmo dia (200)', async () => {
+    const first = await request(app)
+      .post('/api/v1/conversions')
+      .set(bearer(tokenA))
+      .send({ conversionTypeKey: 'venda', contactId: contactA, dealId: dealA, valueCents: 9900 });
+    expect(first.status).toBe(201);
+    expect(first.body.status).toBe('created');
+
+    const dup = await request(app)
+      .post('/api/v1/conversions')
+      .set(bearer(tokenA))
+      .send({ conversionTypeKey: 'venda', contactId: contactA, dealId: dealA, valueCents: 9900 });
+    expect(dup.status).toBe(200);
+    expect(dup.body.status).toBe('deduped');
+  });
+
+  it('404 para tipo de conversão inexistente', async () => {
+    const res = await request(app)
+      .post('/api/v1/conversions')
+      .set(bearer(tokenA))
+      .send({ conversionTypeKey: 'inexistente', contactId: contactA });
+    expect(res.status).toBe(404);
+  });
+
+  it('lista conversões do workspace da chave', async () => {
+    const res = await request(app).get('/api/v1/conversions').set(bearer(tokenA));
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.conversions)).toBe(true);
+    expect(res.body.conversions.length).toBeGreaterThan(0);
+  });
+});
+
+describe('flows + events (F38-S12)', () => {
+  it('lista flows do workspace', async () => {
+    const res = await request(app).get('/api/v1/flows').set(bearer(tokenA));
+    expect(res.status).toBe(200);
+    expect(res.body.flows.map((f: { id: string }) => f.id)).toContain(flowA);
+  });
+
+  it('cria e lista eventos', async () => {
+    const start = new Date(Date.now() + 86_400_000).toISOString();
+    const end = new Date(Date.now() + 86_400_000 + 3_600_000).toISOString();
+    const create = await request(app)
+      .post('/api/v1/events')
+      .set(bearer(tokenA))
+      .send({ calendarId: calendarA, title: 'Demo API', startAt: start, endAt: end, contactId: contactA });
+    expect(create.status).toBe(201);
+    expect(create.body.event.title).toBe('Demo API');
+
+    const list = await request(app).get('/api/v1/events').set(bearer(tokenA));
+    expect(list.status).toBe(200);
+    expect(list.body.events.map((e: { id: string }) => e.id)).toContain(create.body.event.id);
+  });
+
+  it('422 quando endAt <= startAt', async () => {
+    const now = new Date(Date.now() + 86_400_000).toISOString();
+    const res = await request(app)
+      .post('/api/v1/events')
+      .set(bearer(tokenA))
+      .send({ calendarId: calendarA, title: 'Inválido', startAt: now, endAt: now });
+    expect(res.status).toBe(422);
   });
 });

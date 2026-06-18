@@ -14,16 +14,28 @@
  * Router NÃO montado aqui — montado em `apps/api/src/app.ts` (gap-fill).
  */
 import { Router, type Request, type Response } from 'express';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import { schema, withWorkspace, type DbTx } from '@hm/db';
 import { triggerFlow } from '@hm/flow-engine';
+import { moveDealToStage, TransitionError } from '../../services/deal-move';
+import { createEvent, EventServiceError } from '../../services/event-service';
+import { registerConversion } from '../conversions/register';
 import swaggerUi from 'swagger-ui-express';
 import { requireApiKey, requireScope } from '../../middlewares/api-key';
 import { publishOutboundJob } from '../../mq/outbound-publisher';
 import { buildOpenApiDocument } from './openapi';
 import {
   API_SCOPES,
+  createConversionBody,
+  createEventBody,
+  listContactsQuery,
   listConversationsQuery,
+  listConversionsQuery,
+  listDealsQuery,
+  listEventsQuery,
+  listFlowsQuery,
+  moveDealBody,
+  sendMediaBody,
   sendMessageBody,
   sendTemplateBody,
   triggerFlowBody,
@@ -290,6 +302,372 @@ export function createV1Router(): Router {
         return;
       }
       res.json({ conversation });
+    },
+  );
+
+  // ─── GET /api/v1/contacts ───────────────────────────────────────────────────
+  router.get(
+    '/api/v1/contacts',
+    auth,
+    requireScope(API_SCOPES.readContacts),
+    async (req: Request, res: Response): Promise<void> => {
+      const parsed = listContactsQuery.safeParse(req.query);
+      if (!parsed.success) return badRequest(res, 'Query inválida.');
+      const { q, limit } = parsed.data;
+      const workspaceId = req.apiAuth!.workspaceId;
+
+      const rows = await withWorkspace(workspaceId, (tx) => {
+        const conds: SQL[] = [isNull(schema.contacts.deletedAt)];
+        if (q) {
+          const term = `%${q}%`;
+          const match = or(
+            ilike(schema.contacts.displayName, term),
+            ilike(schema.contacts.phone, term),
+            ilike(schema.contacts.email, term),
+          );
+          if (match) conds.push(match);
+        }
+        return tx
+          .select()
+          .from(schema.contacts)
+          .where(and(...conds))
+          .orderBy(desc(schema.contacts.createdAt))
+          .limit(limit);
+      });
+      res.json({ contacts: rows });
+    },
+  );
+
+  // ─── GET /api/v1/contacts/:id ───────────────────────────────────────────────
+  router.get(
+    '/api/v1/contacts/:id',
+    auth,
+    requireScope(API_SCOPES.readContacts),
+    async (req: Request, res: Response): Promise<void> => {
+      const id = paramId(req, 'id');
+      if (!id) return badRequest(res, 'id ausente.');
+      const workspaceId = req.apiAuth!.workspaceId;
+      const [contact] = await withWorkspace(workspaceId, (tx) =>
+        tx
+          .select()
+          .from(schema.contacts)
+          .where(and(eq(schema.contacts.id, id), isNull(schema.contacts.deletedAt)))
+          .limit(1),
+      );
+      if (!contact) {
+        res.status(404).json({ error: 'not_found', message: 'Contato não encontrado.' });
+        return;
+      }
+      res.json({ contact });
+    },
+  );
+
+  // ─── POST /api/v1/messages/media ────────────────────────────────────────────
+  router.post(
+    '/api/v1/messages/media',
+    auth,
+    requireScope(API_SCOPES.sendMessages),
+    async (req: Request, res: Response): Promise<void> => {
+      const parsed = sendMediaBody.safeParse(req.body);
+      if (!parsed.success) return badRequest(res, 'Body inválido para send_media.');
+      const { conversationId, mediaKind, mediaUrl, mime, caption } = parsed.data;
+      const workspaceId = req.apiAuth!.workspaceId;
+
+      const result = await withWorkspace(workspaceId, async (tx) => {
+        const conv = await resolveConversation(tx, conversationId);
+        if (!conv) return null;
+        const [message] = await tx
+          .insert(schema.messages)
+          .values({
+            workspaceId,
+            conversationId,
+            direction: 'outbound',
+            senderType: 'system',
+            type: mediaKind,
+            content: caption ?? null,
+            mediaUrl,
+            mediaMime: mime,
+            mediaCaption: caption ?? null,
+            viewStatus: 'pending',
+          })
+          .returning();
+        return message ? { conv, message } : null;
+      });
+      if (!result) {
+        res.status(404).json({ error: 'not_found', message: 'Conversa não encontrada.' });
+        return;
+      }
+
+      await publishOutboundJob(workspaceId, {
+        kind: 'media',
+        channelId: result.conv.channelId,
+        conversationId,
+        messageId: result.message.id,
+        chatId: result.conv.remoteId,
+        mediaKind,
+        publicMediaUrl: mediaUrl,
+        mime,
+        ...(caption ? { caption } : {}),
+      });
+      res.status(201).json({ message: result.message });
+    },
+  );
+
+  // ─── GET /api/v1/deals ──────────────────────────────────────────────────────
+  router.get(
+    '/api/v1/deals',
+    auth,
+    requireScope(API_SCOPES.readDeals),
+    async (req: Request, res: Response): Promise<void> => {
+      const parsed = listDealsQuery.safeParse(req.query);
+      if (!parsed.success) return badRequest(res, 'Query inválida.');
+      const { pipelineId, stageId, contactId, limit } = parsed.data;
+      const workspaceId = req.apiAuth!.workspaceId;
+
+      const rows = await withWorkspace(workspaceId, (tx) => {
+        const conds: SQL[] = [];
+        if (pipelineId) conds.push(eq(schema.deals.pipelineId, pipelineId));
+        if (stageId) conds.push(eq(schema.deals.stageId, stageId));
+        if (contactId) conds.push(eq(schema.deals.contactId, contactId));
+        return tx
+          .select()
+          .from(schema.deals)
+          .where(conds.length > 0 ? and(...conds) : undefined)
+          .orderBy(desc(schema.deals.createdAt))
+          .limit(limit);
+      });
+      res.json({ deals: rows });
+    },
+  );
+
+  // ─── GET /api/v1/deals/:id ──────────────────────────────────────────────────
+  router.get(
+    '/api/v1/deals/:id',
+    auth,
+    requireScope(API_SCOPES.readDeals),
+    async (req: Request, res: Response): Promise<void> => {
+      const id = paramId(req, 'id');
+      if (!id) return badRequest(res, 'id ausente.');
+      const workspaceId = req.apiAuth!.workspaceId;
+      const [deal] = await withWorkspace(workspaceId, (tx) =>
+        tx.select().from(schema.deals).where(eq(schema.deals.id, id)).limit(1),
+      );
+      if (!deal) {
+        res.status(404).json({ error: 'not_found', message: 'Deal não encontrado.' });
+        return;
+      }
+      res.json({ deal });
+    },
+  );
+
+  // ─── POST /api/v1/deals/:id/move ────────────────────────────────────────────
+  router.post(
+    '/api/v1/deals/:id/move',
+    auth,
+    requireScope(API_SCOPES.writeDeals),
+    async (req: Request, res: Response): Promise<void> => {
+      const id = paramId(req, 'id');
+      if (!id) return badRequest(res, 'id ausente.');
+      const parsed = moveDealBody.safeParse(req.body);
+      if (!parsed.success) return badRequest(res, 'Body inválido para move_deal_stage.');
+      const { stageId } = parsed.data;
+      const workspaceId = req.apiAuth!.workspaceId;
+
+      try {
+        const out = await withWorkspace(workspaceId, (tx) =>
+          moveDealToStage(tx, { dealId: id, newStageId: stageId, workspaceId, actor: { type: 'api' } }),
+        );
+        res.json({ deal: out.deal, fromStageId: out.fromStageId, toStageId: out.toStageId });
+      } catch (err: unknown) {
+        if (err instanceof TransitionError) {
+          res.status(422).json({ error: err.code, message: err.message });
+          return;
+        }
+        const code = err instanceof Error ? err.message : 'error';
+        if (code === 'deal_not_found' || code === 'stage_not_found') {
+          res.status(404).json({ error: 'not_found', message: 'Deal ou stage não encontrado.' });
+          return;
+        }
+        throw err;
+      }
+    },
+  );
+
+  // ─── POST /api/v1/conversions ───────────────────────────────────────────────
+  router.post(
+    '/api/v1/conversions',
+    auth,
+    requireScope(API_SCOPES.writeConversions),
+    async (req: Request, res: Response): Promise<void> => {
+      const parsed = createConversionBody.safeParse(req.body);
+      if (!parsed.success) return badRequest(res, 'Body inválido para create_conversion.');
+      const body = parsed.data;
+      const workspaceId = req.apiAuth!.workspaceId;
+
+      // Dedup same-day: `registerConversion` captura a violação UNIQUE mas NÃO faz
+      // ROLLBACK do statement, o que envenena a transação RLS e estoura no commit.
+      // Como o repo de conversões (register.ts) está fora do escopo deste slot,
+      // pré-checamos a existência de um evento same-day (não cancelado) e curto-
+      // circuitamos em `deduped` — sem o INSERT que aborta a transação. Ver COMMS.
+      const result = await withWorkspace(workspaceId, async (tx) => {
+        const [type] = await tx
+          .select({ id: schema.conversionTypes.id })
+          .from(schema.conversionTypes)
+          .where(
+            and(
+              eq(schema.conversionTypes.workspaceId, workspaceId),
+              eq(schema.conversionTypes.key, body.conversionTypeKey),
+            ),
+          )
+          .limit(1);
+        if (!type) return { kind: 'type_not_found' as const };
+
+        const [dup] = await tx
+          .select({ id: schema.conversionEvents.id })
+          .from(schema.conversionEvents)
+          .where(
+            and(
+              eq(schema.conversionEvents.conversionTypeId, type.id),
+              eq(schema.conversionEvents.contactId, body.contactId),
+              isNull(schema.conversionEvents.cancelledAt),
+              sql`(${schema.conversionEvents.occurredAt} at time zone 'UTC')::date = (now() at time zone 'UTC')::date`,
+            ),
+          )
+          .limit(1);
+        if (dup) return { kind: 'deduped' as const };
+
+        return registerConversion(tx, {
+          workspaceId,
+          conversionTypeId: type.id,
+          contactId: body.contactId,
+          conversationId: body.conversationId ?? null,
+          dealId: body.dealId ?? null,
+          valueCents: body.valueCents ?? null,
+          currency: body.currency,
+          note: body.note ?? null,
+          source: 'api',
+        });
+      });
+
+      if (result.kind === 'type_not_found') {
+        res.status(404).json({ error: 'not_found', message: 'Tipo de conversão não encontrado.' });
+        return;
+      }
+      if (result.kind === 'value_required') {
+        res.status(422).json({ error: 'value_required', message: 'Este tipo de conversão exige valueCents.' });
+        return;
+      }
+      if (result.kind === 'deduped') {
+        res.status(200).json({ status: 'deduped', conversion: null });
+        return;
+      }
+      res.status(201).json({ status: 'created', conversion: result.event });
+    },
+  );
+
+  // ─── GET /api/v1/conversions ────────────────────────────────────────────────
+  router.get(
+    '/api/v1/conversions',
+    auth,
+    requireScope(API_SCOPES.readConversions),
+    async (req: Request, res: Response): Promise<void> => {
+      const parsed = listConversionsQuery.safeParse(req.query);
+      if (!parsed.success) return badRequest(res, 'Query inválida.');
+      const { contactId, limit } = parsed.data;
+      const workspaceId = req.apiAuth!.workspaceId;
+
+      const rows = await withWorkspace(workspaceId, (tx) =>
+        tx
+          .select()
+          .from(schema.conversionEvents)
+          .where(contactId ? eq(schema.conversionEvents.contactId, contactId) : undefined)
+          .orderBy(desc(schema.conversionEvents.occurredAt))
+          .limit(limit),
+      );
+      res.json({ conversions: rows });
+    },
+  );
+
+  // ─── GET /api/v1/flows ──────────────────────────────────────────────────────
+  router.get(
+    '/api/v1/flows',
+    auth,
+    requireScope(API_SCOPES.readFlows),
+    async (req: Request, res: Response): Promise<void> => {
+      const parsed = listFlowsQuery.safeParse(req.query);
+      if (!parsed.success) return badRequest(res, 'Query inválida.');
+      const { limit } = parsed.data;
+      const workspaceId = req.apiAuth!.workspaceId;
+      const rows = await withWorkspace(workspaceId, (tx) =>
+        tx.select().from(schema.flows).orderBy(desc(schema.flows.createdAt)).limit(limit),
+      );
+      res.json({ flows: rows });
+    },
+  );
+
+  // ─── GET /api/v1/events ─────────────────────────────────────────────────────
+  router.get(
+    '/api/v1/events',
+    auth,
+    requireScope(API_SCOPES.readCalendar),
+    async (req: Request, res: Response): Promise<void> => {
+      const parsed = listEventsQuery.safeParse(req.query);
+      if (!parsed.success) return badRequest(res, 'Query inválida.');
+      const { from, to, limit } = parsed.data;
+      const workspaceId = req.apiAuth!.workspaceId;
+
+      const rows = await withWorkspace(workspaceId, (tx) => {
+        const conds: SQL[] = [];
+        if (from) conds.push(gte(schema.events.startAt, new Date(from)));
+        if (to) conds.push(lte(schema.events.startAt, new Date(to)));
+        return tx
+          .select()
+          .from(schema.events)
+          .where(conds.length > 0 ? and(...conds) : undefined)
+          .orderBy(asc(schema.events.startAt))
+          .limit(limit);
+      });
+      res.json({ events: rows });
+    },
+  );
+
+  // ─── POST /api/v1/events ────────────────────────────────────────────────────
+  router.post(
+    '/api/v1/events',
+    auth,
+    requireScope(API_SCOPES.writeCalendar),
+    async (req: Request, res: Response): Promise<void> => {
+      const parsed = createEventBody.safeParse(req.body);
+      if (!parsed.success) return badRequest(res, 'Body inválido para create_event.');
+      const body = parsed.data;
+      const workspaceId = req.apiAuth!.workspaceId;
+
+      try {
+        const event = await withWorkspace(workspaceId, (tx) =>
+          createEvent(
+            tx,
+            {
+              workspaceId,
+              calendarId: body.calendarId,
+              title: body.title,
+              startAt: new Date(body.startAt),
+              endAt: new Date(body.endAt),
+              type: body.type,
+              description: body.description ?? null,
+              location: body.location ?? null,
+              contactId: body.contactId ?? null,
+            },
+            { type: 'api' },
+          ),
+        );
+        res.status(201).json({ event });
+      } catch (err: unknown) {
+        if (err instanceof EventServiceError) {
+          res.status(err.status).json({ error: err.code, message: err.message });
+          return;
+        }
+        throw err;
+      }
     },
   );
 

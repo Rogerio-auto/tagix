@@ -291,3 +291,9 @@ Todos os 3 slots done, integrados, verdes em main.
 - CreatePipelineModal extraído em settings/ e reutilizado no board (S03). DeletePipelineDialog com confirmacao de nome exato.
 - Backend: limite via workspaceEntitlementOverrides.limits.max_pipelines (override) ou default 10.
 - Gotcha: helpers-context.tsx em flow-builder/ também consumia response.pipelines — corrigido na integração do S01.
+
+## F38-S12 (2026-06-18) — orchestrator/executor
+
+- **Finding (latent bug, fora do escopo do slot):** `apps/api/src/routes/conversions/register.ts::registerConversion` captura a violação UNIQUE do dedup same-day (`uq_conv_events_dedup`) e retorna `{kind:'deduped'}`, mas NÃO faz `ROLLBACK TO SAVEPOINT`/rollback do statement. Num único `withWorkspace` (uma transação), o INSERT que falha deixa a transação Postgres em estado *aborted*, e o `COMMIT` da `withWorkspace` então estoura → o endpoint responde **500** em vez de tratar o dedup. A rota manual existente (`/api/conversions`, events.ts → 409) tem o mesmo defeito latente; só não é coberta por teste de dedup same-day.
+- **Decisão (dentro do `files_allowed` do S12):** o handler `POST /api/v1/conversions` faz um **pré-check** (lê um evento same-day não-cancelado do mesmo tipo+contato) e curto-circuita em `deduped` ANTES do INSERT que aborta a transação. Não duplica regra de negócio (o create segue via `registerConversion`); só evita o caminho que envenena a tx. Sem tocar `register.ts` (fora do escopo).
+- **Follow-up sugerido (sub-slot futuro):** trocar o `try/catch` de `registerConversion` por `ON CONFLICT (uq_conv_events_dedup) DO NOTHING ... RETURNING` para corrigir a causa-raiz e remover o pré-check redundante; corrige também a rota manual.
