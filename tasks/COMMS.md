@@ -318,3 +318,24 @@ DECISAO de fronteira — sanitizador Markdown compartilhado:
 - Essa adicao a @hm/ui e feita junto da onda frontend (consumidor inicial: S04). Registrado aqui por transparencia de fronteira. S05/S06/S13 reusam o mesmo `Markdown`.
 
 Icones de nav platform: adiciono keys `help` (S04) e `support` (S11) ao union de nav-items.ts + ambos os mapas ICONS (PlatformNav + PlatformMobileNav). APPEND, sem sobrescrever entradas existentes.
+
+## F38-S15 — Auditoria de seguranca da fase (2026-06-18)
+Escopo: toda a superficie nova da F38 (Help CMS+leitor, Support membro+plataforma, real-time, render Markdown, API v1 nova S12, help contextual). Espelha o rigor do audit F30 (2 IDORs).
+
+### Confirmacoes (verde)
+- Gates platform-admin: TODAS as rotas platform (help.ts 11 + support.ts 4) usam ...requirePlatformAdmin (401 sem sessao / 403 nao-admin AUDITADO / next() so se isPlatformAdmin). Nenhuma ungated.
+- RLS workspace-scoped: support_threads + help_article_feedback policy por current_setting(app.workspace_id) USING+WITH CHECK; support_messages via subquery na thread. (0045_f38_help_support_rls.sql)
+- IDOR support membro (licao F30): assertThreadVisible() em TODOS /:id/* (GET/messages/resolve) -> 404 fora do escopo, sob tx RLS. (routes/support.ts, repos/support.ts:49)
+- Cross-workspace platform: *Platform via getDb() (owner, bypassa RLS por design, gated por requirePlatformAdmin); membro via withWorkspace (SET LOCAL ROLE hm_app + app.workspace_id, rls.ts).
+- Socket join authz (IDOR real-time): authorizeSupportThreadJoin (support-realtime.ts:47) -- admin true; membro withWorkspace+assertThreadVisible -> so o room do PROPRIO workspace. session vem do handshake (socket/index.ts:75), nao do cliente.
+- XSS Markdown: parser emite SO elementos React (parse.tsx); ZERO dangerouslySetInnerHTML; script/iframe/on*/HTML cru viram texto. Links via sanitizeUrl (allowlist http/https/mailto/tel/relativos; bloqueia javascript:/data:/vbscript:/file:/protocol-relative). 10 testes XSS. Os 2 dangerouslySetInnerHTML do web sao pre-existentes e estaticos.
+- Preview CMS === publicado: ArticleEditor, ArticleView e AnchoredHelpHint usam o MESMO @hm/ui Markdown. Zero divergencia.
+- Leitor so publicado: listPublished/searchPublished/findPublishedBySlug/findPublishedByAnchor filtram status=published; feedback exige published (404) + withRLS. (repos/help.ts)
+- FTS sem injection: plainto_tsquery(portuguese, bind-param) -- input como texto plano. (help.ts:165)
+- Scopes API v1 (S12): TODO endpoint tem requireApiKey + requireScope; dados sob withWorkspace(apiAuth.workspaceId); GET /:id sob RLS -> 404 cross-workspace. Zod valida query/body. (routes/v1/index.ts)
+
+### Achados
+- [MEDIO] sanitizeUrl obfuscacao por char de controle (Markdown/sanitize.ts): TAB/newline no esquema (java[TAB]script:) podia escapar a deteccao SE reusado fora do parser (a gramatica de link ja rejeita whitespace na URL, entao NAO exploravel pelo produto hoje). REMEDIADO no audit: strip de controle 0x00-0x1f/0x7f + 2 testes. FECHADO.
+- [BAIXO/UX] inbox platform 'atribuir a mim' (InboxThread.tsx): self-assign depende do member id no cliente (getBrowserSession e stub); por ora so desatribuir (honesto). Follow-up: expor member id na sessao OU endpoint /assign-me. Nao e seguranca.
+
+### Veredito: ZERO critico/alto. 1 medio FECHADO. 1 baixo (UX) com follow-up. F38 segura para release sob os padroes da F30.
