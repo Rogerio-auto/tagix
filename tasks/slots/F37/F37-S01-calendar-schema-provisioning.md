@@ -2,7 +2,7 @@
 id: F37-S01
 title: Calendar 2.0 — schema recorrência + provisionamento + helper de acesso
 phase: F37
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: []
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/CALENDAR_V2_PLAN.md
 agent_id: db-engineer
 claimed_at: 2026-06-18T00:43:09Z
+completed_at: 2026-06-18T00:47:18Z
 
 ---
 # F37-S01 — Schema + provisionamento + acesso
