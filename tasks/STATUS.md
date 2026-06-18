@@ -27,7 +27,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F35   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F36   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F37   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
-| F38   | 15     | 8   | 0   | 0   | 0   | 0   | 7   |
+| F38   | 16     | 9   | 0   | 0   | 0   | 0   | 7   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -331,6 +331,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F38-S13 | Portal do Desenvolvedor in-product (DS v2, render do OpenAPI)   | 🟢 available | high       | —          |
 | F38-S14 | QA da fase (integration + e2e happy paths)                      | 🟢 available | high       | —          |
 | F38-S15 | Auditoria de segurança da fase (RLS, gates, XSS MD, scopes)     | 🟢 available | critical   | —          |
+| F38-S16 | Fix 500 no dedup de conversões (ON CONFLICT DO NOTHING)         | 🟢 available | high       | —          |
 
 ## Fase 4 — Campaigns
 
