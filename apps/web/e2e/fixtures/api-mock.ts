@@ -60,6 +60,8 @@ export interface MockState {
   deals: MockDeal[];
   /** Conta envios outbound do atendente para encadear a resposta do agente. */
   agentRepliedFor: Set<string>;
+  /** Threads de suporte (F38) abertas durante o teste. */
+  supportThreads: { id: string; subject: string; status: string; priority: string; assignedTo: string | null; lastMessageAt: string; createdAt: string }[];
 }
 
 function freshState(): MockState {
@@ -69,6 +71,7 @@ function freshState(): MockState {
     messages: [{ ...INBOUND_MESSAGE }],
     deals: [{ ...DEAL }],
     agentRepliedFor: new Set<string>(),
+    supportThreads: [],
   };
 }
 
@@ -225,6 +228,71 @@ export async function installApiMocks(page: Page): Promise<MockState> {
       const deal = state.deals.find((d) => d.id === dealId);
       if (deal && stageId) deal.stageId = stageId;
       return json(route, { deal: deal ?? { id: dealId, stageId } });
+    }
+
+    // ─── F38: Central de Ajuda (leitor) ────────────────────────────────────
+    if (path === '/api/help/categories' && method === 'GET') {
+      return json(route, {
+        categories: [
+          { id: 'cat_e2e_1', slug: 'primeiros-passos', title: 'Primeiros passos', description: 'Comece por aqui.', icon: null, order: 0, publishedCount: 1 },
+        ],
+      });
+    }
+    if (path === '/api/help/articles' && method === 'GET') {
+      return json(route, {
+        articles: [
+          { id: 'art_e2e_1', categoryId: 'cat_e2e_1', slug: 'como-criar-um-agente', title: 'Como criar um agente', excerpt: 'Em poucos passos.', status: 'published', order: 0, anchorKey: 'agents.list' },
+        ],
+      });
+    }
+    if (path.startsWith('/api/help/articles/by-anchor/') && method === 'GET') {
+      return json(route, {
+        article: { id: 'art_e2e_1', categoryId: 'cat_e2e_1', slug: 'como-criar-um-agente', title: 'Como criar um agente', excerpt: 'Em poucos passos.', status: 'published', order: 0, anchorKey: 'agents.list', bodyMd: '## Passo a passo\n\nEscolha um **template**.', publishedAt: null, updatedAt: null },
+      });
+    }
+    if (path.startsWith('/api/help/articles/') && method === 'GET') {
+      return json(route, {
+        article: { id: 'art_e2e_1', categoryId: 'cat_e2e_1', slug: 'como-criar-um-agente', title: 'Como criar um agente', excerpt: 'Em poucos passos.', status: 'published', order: 0, anchorKey: 'agents.list', bodyMd: '## Passo a passo\n\nEscolha um **template**.', publishedAt: null, updatedAt: null },
+      });
+    }
+    if (path.endsWith('/feedback') && path.startsWith('/api/help/') && method === 'POST') {
+      return json(route, { feedback: { ok: true } });
+    }
+
+    // ─── F38: Suporte (membro) ─────────────────────────────────────────────
+    if (path === '/api/support/threads' && method === 'GET') {
+      return json(route, { threads: state.supportThreads });
+    }
+    if (path === '/api/support/threads' && method === 'POST') {
+      const body = parseBody(request) as { subject?: string; priority?: string; message?: string };
+      const now = new Date().toISOString();
+      const thread = { id: 'sup_e2e_' + (state.supportThreads.length + 1), subject: body.subject ?? 'Sem assunto', status: 'open', priority: body.priority ?? 'normal', assignedTo: null, lastMessageAt: now, createdAt: now };
+      state.supportThreads.unshift(thread);
+      return json(route, { thread, message: { id: 'msg_e2e_1', threadId: thread.id, senderType: 'member', senderId: 'mem_e2e', body: body.message ?? '', createdAt: now } }, 201);
+    }
+    if (path.startsWith('/api/support/threads/') && path.endsWith('/messages') && method === 'POST') {
+      return json(route, { message: { id: 'msg_e2e_2', threadId: 'sup_e2e_1', senderType: 'member', senderId: 'mem_e2e', body: (parseBody(request) as { body?: string }).body ?? '', createdAt: new Date().toISOString() } }, 201);
+    }
+    if (path.startsWith('/api/support/threads/') && path.endsWith('/resolve') && method === 'POST') {
+      const t = state.supportThreads[0];
+      if (t) t.status = 'resolved';
+      return json(route, { thread: t ?? { id: 'sup_e2e_1', status: 'resolved' } });
+    }
+    if (path.startsWith('/api/support/threads/') && method === 'GET') {
+      const t = state.supportThreads[0] ?? { id: 'sup_e2e_1', subject: 'Ajuda', status: 'open', priority: 'normal', assignedTo: null, lastMessageAt: new Date().toISOString(), createdAt: new Date().toISOString() };
+      return json(route, { thread: t, messages: [{ id: 'msg_e2e_1', threadId: t.id, senderType: 'member', senderId: 'mem_e2e', body: 'Preciso de ajuda', createdAt: new Date().toISOString() }] });
+    }
+
+    // ─── F38: Portal do Desenvolvedor (OpenAPI live) ───────────────────────
+    if (path === '/api/v1/openapi.json' && method === 'GET') {
+      return json(route, {
+        openapi: '3.1.0',
+        info: { title: 'Leadium API', version: '1.0.0', description: 'API publica v1 da Leadium.' },
+        paths: {
+          '/api/v1/contacts': { get: { summary: 'Lista contatos', description: 'Requer o scope `contacts:read`.' } },
+          '/api/v1/deals': { get: { summary: 'Lista deals', description: 'Requer o scope `deals:read`.' } },
+        },
+      });
     }
 
     // Fallback: qualquer GET não modelado devolve um envelope vazio plausível,
