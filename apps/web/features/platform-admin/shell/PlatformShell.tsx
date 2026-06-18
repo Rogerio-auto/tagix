@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ArrowLeft, Command } from 'lucide-react';
 import type { PlatformAdminMe } from '../lib';
 import { PlatformNav } from './PlatformNav';
+import { PlatformMobileNav } from './PlatformMobileNav';
 
 /**
  * Chrome do painel de super-admin (F25-S06). Visualmente DISTINTO do workspace
@@ -44,8 +45,9 @@ export function PlatformShell({
 
       <div className="flex min-w-0 flex-1 flex-col lg:pl-64">
         {/* Faixa de plataforma: reforça visualmente o modo admin. */}
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-warn/30 bg-surface/80 px-4 backdrop-blur lg:px-8">
-          <div className="flex items-center gap-2">
+        <header className="pt-safe pl-safe pr-safe sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-warn/30 bg-surface/80 px-4 backdrop-blur lg:px-8">
+          <div className="flex min-w-0 items-center gap-2">
+            <PlatformMobileNav />
             <span className="rounded-pill bg-warn/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-warn">
               Plataforma
             </span>
@@ -58,7 +60,11 @@ export function PlatformShell({
           </span>
         </header>
 
-        <main id="main-content" tabIndex={-1} className="flex-1 px-4 py-6 outline-none lg:px-8">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="pb-safe pl-safe pr-safe flex-1 px-4 py-6 outline-none lg:px-8"
+        >
           {children}
         </main>
       </div>
