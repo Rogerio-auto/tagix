@@ -26,6 +26,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F34   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F35   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F36   | 14     | 6   | 1   | 0   | 0   | 0   | 7   |
+| F37   | 5     | 1   | 4   | 0   | 0   | 0   | 0   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -299,6 +300,16 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F36-S12 | Auth (login/reset) — polish mobile                                  | 🟢 available | low        | —          |
 | F36-S13 | Platform admin legível/operável no mobile                           | 🟢 available | low        | —          |
 | F36-S14 | QA mobile + audit de UX + performance (fechamento)                  | ⏸️ blocked  | medium     | —          |
+
+## Fase 37
+
+| ID      | Titulo                                                                         | Status      | Prioridade | Depende de |
+| ------- | ------------------------------------------------------------------------------ | ----------- | ---------- | ---------- |
+| F37-S01 | Calendar 2.0 — schema recorrência + provisionamento + helper de acesso         | 🟢 available | critical   | —          |
+| F37-S02 | Calendar 2.0 — API (visibilidade + recorrência + provisionamento)              | ⏸️ blocked  | critical   | —          |
+| F37-S03 | Calendar 2.0 — desktop (trilha multi-calendário + agendamento rico + form 2.0) | ⏸️ blocked  | high       | —          |
+| F37-S04 | Calendar 2.0 — mobile (trilha como sheet + cor por calendário)                 | ⏸️ blocked  | medium     | —          |
+| F37-S05 | Calendar 2.0 — QA + audit (regressão do vazamento) + docs                      | ⏸️ blocked  | medium     | —          |
 
 ## Fase 4 — Campaigns
 
