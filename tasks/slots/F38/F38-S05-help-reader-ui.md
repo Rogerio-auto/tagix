@@ -2,7 +2,7 @@
 id: F38-S05
 title: UI leitor /help + entrada de nav "Ajuda"
 phase: F38
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on:
