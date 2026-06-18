@@ -2,7 +2,7 @@
 id: F38-S01
 title: Schema Help + Support (5 tabelas) + RLS + repos + seed
 phase: F38
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: []
