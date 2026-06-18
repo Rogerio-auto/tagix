@@ -2,7 +2,7 @@
 id: F37-S03
 title: Calendar 2.0 — desktop (trilha multi-calendário + agendamento rico + form 2.0)
 phase: F37
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on:
@@ -16,6 +16,7 @@ source_docs:
   - docs/MOBILE_UX.md
 agent_id: frontend-engineer
 claimed_at: 2026-06-18T01:02:07Z
+completed_at: 2026-06-18T01:13:28Z
 
 ---
 # F37-S03 — Calendar 2.0 desktop
