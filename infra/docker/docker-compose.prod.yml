@@ -269,11 +269,12 @@ networks:
   # Ingress do Traefik (criada pelo stack do Traefik; aqui é externa).
   network_public:
     external: true
-  # Rede interna isolada da Leadium. `internal: true` = sem gateway p/ fora.
+  # Rede interna da Leadium (isolada das outras stacks). NÃO publica portas no
+  # host — Postgres/Redis/RabbitMQ não são acessíveis de fora. Tem egress para a
+  # internet (workers/agent-runtime precisam: Meta, OpenRouter, Supabase).
   # `attachable: true` permite o container efêmero de migration se conectar.
   leadium_internal:
     driver: overlay
-    internal: true
     attachable: true
 
 volumes:

@@ -6,7 +6,11 @@
 FROM node:22-slim AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH="/pnpm:$PATH"
-RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
+# Cache do corepack em local compartilhado (lido também pelo usuário `node` em
+# runtime) — evita o corepack tentar baixar o pnpm no boot do container.
+ENV COREPACK_HOME=/usr/local/corepack
+RUN corepack enable && corepack prepare pnpm@11.5.2 --activate \
+    && chmod -R a+rX /usr/local/corepack
 WORKDIR /app
 
 # --- deps: instala o workspace inteiro (frozen). `tsx` é devDep e roda em
