@@ -4,12 +4,13 @@
  * Hub de Tenants (F26-S07) — lista buscavel/paginavel com plano, status, #membros e
  * custo-mes; clicar leva ao Workspace 360 (UX §3.1: selecionar antes de agir). Consome
  * F26-S02. DS v2 dark-first (tokens semanticos, zero hex); skeleton no loading (§3.6).
+ * Mobile (F36-S13): tabela→cards + filtros em sheet via `ResponsiveTable`.
  */
 import { useState } from 'react';
-import Link from 'next/link';
-import { Search } from 'lucide-react';
-import { Skeleton } from '@/shared/components/feedback';
-import { useTenants } from './queries';
+import { useRouter } from 'next/navigation';
+import { Building2, Search } from 'lucide-react';
+import { ResponsiveTable, type ResponsiveColumn } from '@/shared/components/ResponsiveTable';
+import { useTenants, type TenantListItem } from './queries';
 
 const PAGE_SIZE = 25;
 
@@ -41,11 +42,12 @@ function StatusPill({ status }: { status: string }) {
 }
 
 export function TenantsList() {
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(0);
 
-  const { data, isLoading } = useTenants({
+  const { data, isLoading, isError } = useTenants({
     search: search.trim() || undefined,
     status: status || undefined,
     limit: PAGE_SIZE,
@@ -54,6 +56,85 @@ export function TenantsList() {
 
   const total = data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const statusLabel = STATUS_OPTIONS.find((o) => o.value === status)?.label;
+
+  const columns: ResponsiveColumn<TenantListItem>[] = [
+    {
+      id: 'tenant',
+      header: 'Tenant',
+      card: 'primary',
+      cell: (t) => (
+        <span className="flex flex-col">
+          <span className="font-medium text-text-high">{t.name}</span>
+          <span className="text-xs text-text-low">{t.slug}</span>
+        </span>
+      ),
+    },
+    {
+      id: 'plan',
+      header: 'Plano',
+      className: 'text-text-mid',
+      cell: (t) => t.planName ?? '—',
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      card: 'badge',
+      cell: (t) => <StatusPill status={t.subscriptionStatus} />,
+    },
+    {
+      id: 'members',
+      header: 'Membros',
+      align: 'right',
+      className: 'text-right font-mono text-text-mid',
+      cell: (t) => `${t.memberCount} membro(s)`,
+    },
+    {
+      id: 'cost',
+      header: 'Custo (mês)',
+      align: 'right',
+      className: 'text-right font-mono text-text-mid',
+      cell: (t) => `$${t.monthCostUsd.toFixed(2)}`,
+    },
+  ];
+
+  const filters = (
+    <select
+      value={status}
+      onChange={(e) => {
+        setStatus(e.target.value);
+        setPage(0);
+      }}
+      aria-label="Filtrar por status"
+      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text-high focus:border-accent focus:outline-none"
+    >
+      {STATUS_OPTIONS.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+
+  const searchSlot = (
+    <div className="relative">
+      <Search
+        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-low"
+        aria-hidden
+      />
+      <input
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setPage(0);
+        }}
+        placeholder="Buscar por nome ou slug…"
+        aria-label="Buscar tenant"
+        className="w-full rounded-lg border border-border bg-surface-2 py-2 pl-9 pr-3 text-sm text-text-high placeholder:text-text-low focus:border-accent focus:outline-none"
+      />
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -64,108 +145,61 @@ export function TenantsList() {
         </p>
       </header>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-56">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-low" aria-hidden />
-          <input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(0);
-            }}
-            placeholder="Buscar por nome ou slug…"
-            className="w-full rounded-lg border border-border bg-surface-2 py-2 pl-9 pr-3 text-sm text-text-high placeholder:text-text-low focus:border-accent focus:outline-none"
-          />
-        </div>
-        <select
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(0);
-          }}
-          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text-high focus:border-accent focus:outline-none"
-        >
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-border">
-        <table className="w-full text-sm">
-          <thead className="bg-surface-2 text-left text-xs uppercase tracking-wide text-text-low">
-            <tr>
-              <th className="px-4 py-3 font-medium">Tenant</th>
-              <th className="px-4 py-3 font-medium">Plano</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium text-right">Membros</th>
-              <th className="px-4 py-3 font-medium text-right">Custo (mês)</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading ? (
-              Array.from({ length: 6 }).map((_, i) => (
-                <tr key={i}>
-                  <td className="px-4 py-3" colSpan={5}>
-                    <Skeleton className="h-5 w-full" />
-                  </td>
-                </tr>
-              ))
-            ) : data && data.tenants.length > 0 ? (
-              data.tenants.map((t) => (
-                <tr key={t.id} className="transition-colors hover:bg-surface-2">
-                  <td className="px-4 py-3">
-                    <Link href={`/platform/tenants/${t.id}`} className="flex flex-col">
-                      <span className="font-medium text-text-high hover:text-accent">{t.name}</span>
-                      <span className="text-xs text-text-low">{t.slug}</span>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-text-mid">{t.planName ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <StatusPill status={t.subscriptionStatus} />
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-text-mid">{t.memberCount}</td>
-                  <td className="px-4 py-3 text-right font-mono text-text-mid">
-                    ${t.monthCostUsd.toFixed(2)}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td className="px-4 py-8 text-center text-text-low" colSpan={5}>
-                  Nenhum tenant encontrado.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex items-center justify-between text-sm text-text-mid">
-        <span>
-          {total} tenant(s) · página {page + 1} de {pageCount}
-        </span>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={page === 0}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            className="rounded-lg border border-border px-3 py-1.5 text-text-high disabled:opacity-40"
-          >
-            Anterior
-          </button>
-          <button
-            type="button"
-            disabled={page + 1 >= pageCount}
-            onClick={() => setPage((p) => p + 1)}
-            className="rounded-lg border border-border px-3 py-1.5 text-text-high disabled:opacity-40"
-          >
-            Próxima
-          </button>
-        </div>
-      </div>
+      <ResponsiveTable
+        ariaLabel="Tenants"
+        rows={data?.tenants ?? []}
+        columns={columns}
+        getRowId={(t) => t.id}
+        onRowClick={(t) => router.push(`/platform/tenants/${t.id}`)}
+        rowLabel={(t) => `Abrir 360 de ${t.name}`}
+        searchSlot={searchSlot}
+        filters={filters}
+        filtersTitle="Filtrar tenants"
+        activeFilters={
+          status
+            ? [{ id: 'status', label: `Status: ${statusLabel}`, onClear: () => setStatus('') }]
+            : []
+        }
+        onClearFilters={() => setStatus('')}
+        isLoading={isLoading}
+        isError={isError}
+        empty={{
+          icon: Building2,
+          title: 'Nenhum tenant encontrado',
+          description: 'Ajuste a busca ou o filtro de status.',
+        }}
+        error={{
+          title: 'Não foi possível carregar os tenants',
+          whatToDo: 'Tente novamente em instantes.',
+        }}
+        footer={
+          total > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-text-mid">
+              <span>
+                {total} tenant(s) · página {page + 1} de {pageCount}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  className="touch-target rounded-lg border border-border px-3 py-1.5 text-text-high disabled:opacity-40"
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  disabled={page + 1 >= pageCount}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="touch-target rounded-lg border border-border px-3 py-1.5 text-text-high disabled:opacity-40"
+                >
+                  Próxima
+                </button>
+              </div>
+            </div>
+          ) : undefined
+        }
+      />
     </div>
   );
 }
