@@ -2,7 +2,7 @@
 id: F37-S04
 title: Calendar 2.0 — mobile (trilha como sheet + cor por calendário)
 phase: F37
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on:
