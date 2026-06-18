@@ -32,4 +32,30 @@ export * from './types/inbox';
 // --- Eventos Socket.io Server→Client (LIVECHAT.md §6, tipos puros) ---
 export * from './socket-events';
 
+// --- Central de Ajuda (F38 — SUPPORT.md §1). Exports explícitos (sem `export *`). ---
+export {
+  HELP_ARTICLE_STATUSES,
+  helpCategoryInputSchema,
+  helpCategoryPatchSchema,
+  helpArticleInputSchema,
+  helpArticlePatchSchema,
+  helpReorderSchema,
+  helpFeedbackSchema,
+  helpArticlesQuerySchema,
+} from './help';
+export type {
+  HelpArticleStatus,
+  HelpCategoryInput,
+  HelpCategoryPatch,
+  HelpArticleInput,
+  HelpArticlePatch,
+  HelpReorderInput,
+  HelpFeedbackInput,
+  HelpArticlesQuery,
+  HelpCategoryDTO,
+  HelpCategoryWithCountDTO,
+  HelpArticleSummaryDTO,
+  HelpArticleDTO,
+} from './help';
+
 export const SHARED_PKG = '@hm/shared' as const;
