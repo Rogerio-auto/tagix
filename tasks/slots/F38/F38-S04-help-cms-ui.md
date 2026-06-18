@@ -2,7 +2,7 @@
 id: F38-S04
 title: UI CMS Help no (platform) — lista + editor MD + publish
 phase: F38
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on:
