@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Bot, Plus } from 'lucide-react';
 import { can } from '@hm/shared';
-import { Button, Card, useToast } from '@hm/ui';
+import { AnchoredHelpHint, Button, Card, useToast } from '@hm/ui';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/components/feedback';
 import { HelpPanel } from '@/shared/components/help';
 import { PageHeader } from '@/shared/components/layout/PageHeader';
@@ -72,9 +72,12 @@ export function AgentsList() {
         title="Agentes"
         actions={createButton}
         helpSlot={
-          <HelpPanel title="Agentes">
-            <AgentsHelp />
-          </HelpPanel>
+          <span className="flex items-center gap-1">
+            <HelpPanel title="Agentes">
+              <AgentsHelp />
+            </HelpPanel>
+            <AnchoredHelpHint anchorKey="agents.list" />
+          </span>
         }
       />
 

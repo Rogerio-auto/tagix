@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Megaphone, Plus } from 'lucide-react';
-import { Button, useToast } from '@hm/ui';
+import { AnchoredHelpHint, Button, useToast } from '@hm/ui';
 import {
   ResponsiveTable,
   type ActiveFilterChip,
@@ -191,7 +191,10 @@ export function CampaignsPage(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-4 p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-head text-lg font-semibold text-text">Campanhas</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="font-head text-lg font-semibold text-text">Campanhas</h1>
+          <AnchoredHelpHint anchorKey="campaigns.list" />
+        </div>
         <Link href="/campaigns/new">
           <Button variant="primary" size="sm">
             <Plus className="size-4" />

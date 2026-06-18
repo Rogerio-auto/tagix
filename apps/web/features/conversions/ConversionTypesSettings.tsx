@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { Button, Card, CardBody, Input, useToast } from '@hm/ui';
+import { AnchoredHelpHint, Button, Card, CardBody, Input, useToast } from '@hm/ui';
 import { useConversionTypes, useCreateConversionType, useDeleteConversionType } from './queries';
 
 function slugify(label: string): string {
@@ -48,7 +48,10 @@ export function ConversionTypesSettings(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-4 p-6">
-      <h1 className="text-lg font-semibold text-text">Tipos de conversão</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold text-text">Tipos de conversão</h1>
+        <AnchoredHelpHint anchorKey="conversions.types" />
+      </div>
 
       <Card elevation={1}>
         <CardBody className="flex flex-col gap-3">
