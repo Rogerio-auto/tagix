@@ -2,7 +2,7 @@
 id: F38-S14
 title: QA da fase (integration + e2e happy paths)
 phase: F38
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on:
@@ -17,6 +17,7 @@ source_docs:
   - docs/features/SUPPORT.md
 agent_id: qa-engineer
 claimed_at: 2026-06-18T17:53:04Z
+completed_at: 2026-06-18T17:53:14Z
 
 ---
 # F38-S14 — QA da fase
