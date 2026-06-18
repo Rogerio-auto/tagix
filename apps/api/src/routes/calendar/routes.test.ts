@@ -423,6 +423,22 @@ describe('overlay calendarIds', () => {
     expect(res.status).toBe(200);
     expect(res.body.events).toEqual([]); // pediu o inacessível -> interseção vazia
   });
+
+  it('GET /api/events/:id de calendário INACESSÍVEL -> 404 (não vaza o detalhe)', async () => {
+    accessibleIds = [CAL_PERSONAL_ME, CAL_WORKSPACE];
+    ALL_EVENTS = [
+      evt({
+        id: EVT_OTHER,
+        calendarId: CAL_PERSONAL_OTHER,
+        startAt: new Date('2026-02-10T12:00:00Z'),
+        endAt: new Date('2026-02-10T13:00:00Z'),
+      }),
+    ];
+    const res = await request(makeApp())
+      .get(`/api/events/${EVT_OTHER}`)
+      .set('x-test-auth', '1');
+    expect(res.status).toBe(404); // detalhe escopado por accessibleCalendarIds
+  });
 });
 
 // ─── 5. Expansão de recorrência na janela ───────────────────────────────────────
