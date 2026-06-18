@@ -2,7 +2,7 @@
 id: F38-S02
 title: API CMS Help Center (CRUD + publish), platform-admin
 phase: F38
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on:
