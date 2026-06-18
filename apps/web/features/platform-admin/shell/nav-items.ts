@@ -14,7 +14,9 @@ export interface PlatformNavItem {
     | 'plans'
     | 'subscriptions'
     | 'playground'
-    | 'impersonation';
+    | 'impersonation'
+    | 'help'
+    | 'support';
   /** Descrição curta para o help inline `?` (UX §3.3), sobretudo em Secrets. */
   readonly help: string;
   readonly sensitive?: boolean;
@@ -76,5 +78,11 @@ export const PLATFORM_NAV: readonly PlatformNavItem[] = [
     icon: 'impersonation',
     help: 'View-as read-only: veja o produto pelos olhos do tenant. Time-boxed e auditado (LGPD).',
     sensitive: true,
+  },
+  {
+    href: '/platform/help',
+    label: 'Ajuda',
+    icon: 'help',
+    help: 'CMS da Central de Ajuda do Leadium — artigos publicaveis sem deploy, lidos por todos os workspaces.',
   },
 ];

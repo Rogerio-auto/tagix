@@ -22,6 +22,10 @@ export type { ToastOptions, ToastVariant, ToastPosition } from './Toast/Toast';
 export { HelpHint, HelpPanel } from './HelpHint/HelpHint';
 export type { HelpHintProps, HelpContent, HelpLink } from './HelpHint/HelpHint';
 
+export { Markdown } from './Markdown/Markdown';
+export type { MarkdownProps } from './Markdown/Markdown';
+export { sanitizeUrl } from './Markdown/sanitize';
+
 export { cn } from './lib/cn';
 
 /** Aliases de compatibilidade (variante/size do Button são os contratos base). */
