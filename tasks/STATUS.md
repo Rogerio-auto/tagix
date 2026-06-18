@@ -25,7 +25,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F33   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F34   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F35   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
-| F36   | 14     | 0   | 1   | 0   | 0   | 1   | 12   |
+| F36   | 14     | 1   | 0   | 0   | 0   | 0   | 13   |
 | F37   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
@@ -284,22 +284,22 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 36
 
-| ID      | Titulo                                                              | Status     | Prioridade | Depende de |
-| ------- | ------------------------------------------------------------------- | ---------- | ---------- | ---------- |
-| F36-S01 | Primitivos responsivos — Sheet, useBreakpoint, safe-area, MOBILE_UX | ✅ done     | critical   | —          |
-| F36-S02 | Casca mobile (bottom nav + drawer) + PWA instalável                 | ✅ done     | critical   | —          |
-| F36-S03 | Inbox/cockpit responsivo — pilha de views + sheets                  | ✅ done     | high       | —          |
-| F36-S04 | Pipeline/kanban responsivo — seletor de estágio + lista             | ✅ done     | high       | —          |
-| F36-S05 | Padrão Tabela→Cards + filtros em sheet (primitivo + contatos)       | ✅ done     | high       | —          |
-| F36-S06 | Dashboard responsivo — grid→coluna + charts responsivos             | ✅ done     | medium     | —          |
-| F36-S07 | Calendário responsivo — agenda/dia no mobile                        | ✅ done     | medium     | —          |
-| F36-S08 | Agentes responsivos — lista + detalhe com abas                      | ✅ done     | medium     | —          |
-| F36-S09 | Campanhas responsivas — lista + wizard + monitoring                 | ✅ done     | medium     | —          |
-| F36-S10 | Settings + Knowledge + Conversões responsivos                       | ✅ done     | medium     | —          |
-| F36-S11 | Flow Builder mobile — inspecionar/operar (read-first)               | ✅ done     | medium     | —          |
-| F36-S12 | Auth (login/reset) — polish mobile                                  | ✅ done     | low        | —          |
-| F36-S13 | Platform admin legível/operável no mobile                           | 🟣 review   | low        | —          |
-| F36-S14 | QA mobile + audit de UX + performance (fechamento)                  | ⏸️ blocked | medium     | —          |
+| ID      | Titulo                                                              | Status      | Prioridade | Depende de |
+| ------- | ------------------------------------------------------------------- | ----------- | ---------- | ---------- |
+| F36-S01 | Primitivos responsivos — Sheet, useBreakpoint, safe-area, MOBILE_UX | ✅ done      | critical   | —          |
+| F36-S02 | Casca mobile (bottom nav + drawer) + PWA instalável                 | ✅ done      | critical   | —          |
+| F36-S03 | Inbox/cockpit responsivo — pilha de views + sheets                  | ✅ done      | high       | —          |
+| F36-S04 | Pipeline/kanban responsivo — seletor de estágio + lista             | ✅ done      | high       | —          |
+| F36-S05 | Padrão Tabela→Cards + filtros em sheet (primitivo + contatos)       | ✅ done      | high       | —          |
+| F36-S06 | Dashboard responsivo — grid→coluna + charts responsivos             | ✅ done      | medium     | —          |
+| F36-S07 | Calendário responsivo — agenda/dia no mobile                        | ✅ done      | medium     | —          |
+| F36-S08 | Agentes responsivos — lista + detalhe com abas                      | ✅ done      | medium     | —          |
+| F36-S09 | Campanhas responsivas — lista + wizard + monitoring                 | ✅ done      | medium     | —          |
+| F36-S10 | Settings + Knowledge + Conversões responsivos                       | ✅ done      | medium     | —          |
+| F36-S11 | Flow Builder mobile — inspecionar/operar (read-first)               | ✅ done      | medium     | —          |
+| F36-S12 | Auth (login/reset) — polish mobile                                  | ✅ done      | low        | —          |
+| F36-S13 | Platform admin legível/operável no mobile                           | ✅ done      | low        | —          |
+| F36-S14 | QA mobile + audit de UX + performance (fechamento)                  | 🟢 available | medium     | —          |
 
 ## Fase 37
 
