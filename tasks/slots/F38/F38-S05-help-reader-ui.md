@@ -2,7 +2,7 @@
 id: F38-S05
 title: UI leitor /help + entrada de nav "Ajuda"
 phase: F38
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on:
@@ -13,6 +13,7 @@ source_docs:
   - docs/features/SUPPORT.md
 agent_id: frontend-engineer
 claimed_at: 2026-06-18T17:14:04Z
+completed_at: 2026-06-18T17:17:41Z
 
 ---
 # F38-S05 — UI leitor /help
