@@ -37,3 +37,18 @@ export function usePublishFlow(id: string) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: editorKeys.detail(id) }),
   });
 }
+
+/**
+ * Ações de ciclo de vida do flow no editor (F36-S11 — rodapé mobile): pausar (unpublish) e
+ * arquivar. Espelham os endpoints de F4-S08. Invalida o detalhe e a lista após a mutação.
+ */
+export function useFlowLifecycleAction(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (action: 'unpublish' | 'archive') => flowEditorService.lifecycle(id, action),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: editorKeys.detail(id) });
+      void qc.invalidateQueries({ queryKey: ['flows', 'list'] });
+    },
+  });
+}

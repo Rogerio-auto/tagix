@@ -27,11 +27,21 @@ function nodeAriaLabel(node: Node<Record<string, unknown>>): string {
   return `${typeLabel}${name}. Enter ou setas selecionam; o painel lateral edita.`;
 }
 
+interface CanvasInnerProps {
+  /**
+   * Modo somente-leitura (F36-S11 — mobile read-first). Mantém pan/zoom e seleção
+   * (tocar node seleciona + abre o inspector como full-sheet), mas desabilita a
+   * edição estrutural do grafo: sem arrastar nodes, sem conectar edges, sem DnD do
+   * palette e sem Delete por teclado. A edição estrutural fica melhor em `md+`.
+   */
+  readOnly?: boolean;
+}
+
 /**
  * Canvas ReactFlow (FLOW_BUILDER secao 9.1/9.2). DnD do palette cria node no ponto do drop;
  * edges conectam handles; selecao alimenta o inspector. O store (zustand) e a fonte de verdade.
  */
-function CanvasInner() {
+function CanvasInner({ readOnly = false }: CanvasInnerProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const instanceRef = useRef<ReactFlowInstance | null>(null);
   const { screenToFlowPosition } = useReactFlow();
@@ -101,26 +111,33 @@ function CanvasInner() {
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
+        onConnect={readOnly ? undefined : onConnect}
         onInit={(inst) => {
           instanceRef.current = inst;
         }}
         onNodeClick={(_, node) => select(node.id)}
         onPaneClick={() => select(null)}
-        // Delete/Backspace remove selected node (trigger guard via onBeforeDelete)
-        deleteKeyCode={['Delete', 'Backspace']}
+        // Delete/Backspace remove selected node (trigger guard via onBeforeDelete).
+        // Em read-only (mobile) não há atalho de exclusão de grafo.
+        deleteKeyCode={readOnly ? null : ['Delete', 'Backspace']}
         onBeforeDelete={onBeforeDelete}
         onNodesDelete={onNodesDelete}
-        // a11y: nodes focáveis por Tab; setas reposicionam o node selecionado
+        // a11y: nodes focáveis por Tab; setas reposicionam o node selecionado (md+).
         nodesFocusable
-        nodesDraggable
+        // Mobile read-first: pan/zoom + seleção por toque, sem edição estrutural.
+        nodesDraggable={!readOnly}
+        nodesConnectable={!readOnly}
         elementsSelectable
         onSelectionChange={({ nodes: sel }) => select(sel[0]?.id ?? null)}
-        onDrop={onDrop}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
-        }}
+        onDrop={readOnly ? undefined : onDrop}
+        onDragOver={
+          readOnly
+            ? undefined
+            : (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+              }
+        }
         aria-label="Canvas do flow. Use Tab para focar os nós, setas para movê-los e Enter para selecionar e abrir o painel de edição."
         fitView
         proOptions={{ hideAttribution: true }}
@@ -132,6 +149,6 @@ function CanvasInner() {
   );
 }
 
-export function FlowCanvas() {
-  return <CanvasInner />;
+export function FlowCanvas({ readOnly = false }: CanvasInnerProps = {}) {
+  return <CanvasInner readOnly={readOnly} />;
 }

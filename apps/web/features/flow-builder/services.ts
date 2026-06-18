@@ -51,6 +51,8 @@ export const flowEditorService = {
     patch: Partial<Pick<FlowDetail, 'name' | 'nodes' | 'edges' | 'triggerType' | 'triggerConfig'>>,
   ) => api.put<{ flow: FlowDetail }>(`/api/flows/${id}`, patch),
   publish: (id: string) => api.post<{ flow: FlowDetail }>(`/api/flows/${id}/publish`),
+  lifecycle: (id: string, action: 'unpublish' | 'archive') =>
+    api.post<{ flow: FlowDetail }>(`/api/flows/${id}/${action}`),
   executions: (id: string) =>
     api.get<{ executions: FlowExecutionSummary[] }>(`/api/flows/${id}/executions`),
   cancelExecution: (executionId: string) =>
