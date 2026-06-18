@@ -4,6 +4,8 @@ import { members, workspaces } from '../schema';
 
 // Repo de roteamento agente↔departamento (F34-S01).
 export * from './agent_departments';
+// Repo do Calendar 2.0 (F37-S01): provisionamento + acesso.
+export * from './calendar';
 
 export const workspacesRepo = {
   async findById(id: string) {
