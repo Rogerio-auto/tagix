@@ -2,7 +2,7 @@
 id: F38-S15
 title: Auditoria de segurança da fase (RLS, gates, XSS MD, scopes)
 phase: F38
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on:
@@ -17,6 +17,7 @@ source_docs:
   - docs/features/SUPPORT.md
 agent_id: security-auditor
 claimed_at: 2026-06-18T17:46:07Z
+completed_at: 2026-06-18T17:47:31Z
 
 ---
 # F38-S15 — Auditoria de segurança da fase
