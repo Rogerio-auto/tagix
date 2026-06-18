@@ -312,6 +312,16 @@ export * from './evaluations';
 // (índice parcial único). Importado DEPOIS de agents e org (referencia ambos).
 export * from './agent_departments';
 
+// --- Central de Ajuda / Support chat (F38-S01: SUPPORT.md §1/§2) ---
+// help_categories/help_articles: GLOBAIS (sem workspace_id → FORA do RLS de
+// tenant, como platform_secrets; escrita gated por requirePlatformAdmin).
+// help_article_feedback: WORKSPACE-SCOPED → RLS direto.
+export * from './help';
+// support_threads: WORKSPACE-SCOPED → RLS direto (platform-admin bypassa).
+// support_messages: sem workspace_id próprio → isolada via subquery em
+// support_threads (espelha flow_versions / event_participants).
+export * from './support';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -397,4 +407,9 @@ export const RLS_TABLES = [
   'objections',
   // Agent ↔ Department routing (F34). Join N:N com workspace_id denormalizado → RLS direto.
   'agent_departments',
+  // Central de Ajuda / Support (F38). help_article_feedback + support_threads têm
+  // workspace_id próprio → RLS direto. support_messages é isolada via subquery em
+  // support_threads (espelha flow_versions) → NÃO entra nesta lista.
+  'help_article_feedback',
+  'support_threads',
 ] as const;

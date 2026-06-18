@@ -6,6 +6,10 @@ import { members, workspaces } from '../schema';
 export * from './agent_departments';
 // Repo do Calendar 2.0 (F37-S01): provisionamento + acesso.
 export * from './calendar';
+// Central de Ajuda (F38-S01): catalogo global + feedback workspace-scoped.
+export * from './help';
+// Chat de Suporte (F38-S01): threads/mensagens (membro + plataforma).
+export * from './support';
 
 export const workspacesRepo = {
   async findById(id: string) {

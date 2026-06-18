@@ -11,6 +11,7 @@ import { seedCalendarTools } from './seed/calendar_tools';
 import { seedLlmModels } from './seed/llm_models';
 import { seedNicheAgentTemplates } from './seed/agent_templates_niche';
 import { instantiatePipelineTemplate } from './seed/pipeline_templates';
+import { seedHelpCenter } from './seeds/help';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.resolve(here, '../../../.env') });
@@ -77,6 +78,9 @@ await seedCalendarTools(db);
 // Pipelines de nicho no workspace dev (idempotente).
 await instantiatePipelineTemplate(db, workspace.id, 'real_estate');
 await instantiatePipelineTemplate(db, workspace.id, 'clinic');
+
+// Central de Ajuda (F38): categorias + artigos de exemplo (platform-level).
+await seedHelpCenter(db);
 
 await sql.end();
 console.log(`[db] seed ok — workspace=${workspace.slug} owner=${ownerEmail} planos=${PLAN_SEED.length}`);

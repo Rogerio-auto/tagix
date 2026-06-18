@@ -41,5 +41,24 @@ export {
   type Calendar,
   type CalendarAccessContext,
 } from './repos/calendar';
+// Central de Ajuda (F38-S01).
+export {
+  helpRepo,
+  type HelpCategory,
+  type HelpArticle,
+  type HelpArticleFeedback,
+  type HelpArticleSummary,
+} from './repos/help';
+// Chat de Suporte (F38-S01).
+export {
+  supportRepo,
+  type SupportThread,
+  type SupportMessage,
+  type SupportThreadStatus,
+  type SupportThreadPriority,
+  type SupportSenderType,
+  type PlatformThreadFilters,
+} from './repos/support';
+export type { SupportAttachment } from './schema/support';
 
 export const DB_PKG = '@hm/db' as const;
