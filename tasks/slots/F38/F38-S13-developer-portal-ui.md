@@ -2,7 +2,7 @@
 id: F38-S13
 title: Portal do Desenvolvedor in-product (DS v2, render do OpenAPI)
 phase: F38
-status: available
+status: review
 priority: high
 estimated_size: L
 depends_on:
@@ -11,6 +11,9 @@ blocks: []
 source_docs:
   - docs/features/SUPPORT.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-18T17:34:04Z
+completed_at: 2026-06-18T17:41:36Z
+
 ---
 # F38-S13 — Portal do Desenvolvedor
 
