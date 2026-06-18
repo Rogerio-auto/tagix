@@ -1,23 +1,28 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, MapPin } from 'lucide-react';
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  ListFilter,
+  MapPin,
+  Repeat,
+} from 'lucide-react';
 import { Button } from '@hm/ui';
+import type { Role } from '@hm/shared';
+import { useAuthStore } from '@/shared/stores/auth.store';
 import { EmptyState, ErrorState } from '@/shared/components/feedback';
-import { useEvents } from './queries';
-import type { EventRow, EventType } from './types';
-
-/** Cores por tipo via tokens DS v2 — zero hex em JSX (espelha CalendarPage). */
-const TYPE_COLOR: Record<EventType, string> = {
-  meeting: 'var(--brand)',
-  demo: 'var(--info)',
-  follow_up: 'var(--warn)',
-  task: 'var(--brand-soft)',
-  reminder: 'var(--success)',
-  other: 'var(--text-low)',
-};
+import { MobileCalendarRail } from './MobileCalendarRail';
+import { useCalendarMembers, useCalendars, useCalendarSelection, useEvents } from './queries';
+import { isOccurrence } from './types';
+import type { EventRow } from './types';
 
 const TZ = 'America/Sao_Paulo';
+
+/** OWNER/ADMIN também enxergam o pessoal dos colegas (grupo "Pessoas" na trilha). */
+const ADMIN_ROLES: ReadonlySet<Role> = new Set<Role>(['OWNER', 'ADMIN']);
 
 /** Início do dia local (00:00) em ISO, no tz do browser. */
 function startOfDay(d: Date): Date {
@@ -72,7 +77,11 @@ function formatTime(iso: string): string {
 }
 
 export interface MobileAgendaProps {
-  readonly calendarId: string;
+  /**
+   * @deprecated mantido por compat com o call site da `CalendarPage`. A agenda mobile passou
+   * a respeitar a seleção multi-calendário (S04), lendo o MESMO estado persistido do desktop.
+   */
+  readonly calendarId?: string;
   readonly canEdit: boolean;
   /** Toque num evento → abre detalhe em sheet. */
   readonly onOpenEvent: (eventId: string) => void;
@@ -82,18 +91,42 @@ export interface MobileAgendaProps {
 
 /**
  * Visão agenda/dia para mobile (MOBILE_UX §2 "Calendário", §3.9 timeline vertical).
- * Dia único navegável (anterior/próximo + seletor de data) com timeline vertical
- * de eventos — prioriza escaneabilidade sobre a grade de mês (ruim em tela estreita).
+ * Dia único navegável (anterior/próximo + seletor de data) com timeline vertical de eventos.
  *
- * Reusa `/api/events` com filtro `from`/`to` do dia selecionado; nenhuma mudança
- * de API. Datas/horas no tz do app (pt-BR / America/Sao_Paulo).
+ * Calendar 2.0 (S04): respeita a seleção multi-calendário (overlay) — o MESMO estado
+ * persistido por membro que o desktop usa, lido aqui via `useCalendarSelection` (continuidade
+ * desktop↔mobile). Cada evento é colorido pelo seu calendário (`calendars.color`). A trilha
+ * de calendários é um `Sheet` (UX §2.3), aberto pelo botão "Calendários".
+ *
+ * Recorrências chegam expandidas pela API (ocorrências com id sintético `evt:<id>:<startISO>`)
+ * e aparecem normalmente na timeline. Datas/horas no tz do app (pt-BR / America/Sao_Paulo).
  */
 export function MobileAgenda(props: MobileAgendaProps): React.JSX.Element {
+  const auth = useAuthStore((st) => st.auth);
+  const myMemberId = auth?.memberId;
+  const canSeeOthers = auth?.role ? ADMIN_ROLES.has(auth.role) : false;
+
+  const calendarsQuery = useCalendars();
+  const calendars = useMemo(() => calendarsQuery.data?.calendars ?? [], [calendarsQuery.data]);
+  const membersQuery = useCalendarMembers();
+  const members = useMemo(() => membersQuery.data?.members ?? [], [membersQuery.data]);
+
+  // Seleção multi-calendário — MESMA fonte (localStorage por membro) do desktop (S03).
+  const availableIds = useMemo(() => calendars.map((c) => c.id), [calendars]);
+  const selection = useCalendarSelection(availableIds, myMemberId);
+
+  // Mapa id→cor para colorir cada evento pelo seu calendário (DATA, não literal).
+  const colorByCalendar = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of calendars) m.set(c.id, c.color);
+    return m;
+  }, [calendars]);
+
   const [day, setDay] = useState<Date>(() => startOfDay(new Date()));
+  const [railOpen, setRailOpen] = useState(false);
 
   // Janela do dia selecionado [00:00, 23:59:59.999], em ISO. A API filtra por
-  // `events.startAt` (gte from / lte to) — `to` inclusivo no fim do dia evita
-  // que um evento das 00:00 do dia seguinte vaze para esta lista.
+  // `events.startAt` e expande recorrências na janela.
   const range = useMemo(() => {
     const from = startOfDay(day);
     const to = new Date(addDays(day, 1).getTime() - 1);
@@ -101,7 +134,7 @@ export function MobileAgenda(props: MobileAgendaProps): React.JSX.Element {
   }, [day]);
 
   const eventsQuery = useEvents({
-    ...(props.calendarId ? { calendarId: props.calendarId } : {}),
+    calendarIds: selection.selectedIds,
     from: range.from,
     to: range.to,
   });
@@ -116,6 +149,8 @@ export function MobileAgenda(props: MobileAgendaProps): React.JSX.Element {
 
   const today = startOfDay(new Date());
   const isToday = isSameDay(day, today);
+  const selectedCount = selection.selectedIds.length;
+  const noneSelected = selection.isHydrated && selectedCount === 0;
 
   function go(delta: number): void {
     setDay((d) => addDays(d, delta));
@@ -172,19 +207,48 @@ export function MobileAgenda(props: MobileAgendaProps): React.JSX.Element {
         </button>
       </div>
 
-      {!isToday && (
+      {/* Linha de controles: "Hoje" + abrir a trilha de calendários (sheet) */}
+      <div className="flex items-center gap-2">
+        {!isToday && (
+          <button
+            type="button"
+            onClick={() => setDay(today)}
+            className="rounded-pill border border-border bg-surface-2 px-3 py-1.5 text-xs font-medium text-text-mid outline-none transition-colors hover:text-text focus-visible:shadow-glow-md"
+          >
+            Hoje
+          </button>
+        )}
         <button
           type="button"
-          onClick={() => setDay(today)}
-          className="self-start rounded-pill border border-border bg-surface-2 px-3 py-1.5 text-xs font-medium text-text-mid outline-none transition-colors hover:text-text focus-visible:shadow-glow-md"
+          onClick={() => setRailOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={railOpen}
+          className="ml-auto flex items-center gap-2 rounded-pill border border-border bg-surface-2 px-3 py-1.5 text-xs font-medium text-text-mid outline-none transition-colors hover:text-text focus-visible:shadow-glow-md"
         >
-          Hoje
+          <ListFilter className="size-3.5" aria-hidden />
+          Calendários
+          {selectedCount > 0 && (
+            <span className="grid min-w-5 place-items-center rounded-pill bg-surface-raised px-1.5 text-[11px] font-semibold text-text">
+              {selectedCount}
+            </span>
+          )}
         </button>
-      )}
+      </div>
 
       {/* Lista rolável de eventos do dia (timeline vertical, §3.9) */}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-lg border border-border bg-surface">
-        {eventsQuery.isLoading ? (
+        {noneSelected ? (
+          <EmptyState
+            icon={CalendarDays}
+            title="Nenhum calendário visível"
+            description="Escolha quais calendários mostrar para ver os eventos do dia."
+            action={
+              <Button variant="secondary" size="sm" onClick={() => setRailOpen(true)}>
+                Escolher calendários
+              </Button>
+            }
+          />
+        ) : eventsQuery.isLoading ? (
           <DaySkeleton />
         ) : eventsQuery.isError ? (
           <ErrorState
@@ -213,23 +277,44 @@ export function MobileAgenda(props: MobileAgendaProps): React.JSX.Element {
         ) : (
           <ul className="flex flex-col">
             {events.map((e) => (
-              <AgendaItem key={e.id} event={e} onOpen={() => props.onOpenEvent(e.id)} />
+              <AgendaItem
+                key={e.id}
+                event={e}
+                color={colorByCalendar.get(e.calendarId) ?? 'var(--text-low)'}
+                onOpen={() => props.onOpenEvent(e.id)}
+              />
             ))}
           </ul>
         )}
       </div>
+
+      <MobileCalendarRail
+        open={railOpen}
+        onClose={() => setRailOpen(false)}
+        calendars={calendars}
+        members={members}
+        myMemberId={myMemberId}
+        canSeeOthers={canSeeOthers}
+        selection={selection}
+      />
     </div>
   );
 }
 
-/** Item da timeline: faixa de cor por tipo + horário + título + meta (UX §2.1: corpo clicável). */
+/**
+ * Item da timeline: faixa de cor POR CALENDÁRIO + horário + título + meta.
+ * Corpo clicável (UX §2.1). Ocorrências de série ganham um selo de recorrência.
+ */
 function AgendaItem({
   event,
+  color,
   onOpen,
 }: {
   event: EventRow;
+  color: string;
   onOpen: () => void;
 }): React.JSX.Element {
+  const recurring = isOccurrence(event) || Boolean(event.recurrenceRule);
   return (
     <li className="border-b border-border-2 last:border-b-0">
       <button
@@ -237,16 +322,19 @@ function AgendaItem({
         onClick={onOpen}
         className="flex w-full items-stretch gap-3 px-3 py-3 text-left outline-none transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:shadow-glow-md"
       >
-        {/* Faixa vertical de cor por tipo */}
+        {/* Faixa vertical de cor por calendário (DATA da API → style inline). */}
         <span
           aria-hidden
           className="w-1 shrink-0 rounded-pill"
-          style={{ backgroundColor: TYPE_COLOR[event.type] }}
+          style={{ backgroundColor: color }}
         />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex items-center gap-1.5 text-xs font-medium text-text-mid">
             <Clock className="size-3.5 shrink-0" aria-hidden />
             {formatTime(event.startAt)} – {formatTime(event.endAt)}
+            {recurring && (
+              <Repeat className="size-3.5 shrink-0 text-text-low" aria-label="Evento recorrente" />
+            )}
           </span>
           <span className="truncate text-sm font-medium text-text">{event.title}</span>
           {event.location && (

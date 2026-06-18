@@ -2,7 +2,7 @@
 id: F37-S04
 title: Calendar 2.0 — mobile (trilha como sheet + cor por calendário)
 phase: F37
-status: available
+status: review
 priority: medium
 estimated_size: M
 depends_on:
@@ -13,6 +13,9 @@ source_docs:
   - docs/features/CALENDAR_V2_PLAN.md
   - docs/MOBILE_UX.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-18T01:14:32Z
+completed_at: 2026-06-18T01:19:27Z
+
 ---
 # F37-S04 — Calendar 2.0 mobile
 

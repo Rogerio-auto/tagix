@@ -26,7 +26,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F34   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F35   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F36   | 14     | 6   | 1   | 0   | 0   | 0   | 7   |
-| F37   | 5     | 1   | 1   | 0   | 0   | 0   | 3   |
+| F37   | 5     | 0   | 1   | 0   | 0   | 1   | 3   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -303,13 +303,13 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 37
 
-| ID      | Titulo                                                                         | Status      | Prioridade | Depende de |
-| ------- | ------------------------------------------------------------------------------ | ----------- | ---------- | ---------- |
-| F37-S01 | Calendar 2.0 — schema recorrência + provisionamento + helper de acesso         | ✅ done      | critical   | —          |
-| F37-S02 | Calendar 2.0 — API (visibilidade + recorrência + provisionamento)              | ✅ done      | critical   | —          |
-| F37-S03 | Calendar 2.0 — desktop (trilha multi-calendário + agendamento rico + form 2.0) | ✅ done      | high       | —          |
-| F37-S04 | Calendar 2.0 — mobile (trilha como sheet + cor por calendário)                 | 🟢 available | medium     | —          |
-| F37-S05 | Calendar 2.0 — QA + audit (regressão do vazamento) + docs                      | ⏸️ blocked  | medium     | —          |
+| ID      | Titulo                                                                         | Status     | Prioridade | Depende de |
+| ------- | ------------------------------------------------------------------------------ | ---------- | ---------- | ---------- |
+| F37-S01 | Calendar 2.0 — schema recorrência + provisionamento + helper de acesso         | ✅ done     | critical   | —          |
+| F37-S02 | Calendar 2.0 — API (visibilidade + recorrência + provisionamento)              | ✅ done     | critical   | —          |
+| F37-S03 | Calendar 2.0 — desktop (trilha multi-calendário + agendamento rico + form 2.0) | ✅ done     | high       | —          |
+| F37-S04 | Calendar 2.0 — mobile (trilha como sheet + cor por calendário)                 | 🟣 review   | medium     | —          |
+| F37-S05 | Calendar 2.0 — QA + audit (regressão do vazamento) + docs                      | ⏸️ blocked | medium     | —          |
 
 ## Fase 4 — Campaigns
 
