@@ -2,7 +2,7 @@
 id: F38-S02
 title: API CMS Help Center (CRUD + publish), platform-admin
 phase: F38
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on:
@@ -12,6 +12,8 @@ blocks:
 source_docs:
   - docs/features/SUPPORT.md
 agent_id: backend-engineer
+claimed_at: 2026-06-18T15:23:28Z
+
 ---
 # F38-S02 — API CMS Help Center
 
