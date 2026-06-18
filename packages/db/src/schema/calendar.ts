@@ -25,6 +25,7 @@ import {
   time,
   timestamp,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { agents } from './agents';
 import { contacts } from './contacts';
@@ -140,6 +141,19 @@ export const events = pgTable(
     createdByAgentId: uuid('created_by_agent_id').references(() => agents.id, {
       onDelete: 'set null',
     }),
+    // ─── Recorrencia (F37-S01, D1=sim) ─────────────────────────────────────────
+    // RRULE simplificado: FREQ=DAILY|WEEKLY[;BYDAY=MO,WE,...][;UNTIL=ISO]. Guardamos
+    // a regra; a EXPANSAO em ocorrencias e na query da API (S02). Tudo nullable ->
+    // retrocompat: evento simples = recurrence_rule NULL (sem recorrencia).
+    recurrenceRule: text('recurrence_rule'),
+    // Limite duplicado em coluna tipada (timestamptz) para filtro de janela barato na
+    // expansao — espelha o UNTIL embutido no RRULE quando presente.
+    recurrenceUntil: ts('recurrence_until'),
+    // Self-ref nullable: aponta o evento "mestre" (a serie) p/ overrides/excecoes de
+    // uma ocorrencia individual no futuro. NULL = este e o mestre (ou evento simples).
+    recurrenceParentId: uuid('recurrence_parent_id').references((): AnyPgColumn => events.id, {
+      onDelete: 'cascade',
+    }),
     metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at'),
@@ -148,6 +162,12 @@ export const events = pgTable(
     index('idx_events_calendar_start').on(t.calendarId, t.startAt),
     index('idx_events_workspace_start').on(t.workspaceId, t.startAt),
     index('idx_events_contact').on(t.contactId).where(sql`${t.contactId} is not null`),
+    // Indice parcial p/ a expansao de series: so eventos com regra de recorrencia.
+    index('idx_events_recurrence').on(t.workspaceId).where(sql`${t.recurrenceRule} is not null`),
+    // Filhos (overrides) de uma serie -> lookup pelo mestre.
+    index('idx_events_recurrence_parent')
+      .on(t.recurrenceParentId)
+      .where(sql`${t.recurrenceParentId} is not null`),
     check('events_type_chk', sql`${t.type} in ('meeting','demo','follow_up','task','reminder','other')`),
     check('events_status_chk', sql`${t.status} in ('scheduled','confirmed','cancelled','completed')`),
   ],

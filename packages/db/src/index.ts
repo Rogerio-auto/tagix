@@ -35,5 +35,11 @@ export {
   type DepartmentLink,
   type AgentLink,
 } from './repos/agent_departments';
+// Calendar 2.0: provisionamento + acesso (F37-S01).
+export {
+  calendarRepo,
+  type Calendar,
+  type CalendarAccessContext,
+} from './repos/calendar';
 
 export const DB_PKG = '@hm/db' as const;

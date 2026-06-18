@@ -8,6 +8,7 @@ import {
   pickAutoAssignee,
   resolvePeerVisibility,
 } from './repos/livechat';
+import { calendarRepo } from './repos/calendar';
 import {
   agentDepartments,
   agents,
@@ -559,6 +560,204 @@ describe('RLS Calendar (F7-S01)', () => {
     for (const r of rows) {
       expect(new Date(r.start_at).getTime()).toBeGreaterThanOrEqual(threshold - 1000);
     }
+  });
+});
+
+describe('Calendar 2.0 — provisionamento + accessibleCalendarIds (F37-S01)', () => {
+  it('provisionamento idempotente: pessoal por membro + Empresa do workspace', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+
+    // Workspace dedicado p/ nao colidir com calendars de outros testes.
+    const [w] = await db
+      .insert(workspaces)
+      .values({ name: `Cal2 prov ${sfx}`, slug: `cal2-prov-${sfx}` })
+      .returning();
+    if (!w) throw new Error('setup workspace prov');
+    const [m] = await db
+      .insert(members)
+      .values({
+        workspaceId: w.id,
+        authUserId: randomUUID(),
+        email: `prov-${sfx}@test.local`,
+        role: 'AGENT',
+        status: 'active',
+      })
+      .returning();
+    if (!m) throw new Error('setup member prov');
+
+    // Pessoal: cria na 1a chamada, retorna a MESMA linha na 2a (idempotente).
+    const p1 = await withWorkspace(w.id, (tx) =>
+      calendarRepo.ensurePersonalCalendar(tx, w.id, m.id),
+    );
+    const p2 = await withWorkspace(w.id, (tx) =>
+      calendarRepo.ensurePersonalCalendar(tx, w.id, m.id),
+    );
+    expect(p1.id).toBe(p2.id);
+    expect(p1.type).toBe('personal');
+    expect(p1.ownerId).toBe(m.id);
+
+    // Empresa: idem.
+    const e1 = await withWorkspace(w.id, (tx) => calendarRepo.ensureWorkspaceCalendar(tx, w.id));
+    const e2 = await withWorkspace(w.id, (tx) => calendarRepo.ensureWorkspaceCalendar(tx, w.id));
+    expect(e1.id).toBe(e2.id);
+    expect(e1.type).toBe('workspace');
+    expect(e1.isDefault).toBe(true);
+
+    // Exatamente 1 pessoal (do membro) + 1 workspace neste tenant.
+    const all = await withWorkspace(w.id, (tx) => tx.select().from(calendars));
+    expect(all.filter((c) => c.type === 'personal' && c.ownerId === m.id)).toHaveLength(1);
+    expect(all.filter((c) => c.type === 'workspace')).toHaveLength(1);
+
+    await db.delete(workspaces).where(eq(workspaces.id, w.id));
+  });
+
+  it('membro comum NAO ve o pessoal de colega; ve o proprio + Empresa + seus times', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+
+    const [w] = await db
+      .insert(workspaces)
+      .values({ name: `Cal2 acc ${sfx}`, slug: `cal2-acc-${sfx}` })
+      .returning();
+    if (!w) throw new Error('setup workspace acc');
+
+    const mk = async (role: string, tag: string) => {
+      const [row] = await db
+        .insert(members)
+        .values({
+          workspaceId: w.id,
+          authUserId: randomUUID(),
+          email: `${tag}-${sfx}@test.local`,
+          role,
+          status: 'active',
+        })
+        .returning();
+      if (!row) throw new Error(`setup member ${tag}`);
+      return row;
+    };
+    const agent = await mk('AGENT', 'agent');
+    const colleague = await mk('AGENT', 'colleague');
+    const supervisor = await mk('SUPERVISOR', 'sup');
+    const owner = await mk('OWNER', 'owner');
+
+    // Provisiona: pessoal de cada um + Empresa.
+    const workspaceCal = await withWorkspace(w.id, (tx) =>
+      calendarRepo.ensureWorkspaceCalendar(tx, w.id),
+    );
+    const agentCal = await withWorkspace(w.id, (tx) =>
+      calendarRepo.ensurePersonalCalendar(tx, w.id, agent.id),
+    );
+    const colleagueCal = await withWorkspace(w.id, (tx) =>
+      calendarRepo.ensurePersonalCalendar(tx, w.id, colleague.id),
+    );
+    const supCal = await withWorkspace(w.id, (tx) =>
+      calendarRepo.ensurePersonalCalendar(tx, w.id, supervisor.id),
+    );
+
+    // Time liderado pelo supervisor; o agent e integrante; colleague NAO.
+    const [team] = await db
+      .insert(teams)
+      .values({ workspaceId: w.id, name: `Time ${sfx}` })
+      .returning();
+    if (!team) throw new Error('setup team');
+    const [teamCal] = await db
+      .insert(calendars)
+      .values({ workspaceId: w.id, name: `Cal time ${sfx}`, type: 'team', teamId: team.id })
+      .returning();
+    if (!teamCal) throw new Error('setup team calendar');
+    await db.insert(teamMembers).values([
+      { teamId: team.id, memberId: supervisor.id, workspaceId: w.id, role: 'lead' },
+      { teamId: team.id, memberId: agent.id, workspaceId: w.id, role: 'member' },
+    ]);
+
+    // AGENT comum: ve proprio pessoal + Empresa + calendario do seu time; NAO ve o
+    // pessoal do colega nem do supervisor.
+    const agentIds = await withWorkspace(w.id, (tx) =>
+      calendarRepo.accessibleCalendarIds(tx, { memberId: agent.id, role: 'AGENT' }),
+    );
+    expect(agentIds).toContain(agentCal.id);
+    expect(agentIds).toContain(workspaceCal.id);
+    expect(agentIds).toContain(teamCal.id);
+    expect(agentIds).not.toContain(colleagueCal.id);
+    expect(agentIds).not.toContain(supCal.id);
+
+    // COLLEAGUE (fora do time): ve so o proprio + Empresa; nada de team nem de pares.
+    const colleagueIds = await withWorkspace(w.id, (tx) =>
+      calendarRepo.accessibleCalendarIds(tx, { memberId: colleague.id, role: 'AGENT' }),
+    );
+    expect(colleagueIds).toContain(colleagueCal.id);
+    expect(colleagueIds).toContain(workspaceCal.id);
+    expect(colleagueIds).not.toContain(teamCal.id);
+    expect(colleagueIds).not.toContain(agentCal.id);
+
+    // SUPERVISOR: ve o calendario do time que LIDERA + os pessoais dos integrantes
+    // (agent), mas NAO o pessoal do colega que esta fora do time.
+    const supIds = await withWorkspace(w.id, (tx) =>
+      calendarRepo.accessibleCalendarIds(tx, { memberId: supervisor.id, role: 'SUPERVISOR' }),
+    );
+    expect(supIds).toContain(teamCal.id);
+    expect(supIds).toContain(agentCal.id);
+    expect(supIds).toContain(supCal.id);
+    expect(supIds).not.toContain(colleagueCal.id);
+
+    // OWNER: ve TODOS os pessoais + Empresa.
+    const ownerIds = await withWorkspace(w.id, (tx) =>
+      calendarRepo.accessibleCalendarIds(tx, { memberId: owner.id, role: 'OWNER' }),
+    );
+    expect(ownerIds).toContain(agentCal.id);
+    expect(ownerIds).toContain(colleagueCal.id);
+    expect(ownerIds).toContain(supCal.id);
+    expect(ownerIds).toContain(workspaceCal.id);
+
+    await db.delete(workspaces).where(eq(workspaces.id, w.id));
+  });
+
+  it('recorrencia: round-trip das colunas + self-ref parent', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+
+    const [cal] = await db
+      .insert(calendars)
+      .values({ workspaceId: wsA, name: `Rec ${sfx}`, type: 'personal', ownerId: memberA })
+      .returning();
+    if (!cal) throw new Error('setup recurrence calendar');
+
+    const [master] = await db
+      .insert(events)
+      .values({
+        workspaceId: wsA,
+        calendarId: cal.id,
+        title: 'Daily standup',
+        startAt: new Date('2099-02-01T12:00:00-03:00'),
+        endAt: new Date('2099-02-01T12:15:00-03:00'),
+        recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO,WE,FR',
+        recurrenceUntil: new Date('2099-03-01T00:00:00-03:00'),
+      })
+      .returning();
+    if (!master) throw new Error('setup master event');
+    expect(master.recurrenceRule).toBe('FREQ=WEEKLY;BYDAY=MO,WE,FR');
+    expect(master.recurrenceParentId).toBeNull();
+
+    // Override (excecao de uma ocorrencia) aponta o mestre via self-ref.
+    const [override] = await db
+      .insert(events)
+      .values({
+        workspaceId: wsA,
+        calendarId: cal.id,
+        title: 'Daily standup (movido)',
+        startAt: new Date('2099-02-08T13:00:00-03:00'),
+        endAt: new Date('2099-02-08T13:15:00-03:00'),
+        recurrenceParentId: master.id,
+      })
+      .returning();
+    if (!override) throw new Error('setup override event');
+    expect(override.recurrenceParentId).toBe(master.id);
+
+    // ON DELETE CASCADE: apagar o mestre apaga os overrides filhos.
+    await db.delete(events).where(eq(events.id, master.id));
+    const remaining = await db.select().from(events).where(eq(events.id, override.id));
+    expect(remaining).toHaveLength(0);
   });
 });
 
