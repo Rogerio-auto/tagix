@@ -2,7 +2,7 @@
 id: F38-S15
 title: Auditoria de segurança da fase (RLS, gates, XSS MD, scopes)
 phase: F38
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on:
