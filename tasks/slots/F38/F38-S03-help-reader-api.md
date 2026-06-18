@@ -2,7 +2,7 @@
 id: F38-S03
 title: API leitor de ajuda (list/get/anchor + busca FTS + feedback)
 phase: F38
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on:
@@ -13,6 +13,8 @@ blocks:
 source_docs:
   - docs/features/SUPPORT.md
 agent_id: backend-engineer
+claimed_at: 2026-06-18T15:32:22Z
+
 ---
 # F38-S03 — API leitor de ajuda
 
