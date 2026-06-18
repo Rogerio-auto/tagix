@@ -2,7 +2,7 @@
 id: F38-S06
 title: Help contextual (?) — HelpHint em @hm/ui + anchors nas features
 phase: F38
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on:
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/SUPPORT.md
 agent_id: frontend-engineer
 claimed_at: 2026-06-18T17:19:05Z
+completed_at: 2026-06-18T17:23:35Z
 
 ---
 # F38-S06 — Help contextual (?)
