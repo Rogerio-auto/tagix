@@ -44,6 +44,7 @@ import { createDashboardLayoutRouter } from './routes/members/dashboard-layout';
 import { createV1Router } from './routes/v1';
 import { createDevRouter } from './routes/dev';
 import { createPrivacyRouter } from './routes/privacy';
+import { createHelpRouter } from './routes/help';
 import { createPlatformModelsRouter } from './routes/platform/models';
 import { createPlatformPoliciesRouter } from './routes/platform/policies';
 import { createPlatformSecretsRouter } from './routes/platform/secrets';
@@ -53,6 +54,7 @@ import { createPlatformPlansRouter } from './routes/platform/plans';
 import { createPlatformSubscriptionsRouter } from './routes/platform/subscriptions';
 import { createPlatformImpersonationRouter } from './routes/platform/impersonation';
 import { createPlatformPlaygroundRouter } from './routes/platform/playground';
+import { createPlatformHelpRouter } from './routes/platform';
 import {
   IMPERSONATION_COOKIE,
   impersonationMiddleware,
@@ -183,6 +185,9 @@ export function createApp(): Express {
   // Gestão Dev (F9-S04): session-authed CRUD de API keys + webhooks (Settings → Dev).
   app.use(createDevRouter());
 
+  // F38: leitor da Central de Ajuda (qualquer membro autenticado; só published).
+  app.use(createHelpRouter());
+
   // Super-admin de plataforma (F2.5/F25): catálogo de modelos, políticas por
   // workspace, rotação de secrets e rollup de custo LLM. Cada router já é gated
   // internamente por requirePlatformAdmin (F25-S01) — fronteira única da camada
@@ -199,6 +204,8 @@ export function createApp(): Express {
   app.use(createPlatformImpersonationRouter());
   // F26-S10 (glue): proxy SSE do playground em sandbox (zero side-effect).
   app.use(createPlatformPlaygroundRouter());
+  // F38: CMS da Central de Ajuda (gated por requirePlatformAdmin).
+  app.use(createPlatformHelpRouter());
 
   // Sentry error handler (F10-S01) ANTES do handler central: captura a exceção
   // (no-op sem DSN) e repassa para a resposta de erro canônica.
