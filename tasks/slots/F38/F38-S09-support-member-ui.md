@@ -2,7 +2,7 @@
 id: F38-S09
 title: UI launcher + chat de suporte no (app)
 phase: F38
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on:
