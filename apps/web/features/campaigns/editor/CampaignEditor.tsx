@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card, CardBody, Input, useToast } from '@hm/ui';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useChannels } from '@/features/channels/queries';
 import { parseRecipientsCsv, type CsvRow } from './csv';
 import {
@@ -60,6 +61,7 @@ export function CampaignEditor({
 }): React.JSX.Element {
   const router = useRouter();
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const channelsQuery = useChannels();
   const [campaignId, setCampaignId] = useState<string | null>(initialId ?? null);
   const [step, setStep] = useState(0);
@@ -160,6 +162,14 @@ export function CampaignEditor({
   }
 
   const channels = channelsQuery.data?.channels ?? [];
+
+  // Estado agregado de "salvando este passo" → spinner imediato no CTA (UX §2.7).
+  const savingNext =
+    createCampaign.isPending ||
+    updateCampaign.isPending ||
+    setSteps.isPending ||
+    uploadRecipients.isPending ||
+    validateCampaign.isPending;
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -379,27 +389,51 @@ export function CampaignEditor({
               ) : (
                 <p className="text-sm text-text-low">Validacao nao executada.</p>
               )}
-              <Button
-                variant="primary"
-                disabled={!validation?.safe || activateCampaign.isPending}
-                onClick={() => void activate()}
-              >
-                Ativar campanha
-              </Button>
             </div>
           ) : null}
         </CardBody>
       </Card>
 
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" disabled={step === 0} onClick={() => setStep((s) => Math.max(s - 1, 0))}>
+      {/* CTA da etapa. Em mobile fixa no rodapé (zona do polegar) com safe-area;
+          em md+ acompanha o fluxo. Autosave já ocorre em `persistAndNext`. */}
+      <div
+        className={
+          isMobile
+            ? 'sticky bottom-0 z-10 -mx-6 flex items-center justify-between gap-3 border-t border-border bg-surface px-6 pt-3 pb-safe-4'
+            : 'flex items-center justify-between gap-3'
+        }
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={step === 0}
+          onClick={() => setStep((s) => Math.max(s - 1, 0))}
+        >
           Voltar
         </Button>
         {step < TOTAL_STEPS - 1 ? (
-          <Button variant="primary" size="sm" onClick={() => void persistAndNext()}>
+          <Button
+            variant="primary"
+            size={isMobile ? 'md' : 'sm'}
+            className={isMobile ? 'flex-1' : undefined}
+            disabled={savingNext}
+            loading={savingNext}
+            onClick={() => void persistAndNext()}
+          >
             Salvar e continuar
           </Button>
-        ) : null}
+        ) : (
+          <Button
+            variant="primary"
+            size={isMobile ? 'md' : 'sm'}
+            className={isMobile ? 'flex-1' : undefined}
+            disabled={!validation?.safe || activateCampaign.isPending}
+            loading={activateCampaign.isPending}
+            onClick={() => void activate()}
+          >
+            Ativar campanha
+          </Button>
+        )}
       </div>
     </div>
   );
