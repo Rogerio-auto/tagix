@@ -339,3 +339,21 @@ Escopo: toda a superficie nova da F38 (Help CMS+leitor, Support membro+plataform
 - [BAIXO/UX] inbox platform 'atribuir a mim' (InboxThread.tsx): self-assign depende do member id no cliente (getBrowserSession e stub); por ora so desatribuir (honesto). Follow-up: expor member id na sessao OU endpoint /assign-me. Nao e seguranca.
 
 ### Veredito: ZERO critico/alto. 1 medio FECHADO. 1 baixo (UX) com follow-up. F38 segura para release sob os padroes da F30.
+
+## F38-S14 — QA da fase (2026-06-18)
+### Cobertura de integration (backend, ja existente dos slots S02/S03/S07/S08/S10/S12 + S16) — re-verificada verde (482 testes @hm/api):
+- help.test.ts: gate 401, leitor so-published, busca FTS, by-anchor 404, by-slug rascunho 404, feedback upsert + 404 rascunho.
+- platform/help.test.ts: CRUD categorias/artigos, publish/unpublish, reorder, gate admin.
+- support.test.ts: ciclo do membro, lista so proprios, IDOR B->A = 404 (nao 403), 400 body invalido.
+- platform/support.test.ts: gate 401/403, triagem cross-ws + filtros, reply platform, patch status/priority/assign + audit, 400/404.
+- support-realtime.test.ts: resolveSupportEmit (rooms thread + support:platform), authorizeSupportThreadJoin.
+- v1/routes.test.ts: TODOS os endpoints S12 (contacts/media/deals/move/conversions/flows/events) com 403-sem-scope + 404-cross-workspace + happy path; OpenAPI 3.1 com os paths novos + title Leadium API + spec servida sem chave.
+- register.test.ts (S16): dedup same-day idempotente via ON CONFLICT (created/deduped/guard/type) sem envenenar a tx.
+### Specs e2e novas (happy paths) — apps/web/e2e/specs/:
+- help-support.spec.ts: home /help (categorias+busca), artigo (render Markdown sanitizado: ## vira heading) + feedback, navegacao por categoria, launcher + abrir thread de suporte.
+- developer-portal.spec.ts: /help/developers renderiza Leadium API + referencia do OpenAPI (recursos+scope) + copy-paste de exemplo.
+- Fixture api-mock.ts estendido com as rotas F38 (help/support/openapi) para os specs rodarem no CI.
+### Gaps / notas
+- HOST: a app NAO hidrata no headless-shell deste Windows local (memoria e2e-no-hydration) -> os specs e2e da fase sao CI-only; validacao local da F38 foi por pnpm typecheck + lint + build(@hm/web) + unit(@hm/api 482 verdes) + unit(@hm/ui 18 verdes incl. 10 XSS). Sem regressao.
+- [BAIXO/UX] self-assign do inbox platform (ja em S15): so desatribuir hoje; follow-up para expor member id na sessao client ou /assign-me.
+- Envio E2E real do canal (WABA) e dependencia externa, fora do escopo de QA da F38 (suporte e canal INTERNO via socket, coberto).
