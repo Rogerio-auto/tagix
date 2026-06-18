@@ -2,7 +2,7 @@
 id: F37-S03
 title: Calendar 2.0 — desktop (trilha multi-calendário + agendamento rico + form 2.0)
 phase: F37
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on:
