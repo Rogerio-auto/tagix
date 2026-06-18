@@ -2,7 +2,7 @@
 id: F38-S11
 title: UI inbox de suporte no (platform) — real-time
 phase: F38
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on:
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/SUPPORT.md
 agent_id: frontend-engineer
 claimed_at: 2026-06-18T17:28:38Z
+completed_at: 2026-06-18T17:33:11Z
 
 ---
 # F38-S11 — UI inbox de suporte (platform)
