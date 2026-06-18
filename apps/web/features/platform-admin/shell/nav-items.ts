@@ -85,4 +85,10 @@ export const PLATFORM_NAV: readonly PlatformNavItem[] = [
     icon: 'help',
     help: 'CMS da Central de Ajuda do Leadium — artigos publicaveis sem deploy, lidos por todos os workspaces.',
   },
+  {
+    href: '/platform/support',
+    label: 'Suporte',
+    icon: 'support',
+    help: 'Inbox cross-workspace do suporte ao cliente: triagem, reply em tempo real e status/prioridade/atribuicao.',
+  },
 ];
