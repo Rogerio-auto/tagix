@@ -237,13 +237,13 @@ export function createEventsRouter(): Router {
 
   router.get('/api/events/:id', ...viewGuard, async (req: Request, res: Response) => {
     const id = param(req, 'id');
-    const member = { id: req.auth!.member.id, role: req.auth!.member.role as Role };
+    const ctx = { memberId: req.auth!.member.id, role: req.auth!.member.role as Role };
     const result = await req.scoped!(async (tx) => {
       const [event] = await tx.select().from(events).where(eq(events.id, id));
       if (!event) return null;
       // Visibilidade (L1): o detalhe só é entregue se o calendário do evento é
       // acessível ao membro — senão 404 (não confirma a existência do recurso).
-      const accessible = await calendarRepo.accessibleCalendarIds(tx, member);
+      const accessible = await calendarRepo.accessibleCalendarIds(tx, ctx);
       if (!accessible.includes(event.calendarId)) return null;
       const participants = await tx
         .select()
