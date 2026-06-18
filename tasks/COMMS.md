@@ -308,3 +308,13 @@ Todos os 3 slots done, integrados, verdes em main.
 
 - **Mount em app.ts (integração do orchestrator):** `createPlatformSupportRouter` foi adicionado ao barrel `routes/platform/index.ts` (no escopo do S10) e montado em `apps/api/src/app.ts` (1 import + 1 `app.use`). `app.ts` não está no `files_allowed` do S10, mas o mount é a etapa de integração do orchestrator (mesmo padrão de S03/S07 para o help reader / member support). Sem outras edições em app.ts.
 - **Emit real-time:** reply/patch da plataforma chamam `emitSupportEvent` (S08, import read-only) — em testes `io` é null → no-op seguro; em runtime emite para `support:thread:<id>` + `support:platform`.
+
+## F38 frontend wave — dispatch (orchestrator/executor) 2026-06-18
+Backend done+merged (S01/S02/S03/S07/S08/S10/S12). Executor unico (sem sub-workers neste harness). Sequencial no git. S16 (fix dedup 500) feito primeiro e mergeado (482 testes @hm/api verdes).
+
+DECISAO de fronteira — sanitizador Markdown compartilhado:
+- S04 (preview do CMS) e S05 (leitor) DEVEM usar EXATAMENTE o mesmo render sanitizado (anti-divergencia + alvo do audit S15). Nenhum dos dois slots tem @hm/ui no files_allowed; o local compartilhado correto e @hm/ui.
+- Construo um primitive `Markdown` em `packages/ui/src/Markdown/` ZERO-dependency: parser de um subconjunto seguro (headings, p, strong/em, code/inline-code, ul/ol/li, blockquote, hr, links http(s)/relativos) que renderiza ELEMENTOS React diretamente — NUNCA dangerouslySetInnerHTML, NUNCA passthrough de HTML cru. Isso elimina XSS estruturalmente (nenhum HTML e jamais interpretado; <script>/<iframe>/on*/javascript: nao tem como entrar). Exportado de @hm/ui (barrel explicito).
+- Essa adicao a @hm/ui e feita junto da onda frontend (consumidor inicial: S04). Registrado aqui por transparencia de fronteira. S05/S06/S13 reusam o mesmo `Markdown`.
+
+Icones de nav platform: adiciono keys `help` (S04) e `support` (S11) ao union de nav-items.ts + ambos os mapas ICONS (PlatformNav + PlatformMobileNav). APPEND, sem sobrescrever entradas existentes.
