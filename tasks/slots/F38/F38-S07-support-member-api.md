@@ -2,7 +2,7 @@
 id: F38-S07
 title: API suporte do membro (abrir/listar/responder/resolver)
 phase: F38
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on:
