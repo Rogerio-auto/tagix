@@ -2,7 +2,7 @@
 id: F36-S10
 title: Settings + Knowledge + Conversões responsivos
 phase: F36
-status: available
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on:
@@ -13,6 +13,8 @@ blocks:
 source_docs:
   - docs/features/MOBILE_RESPONSIVE_PLAN.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-18T01:53:54Z
+
 ---
 # F36-S10 — Settings + Knowledge + Conversões
 
