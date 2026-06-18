@@ -27,7 +27,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F35   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F36   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F37   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
-| F38   | 15     | 12   | 0   | 0   | 1   | 0   | 2   |
+| F38   | 15     | 12   | 0   | 0   | 0   | 1   | 2   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -314,23 +314,23 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 38 — Suporte ao Cliente (Help Center + Live Support + Dev Portal)
 
-| ID      | Titulo                                                          | Status        | Prioridade | Depende de |
-| ------- | --------------------------------------------------------------- | ------------- | ---------- | ---------- |
-| F38-S01 | Schema Help + Support (5 tabelas) + RLS + repos + seed          | ✅ done        | critical   | —          |
-| F38-S02 | API CMS Help Center (CRUD + publish), platform-admin            | 🔵 in-progress | high       | —          |
-| F38-S03 | API leitor de ajuda (list/get/anchor + busca FTS + feedback)    | 🟢 available   | high       | —          |
-| F38-S04 | UI CMS Help no (platform) — lista + editor MD + publish         | 🟢 available   | high       | —          |
-| F38-S05 | UI leitor /help + entrada de nav "Ajuda"                        | 🟢 available   | high       | —          |
-| F38-S06 | Help contextual (?) — HelpHint em @hm/ui + anchors nas features | 🟢 available   | medium     | —          |
-| F38-S07 | API suporte do membro (abrir/listar/responder/resolver)         | 🟢 available   | high       | —          |
-| F38-S08 | Real-time suporte (Socket.io rooms + relay)                     | 🟢 available   | high       | —          |
-| F38-S09 | UI launcher + chat de suporte no (app)                          | 🟢 available   | high       | —          |
-| F38-S10 | API inbox de suporte no (platform) — triagem/reply/status       | 🟢 available   | high       | —          |
-| F38-S11 | UI inbox de suporte no (platform) — real-time                   | 🟢 available   | high       | —          |
-| F38-S12 | Novos endpoints API pública v1 + OpenAPI + scopes + testes      | ✅ done        | high       | —          |
-| F38-S13 | Portal do Desenvolvedor in-product (DS v2, render do OpenAPI)   | 🟢 available   | high       | —          |
-| F38-S14 | QA da fase (integration + e2e happy paths)                      | 🟢 available   | high       | —          |
-| F38-S15 | Auditoria de segurança da fase (RLS, gates, XSS MD, scopes)     | 🟢 available   | critical   | —          |
+| ID      | Titulo                                                          | Status      | Prioridade | Depende de |
+| ------- | --------------------------------------------------------------- | ----------- | ---------- | ---------- |
+| F38-S01 | Schema Help + Support (5 tabelas) + RLS + repos + seed          | ✅ done      | critical   | —          |
+| F38-S02 | API CMS Help Center (CRUD + publish), platform-admin            | 🟣 review    | high       | —          |
+| F38-S03 | API leitor de ajuda (list/get/anchor + busca FTS + feedback)    | 🟢 available | high       | —          |
+| F38-S04 | UI CMS Help no (platform) — lista + editor MD + publish         | 🟢 available | high       | —          |
+| F38-S05 | UI leitor /help + entrada de nav "Ajuda"                        | 🟢 available | high       | —          |
+| F38-S06 | Help contextual (?) — HelpHint em @hm/ui + anchors nas features | 🟢 available | medium     | —          |
+| F38-S07 | API suporte do membro (abrir/listar/responder/resolver)         | 🟢 available | high       | —          |
+| F38-S08 | Real-time suporte (Socket.io rooms + relay)                     | 🟢 available | high       | —          |
+| F38-S09 | UI launcher + chat de suporte no (app)                          | 🟢 available | high       | —          |
+| F38-S10 | API inbox de suporte no (platform) — triagem/reply/status       | 🟢 available | high       | —          |
+| F38-S11 | UI inbox de suporte no (platform) — real-time                   | 🟢 available | high       | —          |
+| F38-S12 | Novos endpoints API pública v1 + OpenAPI + scopes + testes      | ✅ done      | high       | —          |
+| F38-S13 | Portal do Desenvolvedor in-product (DS v2, render do OpenAPI)   | 🟢 available | high       | —          |
+| F38-S14 | QA da fase (integration + e2e happy paths)                      | 🟢 available | high       | —          |
+| F38-S15 | Auditoria de segurança da fase (RLS, gates, XSS MD, scopes)     | 🟢 available | critical   | —          |
 
 ## Fase 4 — Campaigns
 
