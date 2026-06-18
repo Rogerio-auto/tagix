@@ -2,7 +2,7 @@
 id: F38-S16
 title: Fix 500 no dedup de conversões (ON CONFLICT DO NOTHING)
 phase: F38
-status: available
+status: in-progress
 priority: high
 estimated_size: S
 depends_on: []
@@ -11,6 +11,8 @@ source_docs:
   - docs/features/SUPPORT.md
   - tasks/COMMS.md
 agent_id: backend-engineer
+claimed_at: 2026-06-18T16:50:27Z
+
 ---
 # F38-S16 — Fix dedup de conversões (causa-raiz do 500)
 
