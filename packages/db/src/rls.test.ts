@@ -9,6 +9,8 @@ import {
   resolvePeerVisibility,
 } from './repos/livechat';
 import { calendarRepo } from './repos/calendar';
+import { helpRepo } from './repos/help';
+import { supportRepo } from './repos/support';
 import {
   agentDepartments,
   agents,
@@ -33,6 +35,9 @@ import {
   flowExecutions,
   flows,
   flowVersions,
+  helpArticleFeedback,
+  helpArticles,
+  helpCategories,
   inboxVisibilitySettings,
   memberVisibilityOverrides,
   kbChunks,
@@ -43,6 +48,7 @@ import {
   outboundWebhooks,
   plans,
   slaRules,
+  supportThreads,
   teamMembers,
   teams,
   workspaces,
@@ -1428,5 +1434,183 @@ describe('RLS Agent departments (F34-S01)', () => {
     await db
       .insert(agentDepartments)
       .values({ agentId: ag2.id, departmentId: dep.id, workspaceId: wsA, isDefault: false });
+  });
+});
+
+describe('Help Center (F38-S01)', () => {
+  it('catalogo e platform-level: leitura por slug/anchor so retorna published; FTS funciona', async () => {
+    const sfx = randomUUID().slice(0, 8);
+    const cat = await helpRepo.createCategory({
+      slug: `getting-started-${sfx}`,
+      title: 'Primeiros passos',
+      description: 'Comece aqui',
+      icon: 'rocket',
+      order: 0,
+    });
+
+    const draft = await helpRepo.createArticle({
+      categoryId: cat.id,
+      slug: `rascunho-${sfx}`,
+      title: 'Rascunho oculto',
+      excerpt: 'nao publicado',
+      bodyMd: '# rascunho',
+      status: 'draft',
+      order: 0,
+      anchorKey: `draft.anchor.${sfx}`,
+    });
+
+    const pub = await helpRepo.createArticle({
+      categoryId: cat.id,
+      slug: `publicado-${sfx}`,
+      title: 'Como criar um agente de inteligencia',
+      excerpt: 'guia rapido de agentes',
+      bodyMd: '# Agentes\n\nConfigure o prompt e o modelo.',
+      status: 'draft',
+      order: 1,
+      anchorKey: `agents.create.${sfx}`,
+    });
+    const published = await helpRepo.publishArticle(pub.id);
+    expect(published?.status).toBe('published');
+    expect(published?.publishedAt).not.toBeNull();
+
+    // Leitor: slug publicado retorna; rascunho nao.
+    expect(await helpRepo.findPublishedBySlug(pub.slug)).not.toBeNull();
+    expect(await helpRepo.findPublishedBySlug(draft.slug)).toBeNull();
+
+    // Anchor publicado retorna; anchor de rascunho nao.
+    expect(await helpRepo.findPublishedByAnchor(`agents.create.${sfx}`)).not.toBeNull();
+    expect(await helpRepo.findPublishedByAnchor(`draft.anchor.${sfx}`)).toBeNull();
+
+    // FTS (portugues): busca por termo do titulo encontra o publicado.
+    const hits = await helpRepo.searchPublished('agente', cat.id);
+    expect(hits.some((h) => h.id === pub.id)).toBe(true);
+    expect(hits.some((h) => h.id === draft.id)).toBe(false);
+
+    // contagem de publicados na categoria.
+    const withCount = await helpRepo.listCategoriesWithPublishedCount();
+    const mine = withCount.find((c) => c.id === cat.id);
+    expect(mine?.publishedCount).toBe(1);
+
+    // cleanup (cascade nos artigos).
+    await getDb().delete(helpCategories).where(eq(helpCategories.id, cat.id));
+  });
+
+  it('help_article_feedback isola por workspace; upsert sobrescreve o voto', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const [cat] = await db
+      .insert(helpCategories)
+      .values({ slug: `fb-cat-${sfx}`, title: 'FB', order: 0 })
+      .returning();
+    if (!cat) throw new Error('setup fb category');
+    const [art] = await db
+      .insert(helpArticles)
+      .values({ categoryId: cat.id, slug: `fb-art-${sfx}`, title: 'FB art', bodyMd: '# x', status: 'published' })
+      .returning();
+    if (!art) throw new Error('setup fb article');
+
+    // Voto do membro de A (workspace-scoped).
+    const fb1 = await withWorkspace(wsA, (tx) =>
+      helpRepo.upsertFeedback(tx, { articleId: art.id, workspaceId: wsA, memberId: memberA, helpful: false }),
+    );
+    expect(fb1.helpful).toBe(false);
+    // Re-voto sobrescreve (UNIQUE article+member).
+    const fb2 = await withWorkspace(wsA, (tx) =>
+      helpRepo.upsertFeedback(tx, { articleId: art.id, workspaceId: wsA, memberId: memberA, helpful: true, comment: 'ajudou!' }),
+    );
+    expect(fb2.id).toBe(fb1.id);
+    expect(fb2.helpful).toBe(true);
+    expect(fb2.comment).toBe('ajudou!');
+
+    // A enxerga o proprio feedback; B nao enxerga nada de A.
+    const fbA = await withWorkspace(wsA, (tx) => tx.select().from(helpArticleFeedback));
+    expect(fbA.some((f) => f.id === fb1.id)).toBe(true);
+    const fbB = await withWorkspace(wsB, (tx) => tx.select().from(helpArticleFeedback));
+    expect(fbB.some((f) => f.id === fb1.id)).toBe(false);
+
+    // INSERT cross-tenant via app e barrado pelo WITH CHECK.
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.insert(helpArticleFeedback).values({ articleId: art.id, workspaceId: wsB, memberId: memberA, helpful: true }),
+      ),
+    ).rejects.toThrow();
+
+    await db.delete(helpCategories).where(eq(helpCategories.id, cat.id));
+  });
+});
+
+describe('Support chat (F38-S01)', () => {
+  it('support_threads/messages isolam por workspace; assertThreadVisible nega cross-tenant', async () => {
+    const sfx = randomUUID().slice(0, 8);
+
+    // Thread + mensagem em A (workspace-scoped, via tx RLS).
+    const threadA = await withWorkspace(wsA, (tx) =>
+      supportRepo.createThread(tx, { workspaceId: wsA, openedBy: memberA, subject: `Ajuda A ${sfx}` }),
+    );
+    await withWorkspace(wsA, (tx) =>
+      supportRepo.addMessage(tx, { threadId: threadA.id, senderType: 'member', senderId: memberA, body: 'oi' }),
+    );
+
+    // Thread em B.
+    const threadB = await withWorkspace(wsB, (tx) =>
+      supportRepo.createThread(tx, { workspaceId: wsB, openedBy: null, subject: `Ajuda B ${sfx}` }),
+    );
+
+    // A lista so as proprias threads.
+    const listA = await withWorkspace(wsA, (tx) => supportRepo.listThreads(tx));
+    expect(listA.some((t) => t.id === threadA.id)).toBe(true);
+    expect(listA.some((t) => t.id === threadB.id)).toBe(false);
+
+    // assertThreadVisible: A ve a propria, NAO ve a de B (null -> 404 na rota).
+    expect(await withWorkspace(wsA, (tx) => supportRepo.assertThreadVisible(tx, threadA.id))).not.toBeNull();
+    expect(await withWorkspace(wsA, (tx) => supportRepo.assertThreadVisible(tx, threadB.id))).toBeNull();
+
+    // Mensagens de A visiveis em A; thread de B nao vaza mensagens para A.
+    const msgsA = await withWorkspace(wsA, (tx) => supportRepo.listMessages(tx, threadA.id));
+    expect(msgsA.length).toBe(1);
+    const leak = await withWorkspace(wsA, (tx) => supportRepo.listMessages(tx, threadB.id));
+    expect(leak.length).toBe(0);
+
+    // INSERT cross-tenant de thread via app e barrado pelo WITH CHECK.
+    await expect(
+      withWorkspace(wsA, (tx) => tx.insert(supportThreads).values({ workspaceId: wsB, subject: 'cross' })),
+    ).rejects.toThrow();
+
+    // last_message_at avancou apos a mensagem.
+    const refreshed = await withWorkspace(wsA, (tx) => supportRepo.assertThreadVisible(tx, threadA.id));
+    expect(refreshed?.lastMessageAt.getTime()).toBeGreaterThanOrEqual(threadA.createdAt.getTime());
+  });
+
+  it('plataforma le/responde cross-workspace e atualiza status/priority/assign', async () => {
+    const sfx = randomUUID().slice(0, 8);
+    const threadA = await withWorkspace(wsA, (tx) =>
+      supportRepo.createThread(tx, { workspaceId: wsA, openedBy: memberA, subject: `Plat ${sfx}`, priority: 'high' }),
+    );
+
+    // Plataforma ve a thread (cross-workspace) e filtra por status.
+    const all = await supportRepo.listThreadsPlatform({ status: 'open' });
+    expect(all.some((t) => t.id === threadA.id)).toBe(true);
+
+    // Reply da plataforma cria mensagem e mexe last_message_at.
+    const reply = await supportRepo.addMessagePlatform({
+      threadId: threadA.id,
+      senderType: 'platform',
+      senderId: memberA,
+      body: 'Ola, como posso ajudar?',
+    });
+    expect(reply.senderType).toBe('platform');
+
+    // PATCH de status/priority/assign.
+    const updated = await supportRepo.updateThreadPlatform(threadA.id, { status: 'pending', priority: 'low' });
+    expect(updated?.status).toBe('pending');
+    expect(updated?.priority).toBe('low');
+
+    // CHECK de sender_type rejeita valor fora do dominio.
+    await expect(
+      getDb().execute(sql`
+        INSERT INTO support_messages (thread_id, sender_type, body)
+        VALUES (${threadA.id}::uuid, 'robot', 'x')
+      `),
+    ).rejects.toThrow();
   });
 });
