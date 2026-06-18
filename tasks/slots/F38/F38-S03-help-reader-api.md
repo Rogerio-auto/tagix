@@ -2,7 +2,7 @@
 id: F38-S03
 title: API leitor de ajuda (list/get/anchor + busca FTS + feedback)
 phase: F38
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on:
