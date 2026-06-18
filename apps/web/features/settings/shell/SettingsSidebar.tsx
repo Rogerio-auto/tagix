@@ -23,7 +23,10 @@ export function SettingsSidebar({ sections, activeId, counters, onSelect }: Sett
     sections.filter((s) => s.group === group);
 
   return (
-    <nav aria-label="Seções de configurações" className="flex w-60 shrink-0 flex-col gap-6">
+    <nav
+      aria-label="Seções de configurações"
+      className="flex w-full shrink-0 flex-col gap-6 md:w-60"
+    >
       {SETTINGS_GROUP_ORDER.map((group) => {
         const items = byGroup(group);
         if (items.length === 0) return null;
@@ -51,7 +54,8 @@ export function SettingsSidebar({ sections, activeId, counters, onSelect }: Sett
                 </>
               );
               const baseClass = cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-left font-body text-sm transition-colors',
+                'flex items-center gap-2 rounded-md px-2 py-1.5 text-left font-body text-sm outline-none transition-colors focus-visible:shadow-glow-md',
+                'min-h-11 md:min-h-0',
                 active
                   ? 'bg-surface-2 text-text'
                   : 'text-text-mid hover:bg-surface-2 hover:text-text',

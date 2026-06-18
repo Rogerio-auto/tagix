@@ -1,9 +1,12 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { FileText, Upload } from 'lucide-react';
 import { Button, Input, useToast } from '@hm/ui';
-import { Sheet } from '@/shared/components/help/Sheet';
+import { Sheet as Drawer } from '@/shared/components/help/Sheet';
+import { Sheet as MobileSheet } from '@/shared/components/Sheet';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { ApiError } from '@/shared/lib/api-client';
 import { useCreateKbDocument } from './queries';
 
@@ -14,6 +17,7 @@ import { useCreateKbDocument } from './queries';
  */
 export function UploadDocumentDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const create = useCreateKbDocument();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,67 +73,96 @@ export function UploadDocumentDrawer({ open, onClose }: { open: boolean; onClose
     }
   };
 
-  return (
-    <Sheet open={open} onClose={close} title="Novo documento" widthClass="w-[520px]">
-      <div className="flex flex-col gap-4">
-        <Input
-          label="Título"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Ex.: Política de reembolso"
+  const fields: ReactNode = (
+    <div className="flex flex-col gap-4">
+      <Input
+        label="Título"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Ex.: Política de reembolso"
+      />
+      <Input
+        label="Categoria (opcional)"
+        value={category}
+        onChange={(e) => setCategory(e.target.value)}
+        placeholder="Ex.: Suporte"
+      />
+
+      <div className="flex flex-col gap-1.5">
+        <span className="font-head text-sm font-medium text-text-mid">Conteúdo (markdown)</span>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={isMobile ? 8 : 12}
+          placeholder="Cole o texto/markdown do documento aqui…"
+          className="w-full resize-y rounded-sm border border-border bg-surface-2 px-3 py-2 font-body text-sm text-text outline-none placeholder:text-text-low focus-visible:border-border-brand focus-visible:shadow-glow-sm"
         />
-        <Input
-          label="Categoria (opcional)"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          placeholder="Ex.: Suporte"
+      </div>
+
+      <div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".md,.markdown,.txt,text/markdown,text/plain"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void onFile(file);
+          }}
         />
+        <Button
+          variant="ghost"
+          className="w-full sm:w-auto"
+          leftIcon={<FileText className="size-4" aria-hidden />}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Carregar arquivo .md/.txt
+        </Button>
+      </div>
+    </div>
+  );
 
-        <div className="flex flex-col gap-1.5">
-          <span className="font-head text-sm font-medium text-text-mid">Conteúdo (markdown)</span>
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={12}
-            placeholder="Cole o texto/markdown do documento aqui…"
-            className="w-full resize-y rounded-sm border border-border bg-surface-2 px-3 py-2 font-body text-sm text-text outline-none placeholder:text-text-low focus-visible:border-border-brand focus-visible:shadow-glow-sm"
-          />
-        </div>
-
-        <div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".md,.markdown,.txt,text/markdown,text/plain"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void onFile(file);
-            }}
-          />
-          <Button
-            variant="ghost"
-            leftIcon={<FileText className="size-4" aria-hidden />}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Carregar arquivo .md/.txt
-          </Button>
-        </div>
-
-        <div className="mt-2 flex items-center justify-end gap-2">
-          <Button variant="secondary" onClick={close}>
-            Cancelar
-          </Button>
+  // Mobile: bottom-sheet com CTA fixo na zona do polegar (UX §2.3 / MOBILE_UX §1).
+  if (isMobile) {
+    return (
+      <MobileSheet
+        open={open}
+        onClose={close}
+        variant="bottom"
+        title="Novo documento"
+        footer={
           <Button
             variant="primary"
+            className="w-full"
             leftIcon={<Upload className="size-4" aria-hidden />}
             loading={create.isPending}
             onClick={() => void submit()}
           >
             Enviar
           </Button>
-        </div>
+        }
+      >
+        {fields}
+      </MobileSheet>
+    );
+  }
+
+  return (
+    <Drawer open={open} onClose={close} title="Novo documento" widthClass="w-[520px]">
+      {fields}
+      <div className="mt-4 flex items-center justify-end gap-2">
+        <Button variant="secondary" onClick={close}>
+          Cancelar
+        </Button>
+        <Button
+          variant="primary"
+          leftIcon={<Upload className="size-4" aria-hidden />}
+          loading={create.isPending}
+          onClick={() => void submit()}
+        >
+          Enviar
+        </Button>
       </div>
-    </Sheet>
+    </Drawer>
   );
 }
