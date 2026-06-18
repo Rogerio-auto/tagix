@@ -2,7 +2,7 @@
 id: F38-S13
 title: Portal do Desenvolvedor in-product (DS v2, render do OpenAPI)
 phase: F38
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on:
