@@ -2,7 +2,7 @@
 id: F38-S12
 title: Novos endpoints API pública v1 + OpenAPI + scopes + testes
 phase: F38
-status: available
+status: in-progress
 priority: high
 estimated_size: L
 depends_on: []
@@ -11,6 +11,8 @@ blocks:
 source_docs:
   - docs/features/SUPPORT.md
 agent_id: backend-engineer
+claimed_at: 2026-06-18T15:11:13Z
+
 ---
 # F38-S12 — Novos endpoints API pública v1
 
