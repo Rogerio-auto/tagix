@@ -25,7 +25,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F33   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F34   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F35   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
-| F36   | 14     | 2   | 1   | 0   | 0   | 1   | 10   |
+| F36   | 14     | 2   | 1   | 0   | 0   | 0   | 11   |
 | F37   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
@@ -296,7 +296,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F36-S08 | Agentes responsivos — lista + detalhe com abas                      | ✅ done      | medium     | —          |
 | F36-S09 | Campanhas responsivas — lista + wizard + monitoring                 | ✅ done      | medium     | —          |
 | F36-S10 | Settings + Knowledge + Conversões responsivos                       | ✅ done      | medium     | —          |
-| F36-S11 | Flow Builder mobile — inspecionar/operar (read-first)               | 🟣 review    | medium     | —          |
+| F36-S11 | Flow Builder mobile — inspecionar/operar (read-first)               | ✅ done      | medium     | —          |
 | F36-S12 | Auth (login/reset) — polish mobile                                  | 🟢 available | low        | —          |
 | F36-S13 | Platform admin legível/operável no mobile                           | 🟢 available | low        | —          |
 | F36-S14 | QA mobile + audit de UX + performance (fechamento)                  | ⏸️ blocked  | medium     | —          |

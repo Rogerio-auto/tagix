@@ -2,7 +2,7 @@
 id: F36-S11
 title: Flow Builder mobile — inspecionar/operar (read-first)
 phase: F36
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on:
