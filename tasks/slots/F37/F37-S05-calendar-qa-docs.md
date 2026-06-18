@@ -2,7 +2,7 @@
 id: F37-S05
 title: Calendar 2.0 — QA + audit (regressão do vazamento) + docs
 phase: F37
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on:
