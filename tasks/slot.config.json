@@ -25,7 +25,8 @@
     "F7": "Dashboard + Conversões",
     "F8": "Permissions & Settings",
     "F9": "Hardening + Observability",
-    "F10": "Launch"
+    "F10": "Launch",
+    "F38": "Suporte ao Cliente (Help Center + Live Support + Dev Portal)"
   },
   "migrations": {
     "enabled": false,
