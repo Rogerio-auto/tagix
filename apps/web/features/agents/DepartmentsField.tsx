@@ -92,7 +92,8 @@ export function DepartmentsField({
                 : 'border-border bg-surface-2 hover:border-border-2',
             )}
           >
-            <div className="flex items-center gap-3 px-3 py-2.5">
+            <div className="flex min-h-11 flex-wrap items-center gap-3 px-3 py-2.5">
+
               <input
                 id={checkboxId}
                 type="checkbox"

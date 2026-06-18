@@ -6,6 +6,7 @@ import { ArrowLeft, Bot, Cpu, Power } from 'lucide-react';
 import { can } from '@hm/shared';
 import { Button, Card, useToast } from '@hm/ui';
 import { EmptyState, ErrorState, Skeleton } from '@/shared/components/feedback';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { ApiError } from '@/shared/lib/api-client';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { AgentStatusBadge } from '../list/AgentStatusBadge';
@@ -29,6 +30,7 @@ import { resolveTab } from './tabs';
 export function AgentDetail({ agentId }: { agentId: string }) {
   const searchParams = useSearchParams();
   const activeTab = resolveTab(searchParams.get('tab'));
+  const { isMobile } = useBreakpoint();
 
   const role = useAuthStore((s) => s.auth?.role);
   const canEdit = role ? can(role, 'agent.edit') : false;
@@ -36,6 +38,8 @@ export function AgentDetail({ agentId }: { agentId: string }) {
 
   const agentQuery = useAgent(agentId);
   const basePath = `/agents/${agentId}`;
+  const agentLoaded = agentQuery.data?.agent;
+  const action = useStatusToggle(agentLoaded ?? null);
 
   if (agentQuery.isLoading) {
     return (
@@ -104,60 +108,109 @@ export function AgentDetail({ agentId }: { agentId: string }) {
     <div className="flex flex-col gap-6">
       <Link
         href="/agents"
-        className="inline-flex w-fit items-center gap-1.5 font-head text-sm text-text-low outline-none transition-colors hover:text-text focus-visible:text-text"
+        className="inline-flex min-h-11 w-fit items-center gap-1.5 font-head text-sm text-text-low outline-none transition-colors hover:text-text focus-visible:text-text"
       >
         <ArrowLeft className="size-4" aria-hidden />
         Agentes
       </Link>
 
-      <DetailHeader agent={agent} canEdit={canEdit} />
+      <DetailHeader agent={agent} canEdit={canEdit} action={action} isMobile={isMobile} />
 
       <TabNav basePath={basePath} active={activeTab} />
 
-      <div role="tabpanel" aria-label={activeTab}>
+      <div role="tabpanel" aria-label={activeTab} className={isMobile ? 'pb-2' : undefined}>
         {activeTab === 'config' && <ConfigTab agent={agent} canEdit={canEdit} />}
         {activeTab === 'tools' && <ToolsTab agentId={agent.id} canToggle={canToggle} />}
         {activeTab === 'knowledge' && <KnowledgeTab />}
         {activeTab === 'metrics' && <MetricsTab agentId={agent.id} />}
         {activeTab === 'playground' && <PlaygroundPanel agentId={agent.id} />}
       </div>
+
+      {/* Ação primária na zona do polegar (mobile), fixa no rodapé da página. */}
+      {canEdit && action && isMobile && (
+        <div className="pb-safe sticky inset-x-0 bottom-0 z-30 -mx-4 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur">
+          <Button
+            variant="secondary"
+            className="w-full"
+            loading={action.pending}
+            leftIcon={<Power className="size-4" aria-hidden />}
+            onClick={() => void action.run()}
+          >
+            {action.label}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
 
-/** Cabeçalho de identidade + ação de ativar/desativar (mesma UX do AgentCard). */
-function DetailHeader({ agent, canEdit }: { agent: Agent; canEdit: boolean }) {
+/** Ação de ativar/desativar resolvida (ou `null` p/ arquivado). Compartilhada
+ * pelo botão inline (desktop, no header) e pela barra fixa no rodapé (mobile). */
+interface StatusToggleAction {
+  label: string;
+  pending: boolean;
+  run: () => Promise<void>;
+}
+
+/** Lógica de toggle de status do agente, isolada para reuso desktop/mobile. */
+function useStatusToggle(agent: Agent | null): StatusToggleAction | null {
   const { toast } = useToast();
   const router = useRouter();
   const setStatus = useSetAgentStatus();
 
   const toggle =
-    agent.status === 'active'
+    agent?.status === 'active'
       ? { label: 'Desativar', next: 'inactive' as const }
-      : agent.status === 'inactive'
+      : agent?.status === 'inactive'
         ? { label: 'Ativar', next: 'active' as const }
         : null;
 
-  const onToggle = async () => {
-    if (!toggle) return;
-    try {
-      await setStatus.mutateAsync({ id: agent.id, status: toggle.next });
-      toast({
-        variant: 'success',
-        title: toggle.next === 'active' ? 'Agente ativado' : 'Agente desativado',
-        description: agent.name,
-      });
-      router.refresh();
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Tente novamente.';
-      const ref = err instanceof ApiError ? err.ref : undefined;
-      toast({
-        variant: 'error',
-        title: 'Falha ao atualizar o agente',
-        description: ref ? `${message} (ref ${ref})` : message,
-      });
-    }
+  if (!agent || !toggle) return null;
+
+  return {
+    label: toggle.label,
+    pending: setStatus.isPending,
+    run: async () => {
+      try {
+        await setStatus.mutateAsync({ id: agent.id, status: toggle.next });
+        toast({
+          variant: 'success',
+          title: toggle.next === 'active' ? 'Agente ativado' : 'Agente desativado',
+          description: agent.name,
+        });
+        router.refresh();
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : 'Tente novamente.';
+        const ref = err instanceof ApiError ? err.ref : undefined;
+        toast({
+          variant: 'error',
+          title: 'Falha ao atualizar o agente',
+          description: ref ? `${message} (ref ${ref})` : message,
+        });
+      }
+    },
   };
+}
+
+/**
+ * Cabeçalho de identidade + ação de ativar/desativar (mesma UX do AgentCard).
+ *
+ * Mobile (MOBILE_UX §1 thumb-first): a identidade ocupa a largura toda e a ação
+ * primária vai para uma barra fixa no rodapé da página (renderizada em
+ * `AgentDetail`). Desktop: ação inline à direita do header.
+ */
+function DetailHeader({
+  agent,
+  canEdit,
+  action,
+  isMobile,
+}: {
+  agent: Agent;
+  canEdit: boolean;
+  action: StatusToggleAction | null;
+  isMobile: boolean;
+}) {
+  const showInlineAction = canEdit && action && !isMobile;
 
   return (
     <Card elevation={1} className="flex items-center gap-4 p-5">
@@ -165,8 +218,10 @@ function DetailHeader({ agent, canEdit }: { agent: Agent; canEdit: boolean }) {
         <Bot className="size-6" aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-3">
-          <h1 className="truncate font-head text-xl font-semibold text-text">{agent.name}</h1>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <h1 className="min-w-0 truncate font-head text-lg font-semibold text-text md:text-xl">
+            {agent.name}
+          </h1>
           <AgentStatusBadge status={agent.status} />
         </div>
         <p className="mt-0.5 flex items-center gap-1.5 truncate font-body text-sm text-text-low">
@@ -175,14 +230,14 @@ function DetailHeader({ agent, canEdit }: { agent: Agent; canEdit: boolean }) {
           {agent.description ? ` · ${agent.description}` : ''}
         </p>
       </div>
-      {canEdit && toggle && (
+      {showInlineAction && (
         <Button
           variant="ghost"
-          loading={setStatus.isPending}
+          loading={action.pending}
           leftIcon={<Power className="size-4" aria-hidden />}
-          onClick={() => void onToggle()}
+          onClick={() => void action.run()}
         >
-          {toggle.label}
+          {action.label}
         </Button>
       )}
     </Card>

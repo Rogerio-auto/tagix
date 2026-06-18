@@ -2,7 +2,7 @@
 id: F36-S08
 title: Agentes responsivos — lista + detalhe com abas
 phase: F36
-status: available
+status: review
 priority: medium
 estimated_size: M
 depends_on:
@@ -13,6 +13,9 @@ blocks:
 source_docs:
   - docs/features/MOBILE_RESPONSIVE_PLAN.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-18T01:37:56Z
+completed_at: 2026-06-18T01:47:04Z
+
 ---
 # F36-S08 — Agentes responsivos
 

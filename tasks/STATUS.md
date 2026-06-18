@@ -25,7 +25,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F33   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F34   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F35   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
-| F36   | 14     | 6   | 1   | 0   | 0   | 0   | 7   |
+| F36   | 14     | 5   | 1   | 0   | 0   | 1   | 7   |
 | F37   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
@@ -293,7 +293,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F36-S05 | Padrão Tabela→Cards + filtros em sheet (primitivo + contatos)       | ✅ done      | high       | —          |
 | F36-S06 | Dashboard responsivo — grid→coluna + charts responsivos             | ✅ done      | medium     | —          |
 | F36-S07 | Calendário responsivo — agenda/dia no mobile                        | ✅ done      | medium     | —          |
-| F36-S08 | Agentes responsivos — lista + detalhe com abas                      | 🟢 available | medium     | —          |
+| F36-S08 | Agentes responsivos — lista + detalhe com abas                      | 🟣 review    | medium     | —          |
 | F36-S09 | Campanhas responsivas — lista + wizard + monitoring                 | 🟢 available | medium     | —          |
 | F36-S10 | Settings + Knowledge + Conversões responsivos                       | 🟢 available | medium     | —          |
 | F36-S11 | Flow Builder mobile — inspecionar/operar (read-first)               | 🟢 available | medium     | —          |
