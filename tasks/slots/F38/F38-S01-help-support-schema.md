@@ -2,7 +2,7 @@
 id: F38-S01
 title: Schema Help + Support (5 tabelas) + RLS + repos + seed
 phase: F38
-status: in-progress
+status: review
 priority: critical
 estimated_size: L
 depends_on: []
@@ -14,6 +14,7 @@ source_docs:
   - docs/features/SUPPORT.md
 agent_id: db-engineer
 claimed_at: 2026-06-18T14:56:54Z
+completed_at: 2026-06-18T15:09:36Z
 
 ---
 # F38-S01 — Schema Help + Support
