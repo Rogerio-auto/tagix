@@ -11,7 +11,9 @@ import {
   Command,
   CreditCard,
   Eye,
+  Headset,
   KeyRound,
+  LifeBuoy,
   Layers,
   Menu,
   ShieldCheck,
@@ -33,6 +35,8 @@ const ICONS: Record<PlatformNavItem['icon'], LucideIcon> = {
   subscriptions: CreditCard,
   playground: Bot,
   impersonation: Eye,
+  help: LifeBuoy,
+  support: Headset,
 };
 
 /**
