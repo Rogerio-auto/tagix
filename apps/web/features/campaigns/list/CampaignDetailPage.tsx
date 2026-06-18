@@ -24,16 +24,16 @@ export function CampaignDetailPage({ campaignId }: { campaignId: string }): Reac
   const { campaign } = data;
   return (
     <div className="flex flex-col gap-6 p-6">
-      <header className="flex items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
           <Link href="/campaigns" className="text-xs text-text-low hover:text-text">
             ← Campanhas
           </Link>
-          <h1 className="text-lg font-semibold text-text">{campaign.name}</h1>
+          <h1 className="font-head text-lg font-semibold text-text">{campaign.name}</h1>
         </div>
         <Link
           href={`/campaigns/${campaign.id}/edit`}
-          className="rounded-md border border-border px-3 py-1.5 text-sm text-text hover:bg-surface-2"
+          className="touch-target inline-flex items-center rounded-md border border-border px-3 py-1.5 text-sm text-text outline-none transition-colors hover:bg-surface-2 focus-visible:shadow-glow-md"
         >
           Editar
         </Link>
