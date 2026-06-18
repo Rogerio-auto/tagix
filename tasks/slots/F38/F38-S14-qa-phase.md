@@ -2,7 +2,7 @@
 id: F38-S14
 title: QA da fase (integration + e2e happy paths)
 phase: F38
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on:
