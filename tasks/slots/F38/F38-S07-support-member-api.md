@@ -2,7 +2,7 @@
 id: F38-S07
 title: API suporte do membro (abrir/listar/responder/resolver)
 phase: F38
-status: available
+status: review
 priority: high
 estimated_size: M
 depends_on:
@@ -14,6 +14,9 @@ blocks:
 source_docs:
   - docs/features/SUPPORT.md
 agent_id: backend-engineer
+claimed_at: 2026-06-18T15:35:58Z
+completed_at: 2026-06-18T15:39:28Z
+
 ---
 # F38-S07 — API suporte do membro
 
