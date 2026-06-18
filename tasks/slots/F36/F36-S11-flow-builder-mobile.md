@@ -2,7 +2,7 @@
 id: F36-S11
 title: Flow Builder mobile — inspecionar/operar (read-first)
 phase: F36
-status: available
+status: review
 priority: medium
 estimated_size: M
 depends_on:
@@ -12,6 +12,9 @@ blocks:
 source_docs:
   - docs/features/MOBILE_RESPONSIVE_PLAN.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-18T02:01:32Z
+completed_at: 2026-06-18T02:08:29Z
+
 ---
 # F36-S11 — Flow Builder mobile
 

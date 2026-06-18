@@ -9,12 +9,16 @@ import { CanvasSkeleton, ErrorState, SkeletonList } from '@/shared/components/fe
 import { lazyClient } from '@/shared/lib/lazy';
 import { ApiError } from '@/shared/lib/api-client';
 import { useAuthStore } from '@/shared/stores/auth.store';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { ExecutionsPanel } from './canvas/ExecutionsPanel';
 import { NodePalette } from './canvas/NodePalette';
 import { ToolbarTop } from './canvas/ToolbarTop';
 import { useFlow, usePublishFlow, useSaveFlow } from './hooks/useFlow';
 import { useFlowEditor } from './hooks/useFlowEditor';
 import { InspectorPanel } from './inspector/InspectorPanel';
+import { MobileDegradationBanner } from './mobile/MobileDegradationBanner';
+import { MobileLifecycleBar } from './mobile/MobileLifecycleBar';
+import { MobileNodeList } from './mobile/MobileNodeList';
 import { ValidationBanner } from './shared/validation-banner';
 import { FlowHelpersAutoProvider } from './shared/helpers-context';
 import type { FlowNodeKind } from './shared/node-catalog';
@@ -28,7 +32,7 @@ import { readTriggerConfig, readTriggerType } from './nodes/trigger/config';
  * `ReactFlowProvider` e o store permanecem estáticos: o contexto existe antes do canvas
  * hidratar, então o boundary lazy não quebra os hooks de `useReactFlow`.
  */
-const FlowCanvas = lazyClient<Record<string, never>>(
+const FlowCanvas = lazyClient<{ readOnly?: boolean }>(
   () => import('./canvas/FlowCanvas').then((m) => m.FlowCanvas),
   {
     loading: () => <CanvasSkeleton />,
@@ -40,6 +44,7 @@ const FlowCanvas = lazyClient<Record<string, never>>(
 export function FlowEditorPage({ flowId }: { flowId: string }) {
   const role = useAuthStore((s) => s.auth?.role);
   const canPublish = role ? can(role, 'flow.publish') : false;
+  const { isMobile } = useBreakpoint();
 
   const { toast } = useToast();
   const flow = useFlow(flowId);
@@ -161,6 +166,76 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
     );
   }
 
+  // Mobile (< md, F36-S11): read-first. Canvas pan/zoom sem edição estrutural; lista de nodes
+  // navegável; inspector como full-sheet (no InspectorPanel); ciclo de vida no rodapé thumb-zone.
+  if (isMobile) {
+    return (
+      <ReactFlowProvider>
+        <FlowHelpersAutoProvider>
+          <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
+            <header className="flex min-w-0 items-center gap-2 border-b border-border-2 bg-surface-1 px-4 py-2.5">
+              <h1 className="min-w-0 flex-1 truncate font-head text-sm font-semibold text-text">
+                {flow.data.flow.name}
+              </h1>
+              <span
+                className={
+                  dirty
+                    ? 'shrink-0 rounded-pill bg-warning/15 px-2 py-0.5 text-[11px] text-warning'
+                    : 'shrink-0 rounded-pill bg-surface-3 px-2 py-0.5 text-[11px] text-text-low'
+                }
+              >
+                {dirty ? 'Não salvo' : 'Salvo'}
+              </span>
+            </header>
+
+            <MobileDegradationBanner />
+
+            {showBanner && (
+              <div className="border-b border-border-2 bg-surface-1 px-4 py-2">
+                <ValidationBanner issues={issues} />
+              </div>
+            )}
+
+            {/* Canvas read-first: ~55% da altura útil para pan/zoom, lista navegável abaixo. */}
+            <div className="relative min-h-0 basis-[55%] border-b border-border-2">
+              <FlowCanvas readOnly />
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="border-b border-border-2 bg-surface-1 px-4 py-2">
+                <p className="font-head text-xs font-semibold uppercase tracking-wide text-text-low">
+                  Nodes do flow
+                </p>
+              </div>
+              <MobileNodeList />
+              <div className="px-4 py-3">
+                <p className="mb-2 font-head text-xs font-semibold uppercase tracking-wide text-text-low">
+                  Execuções
+                </p>
+                <ExecutionsPanel flowId={flowId} />
+              </div>
+            </div>
+
+            <MobileLifecycleBar
+              flowId={flowId}
+              status={flow.data.flow.status}
+              dirty={dirty}
+              saving={save.isPending}
+              publishing={publish.isPending}
+              canPublish={canPublish}
+              onSave={() => void handleSave()}
+              onPublish={() => void handlePublish()}
+            />
+          </div>
+
+          {/* Inspector como full-sheet no mobile (controlado pelo node selecionado). */}
+          <InspectorPanel />
+        </FlowHelpersAutoProvider>
+      </ReactFlowProvider>
+    );
+  }
+
+  // Desktop (md+): editor inalterado.
   return (
     <ReactFlowProvider>
       <FlowHelpersAutoProvider>
