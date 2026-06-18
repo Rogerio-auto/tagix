@@ -45,6 +45,7 @@ import { createV1Router } from './routes/v1';
 import { createDevRouter } from './routes/dev';
 import { createPrivacyRouter } from './routes/privacy';
 import { createHelpRouter } from './routes/help';
+import { createSupportRouter } from './routes/support';
 import { createPlatformModelsRouter } from './routes/platform/models';
 import { createPlatformPoliciesRouter } from './routes/platform/policies';
 import { createPlatformSecretsRouter } from './routes/platform/secrets';
@@ -187,6 +188,8 @@ export function createApp(): Express {
 
   // F38: leitor da Central de Ajuda (qualquer membro autenticado; só published).
   app.use(createHelpRouter());
+  // F38: chat de suporte do membro (workspace-scoped; assertThreadVisible → 404).
+  app.use(createSupportRouter());
 
   // Super-admin de plataforma (F2.5/F25): catálogo de modelos, políticas por
   // workspace, rotação de secrets e rollup de custo LLM. Cada router já é gated

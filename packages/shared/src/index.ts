@@ -58,4 +58,26 @@ export type {
   HelpArticleDTO,
 } from './help';
 
+// --- Chat de Suporte (F38 — SUPPORT.md §2). Exports explícitos. ---
+export {
+  SUPPORT_THREAD_STATUSES,
+  SUPPORT_THREAD_PRIORITIES,
+  SUPPORT_SENDER_TYPES,
+  supportOpenThreadSchema,
+  supportSendMessageSchema,
+  supportPlatformFiltersSchema,
+  supportPlatformPatchSchema,
+} from './support';
+export type {
+  SupportThreadStatusT,
+  SupportThreadPriorityT,
+  SupportSenderTypeT,
+  SupportOpenThreadInput,
+  SupportSendMessageInput,
+  SupportPlatformFilters,
+  SupportPlatformPatch,
+  SupportThreadDTO,
+  SupportMessageDTO,
+} from './support';
+
 export const SHARED_PKG = '@hm/shared' as const;
