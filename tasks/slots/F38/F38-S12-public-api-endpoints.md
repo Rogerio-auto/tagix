@@ -2,7 +2,7 @@
 id: F38-S12
 title: Novos endpoints API pública v1 + OpenAPI + scopes + testes
 phase: F38
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: []
