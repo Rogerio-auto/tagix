@@ -2,7 +2,7 @@
 id: F38-S11
 title: UI inbox de suporte no (platform) — real-time
 phase: F38
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on:
