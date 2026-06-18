@@ -2,7 +2,7 @@
 id: F38-S09
 title: UI launcher + chat de suporte no (app)
 phase: F38
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on:
@@ -13,6 +13,7 @@ source_docs:
   - docs/features/SUPPORT.md
 agent_id: frontend-engineer
 claimed_at: 2026-06-18T17:24:44Z
+completed_at: 2026-06-18T17:28:11Z
 
 ---
 # F38-S09 — UI chat de suporte (membro)
