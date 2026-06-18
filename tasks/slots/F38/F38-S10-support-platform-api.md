@@ -2,7 +2,7 @@
 id: F38-S10
 title: API inbox de suporte no (platform) — triagem/reply/status
 phase: F38
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on:
