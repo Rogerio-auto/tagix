@@ -2,7 +2,7 @@
 id: F38-S06
 title: Help contextual (?) — HelpHint em @hm/ui + anchors nas features
 phase: F38
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on:
