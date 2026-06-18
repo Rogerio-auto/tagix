@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "tsx watch --env-file=../../.env src/main.ts",
-    "start": "tsx --env-file=../../.env src/main.ts"
+    "start": "tsx --env-file=../../.env src/main.ts",
+    "start:prod": "tsx src/main.ts"
   },
   "dependencies": {
     "@hm/agents-client": "workspace:*",

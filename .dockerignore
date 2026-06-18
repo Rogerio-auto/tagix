@@ -1,0 +1,45 @@
+# Contexto de build Docker — mantém a imagem enxuta e fora segredos/junk.
+# Vale para TODOS os Dockerfiles (context = raiz do monorepo).
+
+# Dependências e artefatos de build (reinstalados/recompilados dentro da imagem)
+**/node_modules
+**/.next
+**/dist
+**/build
+**/.turbo
+**/coverage
+**/.venv
+**/__pycache__
+**/*.pyc
+
+# Segredos — NUNCA entram na imagem (env vem do compose em runtime)
+.env
+.env.*
+!.env.production.example
+**/.env
+**/.env.*
+
+# Git e CI
+.git
+.github
+.gitignore
+
+# Testes e2e / ferramentas de teste (não vão para produção)
+**/playwright-report
+**/test-results
+**/*.test.ts
+**/*.spec.ts
+**/e2e
+
+# Docs, tasks e infra que não pertencem à imagem da app
+docs
+tasks
+infra/observability
+*.md
+!apps/web/README.md
+
+# Editores / OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db

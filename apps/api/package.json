@@ -7,6 +7,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "dev": "tsx watch --env-file=../../.env src/index.ts",
+    "start:prod": "tsx src/index.ts",
     "test": "vitest run"
   },
   "dependencies": {

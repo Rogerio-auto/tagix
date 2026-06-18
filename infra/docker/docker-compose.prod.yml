@@ -1,0 +1,283 @@
+# =============================================================================
+# Leadium — stack de PRODUÇÃO (Docker Swarm + Traefik).
+# Deploy via scripts/deploy.sh (build no nó → docker stack deploy).
+#
+# ISOLAMENTO: Postgres/Redis/RabbitMQ são PRÓPRIOS da Leadium, numa rede interna
+# (`leadium_internal`) SEM portas publicadas no host. Não tocam nem reusam o
+# Postgres/Redis/n8n que já rodam na VPS. Só `web`, `api` e `landing` tocam a
+# rede `network_public` (ingress do Traefik) para receber tráfego externo.
+#
+# Domínios: app.leadium.com.br (web) · api.leadium.com.br (api) · leadium.com.br (landing)
+# =============================================================================
+
+# --- Bloco de env comum aos serviços Node de backend (api + workers) ---
+x-app-env: &app-env
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: postgresql://${PG_USER}:${PG_PASSWORD}@postgres:5432/${PG_DB}
+  REDIS_URL: redis://redis:6379
+  AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+  SUPABASE_URL: ${SUPABASE_URL}
+  SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+  SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+  AUTH_PROVIDER: ${AUTH_PROVIDER:-supabase}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+  ENCRYPTION_KEY_VERSION: ${ENCRYPTION_KEY_VERSION:-1}
+  OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+  AGENT_RUNTIME_URL: http://agent-runtime:8001
+  AGENT_RUNTIME_TOKEN: ${AGENT_RUNTIME_TOKEN}
+  META_APP_ID: ${META_APP_ID:-}
+  META_APP_SECRET: ${META_APP_SECRET:-}
+  META_WEBHOOK_VERIFY_TOKEN: ${META_WEBHOOK_VERIFY_TOKEN:-}
+  STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+  LOCAL_STORAGE_PATH: /data/storage
+  R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+  R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+  R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+  R2_BUCKET: ${R2_BUCKET:-}
+  BILLING_ENABLED: ${BILLING_ENABLED:-false}
+
+services:
+  # ==========================================================================
+  # INFRA PRÓPRIA (isolada — sem portas no host)
+  # ==========================================================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${PG_DB}
+    volumes:
+      - leadium_pgdata:/var/lib/postgresql/data
+    networks:
+      - leadium_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy: { condition: on-failure, delay: 10s, max_attempts: 5 }
+      resources:
+        limits: { memory: 1024M }
+        reservations: { memory: 384M }
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - leadium_redisdata:/data
+    networks:
+      - leadium_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy: { condition: on-failure, delay: 10s, max_attempts: 5 }
+      resources:
+        limits: { memory: 256M }
+        reservations: { memory: 48M }
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - leadium_rabbitdata:/var/lib/rabbitmq
+    networks:
+      - leadium_internal
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy: { condition: on-failure, delay: 10s, max_attempts: 5 }
+      resources:
+        limits: { memory: 512M }
+        reservations: { memory: 192M }
+
+  # ==========================================================================
+  # API — Express 5 + Socket.io (ingress: api.leadium.com.br + /api,/auth,/socket.io de app.)
+  # ==========================================================================
+  api:
+    image: leadium-api:latest
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      <<: *app-env
+      API_PORT: "3001"
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://app.leadium.com.br,https://leadium.com.br}
+      CSP_CONNECT_SRC: ${CSP_CONNECT_SRC:-}
+    volumes:
+      - leadium_storage:/data/storage
+    networks:
+      - leadium_internal
+      - network_public
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy: { condition: on-failure, delay: 10s, max_attempts: 5 }
+      resources:
+        limits: { memory: 768M }
+        reservations: { memory: 320M }
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.services.leadium_api.loadbalancer.server.port=3001"
+        # api.leadium.com.br — API pública v1 + webhooks Meta (auth por token)
+        - "traefik.http.routers.leadium_api.rule=Host(`api.leadium.com.br`)"
+        - "traefik.http.routers.leadium_api.entrypoints=websecure"
+        - "traefik.http.routers.leadium_api.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.leadium_api.service=leadium_api"
+        - "traefik.http.routers.leadium_api.priority=10"
+        # app.leadium.com.br/{api,auth,socket.io} → API (same-origin; WS nativo no Traefik)
+        - "traefik.http.routers.leadium_app_api.rule=Host(`app.leadium.com.br`) && (PathPrefix(`/api`) || PathPrefix(`/auth`) || PathPrefix(`/socket.io`))"
+        - "traefik.http.routers.leadium_app_api.entrypoints=websecure"
+        - "traefik.http.routers.leadium_app_api.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.leadium_app_api.service=leadium_api"
+        - "traefik.http.routers.leadium_app_api.priority=20"
+
+  # ==========================================================================
+  # WORKERS — 5 consumers + scheduler (sem ingress)
+  # ==========================================================================
+  workers:
+    image: leadium-workers:latest
+    build:
+      context: ../..
+      dockerfile: apps/workers/Dockerfile
+    environment:
+      <<: *app-env
+    volumes:
+      - leadium_storage:/data/storage
+    networks:
+      - leadium_internal
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy: { condition: on-failure, delay: 10s, max_attempts: 5 }
+      resources:
+        limits: { memory: 512M }
+        reservations: { memory: 224M }
+
+  # ==========================================================================
+  # AGENT-RUNTIME — FastAPI + LangGraph (IA, sem ingress; api fala via http interno)
+  # ==========================================================================
+  agent-runtime:
+    image: leadium-agent-runtime:latest
+    build:
+      context: ../../apps/agent-runtime
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://${PG_USER}:${PG_PASSWORD}@postgres:5432/${PG_DB}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      API_BASE_URL: http://api:3001
+      AGENT_RUNTIME_TOKEN: ${AGENT_RUNTIME_TOKEN}
+    networks:
+      - leadium_internal
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy: { condition: on-failure, delay: 10s, max_attempts: 5 }
+      resources:
+        limits: { memory: 768M }
+        reservations: { memory: 320M }
+
+  # ==========================================================================
+  # WEB — Next.js 15 standalone (ingress: app.leadium.com.br)
+  # ==========================================================================
+  web:
+    image: leadium-web:latest
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # Fallback de SSR/rewrites; o roteamento de borda de /api é feito pelo Traefik.
+      API_PROXY_TARGET: http://api:3001
+      NEXT_PUBLIC_HM_ENV: production
+      NEXT_PUBLIC_HM_RELEASE: ${HM_RELEASE:-}
+    networks:
+      - leadium_internal
+      - network_public
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy: { condition: on-failure, delay: 10s, max_attempts: 5 }
+      resources:
+        limits: { memory: 384M }
+        reservations: { memory: 160M }
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.services.leadium_web.loadbalancer.server.port=3000"
+        - "traefik.http.routers.leadium_web.rule=Host(`app.leadium.com.br`)"
+        - "traefik.http.routers.leadium_web.entrypoints=websecure"
+        - "traefik.http.routers.leadium_web.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.leadium_web.service=leadium_web"
+        - "traefik.http.routers.leadium_web.priority=1"
+
+  # ==========================================================================
+  # LANDING — apex leadium.com.br (placeholder até a landing real entrar)
+  # ==========================================================================
+  landing:
+    image: leadium-landing:latest
+    build:
+      context: ./landing
+      dockerfile: Dockerfile
+    networks:
+      - network_public
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy: { condition: on-failure, delay: 5s, max_attempts: 3 }
+      resources:
+        limits: { memory: 64M }
+        reservations: { memory: 16M }
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.services.leadium_landing.loadbalancer.server.port=80"
+        - "traefik.http.routers.leadium_landing.rule=Host(`leadium.com.br`) || Host(`www.leadium.com.br`)"
+        - "traefik.http.routers.leadium_landing.entrypoints=websecure"
+        - "traefik.http.routers.leadium_landing.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.leadium_landing.service=leadium_landing"
+        - "traefik.http.routers.leadium_landing.priority=1"
+
+# =============================================================================
+networks:
+  # Ingress do Traefik (criada pelo stack do Traefik; aqui é externa).
+  network_public:
+    external: true
+  # Rede interna isolada da Leadium. `internal: true` = sem gateway p/ fora.
+  # `attachable: true` permite o container efêmero de migration se conectar.
+  leadium_internal:
+    driver: overlay
+    internal: true
+    attachable: true
+
+volumes:
+  leadium_pgdata:
+  leadium_redisdata:
+  leadium_rabbitdata:
+  leadium_storage:
