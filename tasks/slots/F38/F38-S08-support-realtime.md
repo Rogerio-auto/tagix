@@ -2,7 +2,7 @@
 id: F38-S08
 title: Real-time suporte (Socket.io rooms + relay)
 phase: F38
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on:
