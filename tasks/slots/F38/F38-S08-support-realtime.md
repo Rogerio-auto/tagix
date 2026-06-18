@@ -2,7 +2,7 @@
 id: F38-S08
 title: Real-time suporte (Socket.io rooms + relay)
 phase: F38
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on:
@@ -14,6 +14,7 @@ source_docs:
   - docs/features/SUPPORT.md
 agent_id: backend-engineer
 claimed_at: 2026-06-18T15:41:00Z
+completed_at: 2026-06-18T15:45:04Z
 
 ---
 # F38-S08 — Real-time suporte
