@@ -2,7 +2,7 @@
 id: F36-S09
 title: Campanhas responsivas — lista + wizard + monitoring
 phase: F36
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on:
@@ -14,6 +14,7 @@ source_docs:
   - docs/features/MOBILE_RESPONSIVE_PLAN.md
 agent_id: frontend-engineer
 claimed_at: 2026-06-18T01:47:38Z
+completed_at: 2026-06-18T01:53:12Z
 
 ---
 # F36-S09 — Campanhas responsivas
