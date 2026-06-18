@@ -74,8 +74,13 @@ describe('sanitizeUrl — politica de esquema', () => {
     expect(sanitizeUrl('/help/x')).toBe('/help/x');
     expect(sanitizeUrl('#sec')).toBe('#sec');
   });
+  it('neutraliza obfuscacao por char de controle no esquema', () => {
+    expect(sanitizeUrl('java\tscript:alert(1)')).toBe('#');
+    expect(sanitizeUrl('  ja\nvascript:alert(1)')).toBe('#');
+  });
+
   it('rejeita esquemas perigosos e protocol-relative', () => {
-    expect(sanitizeUrl('javascript:alert(1)')).toBe('#');
+    expect(sanitizeUrl('  ja\nvascript:alert(1)')).toBe('#');
     expect(sanitizeUrl('JAVASCRIPT:alert(1)')).toBe('#');
     expect(sanitizeUrl(' vbscript:msgbox ')).toBe('#');
     expect(sanitizeUrl('data:text/html,x')).toBe('#');
