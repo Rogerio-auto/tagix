@@ -2,7 +2,7 @@
 id: F36-S12
 title: Auth (login/reset) — polish mobile
 phase: F36
-status: available
+status: review
 priority: low
 estimated_size: S
 depends_on:
@@ -12,6 +12,9 @@ blocks:
 source_docs:
   - docs/features/MOBILE_RESPONSIVE_PLAN.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-18T02:09:01Z
+completed_at: 2026-06-18T02:13:06Z
+
 ---
 # F36-S12 — Auth mobile
 

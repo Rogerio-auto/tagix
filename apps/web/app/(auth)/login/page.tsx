@@ -2,7 +2,9 @@ import { LoginForm } from '@/features/auth/components/LoginForm';
 
 export default function LoginPage() {
   return (
-    <div className="w-full max-w-sm">
+    // Mobile: card full-width com paddings generosos. md+: largura travada,
+    // sem chrome de card (visual original preservado).
+    <div className="mx-auto w-full max-w-sm py-8 md:py-0">
       <div className="mb-8 flex items-center gap-2">
         <span className="font-display text-2xl text-brand" aria-hidden>
           ◢

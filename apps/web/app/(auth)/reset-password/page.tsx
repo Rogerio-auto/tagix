@@ -2,7 +2,7 @@ import { ResetPasswordForm } from '@/features/auth/components/ResetPasswordForm'
 
 export default function ResetPasswordPage() {
   return (
-    <div className="w-full max-w-sm">
+    <div className="mx-auto w-full max-w-sm py-8 md:py-0">
       <div className="mb-8 flex items-center gap-2">
         <span className="font-display text-2xl text-brand" aria-hidden>
           ◢
