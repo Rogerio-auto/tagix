@@ -1,8 +1,12 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { Button, Input, Modal, useToast } from '@hm/ui';
+import { Sheet } from '@/shared/components/Sheet';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
+import { cn } from '@/shared/lib/cn';
 import { ApiError } from '@/shared/lib/api-client';
 import { DepartmentsField } from '../DepartmentsField';
 import {
@@ -56,6 +60,7 @@ function isEmptyAnswer(value: TemplateAnswerValue | undefined): boolean {
  */
 export function AgentCreationWizard({ open, onClose }: AgentCreationWizardProps) {
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const templatesQuery = useAgentTemplates(open);
   const modelsQuery = useAgentModels(open);
   const create = useCreateAgent();
@@ -180,96 +185,125 @@ export function AgentCreationWizard({ open, onClose }: AgentCreationWizardProps)
       ? 'Criar agente'
       : `Criar agente${template ? ` · ${template.name}` : ''}`;
 
+  // 1 grupo por view (UX §2.8) — o Stepper marca o progresso; o corpo abaixo é
+  // o passo atual. Idêntico em mobile e desktop, só muda a casca (Sheet/Modal).
+  const body: ReactNode = (
+    <div className="flex flex-col gap-5">
+      <Stepper steps={STEPS} current={step} />
+
+      {step === 0 && (
+        <TemplateStep
+          templates={templates}
+          loading={templatesQuery.isLoading}
+          selectedId={template?.id ?? null}
+          onSelect={pickTemplate}
+        />
+      )}
+
+      {step === 1 && (
+        <div className="flex flex-col gap-4">
+          <Input
+            label="Nome do agente *"
+            value={name}
+            error={nameError}
+            placeholder="Ex.: Vendas WhatsApp"
+            onChange={(e) => {
+              setName(e.target.value);
+              if (nameError) setNameError(undefined);
+            }}
+          />
+          <QuestionsStep
+            questions={questions}
+            values={answers}
+            errors={answerErrors}
+            onChange={setAnswer}
+          />
+        </div>
+      )}
+
+      {step === 2 && (
+        <ModelStep
+          models={models}
+          loading={modelsQuery.isLoading}
+          defaultModel={template?.defaultModel ?? 'Modelo padrão'}
+          selected={model}
+          onSelect={setModel}
+        />
+      )}
+
+      {step === 3 && (
+        <div className="flex flex-col gap-3">
+          <p className="font-body text-sm text-text-mid">
+            Em quais departamentos este agente atende? Marque um como{' '}
+            <span className="font-medium text-text">agente de entrada</span> para que ele receba a
+            primeira mensagem. Opcional — você pode configurar depois.
+          </p>
+          <DepartmentsField value={departments} onChange={setDepartments} />
+        </div>
+      )}
+    </div>
+  );
+
+  // Navegação entre passos. No desktop fica logo abaixo do corpo (no Modal); no
+  // mobile vai para o `footer` fixo do Sheet, na zona do polegar (CTA fixo — §2.8).
+  const navInline = !isMobile;
+  const nav: ReactNode = (
+    <div
+      className={cn(
+        'flex items-center justify-between gap-3',
+        navInline && 'mt-1 border-t border-border-2 pt-4',
+      )}
+    >
+      {step > 0 ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="touch-target"
+          leftIcon={<ArrowLeft className="size-4" aria-hidden />}
+          onClick={goBack}
+        >
+          Voltar
+        </Button>
+      ) : (
+        <span />
+      )}
+
+      {step < LAST_STEP ? (
+        <Button
+          variant="primary"
+          disabled={step === 0 ? !template : false}
+          rightIcon={<ArrowRight className="size-4" aria-hidden />}
+          onClick={goNext}
+        >
+          Continuar
+        </Button>
+      ) : (
+        <Button
+          variant="primary"
+          loading={create.isPending}
+          leftIcon={<Check className="size-4" aria-hidden />}
+          onClick={() => void submit()}
+        >
+          Criar agente
+        </Button>
+      )}
+    </div>
+  );
+
+  // Mobile: full-sheet com CTA fixo no rodapé (thumb-first). Desktop: inalterado.
+  if (isMobile) {
+    return (
+      <Sheet open={open} onClose={handleClose} variant="full" title={title} footer={nav}>
+        {body}
+      </Sheet>
+    );
+  }
+
   return (
     <Modal open={open} onClose={handleClose} title={title} className="max-w-xl">
       <div className="flex flex-col gap-5">
-        <Stepper steps={STEPS} current={step} />
-
-        {step === 0 && (
-          <TemplateStep
-            templates={templates}
-            loading={templatesQuery.isLoading}
-            selectedId={template?.id ?? null}
-            onSelect={pickTemplate}
-          />
-        )}
-
-        {step === 1 && (
-          <div className="flex flex-col gap-4">
-            <Input
-              label="Nome do agente *"
-              value={name}
-              error={nameError}
-              placeholder="Ex.: Vendas WhatsApp"
-              onChange={(e) => {
-                setName(e.target.value);
-                if (nameError) setNameError(undefined);
-              }}
-            />
-            <QuestionsStep
-              questions={questions}
-              values={answers}
-              errors={answerErrors}
-              onChange={setAnswer}
-            />
-          </div>
-        )}
-
-        {step === 2 && (
-          <ModelStep
-            models={models}
-            loading={modelsQuery.isLoading}
-            defaultModel={template?.defaultModel ?? 'Modelo padrão'}
-            selected={model}
-            onSelect={setModel}
-          />
-        )}
-
-        {step === 3 && (
-          <div className="flex flex-col gap-3">
-            <p className="font-body text-sm text-text-mid">
-              Em quais departamentos este agente atende? Marque um como{' '}
-              <span className="font-medium text-text">agente de entrada</span> para que ele receba a
-              primeira mensagem. Opcional — você pode configurar depois.
-            </p>
-            <DepartmentsField value={departments} onChange={setDepartments} />
-          </div>
-        )}
-
-        <div className="mt-1 flex items-center justify-between border-t border-border-2 pt-4">
-          {step > 0 ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              leftIcon={<ArrowLeft className="size-4" aria-hidden />}
-              onClick={goBack}
-            >
-              Voltar
-            </Button>
-          ) : (
-            <span />
-          )}
-
-          {step < LAST_STEP ? (
-            <Button
-              variant="primary"
-              disabled={step === 0 ? !template : false}
-              rightIcon={<ArrowRight className="size-4" aria-hidden />}
-              onClick={goNext}
-            >
-              Continuar
-            </Button>
-          ) : (
-            <Button
-              variant="primary"
-              loading={create.isPending}
-              leftIcon={<Check className="size-4" aria-hidden />}
-              onClick={() => void submit()}
-            >
-              Criar agente
-            </Button>
-          )}
-        </div>
+        {body}
+        {nav}
       </div>
     </Modal>
   );

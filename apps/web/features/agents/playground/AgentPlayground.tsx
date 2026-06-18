@@ -39,13 +39,18 @@ export function AgentPlayground({ agentId }: { agentId: string }) {
   const isEmpty = turns.length === 0 && !error;
 
   return (
-    <div className="flex h-[clamp(28rem,60vh,44rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface-2">
+    // Mobile: ocupa mais altura útil (dvh) para o chat caber na mão; desktop:
+    // clamp original. A altura é só dimensionamento (aparência) — sem troca de
+    // estrutura — então fica em classes responsivas. — MOBILE_UX §2 (canvas/chat).
+    <div className="flex h-[clamp(26rem,72dvh,40rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface-2 md:h-[clamp(28rem,60vh,44rem)]">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border-2 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="size-4 text-brand" aria-hidden />
+      <div className="flex items-center justify-between gap-3 border-b border-border-2 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Sparkles className="size-4 shrink-0 text-brand" aria-hidden />
           <span className="font-head text-sm font-semibold text-text">Playground</span>
-          <span className="font-body text-xs text-text-low">testes não afetam conversas reais</span>
+          <span className="hidden truncate font-body text-xs text-text-low sm:inline">
+            testes não afetam conversas reais
+          </span>
         </div>
         {turns.length > 0 && (
           <Button

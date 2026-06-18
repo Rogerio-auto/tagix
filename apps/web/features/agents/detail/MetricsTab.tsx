@@ -5,6 +5,7 @@ import { BarChart3 } from 'lucide-react';
 import { Button, Card } from '@hm/ui';
 import { cn } from '@/shared/lib/cn';
 import { EmptyState, ErrorState, Skeleton } from '@/shared/components/feedback';
+import { ResponsiveTable, type ResponsiveColumn } from '@/shared/components/ResponsiveTable';
 import { useAgentMetrics } from './queries';
 import type { AgentMetric, MetricPeriod } from './types';
 import { METRIC_PERIODS } from './types';
@@ -67,6 +68,76 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Chave estável de uma linha de métrica agregada. */
+const metricRowId = (r: AgentMetric) => `${r.period}-${r.periodStart}`;
+
+/**
+ * Colunas da grade de métricas. `ResponsiveTable` renderiza tabela densa em
+ * `md+` e cards escaneáveis em `< md` (a partir desta mesma config). O período é
+ * a coluna `primary` do card; custo entra como `badge`; o resto vira `meta`.
+ */
+const METRIC_COLUMNS: readonly ResponsiveColumn<AgentMetric>[] = [
+  {
+    id: 'period',
+    header: 'Período',
+    card: 'primary',
+    cell: (r) => <span className="text-text-mid md:text-text">{formatDate(r.periodStart)}</span>,
+  },
+  {
+    id: 'cost',
+    header: 'Custo',
+    align: 'right',
+    card: 'badge',
+    cell: (r) => <span className="font-price">{usd.format(r.totalCostUsd)}</span>,
+  },
+  {
+    id: 'tokens',
+    header: 'Tokens',
+    align: 'right',
+    cell: (r) => <span className="font-price">{int.format(r.totalTokens)} tokens</span>,
+  },
+  {
+    id: 'conversations',
+    header: 'Conversas',
+    align: 'right',
+    cell: (r) => <span className="font-price">{int.format(r.totalConversations)} conv.</span>,
+  },
+  {
+    id: 'messages',
+    header: 'Mensagens',
+    align: 'right',
+    cell: (r) => <span className="font-price">{int.format(r.totalMessages)} msg</span>,
+  },
+  {
+    id: 'errors',
+    header: 'Erros',
+    align: 'right',
+    cell: (r) => (
+      <span className={cn('font-price', r.errorCount > 0 ? 'text-danger' : 'text-text-low')}>
+        {int.format(r.errorCount)} erros
+      </span>
+    ),
+  },
+  {
+    id: 'handoffs',
+    header: 'Handoffs',
+    align: 'right',
+    cell: (r) => (
+      <span className="font-price text-text-mid">{int.format(r.handoffCount)} handoffs</span>
+    ),
+  },
+  {
+    id: 'latency',
+    header: 'Latência',
+    align: 'right',
+    cell: (r) => (
+      <span className="font-price text-text-mid">
+        {r.avgLatencyMs === null ? '—' : `${int.format(Math.round(r.avgLatencyMs))} ms`}
+      </span>
+    ),
+  },
+];
+
 export function MetricsTab({ agentId }: { agentId: string }) {
   const metrics = useAgentMetrics(agentId);
   const [period, setPeriod] = useState<MetricPeriod>('day');
@@ -118,8 +189,13 @@ export function MetricsTab({ agentId }: { agentId: string }) {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Seletor de período */}
-      <div role="tablist" aria-label="Período" className="inline-flex gap-1 rounded-md bg-surface-2 p-1">
+      {/* Seletor de período — full-width segmentado no mobile (alvos ≥44px),
+          compacto inline no desktop. */}
+      <div
+        role="tablist"
+        aria-label="Período"
+        className="flex w-full gap-1 rounded-md bg-surface-2 p-1 sm:inline-flex sm:w-auto"
+      >
         {METRIC_PERIODS.map((p) => (
           <button
             key={p}
@@ -128,7 +204,7 @@ export function MetricsTab({ agentId }: { agentId: string }) {
             aria-selected={p === period}
             onClick={() => setPeriod(p)}
             className={cn(
-              'rounded-sm px-3 py-1.5 font-head text-sm font-medium outline-none transition-colors duration-200',
+              'min-h-11 flex-1 rounded-sm px-3 py-1.5 font-head text-sm font-medium outline-none transition-colors duration-200 sm:min-h-0 sm:flex-none',
               'focus-visible:shadow-glow-md',
               p === period ? 'bg-surface-3 text-text' : 'text-text-low hover:text-text-mid',
             )}
@@ -153,52 +229,18 @@ export function MetricsTab({ agentId }: { agentId: string }) {
             <StatCard label="Mensagens" value={int.format(summary.totalMessages)} />
           </div>
 
-          <Card elevation={1} className="overflow-x-auto">
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr className="border-b border-border-2 font-head text-xs text-text-low">
-                  <th className="px-4 py-3 font-medium">Período</th>
-                  <th className="px-4 py-3 text-right font-medium">Custo</th>
-                  <th className="px-4 py-3 text-right font-medium">Tokens</th>
-                  <th className="px-4 py-3 text-right font-medium">Conversas</th>
-                  <th className="px-4 py-3 text-right font-medium">Mensagens</th>
-                  <th className="px-4 py-3 text-right font-medium">Erros</th>
-                  <th className="px-4 py-3 text-right font-medium">Handoffs</th>
-                  <th className="px-4 py-3 text-right font-medium">Latência</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr
-                    key={`${r.period}-${r.periodStart}`}
-                    className="border-b border-border-2 font-body text-sm text-text last:border-b-0"
-                  >
-                    <td className="px-4 py-3 text-text-mid">{formatDate(r.periodStart)}</td>
-                    <td className="px-4 py-3 text-right font-price">{usd.format(r.totalCostUsd)}</td>
-                    <td className="px-4 py-3 text-right font-price">{int.format(r.totalTokens)}</td>
-                    <td className="px-4 py-3 text-right font-price">
-                      {int.format(r.totalConversations)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-price">{int.format(r.totalMessages)}</td>
-                    <td
-                      className={cn(
-                        'px-4 py-3 text-right font-price',
-                        r.errorCount > 0 ? 'text-danger' : 'text-text-low',
-                      )}
-                    >
-                      {int.format(r.errorCount)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-price text-text-mid">
-                      {int.format(r.handoffCount)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-price text-text-mid">
-                      {r.avgLatencyMs === null ? '—' : `${int.format(Math.round(r.avgLatencyMs))} ms`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
+          {/* Tabela densa (md+) → cards escaneáveis (< md). */}
+          <ResponsiveTable
+            rows={rows}
+            columns={METRIC_COLUMNS}
+            getRowId={metricRowId}
+            ariaLabel="Métricas por período"
+            empty={{
+              icon: BarChart3,
+              title: `Sem dados ${PERIOD_LABEL[period].toLowerCase()}s`,
+              description: 'Não há métricas agregadas para este período. Tente outro intervalo.',
+            }}
+          />
         </>
       )}
     </div>

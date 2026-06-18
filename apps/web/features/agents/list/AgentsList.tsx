@@ -7,6 +7,7 @@ import { Button, Card, useToast } from '@hm/ui';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/components/feedback';
 import { HelpPanel } from '@/shared/components/help';
 import { PageHeader } from '@/shared/components/layout/PageHeader';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { ApiError } from '@/shared/lib/api-client';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { useAgents, useSetAgentStatus } from '../queries';
@@ -25,6 +26,7 @@ export function AgentsList() {
   const canEdit = role ? can(role, 'agent.edit') : false;
 
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const agents = useAgents();
   const setStatus = useSetAgentStatus();
 
@@ -96,6 +98,21 @@ export function AgentsList() {
           description="Crie um agente IA a partir de um template para automatizar atendimento, vendas e qualificação nas suas conversas."
           action={createButton ?? undefined}
         />
+      ) : isMobile ? (
+        // Mobile: 1 coluna confortável de cards standalone (MOBILE_UX §2/§4 —
+        // tabela/lista densa → cards escaneáveis, ação primária no corpo).
+        <ul className="flex flex-col gap-2">
+          {agents.data.agents.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              canEdit={canEdit}
+              busy={pendingId === agent.id}
+              onToggleActive={(a) => void toggleActive(a)}
+              variant="card"
+            />
+          ))}
+        </ul>
       ) : (
         <Card elevation={1}>
           <ul className="divide-y divide-border-2">
@@ -106,6 +123,7 @@ export function AgentsList() {
                 canEdit={canEdit}
                 busy={pendingId === agent.id}
                 onToggleActive={(a) => void toggleActive(a)}
+                variant="row"
               />
             ))}
           </ul>
