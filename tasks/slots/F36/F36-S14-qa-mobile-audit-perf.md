@@ -2,7 +2,7 @@
 id: F36-S14
 title: QA mobile + audit de UX + performance (fechamento)
 phase: F36
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on:
