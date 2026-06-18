@@ -2,7 +2,7 @@
 id: F38-S16
 title: Fix 500 no dedup de conversões (ON CONFLICT DO NOTHING)
 phase: F38
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: []
