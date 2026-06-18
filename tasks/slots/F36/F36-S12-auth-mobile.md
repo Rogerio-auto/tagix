@@ -2,7 +2,7 @@
 id: F36-S12
 title: Auth (login/reset) — polish mobile
 phase: F36
-status: review
+status: done
 priority: low
 estimated_size: S
 depends_on:
