@@ -15,6 +15,7 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { Plus } from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
 import { HelpHint } from '@/shared/components/help';
+import { AnchoredHelpHint } from '@hm/ui';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { StageColumn } from './StageColumn';
 import { MobileBoard } from './MobileBoard';
@@ -190,6 +191,7 @@ export function PipelinePage(): React.JSX.Element {
             </span>
           )}
           <HelpHint k="pipeline.board" />
+          <AnchoredHelpHint anchorKey="pipeline.board" />
         </div>
         <Button
           variant="secondary"

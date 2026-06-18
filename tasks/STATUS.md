@@ -27,7 +27,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F35   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F36   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F37   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
-| F38   | 16     | 6   | 0   | 0   | 0   | 0   | 10   |
+| F38   | 16     | 5   | 0   | 0   | 0   | 1   | 10   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -321,7 +321,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F38-S03 | API leitor de ajuda (list/get/anchor + busca FTS + feedback)    | ✅ done      | high       | —          |
 | F38-S04 | UI CMS Help no (platform) — lista + editor MD + publish         | ✅ done      | high       | —          |
 | F38-S05 | UI leitor /help + entrada de nav "Ajuda"                        | ✅ done      | high       | —          |
-| F38-S06 | Help contextual (?) — HelpHint em @hm/ui + anchors nas features | 🟢 available | medium     | —          |
+| F38-S06 | Help contextual (?) — HelpHint em @hm/ui + anchors nas features | 🟣 review    | medium     | —          |
 | F38-S07 | API suporte do membro (abrir/listar/responder/resolver)         | ✅ done      | high       | —          |
 | F38-S08 | Real-time suporte (Socket.io rooms + relay)                     | ✅ done      | high       | —          |
 | F38-S09 | UI launcher + chat de suporte no (app)                          | 🟢 available | high       | —          |

@@ -20,6 +20,10 @@ export { ToastProvider, useToast } from './Toast/Toast';
 export type { ToastOptions, ToastVariant, ToastPosition } from './Toast/Toast';
 
 export { HelpHint, HelpPanel } from './HelpHint/HelpHint';
+export { AnchoredHelpHint } from './help-hint/AnchoredHelpHint';
+export type { AnchoredHelpHintProps } from './help-hint/AnchoredHelpHint';
+export { defaultAnchoredHelpFetcher } from './help-hint/fetcher';
+export type { AnchoredHelpArticle, AnchoredHelpFetcher } from './help-hint/types';
 export type { HelpHintProps, HelpContent, HelpLink } from './HelpHint/HelpHint';
 
 export { Markdown } from './Markdown/Markdown';

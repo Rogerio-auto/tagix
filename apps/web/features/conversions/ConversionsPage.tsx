@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Target } from 'lucide-react';
-import { useToast } from '@hm/ui';
+import { AnchoredHelpHint, useToast } from '@hm/ui';
 import {
   ResponsiveTable,
   type ActiveFilterChip,
@@ -149,7 +149,10 @@ export function ConversionsPage(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-4 p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-head text-lg font-semibold text-text">Conversões</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="font-head text-lg font-semibold text-text">Conversões</h1>
+          <AnchoredHelpHint anchorKey="conversions.overview" />
+        </div>
       </header>
 
       {/* Métricas: grid 2-col em md+, coluna única full-width em mobile. */}
