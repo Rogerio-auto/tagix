@@ -2,7 +2,7 @@
 id: F36-S14
 title: QA mobile + audit de UX + performance (fechamento)
 phase: F36
-status: available
+status: review
 priority: medium
 estimated_size: M
 depends_on:
@@ -24,6 +24,9 @@ source_docs:
   - docs/UX_PRINCIPLES.md
   - docs/MOBILE_UX.md
 agent_id: qa-engineer
+claimed_at: 2026-06-18T02:20:26Z
+completed_at: 2026-06-18T02:30:59Z
+
 ---
 # F36-S14 — QA mobile + audit + performance
 
