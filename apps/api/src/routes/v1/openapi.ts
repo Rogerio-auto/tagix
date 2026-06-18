@@ -11,10 +11,28 @@ import {
   conversationResponse,
   conversationsListResponse,
   contactResponse,
+  contactGetResponse,
+  contactsListResponse,
+  conversionCreatedResponse,
+  conversionsListResponse,
+  createConversionBody,
+  createEventBody,
+  dealGetResponse,
+  dealsListResponse,
+  eventCreatedResponse,
+  eventsListResponse,
   errorSchema,
+  flowsListResponse,
+  listContactsQuery,
   listConversationsQuery,
+  listConversionsQuery,
+  listDealsQuery,
+  listEventsQuery,
+  listFlowsQuery,
   messageResponse,
+  moveDealBody,
   registry,
+  sendMediaBody,
   sendMessageBody,
   sendTemplateBody,
   triggerFlowBody,
@@ -125,14 +143,142 @@ export function buildOpenApiDocument(): ReturnType<OpenApiGeneratorV31['generate
     },
   });
 
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/contacts',
+    summary: 'Lista contatos do workspace.',
+    tags: ['Contacts'],
+    security: SECURITY,
+    description: `Requer o scope \`${API_SCOPES.readContacts}\`.`,
+    request: { query: listContactsQuery },
+    responses: { 200: { description: 'Lista de contatos.', ...jsonBody(contactsListResponse) }, ...errorResponses },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/contacts/{id}',
+    summary: 'Detalhe de um contato.',
+    tags: ['Contacts'],
+    security: SECURITY,
+    description: `Requer o scope \`${API_SCOPES.readContacts}\`.`,
+    responses: { 200: { description: 'Contato.', ...jsonBody(contactGetResponse) }, ...errorResponses },
+  });
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/messages/media',
+    summary: 'Envia uma mídia (imagem/vídeo/documento/áudio) para uma conversa.',
+    tags: ['Messaging'],
+    security: SECURITY,
+    description: `Requer o scope \`${API_SCOPES.sendMessages}\`.`,
+    request: { body: jsonBody(sendMediaBody) },
+    responses: { 201: { description: 'Mídia enfileirada para envio.', ...jsonBody(messageResponse) }, ...errorResponses },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/deals',
+    summary: 'Lista negócios (deals) do workspace.',
+    tags: ['Deals'],
+    security: SECURITY,
+    description: `Requer o scope \`${API_SCOPES.readDeals}\`.`,
+    request: { query: listDealsQuery },
+    responses: { 200: { description: 'Lista de deals.', ...jsonBody(dealsListResponse) }, ...errorResponses },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/deals/{id}',
+    summary: 'Detalhe de um deal.',
+    tags: ['Deals'],
+    security: SECURITY,
+    description: `Requer o scope \`${API_SCOPES.readDeals}\`.`,
+    responses: { 200: { description: 'Deal.', ...jsonBody(dealGetResponse) }, ...errorResponses },
+  });
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/deals/{id}/move',
+    summary: 'Move um deal para outro estágio do pipeline.',
+    tags: ['Deals'],
+    security: SECURITY,
+    description: `Requer o scope \`${API_SCOPES.writeDeals}\`. Valida as regras de transição do estágio destino.`,
+    request: { body: jsonBody(moveDealBody) },
+    responses: {
+      200: { description: 'Deal movido.', ...jsonBody(dealGetResponse) },
+      422: { description: 'Transição bloqueada por regra do estágio.', ...jsonBody(errorSchema) },
+      ...errorResponses,
+    },
+  });
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/conversions',
+    summary: 'Registra uma conversão para um contato.',
+    tags: ['Conversions'],
+    security: SECURITY,
+    description: `Requer o scope \`${API_SCOPES.writeConversions}\`. Idempotente no mesmo dia (dedup).`,
+    request: { body: jsonBody(createConversionBody) },
+    responses: {
+      201: { description: 'Conversão registrada.', ...jsonBody(conversionCreatedResponse) },
+      200: { description: 'Conversão deduplicada (já existia hoje).', ...jsonBody(conversionCreatedResponse) },
+      422: { description: 'Valor obrigatório ausente para o tipo.', ...jsonBody(errorSchema) },
+      ...errorResponses,
+    },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/conversions',
+    summary: 'Lista conversões do workspace.',
+    tags: ['Conversions'],
+    security: SECURITY,
+    description: `Requer o scope \`${API_SCOPES.readConversions}\`.`,
+    request: { query: listConversionsQuery },
+    responses: { 200: { description: 'Lista de conversões.', ...jsonBody(conversionsListResponse) }, ...errorResponses },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/flows',
+    summary: 'Lista flows do workspace.',
+    tags: ['Flows'],
+    security: SECURITY,
+    description: `Requer o scope \`${API_SCOPES.readFlows}\`.`,
+    request: { query: listFlowsQuery },
+    responses: { 200: { description: 'Lista de flows.', ...jsonBody(flowsListResponse) }, ...errorResponses },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/events',
+    summary: 'Lista eventos de calendário do workspace.',
+    tags: ['Calendar'],
+    security: SECURITY,
+    description: `Requer o scope \`${API_SCOPES.readCalendar}\`.`,
+    request: { query: listEventsQuery },
+    responses: { 200: { description: 'Lista de eventos.', ...jsonBody(eventsListResponse) }, ...errorResponses },
+  });
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/events',
+    summary: 'Cria um evento de calendário.',
+    tags: ['Calendar'],
+    security: SECURITY,
+    description: `Requer o scope \`${API_SCOPES.writeCalendar}\`.`,
+    request: { body: jsonBody(createEventBody) },
+    responses: { 201: { description: 'Evento criado.', ...jsonBody(eventCreatedResponse) }, ...errorResponses },
+  });
+
   const generator = new OpenApiGeneratorV31(registry.definitions);
   cached = generator.generateDocument({
     openapi: '3.1.0',
     info: {
-      title: 'Highermind Public API',
+      title: 'Leadium API',
       version: '1.0.0',
       description:
-        'API pública v1 do Highermind (tagix). Autenticação por API key de workspace; rate limit por chave.',
+        'API pública v1 da Leadium. Autenticação por API key de workspace; rate limit por chave.',
     },
     servers: [{ url: '/' }],
   });
