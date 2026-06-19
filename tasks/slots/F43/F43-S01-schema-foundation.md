@@ -2,7 +2,7 @@
 id: F43-S01
 title: Schema — quick_replies + estado de onboarding/tour + RLS + repos
 phase: F43
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: []
@@ -11,6 +11,7 @@ agent_id: db-engineer
 source_docs:
   - docs/features/ONBOARDING.md
 claimed_at: 2026-06-19T20:37:09Z
+completed_at: 2026-06-19T20:45:49Z
 
 ---
 # F43-S01 — Schema foundation (onboarding & verticalização)
