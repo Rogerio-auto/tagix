@@ -2,7 +2,7 @@
 id: F41-S04
 title: Wire vitest no @hm/web + integrar os testes do console (F41-S03)
 phase: F41
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on:
