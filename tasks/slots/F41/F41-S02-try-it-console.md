@@ -2,7 +2,7 @@
 id: F41-S02
 title: Console "Try it" — Sandbox (mock) + Real (API key, GET-only)
 phase: F41
-status: available
+status: in-progress
 priority: high
 estimated_size: L
 depends_on:
@@ -12,6 +12,8 @@ blocks:
 source_docs:
   - docs/features/SUPPORT.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-19T16:04:09Z
+
 ---
 # F41-S02 — Console "Try it"
 
