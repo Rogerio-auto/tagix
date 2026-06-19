@@ -2,7 +2,7 @@
 id: F43-S09
 title: Flows dos 4 nichos restantes (Educação/Solar/Varejo/Agências)
 phase: F43
-status: review
+status: done
 priority: low
 estimated_size: S
 depends_on: [F43-S03]
