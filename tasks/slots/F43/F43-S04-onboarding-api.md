@@ -2,7 +2,7 @@
 id: F43-S04
 title: API de onboarding — aplicar blueprint + estado + pesquisa + checklist
 phase: F43
-status: available
+status: review
 priority: high
 estimated_size: M
 depends_on: [F43-S01, F43-S02, F43-S03]
@@ -11,8 +11,10 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/ONBOARDING.md
   - docs/features/PERMISSIONS.md
----
+claimed_at: 2026-06-19T21:55:34Z
+completed_at: 2026-06-19T22:09:36Z
 
+---
 # F43-S04 — API de onboarding
 
 > **source_docs:** `docs/features/ONBOARDING.md` §2.2, §3, §5; `docs/features/PERMISSIONS.md`
