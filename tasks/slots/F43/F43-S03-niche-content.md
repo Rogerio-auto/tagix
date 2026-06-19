@@ -2,7 +2,7 @@
 id: F43-S03
 title: Conteúdo dos 7 nichos + registry (flows escalonados)
 phase: F43
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: [F43-S02]
@@ -11,6 +11,7 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/ONBOARDING.md
 claimed_at: 2026-06-19T20:53:51Z
+completed_at: 2026-06-19T21:01:57Z
 
 ---
 # F43-S03 — Conteúdo dos 7 nichos + registry
