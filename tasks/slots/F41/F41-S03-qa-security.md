@@ -2,7 +2,7 @@
 id: F41-S03
 title: QA + revisão de segurança do console (não misturar)
 phase: F41
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on:
