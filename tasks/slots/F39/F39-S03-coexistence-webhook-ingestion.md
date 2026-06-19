@@ -2,7 +2,7 @@
 id: F39-S03
 title: Ingestão de webhooks de coexistência — parse de history / smb_message_echoes / smb_app_state_sync
 phase: F39
-status: available
+status: review
 priority: high
 estimated_size: M
 depends_on: [F39-S01]
@@ -10,6 +10,9 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/LIVECHAT.md
 blocks: [F39-S04]
+claimed_at: 2026-06-19T05:03:36Z
+completed_at: 2026-06-19T05:18:08Z
+
 ---
 # F39-S03 — Ingestão de webhooks de coexistência (parse + publish)
 

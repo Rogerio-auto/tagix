@@ -9,7 +9,18 @@
  *
  * Usa um canal RabbitMQ lazy e compartilhado por processo; reconecta se cair.
  */
-import { connectMq, makeEnvelope, publish, QUEUES, type MqHandle } from '@hm/shared/mq';
+import {
+  connectMq,
+  makeEnvelope,
+  publish,
+  QUEUES,
+  COEXISTENCE_EVENT_TYPES,
+  COEXISTENCE_ROUTING_KEYS,
+  type MqHandle,
+  type CoexistenceEchoPayload,
+  type CoexistenceHistoryBatchPayload,
+  type CoexistenceAppStatePayload,
+} from '@hm/shared/mq';
 import type { ChannelProvider } from '@hm/shared';
 
 /** Workspace ainda não resolvido na borda — o worker-inbound resolve. */
@@ -47,6 +58,47 @@ export async function publishInboundMessage(payload: InboundMessagePayload): Pro
   const { channel } = await getHandle();
   const envelope = makeEnvelope(INBOUND_MESSAGE_TYPE, UNRESOLVED_WORKSPACE_ID, payload);
   return publish(channel, INBOUND_ROUTING_KEY, envelope);
+}
+
+// --- Coexistência WhatsApp Business (F39-S03) ---
+//
+// Mesmos exchange/envelope do inbound: workspace ainda NÃO resolvido na borda
+// (NIL UUID) — o worker F39-S04 mapeia `phoneNumberId` → channel/workspace. A
+// dedup de borda (registerWebhookEvent) já ocorreu antes destas chamadas.
+
+/** Publica um eco de mensagem do app WhatsApp Business (`coexistence.echo`). */
+export async function publishCoexistenceEcho(payload: CoexistenceEchoPayload): Promise<boolean> {
+  const { channel } = await getHandle();
+  const envelope = makeEnvelope(
+    COEXISTENCE_EVENT_TYPES.echo,
+    UNRESOLVED_WORKSPACE_ID,
+    payload,
+  );
+  return publish(channel, COEXISTENCE_ROUTING_KEYS.echo, envelope);
+}
+
+/** Publica um batch de histórico de coexistência (`coexistence.history`). */
+export async function publishHistoryBatch(
+  payload: CoexistenceHistoryBatchPayload,
+): Promise<boolean> {
+  const { channel } = await getHandle();
+  const envelope = makeEnvelope(
+    COEXISTENCE_EVENT_TYPES.history,
+    UNRESOLVED_WORKSPACE_ID,
+    payload,
+  );
+  return publish(channel, COEXISTENCE_ROUTING_KEYS.history, envelope);
+}
+
+/** Publica um estado de número/sessão de coexistência (`coexistence.app_state`). */
+export async function publishAppState(payload: CoexistenceAppStatePayload): Promise<boolean> {
+  const { channel } = await getHandle();
+  const envelope = makeEnvelope(
+    COEXISTENCE_EVENT_TYPES.appState,
+    UNRESOLVED_WORKSPACE_ID,
+    payload,
+  );
+  return publish(channel, COEXISTENCE_ROUTING_KEYS.appState, envelope);
 }
 
 /** Encerra o canal/conn (testes / shutdown). */
