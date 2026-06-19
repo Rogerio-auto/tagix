@@ -527,8 +527,10 @@ function WaFinishStep({
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
 
+  const isCoexistence = mode === 'coexistence';
   const pinValid = /^\d{6}$/.test(pin);
-  const valid = signup !== null && name.trim() !== '' && pinValid;
+  // Número novo (cloud_api) é provisionado pelo Embedded Signup → não pede PIN.
+  const valid = signup !== null && name.trim() !== '' && (!isCoexistence || pinValid);
 
   return (
     <form
@@ -541,9 +543,9 @@ function WaFinishStep({
           phoneNumberId: signup.phoneNumberId,
           wabaId: signup.wabaId,
           phoneNumber: signup.phoneNumber,
-          pin,
           mode,
           name: name.trim(),
+          ...(isCoexistence ? { pin } : {}),
         });
       }}
     >
@@ -568,16 +570,18 @@ function WaFinishStep({
         onChange={(e) => setName(e.target.value)}
         required
       />
-      <Input
-        label="PIN do WhatsApp (6 dígitos)"
-        value={pin}
-        onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        hint="PIN de verificação em duas etapas do número. Se nunca definiu, escolha um agora na Meta."
-        error={pin !== '' && !pinValid ? 'O PIN precisa ter exatamente 6 dígitos.' : undefined}
-        required
-      />
+      {isCoexistence && (
+        <Input
+          label="PIN do WhatsApp (6 dígitos)"
+          value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          hint="PIN de verificação em duas etapas do número existente. Se nunca definiu, escolha um agora na Meta."
+          error={pin !== '' && !pinValid ? 'O PIN precisa ter exatamente 6 dígitos.' : undefined}
+          required
+        />
+      )}
 
       {mode === 'coexistence' && (
         <p className="flex gap-2 rounded-md border border-border-2 bg-surface-inset px-3 py-2 font-body text-xs text-text-low">
