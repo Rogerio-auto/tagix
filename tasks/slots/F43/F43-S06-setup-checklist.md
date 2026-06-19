@@ -2,7 +2,7 @@
 id: F43-S06
 title: Checklist "Primeiros passos" no dashboard (estado derivado)
 phase: F43
-status: in-progress
+status: review
 priority: medium
 estimated_size: S
 depends_on: [F43-S04]
@@ -17,6 +17,7 @@ ux_considerations:
   - "Aplica 2.4 — cada item linka direto para a tela (path óbvio), não menu escondido."
   - "Aplica 2.7 — itens refletem dado real (sem click-fantasma); some quando completo/dispensado."
 claimed_at: 2026-06-19T22:21:41Z
+completed_at: 2026-06-19T22:28:11Z
 
 ---
 # F43-S06 — Checklist "Primeiros passos"
