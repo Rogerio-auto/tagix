@@ -2,7 +2,7 @@
 id: F42-S06
 title: Billing portal self-serve (web, settings/billing)
 phase: F42
-status: blocked
+status: done
 priority: high
 estimated_size: M
 depends_on: [F42-S04]

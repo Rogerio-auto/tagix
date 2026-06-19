@@ -2,7 +2,7 @@
 id: F42-S03
 title: Webhook AbacatePay (HMAC + idempotência + transições de status)
 phase: F42
-status: blocked
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F42-S01, F42-S02]

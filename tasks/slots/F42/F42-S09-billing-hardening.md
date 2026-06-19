@@ -2,7 +2,7 @@
 id: F42-S09
 title: Hardening de billing — auditoria de segurança + integração + validação sandbox
 phase: F42
-status: blocked
+status: done
 priority: high
 estimated_size: M
 depends_on: [F42-S03, F42-S04, F42-S05, F42-S07]

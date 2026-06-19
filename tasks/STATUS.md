@@ -32,7 +32,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F40   | 1     | 1   | 0   | 0   | 0   | 0   | 0   |
 | F41   | 4     | 0   | 0   | 0   | 0   | 0   | 4   |
-| F42   | 9     | 2   | 7   | 0   | 0   | 0   | 0   |
+| F42   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -383,17 +383,17 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 42
 
-| ID      | Titulo                                                                          | Status      | Prioridade | Depende de                         |
-| ------- | ------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------------------- |
-| F42-S01 | Pacote @hm/payments (IPaymentProvider + AbacatePay + Mock + HMAC)               | 🟢 available | critical   | —                                  |
-| F42-S02 | Schema de billing provider-agnóstico + payment_events + RLS + migration         | 🟢 available | critical   | —                                  |
-| F42-S03 | Webhook AbacatePay (HMAC + idempotência + transições de status)                 | ⏸️ blocked  | critical   | F42-S01, F42-S02                   |
-| F42-S04 | API self-serve (checkout hospedado + subscription + cancel + plan↔product sync) | ⏸️ blocked  | critical   | F42-S01, F42-S02                   |
-| F42-S05 | Worker de recorrência PIX + dunning + execução de cancel-at-period-end          | ⏸️ blocked  | high       | F42-S02, F42-S03                   |
-| F42-S06 | Billing portal self-serve (web, settings/billing)                               | ⏸️ blocked  | high       | F42-S04                            |
-| F42-S07 | Plataforma assistida — gerar cobrança/checkout para um tenant (API)             | ⏸️ blocked  | medium     | F42-S01, F42-S04                   |
-| F42-S08 | Plataforma assistida — botão "gerar cobrança" no Workspace 360 (UI)             | ⏸️ blocked  | medium     | F42-S07                            |
-| F42-S09 | Hardening de billing — auditoria de segurança + integração + validação sandbox  | ⏸️ blocked  | high       | F42-S03, F42-S04, F42-S05, F42-S07 |
+| ID      | Titulo                                                                          | Status | Prioridade | Depende de                         |
+| ------- | ------------------------------------------------------------------------------- | ------ | ---------- | ---------------------------------- |
+| F42-S01 | Pacote @hm/payments (IPaymentProvider + AbacatePay + Mock + HMAC)               | ✅ done | critical   | —                                  |
+| F42-S02 | Schema de billing provider-agnóstico + payment_events + RLS + migration         | ✅ done | critical   | —                                  |
+| F42-S03 | Webhook AbacatePay (HMAC + idempotência + transições de status)                 | ✅ done | critical   | F42-S01, F42-S02                   |
+| F42-S04 | API self-serve (checkout hospedado + subscription + cancel + plan↔product sync) | ✅ done | critical   | F42-S01, F42-S02                   |
+| F42-S05 | Worker de recorrência PIX + dunning + execução de cancel-at-period-end          | ✅ done | high       | F42-S02, F42-S03                   |
+| F42-S06 | Billing portal self-serve (web, settings/billing)                               | ✅ done | high       | F42-S04                            |
+| F42-S07 | Plataforma assistida — gerar cobrança/checkout para um tenant (API)             | ✅ done | medium     | F42-S01, F42-S04                   |
+| F42-S08 | Plataforma assistida — botão "gerar cobrança" no Workspace 360 (UI)             | ✅ done | medium     | F42-S07                            |
+| F42-S09 | Hardening de billing — auditoria de segurança + integração + validação sandbox  | ✅ done | high       | F42-S03, F42-S04, F42-S05, F42-S07 |
 
 ## Fase 5 — Calendar
 

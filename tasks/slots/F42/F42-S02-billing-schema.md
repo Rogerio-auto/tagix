@@ -2,7 +2,7 @@
 id: F42-S02
 title: Schema de billing provider-agnóstico + payment_events + RLS + migration
 phase: F42
-status: available
+status: done
 priority: critical
 estimated_size: M
 depends_on: []

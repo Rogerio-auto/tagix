@@ -2,7 +2,7 @@
 id: F42-S05
 title: Worker de recorrência PIX + dunning + execução de cancel-at-period-end
 phase: F42
-status: blocked
+status: done
 priority: high
 estimated_size: M
 depends_on: [F42-S02, F42-S03]

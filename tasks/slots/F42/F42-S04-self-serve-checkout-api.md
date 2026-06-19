@@ -2,7 +2,7 @@
 id: F42-S04
 title: API self-serve (checkout hospedado + subscription + cancel + plan↔product sync)
 phase: F42
-status: blocked
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F42-S01, F42-S02]

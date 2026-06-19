@@ -2,7 +2,7 @@
 id: F42-S01
 title: Pacote @hm/payments (IPaymentProvider + AbacatePay + Mock + HMAC)
 phase: F42
-status: available
+status: done
 priority: critical
 estimated_size: M
 depends_on: []

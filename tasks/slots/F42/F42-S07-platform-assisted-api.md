@@ -2,7 +2,7 @@
 id: F42-S07
 title: Plataforma assistida — gerar cobrança/checkout para um tenant (API)
 phase: F42
-status: blocked
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F42-S01, F42-S04]

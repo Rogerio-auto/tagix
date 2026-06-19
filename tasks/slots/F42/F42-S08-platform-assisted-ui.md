@@ -2,7 +2,7 @@
 id: F42-S08
 title: Plataforma assistida — botão "gerar cobrança" no Workspace 360 (UI)
 phase: F42
-status: blocked
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F42-S07]
