@@ -2,7 +2,7 @@
 id: F39-S05
 title: Validação E2E Meta + runbook de conexão WhatsApp/coexistência
 phase: F39
-status: available
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on: [F39-S01, F39-S02, F39-S03, F39-S04]
@@ -11,6 +11,8 @@ source_docs:
   - docs/features/INSTAGRAM.md
   - docs/runbooks/deploy-production.md
 blocks: []
+claimed_at: 2026-06-19T05:34:05Z
+
 ---
 # F39-S05 — Validação E2E Meta + runbook de conexão
 
