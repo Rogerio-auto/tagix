@@ -13,6 +13,11 @@ WORKDIR /app
 FROM base AS build
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV BUILD_STANDALONE=true
+# Embedded Signup da Meta (NEXT_PUBLIC = inlinado no build do browser).
+ARG NEXT_PUBLIC_META_APP_ID=
+ARG NEXT_PUBLIC_META_CONFIG_ID=
+ENV NEXT_PUBLIC_META_APP_ID=${NEXT_PUBLIC_META_APP_ID}
+ENV NEXT_PUBLIC_META_CONFIG_ID=${NEXT_PUBLIC_META_CONFIG_ID}
 COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile

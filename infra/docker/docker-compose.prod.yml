@@ -210,6 +210,9 @@ services:
     build:
       context: ../..
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_META_APP_ID: ${META_APP_ID:-}
+        NEXT_PUBLIC_META_CONFIG_ID: ${META_CONFIG_ID:-}
     environment:
       NODE_ENV: production
       PORT: "3000"
@@ -238,13 +241,16 @@ services:
         - "traefik.http.routers.leadium_web.priority=1"
 
   # ==========================================================================
-  # LANDING — apex leadium.com.br (placeholder até a landing real entrar)
+  # LANDING — apex leadium.com.br (app Vite/React em /landing; serve /privacidade e /termos)
   # ==========================================================================
   landing:
     image: leadium-landing:${APP_VERSION:-latest}
     build:
-      context: ./landing
+      context: ../../landing
       dockerfile: Dockerfile
+      args:
+        VITE_APP_URL: https://app.leadium.com.br
+        VITE_CADASTRO_URL: https://app.leadium.com.br
     networks:
       - network_public
     deploy:
