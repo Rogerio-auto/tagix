@@ -2,7 +2,7 @@
 id: F41-S01
 title: Referência por endpoint — request body + params + response + exemplo gerado
 phase: F41
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
