@@ -2,7 +2,7 @@
 id: F43-S06
 title: Checklist "Primeiros passos" no dashboard (estado derivado)
 phase: F43
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F43-S04]
