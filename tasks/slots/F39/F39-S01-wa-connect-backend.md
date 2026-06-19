@@ -2,7 +2,7 @@
 id: F39-S01
 title: WhatsApp connect backend — Embedded Signup server-side (Cloud API + coexistência onboarding)
 phase: F39
-status: available
+status: in-progress
 priority: critical
 estimated_size: L
 depends_on: []
@@ -11,6 +11,8 @@ source_docs:
   - docs/features/INSTAGRAM.md
   - docs/features/LIVECHAT.md
 blocks: [F39-S02, F39-S03]
+claimed_at: 2026-06-19T04:53:01Z
+
 ---
 # F39-S01 — WhatsApp connect backend (Tech Provider server-side)
 
