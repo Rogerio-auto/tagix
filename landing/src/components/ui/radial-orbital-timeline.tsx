@@ -4,6 +4,7 @@ import { ArrowRight, Link, Zap } from "lucide-react";
 import { Badge } from "./Badge";
 import { Button } from "./Button";
 import { Card, CardContent, CardHeader, CardTitle } from "./Card";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 interface TimelineItem {
   id: number;
@@ -39,6 +40,7 @@ export default function RadialOrbitalTimeline({
   const containerRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<HTMLDivElement>(null);
   const nodeRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const isMobile = useIsMobile();
 
   const getRelatedItems = useCallback((itemId: number): number[] => {
     const currentItem = timelineData.find((item) => item.id === itemId);
@@ -86,9 +88,9 @@ export default function RadialOrbitalTimeline({
     });
   }, [getRelatedItems, centerViewOnNode]);
 
-  // Rotation effect
+  // Rotation effect — desligado no mobile (orbital não é renderizado lá)
   useEffect(() => {
-    if (!autoRotate) return;
+    if (isMobile || !autoRotate) return;
 
     let frameId: number;
     const animate = () => {
@@ -98,11 +100,13 @@ export default function RadialOrbitalTimeline({
 
     frameId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(frameId);
-  }, [autoRotate]);
+  }, [autoRotate, isMobile]);
 
-  // 20-second Animation Cycle Logic
+  // 20-second Animation Cycle Logic — desligado no mobile
   useEffect(() => {
-    let timer: any;
+    if (isMobile) return;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
     let isRotating = true;
     let lastItemId: number | null = null;
 
@@ -141,7 +145,7 @@ export default function RadialOrbitalTimeline({
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [timelineData, toggleItem]);
+  }, [timelineData, toggleItem, isMobile]);
 
   const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === containerRef.current || e.target === orbitRef.current) {
@@ -176,6 +180,79 @@ export default function RadialOrbitalTimeline({
     const relatedItems = getRelatedItems(activeNodeId);
     return relatedItems.includes(itemId);
   };
+
+  const statusLabel = (status: TimelineItem["status"]): string =>
+    status === "completed"
+      ? "QUALIFICADO"
+      : status === "in-progress"
+        ? "PROCESSANDO"
+        : "AGUARDANDO";
+
+  // Mobile: versão vertical empilhada, sem orbital/perspective/absolute.
+  // Layout em fluxo normal → sem overflow horizontal, sem flicker de rAF.
+  if (isMobile) {
+    return (
+      <div className="w-full py-4">
+        <ol className="relative mx-auto flex w-full max-w-md flex-col gap-4">
+          {/* trilha vertical conectando os passos */}
+          <span
+            className="absolute left-[27px] top-6 bottom-6 w-px bg-gradient-to-b from-primary/40 via-primary/15 to-transparent"
+            aria-hidden="true"
+          />
+          {timelineData.map((item) => {
+            const Icon = item.icon;
+            return (
+              <li
+                key={item.id}
+                className="relative flex gap-4 rounded-2xl border border-border/40 bg-card/70 p-4 backdrop-blur-sm"
+              >
+                <div className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-primary/40 bg-background/80 text-primary shadow-[0_0_20px_rgba(47,180,99,0.15)]">
+                  <Icon size={18} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      {item.date}
+                    </span>
+                    <Badge
+                      className={`px-2 py-0 text-[10px] font-black border-none ${
+                        item.status === "completed"
+                          ? "bg-primary/20 text-primary"
+                          : "bg-blue-500/20 text-blue-400"
+                      }`}
+                    >
+                      {statusLabel(item.status)}
+                    </Badge>
+                  </div>
+                  <h4 className="text-base font-bold text-foreground">
+                    {item.title}
+                  </h4>
+                  <p className="mt-1 text-sm leading-relaxed text-foreground/70">
+                    {item.content}
+                  </p>
+                  <div className="mt-3 flex items-center gap-2">
+                    <Zap
+                      size={11}
+                      className="shrink-0 fill-primary text-primary"
+                    />
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-foreground/10">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-primary"
+                        style={{ width: `${item.energy}%` }}
+                      />
+                    </div>
+                    <span className="shrink-0 font-mono text-[10px] text-primary">
+                      {item.energy}%
+                    </span>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -350,7 +427,7 @@ export default function RadialOrbitalTimeline({
                                   variant="outline"
                                   size="sm"
                                   className="h-7 px-3 py-0 text-[10px] font-bold rounded-full border-border/20 bg-foreground/5 hover:bg-blue-600/30 hover:border-blue-500/50 text-foreground hover:text-white transition-all duration-300 shadow-sm"
-                                   onClick={(e: any) => {
+                                   onClick={(e: React.MouseEvent) => {
                                     e.stopPropagation();
                                     toggleItem(relatedId);
                                   }}

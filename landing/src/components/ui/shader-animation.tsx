@@ -2,6 +2,12 @@
 
 import { useEffect, useRef } from "react"
 import * as THREE from "three"
+import { useIsMobile } from "../../hooks/useIsMobile"
+
+interface ShaderUniforms {
+  time: { type: string; value: number }
+  resolution: { type: string; value: THREE.Vector2 }
+}
 
 export function ShaderAnimation() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -9,12 +15,20 @@ export function ShaderAnimation() {
     camera: THREE.Camera
     scene: THREE.Scene
     renderer: THREE.WebGLRenderer
-    uniforms: any
+    uniforms: ShaderUniforms
     animationId: number
   } | null>(null)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     if (!containerRef.current) return
+
+    // WebGL é pesado e pode falhar em alguns celulares — gate p/ desktop +
+    // respeita prefers-reduced-motion.
+    const prefersReduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    if (isMobile || prefersReduced) return
 
     const container = containerRef.current
 
@@ -71,7 +85,15 @@ export function ShaderAnimation() {
     const mesh = new THREE.Mesh(geometry, material)
     scene.add(mesh)
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+    let renderer: THREE.WebGLRenderer
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+    } catch {
+      // Contexto WebGL indisponível/perdido — degrada sem quebrar.
+      geometry.dispose()
+      material.dispose()
+      return
+    }
     renderer.setPixelRatio(window.devicePixelRatio)
 
     container.appendChild(renderer.domElement)
@@ -128,7 +150,7 @@ export function ShaderAnimation() {
         material.dispose()
       }
     }
-  }, [])
+  }, [isMobile])
 
   return (
     <div

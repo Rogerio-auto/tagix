@@ -3,6 +3,7 @@ import { NICHES } from "../../utils/constants";
 import DisplayCards from "../ui/display-cards";
 import { motion } from "framer-motion";
 import { Badge } from "../ui/Badge";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import { 
   Sun, 
   GraduationCap, 
@@ -24,6 +25,7 @@ const iconMap: Record<string, React.ReactNode> = {
 };
 
 export const Niches: React.FC = () => {
+  const isMobile = useIsMobile();
   const displayCards = NICHES.map((niche) => ({
     title: niche.label,
     description: niche.useCase,
@@ -32,7 +34,10 @@ export const Niches: React.FC = () => {
   }));
 
   return (
-    <section id="niches" className="py-24 relative overflow-hidden bg-background min-h-[800px] flex items-center">
+    <section
+      id="niches"
+      className="py-24 relative overflow-hidden bg-background flex items-center md:min-h-[800px]"
+    >
       <div className="container px-4 mx-auto relative z-10 text-foreground">
         <div className="flex flex-col lg:flex-row items-center gap-20">
           <div className="lg:w-5/12 text-center lg:text-left">
@@ -71,21 +76,29 @@ export const Niches: React.FC = () => {
             </motion.div>
           </div>
 
-          <div className="lg:w-7/12 flex justify-center items-center relative perspective-1000">
-            <motion.div 
-              className="relative w-full max-w-md h-[400px] md:h-[500px] flex items-center justify-center"
-              initial={{ opacity: 0, rotateY: -20, scale: 0.8 }}
-              whileInView={{ opacity: 1, rotateY: 0, scale: 1 }}
-              viewport={{ once: false, amount: 0.5 }}
-              transition={{ duration: 1.2, ease: "circOut" }}
-            >
+          {isMobile ? (
+            // Mobile: stack vertical em fluxo normal — sem perspective, sem
+            // altura fixa, sem rotateY. Nada vaza o viewport nem pisca.
+            <div className="w-full">
               <DisplayCards cards={displayCards} />
-              
-              {/* Decorative Glow */}
-              <div className="absolute -inset-20 bg-primary/20 blur-[120px] -z-10 rounded-full animate-pulse-subtle" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] border border-primary/5 rounded-full -z-20 opacity-20" />
-            </motion.div>
-          </div>
+            </div>
+          ) : (
+            <div className="lg:w-7/12 flex justify-center items-center relative perspective-1000">
+              <motion.div
+                className="relative w-full max-w-md h-[400px] md:h-[500px] flex items-center justify-center"
+                initial={{ opacity: 0, rotateY: -20, scale: 0.8 }}
+                whileInView={{ opacity: 1, rotateY: 0, scale: 1 }}
+                viewport={{ once: false, amount: 0.5 }}
+                transition={{ duration: 1.2, ease: "circOut" }}
+              >
+                <DisplayCards cards={displayCards} />
+
+                {/* Decorative Glow */}
+                <div className="absolute -inset-20 bg-primary/20 blur-[120px] -z-10 rounded-full animate-pulse-subtle" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] border border-primary/5 rounded-full -z-20 opacity-20" />
+              </motion.div>
+            </div>
+          )}
         </div>
       </div>
     </section>

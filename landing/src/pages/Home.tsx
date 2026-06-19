@@ -1,7 +1,8 @@
 import { Hero } from "../components/sections/Hero";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, type ComponentType } from "react";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { StickyMobileCTA } from "../components/sections/StickyMobileCTA";
+import { SectionBoundary } from "../components/ui/SectionBoundary";
 
 // Lazy loaded sections
 const PainSection = lazy(() => import("../components/sections/PainSection").then(m => ({ default: m.PainSection })));
@@ -20,6 +21,26 @@ const SectionLoader = () => (
   </div>
 );
 
+/**
+ * Cada seção é isolada por um Suspense próprio (lazy/loader não bloqueia as
+ * outras) e por um SectionBoundary (erro em uma seção degrada em silêncio,
+ * nunca quebra a página inteira). Essencial no mobile, onde animações pesadas
+ * podem falhar em devices específicos.
+ */
+const Section = ({
+  name,
+  component: SectionComponent,
+}: {
+  name: string;
+  component: ComponentType;
+}) => (
+  <SectionBoundary name={name}>
+    <Suspense fallback={<SectionLoader />}>
+      <SectionComponent />
+    </Suspense>
+  </SectionBoundary>
+);
+
 const Home = () => {
   usePageMeta({
     title: "Cada conversa virando venda — no automático",
@@ -32,17 +53,15 @@ const Home = () => {
       <Hero />
 
       <div className="relative z-10 bg-background">
-        <Suspense fallback={<SectionLoader />}>
-          <SocialProof />
-          <PainSection />
-          <TimelineSection />
-          <FeatureGrid />
-          <Niches />
-          <PricingPreview />
-          <Testimonials />
-          <FAQSection />
-          <FinalCTA />
-        </Suspense>
+        <Section name="SocialProof" component={SocialProof} />
+        <Section name="PainSection" component={PainSection} />
+        <Section name="TimelineSection" component={TimelineSection} />
+        <Section name="FeatureGrid" component={FeatureGrid} />
+        <Section name="Niches" component={Niches} />
+        <Section name="PricingPreview" component={PricingPreview} />
+        <Section name="Testimonials" component={Testimonials} />
+        <Section name="FAQSection" component={FAQSection} />
+        <Section name="FinalCTA" component={FinalCTA} />
       </div>
 
       <StickyMobileCTA />

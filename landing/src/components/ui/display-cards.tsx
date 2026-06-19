@@ -4,6 +4,7 @@ import { cn } from "../../lib/utils";
 import { Sparkles } from "lucide-react";
 import { motion, useMotionValue, useTransform } from "framer-motion";
 import { useState, useEffect } from "react";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 interface DisplayCardProps {
   className?: string;
@@ -125,12 +126,60 @@ function DisplayCard({
   );
 }
 
+/**
+ * Card estático para o mobile — sem drag, sem absolute, sem perspective 3D.
+ * Fica em fluxo normal num grid, então nunca vaza o viewport nem pisca.
+ */
+function StaticCard({
+  icon = <Sparkles className="size-4 text-primary" />,
+  title = "Destaque",
+  description = "Conheça novos conteúdos",
+  date = "Agora mesmo",
+  titleClassName = "text-primary",
+}: DisplayCardProps) {
+  return (
+    <div className="relative flex flex-col justify-between gap-4 rounded-3xl border border-border bg-card/90 p-6 shadow-xl backdrop-blur-sm">
+      <div className="flex items-center gap-3">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <p className={cn("text-lg font-bold tracking-tight text-foreground", titleClassName)}>
+            {title}
+          </p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80">
+            Intelligence Deck
+          </p>
+        </div>
+      </div>
+
+      <p className="text-base font-medium leading-relaxed text-foreground/80">
+        {description}
+      </p>
+
+      <div className="flex items-center justify-between border-t border-border/50 pt-4">
+        <div className="flex items-center gap-2">
+          <div className="h-2 w-2 rounded-full bg-primary" />
+          <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+            {date}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 opacity-60">
+          <Sparkles size={14} className="text-primary" />
+          <span className="text-[10px] font-black text-primary">PREMIUM</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface DisplayCardsProps {
   cards?: DisplayCardProps[];
 }
 
 export default function DisplayCards({ cards: initialCards }: DisplayCardsProps) {
   const [cards, setCards] = useState(initialCards || []);
+  const isMobile = useIsMobile();
 
   // Sincroniza se as props mudarem
   useEffect(() => {
@@ -150,15 +199,26 @@ export default function DisplayCards({ cards: initialCards }: DisplayCardsProps)
 
   if (!cards || cards.length === 0) return null;
 
+  // Mobile: stack vertical estático e legível, sem 3D nem overflow.
+  if (isMobile) {
+    return (
+      <div className="flex w-full flex-col gap-4">
+        {cards.map((cardProps) => (
+          <StaticCard key={cardProps.title} {...cardProps} />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="relative h-[550px] w-full flex items-center justify-center py-20 px-4">
       <div className="relative w-full max-w-sm h-full flex items-center justify-center">
         {cards.map((cardProps, index) => (
-          <DisplayCard 
-            key={cardProps.title} 
-            index={index} 
+          <DisplayCard
+            key={cardProps.title}
+            index={index}
             onSendToBack={() => sendToBack(index)}
-            {...cardProps} 
+            {...cardProps}
           />
         ))}
       </div>

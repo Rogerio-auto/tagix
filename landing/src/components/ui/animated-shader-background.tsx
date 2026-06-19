@@ -1,16 +1,30 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 const AnimatedShaderBackground = () => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
+    // WebGL pesado: gate p/ desktop + respeita prefers-reduced-motion.
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (isMobile || prefersReduced) return;
+
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch {
+      // Contexto WebGL indisponível — degrada em silêncio.
+      return;
+    }
     renderer.setClearColor(0x000000, 0); // fundo 100% transparente
 
     // Usar window.innerWidth/Height garante tamanho correto mesmo antes do layout
@@ -137,7 +151,7 @@ const AnimatedShaderBackground = () => {
       material.dispose();
       renderer.dispose();
     };
-  }, []);
+  }, [isMobile]);
 
   return (
     <div

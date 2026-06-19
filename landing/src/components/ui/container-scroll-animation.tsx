@@ -34,6 +34,20 @@ export const ContainerScroll = ({
   const scale = useTransform(scrollYProgress, [0, 1], scaleDimensions());
   const translate = useTransform(scrollYProgress, [0, 1], [0, -100]);
 
+  // Mobile: sem scroll-jacking nem perspective — fallback estático e legível.
+  if (isMobile) {
+    return (
+      <div className="flex w-full flex-col items-center justify-center px-2 py-8">
+        <div className="mx-auto w-full max-w-5xl text-center">{titleComponent}</div>
+        <div className="mx-auto mt-6 aspect-video w-full max-w-5xl overflow-hidden rounded-2xl border-4 border-muted-foreground/20 bg-background/50 p-2 shadow-2xl backdrop-blur-sm">
+          <div className="h-full w-full overflow-hidden rounded-xl bg-muted/50">
+            {children}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="h-[35rem] md:h-[70rem] flex items-center justify-center relative p-2 md:p-10"
@@ -54,7 +68,13 @@ export const ContainerScroll = ({
   );
 };
 
-export const Header = ({ translate, titleComponent }: any) => {
+export const Header = ({
+  translate,
+  titleComponent,
+}: {
+  translate: MotionValue<number>;
+  titleComponent: string | React.ReactNode;
+}) => {
   return (
     <motion.div
       style={{
