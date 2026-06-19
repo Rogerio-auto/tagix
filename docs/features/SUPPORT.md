@@ -132,5 +132,23 @@ Todos reusam serviços/repos existentes; nada de lógica nova de negócio — s�
 - **Migration journal:** S01 é o único slot de schema da fase (help + support juntos) para evitar colisão no `meta/_journal.json`.
 - **Barrel `@hm/shared`:** exports explícitos (gotcha F34) — coordenar edições do `index.ts` entre slots backend.
 - **Nome do produto:** **Leadium** em toda string product-facing (inclui título do OpenAPI / portal). Sem "Tagix" em artefato novo.
+
+---
+
+## 6. F41 — Portal do Desenvolvedor: Referência rica + Console "Try it"
+
+Extensão do portal (F38-S13), 100% frontend em `apps/web/features/developers/**`. O OpenAPI em `/api/v1/openapi.json` já expõe os schemas (Zod-derived); o modo real reusa a `/api/v1` existente (API key + CORS já libera `Authorization`). **Nenhuma mudança de backend.**
+
+### 6.1 Referência por endpoint (gap do S13)
+Hoje a referência mostra só método + path + summary + scope. Adicionar, por endpoint: **request body** (campos, tipos, obrigatórios), **parâmetros** (path/query), **response** (schema), e um **exemplo de requisição gerado do schema** (curl/JS/Python) — substituindo o `snippets.ts` hardcoded por um gerador. Resolver `$ref` para `components.schemas`.
+
+### 6.2 Console "Try it"
+Painel de execução por endpoint com toggle **Sandbox (default) / Real**:
+- **Sandbox:** mock **client-side** gerado do response schema. Disponível para TODOS os endpoints (inclusive mutações). **Nunca faz request de rede, nunca toca dado real.**
+- **Real:** o cliente cola uma **API key (Bearer)**; o browser chama `/api/v1` direto, escopado ao workspace da chave pelo backend. **Somente GET.** Endpoints de escrita/efeito (`send_message`, `move_deal_stage`, etc.) ficam **bloqueados no modo real** (com aviso) e só executam no Sandbox. A key vive **só em memória** (nunca persistida/logada).
+
+### 6.3 Os dois muros do "não misture" (inegociável)
+1. **Sandbox ⟂ dado real:** sandbox é mock puro client-side; jamais emite request nem escreve.
+2. **Escopo do tenant:** o console é estritamente do workspace do cliente (modo real usa a key dele, isolada por RLS no backend). Nada de endpoints/dados de plataforma (equipe Leadium), nada cross-tenant. Mutações reais impossíveis pelo console.
 </content>
 </invoke>
