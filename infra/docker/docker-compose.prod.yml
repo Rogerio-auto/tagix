@@ -115,7 +115,7 @@ services:
   # API — Express 5 + Socket.io (ingress: api.leadium.com.br + /api,/auth,/socket.io de app.)
   # ==========================================================================
   api:
-    image: leadium-api:latest
+    image: leadium-api:${APP_VERSION:-latest}
     build:
       context: ../..
       dockerfile: apps/api/Dockerfile
@@ -157,7 +157,7 @@ services:
   # WORKERS — 5 consumers + scheduler (sem ingress)
   # ==========================================================================
   workers:
-    image: leadium-workers:latest
+    image: leadium-workers:${APP_VERSION:-latest}
     build:
       context: ../..
       dockerfile: apps/workers/Dockerfile
@@ -180,7 +180,7 @@ services:
   # AGENT-RUNTIME — FastAPI + LangGraph (IA, sem ingress; api fala via http interno)
   # ==========================================================================
   agent-runtime:
-    image: leadium-agent-runtime:latest
+    image: leadium-agent-runtime:${APP_VERSION:-latest}
     build:
       context: ../../apps/agent-runtime
       dockerfile: Dockerfile
@@ -206,7 +206,7 @@ services:
   # WEB — Next.js 15 standalone (ingress: app.leadium.com.br)
   # ==========================================================================
   web:
-    image: leadium-web:latest
+    image: leadium-web:${APP_VERSION:-latest}
     build:
       context: ../..
       dockerfile: apps/web/Dockerfile
@@ -241,7 +241,7 @@ services:
   # LANDING — apex leadium.com.br (placeholder até a landing real entrar)
   # ==========================================================================
   landing:
-    image: leadium-landing:latest
+    image: leadium-landing:${APP_VERSION:-latest}
     build:
       context: ./landing
       dockerfile: Dockerfile

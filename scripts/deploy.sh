@@ -47,9 +47,14 @@ fi
 # --- 2. Carrega .env p/ interpolação do compose ------------------------------
 set -a; . "$APP_DIR/.env"; set +a
 export DATABASE_URL="postgresql://${PG_USER}:${PG_PASSWORD}@postgres:5432/${PG_DB}"
+# Tag das imagens pelo commit atual. CRÍTICO no Swarm: com tag fixa (:latest) o
+# `stack deploy` NÃO recria os serviços (compara a string da tag, não o conteúdo),
+# então mudanças de código não subiriam. Tag por sha => cada deploy é detectado.
+export APP_VERSION="$(git rev-parse --short HEAD 2>/dev/null || echo latest)"
+ok "Versão do deploy: $APP_VERSION"
 
 # --- 3. Build das imagens no nó ----------------------------------------------
-step "Buildando imagens (api, web, workers, agent-runtime, landing)"
+step "Buildando imagens (api, web, workers, agent-runtime, landing) :$APP_VERSION"
 docker compose --env-file "$APP_DIR/.env" -f "$COMPOSE" build
 ok "Imagens construídas"
 
@@ -76,7 +81,7 @@ for i in $(seq 1 6); do
   if docker run --rm \
       --network "$INTERNAL_NET" \
       -e DATABASE_URL="$DATABASE_URL" \
-      leadium-api:latest pnpm --filter @hm/db migrate; then
+      "leadium-api:${APP_VERSION}" pnpm --filter @hm/db migrate; then
     mig_ok=1; break
   fi
   c "1;33" "  migration tentativa $i falhou (Postgres ainda acordando?), retry em 5s…"

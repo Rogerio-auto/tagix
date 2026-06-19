@@ -136,20 +136,22 @@ docker stats                             # uso de CPU/RAM em tempo real
 ```
 
 ### Rollback
-Imagens são `:latest` (sem tag por versão neste estágio). Para reverter:
+As imagens são tagueadas pelo **commit** (`leadium-api:<sha>` etc.) — o `deploy.sh`
+deriva `APP_VERSION` de `git rev-parse --short HEAD`. Para reverter:
 ```bash
 cd /opt/leadium && git reset --hard <commit-anterior>
 sudo bash scripts/deploy.sh main
 ```
-> Evolução planejada: taguear imagens por commit (`leadium-api:<sha>`) para
-> rollback instantâneo sem rebuild. Ver §6.
+> Importante: tag fixa (`:latest`) NÃO funciona no Swarm — `stack deploy` compara a
+> string da tag e não recria o serviço se ela não mudar. Por isso tagueamos por sha.
+> Se a imagem `<sha>` antigo ainda existir no nó, o redeploy é instantâneo (sem rebuild).
 
 ### Migrations manuais
 ```bash
 set -a; . /opt/leadium/.env; set +a
 docker run --rm --network leadium_leadium_internal \
   -e DATABASE_URL="postgresql://$PG_USER:$PG_PASSWORD@postgres:5432/$PG_DB" \
-  leadium-api:latest pnpm --filter @hm/db migrate
+  "leadium-api:$(git -C /opt/leadium rev-parse --short HEAD)" pnpm --filter @hm/db migrate
 ```
 
 ### Backup do banco (Leadium)
