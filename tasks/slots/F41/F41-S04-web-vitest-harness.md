@@ -2,7 +2,7 @@
 id: F41-S04
 title: Wire vitest no @hm/web + integrar os testes do console (F41-S03)
 phase: F41
-status: available
+status: review
 priority: high
 estimated_size: S
 depends_on:
@@ -11,6 +11,9 @@ blocks: []
 source_docs:
   - docs/features/SUPPORT.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-19T16:17:23Z
+completed_at: 2026-06-19T16:21:24Z
+
 ---
 # F41-S04 — Harness de teste unitario do @hm/web
 
