@@ -330,6 +330,20 @@
       "when": 1781452807000,
       "tag": "0046_f41_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1781452808000,
+      "tag": "0047_f43_onboarding",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1781452809000,
+      "tag": "0048_f43_onboarding_rls",
+      "breakpoints": true
     }
   ]
 }
