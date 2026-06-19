@@ -2,7 +2,7 @@
 id: F43-S09
 title: Flows dos 4 nichos restantes (Educação/Solar/Varejo/Agências)
 phase: F43
-status: in-progress
+status: review
 priority: low
 estimated_size: S
 depends_on: [F43-S03]
@@ -11,6 +11,7 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/ONBOARDING.md
 claimed_at: 2026-06-19T23:18:02Z
+completed_at: 2026-06-19T23:22:11Z
 
 ---
 # F43-S09 — Flows dos nichos restantes
