@@ -1,22 +1,29 @@
 /**
- * Templates de pipeline por nicho (F5-S15): imobiliaria + clinica.
+ * Templates de pipeline por nicho.
  *
  * Pipelines/stages sao SEMPRE workspace-scoped (nao ha pipeline global). Aqui
  * definimos as DEFINICOES de template (stages + custom_fields) e um instanciador
  * idempotente `instantiatePipelineTemplate(db, workspaceId, key)` que cria o
  * pipeline + stages no workspace (usado pelo onboarding wizard, F5-S15 web).
  *
+ * FONTE ÚNICA (F43-S03): os pipelines dos 7 nichos vivem nos Niche Blueprints
+ * (`seed/niches/blueprints/**`). Este módulo DERIVA `PIPELINE_TEMPLATES` do registry
+ * `NICHE_BLUEPRINTS` — não duplica conteúdo. Mantém-se a chave histórica `clinic`
+ * como alias do nicho `health`, para o caminho legado `POST /api/onboarding/niche`.
+ *
  * Idempotencia: a UNIQUE (workspace_id, name) de pipelines ancora o upsert; os
  * stages usam UNIQUE (pipeline_id, position). Re-rodar nao duplica.
  *
- * Spec: PIPELINE.md §1/§8; ROADMAP F5-S11.
+ * Spec: PIPELINE.md §1/§8; ROADMAP F5-S11; ONBOARDING.md §2.3.
  */
 import { and, eq } from 'drizzle-orm';
 import type { DB } from '../client';
 import { pipelines, stages } from '../schema';
 import type { CustomFieldDef } from '../schema/pipeline';
+import { NICHE_BLUEPRINTS, type NicheKey } from './niches';
 
-export type NichePipelineKey = 'real_estate' | 'clinic';
+/** Chaves aceitas pelo instanciador legado: as 7 do registry + alias `clinic`→`health`. */
+export type NichePipelineKey = NicheKey | 'clinic';
 
 interface StageTemplate {
   name: string;
@@ -36,47 +43,30 @@ export interface PipelineTemplate {
   stages: StageTemplate[];
 }
 
+/** Deriva um `PipelineTemplate` a partir do pipeline de um Niche Blueprint. */
+function fromBlueprint(key: NichePipelineKey, blueprintKey: NicheKey): PipelineTemplate {
+  const bp = NICHE_BLUEPRINTS[blueprintKey];
+  return {
+    key,
+    name: bp.pipeline.name,
+    description: bp.pipeline.description,
+    industry: bp.industry,
+    customFields: bp.pipeline.customFields,
+    stages: bp.pipeline.stages,
+  };
+}
+
+/** Templates de pipeline = um por nicho (derivado do registry) + alias `clinic`. */
 export const PIPELINE_TEMPLATES: readonly PipelineTemplate[] = [
-  {
-    key: 'real_estate',
-    name: 'Funil Imobiliário',
-    description: 'Pipeline para captação e venda/locação de imóveis.',
-    industry: 'real_estate',
-    customFields: [
-      { key: 'property_type', label: 'Tipo de imóvel', type: 'select', required: false, options: ['Apartamento', 'Casa', 'Terreno', 'Comercial'], position: 0 },
-      { key: 'budget_brl', label: 'Orçamento (R$)', type: 'currency', required: false, position: 1 },
-      { key: 'neighborhood', label: 'Bairro de interesse', type: 'text', required: false, position: 2 },
-      { key: 'visit_date', label: 'Data da visita', type: 'date', required: false, position: 3 },
-    ],
-    stages: [
-      { name: 'Novo lead', color: '#1FFF13', position: 0, probability: 10 },
-      { name: 'Qualificação', color: '#13C7FF', position: 1, probability: 25 },
-      { name: 'Visita agendada', color: '#FFB413', position: 2, probability: 50 },
-      { name: 'Proposta', color: '#9B13FF', position: 3, probability: 75 },
-      { name: 'Fechado (ganho)', color: '#13FF6B', position: 4, isWon: true, probability: 100 },
-      { name: 'Perdido', color: '#FF4136', position: 5, isLost: true, probability: 0 },
-    ],
-  },
-  {
-    key: 'clinic',
-    name: 'Funil Clínica',
-    description: 'Pipeline para captação de pacientes e agendamento de consultas.',
-    industry: 'clinic',
-    customFields: [
-      { key: 'procedure', label: 'Procedimento de interesse', type: 'text', required: false, position: 0 },
-      { key: 'insurance', label: 'Convênio', type: 'text', required: false, position: 1 },
-      { key: 'appointment_date', label: 'Data da consulta', type: 'date', required: false, position: 2 },
-      { key: 'estimated_value_brl', label: 'Valor estimado (R$)', type: 'currency', required: false, position: 3 },
-    ],
-    stages: [
-      { name: 'Novo contato', color: '#1FFF13', position: 0, probability: 10 },
-      { name: 'Triagem', color: '#13C7FF', position: 1, probability: 30 },
-      { name: 'Consulta agendada', color: '#FFB413', position: 2, probability: 60 },
-      { name: 'Compareceu', color: '#9B13FF', position: 3, probability: 80 },
-      { name: 'Tratamento fechado', color: '#13FF6B', position: 4, isWon: true, probability: 100 },
-      { name: 'Não convertido', color: '#FF4136', position: 5, isLost: true, probability: 0 },
-    ],
-  },
+  fromBlueprint('real_estate', 'real_estate'),
+  fromBlueprint('health', 'health'),
+  fromBlueprint('education', 'education'),
+  fromBlueprint('solar', 'solar'),
+  fromBlueprint('retail', 'retail'),
+  fromBlueprint('law', 'law'),
+  fromBlueprint('agency', 'agency'),
+  // Alias histórico: 'clinic' aponta para o nicho 'health' (caminho legado).
+  fromBlueprint('clinic', 'health'),
 ];
 
 export function getPipelineTemplate(key: NichePipelineKey): PipelineTemplate | undefined {
