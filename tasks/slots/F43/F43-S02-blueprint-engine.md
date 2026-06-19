@@ -2,7 +2,7 @@
 id: F43-S02
 title: Engine de Niche Blueprint — tipo declarativo + instanciador idempotente
 phase: F43
-status: blocked
+status: available
 priority: critical
 estimated_size: M
 depends_on: [F43-S01]
