@@ -43,6 +43,13 @@ export interface PaymentPlanInput {
   readonly priceYearlyCents?: number;
   /** Descrição opcional do plano. */
   readonly description?: string;
+  /**
+   * Ciclo do product no gateway. A AbacatePay exige `cycle` no product para que
+   * ele possa lastrear uma **assinatura** (`/subscriptions/create`). Ausente
+   * (checkout avulso/PIX) → product sem ciclo. O provider mapeia
+   * monthly→MONTHLY, yearly→ANNUALLY.
+   */
+  readonly cycle?: BillingCycle;
   /** Id de product já existente no gateway, se o caller já o conhece. */
   readonly externalProductId?: string;
 }

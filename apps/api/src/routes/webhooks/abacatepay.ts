@@ -1,19 +1,24 @@
 /**
  * Webhook AbacatePay (F41-S03 — PAYMENTS_ABACATEPAY.md §4/§9).
  *
- *   POST /webhooks/abacatepay → verify HMAC → dedup → mapeia evento → transição
+ *   POST /webhooks/abacatepay?webhookSecret=… → auth → dedup → mapeia evento → transição
  *
  * **Fonte da verdade do pagamento.** Montado ANTES do `express.json()` global
- * (raw body): o HMAC precisa dos bytes EXATOS recebidos — um JSON re-serializado
- * divergiria da assinatura. Espelha o mecanismo de raw-body do webhook Meta.
+ * (raw body): a verificação opcional de HMAC precisa dos bytes EXATOS recebidos —
+ * um JSON re-serializado divergiria. Espelha o raw-body do webhook Meta.
  *
- * Segurança (§9): HMAC obrigatório (sem/má assinatura → 401, sem efeito);
- * idempotência dupla (borda em `webhook_events` + domínio em `payment_events`);
- * preço/plano SEMPRE reconferidos server-side em `transitions.ts` (nunca confiamos
- * no payload); toda transição auditada. Nunca logamos secret nem payload sensível.
+ * Segurança (§9):
+ *  - AUTH PRIMÁRIA: o query param `webhookSecret` é comparado (constant-time) com
+ *    `ABACATEPAY_WEBHOOK_SECRET`. Ausente/errado → 401, sem efeito (fail-closed).
+ *  - CAMADA EXTRA (opcional): quando `ABACATEPAY_PUBLIC_KEY` está configurada,
+ *    exigimos também o header `x-webhook-signature` = HMAC-SHA256(base64) do raw
+ *    body com a chave pública da AbacatePay; mismatch → 401.
+ *  - Idempotência dupla (borda em `webhook_events` + domínio em `payment_events`
+ *    pelo `id` top-level do evento); preço/plano SEMPRE reconferidos server-side
+ *    em `transitions.ts`; toda transição auditada. Nunca logamos secret/chave/payload.
  *
- * O secret do webhook vem de `ABACATEPAY_WEBHOOK_SECRET` (env / secret de serviço),
- * nunca por-tenant, nunca commitado.
+ * Secrets vêm de env (`ABACATEPAY_WEBHOOK_SECRET`, `ABACATEPAY_PUBLIC_KEY`),
+ * nunca por-tenant, nunca commitados.
  */
 import { Buffer } from 'node:buffer';
 import express, { Router, type Request, type Response } from 'express';
@@ -21,8 +26,10 @@ import { and, eq } from 'drizzle-orm';
 import { getDb, schema, type DB } from '@hm/db';
 import type { ChannelProvider } from '@hm/shared';
 import {
+  verifyWebhookSecret,
   verifyWebhookSignature,
   ABACATEPAY_SIGNATURE_HEADER,
+  ABACATEPAY_WEBHOOK_SECRET_PARAM,
   WebhookEventSchema,
   type WebhookEvent,
 } from '@hm/payments';
@@ -48,10 +55,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-/** Id de idempotência de domínio: id do evento do provider ou hash do corpo. */
+/**
+ * Id de idempotência de domínio: o `id` top-level do envelope (`log_…`) ou, se
+ * ausente, um hash determinístico do corpo (defensivo — não esperado na v2).
+ */
 function deriveDomainEventId(event: WebhookEvent, rawBody: Buffer): string {
   if (typeof event.id === 'string' && event.id.length > 0) return event.id;
-  if (typeof event.eventId === 'string' && event.eventId.length > 0) return event.eventId;
   return deriveEventId(rawBody, event);
 }
 
@@ -129,7 +138,7 @@ function buildPorts(db: DB): TransitionPorts {
         .limit(1);
       return row?.isActive === true;
     },
-    async applyTransition({ workspaceId, patch }) {
+    async applyTransition({ workspaceId, patch, externalSubscriptionId }) {
       const now = new Date();
       // workspaces = fonte da verdade do status/plano/trial.
       await db
@@ -144,11 +153,17 @@ function buildPorts(db: DB): TransitionPorts {
 
       // subscriptions = espelho coerente (period/cancel/canceled). `subscriptions.plan_id`
       // é NOT NULL: só sobrescrevemos o plano quando resolvido (nunca para null).
+      // `external_subscription_id` só é gravado quando o evento traz o `subs_…`
+      // real (activate/renew) — o checkout só conhecia o `bill_…`; este é o id
+      // necessário para o cancelamento de cartão (POST /subscriptions/cancel).
       await db
         .update(subscriptions)
         .set({
           status: patch.status,
           ...(patch.planId !== null ? { planId: patch.planId } : {}),
+          ...(externalSubscriptionId !== null
+            ? { externalSubscriptionId }
+            : {}),
           trialEndsAt: patch.trialEndsAt,
           currentPeriodEnd: patch.currentPeriodEnd,
           canceledAt: patch.canceledAt,
@@ -232,13 +247,29 @@ export function createAbacatePayWebhookRouter(): Router {
     express.raw({ type: () => true, limit: '1mb' }),
     async (req: Request, res: Response) => {
       const rawBody = getRawBody(req);
-      const signature = req.get(ABACATEPAY_SIGNATURE_HEADER);
-      const secret = process.env['ABACATEPAY_WEBHOOK_SECRET'];
 
-      // §9: HMAC obrigatório. Secret ausente OU assinatura inválida → 401, sem efeito.
-      if (!verifyWebhookSignature(rawBody, signature, secret)) {
+      // AUTH PRIMÁRIA (§9): a AbacatePay anexa o secret na query string do endpoint
+      // registrado (`?webhookSecret=…`). Comparação constant-time com o env.
+      // Ausente/errado → 401, sem efeito (fail-closed).
+      const providedSecretRaw = req.query[ABACATEPAY_WEBHOOK_SECRET_PARAM];
+      const providedSecret =
+        typeof providedSecretRaw === 'string' ? providedSecretRaw : undefined;
+      const expectedSecret = process.env['ABACATEPAY_WEBHOOK_SECRET'];
+      if (!verifyWebhookSecret(providedSecret, expectedSecret)) {
         res.sendStatus(401);
         return;
+      }
+
+      // CAMADA EXTRA (opcional): só quando ABACATEPAY_PUBLIC_KEY está configurada,
+      // exigimos o HMAC-SHA256(base64) do raw body no header `x-webhook-signature`,
+      // com a chave pública da AbacatePay. Mismatch → 401.
+      const publicKey = process.env['ABACATEPAY_PUBLIC_KEY'];
+      if (publicKey && publicKey.length > 0) {
+        const signature = req.get(ABACATEPAY_SIGNATURE_HEADER);
+        if (!verifyWebhookSignature(rawBody, signature, publicKey)) {
+          res.sendStatus(401);
+          return;
+        }
       }
 
       // Parse + validação Zod do corpo já autenticado.

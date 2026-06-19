@@ -82,8 +82,7 @@ export function isRetryableStatus(httpStatus: number): boolean {
 
 /**
  * Extrai uma mensagem de erro do envelope da AbacatePay.
- * Aceita tanto `{ error: "msg" }` quanto `{ error: { message } }` (incerto na
- * v2 — ver TODO em `client.ts`).
+ * Aceita tanto `{ error: "msg" }` quanto `{ error: { message } }` (defensivo).
  */
 function extractErrorMessage(body: unknown): string | undefined {
   if (typeof body !== 'object' || body === null || !('error' in body)) return undefined;

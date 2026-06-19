@@ -11,14 +11,15 @@
  * + reset do singleton, como em subscriptions.test.ts) e @hm/db e um fake stateful
  * que encena os builders Drizzle de AMBAS as rotas. O HMAC NAO e mockado.
  */
-import { Buffer } from 'node:buffer';
-import { createHmac } from 'node:crypto';
 import express from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const SECRET = 'integration_webhook_secret';
 process.env['ABACATEPAY_WEBHOOK_SECRET'] = SECRET;
+delete process.env['ABACATEPAY_PUBLIC_KEY'];
+
+const WEBHOOK_PATH = `/webhooks/abacatepay?webhookSecret=${SECRET}`;
 
 const WS_ID = '00000000-0000-0000-0000-0000000000aa';
 const PLAN_ID = '00000000-0000-0000-0000-0000000000f0';
@@ -425,22 +426,27 @@ async function buildApp() {
   return app;
 }
 
-function sign(body: string, secret = SECRET): string {
-  return 'sha256=' + createHmac('sha256', secret).update(Buffer.from(body, 'utf8')).digest('hex');
-}
-
 function webhookPayload(eventType: string, data: Record<string, unknown> = {}): string {
   return JSON.stringify({
-    id: 'evt_' + eventType + '_' + Math.random().toString(36).slice(2),
+    id: 'log_' + eventType + '_' + Math.random().toString(36).slice(2),
     event: eventType,
+    apiVersion: 'v2',
+    devMode: false,
     data: { id: EXT_SUB, metadata: { workspaceId: WS_ID }, ...data },
   });
 }
 
-async function postWebhook(app: express.Express, body: string, signature?: string) {
-  const req = request(app).post('/webhooks/abacatepay').set('content-type', 'application/json');
-  if (signature !== undefined) req.set('x-abacatepay-signature', signature);
-  return req.send(body);
+/**
+ * Posta o webhook. Por default usa o secret correto na query (auth primária);
+ * `withSecret: false` simula a chamada SEM auth (→ 401).
+ */
+async function postWebhook(
+  app: express.Express,
+  body: string,
+  opts: { withSecret?: boolean } = {},
+) {
+  const path = opts.withSecret === false ? '/webhooks/abacatepay' : WEBHOOK_PATH;
+  return request(app).post(path).set('content-type', 'application/json').send(body);
 }
 
 beforeEach(() => {
@@ -467,7 +473,7 @@ describe('billing ciclo de vida ponta-a-ponta (checkout completed renewed cancel
     state.subscription!.externalSubscriptionId = EXT_SUB;
 
     const completedBody = webhookPayload('checkout.completed');
-    const completed = await postWebhook(app, completedBody, sign(completedBody));
+    const completed = await postWebhook(app, completedBody);
     expect(completed.status).toBe(200);
     expect(state.workspace.subscriptionStatus).toBe('active');
     expect(state.subscription?.status).toBe('active');
@@ -477,7 +483,7 @@ describe('billing ciclo de vida ponta-a-ponta (checkout completed renewed cancel
     expect(periodAfterActivate).toBeInstanceOf(Date);
 
     const renewedBody = webhookPayload('subscription.renewed');
-    const renewed = await postWebhook(app, renewedBody, sign(renewedBody));
+    const renewed = await postWebhook(app, renewedBody);
     expect(renewed.status).toBe(200);
     expect(state.subscription?.status).toBe('active');
     expect(state.subscription?.currentPeriodEnd?.getTime()).toBeGreaterThan(
@@ -486,7 +492,7 @@ describe('billing ciclo de vida ponta-a-ponta (checkout completed renewed cancel
     expect(state.audits.some((a) => a.action === 'subscription.renewed')).toBe(true);
 
     const cancelledBody = webhookPayload('subscription.cancelled');
-    const cancelled = await postWebhook(app, cancelledBody, sign(cancelledBody));
+    const cancelled = await postWebhook(app, cancelledBody);
     expect(cancelled.status).toBe(200);
     expect(state.workspace.subscriptionStatus).toBe('canceled');
     expect(state.subscription?.status).toBe('canceled');
@@ -503,7 +509,7 @@ describe('billing ciclo de vida ponta-a-ponta (checkout completed renewed cancel
     const app = await buildApp();
     state.subscription = { ...defaultSubFor(), externalSubscriptionId: EXT_SUB };
     const body = webhookPayload('checkout.completed');
-    const res = await postWebhook(app, body);
+    const res = await postWebhook(app, body, { withSecret: false });
     expect(res.status).toBe(401);
     expect(state.workspace.subscriptionStatus).toBe('trial');
     expect(state.subscription?.status).toBe('trial');
@@ -516,14 +522,14 @@ describe('billing ciclo de vida ponta-a-ponta (checkout completed renewed cancel
     state.subscription = { ...defaultSubFor(), externalSubscriptionId: EXT_SUB };
     const body = webhookPayload('checkout.completed');
 
-    const first = await postWebhook(app, body, sign(body));
+    const first = await postWebhook(app, body);
     expect(first.status).toBe(200);
     expect(state.workspace.subscriptionStatus).toBe('active');
     const auditsAfterFirst = state.audits.length;
 
     state.workspace.subscriptionStatus = 'past_due';
 
-    const replay = await postWebhook(app, body, sign(body));
+    const replay = await postWebhook(app, body);
     expect(replay.status).toBe(200);
     expect(state.workspace.subscriptionStatus).toBe('past_due');
     expect(state.audits.length).toBe(auditsAfterFirst);
@@ -538,7 +544,7 @@ describe('billing ciclo de vida ponta-a-ponta (checkout completed renewed cancel
       amount: 1,
       metadata: { workspaceId: WS_ID, planId: OTHER_PLAN_ID },
     });
-    const res = await postWebhook(app, body, sign(body));
+    const res = await postWebhook(app, body);
     expect(res.status).toBe(200);
     expect(state.workspace.planId).toBe(PLAN_ID);
     expect(state.subscription?.planId).toBe(PLAN_ID);

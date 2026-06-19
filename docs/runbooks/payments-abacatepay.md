@@ -19,7 +19,8 @@
 | Variavel | Onde | Obrigatoria | Descricao |
 |---|---|---|---|
 | `ABACATEPAY_API_KEY` | api, workers | Para cobranca real | API key da conta AbacatePay. Ausente/vazia entao MockPaymentProvider. Segredo de plataforma. |
-| `ABACATEPAY_WEBHOOK_SECRET` | api | Para cobranca real | Segredo HMAC do webhook. Sem ele, todo webhook e rejeitado com 401 (fail-closed). |
+| `ABACATEPAY_WEBHOOK_SECRET` | api | Para cobranca real | Secret do webhook. A AbacatePay o anexa na QUERY STRING do endpoint (`?webhookSecret=...`); e a AUTH PRIMARIA. Sem ele ou divergente, todo webhook e rejeitado com 401 (fail-closed). |
+| `ABACATEPAY_PUBLIC_KEY` | api | Nao (camada extra) | Chave PUBLICA da AbacatePay. Se setada, exige tambem o header `x-webhook-signature` = HMAC-SHA256(base64) do corpo bruto com esta chave (defense-in-depth). Ausente entao a verificacao de HMAC e pulada. |
 | `BILLING_ENABLED` | api, web | Nao | Flag de exposicao do billing portal. Nao desliga o webhook. |
 | `APP_PUBLIC_URL` | api | Recomendada | Base usada para montar `returnUrl`/`completionUrl` do checkout. Fallback: `CORS_ORIGIN` e depois `http://localhost:3000`. |
 | `BILLING_DUNNING_LEAD_DAYS` | workers | Nao (default 3) | Dias antes do vencimento em que a cobranca PIX do proximo ciclo e gerada. |
@@ -47,6 +48,8 @@ real em `.env.example` nem em `.env.production.example` (sao versionados).
    ```
    ABACATEPAY_API_KEY=<key_de_producao>
    ABACATEPAY_WEBHOOK_SECRET=<secret_forte_gerado>
+   # opcional (camada extra de HMAC):
+   ABACATEPAY_PUBLIC_KEY=<chave_publica_da_conta_abacatepay>
    ```
 
    Gere o secret forte com: `openssl rand -base64 36` (e remova caracteres nao alfanumericos).
@@ -55,42 +58,45 @@ real em `.env.example` nem em `.env.production.example` (sao versionados).
    por processo). Se a key estava ausente no boot, o processo fica preso no mock ate reiniciar —
    por isso o re-deploy e obrigatorio, nao basta editar o arquivo.
 
-> O `ABACATEPAY_WEBHOOK_SECRET` deve ser identico ao secret registrado em `webhooks/create`
-> (secao 4). Se divergir, todos os webhooks caem em 401 e nenhuma assinatura ativa.
+> O `ABACATEPAY_WEBHOOK_SECRET` deve ser identico ao secret que voce coloca no `?webhookSecret=`
+> do endpoint registrado (secao 4). Se divergir, todos os webhooks caem em 401 e nenhuma
+> assinatura ativa. O `ABACATEPAY_PUBLIC_KEY` (se usado) deve ser a chave publica da conta.
 
 ## 4. Registrar o webhook HTTPS na conta AbacatePay
 
 Pre-requisito (seam de infra, secao 10): a VPS precisa ter URL publica HTTPS apontando para a
 API. O endpoint e `POST https://<dominio-publico>/webhooks/abacatepay` (montado ANTES do
-`express.json()` para preservar o raw body do HMAC).
+`express.json()` para preservar o raw body do HMAC opcional).
 
-Registre o webhook na conta (uma vez), via `POST /webhooks/create` na API AbacatePay:
+**CRITICO:** a AbacatePay anexa o secret na QUERY STRING do endpoint. Portanto o `endpoint`
+cadastrado na conta DEVE incluir `?webhookSecret=<MESMO_VALOR_DE_ABACATEPAY_WEBHOOK_SECRET>`.
+Esse query param e a AUTH PRIMARIA: o webhook valida (constant-time) que ele bate com a env.
+
+No painel da AbacatePay (Webhooks), cadastre a URL completa com o secret:
 
 ```
-curl -X POST https://api.abacatepay.com/v2/webhooks/create \
-  -H "Authorization: Bearer $ABACATEPAY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "leadium-prod",
-    "endpoint": "https://app.leadium.com.br/webhooks/abacatepay",
-    "secret": "<MESMO_VALOR_DE_ABACATEPAY_WEBHOOK_SECRET>",
-    "events": [
-      "checkout.completed",
-      "subscription.completed",
-      "subscription.renewed",
-      "subscription.cancelled",
-      "payment.refunded"
-    ]
-  }'
+https://app.leadium.com.br/webhooks/abacatepay?webhookSecret=<MESMO_VALOR_DE_ABACATEPAY_WEBHOOK_SECRET>
 ```
 
-> Os nomes EXATOS de campos/eventos e o header de assinatura (`x-abacatepay-signature`) estao
-> marcados `TODO(confirmar)` no codigo (`packages/payments/src/abacatepay/schemas.ts`,
-> `webhook.ts`). Confirme contra a doc/sandbox antes do go-live e ajuste o mapa de eventos em
-> `apps/api/src/services/billing/transitions.ts` (`classifyEvent`) se a nomenclatura diferir.
+Eventos a habilitar (envelope `{ id, event, apiVersion, devMode, data }`; o `id` top-level
+`log_…` e a chave de idempotencia):
 
-O verificador (`verifyWebhookSignature`) aceita assinatura hex ou base64, com ou sem prefixo
-`sha256=`, e compara em tempo constante. A verificacao roda sobre os bytes brutos recebidos.
+```
+checkout.completed
+subscription.completed
+subscription.renewed
+subscription.cancelled
+transparent.completed   (PIX confirmado)
+checkout.refunded / transparent.refunded   (estorno -> revisao)
+```
+
+> O mapa evento -> transicao vive em `apps/api/src/services/billing/transitions.ts`
+> (`classifyEvent`). Refund/dispute/lost -> `past_due`.
+
+CAMADA EXTRA (opcional): se `ABACATEPAY_PUBLIC_KEY` estiver setada, o webhook tambem exige o
+header `x-webhook-signature` = HMAC-SHA256 do corpo BRUTO, codificado em BASE64, com chave =
+CHAVE PUBLICA da AbacatePay. O verificador (`verifyWebhookSignature`) aceita base64 (e hex como
+defensivo), com ou sem prefixo `sha256=`, e compara em tempo constante sobre os bytes brutos.
 
 ## 5. Checklist de validacao na sandbox
 
@@ -101,8 +107,10 @@ Antes de habilitar producao, rode contra a sandbox (key + webhook de sandbox):
 - [ ] **Checkout self-serve:** `POST /api/billing/checkout` (OWNER) retorna `redirectUrl` da
       sandbox; o intent (provider/customer/product/method) e gravado na `subscriptions` do
       workspace; o `amountCents` bate com o catalogo `plans` (nunca com o body).
-- [ ] **Webhook HMAC obrigatorio:** um POST sem header de assinatura, e outro com assinatura de
-      secret errado, ambos retornam 401 e NAO transicionam o status.
+- [ ] **Webhook auth obrigatoria:** um POST sem o query param `webhookSecret`, e outro com
+      `webhookSecret` errado, ambos retornam 401 e NAO transicionam o status. Com
+      `ABACATEPAY_PUBLIC_KEY` setada, um POST com secret correto mas `x-webhook-signature`
+      invalido tambem retorna 401.
 - [ ] **Ativacao:** evento `checkout.completed`/`subscription.completed` assinado leva o workspace
       e a subscription a `active`, encerra o trial e grava `audit_logs` (`subscription.activated`).
 - [ ] **Renovacao:** `subscription.renewed` mantem `active` e AVANCA `current_period_end`.
@@ -125,10 +133,10 @@ Antes de habilitar producao, rode contra a sandbox (key + webhook de sandbox):
 ## 6. Rotacao de segredo
 
 1. Gere novo `ABACATEPAY_WEBHOOK_SECRET`.
-2. Atualize o webhook na conta AbacatePay (`webhooks/update` ou recriar) com o novo secret.
+2. Atualize a URL do webhook na conta AbacatePay com o novo `?webhookSecret=<novo>`.
 3. Atualize `/opt/leadium/.env` e re-deploy `api`.
-4. Janela de troca: enquanto o secret do servidor e o registrado divergirem, webhooks caem em
-   401. Faca a troca dos dois lados o mais proximo possivel e monitore reentregas.
+4. Janela de troca: enquanto o secret do servidor e o do query param divergirem, webhooks caem
+   em 401. Faca a troca dos dois lados o mais proximo possivel e monitore reentregas.
 
 ## 7. Referencias de codigo
 

@@ -18,8 +18,12 @@
 - **Não reinventa o billing interno.** Fonte da verdade do status continua sendo
   `workspaces.{plan_id,subscription_status,trial_ends_at}` + `subscriptions` + `resolveEntitlements`.
 - **Dinheiro em centavos, BRL.** API AbacatePay `https://api.abacatepay.com/v2`, auth
-  `Authorization: Bearer`, envelope `{ data, success, error }`. Versão/shapes exatos a confirmar
-  contra a doc/sandbox antes de fechar os contratos Zod (o `llms.txt` é índice resumido).
+  `Authorization: Bearer`, envelope `{ data, success, error }`. Endpoints e shapes **confirmados**
+  contra a doc oficial: `/products/create`, `/customers/create`, `/checkouts/create`,
+  `/subscriptions/create`, `/subscriptions/cancel` (POST body `{id}`), `/transparents/create`
+  (PIX, request aninhado em `{data:{...}}`). Checkout/assinatura usam `items:[{id,quantity}]`
+  onde `id` é o ID do PRODUTO (de `/products/create`), sem `price`. Ciclos:
+  WEEKLY|MONTHLY|SEMIANNUALLY|ANNUALLY (monthly→MONTHLY, yearly→ANNUALLY). Redirect = `data.url`.
 
 ## 2. Modelo de dados
 
@@ -49,8 +53,16 @@ tratadas como **legado, não usadas** por esta feature. Adicionamos colunas prov
 
 ## 4. Webhook & transições
 
-`POST /api/webhooks/abacatepay` (dentro de `routes/webhooks/`, **antes** do `express.json` para
-raw body). Verifica HMAC → dedup (`webhook_events` + `payment_events`) → mapeia evento → transição:
+`POST /webhooks/abacatepay?webhookSecret=…` (dentro de `routes/webhooks/`, **antes** do
+`express.json` para raw body). Auth → dedup (`webhook_events` + `payment_events` pelo `id`
+top-level `log_…`) → mapeia evento → transição:
+
+**Auth (§9):** PRIMÁRIA = o query param `webhookSecret` (a AbacatePay anexa o secret na URL do
+endpoint registrado) comparado constant-time com `ABACATEPAY_WEBHOOK_SECRET`. EXTRA opcional =
+header `x-webhook-signature` (HMAC-SHA256 base64 do raw body com a CHAVE PÚBLICA da AbacatePay,
+`ABACATEPAY_PUBLIC_KEY`), verificado só quando a chave pública está configurada.
+
+Envelope do payload: `{ id, event, apiVersion, devMode, data }`.
 
 | Evento AbacatePay                          | Transição                              |
 |--------------------------------------------|----------------------------------------|
@@ -59,6 +71,10 @@ raw body). Verifica HMAC → dedup (`webhook_events` + `payment_events`) → map
 | `subscription.cancelled`                   | `canceled`                             |
 | `*.refunded` / `*.disputed` / `*.lost`     | `past_due` / revisão (auditado)        |
 | (PIX vencido sem pagamento — via worker)   | `past_due` → corte                     |
+
+Em `subscription.completed`/`renewed` capturamos o id REAL da assinatura (`subs_…`) do payload
+e gravamos em `subscriptions.external_subscription_id` (o checkout só conhecia o `bill_…`) — é
+o id necessário para o cancelamento de cartão (`POST /subscriptions/cancel {id}`).
 
 Toda transição grava `audit_logs` (before/after) + `payment_events.processed_at`.
 
@@ -92,13 +108,15 @@ histórico), cancelar. Banners de `trial`/`past_due` reusando o status existente
 
 ## 9. Segurança
 
-Key só em `.env`/secret de serviço; HMAC obrigatório (rejeita sem assinatura); idempotência por
-event id; preço/plano sempre reconferidos server-side; toda transição auditada; Zod em todo input
-externo (inclusive payload do webhook); webhook sem auth de sessão mas com assinatura.
+Key só em `.env`/secret de serviço; webhook auth obrigatória (query `webhookSecret`, fail-closed
+com 401; HMAC com chave pública como camada extra opcional); idempotência pelo `id` top-level do
+evento; preço/plano sempre reconferidos server-side; toda transição auditada; Zod em todo input
+externo (inclusive payload do webhook); webhook sem auth de sessão. Nunca logamos secret/chave/payload.
 
 ## 10. Seams (explícitos, dependem de infra/conta)
 
-- **Cobrança real E2E** exige a **key de produção** + registrar o webhook HTTPS na conta AbacatePay
-  (`webhooks/create`) quando a VPS tiver URL pública.
-- **Confirmar contra doc/sandbox** os shapes exatos (`v2`, campos) antes de fechar os Zod.
+- **Cobrança real E2E** exige a **key de produção** + cadastrar a URL do webhook (com
+  `?webhookSecret=…`) no painel da conta AbacatePay quando a VPS tiver URL pública HTTPS.
+- Shapes/endpoints v2 **confirmados** contra a doc oficial (ver §1/§4). Resta validar em sandbox:
+  o get-by-id de assinatura (não existe; só `/subscriptions/list`) e o filtro de `getSubscription`.
 - Cupons/payouts/trustMRR: fora de escopo (plugáveis depois).

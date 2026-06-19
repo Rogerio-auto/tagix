@@ -37,8 +37,13 @@ export {
   type PaymentErrorKind,
 } from './errors';
 
-// --- Webhook (HMAC) ---
-export { verifyWebhookSignature, ABACATEPAY_SIGNATURE_HEADER } from './webhook';
+// --- Webhook (auth) ---
+export {
+  verifyWebhookSecret,
+  verifyWebhookSignature,
+  ABACATEPAY_SIGNATURE_HEADER,
+  ABACATEPAY_WEBHOOK_SECRET_PARAM,
+} from './webhook';
 
 // --- Adapter real AbacatePay ---
 export { AbacatePayProvider } from './abacatepay/provider';
@@ -55,15 +60,22 @@ export { MockPaymentProvider, type MockPaymentProviderOptions } from './mock/pro
 // --- Contratos Zod (request/response por endpoint + webhook) ---
 export {
   CentsSchema,
+  CurrencySchema,
+  CycleSchema,
+  MethodSchema,
   envelopeSchema,
   CreateProductRequestSchema,
   ProductDataSchema,
   CreateCustomerRequestSchema,
   CustomerDataSchema,
+  CheckoutItemSchema,
   CreateCheckoutRequestSchema,
   CheckoutDataSchema,
   CreateSubscriptionRequestSchema,
   SubscriptionDataSchema,
+  CancelSubscriptionRequestSchema,
+  CancelSubscriptionDataSchema,
+  CreatePixChargeDataSchema,
   CreatePixChargeRequestSchema,
   PixChargeDataSchema,
   WebhookEventSchema,
@@ -75,6 +87,8 @@ export {
   type CheckoutData,
   type CreateSubscriptionRequest,
   type SubscriptionData,
+  type CancelSubscriptionRequest,
+  type CancelSubscriptionData,
   type CreatePixChargeRequest,
   type PixChargeData,
   type WebhookEvent,

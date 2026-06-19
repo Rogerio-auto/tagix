@@ -16,6 +16,12 @@ const workspace: PaymentWorkspaceInput = {
   billingEmail: 'billing@acme.com',
 };
 
+interface CapturedRequest {
+  url: string;
+  method: string;
+  body: unknown;
+}
+
 /** Monta um `fetch` falso que devolve um envelope JSON com o status dado. */
 function fakeFetch(status: number, body: unknown): typeof fetch {
   const impl = async (): Promise<Response> =>
@@ -23,6 +29,28 @@ function fakeFetch(status: number, body: unknown): typeof fetch {
       status,
       headers: { 'content-type': 'application/json' },
     });
+  return impl as unknown as typeof fetch;
+}
+
+/**
+ * `fetch` falso que devolve respostas em sequência e captura cada request
+ * (url/method/body parseado) para asserts de contrato.
+ */
+function seqFetchCapturing(
+  responses: unknown[],
+  captured: CapturedRequest[],
+): typeof fetch {
+  let i = 0;
+  const impl = async (url: string | URL, init?: RequestInit): Promise<Response> => {
+    const rawBody = typeof init?.body === 'string' ? init.body : undefined;
+    captured.push({
+      url: String(url),
+      method: init?.method ?? 'GET',
+      body: rawBody ? JSON.parse(rawBody) : undefined,
+    });
+    const body = responses[i++];
+    return new Response(JSON.stringify(body), { status: 200 });
+  };
   return impl as unknown as typeof fetch;
 }
 
@@ -59,19 +87,43 @@ describe('AbacatePayProvider', () => {
     expect(called).toBe(false);
   });
 
-  it('createHostedCheckout devolve redirectUrl', async () => {
+  it('ensureProduct manda /products/create com currency BRL e sem cycle (avulso)', async () => {
+    const captured: CapturedRequest[] = [];
+    const p = makeProvider(seqFetchCapturing([{ data: { id: 'prod_1' }, success: true }], captured));
+    await p.ensureProduct(plan);
+    const req = captured[0]!;
+    expect(req.method).toBe('POST');
+    expect(req.url).toContain('/products/create');
+    expect(req.body).toMatchObject({
+      externalId: 'plan_pro',
+      name: 'Pro',
+      price: 9900,
+      currency: 'BRL',
+    });
+    expect((req.body as Record<string, unknown>)['cycle']).toBeUndefined();
+  });
+
+  it('ensureProduct com cycle manda cycle mapeado e externalId por ciclo', async () => {
+    const captured: CapturedRequest[] = [];
+    const p = makeProvider(seqFetchCapturing([{ data: { id: 'prod_y' }, success: true }], captured));
+    await p.ensureProduct({ ...plan, cycle: 'yearly' });
+    expect(captured[0]!.body).toMatchObject({
+      externalId: 'plan_pro__ANNUALLY',
+      price: 99000,
+      currency: 'BRL',
+      cycle: 'ANNUALLY',
+    });
+  });
+
+  it('createHostedCheckout devolve data.url e manda items:[{id,quantity}] sem price', async () => {
+    const captured: CapturedRequest[] = [];
     // ensureProduct, ensureCustomer e checkout: três respostas sequenciais.
     const responses = [
       { data: { id: 'prod_1' }, success: true },
       { data: { id: 'cust_1' }, success: true },
-      { data: { id: 'chk_1', url: 'https://pay.abacate/checkout/chk_1' }, success: true },
+      { data: { id: 'bill_1', url: 'https://pay.abacate/checkout/bill_1', amount: 9900 }, success: true },
     ];
-    let i = 0;
-    const seqFetch = (async () => {
-      const body = responses[i++];
-      return new Response(JSON.stringify(body), { status: 200 });
-    }) as unknown as typeof fetch;
-    const p = makeProvider(seqFetch);
+    const p = makeProvider(seqFetchCapturing(responses, captured));
     const r = await p.createHostedCheckout({
       plan,
       workspace,
@@ -80,8 +132,101 @@ describe('AbacatePayProvider', () => {
       returnUrl: 'https://app.test/return',
       completionUrl: 'https://app.test/done',
     });
-    expect(r.externalId).toBe('chk_1');
-    expect(r.redirectUrl).toBe('https://pay.abacate/checkout/chk_1');
+    expect(r.externalId).toBe('bill_1');
+    expect(r.redirectUrl).toBe('https://pay.abacate/checkout/bill_1');
+
+    const checkoutReq = captured[2]!;
+    expect(checkoutReq.url).toContain('/checkouts/create');
+    const cbody = checkoutReq.body as Record<string, unknown>;
+    expect(cbody['items']).toEqual([{ id: 'prod_1', quantity: 1 }]);
+    expect(cbody['methods']).toEqual(['CARD', 'PIX']);
+    expect(cbody['customerId']).toBe('cust_1');
+    // items NÃO carrega price (o preço vem do product).
+    const items = cbody['items'] as Array<Record<string, unknown>>;
+    expect(items[0]!['price']).toBeUndefined();
+  });
+
+  it('createSubscription ensura product COM cycle e manda items length 1 + methods CARD', async () => {
+    const captured: CapturedRequest[] = [];
+    // ensureProduct(cycle) + subscriptions/create.
+    const responses = [
+      { data: { id: 'prod_year' }, success: true },
+      { data: { id: 'bill_sub_1', url: 'https://pay.abacate/subscribe/bill_sub_1', status: 'PENDING' }, success: true },
+    ];
+    const p = makeProvider(seqFetchCapturing(responses, captured));
+    const r = await p.createSubscription({
+      plan,
+      workspace,
+      cycle: 'yearly',
+      customer: { externalCustomerId: 'cust_1', workspaceId: workspace.id },
+      product: { externalProductId: 'prod_avulso', planId: plan.id },
+      returnUrl: 'https://app.test/return',
+      completionUrl: 'https://app.test/done',
+    });
+    expect(r.externalSubscriptionId).toBe('bill_sub_1');
+    expect(r.status).toBe('pending');
+    expect(r.redirectUrl).toBe('https://pay.abacate/subscribe/bill_sub_1');
+
+    // O product da assinatura é ensurado com cycle (não reusa o avulso).
+    expect(captured[0]!.url).toContain('/products/create');
+    expect(captured[0]!.body).toMatchObject({ cycle: 'ANNUALLY' });
+
+    const subReq = captured[1]!;
+    expect(subReq.url).toContain('/subscriptions/create');
+    const sbody = subReq.body as Record<string, unknown>;
+    expect(sbody['items']).toEqual([{ id: 'prod_year', quantity: 1 }]);
+    expect(sbody['methods']).toEqual(['CARD']);
+  });
+
+  it('cancelSubscription faz POST /subscriptions/cancel com body {id}', async () => {
+    const captured: CapturedRequest[] = [];
+    const p = makeProvider(
+      seqFetchCapturing([{ data: { id: 'subs_1', status: 'CANCELLED' }, success: true }], captured),
+    );
+    await p.cancelSubscription('subs_1');
+    const req = captured[0]!;
+    expect(req.method).toBe('POST');
+    expect(req.url).toContain('/subscriptions/cancel');
+    expect(req.body).toEqual({ id: 'subs_1' });
+  });
+
+  it('createPixCharge usa /transparents/create com wrapper {data} e devolve brCode', async () => {
+    const captured: CapturedRequest[] = [];
+    const p = makeProvider(
+      seqFetchCapturing(
+        [
+          {
+            data: {
+              id: 'pix_1',
+              status: 'PENDING',
+              amount: 9900,
+              brCode: '00020126BR',
+              brCodeBase64: 'aGVsbG8=',
+              expiresAt: '2026-07-01T00:00:00Z',
+            },
+            success: true,
+          },
+        ],
+        captured,
+      ),
+    );
+    const r = await p.createPixCharge({
+      plan,
+      workspace,
+      cycle: 'monthly',
+      customer: { externalCustomerId: 'cust_1', workspaceId: workspace.id },
+      amountCents: 9900,
+      expiresInSeconds: 3600,
+    });
+    expect(r.externalId).toBe('pix_1');
+    expect(r.status).toBe('pending');
+    expect(r.brCode).toBe('00020126BR');
+    expect(r.brCodeBase64).toBe('aGVsbG8=');
+
+    const req = captured[0]!;
+    expect(req.url).toContain('/transparents/create');
+    const body = req.body as Record<string, unknown>;
+    expect(body['data']).toMatchObject({ amount: 9900, expiresIn: 3600 });
   });
 
   it('normaliza erro HTTP 401 como kind auth', async () => {

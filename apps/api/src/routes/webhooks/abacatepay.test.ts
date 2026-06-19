@@ -4,22 +4,25 @@
  * Cobre o contrato de segurança + idempotência sem Postgres real: `@hm/db` é
  * mockado por um fake stateful que encena os builders Drizzle usados pela rota e
  * pela dedup de borda. Casos:
- *   - assinatura ausente / inválida → 401, sem efeito (nenhum insert)
+ *   - AUTH PRIMÁRIA por query param `?webhookSecret=…` (ok/ausente/errado → 401)
+ *   - CAMADA EXTRA HMAC (header `x-webhook-signature`) só quando ABACATEPAY_PUBLIC_KEY existe
  *   - assinatura válida → 200 + transição aplicada (workspace+subscription+audit)
- *   - replay do mesmo event id → no-op idempotente (transição não re-aplica)
+ *   - captura do `subs_…` real do payload em activate/renew → external_subscription_id
+ *   - replay do mesmo event id (top-level `id`/`log_…`) → no-op idempotente
  *   - cada transição (completed/renewed/cancelled/refunded)
  *
- * O HMAC é o real do `@hm/payments` (não mockado) — garante que o raw body é o
- * que verificamos. O secret vem de ABACATEPAY_WEBHOOK_SECRET (setado no teste).
+ * O HMAC é o real do `@hm/payments` (não mockado). O secret vem de
+ * ABACATEPAY_WEBHOOK_SECRET (query) e a chave pública de ABACATEPAY_PUBLIC_KEY.
  */
 import { Buffer } from 'node:buffer';
 import { createHmac } from 'node:crypto';
 import express from 'express';
 import request from 'supertest';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const SECRET = 'test_webhook_secret_value';
 process.env['ABACATEPAY_WEBHOOK_SECRET'] = SECRET;
+delete process.env['ABACATEPAY_PUBLIC_KEY'];
 
 // ─── Fake stateful de @hm/db ──────────────────────────────────────────────────
 // Tabelas de interesse: webhook_events (dedup de borda) e payment_events (ledger
@@ -231,6 +234,8 @@ function applyUpdate(table: TableName, pred: Predicate, vals: Record<string, unk
     if ('currentPeriodEnd' in vals) state.subscription.currentPeriodEnd = (vals['currentPeriodEnd'] as Date | null) ?? null;
     if ('canceledAt' in vals) state.subscription.canceledAt = (vals['canceledAt'] as Date | null) ?? null;
     if ('cancelAtPeriodEnd' in vals) state.subscription.cancelAtPeriodEnd = Boolean(vals['cancelAtPeriodEnd']);
+    if ('externalSubscriptionId' in vals)
+      state.subscription.externalSubscriptionId = (vals['externalSubscriptionId'] as string | null) ?? null;
   } else if (table === TBL.paymentEvents) {
     // update por id (pred.col === 'id'): carimba processed_at/status/workspace.
     for (const row of state.paymentEvents.values()) {
@@ -281,24 +286,33 @@ function buildApp() {
   return app;
 }
 
-function sign(body: string, secret = SECRET): string {
-  return `sha256=${createHmac('sha256', secret).update(Buffer.from(body, 'utf8')).digest('hex')}`;
+/** HMAC base64 do raw body com a CHAVE PÚBLICA (camada extra). */
+function signWithPublicKey(body: string, publicKey: string): string {
+  return `sha256=${createHmac('sha256', publicKey).update(Buffer.from(body, 'utf8')).digest('base64')}`;
 }
 
 function payload(eventType: string, extra: Record<string, unknown> = {}): string {
   return JSON.stringify({
-    id: `evt_${eventType}_${Math.random().toString(36).slice(2)}`,
+    id: `log_${eventType}_${Math.random().toString(36).slice(2)}`,
     event: eventType,
+    apiVersion: 'v2',
+    devMode: false,
     data: { id: EXT_SUB, ...extra },
   });
 }
+
+const WEBHOOK_PATH = `/webhooks/abacatepay?webhookSecret=${SECRET}`;
 
 beforeEach(() => {
   state = freshState();
 });
 
-describe('POST /webhooks/abacatepay — segurança HMAC', () => {
-  it('rejeita 401 sem header de assinatura', async () => {
+afterEach(() => {
+  delete process.env['ABACATEPAY_PUBLIC_KEY'];
+});
+
+describe('POST /webhooks/abacatepay — auth primária (query secret)', () => {
+  it('rejeita 401 sem o query param webhookSecret', async () => {
     const body = payload('checkout.completed');
     const res = await request(buildApp())
       .post('/webhooks/abacatepay')
@@ -309,33 +323,67 @@ describe('POST /webhooks/abacatepay — segurança HMAC', () => {
     expect(state.paymentEvents.size).toBe(0);
   });
 
-  it('rejeita 401 com assinatura de segredo errado', async () => {
+  it('rejeita 401 com webhookSecret errado', async () => {
     const body = payload('checkout.completed');
     const res = await request(buildApp())
-      .post('/webhooks/abacatepay')
+      .post('/webhooks/abacatepay?webhookSecret=wrong')
       .set('content-type', 'application/json')
-      .set('x-abacatepay-signature', sign(body, 'wrong_secret'))
       .send(body);
     expect(res.status).toBe(401);
     expect(state.workspace.subscriptionStatus).toBe('trial');
   });
 
-  it('rejeita 401 com corpo adulterado após assinar', async () => {
+  it('aceita 200 com webhookSecret correto (sem chave pública configurada)', async () => {
     const body = payload('checkout.completed');
     const res = await request(buildApp())
-      .post('/webhooks/abacatepay')
+      .post(WEBHOOK_PATH)
       .set('content-type', 'application/json')
-      .set('x-abacatepay-signature', sign(body))
-      .send(body + ' ');
+      .send(body);
+    expect(res.status).toBe(200);
+    expect(state.workspace.subscriptionStatus).toBe('active');
+  });
+});
+
+describe('POST /webhooks/abacatepay — camada extra HMAC (opcional)', () => {
+  it('com ABACATEPAY_PUBLIC_KEY: exige header HMAC válido (sem header → 401)', async () => {
+    process.env['ABACATEPAY_PUBLIC_KEY'] = 'public_key_test';
+    const body = payload('checkout.completed');
+    const res = await request(buildApp())
+      .post(WEBHOOK_PATH)
+      .set('content-type', 'application/json')
+      .send(body);
     expect(res.status).toBe(401);
+    expect(state.workspace.subscriptionStatus).toBe('trial');
+  });
+
+  it('com ABACATEPAY_PUBLIC_KEY: header HMAC errado → 401', async () => {
+    process.env['ABACATEPAY_PUBLIC_KEY'] = 'public_key_test';
+    const body = payload('checkout.completed');
+    const res = await request(buildApp())
+      .post(WEBHOOK_PATH)
+      .set('content-type', 'application/json')
+      .set('x-webhook-signature', signWithPublicKey(body, 'wrong_public_key'))
+      .send(body);
+    expect(res.status).toBe(401);
+  });
+
+  it('com ABACATEPAY_PUBLIC_KEY: secret + HMAC válidos → 200', async () => {
+    process.env['ABACATEPAY_PUBLIC_KEY'] = 'public_key_test';
+    const body = payload('checkout.completed');
+    const res = await request(buildApp())
+      .post(WEBHOOK_PATH)
+      .set('content-type', 'application/json')
+      .set('x-webhook-signature', signWithPublicKey(body, 'public_key_test'))
+      .send(body);
+    expect(res.status).toBe(200);
+    expect(state.workspace.subscriptionStatus).toBe('active');
   });
 });
 
 async function post(app: express.Express, body: string) {
   return request(app)
-    .post('/webhooks/abacatepay')
+    .post(WEBHOOK_PATH)
     .set('content-type', 'application/json')
-    .set('x-abacatepay-signature', sign(body))
     .send(body);
 }
 
@@ -391,6 +439,21 @@ describe('POST /webhooks/abacatepay — transições §4', () => {
     expect(res.status).toBe(200);
     expect(state.workspace.subscriptionStatus).toBe('trial');
     expect(state.audits).toHaveLength(0);
+  });
+
+  it('subscription.completed captura o subs_… e grava em external_subscription_id', async () => {
+    // Correlaciona pelo bill_… (data.id) que o checkout gravou; o payload também
+    // traz o subscriptionId real (subs_…) que precisa ir para external_subscription_id.
+    state.subscription.externalSubscriptionId = EXT_SUB; // bill_… correlator atual
+    const body = JSON.stringify({
+      id: 'log_sub_completed_1',
+      event: 'subscription.completed',
+      data: { id: EXT_SUB, subscriptionId: 'subs_real_42' },
+    });
+    const res = await post(buildApp(), body);
+    expect(res.status).toBe(200);
+    expect(state.subscription.status).toBe('active');
+    expect(state.subscription.externalSubscriptionId).toBe('subs_real_42');
   });
 });
 

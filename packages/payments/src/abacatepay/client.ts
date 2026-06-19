@@ -9,7 +9,8 @@
  * SEGURANÇA: a API key vive só em memória e só viaja no header `Authorization`.
  * NUNCA é colocada em mensagens de erro, `raw`, ou qualquer log.
  *
- * TODO(confirmar): base v2 e nomes de endpoints contra a doc/sandbox (§10).
+ * Base `https://api.abacatepay.com/v2` e endpoints confirmados contra a doc
+ * oficial (ver `ENDPOINTS` em `provider.ts`).
  */
 
 import type { z } from 'zod';

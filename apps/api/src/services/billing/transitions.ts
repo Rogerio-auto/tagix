@@ -105,9 +105,13 @@ function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-/** Lê o tipo do evento de qualquer um dos campos tolerados (`event`/`type`). */
+/**
+ * Lê o tipo do evento. A v2 usa o campo `event`; `type` é aceito de forma
+ * defensiva (via index signature do envelope `passthrough`).
+ */
 export function eventTypeOf(event: WebhookEvent): string {
-  return (asString(event.event) ?? asString(event.type) ?? '').toLowerCase();
+  const fallbackType = (event as Record<string, unknown>)['type'];
+  return (asString(event.event) ?? asString(fallbackType) ?? '').toLowerCase();
 }
 
 /**
@@ -155,16 +159,64 @@ function eventData(event: WebhookEvent): Record<string, unknown> {
 /**
  * Resolve o id externo da assinatura a partir do payload (campos tolerados).
  * Usado SÓ para correlacionar com a NOSSA linha — nunca como fonte de plano/preço.
+ *
+ * No checkout/PIX o `data.id` é a cobrança (`bill_…`/PIX id); em eventos de
+ * assinatura há também o id REAL da assinatura (`subs_…`) — ver
+ * `resolveSubscriptionId`. Ambos são correlacionadores (a NOSSA linha pode estar
+ * gravada com qualquer um deles dependendo do estágio), nunca fonte de plano.
  */
 export function resolveExternalSubscriptionId(event: WebhookEvent): string | null {
+  const [first] = correlationCandidates(event);
+  return first ?? null;
+}
+
+/**
+ * Todos os candidatos de correlação presentes no payload, em ordem de
+ * preferência e sem duplicatas. A NOSSA linha pode estar gravada com o `subs_…`
+ * (após o primeiro activate) ou com o id da cobrança (`bill_…`/`data.id`),
+ * então tentamos todos antes do fallback por workspace.
+ */
+export function correlationCandidates(event: WebhookEvent): string[] {
   const data = eventData(event);
-  return (
-    asString(data['subscriptionId']) ??
-    asString(data['subscription_id']) ??
-    asString(data['externalSubscriptionId']) ??
-    asString(data['id']) ??
-    null
-  );
+  const raw = [
+    asString(data['subscriptionId']),
+    asString(data['subscription_id']),
+    asString(data['externalSubscriptionId']),
+    asString(data['id']),
+  ];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of raw) {
+    if (v && !seen.has(v)) {
+      seen.add(v);
+      out.push(v);
+    }
+  }
+  return out;
+}
+
+/**
+ * Resolve o id REAL da assinatura AbacatePay (`subs_…`) — o id necessário para
+ * `/subscriptions/cancel`. Os eventos `subscription.completed`/`renewed` trazem
+ * esse id; o checkout grava o `bill_…` como external id, então precisamos
+ * capturar o `subs_…` aqui para que o cancelamento de cartão funcione depois.
+ *
+ * Tolerante a nomes (`subscriptionId`/`subscription_id`/`subscription.id`/`id`
+ * com prefixo `subs_`). Só retorna quando o valor tem o prefixo `subs_`.
+ */
+export function resolveSubscriptionId(event: WebhookEvent): string | null {
+  const data = eventData(event);
+  const nested = isRecord(data['subscription']) ? data['subscription'] : undefined;
+  const candidates: Array<string | undefined> = [
+    asString(data['subscriptionId']),
+    asString(data['subscription_id']),
+    nested ? asString(nested['id']) : undefined,
+    asString(data['id']),
+  ];
+  for (const candidate of candidates) {
+    if (candidate && candidate.startsWith('subs_')) return candidate;
+  }
+  return null;
 }
 
 /** Extrai o `workspaceId` que NÓS gravamos em metadata ao criar o checkout. */
@@ -213,9 +265,18 @@ export async function applyTransition(
   // a linha é criada no checkout (S04). Sem assinatura → não resolvido.
   const externalId = resolveExternalSubscriptionId(event);
   const metadataWorkspaceId = resolveWorkspaceIdFromMetadata(event);
+  // Id REAL da assinatura (`subs_…`), quando o evento o trouxer — necessário para
+  // o cancelamento de cartão. Persistido em activate/renew (ver abaixo).
+  const subscriptionId = resolveSubscriptionId(event);
 
+  // Correlação tolerante: tenta todos os candidatos do payload (a NOSSA linha
+  // pode estar gravada com o `subs_…` OU com o `bill_…`/`data.id`) antes do
+  // fallback por workspace via metadata.
   let sub: SubscriptionSnapshot | null = null;
-  if (externalId) sub = await ports.findSubscriptionByExternalId(externalId);
+  for (const key of correlationCandidates(event)) {
+    sub = await ports.findSubscriptionByExternalId(key);
+    if (sub) break;
+  }
   if (!sub && metadataWorkspaceId) {
     sub = await ports.findSubscriptionByWorkspace(metadataWorkspaceId);
   }
@@ -301,10 +362,16 @@ export async function applyTransition(
     }
   }
 
+  // Em activate/renew capturamos o `subs_…` real para gravar em
+  // `external_subscription_id` (o checkout só conhecia o `bill_…`); nas demais
+  // transições não sobrescrevemos (null = não tocar).
+  const subscriptionIdToPersist =
+    (kind === 'activate' || kind === 'renew') ? subscriptionId : null;
+
   await ports.applyTransition({
     workspaceId: ws.id,
     patch,
-    externalSubscriptionId: externalId,
+    externalSubscriptionId: subscriptionIdToPersist,
   });
 
   await ports.recordAudit({
@@ -325,6 +392,7 @@ export async function applyTransition(
       provider: 'abacatepay',
       eventType,
       externalSubscriptionId: externalId,
+      subscriptionId: subscriptionId,
     },
   });
 

@@ -13,6 +13,7 @@ import {
   classifyEvent,
   eventTypeOf,
   resolveExternalSubscriptionId,
+  resolveSubscriptionId,
   resolveWorkspaceIdFromMetadata,
   type SubscriptionSnapshot,
   type TransitionPorts,
@@ -118,6 +119,15 @@ describe('helpers de extração', () => {
       WS_ID,
     );
   });
+  it('resolveSubscriptionId só retorna valores com prefixo subs_ (tolerante a nomes)', () => {
+    expect(resolveSubscriptionId(event('x', { subscriptionId: 'subs_1' }))).toBe('subs_1');
+    expect(resolveSubscriptionId(event('x', { subscription_id: 'subs_2' }))).toBe('subs_2');
+    expect(resolveSubscriptionId(event('x', { subscription: { id: 'subs_3' } }))).toBe('subs_3');
+    expect(resolveSubscriptionId(event('x', { id: 'subs_4' }))).toBe('subs_4');
+    // bill_… / sem prefixo → não é o subscription id real.
+    expect(resolveSubscriptionId(event('x', { id: 'bill_9' }))).toBeNull();
+    expect(resolveSubscriptionId(event('x', { subscriptionId: 'sub_ext_abc' }))).toBeNull();
+  });
 });
 
 describe('applyTransition — mapa §4', () => {
@@ -211,6 +221,39 @@ describe('applyTransition — mapa §4', () => {
       ports,
     );
     expect(out).toMatchObject({ kind: 'applied', status: 'active' });
+  });
+
+  it('activate captura o subs_… do payload e o passa ao port (external_subscription_id)', async () => {
+    const { ports, capture } = makePorts({ sub: makeSub(), ws: makeWs() });
+    await applyTransition(
+      event('subscription.completed', { id: 'bill_1', subscriptionId: 'subs_real_42' }),
+      ports,
+    );
+    expect(capture.applied[0]?.externalSubscriptionId).toBe('subs_real_42');
+  });
+
+  it('renew captura o subs_… aninhado (subscription.id)', async () => {
+    const { ports, capture } = makePorts({
+      sub: makeSub({ status: 'active' }),
+      ws: makeWs({ status: 'active' }),
+    });
+    await applyTransition(
+      event('subscription.renewed', { id: 'bill_2', subscription: { id: 'subs_real_99' } }),
+      ports,
+    );
+    expect(capture.applied[0]?.externalSubscriptionId).toBe('subs_real_99');
+  });
+
+  it('cancel NÃO sobrescreve external_subscription_id (passa null)', async () => {
+    const { ports, capture } = makePorts({
+      sub: makeSub({ status: 'active' }),
+      ws: makeWs({ status: 'active' }),
+    });
+    await applyTransition(
+      event('subscription.cancelled', { id: 'subs_real_1' }),
+      ports,
+    );
+    expect(capture.applied[0]?.externalSubscriptionId).toBeNull();
   });
 
   it('NUNCA confia em plano do payload: usa o plano da NOSSA assinatura', async () => {

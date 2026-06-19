@@ -1,13 +1,11 @@
 /**
- * Contratos Zod de request/response da AbacatePay v2.
+ * Contratos Zod de request/response da AbacatePay v2 (confirmados contra a doc
+ * oficial — docs.abacatepay.com).
  *
- * IMPORTANTE — shapes INCERTOS: a API AbacatePay v2 usa o envelope
- * `{ data, success, error }` e valores em centavos/BRL, mas os nomes EXATOS dos
- * campos de cada endpoint precisam ser confirmados contra a doc/sandbox
- * (`PAYMENTS_ABACATEPAY.md` §1/§10). Cada schema abaixo está marcado com
- * `TODO(confirmar)` no(s) campo(s) duvidoso(s) e propositalmente tolerante
- * (`.passthrough()` no envelope, campos opcionais) para ser fácil de ajustar
- * sem quebrar os callers — basta apertar quando os shapes forem confirmados.
+ * Base `https://api.abacatepay.com/v2`, auth `Authorization: Bearer`, valores em
+ * **centavos/BRL**, envelope `{ data, success, error }`. Os schemas de resposta
+ * mantêm `.passthrough()` para tolerar campos extras do gateway sem quebrar — só
+ * validamos os campos que consumimos.
  */
 
 import { z } from 'zod';
@@ -15,11 +13,19 @@ import { z } from 'zod';
 /** Inteiro não-negativo em centavos (BRL). */
 export const CentsSchema = z.number().int().nonnegative();
 
+/** Moeda suportada (merchant único = Leadium/Brasil). */
+export const CurrencySchema = z.literal('BRL');
+
+/** Ciclo de cobrança do gateway (product/subscription). */
+export const CycleSchema = z.enum(['WEEKLY', 'MONTHLY', 'SEMIANNUALLY', 'ANNUALLY']);
+
+/** Métodos de pagamento aceitos pela AbacatePay. */
+export const MethodSchema = z.enum(['PIX', 'CARD']);
+
 /**
  * Envelope padrão da AbacatePay: `{ data, success, error }`.
  * `success` pode não vir em todas as respostas → opcional; `error` pode ser
- * string ou objeto. Mantemos `passthrough` para não perder campos novos.
- * TODO(confirmar): se `success` é sempre presente e o shape de `error`.
+ * string ou objeto. `passthrough` para não perder campos novos.
  */
 export function envelopeSchema<T extends z.ZodTypeAny>(dataSchema: T) {
   return z
@@ -31,20 +37,24 @@ export function envelopeSchema<T extends z.ZodTypeAny>(dataSchema: T) {
     .passthrough();
 }
 
-// --- Products -----------------------------------------------------------
+// --- Products (POST /products/create) -----------------------------------
 
 /**
- * Request de criação de product.
- * TODO(confirmar): nomes de campos (`name`, `description`, `price`, `externalId`)
- * e se o ciclo (`monthly`/`yearly`) vai no product ou só na assinatura.
+ * Request de `/products/create`.
+ * `price` em centavos; `currency` sempre 'BRL'; `cycle` obrigatório quando o
+ * product vai lastrear uma assinatura.
  */
 export const CreateProductRequestSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  /** Preço em centavos. TODO(confirmar): nome do campo (`price` vs `amount`). */
-  price: CentsSchema,
-  /** Idempotência: `externalId = plan.id`. TODO(confirmar): nome do campo. */
+  /** Idempotência: `externalId = plan.id` (one-time) ou `plan.id__CYCLE` (assinatura). */
   externalId: z.string().min(1),
+  name: z.string().min(1),
+  /** Preço em centavos. */
+  price: CentsSchema,
+  currency: CurrencySchema,
+  description: z.string().optional(),
+  imageUrl: z.string().url().optional(),
+  /** Obrigatório p/ assinatura; ausente em product avulso. */
+  cycle: CycleSchema.optional(),
 });
 
 export const ProductDataSchema = z
@@ -54,22 +64,21 @@ export const ProductDataSchema = z
   })
   .passthrough();
 
-// --- Customers ----------------------------------------------------------
+// --- Customers (POST /customers/create) ---------------------------------
 
 /**
- * Request de criação de customer.
- * TODO(confirmar): a AbacatePay aninha sob `metadata` ou usa campos planos?
- * (`name`, `email`, `cellphone`, `taxId`). Modelado plano por ora.
+ * Request de `/customers/create`. `email` é obrigatório; os demais são opcionais.
  */
 export const CreateCustomerRequestSchema = z.object({
-  name: z.string().min(1),
   email: z.string().email(),
-  /** E.164. TODO(confirmar): nome do campo (`cellphone` vs `phone`). */
+  name: z.string().min(1).optional(),
+  /** E.164. */
   cellphone: z.string().optional(),
-  /** CPF/CNPJ (dígitos). TODO(confirmar): nome do campo (`taxId` vs `cpfCnpj`). */
+  /** CPF/CNPJ (dígitos). */
   taxId: z.string().optional(),
-  /** Idempotência: `externalId = workspace.id`. TODO(confirmar): suporte real. */
-  externalId: z.string().optional(),
+  /** CEP (dígitos). */
+  zipCode: z.string().optional(),
+  metadata: z.record(z.string()).optional(),
 });
 
 export const CustomerDataSchema = z
@@ -79,96 +88,112 @@ export const CustomerDataSchema = z
   })
   .passthrough();
 
-// --- Hosted checkout / billing -----------------------------------------
+// --- Hosted checkout (POST /checkouts/create) ---------------------------
 
 /**
- * Request de checkout hospedado (CARD+PIX).
- * TODO(confirmar): endpoint (`/billing` vs `/checkouts`), nomes
- * (`frequency`, `methods`, `products`, `returnUrl`, `completionUrl`) e como
- * referenciar o product/customer.
+ * Item de checkout/assinatura. `id` é o ID DO PRODUTO AbacatePay (de
+ * `/products/create`), NÃO o `externalId`. **Não** se manda `price` — o preço
+ * vem do product.
+ */
+export const CheckoutItemSchema = z.object({
+  id: z.string().min(1),
+  quantity: z.number().int().positive(),
+});
+
+/**
+ * Request de `/checkouts/create`. `methods` default ['PIX','CARD']; `items`
+ * referencia o(s) product(s) por id; URLs e metadata para correlação.
  */
 export const CreateCheckoutRequestSchema = z.object({
-  /** TODO(confirmar): enum aceito (`ONE_TIME` | `MULTIPLE_PAYMENTS` | ...). */
-  frequency: z.string(),
-  /** Métodos liberados. TODO(confirmar): valores exatos (`CARD` | `PIX`). */
-  methods: z.array(z.string()).min(1),
-  /** Itens da cobrança. TODO(confirmar): shape (`externalId`/`quantity`/`price`). */
-  products: z
-    .array(
-      z.object({
-        externalId: z.string().min(1),
-        quantity: z.number().int().positive(),
-        price: CentsSchema.optional(),
-      }),
-    )
-    .min(1),
-  returnUrl: z.string().url(),
-  completionUrl: z.string().url(),
-  /** Metadados de domínio (workspaceId/planId/cycle) para o webhook. */
-  metadata: z.record(z.string()).optional(),
-  /** Customer associado, quando aplicável. TODO(confirmar): `customerId` vs `customer`. */
+  items: z.array(CheckoutItemSchema).min(1),
+  methods: z.array(MethodSchema).min(1).optional(),
   customerId: z.string().optional(),
+  returnUrl: z.string().url().optional(),
+  completionUrl: z.string().url().optional(),
+  externalId: z.string().optional(),
+  metadata: z.record(z.string()).optional(),
 });
 
 export const CheckoutDataSchema = z
   .object({
+    /** `bill_…` */
     id: z.string().min(1),
-    /** TODO(confirmar): nome do campo de redirect (`url` vs `redirectUrl`). */
-    url: z.string().url().optional(),
-    redirectUrl: z.string().url().optional(),
+    /** URL de redirecionamento (hosted page). Fonte do redirect. */
+    url: z.string().url(),
+    amount: CentsSchema.optional(),
+    status: z.string().optional(),
   })
   .passthrough();
 
-// --- Subscriptions (cartão) --------------------------------------------
+// --- Subscriptions (POST /subscriptions/create) -------------------------
 
 /**
- * Request de assinatura nativa por cartão.
- * TODO(confirmar): endpoint e nomes (`productExternalId`, `customerId`,
- * `frequency`, `returnUrl`).
+ * Request de `/subscriptions/create` — mesma forma do checkout, mas `items`
+ * deve conter EXATAMENTE 1 product que TENHA `cycle`. `methods` default ['CARD'].
  */
 export const CreateSubscriptionRequestSchema = z.object({
-  productExternalId: z.string().min(1),
-  customerId: z.string().min(1),
-  /** Ciclo. TODO(confirmar): valores (`MONTHLY` | `YEARLY`). */
-  frequency: z.string(),
-  returnUrl: z.string().url(),
-  completionUrl: z.string().url(),
+  items: z.array(CheckoutItemSchema).length(1),
+  methods: z.array(MethodSchema).min(1).optional(),
+  customerId: z.string().optional(),
+  returnUrl: z.string().url().optional(),
+  completionUrl: z.string().url().optional(),
+  externalId: z.string().optional(),
   metadata: z.record(z.string()).optional(),
 });
 
 export const SubscriptionDataSchema = z
   .object({
+    /** `bill_…` (id da cobrança que cria a assinatura). */
     id: z.string().min(1),
-    /** TODO(confirmar): vocabulário de status do gateway. */
+    /** Status: PENDING|EXPIRED|CANCELLED|PAID|REFUNDED. */
     status: z.string().optional(),
+    /** URL para o cliente concluir o cadastro do cartão. */
     url: z.string().url().optional(),
-    redirectUrl: z.string().url().optional(),
-    /** ISO-8601. TODO(confirmar): nome (`nextBilling` vs `currentPeriodEnd`). */
-    nextBilling: z.string().optional(),
-    currentPeriodEnd: z.string().optional(),
-    currentPeriodStart: z.string().optional(),
-    cancelAtPeriodEnd: z.boolean().optional(),
-    /** TODO(confirmar): nome do campo de valor (`amount` vs `price`). */
     amount: CentsSchema.optional(),
-    /** TODO(confirmar): método na resposta (`CARD` | `PIX`). */
-    method: z.string().optional(),
+    customerId: z.string().optional(),
   })
   .passthrough();
 
-// --- PIX (transparent charge) ------------------------------------------
+// --- Subscription cancel (POST /subscriptions/cancel) -------------------
+
+/** Request de `/subscriptions/cancel`: body `{ id: 'subs_…' }`. */
+export const CancelSubscriptionRequestSchema = z.object({
+  id: z.string().min(1),
+});
+
+export const CancelSubscriptionDataSchema = z
+  .object({
+    id: z.string().min(1),
+    /** Esperado 'CANCELLED' após o cancel. */
+    status: z.string().optional(),
+  })
+  .passthrough();
+
+// --- PIX (POST /transparents/create) ------------------------------------
 
 /**
- * Request de cobrança PIX avulsa (um ciclo).
- * TODO(confirmar): endpoint (`/pixQrCode/create` vs `/transparent/pix`) e nomes
- * (`amount`, `expiresIn`, `customerId`, `description`).
+ * Conteúdo de `data` da cobrança PIX transparente. O request real aninha tudo
+ * sob `{ data: {...} }` (montado no provider).
  */
-export const CreatePixChargeRequestSchema = z.object({
+export const CreatePixChargeDataSchema = z.object({
   amount: CentsSchema,
-  /** Expiração em segundos. TODO(confirmar): nome (`expiresIn` vs `expiresAt`). */
+  /** Expiração em segundos. */
   expiresIn: z.number().int().positive().optional(),
   description: z.string().optional(),
-  customerId: z.string().optional(),
+  customer: z
+    .object({
+      name: z.string().optional(),
+      email: z.string().email().optional(),
+      taxId: z.string().optional(),
+      cellphone: z.string().optional(),
+    })
+    .optional(),
   metadata: z.record(z.string()).optional(),
+});
+
+/** Envelope do request de `/transparents/create`: `{ data: {...} }`. */
+export const CreatePixChargeRequestSchema = z.object({
+  data: CreatePixChargeDataSchema,
 });
 
 export const PixChargeDataSchema = z
@@ -176,10 +201,10 @@ export const PixChargeDataSchema = z
     id: z.string().min(1),
     status: z.string().optional(),
     amount: CentsSchema.optional(),
-    /** QR em base64. TODO(confirmar): nome (`brCodeBase64` vs `qrCodeImage`). */
-    brCodeBase64: z.string().optional(),
-    /** Copia-e-cola EMV. TODO(confirmar): nome (`brCode` vs `qrCode`). */
+    /** Copia-e-cola EMV do PIX. */
     brCode: z.string().optional(),
+    /** QR em base64 (imagem). */
+    brCodeBase64: z.string().optional(),
     expiresAt: z.string().optional(),
   })
   .passthrough();
@@ -187,19 +212,18 @@ export const PixChargeDataSchema = z
 // --- Webhook payload ----------------------------------------------------
 
 /**
- * Payload do webhook após verificação HMAC.
- * TODO(confirmar): envelope real do evento — nomes de `event`, `id` do evento,
- * e a localização de `metadata`/`subscriptionId`/`amount`. Modelado tolerante.
+ * Envelope do payload do webhook (confirmado): `{ id, event, apiVersion,
+ * devMode, data }`. `id` (`log_…`) top-level é a chave de idempotência.
  */
 export const WebhookEventSchema = z
   .object({
-    /** Id único do evento — usado para idempotência de domínio (`payment_events`). */
+    /** `log_…` — id único do log do evento (idempotência de domínio). */
     id: z.string().optional(),
-    eventId: z.string().optional(),
     /** Tipo do evento (`checkout.completed`, `subscription.renewed`, ...). */
     event: z.string().optional(),
-    type: z.string().optional(),
-    /** Carga do evento. TODO(confirmar): aninhamento (`data` vs raiz). */
+    apiVersion: z.string().optional(),
+    devMode: z.boolean().optional(),
+    /** Carga do evento. */
     data: z.record(z.unknown()).optional(),
   })
   .passthrough();
@@ -212,6 +236,8 @@ export type CreateCheckoutRequest = z.infer<typeof CreateCheckoutRequestSchema>;
 export type CheckoutData = z.infer<typeof CheckoutDataSchema>;
 export type CreateSubscriptionRequest = z.infer<typeof CreateSubscriptionRequestSchema>;
 export type SubscriptionData = z.infer<typeof SubscriptionDataSchema>;
+export type CancelSubscriptionRequest = z.infer<typeof CancelSubscriptionRequestSchema>;
+export type CancelSubscriptionData = z.infer<typeof CancelSubscriptionDataSchema>;
 export type CreatePixChargeRequest = z.infer<typeof CreatePixChargeRequestSchema>;
 export type PixChargeData = z.infer<typeof PixChargeDataSchema>;
 export type WebhookEvent = z.infer<typeof WebhookEventSchema>;

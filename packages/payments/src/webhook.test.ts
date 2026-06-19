@@ -1,66 +1,83 @@
 import { describe, it, expect } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { verifyWebhookSignature } from './webhook';
+import { verifyWebhookSecret, verifyWebhookSignature } from './webhook';
 
 const SECRET = 'whsec_test_platform_secret';
+const PUBLIC_KEY = 'abacate_public_key_test';
 const BODY = JSON.stringify({ event: 'checkout.completed', data: { id: 'evt_1' } });
 
-function signHex(body: string, secret: string): string {
-  return createHmac('sha256', secret).update(body, 'utf8').digest('hex');
+function signBase64(body: string, key: string): string {
+  return createHmac('sha256', key).update(body, 'utf8').digest('base64');
 }
-function signBase64(body: string, secret: string): string {
-  return createHmac('sha256', secret).update(body, 'utf8').digest('base64');
+function signHex(body: string, key: string): string {
+  return createHmac('sha256', key).update(body, 'utf8').digest('hex');
 }
 
-describe('verifyWebhookSignature', () => {
-  it('aceita assinatura hex válida (string)', () => {
-    expect(verifyWebhookSignature(BODY, signHex(BODY, SECRET), SECRET)).toBe(true);
+describe('verifyWebhookSecret (auth primária — query param)', () => {
+  it('aceita secret idêntico', () => {
+    expect(verifyWebhookSecret(SECRET, SECRET)).toBe(true);
+  });
+  it('rejeita secret ausente (provided)', () => {
+    expect(verifyWebhookSecret(undefined, SECRET)).toBe(false);
+    expect(verifyWebhookSecret(null, SECRET)).toBe(false);
+    expect(verifyWebhookSecret('', SECRET)).toBe(false);
+  });
+  it('rejeita expected ausente', () => {
+    expect(verifyWebhookSecret(SECRET, undefined)).toBe(false);
+    expect(verifyWebhookSecret(SECRET, '')).toBe(false);
+  });
+  it('rejeita mismatch', () => {
+    expect(verifyWebhookSecret('wrong', SECRET)).toBe(false);
+  });
+  it('rejeita prefixo/sufixo (sem lançar em tamanhos diferentes)', () => {
+    expect(verifyWebhookSecret(SECRET + 'x', SECRET)).toBe(false);
+    expect(verifyWebhookSecret(SECRET.slice(0, -1), SECRET)).toBe(false);
+  });
+});
+
+describe('verifyWebhookSignature (camada extra — HMAC com chave pública)', () => {
+  it('aceita assinatura base64 válida (string)', () => {
+    expect(verifyWebhookSignature(BODY, signBase64(BODY, PUBLIC_KEY), PUBLIC_KEY)).toBe(true);
   });
 
-  it('aceita assinatura hex válida (Buffer)', () => {
+  it('aceita assinatura base64 válida (Buffer)', () => {
     const buf = Buffer.from(BODY, 'utf8');
-    expect(verifyWebhookSignature(buf, signHex(BODY, SECRET), SECRET)).toBe(true);
+    expect(verifyWebhookSignature(buf, signBase64(BODY, PUBLIC_KEY), PUBLIC_KEY)).toBe(true);
   });
 
   it('aceita assinatura com prefixo sha256=', () => {
-    expect(verifyWebhookSignature(BODY, `sha256=${signHex(BODY, SECRET)}`, SECRET)).toBe(true);
+    expect(verifyWebhookSignature(BODY, `sha256=${signBase64(BODY, PUBLIC_KEY)}`, PUBLIC_KEY)).toBe(
+      true,
+    );
   });
 
-  it('aceita assinatura em base64', () => {
-    expect(verifyWebhookSignature(BODY, signBase64(BODY, SECRET), SECRET)).toBe(true);
+  it('aceita assinatura em hex (defensivo)', () => {
+    expect(verifyWebhookSignature(BODY, signHex(BODY, PUBLIC_KEY), PUBLIC_KEY)).toBe(true);
   });
 
-  it('rejeita assinatura ausente (undefined)', () => {
-    expect(verifyWebhookSignature(BODY, undefined, SECRET)).toBe(false);
+  it('rejeita assinatura ausente (undefined/null/empty)', () => {
+    expect(verifyWebhookSignature(BODY, undefined, PUBLIC_KEY)).toBe(false);
+    expect(verifyWebhookSignature(BODY, null, PUBLIC_KEY)).toBe(false);
+    expect(verifyWebhookSignature(BODY, '', PUBLIC_KEY)).toBe(false);
+    expect(verifyWebhookSignature(BODY, 'sha256=', PUBLIC_KEY)).toBe(false);
   });
 
-  it('rejeita assinatura ausente (null/empty)', () => {
-    expect(verifyWebhookSignature(BODY, null, SECRET)).toBe(false);
-    expect(verifyWebhookSignature(BODY, '', SECRET)).toBe(false);
-    expect(verifyWebhookSignature(BODY, 'sha256=', SECRET)).toBe(false);
+  it('rejeita chave pública ausente', () => {
+    expect(verifyWebhookSignature(BODY, signBase64(BODY, PUBLIC_KEY), '')).toBe(false);
+    expect(verifyWebhookSignature(BODY, signBase64(BODY, PUBLIC_KEY), undefined)).toBe(false);
   });
 
-  it('rejeita secret ausente', () => {
-    expect(verifyWebhookSignature(BODY, signHex(BODY, SECRET), '')).toBe(false);
-    expect(verifyWebhookSignature(BODY, signHex(BODY, SECRET), undefined)).toBe(false);
-  });
-
-  it('rejeita mismatch (secret errado)', () => {
-    expect(verifyWebhookSignature(BODY, signHex(BODY, 'wrong_secret'), SECRET)).toBe(false);
+  it('rejeita mismatch (chave errada)', () => {
+    expect(verifyWebhookSignature(BODY, signBase64(BODY, 'wrong_key'), PUBLIC_KEY)).toBe(false);
   });
 
   it('rejeita mismatch (corpo adulterado)', () => {
-    const sig = signHex(BODY, SECRET);
+    const sig = signBase64(BODY, PUBLIC_KEY);
     const tampered = JSON.stringify({ event: 'checkout.completed', data: { id: 'evt_TAMPERED' } });
-    expect(verifyWebhookSignature(tampered, sig, SECRET)).toBe(false);
+    expect(verifyWebhookSignature(tampered, sig, PUBLIC_KEY)).toBe(false);
   });
 
   it('rejeita assinatura de tamanho diferente sem lançar', () => {
-    expect(verifyWebhookSignature(BODY, 'deadbeef', SECRET)).toBe(false);
-  });
-
-  it('rejeita assinatura com caracteres inválidos', () => {
-    const len = signHex(BODY, SECRET).length;
-    expect(verifyWebhookSignature(BODY, 'z'.repeat(len), SECRET)).toBe(false);
+    expect(verifyWebhookSignature(BODY, 'deadbeef', PUBLIC_KEY)).toBe(false);
   });
 });
