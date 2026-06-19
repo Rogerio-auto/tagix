@@ -65,7 +65,7 @@ export function TableCard({ card, onDrill }: TableCardProps): React.JSX.Element 
       type="button"
       onClick={onDrill ? () => onDrill(card) : undefined}
       className={cn(
-        'flex h-full flex-col rounded-lg border border-border bg-surface p-4 text-left transition-colors sm:p-5',
+        'flex h-full w-full flex-col rounded-lg border border-border bg-surface p-4 text-left transition-colors sm:p-5',
         onDrill && 'hover:border-border-brand',
       )}
     >

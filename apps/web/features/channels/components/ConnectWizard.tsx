@@ -45,9 +45,9 @@ export interface ConnectWizardProps {
  * Assistente de conexão multi-step num único painel (UX §2.3 — wizard em Modal,
  * sem modais aninhados). Passo 1: escolher provider. Passo 2: conectar.
  *
- * Meta (WhatsApp/IG): botão de login da Meta (seam `fb-login`, hoje stub) com
- * fallback para entrada manual. Os passos específicos de Instagram (seleção de
- * conta/página) estão STUBADOS — ver TODO no passo de conexão.
+ * Meta (WhatsApp/IG): botão de login da Meta (Embedded Signup real via `fb-login`)
+ * com fallback para entrada manual quando as envs `NEXT_PUBLIC_META_*` não estão
+ * configuradas no ambiente.
  * WAHA: identificador da sessão + chave de API.
  */
 export function ConnectWizard({ open, onClose }: ConnectWizardProps) {
@@ -169,7 +169,7 @@ function ConnectStep({
   );
 }
 
-/** Botão de login da Meta + fallback manual. Hoje o SDK é stub → só manual. */
+/** Botão de login da Meta + fallback manual (manual quando o SDK não está configurado). */
 function MetaLoginNotice({
   provider,
   onCredentials,
@@ -527,8 +527,10 @@ function WaFinishStep({
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
 
+  const isCoexistence = mode === 'coexistence';
   const pinValid = /^\d{6}$/.test(pin);
-  const valid = signup !== null && name.trim() !== '' && pinValid;
+  // Número novo (cloud_api) é provisionado pelo Embedded Signup → não pede PIN.
+  const valid = signup !== null && name.trim() !== '' && (!isCoexistence || pinValid);
 
   return (
     <form
@@ -541,9 +543,9 @@ function WaFinishStep({
           phoneNumberId: signup.phoneNumberId,
           wabaId: signup.wabaId,
           phoneNumber: signup.phoneNumber,
-          pin,
           mode,
           name: name.trim(),
+          ...(isCoexistence ? { pin } : {}),
         });
       }}
     >
@@ -568,16 +570,18 @@ function WaFinishStep({
         onChange={(e) => setName(e.target.value)}
         required
       />
-      <Input
-        label="PIN do WhatsApp (6 dígitos)"
-        value={pin}
-        onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        hint="PIN de verificação em duas etapas do número. Se nunca definiu, escolha um agora na Meta."
-        error={pin !== '' && !pinValid ? 'O PIN precisa ter exatamente 6 dígitos.' : undefined}
-        required
-      />
+      {isCoexistence && (
+        <Input
+          label="PIN do WhatsApp (6 dígitos)"
+          value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          hint="PIN de verificação em duas etapas do número existente. Se nunca definiu, escolha um agora na Meta."
+          error={pin !== '' && !pinValid ? 'O PIN precisa ter exatamente 6 dígitos.' : undefined}
+          required
+        />
+      )}
 
       {mode === 'coexistence' && (
         <p className="flex gap-2 rounded-md border border-border-2 bg-surface-inset px-3 py-2 font-body text-xs text-text-low">

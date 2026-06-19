@@ -26,7 +26,8 @@
     "F8": "Permissions & Settings",
     "F9": "Hardening + Observability",
     "F10": "Launch",
-    "F38": "Suporte ao Cliente (Help Center + Live Support + Dev Portal)"
+    "F38": "Suporte ao Cliente (Help Center + Live Support + Dev Portal)",
+    "F41": "Portal do Desenvolvedor — Referência rica + Console Try-it"
   },
   "migrations": {
     "enabled": false,

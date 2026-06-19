@@ -9,6 +9,7 @@ import {
   exchangeCodeForToken,
   registerPhoneNumber,
   subscribeWabaApp,
+  runWhatsAppConnect,
   WA_COEXISTENCE_SUBSCRIBED_FIELDS,
   WA_CLOUD_API_SUBSCRIBED_FIELDS,
 } from './whatsapp-connect';
@@ -98,5 +99,58 @@ describe('subscribeWabaApp', () => {
     await expect(
       subscribeWabaApp(graph, 'WABA_1', 'TOKEN', { coexistence: true }),
     ).rejects.toBeInstanceOf(WaConnectError);
+  });
+});
+
+describe('runWhatsAppConnect (regra do PIN)', () => {
+  const creds = { appId: 'APP_ID', appSecret: 'APP_SECRET' };
+  const okPost = () =>
+    vi.fn(async (_path: string, _body: Record<string, unknown>, _token: string) => ({
+      success: true,
+    }));
+  const graphWithToken = (post: ReturnType<typeof okPost>) =>
+    mockGraph({
+      get: vi.fn(async () => ({ access_token: 'LONG_LIVED' })) as unknown as GraphClient['get'],
+      post: post as unknown as GraphClient['post'],
+    });
+
+  it('cloud_api (numero novo): NAO registra nem pede PIN; subscribe so messages', async () => {
+    const post = okPost();
+    const token = await runWhatsAppConnect(
+      graphWithToken(post),
+      { code: 'C', phoneNumberId: 'PNID', wabaId: 'WABA', mode: 'cloud_api' },
+      creds,
+    );
+    expect(token).toBe('LONG_LIVED');
+    expect(post.mock.calls.some((c) => c[0].endsWith('/register'))).toBe(false); // sem register
+    const sub = post.mock.calls.find((c) => c[0] === 'WABA/subscribed_apps');
+    const body = sub?.[1] as { subscribed_fields: string } | undefined;
+    expect(body?.subscribed_fields).toBe(WA_CLOUD_API_SUBSCRIBED_FIELDS.join(','));
+  });
+
+  it('coexistence: registra com PIN e subscribe com campos de coexistencia', async () => {
+    const post = okPost();
+    await runWhatsAppConnect(
+      graphWithToken(post),
+      { code: 'C', phoneNumberId: 'PNID', wabaId: 'WABA', pin: '123456', mode: 'coexistence' },
+      creds,
+    );
+    const register = post.mock.calls.find((c) => c[0] === 'PNID/register');
+    expect(register?.[1]).toMatchObject({ messaging_product: 'whatsapp', pin: '123456' });
+    const sub = post.mock.calls.find((c) => c[0] === 'WABA/subscribed_apps');
+    const body = sub?.[1] as { subscribed_fields: string } | undefined;
+    expect(body?.subscribed_fields).toBe(WA_COEXISTENCE_SUBSCRIBED_FIELDS.join(','));
+  });
+
+  it('coexistence SEM PIN → WaConnectError (e nao chega a registrar)', async () => {
+    const post = okPost();
+    await expect(
+      runWhatsAppConnect(
+        graphWithToken(post),
+        { code: 'C', phoneNumberId: 'PNID', wabaId: 'WABA', mode: 'coexistence' },
+        creds,
+      ),
+    ).rejects.toBeInstanceOf(WaConnectError);
+    expect(post.mock.calls.some((c) => c[0] === 'PNID/register')).toBe(false);
   });
 });

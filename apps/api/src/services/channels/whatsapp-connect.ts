@@ -139,3 +139,47 @@ export async function subscribeWabaApp(
     );
   }
 }
+
+export interface WaConnectParams {
+  code: string;
+  phoneNumberId: string;
+  wabaId: string;
+  /** 2FA de 6 digitos — obrigatorio SO na coexistencia (numero existente). */
+  pin?: string;
+  mode: WaConnectMode;
+}
+
+export interface WaConnectAppCreds {
+  appId: string;
+  appSecret: string;
+}
+
+/**
+ * Orquestra o connect WA: exchange → (coexistencia? register com PIN) → subscribe.
+ *
+ * **Regra do PIN (espelha o fluxo comprovado do v1):** numero NOVO (`cloud_api`) e
+ * provisionado pelo proprio Embedded Signup — NAO registra nem pede PIN. So a
+ * COEXISTENCIA registra o numero JA existente na Cloud API, e ai o PIN do 2FA e
+ * obrigatorio. Retorna o token long-lived (a rota cifra e persiste).
+ */
+export async function runWhatsAppConnect(
+  graph: GraphClient,
+  params: WaConnectParams,
+  creds: WaConnectAppCreds,
+): Promise<string> {
+  const token = await exchangeCodeForToken(graph, params.code, creds.appId, creds.appSecret);
+  const coexistence = params.mode === 'coexistence';
+
+  if (coexistence) {
+    if (params.pin === undefined || params.pin.length === 0) {
+      throw new WaConnectError(
+        'WA_CONNECT_PIN_REQUIRED',
+        'O PIN de 6 digitos do numero e obrigatorio na coexistencia.',
+      );
+    }
+    await registerPhoneNumber(graph, params.phoneNumberId, params.pin, token);
+  }
+
+  await subscribeWabaApp(graph, params.wabaId, token, { coexistence });
+  return token;
+}

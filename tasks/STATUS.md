@@ -31,7 +31,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F39   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F40   | 1     | 1   | 0   | 0   | 0   | 0   | 0   |
-| F41   | 9     | 2   | 7   | 0   | 0   | 0   | 0   |
+| F41   | 4     | 0   | 0   | 0   | 0   | 0   | 4   |
+| F42   | 9     | 2   | 7   | 0   | 0   | 0   | 0   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -371,19 +372,28 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ------- | ---------------------------------------------------------------------------------- | ----------- | ---------- | ---------- |
 | F40-S01 | Fix RLS — GUC app.workspace_id vazio ('') quebra queries cross-tenant (schedulers) | 🟢 available | high       | —          |
 
-## Fase 41
+## Fase 41 — Portal do Desenvolvedor — Referência rica + Console Try-it
+
+| ID      | Titulo                                                                      | Status | Prioridade | Depende de |
+| ------- | --------------------------------------------------------------------------- | ------ | ---------- | ---------- |
+| F41-S01 | Referência por endpoint — request body + params + response + exemplo gerado | ✅ done | high       | —          |
+| F41-S02 | Console "Try it" — Sandbox (mock) + Real (API key, GET-only)                | ✅ done | high       | —          |
+| F41-S03 | QA + revisão de segurança do console (não misturar)                         | ✅ done | high       | —          |
+| F41-S04 | Wire vitest no @hm/web + integrar os testes do console (F41-S03)            | ✅ done | high       | —          |
+
+## Fase 42
 
 | ID      | Titulo                                                                          | Status      | Prioridade | Depende de                         |
 | ------- | ------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------------------- |
-| F41-S01 | Pacote @hm/payments (IPaymentProvider + AbacatePay + Mock + HMAC)               | 🟢 available | critical   | —                                  |
-| F41-S02 | Schema de billing provider-agnóstico + payment_events + RLS + migration         | 🟢 available | critical   | —                                  |
-| F41-S03 | Webhook AbacatePay (HMAC + idempotência + transições de status)                 | ⏸️ blocked  | critical   | F41-S01, F41-S02                   |
-| F41-S04 | API self-serve (checkout hospedado + subscription + cancel + plan↔product sync) | ⏸️ blocked  | critical   | F41-S01, F41-S02                   |
-| F41-S05 | Worker de recorrência PIX + dunning + execução de cancel-at-period-end          | ⏸️ blocked  | high       | F41-S02, F41-S03                   |
-| F41-S06 | Billing portal self-serve (web, settings/billing)                               | ⏸️ blocked  | high       | F41-S04                            |
-| F41-S07 | Plataforma assistida — gerar cobrança/checkout para um tenant (API)             | ⏸️ blocked  | medium     | F41-S01, F41-S04                   |
-| F41-S08 | Plataforma assistida — botão "gerar cobrança" no Workspace 360 (UI)             | ⏸️ blocked  | medium     | F41-S07                            |
-| F41-S09 | Hardening de billing — auditoria de segurança + integração + validação sandbox  | ⏸️ blocked  | high       | F41-S03, F41-S04, F41-S05, F41-S07 |
+| F42-S01 | Pacote @hm/payments (IPaymentProvider + AbacatePay + Mock + HMAC)               | 🟢 available | critical   | —                                  |
+| F42-S02 | Schema de billing provider-agnóstico + payment_events + RLS + migration         | 🟢 available | critical   | —                                  |
+| F42-S03 | Webhook AbacatePay (HMAC + idempotência + transições de status)                 | ⏸️ blocked  | critical   | F42-S01, F42-S02                   |
+| F42-S04 | API self-serve (checkout hospedado + subscription + cancel + plan↔product sync) | ⏸️ blocked  | critical   | F42-S01, F42-S02                   |
+| F42-S05 | Worker de recorrência PIX + dunning + execução de cancel-at-period-end          | ⏸️ blocked  | high       | F42-S02, F42-S03                   |
+| F42-S06 | Billing portal self-serve (web, settings/billing)                               | ⏸️ blocked  | high       | F42-S04                            |
+| F42-S07 | Plataforma assistida — gerar cobrança/checkout para um tenant (API)             | ⏸️ blocked  | medium     | F42-S01, F42-S04                   |
+| F42-S08 | Plataforma assistida — botão "gerar cobrança" no Workspace 360 (UI)             | ⏸️ blocked  | medium     | F42-S07                            |
+| F42-S09 | Hardening de billing — auditoria de segurança + integração + validação sandbox  | ⏸️ blocked  | high       | F42-S03, F42-S04, F42-S05, F42-S07 |
 
 ## Fase 5 — Calendar
 

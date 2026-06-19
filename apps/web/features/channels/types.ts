@@ -63,8 +63,11 @@ export interface WaConnectInput {
   code: string;
   phoneNumberId: string;
   wabaId: string;
-  /** PIN de verificação em duas etapas do número (6 dígitos). */
-  pin: string;
+  /**
+   * PIN de verificação em duas etapas do número (6 dígitos). Obrigatório SÓ na
+   * coexistência (número existente). Número novo (cloud_api) não pede PIN.
+   */
+  pin?: string;
   mode: WaConnectMode;
   name: string;
   phoneNumber?: string;

@@ -22,12 +22,7 @@ import {
   subscribeInstagramWebhook,
   sendInstagramTestMessage,
 } from '../../services/channels/instagram-connect';
-import {
-  WaConnectError,
-  exchangeCodeForToken,
-  registerPhoneNumber,
-  subscribeWabaApp,
-} from '../../services/channels/whatsapp-connect';
+import { WaConnectError, runWhatsAppConnect } from '../../services/channels/whatsapp-connect';
 import { platformSecrets } from '../../secrets';
 
 /**
@@ -112,23 +107,38 @@ const igConnectSchema = z.object({
 
 /**
  * Wizard WA: connect server-side (Embedded Signup / Tech Provider). Troca o
- * `code` por token long-lived, registra o numero (PIN), inscreve a WABA no app
- * (subscribed_apps — com campos de coexistencia quando `mode=coexistence`),
- * cria o canal e cifra o token. O token NUNCA volta ao cliente.
+ * `code` por token long-lived, registra o numero (PIN — so na coexistencia),
+ * inscreve a WABA no app (subscribed_apps — com campos de coexistencia quando
+ * `mode=coexistence`), cria o canal e cifra o token. O token NUNCA volta ao cliente.
+ *
+ * **PIN**: obrigatorio SO na coexistencia (numero existente registra na Cloud API
+ * com seu 2FA). Numero novo (`cloud_api`) e provisionado pelo Embedded Signup —
+ * sem register/PIN. Regra validada via superRefine (espelha o fluxo do v1).
  */
-const waConnectSchema = z.object({
-  code: z.string().trim().min(1),
-  phoneNumberId: z.string().trim().min(1).max(64),
-  wabaId: z.string().trim().min(1).max(64),
-  pin: z
-    .string()
-    .trim()
-    .regex(/^\d{6}$/, 'O PIN do WhatsApp deve ter 6 digitos.'),
-  mode: z.enum(['cloud_api', 'coexistence']),
-  name: z.string().trim().min(1).max(120),
-  phoneNumber: z.string().trim().min(1).max(32).optional(),
-  displayHandle: z.string().trim().min(1).max(120).optional(),
-});
+const waConnectSchema = z
+  .object({
+    code: z.string().trim().min(1),
+    phoneNumberId: z.string().trim().min(1).max(64),
+    wabaId: z.string().trim().min(1).max(64),
+    pin: z
+      .string()
+      .trim()
+      .regex(/^\d{6}$/, 'O PIN do WhatsApp deve ter 6 digitos.')
+      .optional(),
+    mode: z.enum(['cloud_api', 'coexistence']),
+    name: z.string().trim().min(1).max(120),
+    phoneNumber: z.string().trim().min(1).max(32).optional(),
+    displayHandle: z.string().trim().min(1).max(120).optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.mode === 'coexistence' && (val.pin === undefined || val.pin.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['pin'],
+        message: 'O PIN de 6 digitos e obrigatorio na coexistencia.',
+      });
+    }
+  });
 
 /** Narrowing de `req.params['x']` (string | string[] no @types/express 5). */
 function param(req: Request, key: string): string {
@@ -427,15 +437,23 @@ export function createChannelsRouter(): Router {
       }
 
       const graph = new GraphClient();
-      const coexistence = input.mode === 'coexistence';
 
-      // 1) Orquestra Graph: exchange → register → subscribe. Falha em qualquer
-      // etapa aborta antes de criar o canal (token cifrado so se tudo passou).
+      // 1) Orquestra Graph: exchange → (coexistencia? register com PIN) → subscribe.
+      // Numero novo NAO registra/pede PIN. Falha em qualquer etapa aborta antes de
+      // criar o canal (token cifrado so se tudo passou).
       let token: string;
       try {
-        token = await exchangeCodeForToken(graph, input.code, appId, appSecret);
-        await registerPhoneNumber(graph, input.phoneNumberId, input.pin, token);
-        await subscribeWabaApp(graph, input.wabaId, token, { coexistence });
+        token = await runWhatsAppConnect(
+          graph,
+          {
+            code: input.code,
+            phoneNumberId: input.phoneNumberId,
+            wabaId: input.wabaId,
+            pin: input.pin,
+            mode: input.mode,
+          },
+          { appId, appSecret },
+        );
       } catch (err: unknown) {
         if (err instanceof WaConnectError) {
           res.status(422).json({ code: err.code, message: err.message });

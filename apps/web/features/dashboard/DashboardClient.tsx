@@ -30,7 +30,7 @@ import { useDashboardSocket } from './useDashboardSocket';
 import { AlertsBanner } from './AlertsBanner';
 import { DrillDownDrawer } from './DrillDownDrawer';
 import { CustomizeDashboardButton } from './customization';
-import { cardSpan, renderCard } from './cards/registry';
+import { renderCard } from './cards/registry';
 import type { DashboardCard, MetricCategory } from './types';
 
 const CATEGORY_LABEL: Record<MetricCategory, string> = {
@@ -142,8 +142,6 @@ export function DashboardClient() {
           )}
           {grouped.map((group) => {
             const Icon = CATEGORY_ICON[group.category];
-            const statCards = group.cards.filter((c) => cardSpan(c.cardType) === 1);
-            const wideCards = group.cards.filter((c) => cardSpan(c.cardType) === 2);
             return (
               <section key={group.category} className="flex flex-col gap-4">
                 {/* Cabeçalho da seção */}
@@ -153,34 +151,21 @@ export function DashboardClient() {
                     {CATEGORY_LABEL[group.category]}
                   </h2>
                 </div>
-                {/* Stat cards — grade compacta. < 400px: 1 coluna full-width
-                    (legibilidade/alvo > densidade); a partir daí 2/3/4 cols.
-                    sm+/lg+ inalterados (md+ intacto). F36-S06 / MOBILE_UX §2. */}
-                {statCards.length > 0 && (
-                  <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
-                    {statCards.map((card) => {
-                      const wantsDrawer = DRAWER_METRICS.has(card.key);
-                      return (
-                        <div key={card.key}>
-                          {renderCard(card, wantsDrawer ? onDrill : undefined)}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {/* Cards largos (chart/table) — própria linha, até 2 por row */}
-                {wideCards.length > 0 && (
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    {wideCards.map((card) => {
-                      const wantsDrawer = DRAWER_METRICS.has(card.key);
-                      return (
-                        <div key={card.key}>
-                          {renderCard(card, wantsDrawer ? onDrill : undefined)}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                {/* Bento masonry: stat/chart/table empacotados em colunas que se
+                    balanceiam — sem buracos qualquer que seja a contagem ou os
+                    cards ocultos (S04). `break-inside-avoid` mantém cada card
+                    inteiro numa coluna. < 640px: 1 coluna full-width (alvo/
+                    legibilidade); depois 2/3/4 conforme a largura. */}
+                <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 2xl:columns-4">
+                  {group.cards.map((card) => {
+                    const wantsDrawer = DRAWER_METRICS.has(card.key);
+                    return (
+                      <div key={card.key} className="mb-4 break-inside-avoid">
+                        {renderCard(card, wantsDrawer ? onDrill : undefined)}
+                      </div>
+                    );
+                  })}
+                </div>
               </section>
             );
           })}

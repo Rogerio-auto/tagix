@@ -24,11 +24,24 @@
  * Sem essas envs, `isFbSdkAvailable()` → false e o wizard mantém a entrada manual.
  */
 
-const FB_SDK_SRC = 'https://connect.facebook.net/en_US/sdk.js';
-const FB_GRAPH_VERSION = 'v23.0';
+const FB_SDK_SRC = 'https://connect.facebook.net/pt_BR/sdk.js';
+const FB_GRAPH_VERSION = 'v24.0';
 
-/** Origens confiáveis das mensagens `postMessage` do Embedded Signup. */
-const TRUSTED_MESSAGE_ORIGINS = ['https://www.facebook.com', 'https://web.facebook.com'] as const;
+/**
+ * Confia em `https://*.facebook.com` (e `facebook.com`). O Embedded Signup emite o
+ * `postMessage` de várias origens facebook.com (www, web, staticxx…), então um
+ * allowlist exato derrubava mensagens legítimas — checamos o host com segurança
+ * (https + sufixo `.facebook.com`), sem casar domínios maliciosos tipo `evilfacebook.com`.
+ */
+function isTrustedFacebookOrigin(origin: string): boolean {
+  try {
+    const { hostname, protocol } = new URL(origin);
+    if (protocol !== 'https:') return false;
+    return hostname === 'facebook.com' || hostname.endsWith('.facebook.com');
+  } catch {
+    return false;
+  }
+}
 
 const META_APP_ID = process.env['NEXT_PUBLIC_META_APP_ID'];
 const META_CONFIG_ID = process.env['NEXT_PUBLIC_META_CONFIG_ID'];
@@ -221,8 +234,21 @@ interface EmbeddedSignupPayload {
   phoneNumber?: string;
 }
 
-/** Narrowing seguro do `data` do `postMessage` do Embedded Signup (`unknown`). */
-function parseEmbeddedSignupMessage(raw: unknown): EmbeddedSignupPayload | null {
+/**
+ * Semântica do `event` do Embedded Signup. Os ids só vêm no `FINISH*` (cobre
+ * `FINISH`, `FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING`, `FINISH_ONLY_WABA`…); os
+ * demais são progresso. `CANCEL`/`ERROR` encerram o fluxo com mensagem clara.
+ */
+type EmbeddedSignupEvent = 'finish' | 'cancel' | 'error' | 'progress';
+
+interface EmbeddedSignupMessage extends EmbeddedSignupPayload {
+  event: EmbeddedSignupEvent;
+  currentStep?: string;
+  errorMessage?: string;
+}
+
+/** Narrowing seguro do `postMessage` do Embedded Signup (`unknown`). */
+function parseEmbeddedSignupMessage(raw: unknown): EmbeddedSignupMessage | null {
   let value: unknown = raw;
   if (typeof raw === 'string') {
     try {
@@ -237,15 +263,25 @@ function parseEmbeddedSignupMessage(raw: unknown): EmbeddedSignupPayload | null 
   if (record['type'] !== 'WA_EMBEDDED_SIGNUP') return null;
 
   const data = record['data'];
-  if (typeof data !== 'object' || data === null) return null;
-  const d = data as Record<string, unknown>;
+  const d = (typeof data === 'object' && data !== null ? data : {}) as Record<string, unknown>;
+
+  const rawEvent = typeof record['event'] === 'string' ? record['event'] : '';
+  const event: EmbeddedSignupEvent = rawEvent.startsWith('FINISH')
+    ? 'finish'
+    : rawEvent === 'CANCEL'
+      ? 'cancel'
+      : rawEvent === 'ERROR'
+        ? 'error'
+        : 'progress';
 
   const phoneNumberId = typeof d['phone_number_id'] === 'string' ? d['phone_number_id'] : undefined;
   const wabaId = typeof d['waba_id'] === 'string' ? d['waba_id'] : undefined;
   const phoneNumberRaw = d['display_phone_number'] ?? d['phone_number'];
   const phoneNumber = typeof phoneNumberRaw === 'string' ? phoneNumberRaw : undefined;
+  const currentStep = typeof d['current_step'] === 'string' ? d['current_step'] : undefined;
+  const errorMessage = typeof d['error_message'] === 'string' ? d['error_message'] : undefined;
 
-  return { phoneNumberId, wabaId, phoneNumber };
+  return { event, phoneNumberId, wabaId, phoneNumber, currentStep, errorMessage };
 }
 
 /**
@@ -263,23 +299,65 @@ export async function startWhatsAppSignup(mode: WaConnectMode): Promise<WaSignup
 
   return new Promise<WaSignupResult>((resolve, reject) => {
     let captured: EmbeddedSignupPayload = {};
+    let authCode = '';
     let settled = false;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
 
     const cleanup = (): void => {
       window.removeEventListener('message', onMessage);
+      if (settleTimer) {
+        clearTimeout(settleTimer);
+        settleTimer = null;
+      }
+    };
+
+    const finish = (result: WaSignupResult): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+
+    const fail = (message: string): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error(message));
+    };
+
+    // Só resolve com AMBOS: o `code` (callback do FB.login) e os ids (postMessage
+    // FINISH). Os dois chegam por caminhos distintos e em ordem não-determinística.
+    const resolveIfReady = (): void => {
+      if (!authCode) return;
+      if (!captured.phoneNumberId || !captured.wabaId) return;
+      finish({
+        code: authCode,
+        phoneNumberId: captured.phoneNumberId,
+        wabaId: captured.wabaId,
+        phoneNumber: captured.phoneNumber,
+      });
     };
 
     const onMessage = (event: MessageEvent): void => {
-      if (!TRUSTED_MESSAGE_ORIGINS.includes(event.origin as (typeof TRUSTED_MESSAGE_ORIGINS)[number])) {
+      if (!isTrustedFacebookOrigin(event.origin)) return;
+      const msg = parseEmbeddedSignupMessage(event.data);
+      if (!msg) return;
+
+      if (msg.event === 'cancel') {
+        fail(`Cadastro cancelado na Meta${msg.currentStep ? ` (passo: ${msg.currentStep})` : ''}.`);
         return;
       }
-      const payload = parseEmbeddedSignupMessage(event.data);
-      if (!payload) return;
+      if (msg.event === 'error') {
+        fail(msg.errorMessage ?? 'Erro no Embedded Signup da Meta.');
+        return;
+      }
+      // finish | progress: acumula o que vier (os ids chegam no FINISH).
       captured = {
-        phoneNumberId: payload.phoneNumberId ?? captured.phoneNumberId,
-        wabaId: payload.wabaId ?? captured.wabaId,
-        phoneNumber: payload.phoneNumber ?? captured.phoneNumber,
+        phoneNumberId: msg.phoneNumberId ?? captured.phoneNumberId,
+        wabaId: msg.wabaId ?? captured.wabaId,
+        phoneNumber: msg.phoneNumber ?? captured.phoneNumber,
       };
+      resolveIfReady();
     };
 
     window.addEventListener('message', onMessage);
@@ -287,29 +365,29 @@ export async function startWhatsAppSignup(mode: WaConnectMode): Promise<WaSignup
     fb.login(
       (response) => {
         if (settled) return;
-        settled = true;
-        cleanup();
 
         const code = response.authResponse?.code;
         if (response.status !== 'connected' || !code) {
-          reject(new Error('Login da Meta cancelado ou não autorizado.'));
+          fail('Login da Meta cancelado ou não autorizado.');
           return;
         }
-        if (!captured.phoneNumberId || !captured.wabaId) {
-          reject(
-            new Error(
-              'Embedded Signup não retornou o número e a conta. Tente novamente ou informe os dados manualmente.',
-            ),
-          );
-          return;
-        }
+        authCode = code;
 
-        resolve({
-          code,
-          phoneNumberId: captured.phoneNumberId,
-          wabaId: captured.wabaId,
-          phoneNumber: captured.phoneNumber,
-        });
+        // O FINISH (com phone_number_id/waba_id) costuma chegar DEPOIS deste callback.
+        // Tenta resolver agora; se faltarem os ids, aguarda uma janela curta antes de
+        // desistir — em vez de rejeitar um sucesso legítimo numa corrida (lição do v1).
+        resolveIfReady();
+        if (!settled) {
+          settleTimer = setTimeout(() => {
+            if (captured.phoneNumberId && captured.wabaId) {
+              resolveIfReady();
+            } else {
+              fail(
+                'O Embedded Signup não retornou o número e a conta. Tente novamente ou informe os dados manualmente.',
+              );
+            }
+          }, 5000);
+        }
       },
       {
         config_id: META_CONFIG_ID,

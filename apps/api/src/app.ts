@@ -32,6 +32,7 @@ import { createConversionsRouter } from './routes/conversions';
 import { createCampaignsRouter } from './routes/campaigns';
 import { createCampaignRecipientsRouter } from './routes/campaigns/recipients';
 import { createContactsRouter } from './routes/contacts';
+import { createUsageRouter } from './routes/usage';
 import { createOnboardingRouter } from './routes/onboarding';
 import { createCalendarRouter } from './routes/calendar';
 import { createDashboardRouter } from './routes/dashboard';
@@ -194,6 +195,9 @@ export function createApp(): Express {
   app.use(createHelpRouter());
   // F38: chat de suporte do membro (workspace-scoped; assertThreadVisible → 404).
   app.use(createSupportRouter());
+  // Uso e custo LLM do workspace (tenant-scoped via RLS) — alimenta /settings/usage,
+  // destino de drill dos cards "Custo IA" do dashboard. Gated por agent.view_costs.
+  app.use(createUsageRouter());
 
   // Super-admin de plataforma (F2.5/F25): catálogo de modelos, políticas por
   // workspace, rotação de secrets e rollup de custo LLM. Cada router já é gated
