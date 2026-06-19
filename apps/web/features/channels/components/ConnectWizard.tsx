@@ -45,9 +45,9 @@ export interface ConnectWizardProps {
  * Assistente de conexão multi-step num único painel (UX §2.3 — wizard em Modal,
  * sem modais aninhados). Passo 1: escolher provider. Passo 2: conectar.
  *
- * Meta (WhatsApp/IG): botão de login da Meta (seam `fb-login`, hoje stub) com
- * fallback para entrada manual. Os passos específicos de Instagram (seleção de
- * conta/página) estão STUBADOS — ver TODO no passo de conexão.
+ * Meta (WhatsApp/IG): botão de login da Meta (Embedded Signup real via `fb-login`)
+ * com fallback para entrada manual quando as envs `NEXT_PUBLIC_META_*` não estão
+ * configuradas no ambiente.
  * WAHA: identificador da sessão + chave de API.
  */
 export function ConnectWizard({ open, onClose }: ConnectWizardProps) {
@@ -169,7 +169,7 @@ function ConnectStep({
   );
 }
 
-/** Botão de login da Meta + fallback manual. Hoje o SDK é stub → só manual. */
+/** Botão de login da Meta + fallback manual (manual quando o SDK não está configurado). */
 function MetaLoginNotice({
   provider,
   onCredentials,

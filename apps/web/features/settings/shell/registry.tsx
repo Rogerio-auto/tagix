@@ -204,6 +204,15 @@ const WORKSPACE: SettingsSection[] = [
     externalHref: '/settings/conversions',
   },
   {
+    id: 'usage',
+    group: 'workspace',
+    label: 'Uso e custo de IA',
+    description: 'Gasto com agentes de IA: custo hoje/mês, por dia e por modelo.',
+    keywords: ['uso', 'custo', 'ia', 'ai', 'llm', 'gasto', 'tokens', 'billing', 'consumo'],
+    permission: 'agent.view_costs',
+    externalHref: '/settings/usage',
+  },
+  {
     id: 'tags',
     group: 'workspace',
     label: 'Tags',
