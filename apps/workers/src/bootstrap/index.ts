@@ -57,6 +57,11 @@ import {
   type FlowWorkerHandle,
   type FlowSchedulerHandle,
 } from '../flows/index';
+import {
+  createCoexistenceDeps,
+  startCoexistenceWorker,
+  type CoexistenceWorkerHandle,
+} from '../coexistence/index';
 import { startCampaignWorker, type CampaignSchedulerHandle } from '../campaigns/index';
 import {
   startFollowupProcessor,
@@ -119,6 +124,7 @@ export interface WorkersBootstrapHandle {
   readonly reengagement: ReengagementSchedulerHandle;
   readonly flow: FlowWorkerHandle;
   readonly flowScheduler: FlowSchedulerHandle;
+  readonly coexistence: CoexistenceWorkerHandle;
   readonly campaignWorker: CampaignSchedulerHandle;
   readonly followupProcessor: { handle: CampaignFollowupSchedulerHandle };
   readonly automationWorker: AutomationWorkerHandle;
@@ -182,6 +188,14 @@ export async function startWorkers(
   // Worker de execucao de flows (F4-S03): consome hm.q.flow.execution -> processFlowStep.
   const flow = await startFlowWorker({
     deps: createFlowWorkerDeps(channel, logger),
+    logger,
+  });
+
+  // Worker de coexistencia WhatsApp Business (F39-S04): consome hm.q.coexistence
+  // (echoes/history/app_state de F39-S03) -> materializa conversas/mensagens/
+  // contatos/estado-do-canal via @hm/db+RLS, idempotente por id externo.
+  const coexistence = await startCoexistenceWorker({
+    deps: createCoexistenceDeps(logger),
     logger,
   });
 
@@ -343,6 +357,7 @@ export async function startWorkers(
       'followup-scheduler',
       'reengagement-scheduler',
       'flow',
+      'coexistence',
       'flow-wakeup-scheduler',
       'campaign-scheduler',
       'campaign-followup-processor',
@@ -367,6 +382,7 @@ export async function startWorkers(
     reengagement,
     flow,
     flowScheduler,
+    coexistence,
     campaignWorker,
     followupProcessor,
     automationWorker,
@@ -385,6 +401,7 @@ export async function startWorkers(
       await calendarReminders.stop();
       await staleScheduler.stop();
       await automationWorker.stop();
+      await coexistence.stop();
       await flow.stop();
       await reengagement.stop();
       followup.stop();
