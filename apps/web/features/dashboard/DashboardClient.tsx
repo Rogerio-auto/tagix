@@ -31,6 +31,7 @@ import { AlertsBanner } from './AlertsBanner';
 import { DrillDownDrawer } from './DrillDownDrawer';
 import { CustomizeDashboardButton } from './customization';
 import { renderCard } from './cards/registry';
+import { SetupChecklist } from '@/features/onboarding/checklist';
 import type { DashboardCard, MetricCategory } from './types';
 
 const CATEGORY_LABEL: Record<MetricCategory, string> = {
@@ -134,6 +135,9 @@ export function DashboardClient() {
       )}
       {data && (
         <div className="flex flex-col gap-10">
+          {/* Onboarding: checklist "Primeiros passos" — só ADMIN/OWNER, some quando
+              tudo concluído ou dispensado (F43-S06). Auto-gated internamente. */}
+          <SetupChecklist />
           <AlertsBanner alerts={data.alerts} />
           {grouped.length === 0 && (
             <div className="rounded-lg border border-border bg-surface p-8">
