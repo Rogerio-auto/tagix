@@ -41,11 +41,6 @@ const REGISTRY: Record<CardType, CardComponent> = {
   list: StatCard,
 };
 
-/** Cards `chart`/`table` ocupam 2 colunas; `stat`/`list` ocupam 1. */
-export function cardSpan(cardType: CardType): 1 | 2 {
-  return cardType === 'chart' || cardType === 'table' ? 2 : 1;
-}
-
 export function renderCard(card: DashboardCard, onDrill?: (card: DashboardCard) => void): React.JSX.Element {
   const Component = REGISTRY[card.cardType];
   return <Component card={card} onDrill={onDrill} />;
