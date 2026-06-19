@@ -63,6 +63,18 @@ export const workspaces = pgTable(
     locale: text('locale').notNull().default('pt-BR'),
     logoUrl: text('logo_url'),
     settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
+    // Estado de onboarding/verticalização (F43-S01: ONBOARDING.md §3.1). Coluna
+    // dedicada (não dentro de `settings`) para query/observabilidade clara do
+    // first-run. niche_key=null → onboarding ainda não aplicado.
+    onboarding: jsonb('onboarding')
+      .$type<{
+        niche_key?: string | null;
+        applied_at?: string | null;
+        survey?: Record<string, unknown> | null;
+        setup_completed?: boolean;
+      }>()
+      .notNull()
+      .default({}),
     planId: uuid('plan_id').references(() => plans.id, { onDelete: 'set null' }),
     trialEndsAt: ts('trial_ends_at'),
     subscriptionStatus: text('subscription_status').notNull().default('trial'),
@@ -100,6 +112,12 @@ export const members = pgTable(
       .notNull()
       .default({ in_app: true, email: true, push: false }),
     densityPreference: text('density_preference').default('comfortable'),
+    // Estado dos tours guiados por membro (F43-S01: ONBOARDING.md §3.1/§4.1).
+    // Mapa por tourId → { completed_at, dismissed }; vazio = nenhum tour visto.
+    tourState: jsonb('tour_state')
+      .$type<Record<string, { completed_at?: string; dismissed?: boolean }>>()
+      .notNull()
+      .default({}),
     localeOverride: text('locale_override'),
     isOnline: boolean('is_online').notNull().default(false),
     lastSeenAt: ts('last_seen_at'),
@@ -339,6 +357,13 @@ export * from './support';
 // As colunas provider-agnósticas de plans/subscriptions são adicionadas na migration 0046.
 export * from './billing';
 
+// --- Onboarding / Verticalização (F43-S01: ONBOARDING.md §2.1/§3.1) ---
+// quick_replies: respostas rápidas do LiveChat, workspace-scoped (RLS direto).
+// department_id opcional (FK org.departments) → importada DEPOIS de org.
+// O estado de onboarding/tour vive em colunas jsonb de workspaces/members (acima),
+// herdando o RLS já existente dessas tabelas.
+export * from './quick_replies';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -433,4 +458,6 @@ export const RLS_TABLES = [
   // por workspace quando presente; eventos sem workspace (catálogo/pré-mapeamento)
   // ficam visíveis só ao owner/bypass (leitura platform). Espelha audit_logs.
   'payment_events',
+  // Onboarding / Verticalização (F43). quick_replies tem workspace_id próprio → RLS direto.
+  'quick_replies',
 ] as const;

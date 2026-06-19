@@ -12,6 +12,8 @@ import { calendarRepo } from './repos/calendar';
 import { helpRepo } from './repos/help';
 import { supportRepo } from './repos/support';
 import { paymentEventsRepo } from './repos/payment-events';
+import { quickRepliesRepo } from './repos/quick-replies';
+import { onboardingRepo } from './repos/onboarding';
 import {
   agentDepartments,
   agents,
@@ -49,6 +51,7 @@ import {
   outboundWebhooks,
   paymentEvents,
   plans,
+  quickReplies,
   slaRules,
   supportThreads,
   teamMembers,
@@ -1768,6 +1771,151 @@ describe('RLS Payment events (F41-S02)', () => {
       INSERT INTO subscriptions (workspace_id, plan_id, payment_method)
       VALUES (${w.id}::uuid, ${free.id}::uuid, 'card')
     `);
+    await db.delete(workspaces).where(eq(workspaces.id, w.id));
+  });
+});
+
+describe('RLS Onboarding / quick_replies (F43-S01)', () => {
+  it('quick_replies isola por workspace; cross-tenant nega', async () => {
+    const db = getDb(); // owner bypassa RLS no seed
+    const sfx = randomUUID().slice(0, 8);
+
+    const [qrA] = await db
+      .insert(quickReplies)
+      .values({ workspaceId: wsA, title: `Saudacao ${sfx}`, body: 'Ola! Como posso ajudar?' })
+      .returning();
+    const [qrB] = await db
+      .insert(quickReplies)
+      .values({ workspaceId: wsB, title: `Saudacao ${sfx}`, body: 'Oi, tudo bem?' })
+      .returning();
+    if (!qrA || !qrB) throw new Error('Falha ao criar quick_replies.');
+
+    // A só enxerga as próprias; B não enxerga nada de A.
+    const qrsA = await withWorkspace(wsA, (tx) => tx.select().from(quickReplies));
+    expect(qrsA.every((q) => q.workspaceId === wsA)).toBe(true);
+    expect(qrsA.some((q) => q.id === qrA.id)).toBe(true);
+    expect(qrsA.some((q) => q.id === qrB.id)).toBe(false);
+
+    const qrsB = await withWorkspace(wsB, (tx) => tx.select().from(quickReplies));
+    expect(qrsB.some((q) => q.id === qrA.id)).toBe(false);
+
+    // INSERT cross-tenant via app é barrado pelo WITH CHECK (workspace_id de B sob A).
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.insert(quickReplies).values({ workspaceId: wsB, title: `cross ${sfx}`, body: 'x' }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('UNIQUE(workspace_id, title): segundo insert do mesmo titulo falha', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const title = `Despedida ${sfx}`;
+    await db.insert(quickReplies).values({ workspaceId: wsA, title, body: 'Ate logo!' });
+    await expect(
+      db.insert(quickReplies).values({ workspaceId: wsA, title, body: 'Tchau!' }),
+    ).rejects.toThrow();
+  });
+
+  it('quickRepliesRepo.upsert e idempotente por (workspace_id, title)', async () => {
+    const sfx = randomUUID().slice(0, 8);
+    const title = `FAQ preco ${sfx}`;
+
+    const first = await withWorkspace(wsA, (tx) =>
+      quickRepliesRepo.upsert(tx, { workspaceId: wsA, title, body: 'Planos a partir de R$X' }),
+    );
+    // Reaplicar (mesmo blueprint) NAO duplica: mesma linha, body atualizado.
+    const second = await withWorkspace(wsA, (tx) =>
+      quickRepliesRepo.upsert(tx, { workspaceId: wsA, title, body: 'Planos atualizados' }),
+    );
+    expect(second.id).toBe(first.id);
+    expect(second.body).toBe('Planos atualizados');
+
+    const all = await withWorkspace(wsA, (tx) =>
+      quickRepliesRepo.listByWorkspace(tx, wsA),
+    );
+    expect(all.filter((q) => q.title === title)).toHaveLength(1);
+  });
+
+  it('listByDepartment retorna so as respostas do depto (nao as globais)', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const [dep] = await db
+      .insert(departments)
+      .values({ workspaceId: wsA, name: `Suporte QR ${sfx}` })
+      .returning();
+    if (!dep) throw new Error('setup department QR');
+
+    await withWorkspace(wsA, async (tx) => {
+      await quickRepliesRepo.create(tx, {
+        workspaceId: wsA,
+        title: `Global ${sfx}`,
+        body: 'resposta global',
+      });
+      await quickRepliesRepo.create(tx, {
+        workspaceId: wsA,
+        title: `Do depto ${sfx}`,
+        body: 'resposta do depto',
+        departmentId: dep.id,
+      });
+    });
+
+    const deptReplies = await withWorkspace(wsA, (tx) =>
+      quickRepliesRepo.listByDepartment(tx, wsA, dep.id),
+    );
+    expect(deptReplies.every((q) => q.departmentId === dep.id)).toBe(true);
+    expect(deptReplies.some((q) => q.title === `Do depto ${sfx}`)).toBe(true);
+    expect(deptReplies.some((q) => q.title === `Global ${sfx}`)).toBe(false);
+  });
+
+  it('onboardingRepo: merge de workspace.onboarding preserva chaves e set de tour preserva outros', async () => {
+    // Workspace dedicado p/ nao colidir com outros testes.
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const [w] = await db
+      .insert(workspaces)
+      .values({ name: `Onb ${sfx}`, slug: `onb-${sfx}` })
+      .returning();
+    if (!w) throw new Error('setup workspace onboarding');
+    const [m] = await db
+      .insert(members)
+      .values({
+        workspaceId: w.id,
+        authUserId: randomUUID(),
+        email: `onb-${sfx}@test.local`,
+        role: 'OWNER',
+        status: 'active',
+      })
+      .returning();
+    if (!m) throw new Error('setup member onboarding');
+
+    // Default vazio.
+    const initial = await withWorkspace(w.id, (tx) =>
+      onboardingRepo.getWorkspaceOnboarding(tx, w.id),
+    );
+    expect(initial).toEqual({});
+
+    // Merge 1: grava niche_key.
+    await withWorkspace(w.id, (tx) =>
+      onboardingRepo.mergeWorkspaceOnboarding(tx, w.id, { niche_key: 'real_estate' }),
+    );
+    // Merge 2: grava setup_completed SEM apagar niche_key.
+    const merged = await withWorkspace(w.id, (tx) =>
+      onboardingRepo.mergeWorkspaceOnboarding(tx, w.id, { setup_completed: true }),
+    );
+    expect(merged.niche_key).toBe('real_estate');
+    expect(merged.setup_completed).toBe(true);
+
+    // tour_state: marcar 'dashboard' e depois 'pipeline' preserva o primeiro.
+    await withWorkspace(w.id, (tx) =>
+      onboardingRepo.markTour(tx, m.id, 'dashboard', { completed_at: '2026-06-19T00:00:00Z' }),
+    );
+    const tours = await withWorkspace(w.id, (tx) =>
+      onboardingRepo.markTour(tx, m.id, 'pipeline', { dismissed: true }),
+    );
+    expect(tours['dashboard']?.completed_at).toBe('2026-06-19T00:00:00Z');
+    expect(tours['pipeline']?.dismissed).toBe(true);
+
     await db.delete(workspaces).where(eq(workspaces.id, w.id));
   });
 });
