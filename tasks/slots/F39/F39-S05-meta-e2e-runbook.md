@@ -2,7 +2,7 @@
 id: F39-S05
 title: Validação E2E Meta + runbook de conexão WhatsApp/coexistência
 phase: F39
-status: blocked
+status: available
 priority: medium
 estimated_size: M
 depends_on: [F39-S01, F39-S02, F39-S03, F39-S04]
