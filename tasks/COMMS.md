@@ -357,3 +357,32 @@ Escopo: toda a superficie nova da F38 (Help CMS+leitor, Support membro+plataform
 - HOST: a app NAO hidrata no headless-shell deste Windows local (memoria e2e-no-hydration) -> os specs e2e da fase sao CI-only; validacao local da F38 foi por pnpm typecheck + lint + build(@hm/web) + unit(@hm/api 482 verdes) + unit(@hm/ui 18 verdes incl. 10 XSS). Sem regressao.
 - [BAIXO/UX] self-assign do inbox platform (ja em S15): so desatribuir hoje; follow-up para expor member id na sessao client ou /assign-me.
 - Envio E2E real do canal (WABA) e dependencia externa, fora do escopo de QA da F38 (suporte e canal INTERNO via socket, coberto).
+
+## F41 — Portal do Dev: Referencia rica + Console "Try it" (2026-06-19)
+
+### F41-S01 (referencia rica) + F41-S02 (console) — integrados na main, verdes
+Validacao: pnpm --filter @hm/web typecheck + eslint (4+5 arquivos) + build (rota /help/developers compila, 9.47 kB). Sem `any`; DS v2 (tokens semanticos, zero hex). Branding "Leadium API".
+
+### F41-S03 — QA + seguranca (auditoria dos DOIS MUROS do "nao misture", SUPPORT.md 6.3)
+
+VEREDITO: ZERO critico/alto. Os dois muros sao SOLIDOS. 1 gap de INFRA de teste (nao de produto) com follow-up (F41-S04).
+
+#### Muro 1 — Sandbox perpendicular a rede/dado real (PROVADO)
+- `runSandbox()` (TryItConsole.tsx) e sincrono e gera a resposta de `buildSampleResponse(endpoint.response?.schema)` — mock 100% client-side do schema (S01). NAO chama fetch/api-client/XHR/sendBeacon, NAO usa await.
+- grep do feature inteiro: existe EXATAMENTE 1 `fetch(` executavel no console, e esta dentro de `runReal()` (modo Real). Os demais `fetch(` em snippets.ts sao STRINGS de exemplo (codigo mostrado ao usuario), nunca executados.
+- `openapi.ts` usa `api.get('/api/v1/openapi.json')` — o endpoint PUBLICO da spec (sem chave, sem dado de tenant) so para renderizar a referencia. Esperado e seguro.
+
+#### Muro 2 — escopo do tenant; modo Real so GET; sem plataforma/cross-tenant (PROVADO)
+- `runReal()` recusa metodo != GET (`if (endpoint.method !== 'get') throw`) — defesa em profundidade alem do gate de UI. `method: 'GET'` fixo. `credentials: 'omit'` (a sessao por cookie NAO se mistura; acesso e estritamente o da API key, isolado por RLS no backend).
+- Componente: `effectiveMode = isMutating ? 'sandbox' : mode` e o toggle Real so renderiza para `!isMutating` — mutacoes ficam impossiveis no Real (forcadas ao Sandbox, com aviso explicito). GET vs mutacao vem de `endpoint.mutating` (post/put/patch/delete) do model do S01.
+- API key vive SO em `useState` (memoria da aba). Auditoria (codigo sem comentarios): nenhum `localStorage`/`sessionStorage`/`document.cookie`/`indexedDB`/`console.*`. A chave so flui para o header `Authorization: Bearer` da request real; some ao desmontar.
+- Superficie: a referencia consome SO `/api/v1/openapi.json`. A spec v1 contem apenas recursos do tenant (contacts/messages/deals/conversions/flows/events/conversations), todos `requireApiKey + requireScope + withWorkspace` (RLS) — confirmado na F38-S15. ZERO `/platform`, `/api/help`, `/api/support` na referencia ou nos exemplos. Sem caminho cross-tenant.
+
+#### Testes (artefato do S03) — RODAM VERDES via vitest
+- `apps/web/features/developers/snippets.test.ts` (9 testes): gerador buildExample (curl/JS/Python) e mocks buildSampleBody/buildSampleResponse/sampleForField derivam do schema (example>default>enum>placeholder por format/type), body required-only, nested, enum, path-param preenchido, GET sem body.
+- `apps/web/features/developers/console-walls.test.ts` (11 testes): muros por inspecao estrutural do fonte — runSandbox sem fetch/await; exatamente 1 fetch e em runReal; runReal GET-only + throw + credentials omit; toggle Real oculto em mutacao; key sem storage/cookie/log; referencia so /api/v1.
+- Execucao: `vitest run` (environment node) -> 2 files, 20 tests, 20 PASS.
+
+#### Gap de INFRA (nao e bug de produto) -> follow-up F41-S04
+- `@hm/web` NAO tem harness de teste unitario (sem `vitest` em devDeps, sem config, sem script "test"). E o mesmo gap ja documentado pelo @hm/ui (F10-S05) e pela memoria "e2e-no-hydration". Por isso os 20 testes acima, embora verdes sob vitest, QUEBRAM `pnpm --filter @hm/web typecheck` (TS2307 'Cannot find module vitest') porque o tsconfig do web inclui `**/*.ts`. Esse arquivo de wiring (package.json + vitest.config.ts + exclude no tsconfig) esta FORA do files_allowed do S03 (so `*.test.ts(x)` + e2e + COMMS).
+- ACAO: criado follow-up F41-S04 (size S) para wirar vitest no @hm/web e integrar os 2 test files verdes. Ate la os testes vivem na branch feat/f41-s03 como artefato comprovadamente verde; a referencia/console (S01/S02) ja estao integrados e verdes na main, sem regressao.
