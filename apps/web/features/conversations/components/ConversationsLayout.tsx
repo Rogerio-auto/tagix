@@ -84,7 +84,10 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
   return (
     <div className="flex h-[calc(100dvh-7rem)] overflow-hidden rounded-lg border border-border">
       {/* Coluna 1 — lista (F1-S14: filtros/busca/unread/real-time) */}
-      <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-surface">
+      <aside
+        data-tour-id="inbox-list"
+        className="flex w-80 shrink-0 flex-col border-r border-border bg-surface"
+      >
         <div className="flex items-center justify-between border-b border-border-2 px-4 py-3">
           <span className="font-head text-sm font-semibold text-text">Conversas</span>
           <HelpPanel title="Conversas">
@@ -144,7 +147,10 @@ function MobileConversationsLayout({
   // Sem conversa selecionada → Lista em tela cheia (uma intenção por view, §2/§4).
   if (!conversationId) {
     return (
-      <div className="flex h-[calc(100dvh-10rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface">
+      <div
+        data-tour-id="inbox-list"
+        className="flex h-[calc(100dvh-10rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface"
+      >
         <div className="flex items-center justify-between border-b border-border-2 px-4 py-3">
           <span className="font-head text-sm font-semibold text-text">Conversas</span>
           <HelpPanel title="Conversas">
