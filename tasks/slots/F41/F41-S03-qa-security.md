@@ -2,7 +2,7 @@
 id: F41-S03
 title: QA + revisão de segurança do console (não misturar)
 phase: F41
-status: available
+status: in-progress
 priority: high
 estimated_size: S
 depends_on:
@@ -12,6 +12,8 @@ blocks: []
 source_docs:
   - docs/features/SUPPORT.md
 agent_id: qa-engineer
+claimed_at: 2026-06-19T16:08:44Z
+
 ---
 # F41-S03 — QA + revisão de segurança
 
