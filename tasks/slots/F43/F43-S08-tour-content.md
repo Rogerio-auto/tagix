@@ -2,7 +2,7 @@
 id: F43-S08
 title: Conteúdo dos tours + âncoras data-tour-id nas telas
 phase: F43
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F43-S06, F43-S07]
@@ -15,6 +15,7 @@ ux_considerations:
   - "Aplica 2.4 — passos apontam a ação primária visível de cada tela (path óbvio), não menus escondidos."
   - "Aplica 2.5/3.3 — textos reaproveitam/expandem o conteúdo do HelpHint (explicação real, não 1 linha)."
 claimed_at: 2026-06-19T23:09:16Z
+completed_at: 2026-06-19T23:17:44Z
 
 ---
 # F43-S08 — Conteúdo dos tours + âncoras
@@ -41,6 +42,7 @@ Dashboard, Conversas/Inbox, Pipeline, Agentes, Flows.
 ## Arquivos permitidos
 
 - `apps/web/shared/components/tour/content/**`
+- `apps/web/shared/components/tour/GuidedTourMount.tsx`
 - `apps/web/features/dashboard/DashboardClient.tsx`
 - `apps/web/features/conversations/**`
 - `apps/web/features/pipeline/**`
