@@ -2,7 +2,7 @@
 id: F43-S07
 title: Engine de tour guiado in-house (DS v2, spotlight, estado por membro)
 phase: F43
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F43-S01, F43-S04, F43-S05]
