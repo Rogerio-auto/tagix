@@ -2,7 +2,7 @@
 id: F39-S03
 title: Ingestão de webhooks de coexistência — parse de history / smb_message_echoes / smb_app_state_sync
 phase: F39
-status: blocked
+status: available
 priority: high
 estimated_size: M
 depends_on: [F39-S01]

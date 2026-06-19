@@ -2,7 +2,7 @@
 id: F39-S01
 title: WhatsApp connect backend — Embedded Signup server-side (Cloud API + coexistência onboarding)
 phase: F39
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: []
