@@ -51,3 +51,41 @@ export async function startFbLogin(
     'FB Login indisponível: SDK não instalado. Use a entrada manual de credenciais.',
   );
 }
+
+/** Modo do connect WhatsApp server-side (F39): número novo × coexistência. */
+export type WaConnectMode = 'cloud_api' | 'coexistence';
+
+/**
+ * Retorno do Embedded Signup do WhatsApp (server-side / Tech Provider).
+ *
+ * ⚠️ TODO(F39+): no fluxo real, `FB.login({ config_id, response_type: 'code' })`
+ * devolve um `code` (authorization code) no callback `authResponse`, e os ids
+ * (`phone_number_id`, `waba_id`) chegam via mensagem `postMessage` do iframe do
+ * Embedded Signup (evento `WA_EMBEDDED_SIGNUP`). O backend (F39-S01) troca o
+ * `code` por um token long-lived — o token NUNCA transita pelo client.
+ *
+ * SUPOSIÇÃO a validar: os nomes de campo do `postMessage` são
+ * `phone_number_id` / `waba_id` (e, na coexistência, o `display_phone_number`).
+ */
+export interface WaSignupResult {
+  /** Authorization `code` do FB Login — o backend troca por token long-lived. */
+  code: string;
+  /** `phone_number_id` (Graph) do número selecionado no Embedded Signup. */
+  phoneNumberId: string;
+  /** `waba_id` (Graph) da conta WhatsApp Business. */
+  wabaId: string;
+  /** Número em formato E.164, quando o Signup o expõe (coexistência). */
+  phoneNumber?: string;
+}
+
+/**
+ * Dispara o Embedded Signup do WhatsApp para o `mode` escolhido. STUB: rejeita
+ * com instrução clara para o caller cair no modo manual (colar `code` + ids do
+ * painel da Meta). Substituir pela orquestração real `FB.login` + `postMessage`
+ * quando o SDK for adicionado.
+ */
+export async function startWhatsAppSignup(_mode: WaConnectMode): Promise<WaSignupResult> {
+  throw new Error(
+    'Embedded Signup indisponível: SDK da Meta não instalado. Informe os dados manualmente.',
+  );
+}

@@ -12,6 +12,14 @@ export function ChannelsHelp() {
         painel da Meta).
       </p>
       <p>
+        No WhatsApp você escolhe entre <span className="text-text">número novo (Cloud API)</span> —
+        registra um número que ainda não está em nenhum app — ou{' '}
+        <span className="text-text">coexistência</span>, para manter o número que já usa no app
+        WhatsApp Business. Na coexistência, as mensagens enviadas pelo app continuam funcionando e
+        também aparecem aqui no inbox; o histórico já existente pode levar alguns minutos para
+        sincronizar.
+      </p>
+      <p>
         Para o WAHA, informe o identificador da sessão e a chave de API. Se a sessão for desconectada
         do lado do WhatsApp, o canal aparece como desautorizado e precisa ser reconectado.
       </p>

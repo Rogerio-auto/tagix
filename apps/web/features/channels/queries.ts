@@ -7,6 +7,7 @@ import type {
   ConnectChannelInput,
   IgAccountCandidate,
   IgConnectInput,
+  WaConnectInput,
 } from './types';
 
 const CHANNELS_KEY = ['channels'] as const;
@@ -46,6 +47,21 @@ export function useDeleteChannel() {
   const queryClient = useQueryClient();
   return useMutation<void, Error, { id: string }>({
     mutationFn: ({ id }) => api.delete<void>(`/api/channels/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: CHANNELS_KEY });
+    },
+  });
+}
+
+/**
+ * Conecta o WhatsApp server-side (Embedded Signup, F39-S01): troca code → token,
+ * registra número (PIN), inscreve a WABA (com campos de coexistência quando
+ * aplicável), cria o canal e cifra o token. Invalida a lista no sucesso.
+ */
+export function useConnectWhatsApp() {
+  const queryClient = useQueryClient();
+  return useMutation<{ channel: Channel }, Error, WaConnectInput>({
+    mutationFn: (input) => api.post<{ channel: Channel }>('/api/channels/whatsapp/connect', input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: CHANNELS_KEY });
     },
