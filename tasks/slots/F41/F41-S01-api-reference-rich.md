@@ -2,7 +2,7 @@
 id: F41-S01
 title: Referência por endpoint — request body + params + response + exemplo gerado
 phase: F41
-status: available
+status: review
 priority: high
 estimated_size: M
 depends_on: []
@@ -11,6 +11,9 @@ blocks:
 source_docs:
   - docs/features/SUPPORT.md
 agent_id: frontend-engineer
+claimed_at: 2026-06-19T15:51:20Z
+completed_at: 2026-06-19T16:03:45Z
+
 ---
 # F41-S01 — Referência rica por endpoint
 
