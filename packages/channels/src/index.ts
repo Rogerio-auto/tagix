@@ -54,6 +54,21 @@ export { parseWhatsAppWebhook } from './meta/whatsapp/webhook.parser';
 export { parseWahaWebhook } from './waha/webhook.parser';
 export { parseInstagramWebhook } from './meta/instagram/webhook.parser';
 
+// --- Coexistência WhatsApp Business (F39-S03): parser + contrato p/ F39-S04 ---
+export {
+  parseCoexistence,
+  hasCoexistenceFields,
+  isCoexistenceField,
+} from './meta/whatsapp/coexistence';
+export type {
+  CoexistenceParseResult,
+  CoexistenceEcho,
+  CoexistenceHistoryBatch,
+  CoexistenceHistoryContact,
+  CoexistenceHistoryMessage,
+  CoexistenceAppState,
+} from './meta/whatsapp/coexistence';
+
 // --- Adapters ---
 export { MetaWhatsAppAdapter } from './meta/whatsapp/adapter';
 export { MetaInstagramAdapter } from './meta/instagram/adapter';

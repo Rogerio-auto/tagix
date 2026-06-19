@@ -16,9 +16,15 @@ import type { ChannelProvider } from '@hm/shared';
 import { platformSecrets } from '../../secrets';
 import { registerWebhookEvent } from './dedup';
 import { deriveEventId } from './event-id';
-import { publishInboundMessage } from './publisher';
+import {
+  publishInboundMessage,
+  publishCoexistenceEcho,
+  publishHistoryBatch,
+  publishAppState,
+} from './publisher';
 import { verifyMetaSignature } from './signature';
 import { summarizeInstagramEnvelope } from './meta-instagram';
+import { parseCoexistence } from '@hm/channels';
 import {
   createSubmissionDeps,
   processMetaFlowSubmission,
@@ -100,6 +106,29 @@ function parseResponseJson(value: unknown): Record<string, unknown> {
 const webhookLogger = createLogger('info', { svc: 'meta-webhook' });
 const submissionDeps = createSubmissionDeps(webhookLogger);
 
+/**
+ * F39-S03: detecta campos de coexistência da WhatsApp Business
+ * (smb_message_echoes / history / smb_app_state_sync) e publica os eventos
+ * tipados para o worker F39-S04. Campos desconhecidos → nenhuma publicação.
+ *
+ * Não bloqueia o ack do webhook em caso de falha de publish (já dedup'ado na
+ * borda); só registra a contagem para observabilidade.
+ */
+async function dispatchCoexistence(body: Record<string, unknown>): Promise<void> {
+  const { echoes, history, appStates } = parseCoexistence(body);
+  if (echoes.length === 0 && history.length === 0 && appStates.length === 0) return;
+
+  for (const echo of echoes) await publishCoexistenceEcho(echo);
+  for (const batch of history) await publishHistoryBatch(batch);
+  for (const state of appStates) await publishAppState(state);
+
+  webhookLogger.info('webhook.whatsapp.coexistence.published', {
+    echoes: echoes.length,
+    history: history.length,
+    appStates: appStates.length,
+  });
+}
+
 export function createMetaWebhookRouter(): Router {
   const router = Router();
 
@@ -172,6 +201,14 @@ export function createMetaWebhookRouter(): Router {
             } catch {
               // Nao bloqueia o ack do webhook; o erro ja e logado no handler.
             }
+          }
+          // F39-S03: ingestão de coexistência (echoes/history/app_state).
+          try {
+            await dispatchCoexistence(body);
+          } catch (err) {
+            webhookLogger.error('webhook.whatsapp.coexistence.failed', {
+              error: err instanceof Error ? err.message : 'unknown',
+            });
           }
         }
         // F15-S02: observabilidade da ingestao IG (sem parse de dominio aqui).

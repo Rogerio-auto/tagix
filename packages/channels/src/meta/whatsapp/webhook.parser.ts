@@ -12,6 +12,23 @@
  */
 
 import type { InboundEvent, MediaRef, MessageType } from '../../types';
+import { isCoexistenceField } from './coexistence';
+
+// Re-export do contrato/parser de coexistência (F39-S03) para que callers do
+// parser WA tenham um ponto único de entrada (`./webhook.parser`).
+export {
+  parseCoexistence,
+  hasCoexistenceFields,
+  isCoexistenceField,
+} from './coexistence';
+export type {
+  CoexistenceParseResult,
+  CoexistenceEcho,
+  CoexistenceHistoryBatch,
+  CoexistenceHistoryContact,
+  CoexistenceHistoryMessage,
+  CoexistenceAppState,
+} from './coexistence';
 
 const PROVIDER = 'meta_whatsapp' as const;
 
@@ -228,6 +245,9 @@ export function parseWhatsAppWebhook(payload: unknown): InboundEvent[] {
     if (!isRecord(entry)) continue;
     for (const change of asArray(entry['changes'])) {
       if (!isRecord(change)) continue;
+      // Campos de coexistência (echoes/history/app_state) têm parser dedicado
+      // (`parseCoexistence`); aqui só tratamos `messages`/`statuses` inbound.
+      if (isCoexistenceField(change['field'])) continue;
       const value = change['value'];
       if (!isRecord(value)) continue;
 
