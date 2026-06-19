@@ -57,13 +57,15 @@ export function AgentsList() {
   };
 
   const createButton = canEdit ? (
-    <Button
-      variant="primary"
-      leftIcon={<Plus className="size-4" aria-hidden />}
-      onClick={() => setWizardOpen(true)}
-    >
-      Criar agente
-    </Button>
+    <span data-tour-id="agents-create">
+      <Button
+        variant="primary"
+        leftIcon={<Plus className="size-4" aria-hidden />}
+        onClick={() => setWizardOpen(true)}
+      >
+        Criar agente
+      </Button>
+    </span>
   ) : null;
 
   return (
@@ -104,7 +106,7 @@ export function AgentsList() {
       ) : isMobile ? (
         // Mobile: 1 coluna confortável de cards standalone (MOBILE_UX §2/§4 —
         // tabela/lista densa → cards escaneáveis, ação primária no corpo).
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-2" data-tour-id="agents-list">
           {agents.data.agents.map((agent) => (
             <AgentCard
               key={agent.id}
@@ -117,7 +119,7 @@ export function AgentsList() {
           ))}
         </ul>
       ) : (
-        <Card elevation={1}>
+        <Card elevation={1} data-tour-id="agents-list">
           <ul className="divide-y divide-border-2">
             {agents.data.agents.map((agent) => (
               <AgentCard
