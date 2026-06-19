@@ -5,7 +5,7 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci --ignore-scripts
+RUN npm ci --ignore-scripts || npm install --no-audit --no-fund --ignore-scripts
 COPY . .
 # URL do app (CTAs "entrar"/"começar" apontam pro produto).
 ARG VITE_APP_URL=https://app.leadium.com.br
