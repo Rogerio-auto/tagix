@@ -2,7 +2,7 @@
 id: F43-S01
 title: Schema — quick_replies + estado de onboarding/tour + RLS + repos
 phase: F43
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []

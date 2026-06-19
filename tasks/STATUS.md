@@ -33,7 +33,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F40   | 1     | 1   | 0   | 0   | 0   | 0   | 0   |
 | F41   | 4     | 0   | 0   | 0   | 0   | 0   | 4   |
 | F42   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F43   | 9     | 0   | 8   | 0   | 0   | 1   | 0   |
+| F43   | 9     | 0   | 8   | 0   | 0   | 0   | 1   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -400,7 +400,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID      | Titulo                                                                  | Status     | Prioridade | Depende de                |
 | ------- | ----------------------------------------------------------------------- | ---------- | ---------- | ------------------------- |
-| F43-S01 | Schema — quick_replies + estado de onboarding/tour + RLS + repos        | 🟣 review   | critical   | —                         |
+| F43-S01 | Schema — quick_replies + estado de onboarding/tour + RLS + repos        | ✅ done     | critical   | —                         |
 | F43-S02 | Engine de Niche Blueprint — tipo declarativo + instanciador idempotente | ⏸️ blocked | critical   | F43-S01                   |
 | F43-S03 | Conteúdo dos 7 nichos + registry (flows escalonados)                    | ⏸️ blocked | high       | F43-S02                   |
 | F43-S04 | API de onboarding — aplicar blueprint + estado + pesquisa + checklist   | ⏸️ blocked | high       | F43-S01, F43-S02, F43-S03 |
