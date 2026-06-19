@@ -51,6 +51,26 @@ export type ConnectChannelInput =
       apiKey: string;
     };
 
+/** Modo do connect WhatsApp server-side: número novo (Cloud API) × coexistência. */
+export type WaConnectMode = 'cloud_api' | 'coexistence';
+
+/**
+ * Payload de POST /api/channels/whatsapp/connect (Embedded Signup server-side).
+ * O backend (F39-S01) troca `code` por token long-lived, registra o número com
+ * o `pin` e inscreve a WABA no app. Nenhum segredo transita de volta ao client.
+ */
+export interface WaConnectInput {
+  code: string;
+  phoneNumberId: string;
+  wabaId: string;
+  /** PIN de verificação em duas etapas do número (6 dígitos). */
+  pin: string;
+  mode: WaConnectMode;
+  name: string;
+  phoneNumber?: string;
+  displayHandle?: string;
+}
+
 /** Conta IG candidata (Page+IGBA) retornada por POST /api/channels/instagram/accounts. */
 export interface IgAccountCandidate {
   pageId: string;

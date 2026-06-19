@@ -1,14 +1,38 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, Check, Instagram, RefreshCw } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  Info,
+  Instagram,
+  MessageSquarePlus,
+  RefreshCw,
+  Repeat2,
+} from 'lucide-react';
 import { Button, Input, Modal, useToast } from '@hm/ui';
 import { ApiError } from '@/shared/lib/api-client';
 import { cn } from '@/shared/lib/cn';
 import { PROVIDER_META, PROVIDER_ORDER } from '../constants';
-import { isFbSdkAvailable, startFbLogin } from '../fb-login';
-import { useConnectChannel, useConnectInstagram, useListInstagramAccounts } from '../queries';
-import type { ChannelProvider, ConnectChannelInput, IgAccountCandidate } from '../types';
+import {
+  isFbSdkAvailable,
+  startFbLogin,
+  startWhatsAppSignup,
+  type WaConnectMode,
+  type WaSignupResult,
+} from '../fb-login';
+import {
+  useConnectChannel,
+  useConnectInstagram,
+  useConnectWhatsApp,
+  useListInstagramAccounts,
+} from '../queries';
+import type {
+  ChannelProvider,
+  ConnectChannelInput,
+  IgAccountCandidate,
+  WaConnectInput,
+} from '../types';
 
 type Step = 'provider' | 'connect';
 
@@ -136,9 +160,7 @@ function ConnectStep({
         Trocar tipo
       </button>
 
-      {provider === 'meta_whatsapp' && (
-        <MetaWhatsAppForm submitting={connect.isPending} onSubmit={submit} />
-      )}
+      {provider === 'meta_whatsapp' && <MetaWhatsAppFlow onDone={onDone} />}
       {provider === 'meta_instagram' && (
         <MetaInstagramForm submitting={connect.isPending} onSubmit={submit} onDone={onDone} />
       )}
@@ -188,61 +210,374 @@ function MetaLoginNotice({
   );
 }
 
-function MetaWhatsAppForm({
-  submitting,
-  onSubmit,
+/** Modos de conexão do WhatsApp oficial (Embedded Signup server-side, F39). */
+interface WaModeMeta {
+  mode: WaConnectMode;
+  label: string;
+  blurb: string;
+  icon: typeof MessageSquarePlus;
+}
+
+const WA_MODES: readonly WaModeMeta[] = [
+  {
+    mode: 'cloud_api',
+    label: 'Número novo (Cloud API)',
+    blurb: 'Registre um número que ainda não está em nenhum app WhatsApp. Pronto na hora.',
+    icon: MessageSquarePlus,
+  },
+  {
+    mode: 'coexistence',
+    label: 'Coexistência',
+    blurb: 'Mantenha o número que já usa no app WhatsApp Business e atenda também por aqui.',
+    icon: Repeat2,
+  },
+];
+
+type WaStep = 'mode' | 'signup' | 'finish';
+
+/**
+ * Fluxo WhatsApp server-side (Embedded Signup — INSTAGRAM.md §12.1):
+ *   1. Escolher modo (Cloud API novo número × coexistência).
+ *   2. Embedded Signup (FB Login) → captura code/phoneNumberId/wabaId; fallback
+ *      manual quando o SDK da Meta não está disponível no ambiente.
+ *   3. PIN (6 dígitos) + nome → POST /api/channels/whatsapp/connect.
+ *
+ * Multi-step dentro do mesmo painel do wizard (UX §2.3 — sem modal full-screen,
+ * sem modal aninhado). Voltar não perde os dados já capturados (UX §2.8).
+ */
+function MetaWhatsAppFlow({ onDone }: { onDone: () => void }) {
+  const { toast } = useToast();
+  const connect = useConnectWhatsApp();
+
+  const [step, setStep] = useState<WaStep>('mode');
+  const [mode, setMode] = useState<WaConnectMode>('cloud_api');
+  const [signup, setSignup] = useState<WaSignupResult | null>(null);
+
+  const submit = async (input: WaConnectInput) => {
+    try {
+      const res = await connect.mutateAsync(input);
+      toast({
+        variant: 'success',
+        title: 'WhatsApp conectado',
+        description:
+          input.mode === 'coexistence'
+            ? 'Canal ativo. O histórico do app pode levar alguns minutos para sincronizar.'
+            : (res.channel.name ?? input.name),
+      });
+      onDone();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Tente novamente.';
+      const ref = err instanceof ApiError ? err.ref : undefined;
+      const code = err instanceof ApiError && err.status === 503 ? err.message : undefined;
+      toast({
+        variant: 'error',
+        title: 'Falha ao conectar o WhatsApp',
+        description: code ?? (ref ? `${message} (ref ${ref})` : message),
+      });
+    }
+  };
+
+  if (step === 'mode') {
+    return (
+      <WaModeStep
+        selected={mode}
+        onSelect={setMode}
+        onNext={() => setStep('signup')}
+      />
+    );
+  }
+
+  if (step === 'signup') {
+    return (
+      <WaSignupStep
+        mode={mode}
+        onBack={() => setStep('mode')}
+        onCaptured={(result) => {
+          setSignup(result);
+          setStep('finish');
+        }}
+      />
+    );
+  }
+
+  return (
+    <WaFinishStep
+      mode={mode}
+      signup={signup}
+      submitting={connect.isPending}
+      onBack={() => setStep('signup')}
+      onSubmit={(input) => void submit(input)}
+    />
+  );
+}
+
+/** Passo 1: escolher o modo de conexão (Cloud API × coexistência). */
+function WaModeStep({
+  selected,
+  onSelect,
+  onNext,
 }: {
-  submitting: boolean;
-  onSubmit: (input: ConnectChannelInput) => void;
+  selected: WaConnectMode;
+  onSelect: (m: WaConnectMode) => void;
+  onNext: () => void;
 }) {
-  const [name, setName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="font-body text-sm text-text-mid">
+        Como você quer conectar o WhatsApp oficial?
+      </p>
+      <div className="flex flex-col gap-2">
+        {WA_MODES.map((m) => {
+          const Icon = m.icon;
+          const active = selected === m.mode;
+          return (
+            <button
+              key={m.mode}
+              type="button"
+              onClick={() => onSelect(m.mode)}
+              aria-pressed={active}
+              className={cn(
+                'flex items-center gap-3 rounded-md border px-4 py-3 text-left outline-none transition-colors duration-200',
+                active
+                  ? 'border-accent bg-surface-2'
+                  : 'border-border bg-surface-inset hover:border-border-2 hover:bg-surface-2',
+                'focus-visible:shadow-glow-md',
+              )}
+            >
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-surface text-text-mid">
+                <Icon className="size-5" aria-hidden />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-head text-sm font-semibold text-text">{m.label}</span>
+                <span className="block font-body text-xs text-text-low">{m.blurb}</span>
+              </span>
+              {active && <Check className="ml-auto size-4 text-accent" aria-hidden />}
+            </button>
+          );
+        })}
+      </div>
+
+      {selected === 'coexistence' && (
+        <p className="flex gap-2 rounded-md border border-border-2 bg-surface-inset px-3 py-2 font-body text-xs text-text-low">
+          <Info className="mt-0.5 size-3.5 shrink-0 text-text-mid" aria-hidden />
+          <span>
+            As mensagens que você enviar pelo app WhatsApp Business continuam funcionando e também
+            aparecem aqui no inbox. O histórico já existente pode levar alguns minutos para
+            sincronizar.
+          </span>
+        </p>
+      )}
+
+      <div className="mt-1 flex justify-end">
+        <Button type="button" variant="primary" onClick={onNext}>
+          Continuar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Passo 2: Embedded Signup (FB Login). Quando o SDK da Meta está disponível,
+ * o botão dispara o Signup e captura code/ids; senão, cai no modo manual (colar
+ * code + ids do painel da Meta), que é o mesmo contrato do backend.
+ */
+function WaSignupStep({
+  mode,
+  onBack,
+  onCaptured,
+}: {
+  mode: WaConnectMode;
+  onBack: () => void;
+  onCaptured: (result: WaSignupResult) => void;
+}) {
+  const { toast } = useToast();
+  const sdkReady = isFbSdkAvailable();
+  const [loading, setLoading] = useState(false);
+
+  const [code, setCode] = useState('');
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [wabaId, setWabaId] = useState('');
-  const [accessToken, setAccessToken] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
 
-  const valid =
-    name.trim() && phoneNumberId.trim() && wabaId.trim() && accessToken.trim();
+  const onSignup = async () => {
+    setLoading(true);
+    try {
+      const result = await startWhatsAppSignup(mode);
+      onCaptured(result);
+    } catch {
+      toast({
+        variant: 'error',
+        title: 'Embedded Signup indisponível',
+        description: 'Informe os dados manualmente abaixo (code e ids do painel da Meta).',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const manualValid = code.trim() && phoneNumberId.trim() && wabaId.trim();
+
+  return (
+    <div className="flex flex-col gap-3">
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex items-center gap-1.5 self-start rounded-sm px-1 py-0.5 font-head text-xs text-text-low outline-none hover:text-text focus-visible:shadow-glow-md"
+      >
+        <ArrowLeft className="size-3.5" aria-hidden />
+        Trocar modo
+      </button>
+
+      <div className="rounded-md border border-border bg-surface-inset px-4 py-3">
+        <Button
+          variant="secondary"
+          size="sm"
+          loading={loading}
+          disabled={!sdkReady}
+          onClick={() => void onSignup()}
+        >
+          {mode === 'coexistence' ? 'Conectar número existente' : 'Entrar com a Meta'}
+        </Button>
+        <p className="mt-2 font-body text-xs text-text-low">
+          {sdkReady
+            ? 'Conclua o Embedded Signup na janela da Meta — vamos capturar o número e a conta automaticamente.'
+            : 'Login da Meta indisponível neste ambiente. Cole abaixo o code e os ids obtidos no painel da Meta.'}
+        </p>
+      </div>
+
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!manualValid) return;
+          onCaptured({
+            code: code.trim(),
+            phoneNumberId: phoneNumberId.trim(),
+            wabaId: wabaId.trim(),
+            phoneNumber: phoneNumber.trim() || undefined,
+          });
+        }}
+      >
+        <Input
+          label="Authorization code"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          hint="Trocado por um token no servidor; nunca exibido de volta."
+          required
+        />
+        <Input
+          label="Phone Number ID"
+          value={phoneNumberId}
+          onChange={(e) => setPhoneNumberId(e.target.value)}
+          required
+        />
+        <Input label="WABA ID" value={wabaId} onChange={(e) => setWabaId(e.target.value)} required />
+        <Input
+          label="Telefone (opcional)"
+          value={phoneNumber}
+          onChange={(e) => setPhoneNumber(e.target.value)}
+        />
+        <div className="mt-1 flex justify-end">
+          <Button type="submit" variant="primary" disabled={!manualValid}>
+            Continuar
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/** Passo 3: PIN (6 dígitos) + nome do canal → connect server-side. */
+function WaFinishStep({
+  mode,
+  signup,
+  submitting,
+  onBack,
+  onSubmit,
+}: {
+  mode: WaConnectMode;
+  signup: WaSignupResult | null;
+  submitting: boolean;
+  onBack: () => void;
+  onSubmit: (input: WaConnectInput) => void;
+}) {
+  const [name, setName] = useState('');
+  const [pin, setPin] = useState('');
+
+  const pinValid = /^\d{6}$/.test(pin);
+  const valid = signup !== null && name.trim() !== '' && pinValid;
 
   return (
     <form
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!valid) return;
+        if (!signup || !valid) return;
         onSubmit({
-          provider: 'meta_whatsapp',
+          code: signup.code,
+          phoneNumberId: signup.phoneNumberId,
+          wabaId: signup.wabaId,
+          phoneNumber: signup.phoneNumber,
+          pin,
+          mode,
           name: name.trim(),
-          phoneNumber: phoneNumber.trim() || undefined,
-          phoneNumberId: phoneNumberId.trim(),
-          wabaId: wabaId.trim(),
-          accessToken: accessToken.trim(),
         });
       }}
     >
-      <MetaLoginNotice provider="meta_whatsapp" onCredentials={setAccessToken} />
-      <Input label="Nome do canal" value={name} onChange={(e) => setName(e.target.value)} required />
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex items-center gap-1.5 self-start rounded-sm px-1 py-0.5 font-head text-xs text-text-low outline-none hover:text-text focus-visible:shadow-glow-md"
+      >
+        <ArrowLeft className="size-3.5" aria-hidden />
+        Voltar
+      </button>
+
+      {signup?.phoneNumber && (
+        <p className="rounded-md border border-border-2 bg-surface-inset px-3 py-2 font-body text-xs text-text-low">
+          Número selecionado: <span className="font-medium text-text-mid">{signup.phoneNumber}</span>
+        </p>
+      )}
+
       <Input
-        label="Telefone (opcional)"
-        value={phoneNumber}
-        onChange={(e) => setPhoneNumber(e.target.value)}
-      />
-      <Input
-        label="Phone Number ID"
-        value={phoneNumberId}
-        onChange={(e) => setPhoneNumberId(e.target.value)}
+        label="Nome do canal"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
         required
       />
-      <Input label="WABA ID" value={wabaId} onChange={(e) => setWabaId(e.target.value)} required />
       <Input
-        label="Token de acesso"
-        type="password"
-        value={accessToken}
-        onChange={(e) => setAccessToken(e.target.value)}
-        hint="Cifrado no servidor; nunca exibido novamente."
+        label="PIN do WhatsApp (6 dígitos)"
+        value={pin}
+        onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        hint="PIN de verificação em duas etapas do número. Se nunca definiu, escolha um agora na Meta."
+        error={pin !== '' && !pinValid ? 'O PIN precisa ter exatamente 6 dígitos.' : undefined}
         required
       />
-      <SubmitRow submitting={submitting} disabled={!valid} />
+
+      {mode === 'coexistence' && (
+        <p className="flex gap-2 rounded-md border border-border-2 bg-surface-inset px-3 py-2 font-body text-xs text-text-low">
+          <Info className="mt-0.5 size-3.5 shrink-0 text-text-mid" aria-hidden />
+          <span>
+            Após conectar, as mensagens enviadas pelo app WhatsApp Business passam a aparecer no
+            inbox. A sincronização do histórico pode levar alguns minutos.
+          </span>
+        </p>
+      )}
+
+      <div className="mt-1 flex justify-end">
+        <Button
+          type="submit"
+          variant="primary"
+          loading={submitting}
+          disabled={!valid}
+          leftIcon={<Check className="size-4" aria-hidden />}
+        >
+          Conectar WhatsApp
+        </Button>
+      </div>
     </form>
   );
 }
