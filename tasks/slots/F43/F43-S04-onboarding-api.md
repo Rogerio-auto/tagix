@@ -2,7 +2,7 @@
 id: F43-S04
 title: API de onboarding — aplicar blueprint + estado + pesquisa + checklist
 phase: F43
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F43-S01, F43-S02, F43-S03]
