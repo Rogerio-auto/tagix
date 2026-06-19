@@ -14,6 +14,7 @@ import type { Endpoint, HttpMethod, ParamField, ResolvedSchema, SchemaField } fr
 import { groupEndpoints, useOpenApi } from './openapi';
 import type { SnippetLang } from './snippets';
 import { buildExample } from './snippets';
+import { TryItConsole } from './TryItConsole';
 
 const METHOD_CLS: Record<HttpMethod, string> = {
   get: 'bg-brand/15 text-brand',
@@ -211,6 +212,8 @@ function EndpointRow({ endpoint }: { endpoint: Endpoint }) {
           )}
 
           <ExampleTabs endpoint={endpoint} />
+
+          <TryItConsole endpoint={endpoint} />
         </div>
       )}
     </li>
