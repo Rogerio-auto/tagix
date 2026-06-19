@@ -2,7 +2,7 @@
 id: F41-S02
 title: Console "Try it" — Sandbox (mock) + Real (API key, GET-only)
 phase: F41
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on:
