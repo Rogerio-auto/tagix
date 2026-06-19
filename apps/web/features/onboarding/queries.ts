@@ -1,28 +1,67 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/shared/lib/api-client';
-import type { InstantiateNicheInput, InstantiateNicheResult } from './types';
+import type {
+  ApplyNicheInput,
+  ApplyNicheResult,
+  OnboardingStateResponse,
+  SurveyInput,
+  WorkspaceOnboardingState,
+} from './types';
 
 /**
- * React Query hooks do onboarding por nicho (F5-S15).
+ * React Query hooks do onboarding / first-run (F43-S05). Consome a API do F43-S04:
  *
- * Consome `POST /api/onboarding/niche` (gap-fill do orchestrator): instancia o
- * pipeline do nicho (+ agente opcional) no workspace atual. Invalida as listas de
- * pipelines e agentes no sucesso.
+ *   GET  /api/onboarding/state   → estado de onboarding + checklist + tour
+ *   PUT  /api/onboarding/survey  → grava a mini-pesquisa
+ *   POST /api/onboarding/apply   → aplica o blueprint do nicho
+ *
+ * `state` é gated por `workspace.edit` no servidor (ADMIN/OWNER). Para membros sem
+ * essa permissão a chamada falha — o provider trata isso como "não abrir o wizard".
  */
 export const onboardingKeys = {
   all: ['onboarding'] as const,
+  state: ['onboarding', 'state'] as const,
 };
 
-export function useInstantiateNiche() {
+export function useOnboardingState(enabled = true) {
+  return useQuery<OnboardingStateResponse>({
+    queryKey: onboardingKeys.state,
+    queryFn: () => api.get<OnboardingStateResponse>('/api/onboarding/state'),
+    enabled,
+    // O first-run é por sessão — não revalidar agressivamente.
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+}
+
+export function useSaveSurvey() {
   const queryClient = useQueryClient();
-  return useMutation<InstantiateNicheResult, Error, InstantiateNicheInput>({
-    mutationFn: (input) =>
-      api.post<InstantiateNicheResult>('/api/onboarding/niche', input),
+  return useMutation<{ onboarding: WorkspaceOnboardingState }, Error, SurveyInput>({
+    mutationFn: (input) => api.put<{ onboarding: WorkspaceOnboardingState }>('/api/onboarding/survey', input),
+    onSuccess: (data) => {
+      // Mantém o estado em cache coerente com a pesquisa recém-salva.
+      queryClient.setQueryData<OnboardingStateResponse>(onboardingKeys.state, (prev) =>
+        prev ? { ...prev, onboarding: data.onboarding } : prev,
+      );
+    },
+  });
+}
+
+export function useApplyNiche() {
+  const queryClient = useQueryClient();
+  return useMutation<ApplyNicheResult, Error, ApplyNicheInput>({
+    mutationFn: (input) => api.post<ApplyNicheResult>('/api/onboarding/apply', input),
     onSuccess: () => {
+      // O blueprint cria funil, agente(s), etiquetas, conversões, etc. — invalida as
+      // listas afetadas para que o app reflita o setup imediatamente.
+      void queryClient.invalidateQueries({ queryKey: onboardingKeys.state });
       void queryClient.invalidateQueries({ queryKey: ['pipelines'] });
       void queryClient.invalidateQueries({ queryKey: ['agents'] });
+      void queryClient.invalidateQueries({ queryKey: ['tags'] });
+      void queryClient.invalidateQueries({ queryKey: ['conversions'] });
+      void queryClient.invalidateQueries({ queryKey: ['flows'] });
     },
   });
 }

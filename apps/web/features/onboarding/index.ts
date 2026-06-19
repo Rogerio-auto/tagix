@@ -1,6 +1,18 @@
-/** Feature de onboarding por nicho (F5-S15). */
-export { NicheOnboardingWizard } from './NicheOnboardingWizard';
-export type { NicheOnboardingWizardProps } from './NicheOnboardingWizard';
-export { NICHE_OPTIONS } from './niches';
-export { useInstantiateNiche } from './queries';
-export type { NicheKey, NicheOption, InstantiateNicheInput, InstantiateNicheResult } from './types';
+/** Feature de onboarding / first-run (F43-S05). */
+export { OnboardingProvider } from './components/OnboardingProvider';
+export { OnboardingWizard } from './components/OnboardingWizard';
+export type { OnboardingWizardProps } from './components/OnboardingWizard';
+export { NICHE_OPTIONS, NICHE_ICON, getNicheOption, suggestNiche } from './niches';
+export { useOnboardingState, useSaveSurvey, useApplyNiche, onboardingKeys } from './queries';
+export type {
+  NicheKey,
+  NicheOption,
+  TeamSize,
+  SurveyGoal,
+  SurveyAnswers,
+  WorkspaceOnboardingState,
+  OnboardingStateResponse,
+  SurveyInput,
+  ApplyNicheInput,
+  ApplyNicheResult,
+} from './types';
