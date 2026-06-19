@@ -2,7 +2,7 @@
 id: F43-S03
 title: Conteúdo dos 7 nichos + registry (flows escalonados)
 phase: F43
-status: blocked
+status: available
 priority: high
 estimated_size: L
 depends_on: [F43-S02]
