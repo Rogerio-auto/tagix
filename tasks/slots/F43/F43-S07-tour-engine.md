@@ -2,7 +2,7 @@
 id: F43-S07
 title: Engine de tour guiado in-house (DS v2, spotlight, estado por membro)
 phase: F43
-status: available
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on: [F43-S01, F43-S04, F43-S05]
@@ -15,8 +15,9 @@ ux_considerations:
   - "Aplica 2.5/3.3 — tour ensina o uso (passo a passo), complementa o HelpPanel `?`, não substitui por tooltip."
   - "Aplica 2.10 — `Esc` fecha/pula; navegação por teclado entre passos; foco gerenciado."
   - "Aplica 3.10 — animações motion-safe < 250ms; spotlight intencional, sem poluição."
----
+claimed_at: 2026-06-19T23:00:23Z
 
+---
 # F43-S07 — Engine de tour guiado (in-house)
 
 > **source_docs:** `docs/features/ONBOARDING.md` §4.1; `docs/UX_PRINCIPLES.md`
