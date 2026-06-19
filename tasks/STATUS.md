@@ -30,6 +30,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F38   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F39   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
+| F40   | 1     | 1   | 0   | 0   | 0   | 0   | 0   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -362,6 +363,12 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F4-S12 | LiveChat flow integration — quickbar manual + confirm modal + ExecutionsBadge                       | ✅ done | medium     | F4-S08                 |
 | F4-S13 | Trigger dispatcher (inbound) — keyword/new_message/new_lead/system_event + resume waiting flows     | ✅ done | high       | F4-S01, F4-S02         |
 | F4-S14 | Meta flow_submission webhook + trigger flow (flow_submission)                                       | ✅ done | medium     | F4-S01, F4-S02         |
+
+## Fase 40
+
+| ID      | Titulo                                                                             | Status      | Prioridade | Depende de |
+| ------- | ---------------------------------------------------------------------------------- | ----------- | ---------- | ---------- |
+| F40-S01 | Fix RLS — GUC app.workspace_id vazio ('') quebra queries cross-tenant (schedulers) | 🟢 available | high       | —          |
 
 ## Fase 5 — Calendar
 
