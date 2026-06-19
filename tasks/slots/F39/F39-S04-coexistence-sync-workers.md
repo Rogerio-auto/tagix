@@ -2,7 +2,7 @@
 id: F39-S04
 title: Workers de sync de coexistência — echoes → conversas, import de histórico, app_state
 phase: F39
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: [F39-S03]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/LIVECHAT.md
 blocks: [F39-S05]
 claimed_at: 2026-06-19T05:18:12Z
+completed_at: 2026-06-19T05:27:38Z
 
 ---
 # F39-S04 — Workers de sincronização de coexistência
