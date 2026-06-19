@@ -33,7 +33,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F40   | 1     | 1   | 0   | 0   | 0   | 0   | 0   |
 | F41   | 4     | 0   | 0   | 0   | 0   | 0   | 4   |
 | F42   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F43   | 9     | 0   | 4   | 0   | 0   | 1   | 4   |
+| F43   | 9     | 0   | 4   | 0   | 0   | 0   | 5   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -404,7 +404,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F43-S02 | Engine de Niche Blueprint — tipo declarativo + instanciador idempotente | ✅ done     | critical   | F43-S01                   |
 | F43-S03 | Conteúdo dos 7 nichos + registry (flows escalonados)                    | ✅ done     | high       | F43-S02                   |
 | F43-S04 | API de onboarding — aplicar blueprint + estado + pesquisa + checklist   | ✅ done     | high       | F43-S01, F43-S02, F43-S03 |
-| F43-S05 | First-run — welcome + pesquisa + escolha de nicho (aplica blueprint)    | 🟣 review   | high       | F43-S04                   |
+| F43-S05 | First-run — welcome + pesquisa + escolha de nicho (aplica blueprint)    | ✅ done     | high       | F43-S04                   |
 | F43-S06 | Checklist "Primeiros passos" no dashboard (estado derivado)             | ⏸️ blocked | medium     | F43-S04                   |
 | F43-S07 | Engine de tour guiado in-house (DS v2, spotlight, estado por membro)    | ⏸️ blocked | medium     | F43-S01, F43-S04, F43-S05 |
 | F43-S08 | Conteúdo dos tours + âncoras data-tour-id nas telas                     | ⏸️ blocked | medium     | F43-S06, F43-S07          |

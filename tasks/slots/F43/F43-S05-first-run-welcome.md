@@ -2,7 +2,7 @@
 id: F43-S05
 title: First-run — welcome + pesquisa + escolha de nicho (aplica blueprint)
 phase: F43
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F43-S04]
