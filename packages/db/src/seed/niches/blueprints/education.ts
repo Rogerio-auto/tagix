@@ -2,7 +2,7 @@
  * Niche Blueprint — Educação (`education`).
  *
  * Funil dúvida → matrícula. Agente consultor educacional (`sales_education`).
- * `flows: []` — serão preenchidos no F43-S09.
+ * Flows POPULADOS (boas-vindas/qualificação/agendamento/recuperação) — F43-S09.
  */
 import type { NicheBlueprint } from '../types';
 
@@ -51,5 +51,73 @@ export const educationBlueprint: NicheBlueprint = {
     { title: 'Valores e bolsas', body: 'Temos opções de bolsa e parcelamento. Posso te enviar os valores do curso que você procura?', departmentName: 'Comercial', position: 1 },
     { title: 'Documentos matrícula', body: 'Para a matrícula precisamos de: RG, CPF, comprovante de residência e histórico escolar.', departmentName: 'Secretaria', position: 2 },
   ],
-  flows: [],
+  flows: [
+    {
+      name: 'Boas-vindas ao Interessado',
+      description: 'Acolhe o interessado e captura o curso desejado.',
+      status: 'active',
+      triggerType: 'new_lead',
+      nodes: [
+        { id: 'start', type: 'trigger', data: { label: 'Novo interessado' } },
+        { id: 'welcome', type: 'send_message', data: { text: 'Olá! Que bom seu interesse na nossa instituição. Posso te ajudar a escolher o curso ideal.' } },
+        { id: 'ask_course', type: 'send_message', data: { text: 'Qual curso você gostaria de conhecer?' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'welcome' },
+        { id: 'e2', source: 'welcome', target: 'ask_course' },
+      ],
+    },
+    {
+      name: 'Qualificação do Aluno',
+      description: 'Coleta curso, turno e objetivo para qualificar.',
+      status: 'active',
+      triggerType: 'keyword',
+      triggerConfig: { keywords: ['curso', 'matrícula', 'matricula', 'graduação', 'graduacao', 'inscrição', 'inscricao'] },
+      nodes: [
+        { id: 'start', type: 'trigger', data: { label: 'Palavra-chave' } },
+        { id: 'ask_shift', type: 'send_message', data: { text: 'Você prefere estudar de manhã, à tarde ou à noite?' } },
+        { id: 'ask_goal', type: 'send_message', data: { text: 'Qual seu objetivo: ingressar no mercado, mudar de área ou se especializar?' } },
+        { id: 'tag', type: 'add_tag', data: { tag: 'Graduação' } },
+        { id: 'move', type: 'move_stage', data: { stage: 'Dúvidas' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'ask_shift' },
+        { id: 'e2', source: 'ask_shift', target: 'ask_goal' },
+        { id: 'e3', source: 'ask_goal', target: 'tag' },
+        { id: 'e4', source: 'tag', target: 'move' },
+      ],
+    },
+    {
+      name: 'Agendamento de Visita / Aula Experimental',
+      description: 'Conduz o interessado até agendar uma visita ou aula experimental.',
+      status: 'active',
+      triggerType: 'manual',
+      nodes: [
+        { id: 'start', type: 'trigger', data: { label: 'Manual' } },
+        { id: 'ask_slot', type: 'send_message', data: { text: 'Qual o melhor dia e horário para você conhecer a escola ou fazer uma aula experimental?' } },
+        { id: 'schedule', type: 'schedule_event', data: { title: 'Visita / aula experimental' } },
+        { id: 'move', type: 'move_stage', data: { stage: 'Nutrição' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'ask_slot' },
+        { id: 'e2', source: 'ask_slot', target: 'schedule' },
+        { id: 'e3', source: 'schedule', target: 'move' },
+      ],
+    },
+    {
+      name: 'Recuperação de Matrícula',
+      description: 'Reengaja interessados que não concluíram a matrícula.',
+      status: 'active',
+      triggerType: 'manual',
+      nodes: [
+        { id: 'start', type: 'trigger', data: { label: 'Manual' } },
+        { id: 'wait', type: 'wait', data: { duration: '2d' } },
+        { id: 'nudge', type: 'send_message', data: { text: 'Oi! As vagas estão acabando. Quer garantir sua matrícula? Posso te ajudar com bolsa e parcelamento.' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'wait' },
+        { id: 'e2', source: 'wait', target: 'nudge' },
+      ],
+    },
+  ],
 };

@@ -1,8 +1,8 @@
 /**
  * Niche Blueprint — Agências (`agency`).
  *
- * Funil lead → reunião → contrato. Agente SDR (`sales_agency`). `flows: []` —
- * serão preenchidos no F43-S09.
+ * Funil lead → reunião → contrato. Agente SDR (`sales_agency`). Flows
+ * POPULADOS (boas-vindas/qualificação/agendamento/recuperação) — F43-S09.
  */
 import type { NicheBlueprint } from '../types';
 
@@ -51,5 +51,73 @@ export const agencyBlueprint: NicheBlueprint = {
     { title: 'Qualificação', body: 'Para montar a melhor proposta, qual o segmento da sua empresa e a verba que pretende investir por mês?', departmentName: 'Novos negócios', position: 1 },
     { title: 'Agendar reunião', body: 'Vamos marcar uma reunião de diagnóstico? Me passa um dia e horário que funcione para você.', departmentName: 'Novos negócios', position: 2 },
   ],
-  flows: [],
+  flows: [
+    {
+      name: 'Boas-vindas ao Lead',
+      description: 'Acolhe o lead e identifica o serviço de interesse.',
+      status: 'active',
+      triggerType: 'new_lead',
+      nodes: [
+        { id: 'start', type: 'trigger', data: { label: 'Novo lead' } },
+        { id: 'welcome', type: 'send_message', data: { text: 'Olá! Obrigado pelo contato. Somos especialistas em crescimento de marcas.' } },
+        { id: 'ask_service', type: 'send_message', data: { text: 'Qual serviço você procura: tráfego pago, social media, branding ou site/landing?' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'welcome' },
+        { id: 'e2', source: 'welcome', target: 'ask_service' },
+      ],
+    },
+    {
+      name: 'Qualificação do Lead',
+      description: 'Coleta serviço, segmento e orçamento para qualificar.',
+      status: 'active',
+      triggerType: 'keyword',
+      triggerConfig: { keywords: ['tráfego', 'trafego', 'anúncio', 'anuncio', 'marketing', 'agência', 'agencia', 'social media', 'site'] },
+      nodes: [
+        { id: 'start', type: 'trigger', data: { label: 'Palavra-chave' } },
+        { id: 'ask_segment', type: 'send_message', data: { text: 'Qual o segmento da sua empresa e o que você quer alcançar com esse investimento?' } },
+        { id: 'ask_budget', type: 'send_message', data: { text: 'Qual a verba que você pretende investir por mês?' } },
+        { id: 'tag', type: 'add_tag', data: { tag: 'Tráfego pago' } },
+        { id: 'move', type: 'move_stage', data: { stage: 'Qualificação' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'ask_segment' },
+        { id: 'e2', source: 'ask_segment', target: 'ask_budget' },
+        { id: 'e3', source: 'ask_budget', target: 'tag' },
+        { id: 'e4', source: 'tag', target: 'move' },
+      ],
+    },
+    {
+      name: 'Agendamento de Reunião',
+      description: 'Conduz o lead até agendar a reunião de diagnóstico.',
+      status: 'active',
+      triggerType: 'manual',
+      nodes: [
+        { id: 'start', type: 'trigger', data: { label: 'Manual' } },
+        { id: 'ask_slot', type: 'send_message', data: { text: 'Vamos marcar uma reunião de diagnóstico? Qual o melhor dia e horário para você?' } },
+        { id: 'schedule', type: 'schedule_event', data: { title: 'Reunião de diagnóstico' } },
+        { id: 'move', type: 'move_stage', data: { stage: 'Reunião agendada' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'ask_slot' },
+        { id: 'e2', source: 'ask_slot', target: 'schedule' },
+        { id: 'e3', source: 'schedule', target: 'move' },
+      ],
+    },
+    {
+      name: 'Recuperação de Lead',
+      description: 'Reengaja leads que não retornaram após a proposta.',
+      status: 'active',
+      triggerType: 'manual',
+      nodes: [
+        { id: 'start', type: 'trigger', data: { label: 'Manual' } },
+        { id: 'wait', type: 'wait', data: { duration: '3d' } },
+        { id: 'nudge', type: 'send_message', data: { text: 'Oi! Ainda quer escalar seus resultados? Posso revisar a proposta e te mostrar cases do seu segmento.' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'wait' },
+        { id: 'e2', source: 'wait', target: 'nudge' },
+      ],
+    },
+  ],
 };

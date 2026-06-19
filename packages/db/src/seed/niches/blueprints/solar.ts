@@ -2,7 +2,7 @@
  * Niche Blueprint — Energia Solar (`solar`).
  *
  * Funil de qualificação (conta de luz / consumo) → proposta. Agente consultor
- * solar (`sales_solar`) qualifica ANTES de propor. `flows: []` — F43-S09.
+ * solar (`sales_solar`) qualifica ANTES de propor. Flows POPULADOS — F43-S09.
  */
 import type { NicheBlueprint } from '../types';
 
@@ -51,5 +51,73 @@ export const solarBlueprint: NicheBlueprint = {
     { title: 'Pedir conta de luz', body: 'Você pode me enviar uma foto da sua conta de luz? Assim faço um dimensionamento preciso.', departmentName: 'Vendas', position: 1 },
     { title: 'Economia estimada', body: 'Com base no seu consumo, o sistema pode reduzir até 95% da sua conta. Vou preparar a proposta.', departmentName: 'Engenharia', position: 2 },
   ],
-  flows: [],
+  flows: [
+    {
+      name: 'Boas-vindas Energia Solar',
+      description: 'Acolhe o lead e introduz a economia com energia solar.',
+      status: 'active',
+      triggerType: 'new_lead',
+      nodes: [
+        { id: 'start', type: 'trigger', data: { label: 'Novo lead' } },
+        { id: 'welcome', type: 'send_message', data: { text: 'Olá! Vamos calcular quanto você pode economizar com energia solar?' } },
+        { id: 'ask_bill', type: 'send_message', data: { text: 'Qual o valor médio da sua conta de luz por mês?' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'welcome' },
+        { id: 'e2', source: 'welcome', target: 'ask_bill' },
+      ],
+    },
+    {
+      name: 'Qualificação Solar',
+      description: 'Coleta conta de luz, consumo e tipo de imóvel para qualificar.',
+      status: 'active',
+      triggerType: 'keyword',
+      triggerConfig: { keywords: ['solar', 'energia', 'placa', 'placas', 'fotovoltaico', 'conta de luz', 'economia'] },
+      nodes: [
+        { id: 'start', type: 'trigger', data: { label: 'Palavra-chave' } },
+        { id: 'ask_consumption', type: 'send_message', data: { text: 'Você sabe seu consumo mensal em kWh? Se tiver a conta em mãos, pode me enviar uma foto.' } },
+        { id: 'ask_property', type: 'send_message', data: { text: 'O imóvel é residencial, comercial, rural ou industrial?' } },
+        { id: 'tag', type: 'add_tag', data: { tag: 'Residencial' } },
+        { id: 'move', type: 'move_stage', data: { stage: 'Qualificação (conta de luz)' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'ask_consumption' },
+        { id: 'e2', source: 'ask_consumption', target: 'ask_property' },
+        { id: 'e3', source: 'ask_property', target: 'tag' },
+        { id: 'e4', source: 'tag', target: 'move' },
+      ],
+    },
+    {
+      name: 'Agendamento de Visita Técnica',
+      description: 'Conduz o lead até agendar a visita técnica para dimensionamento.',
+      status: 'active',
+      triggerType: 'manual',
+      nodes: [
+        { id: 'start', type: 'trigger', data: { label: 'Manual' } },
+        { id: 'ask_slot', type: 'send_message', data: { text: 'Para dimensionar seu sistema, qual o melhor dia e horário para a visita técnica no local?' } },
+        { id: 'schedule', type: 'schedule_event', data: { title: 'Visita técnica' } },
+        { id: 'move', type: 'move_stage', data: { stage: 'Dimensionamento' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'ask_slot' },
+        { id: 'e2', source: 'ask_slot', target: 'schedule' },
+        { id: 'e3', source: 'schedule', target: 'move' },
+      ],
+    },
+    {
+      name: 'Recuperação de Lead Solar',
+      description: 'Reengaja leads que não fecharam após a proposta.',
+      status: 'active',
+      triggerType: 'manual',
+      nodes: [
+        { id: 'start', type: 'trigger', data: { label: 'Manual' } },
+        { id: 'wait', type: 'wait', data: { duration: '3d' } },
+        { id: 'nudge', type: 'send_message', data: { text: 'Oi! Ainda quer parar de pagar caro na conta de luz? Posso revisar sua proposta e as condições de financiamento.' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'start', target: 'wait' },
+        { id: 'e2', source: 'wait', target: 'nudge' },
+      ],
+    },
+  ],
 };
