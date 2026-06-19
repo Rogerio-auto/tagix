@@ -10,7 +10,7 @@ export const Footer = () => (
         <div>
           <Wordmark className="text-xl" />
           <p className="mt-3 max-w-md text-sm text-muted-foreground">
-            Plataforma multi-tenant de atendimento, vendas conversacionais e automação. Canais oficiais da Meta, agentes de IA e Flow Builder visual em um só lugar.
+            Atendimento, vendas e IA em um só lugar. WhatsApp e Instagram oficiais, uma IA que responde por você e automações que não deixam venda escapar.
           </p>
           <p className="mt-6 text-xs uppercase tracking-[0.3em] text-muted-foreground/60">© {new Date().getFullYear()} Leadium.</p>
         </div>
@@ -55,7 +55,7 @@ export const Footer = () => (
           <span className="text-border">•</span>
           <Link to="/lgpd" className="hover:text-primary transition-colors">LGPD</Link>
         </div>
-        <span>API oficial da Meta · Multi-tenant com RLS · LGPD</span>
+        <span>WhatsApp e Instagram oficiais · Aprovado pela Meta · LGPD</span>
       </div>
     </Container>
   </footer>

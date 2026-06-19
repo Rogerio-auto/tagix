@@ -23,7 +23,7 @@ const Terms = () => {
             <section>
               <h2 className="text-2xl font-semibold text-foreground mb-4">1. Descrição do Serviço</h2>
               <p>
-                A Leadium oferece uma plataforma multi-tenant de atendimento, vendas conversacionais e automação, com integração a canais de mensageria (incluindo WhatsApp e Instagram via APIs da Meta), construtor de fluxos, agentes de inteligência artificial, gestão de leads, agendamentos e campanhas.
+                A Leadium oferece uma plataforma de atendimento, vendas conversacionais e automação, com integração a canais de mensageria (incluindo WhatsApp e Instagram via APIs oficiais da Meta), construtor de fluxos, agentes de inteligência artificial, gestão de leads, agendamentos e campanhas.
               </p>
             </section>
 

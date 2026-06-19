@@ -36,7 +36,7 @@ const LGPD = () => {
               </div>
               <div className="p-6 bg-card/40 backdrop-blur-sm rounded-2xl border border-border/50">
                 <h3 className="text-lg font-bold text-foreground mb-2">Isolamento por workspace</h3>
-                <p className="text-sm">Arquitetura multi-tenant com Row-Level Security (RLS) em Postgres, separando os dados de cada cliente.</p>
+                <p className="text-sm">Os dados de cada cliente ficam isolados e separados no banco de dados, sem se misturar com os de outras empresas.</p>
               </div>
               <div className="p-6 bg-card/40 backdrop-blur-sm rounded-2xl border border-border/50">
                 <h3 className="text-lg font-bold text-foreground mb-2">Credenciais criptografadas</h3>
@@ -52,8 +52,8 @@ const LGPD = () => {
               <h2 className="text-2xl font-semibold text-foreground mb-4">Nossa base de proteção</h2>
               <ul className="list-disc pl-5 space-y-2">
                 <li><strong className="text-foreground">Canais oficiais da Meta:</strong> WhatsApp e Instagram pela API oficial, sem intermediários não autorizados.</li>
-                <li><strong className="text-foreground">Autenticação Supabase:</strong> controle de acesso e identidade gerenciados sobre uma camada dedicada.</li>
-                <li><strong className="text-foreground">Row-Level Security:</strong> isolamento de dados por tenant diretamente no banco de dados.</li>
+                <li><strong className="text-foreground">Autenticação dedicada:</strong> controle de acesso e identidade gerenciados sobre uma camada especializada, com provedores contratados sob obrigações de proteção de dados.</li>
+                <li><strong className="text-foreground">Isolamento de dados:</strong> separação dos dados de cada cliente diretamente no banco de dados.</li>
                 <li><strong className="text-foreground">Provedores de IA como sub-operadores:</strong> contratados sob obrigações de confidencialidade.</li>
               </ul>
             </section>

@@ -45,27 +45,27 @@ export const Niches: React.FC = () => {
               <Badge className="mb-4 bg-primary/10 text-primary border-primary/20 px-3 py-1">
                 FEITO PARA O SEU SEGMENTO
               </Badge>
-              <h2 className="text-4xl md:text-6xl font-bold mb-6 tracking-tight leading-tight">
-                Atendimento que <span className="text-primary">conversa</span> <br /> com o seu nicho
+              <h2 className="font-head text-4xl md:text-6xl font-extrabold uppercase mb-6 tracking-tight leading-[1.05]">
+                Fala a língua <span className="text-primary">do seu negócio</span>
               </h2>
-              <p className="text-xl text-muted-foreground mb-10 leading-relaxed">
-                A Leadium é flexível por design: funil, fluxos, agentes de IA e
-                campanhas se adaptam à forma como o seu setor vende e atende —
-                de imobiliárias e clínicas a varejo e agências.
+              <p className="text-lg sm:text-xl text-muted-foreground mb-10 leading-relaxed">
+                Imobiliária qualifica e agenda visita. Clínica marca consulta e
+                lembra o paciente. Loja vende pelo catálogo. A Leadium se molda à
+                forma como o seu setor vende — não o contrário.
               </p>
 
               <div className="flex flex-col items-center lg:items-start gap-4">
                 <div className="flex items-center gap-3 text-sm font-medium text-foreground/80">
                   <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
-                  Pipeline e tags configuráveis
+                  Funil e etapas do seu jeito de vender
                 </div>
                 <div className="flex items-center gap-3 text-sm font-medium text-foreground/80">
                   <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
-                  Flow Builder visual sem código
+                  Atendimentos automáticos, sem programar
                 </div>
                 <div className="flex items-center gap-3 text-sm font-medium text-foreground/80">
                   <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
-                  Times e departamentos para multi-cliente
+                  Times separados para atender vários clientes
                 </div>
               </div>
             </motion.div>

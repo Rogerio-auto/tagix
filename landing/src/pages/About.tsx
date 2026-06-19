@@ -4,10 +4,10 @@ import { Card } from "../components/ui/Card";
 import { usePageMeta } from "../hooks/usePageMeta";
 
 const pillars = [
-  { title: "Canais oficiais", detail: "WhatsApp e Instagram pela API oficial da Meta, como Tech Provider." },
-  { title: "Inteligência aplicada", detail: "Agentes em LangGraph roteados pelo OpenRouter, com base de conhecimento." },
-  { title: "Automação sem código", detail: "Flow Builder visual com cerca de 22 tipos de nó e gatilhos." },
-  { title: "Segurança por design", detail: "Multi-tenant com RLS, credenciais criptografadas e conformidade LGPD." },
+  { title: "Canais oficiais", detail: "WhatsApp e Instagram pela conexão oficial da Meta — sem risco de bloqueio." },
+  { title: "Inteligência aplicada", detail: "Uma IA que aprende sobre o seu negócio e responde com precisão." },
+  { title: "Automação sem código", detail: "Monte atendimentos que vendem sozinhos, arrastando blocos na tela." },
+  { title: "Segurança por design", detail: "Dados isolados, credenciais criptografadas e conformidade com a LGPD." },
 ];
 
 const About = () => {
@@ -22,7 +22,7 @@ const About = () => {
         <SectionHeading
           eyebrow="Sobre"
           title="A plataforma para atender, vender e automatizar com IA"
-          description="A Leadium nasce para unificar canais oficiais, inteligência artificial e automação em uma base sólida, multi-tenant e segura — pronta para crescer com a sua operação."
+          description="A Leadium nasce para unir canais oficiais, inteligência artificial e automação em um só lugar — simples de usar, segura por padrão e pronta para crescer com a sua operação."
         />
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
@@ -32,19 +32,19 @@ const About = () => {
             </p>
             <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
               <li>• Atendimento humano e IA na mesma caixa de entrada</li>
-              <li>• Conformidade LGPD e isolamento por workspace (RLS)</li>
+              <li>• Privacidade tratada como fundação, em conformidade com a LGPD</li>
               <li>• Integrações oficiais, sem atalhos arriscados</li>
             </ul>
           </Card>
           <Card>
-            <h3 className="text-xl font-semibold text-foreground">Arquitetura</h3>
+            <h3 className="text-xl font-semibold text-foreground">Como entregamos</h3>
             <p className="mt-3 text-sm text-muted-foreground">
-              Plataforma multi-tenant sobre Postgres com Row-Level Security, autenticação Supabase, agentes de IA em LangGraph + OpenRouter e tempo real via Socket.io. API pública v1 documentada em OpenAPI.
+              Tudo em tempo real, do inbox às notificações. Automações que executam sozinhas, IA que aprende sobre o seu negócio e integrações prontas para o seu sistema.
             </p>
             <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-              <li>• Tempo real para inbox e notificações</li>
-              <li>• Flow Builder com execução monitorada em fila</li>
-              <li>• API pública v1 e webhooks para integração</li>
+              <li>• Mensagens e notificações na hora, sem atraso</li>
+              <li>• Atendimentos automáticos que não deixam venda escapar</li>
+              <li>• Integração por API e webhooks para o seu time</li>
             </ul>
           </Card>
         </div>

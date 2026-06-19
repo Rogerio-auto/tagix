@@ -57,7 +57,7 @@ const Pricing = () => {
         </div>
         <div className="mt-10 rounded-3xl border border-primary/20 bg-primary/5 p-6 text-sm text-foreground/60 italic text-center">
           <p>
-            Todos os planos rodam sobre a API oficial da Meta, com arquitetura multi-tenant, isolamento por workspace (RLS) e conformidade com a LGPD.
+            Todos os planos usam a conexão oficial da Meta, com seus dados isolados, credenciais criptografadas e em conformidade com a LGPD.
           </p>
         </div>
       </Container>

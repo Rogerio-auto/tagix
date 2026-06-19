@@ -78,7 +78,7 @@ const Privacy = () => {
             <section>
               <h2 className="text-2xl font-semibold text-foreground mb-4">8. Segurança</h2>
               <p>
-                Adotamos medidas técnicas e organizacionais para proteger os dados, incluindo criptografia de credenciais sensíveis, controle de acesso baseado em função, isolamento multi-tenant (Row-Level Security) e transporte sob TLS. Nenhum sistema é totalmente imune a riscos, mas trabalhamos continuamente para mitigá-los.
+                Adotamos medidas técnicas e organizacionais para proteger os dados, incluindo criptografia de credenciais sensíveis, controle de acesso por função, isolamento dos dados de cada cliente no banco de dados e transporte sob TLS. Nenhum sistema é totalmente imune a riscos, mas trabalhamos continuamente para mitigá-los.
               </p>
             </section>
 

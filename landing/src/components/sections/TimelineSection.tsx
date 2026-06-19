@@ -7,9 +7,9 @@ import { Button } from "../ui/Button";
 const timelineData = [
   {
     id: 1,
-    title: "Conexão",
+    title: "Conecte",
     date: "Passo 1",
-    content: "Conecte WhatsApp e Instagram pela API oficial da Meta — incluindo Coexistence com o app WhatsApp Business.",
+    content: "Ligue o WhatsApp que você já usa e o Instagram em minutos. Sem trocar de chip, sem perder o histórico das conversas.",
     category: "Setup",
     icon: MessageSquare,
     relatedIds: [2],
@@ -18,9 +18,9 @@ const timelineData = [
   },
   {
     id: 2,
-    title: "IA & Fluxos",
+    title: "Automatize",
     date: "Passo 2",
-    content: "Crie agentes de IA (LangGraph + OpenRouter) e desenhe fluxos no Flow Builder visual, sem código.",
+    content: "Monte o atendimento arrastando blocos na tela e ative a IA, que aprende sobre o seu negócio e responde sozinha.",
     category: "Automation",
     icon: Bot,
     relatedIds: [1, 3],
@@ -29,9 +29,9 @@ const timelineData = [
   },
   {
     id: 3,
-    title: "Vendas",
+    title: "Venda",
     date: "Passo 3",
-    content: "Dispare campanhas com templates aprovados pela Meta, organize o funil no CRM e gerencie a agenda do time.",
+    content: "Cada conversa vira um card no funil. Dispare ofertas para a base inteira e marque horários direto na agenda do time.",
     category: "Execution",
     icon: Users,
     relatedIds: [2, 4],
@@ -40,9 +40,9 @@ const timelineData = [
   },
   {
     id: 4,
-    title: "Análise",
+    title: "Acompanhe",
     date: "Passo 4",
-    content: "Acompanhe dashboards role-aware com conversões, CSAT e qualidade do atendimento avaliada por IA.",
+    content: "Veja quanto vende, quanto o time demora e o que o cliente acha — com a satisfação avaliada automaticamente.",
     category: "Analytics",
     icon: BarChart3,
     relatedIds: [3, 5],
@@ -51,9 +51,9 @@ const timelineData = [
   },
   {
     id: 5,
-    title: "Escala",
+    title: "Cresça",
     date: "Passo 5",
-    content: "Cresça com multi-agente, roteamento agente↔departamento, times e a API pública v1 com webhooks.",
+    content: "Adicione times, departamentos e novas IAs trabalhando juntas conforme a operação aumenta. No seu ritmo.",
     category: "Growth",
     icon: Rocket,
     relatedIds: [4],
@@ -68,18 +68,19 @@ export function TimelineSection() {
       <div className="container mx-auto px-4">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           <div className="text-left">
-            <h2 className="text-4xl md:text-6xl font-bold text-foreground mb-6 leading-tight">
-              Do primeiro canal à <span className="text-primary">escala</span>
+            <span className="kicker mb-4 inline-flex">Como funciona</span>
+            <h2 className="font-head text-4xl font-extrabold uppercase leading-[1.05] tracking-tight text-foreground mb-6 md:text-6xl">
+              No ar hoje. <span className="text-primary">Vendendo amanhã.</span>
             </h2>
-            <p className="text-muted-foreground text-lg mb-8 max-w-xl">
-              Cinco passos para colocar a Leadium para rodar: conectar canais, automatizar com IA, vender, medir e escalar — no seu ritmo.
+            <p className="text-muted-foreground text-base sm:text-lg mb-8 max-w-xl leading-relaxed">
+              Cinco passos simples: conectar, automatizar, vender, acompanhar e crescer. Sem TI, sem manual de cem páginas, sem fricção.
             </p>
-            
-            <div className="space-y-6">
+
+            <div className="space-y-4">
               {[
-                { title: "Canais oficiais", desc: "WhatsApp e Instagram pela API oficial da Meta." },
-                { title: "Automação com IA", desc: "Flow Builder visual e agentes que consultam sua base de conhecimento." },
-                { title: "Segurança por design", desc: "Multi-tenant com RLS, credenciais criptografadas e LGPD." }
+                { title: "Continue no seu número", desc: "Liga o WhatsApp que você já usa, sem perder histórico." },
+                { title: "IA que responde por você", desc: "Atende, qualifica e agenda — 24 horas, sem cansar." },
+                { title: "Sem código, sem complicação", desc: "Monta o atendimento arrastando blocos na tela." }
               ].map((item) => (
                 <div key={item.title} className="flex gap-4 p-4 rounded-2xl bg-foreground/5 border border-foreground/10 hover:border-primary/30 transition-all">
                   <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">

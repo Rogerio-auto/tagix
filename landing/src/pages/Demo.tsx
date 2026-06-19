@@ -23,11 +23,11 @@ const Demo = () => {
           <div className="rounded-3xl border border-border/50 bg-card/40 backdrop-blur-sm p-6 text-sm text-muted-foreground shadow-elev3">
             <h3 className="text-xl font-semibold text-foreground">O que vamos cobrir</h3>
             <ul className="mt-4 space-y-3">
-              <li>• Inbox unificado de WhatsApp e Instagram (API oficial)</li>
-              <li>• WhatsApp Coexistence com o app WhatsApp Business</li>
-              <li>• Agentes de IA com base de conhecimento (RAG)</li>
-              <li>• Flow Builder visual, CRM e campanhas</li>
-              <li>• Dashboards role-aware, segurança e LGPD</li>
+              <li>• WhatsApp e Instagram oficiais numa caixa de entrada só</li>
+              <li>• Continue no número de WhatsApp que você já usa</li>
+              <li>• Uma IA que responde, qualifica e agenda sozinha</li>
+              <li>• Atendimentos automáticos, funil e campanhas</li>
+              <li>• Painéis com vendas, satisfação e segurança (LGPD)</li>
             </ul>
             <p className="mt-4">Adaptamos a conversa ao seu segmento e ao seu volume de atendimento.</p>
           </div>

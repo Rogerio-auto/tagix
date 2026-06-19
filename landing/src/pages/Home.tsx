@@ -1,11 +1,10 @@
-import { Hero as AnimatedHero } from "../components/ui/animated-hero";
-import { HeroGeometric } from "../components/ui/shape-landing-hero";
-import { SparklesCore } from "../components/ui/sparkles";
+import { Hero } from "../components/sections/Hero";
 import { Suspense, lazy } from "react";
 import { usePageMeta } from "../hooks/usePageMeta";
+import { StickyMobileCTA } from "../components/sections/StickyMobileCTA";
 
 // Lazy loaded sections
-const SneakPeek = lazy(() => import("../components/sections/SneakPeek").then(m => ({ default: m.SneakPeek })));
+const PainSection = lazy(() => import("../components/sections/PainSection").then(m => ({ default: m.PainSection })));
 const TimelineSection = lazy(() => import("../components/sections/TimelineSection").then(m => ({ default: m.TimelineSection })));
 const SocialProof = lazy(() => import("../components/sections/SocialProof").then(m => ({ default: m.SocialProof })));
 const FeatureGrid = lazy(() => import("../components/sections/FeatureGrid").then(m => ({ default: m.FeatureGrid })));
@@ -23,44 +22,19 @@ const SectionLoader = () => (
 
 const Home = () => {
   usePageMeta({
-    title: "Atendimento, vendas e IA em uma plataforma",
-    description: "A Leadium unifica WhatsApp e Instagram pela API oficial da Meta, agentes de IA (LangGraph + OpenRouter), Flow Builder visual, CRM e campanhas — tudo em um só lugar.",
+    title: "Cada conversa virando venda — no automático",
+    description:
+      "A Leadium responde, qualifica e agenda sozinha no WhatsApp e Instagram que você já usa. Atendimento, IA e automação em um só lugar — pare de perder cliente por demora.",
   });
 
   return (
     <>
-      {/* Hero */}
-      <section className="relative overflow-hidden min-h-screen">
-        {/* Sparkles de fundo */}
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          <SparklesCore
-            id="hero-sparkles"
-            background="transparent"
-            minSize={0.4}
-            maxSize={1.2}
-            particleDensity={80}
-            className="w-full h-full"
-            particleColor="#1FFF13"
-            speed={0.8}
-          />
-        </div>
-
-        {/* Conteúdo */}
-        <div className="relative z-10">
-          <HeroGeometric
-            badge="Leadium · Atendimento + IA"
-            title1="Atendimento, vendas"
-            title2="e IA em um só lugar"
-          >
-            <AnimatedHero />
-          </HeroGeometric>
-        </div>
-      </section>
+      <Hero />
 
       <div className="relative z-10 bg-background">
         <Suspense fallback={<SectionLoader />}>
-          <SneakPeek />
           <SocialProof />
+          <PainSection />
           <TimelineSection />
           <FeatureGrid />
           <Niches />
@@ -70,6 +44,8 @@ const Home = () => {
           <FinalCTA />
         </Suspense>
       </div>
+
+      <StickyMobileCTA />
     </>
   );
 };
