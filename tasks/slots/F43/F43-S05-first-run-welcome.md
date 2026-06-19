@@ -2,7 +2,7 @@
 id: F43-S05
 title: First-run — welcome + pesquisa + escolha de nicho (aplica blueprint)
 phase: F43
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F43-S04]
@@ -17,8 +17,9 @@ ux_considerations:
   - "Aplica 2.11 — erro em 3 partes (o quê/por quê/o que fazer)."
   - "Aplica 2.6 — primeira sessão é o anti-empty-state: guia o próximo passo em vez de tela vazia."
   - "Mobile (MOBILE_UX §2.3): em < md o wizard vira sheet, não modal lateral."
----
+claimed_at: 2026-06-19T22:09:57Z
 
+---
 # F43-S05 — First-run (welcome + pesquisa + nicho)
 
 > **source_docs:** `docs/features/ONBOARDING.md` §3.2; `docs/UX_PRINCIPLES.md`
