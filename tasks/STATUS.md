@@ -28,7 +28,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F36   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F37   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F38   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F39   | 5     | 1   | 2   | 0   | 0   | 1   | 1   |
+| F39   | 5     | 2   | 1   | 0   | 0   | 0   | 2   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -340,8 +340,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ------- | ------------------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------------------- |
 | F39-S01 | WhatsApp connect backend — Embedded Signup server-side (Cloud API + coexistência onboarding)      | ✅ done      | critical   | —                                  |
 | F39-S02 | WhatsApp connect wizard UI — Embedded Signup (FB Login) + seleção de número + modo coexistência   | 🟢 available | high       | F39-S01                            |
-| F39-S03 | Ingestão de webhooks de coexistência — parse de history / smb_message_echoes / smb_app_state_sync | 🟣 review    | high       | F39-S01                            |
-| F39-S04 | Workers de sync de coexistência — echoes → conversas, import de histórico, app_state              | ⏸️ blocked  | high       | F39-S03                            |
+| F39-S03 | Ingestão de webhooks de coexistência — parse de history / smb_message_echoes / smb_app_state_sync | ✅ done      | high       | F39-S01                            |
+| F39-S04 | Workers de sync de coexistência — echoes → conversas, import de histórico, app_state              | 🟢 available | high       | F39-S03                            |
 | F39-S05 | Validação E2E Meta + runbook de conexão WhatsApp/coexistência                                     | ⏸️ blocked  | medium     | F39-S01, F39-S02, F39-S03, F39-S04 |
 
 ## Fase 4 — Campaigns
