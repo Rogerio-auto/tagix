@@ -2,7 +2,7 @@
 id: F43-S08
 title: Conteúdo dos tours + âncoras data-tour-id nas telas
 phase: F43
-status: blocked
+status: available
 priority: medium
 estimated_size: M
 depends_on: [F43-S06, F43-S07]
