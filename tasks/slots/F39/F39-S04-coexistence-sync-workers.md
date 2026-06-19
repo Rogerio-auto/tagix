@@ -2,7 +2,7 @@
 id: F39-S04
 title: Workers de sync de coexistência — echoes → conversas, import de histórico, app_state
 phase: F39
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F39-S03]
