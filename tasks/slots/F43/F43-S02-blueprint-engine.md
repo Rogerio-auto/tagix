@@ -2,7 +2,7 @@
 id: F43-S02
 title: Engine de Niche Blueprint — tipo declarativo + instanciador idempotente
 phase: F43
-status: available
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F43-S01]
@@ -10,8 +10,10 @@ blocks: [F43-S03, F43-S04]
 agent_id: backend-engineer
 source_docs:
   - docs/features/ONBOARDING.md
----
+claimed_at: 2026-06-19T20:47:20Z
+completed_at: 2026-06-19T20:53:32Z
 
+---
 # F43-S02 — Engine de Niche Blueprint
 
 > **source_docs:** `docs/features/ONBOARDING.md` §2.1, §2.2
