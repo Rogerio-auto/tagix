@@ -22,6 +22,13 @@ import {
   subscribeInstagramWebhook,
   sendInstagramTestMessage,
 } from '../../services/channels/instagram-connect';
+import {
+  WaConnectError,
+  exchangeCodeForToken,
+  registerPhoneNumber,
+  subscribeWabaApp,
+} from '../../services/channels/whatsapp-connect';
+import { platformSecrets } from '../../secrets';
 
 /**
  * Campos de canal seguros para devolver ao cliente. NUNCA inclui colunas de
@@ -101,6 +108,26 @@ const igConnectSchema = z.object({
   appSecret: z.string().trim().min(1).optional(),
   /** IGSID alvo da mensagem de teste (default: o proprio dono). Opcional. */
   testRecipientIgsid: z.string().trim().min(1).max(64).optional(),
+});
+
+/**
+ * Wizard WA: connect server-side (Embedded Signup / Tech Provider). Troca o
+ * `code` por token long-lived, registra o numero (PIN), inscreve a WABA no app
+ * (subscribed_apps — com campos de coexistencia quando `mode=coexistence`),
+ * cria o canal e cifra o token. O token NUNCA volta ao cliente.
+ */
+const waConnectSchema = z.object({
+  code: z.string().trim().min(1),
+  phoneNumberId: z.string().trim().min(1).max(64),
+  wabaId: z.string().trim().min(1).max(64),
+  pin: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, 'O PIN do WhatsApp deve ter 6 digitos.'),
+  mode: z.enum(['cloud_api', 'coexistence']),
+  name: z.string().trim().min(1).max(120),
+  phoneNumber: z.string().trim().min(1).max(32).optional(),
+  displayHandle: z.string().trim().min(1).max(120).optional(),
 });
 
 /** Narrowing de `req.params['x']` (string | string[] no @types/express 5). */
@@ -368,6 +395,86 @@ export function createChannelsRouter(): Router {
       }
 
       res.status(201).json({ channel: created, testMessageSent });
+    },
+  );
+
+  // --- Wizard WhatsApp (Embedded Signup / Tech Provider — server-side) ---
+
+  // POST /api/channels/whatsapp/connect — exchange code → register → subscribe →
+  // cria canal meta_whatsapp + cifra token long-lived. Dispatch por `mode`.
+  router.post(
+    '/api/channels/whatsapp/connect',
+    requireAuth,
+    withRLS,
+    requireRole('channel.connect'),
+    async (req: Request, res: Response) => {
+      const parsed = waConnectSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ message: 'Dados de conexao WhatsApp invalidos.' });
+        return;
+      }
+      const input = parsed.data;
+      const workspaceId = req.auth!.workspace.id;
+
+      const appId = platformSecrets.get('meta_app_id');
+      const appSecret = platformSecrets.get('meta_app_secret');
+      if (appId === undefined || appSecret === undefined) {
+        res.status(503).json({
+          code: 'WA_CONNECT_APP_NOT_CONFIGURED',
+          message: 'Credenciais do app Meta nao configuradas na plataforma.',
+        });
+        return;
+      }
+
+      const graph = new GraphClient();
+      const coexistence = input.mode === 'coexistence';
+
+      // 1) Orquestra Graph: exchange → register → subscribe. Falha em qualquer
+      // etapa aborta antes de criar o canal (token cifrado so se tudo passou).
+      let token: string;
+      try {
+        token = await exchangeCodeForToken(graph, input.code, appId, appSecret);
+        await registerPhoneNumber(graph, input.phoneNumberId, input.pin, token);
+        await subscribeWabaApp(graph, input.wabaId, token, { coexistence });
+      } catch (err: unknown) {
+        if (err instanceof WaConnectError) {
+          res.status(422).json({ code: err.code, message: err.message });
+          return;
+        }
+        res.status(502).json({
+          code: 'WA_CONNECT_GRAPH_ERROR',
+          message: 'Falha ao conectar o WhatsApp na Meta. Tente novamente.',
+        });
+        return;
+      }
+
+      // 2) Cria o canal + cifra o token (mesmo padrao do connect legado). Tudo
+      // sob RLS. O `mode` persiste em `metadata` (jsonb) — sem migracao de schema.
+      const created = await req.scoped!(async (tx) => {
+        const [channel] = await tx
+          .insert(schema.channels)
+          .values({
+            workspaceId,
+            provider: 'meta_whatsapp',
+            name: input.name,
+            displayHandle: input.displayHandle ?? null,
+            phoneNumber: input.phoneNumber ?? null,
+            phoneNumberId: input.phoneNumberId,
+            wabaId: input.wabaId,
+            metadata: { waConnectMode: input.mode },
+            isActive: true,
+          })
+          .returning(PUBLIC_CHANNEL_COLUMNS);
+        if (!channel) throw new Error('Falha ao criar canal WhatsApp.');
+
+        await tx.insert(schema.channelSecrets).values({
+          channelId: channel.id,
+          accessTokenEnc: encryptSecret(token),
+        });
+        return channel;
+      });
+
+      res.status(201).json({ channel: created });
     },
   );
 

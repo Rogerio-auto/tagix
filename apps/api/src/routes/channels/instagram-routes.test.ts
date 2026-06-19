@@ -31,3 +31,17 @@ describe('rotas do wizard Instagram (autorizacao)', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('rota do wizard WhatsApp (autorizacao)', () => {
+  it('POST /api/channels/whatsapp/connect sem sessao -> 401', async () => {
+    const res = await request(app).post('/api/channels/whatsapp/connect').send({
+      code: 'c',
+      phoneNumberId: 'p',
+      wabaId: 'w',
+      pin: '123456',
+      mode: 'cloud_api',
+      name: 'WA',
+    });
+    expect(res.status).toBe(401);
+  });
+});
