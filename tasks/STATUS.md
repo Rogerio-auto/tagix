@@ -31,7 +31,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F39   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F40   | 1     | 1   | 0   | 0   | 0   | 0   | 0   |
-| F41   | 3     | 3   | 0   | 0   | 0   | 0   | 0   |
+| F41   | 3     | 2   | 0   | 0   | 1   | 0   | 0   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -373,11 +373,11 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 41 — Portal do Desenvolvedor — Referência rica + Console Try-it
 
-| ID      | Titulo                                                                      | Status      | Prioridade | Depende de |
-| ------- | --------------------------------------------------------------------------- | ----------- | ---------- | ---------- |
-| F41-S01 | Referência por endpoint — request body + params + response + exemplo gerado | 🟢 available | high       | —          |
-| F41-S02 | Console "Try it" — Sandbox (mock) + Real (API key, GET-only)                | 🟢 available | high       | —          |
-| F41-S03 | QA + revisão de segurança do console (não misturar)                         | 🟢 available | high       | —          |
+| ID      | Titulo                                                                      | Status        | Prioridade | Depende de |
+| ------- | --------------------------------------------------------------------------- | ------------- | ---------- | ---------- |
+| F41-S01 | Referência por endpoint — request body + params + response + exemplo gerado | 🔵 in-progress | high       | —          |
+| F41-S02 | Console "Try it" — Sandbox (mock) + Real (API key, GET-only)                | 🟢 available   | high       | —          |
+| F41-S03 | QA + revisão de segurança do console (não misturar)                         | 🟢 available   | high       | —          |
 
 ## Fase 5 — Calendar
 
