@@ -10,6 +10,8 @@ export * from './calendar';
 export * from './help';
 // Chat de Suporte (F38-S01): threads/mensagens (membro + plataforma).
 export * from './support';
+// Payments (F41-S02): ledger de eventos de pagamento (idempotente por provider+event).
+export * from './payment-events';
 
 export const workspacesRepo = {
   async findById(id: string) {

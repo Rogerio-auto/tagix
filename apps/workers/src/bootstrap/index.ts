@@ -80,6 +80,10 @@ import {
   startReminderScheduler,
 } from '../calendar-reminders/index';
 import {
+  startRecurrenceScheduler,
+  type RecurrenceSchedulerHandle,
+} from '../billing/index';
+import {
   startDashboardMvScheduler,
   startDashboardSnapshotScheduler,
 } from '../dashboard-refresh/index';
@@ -128,6 +132,7 @@ export interface WorkersBootstrapHandle {
   readonly campaignWorker: CampaignSchedulerHandle;
   readonly followupProcessor: { handle: CampaignFollowupSchedulerHandle };
   readonly automationWorker: AutomationWorkerHandle;
+  readonly billingRecurrence: RecurrenceSchedulerHandle;
   stop(): Promise<void>;
 }
 
@@ -330,6 +335,11 @@ export async function startWorkers(
   // Processor de export LGPD (F10-S02): drena data_export_jobs pendentes, reúne PII
   // sob RLS e grava o artefato via @hm/storage. Singleton via lock Redis.
   const privacyExport = startPrivacyExportProcessor({ redis, logger });
+  // Recorrência PIX + dunning (F41-S05): tick 1h que gera a cobrança do próximo ciclo
+  // perto do current_period_end (1×/ciclo, idempotente via payment_events) e aplica a
+  // régua de dunning (lembrete→tolerância→past_due→corte) + executa cancel_at_period_end.
+  // Provider por env (AbacatePay real ou Mock). Singleton via lock Redis; RLS por tenant.
+  const billingRecurrence = startRecurrenceScheduler({ redis, logger });
   // Worker de avaliacao pos-conversa (F29-S03): tick 5min que encontra conversas
   // encerradas sem avaliacao, chama o LLM-judge (F29-S02) e persiste a qualidade/
   // CSAT/objecoes (F29-S01). Singleton via lock Redis; reusa a config do runtime.
@@ -369,6 +379,7 @@ export async function startWorkers(
       'webhook-dispatcher',
       'privacy-export-processor',
       'evaluation-scheduler',
+      'billing-recurrence-scheduler',
     ],
   });
 
@@ -386,9 +397,11 @@ export async function startWorkers(
     campaignWorker,
     followupProcessor,
     automationWorker,
+    billingRecurrence,
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
       clearInterval(metricsTimer);
+      await billingRecurrence.stop();
       await evaluationScheduler.stop();
       await privacyExport.stop();
       await webhookDispatcher.stop();

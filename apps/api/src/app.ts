@@ -43,6 +43,7 @@ import { createAuditRouter } from './routes/audit';
 import { createDashboardLayoutRouter } from './routes/members/dashboard-layout';
 import { createV1Router } from './routes/v1';
 import { createDevRouter } from './routes/dev';
+import { createBillingRouter } from './routes/billing';
 import { createPrivacyRouter } from './routes/privacy';
 import { createHelpRouter } from './routes/help';
 import { createSupportRouter } from './routes/support';
@@ -185,6 +186,9 @@ export function createApp(): Express {
   app.use(createV1Router());
   // Gestão Dev (F9-S04): session-authed CRUD de API keys + webhooks (Settings → Dev).
   app.use(createDevRouter());
+  // Billing self-serve (F41-S04): checkout hospedado (CARD+PIX) + estado + cancel.
+  // Preço/plano reconferidos server-side; webhook (S03) confirma o pagamento.
+  app.use(createBillingRouter());
 
   // F38: leitor da Central de Ajuda (qualquer membro autenticado; só published).
   app.use(createHelpRouter());

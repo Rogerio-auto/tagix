@@ -11,6 +11,7 @@ import {
 import { calendarRepo } from './repos/calendar';
 import { helpRepo } from './repos/help';
 import { supportRepo } from './repos/support';
+import { paymentEventsRepo } from './repos/payment-events';
 import {
   agentDepartments,
   agents,
@@ -46,6 +47,7 @@ import {
   members,
   outboundWebhookDeliveries,
   outboundWebhooks,
+  paymentEvents,
   plans,
   slaRules,
   supportThreads,
@@ -1612,5 +1614,160 @@ describe('Support chat (F38-S01)', () => {
         VALUES (${threadA.id}::uuid, 'robot', 'x')
       `),
     ).rejects.toThrow();
+  });
+});
+
+describe('RLS Payment events (F41-S02)', () => {
+  it('payment_events isola por workspace; cross-tenant nao vaza; eventos sem workspace ficam fora do escopo de tenant', async () => {
+    const db = getDb(); // owner bypassa RLS no seed
+    const sfx = randomUUID().slice(0, 8);
+
+    // Evento de A, evento de B e um evento SEM workspace (catalogo/pre-mapeamento).
+    const [evA] = await db
+      .insert(paymentEvents)
+      .values({
+        provider: 'abacatepay',
+        externalEventId: `evt-a-${sfx}`,
+        eventType: 'checkout.completed',
+        workspaceId: wsA,
+        subscriptionExternalId: `sub-a-${sfx}`,
+        amountCents: 9900,
+        status: 'active',
+        rawPayload: { id: `evt-a-${sfx}` },
+      })
+      .returning();
+    const [evB] = await db
+      .insert(paymentEvents)
+      .values({
+        provider: 'abacatepay',
+        externalEventId: `evt-b-${sfx}`,
+        eventType: 'checkout.completed',
+        workspaceId: wsB,
+        rawPayload: { id: `evt-b-${sfx}` },
+      })
+      .returning();
+    const [evNull] = await db
+      .insert(paymentEvents)
+      .values({
+        provider: 'abacatepay',
+        externalEventId: `evt-null-${sfx}`,
+        eventType: 'product.updated',
+        rawPayload: { id: `evt-null-${sfx}` },
+      })
+      .returning();
+    if (!evA || !evB || !evNull) throw new Error('Falha ao criar payment_events.');
+
+    // A so enxerga os proprios; B nao enxerga nada de A; ninguem enxerga o sem-workspace.
+    const eventsA = await withWorkspace(wsA, (tx) => tx.select().from(paymentEvents));
+    expect(eventsA.every((e) => e.workspaceId === wsA)).toBe(true);
+    expect(eventsA.some((e) => e.id === evA.id)).toBe(true);
+    expect(eventsA.some((e) => e.id === evB.id)).toBe(false);
+    expect(eventsA.some((e) => e.id === evNull.id)).toBe(false);
+
+    const eventsB = await withWorkspace(wsB, (tx) => tx.select().from(paymentEvents));
+    expect(eventsB.some((e) => e.id === evA.id)).toBe(false);
+
+    // listByWorkspace (billing portal) sob tx escopado: so o tenant do tx.
+    const listA = await withWorkspace(wsA, (tx) => paymentEventsRepo.listByWorkspace(tx, wsA));
+    expect(listA.some((e) => e.id === evA.id)).toBe(true);
+    expect(listA.some((e) => e.id === evB.id)).toBe(false);
+
+    // INSERT cross-tenant via app e barrado pelo WITH CHECK (workspace_id de B sob A).
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.insert(paymentEvents).values({
+          provider: 'abacatepay',
+          externalEventId: `evt-cross-${sfx}`,
+          eventType: 'checkout.completed',
+          workspaceId: wsB,
+          rawPayload: {},
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('record e idempotente por (provider, external_event_id): replay nao duplica', async () => {
+    const sfx = randomUUID().slice(0, 8);
+    const externalEventId = `idem-${sfx}`;
+
+    const first = await paymentEventsRepo.record({
+      provider: 'abacatepay',
+      externalEventId,
+      eventType: 'subscription.renewed',
+      workspaceId: wsA,
+      amountCents: 4900,
+      status: 'active',
+      rawPayload: { id: externalEventId, attempt: 1 },
+    });
+    // Replay do MESMO evento (payload diferente) devolve a linha original, sem duplicar.
+    const replay = await paymentEventsRepo.record({
+      provider: 'abacatepay',
+      externalEventId,
+      eventType: 'subscription.renewed',
+      workspaceId: wsA,
+      rawPayload: { id: externalEventId, attempt: 2 },
+    });
+    expect(replay.id).toBe(first.id);
+
+    const rows = await getDb()
+      .select()
+      .from(paymentEvents)
+      .where(
+        sql`${paymentEvents.provider} = 'abacatepay' and ${paymentEvents.externalEventId} = ${externalEventId}`,
+      );
+    expect(rows).toHaveLength(1);
+
+    // exists / markProcessed.
+    expect(await paymentEventsRepo.exists('abacatepay', externalEventId)).toBe(true);
+    expect(await paymentEventsRepo.exists('abacatepay', `missing-${sfx}`)).toBe(false);
+    expect(first.processedAt).toBeNull();
+    const processed = await paymentEventsRepo.markProcessed(first.id);
+    expect(processed?.processedAt).not.toBeNull();
+  });
+
+  it('UNIQUE(provider, external_event_id): segundo insert direto do mesmo par falha', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const externalEventId = `uq-${sfx}`;
+    await db.insert(paymentEvents).values({
+      provider: 'abacatepay',
+      externalEventId,
+      eventType: 'checkout.completed',
+      workspaceId: wsA,
+      rawPayload: {},
+    });
+    await expect(
+      db.insert(paymentEvents).values({
+        provider: 'abacatepay',
+        externalEventId,
+        eventType: 'checkout.completed',
+        workspaceId: wsA,
+        rawPayload: {},
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('payment_method CHECK em subscriptions rejeita valor fora de card|pix', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const [w] = await db
+      .insert(workspaces)
+      .values({ name: `Pay chk ${sfx}`, slug: `pay-chk-${sfx}` })
+      .returning();
+    if (!w) throw new Error('setup workspace pay chk');
+    const [free] = await db.select().from(plans).where(eq(plans.key, 'free'));
+    if (!free) throw new Error('setup plan free');
+    await expect(
+      db.execute(sql`
+        INSERT INTO subscriptions (workspace_id, plan_id, payment_method)
+        VALUES (${w.id}::uuid, ${free.id}::uuid, 'bitcoin')
+      `),
+    ).rejects.toThrow();
+    // card e valido.
+    await db.execute(sql`
+      INSERT INTO subscriptions (workspace_id, plan_id, payment_method)
+      VALUES (${w.id}::uuid, ${free.id}::uuid, 'card')
+    `);
+    await db.delete(workspaces).where(eq(workspaces.id, w.id));
   });
 });

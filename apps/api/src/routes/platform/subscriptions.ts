@@ -1,29 +1,78 @@
 /**
  * API de plataforma -- assinatura por tenant + entitlement overrides (F26-S04, secao 5.2/5.3).
  *
- *   GET /api/platform/tenants/:id/subscription            plano+status+trial+override+efetivos
- *   PUT /api/platform/tenants/:id/subscription            troca plano/status/trial/cycle
- *   PUT /api/platform/tenants/:id/entitlement-overrides   limites/features override (custom plan)
+ *   GET  /api/platform/tenants/:id/subscription            plano+status+trial+override+efetivos
+ *   PUT  /api/platform/tenants/:id/subscription            troca plano/status/trial/cycle
+ *   PUT  /api/platform/tenants/:id/entitlement-overrides   limites/features override (custom plan)
+ *   POST /api/platform/tenants/:id/billing/checkout        gera checkout HOSPEDADO (cobranca real)
  *
  * Gestao INTERNA (sem Stripe). Mantem workspaces.{plan_id,subscription_status,trial_ends_at}
  * e a linha em `subscriptions` coerentes. Toda mutacao com before/after em audit_logs +
  * updated_by. resolveEntitlements e a fonte unica dos efetivos. Cross-workspace como owner;
  * gated por requirePlatformAdmin. Wire em app.ts e do orchestrator.
+ *
+ * O fluxo ASSISTIDO (PAYMENTS_ABACATEPAY.md §7) reusa o MESMO provider do self-serve
+ * (`getPaymentProvider()` do S04) — o super-admin so gera o link; quem transiciona o
+ * status e sempre o webhook HMAC (S03). Preco/plano sao SEMPRE reconferidos server-side
+ * (cliente nunca dita valor); a API key do gateway nunca e tocada/logada aqui.
  */
 import { Router, type Request, type Response } from 'express';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { entitlementOverridesRepo, getDb, schema } from '@hm/db';
+import type { BillingCycle, PaymentMethod, PaymentWorkspaceInput } from '@hm/payments';
 import { requirePlatformAdmin } from '../../middlewares/platform-admin';
 import { resolveEntitlements } from '../../services/platform/entitlements';
+import { getPaymentProvider } from '../../services/billing/provider';
+import { ensurePlanProduct, type PlanRow } from '../../services/billing/plan-sync';
 import { planFeaturesSchema, planLimitsSchema } from './plans';
 
-const { workspaces, plans, subscriptions, auditLogs } = schema;
+const { workspaces, members, plans, subscriptions, auditLogs } = schema;
 
 const STATUSES = ['trial', 'active', 'past_due', 'canceled', 'expired'] as const;
 const CYCLES = ['monthly', 'yearly'] as const;
 
+/** Tag do gateway gravada no intent da subscription (PAYMENTS_ABACATEPAY.md §2). */
+const PROVIDER_TAG = 'abacatepay';
+
+/** Metodos liberados no checkout hospedado (§5). */
+const HOSTED_METHODS: readonly PaymentMethod[] = ['card', 'pix'] as const;
+
 const idParam = z.string().uuid();
+
+/** Body do checkout assistido — espelha o self-serve (§5/§7); preco vem do catalogo. */
+const checkoutSchema = z
+  .object({
+    planId: z.string().uuid(),
+    cycle: z.enum(CYCLES),
+    method: z.enum(['card', 'pix']),
+  })
+  .strict();
+
+/** Base publica do app (web) para montar return/completion URLs do checkout. */
+function appBaseUrl(): string {
+  return process.env['APP_PUBLIC_URL'] ?? process.env['CORS_ORIGIN'] ?? 'http://localhost:3000';
+}
+
+/** Projeta a row de plano (catalogo de plataforma) para o subset do sync. */
+function toPlanRow(row: typeof plans.$inferSelect): PlanRow {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    priceMonthlyCents: row.priceMonthlyCents,
+    priceYearlyCents: row.priceYearlyCents,
+    paymentProviderProductId: row.paymentProviderProductId,
+  };
+}
+
+/** Preco server-side do plano para o ciclo. NUNCA vem do cliente. */
+function priceForCycle(row: PlanRow, cycle: BillingCycle): number {
+  if (cycle === 'yearly') {
+    return row.priceYearlyCents > 0 ? row.priceYearlyCents : row.priceMonthlyCents * 12;
+  }
+  return row.priceMonthlyCents;
+}
 
 const putSubscriptionSchema = z
   .object({
@@ -268,6 +317,155 @@ export function createPlatformSubscriptionsRouter(): Router {
 
       const entitlements = await resolveEntitlements(id.data);
       res.json({ workspaceId: id.data, entitlements });
+    },
+  );
+
+  // ─── POST billing/checkout (cobranca real assistida — §7) ───────────────────
+  router.post(
+    '/api/platform/tenants/:id/billing/checkout',
+    ...requirePlatformAdmin,
+    async (req: Request, res: Response) => {
+      const id = idParam.safeParse(req.params['id']);
+      if (!id.success) {
+        res.status(400).json({ error: 'invalid_id' });
+        return;
+      }
+      const parsed = checkoutSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues });
+        return;
+      }
+      const { planId, cycle, method } = parsed.data;
+
+      // Tenant precisa existir (camada de plataforma é cross-workspace, sem RLS).
+      const [ws] = await db
+        .select({ id: workspaces.id, name: workspaces.name, planId: workspaces.planId })
+        .from(workspaces)
+        .where(eq(workspaces.id, id.data))
+        .limit(1);
+      if (!ws) {
+        res.status(404).json({ error: 'workspace_not_found' });
+        return;
+      }
+
+      // Plano vem do catálogo de plataforma → preço/identidade SEMPRE server-side.
+      const [planRowRaw] = await db.select().from(plans).where(eq(plans.id, planId)).limit(1);
+      if (!planRowRaw || !planRowRaw.isActive) {
+        res.status(404).json({ error: 'plan_not_found' });
+        return;
+      }
+      const planRow = toPlanRow(planRowRaw);
+      const amountCents = priceForCycle(planRow, cycle);
+      if (amountCents <= 0) {
+        res.status(422).json({ error: 'plan_not_billable' });
+        return;
+      }
+
+      // E-mail de cobrança é do TENANT (não do super-admin): OWNER ativo, com
+      // fallback para qualquer membro ativo. Sem membro faturável → 422.
+      const billable = await db
+        .select({ email: members.email, role: members.role })
+        .from(members)
+        .where(eq(members.workspaceId, id.data));
+      const owner = billable.find((m) => m.role === 'OWNER' && !!m.email);
+      const billingEmail = owner?.email ?? billable.find((m) => !!m.email)?.email;
+      if (!billingEmail) {
+        res.status(422).json({ error: 'no_billing_contact' });
+        return;
+      }
+
+      // Reusa o MESMO provider do self-serve (mock em dev/teste, real com a key).
+      const provider = getPaymentProvider();
+
+      // Garante product (idempotente; grava plans.payment_provider_product_id) e customer.
+      const externalProductId = await ensurePlanProduct(provider, planRow);
+
+      const workspaceInput: PaymentWorkspaceInput = {
+        id: ws.id,
+        name: ws.name,
+        billingEmail,
+      };
+      const customer = await provider.ensureCustomer(workspaceInput);
+
+      const checkout = await provider.createHostedCheckout({
+        plan: {
+          id: planRow.id,
+          name: planRow.name,
+          priceMonthlyCents: planRow.priceMonthlyCents,
+          priceYearlyCents: planRow.priceYearlyCents > 0 ? planRow.priceYearlyCents : undefined,
+          description: planRow.description ?? undefined,
+          externalProductId,
+        },
+        workspace: { ...workspaceInput, externalCustomerId: customer.externalCustomerId },
+        cycle,
+        methods: HOSTED_METHODS,
+        returnUrl: `${appBaseUrl()}/settings/billing?status=return&workspace=${ws.id}&plan=${planRow.id}`,
+        completionUrl: `${appBaseUrl()}/settings/billing?status=completed&workspace=${ws.id}&plan=${planRow.id}`,
+      });
+
+      // Grava o INTENT na subscription (sem RLS aqui — plataforma é owner). O webhook
+      // (S03) confirma/transiciona o status; aqui só registramos provider/customer/método.
+      const [existing] = await db
+        .select()
+        .from(subscriptions)
+        .where(eq(subscriptions.workspaceId, id.data))
+        .limit(1);
+      const before = existing
+        ? {
+            planId: existing.planId,
+            billingCycle: existing.billingCycle,
+            paymentMethod: existing.paymentMethod,
+            externalCustomerId: existing.externalCustomerId,
+          }
+        : null;
+
+      await db
+        .insert(subscriptions)
+        .values({
+          workspaceId: id.data,
+          planId: planRow.id,
+          billingCycle: cycle,
+          paymentProvider: PROVIDER_TAG,
+          externalCustomerId: customer.externalCustomerId,
+          externalProductId,
+          paymentMethod: method,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: subscriptions.workspaceId,
+          set: {
+            planId: planRow.id,
+            billingCycle: cycle,
+            paymentProvider: PROVIDER_TAG,
+            externalCustomerId: customer.externalCustomerId,
+            externalProductId,
+            paymentMethod: method,
+            updatedAt: new Date(),
+          },
+        });
+
+      await audit(req, 'subscription.checkout_generated', id.data, {
+        before,
+        after: {
+          planId: planRow.id,
+          billingCycle: cycle,
+          paymentMethod: method,
+          provider: PROVIDER_TAG,
+          externalCustomerId: customer.externalCustomerId,
+          externalProductId,
+          externalCheckoutId: checkout.externalId,
+          amountCents,
+        },
+      });
+
+      res.status(201).json({
+        workspaceId: id.data,
+        planId: planRow.id,
+        cycle,
+        method,
+        amountCents,
+        redirectUrl: checkout.redirectUrl,
+      });
     },
   );
 

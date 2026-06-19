@@ -18,6 +18,7 @@
     "@hm/db": "workspace:*",
     "@hm/flow-engine": "workspace:*",
     "@hm/logger": "workspace:*",
+    "@hm/payments": "workspace:*",
     "@hm/shared": "workspace:*",
     "@hm/storage": "workspace:*",
     "@sentry/node": "^8.47.0",

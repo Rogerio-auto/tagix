@@ -16,6 +16,7 @@ import {
   Users,
 } from 'lucide-react';
 import { Skeleton } from '@/shared/components/feedback';
+import { BillingCheckoutPanel } from './BillingCheckoutPanel';
 import { useWorkspace360 } from './queries';
 
 function Card({
@@ -125,6 +126,7 @@ export function Workspace360({ id }: { id: string }) {
             <dt className="text-text-low">Setor</dt>
             <dd className="text-text-high">{summary.industry ?? '—'}</dd>
           </dl>
+          <BillingCheckoutPanel workspaceId={summary.id} currentPlanId={null} />
         </Card>
 
         <Card

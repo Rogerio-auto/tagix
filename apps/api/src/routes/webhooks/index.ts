@@ -16,15 +16,20 @@
 import { Router } from 'express';
 import { createMetaWebhookRouter } from './meta';
 import { createWahaWebhookRouter } from './waha';
+import { createAbacatePayWebhookRouter } from './abacatepay';
 
-/** Router agregado: `/webhooks/meta` (WA + IG) e `/webhooks/waha`. */
+/** Router agregado: `/webhooks/meta` (WA + IG), `/webhooks/waha` e `/webhooks/abacatepay`. */
 export function createWebhooksRouter(): Router {
   const router = Router();
   router.use(createMetaWebhookRouter());
   router.use(createWahaWebhookRouter());
+  // F41-S03: webhook de pagamento (HMAC + idempotência + transições). Raw body
+  // pelo mesmo motivo do Meta — o express.raw é aplicado no nível da rota.
+  router.use(createAbacatePayWebhookRouter());
   return router;
 }
 
 export { createMetaWebhookRouter } from './meta';
 export { createWahaWebhookRouter } from './waha';
+export { createAbacatePayWebhookRouter } from './abacatepay';
 export { closeWebhookPublisher } from './publisher';

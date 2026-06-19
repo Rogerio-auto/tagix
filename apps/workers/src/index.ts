@@ -147,4 +147,33 @@ export {
   type MediaWorkerHandle,
 } from './media/index';
 
+// --- Worker billing: recorrência PIX + dunning (F41-S05) ---
+export {
+  startRecurrenceScheduler,
+  resolvePaymentProvider,
+  billingTickMsFromEnv,
+  runRecurrenceTick,
+  createBillingDbPort,
+  dunningStage,
+  dunningPolicyFromEnv,
+  pixChargeEventId,
+  systemClock,
+  BILLING_RECURRENCE_LOCK_KEY,
+  BILLING_RECURRENCE_LOCK_TTL_MS,
+  DEFAULT_BILLING_TICK_MS,
+  DEFAULT_DUNNING_POLICY,
+  PAYMENT_PROVIDER,
+  type RecurrenceSchedulerHandle,
+  type RecurrenceSchedulerBootDeps,
+  type RecurrenceSchedulerOptions,
+  type RecurrenceDeps,
+  type RecurrenceTickOptions,
+  type RecurrenceTickResult,
+  type BillingDbPort,
+  type DunningPolicy,
+  type DunningStage,
+  type PixSubscription,
+  type Clock,
+} from './billing/index';
+
 export const WORKERS_PKG = '@hm/workers' as const;

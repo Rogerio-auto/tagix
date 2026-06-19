@@ -11,6 +11,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb, schema } from '@hm/db';
 import { SESSION_COOKIE } from '../../auth/session';
+import { __resetPaymentProviderForTests } from '../../services/billing/provider';
 import { createPlatformSubscriptionsRouter } from './subscriptions';
 
 const { workspaces, members, plans, subscriptions } = schema;
@@ -21,6 +22,12 @@ let planProId = '';
 let adminCookie = '';
 let userCookie = '';
 const sfx = randomUUID().slice(0, 8);
+const priceMonthlyCents = 9900;
+
+// Força o MockPaymentProvider (sem rede): o checkout assistido reusa
+// getPaymentProvider(), que cai no mock quando ABACATEPAY_API_KEY está ausente.
+delete process.env['ABACATEPAY_API_KEY'];
+__resetPaymentProviderForTests();
 
 const app = express();
 app.use(express.json());
@@ -47,6 +54,7 @@ beforeAll(async () => {
     .values({
       key: `f26-sub-${sfx}-pro`,
       name: 'Pro',
+      priceMonthlyCents,
       limits: { max_agents: 10, max_channels: 5 },
       features: { instagram: true, api_access: true },
     })
@@ -204,5 +212,79 @@ describe('PUT entitlement-overrides (custom plan)', () => {
       .set('Cookie', adminCookie)
       .send({ limits: { bogus: 1 } });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('POST billing/checkout (cobranca assistida — §7)', () => {
+  it('sem sessao -> 401', async () => {
+    const res = await request(app)
+      .post(`/api/platform/tenants/${wsA}/billing/checkout`)
+      .send({ planId: planProId, cycle: 'monthly', method: 'pix' });
+    expect(res.status).toBe(401);
+  });
+
+  it('nao-admin -> 403', async () => {
+    const res = await request(app)
+      .post(`/api/platform/tenants/${wsA}/billing/checkout`)
+      .set('Cookie', userCookie)
+      .send({ planId: planProId, cycle: 'monthly', method: 'pix' });
+    expect(res.status).toBe(403);
+  });
+
+  it('gera redirectUrl via MockPaymentProvider e grava o intent', async () => {
+    const res = await request(app)
+      .post(`/api/platform/tenants/${wsA}/billing/checkout`)
+      .set('Cookie', adminCookie)
+      .send({ planId: planProId, cycle: 'monthly', method: 'card' });
+    expect(res.status).toBe(201);
+    expect(res.body.workspaceId).toBe(wsA);
+    expect(res.body.planId).toBe(planProId);
+    expect(res.body.cycle).toBe('monthly');
+    expect(res.body.method).toBe('card');
+    // Preco vem do catalogo server-side (Pro = priceMonthlyCents).
+    expect(res.body.amountCents).toBe(priceMonthlyCents);
+    // MockPaymentProvider devolve URL deterministica.
+    expect(res.body.redirectUrl).toContain(`chk_mock_${wsA}_${planProId}_monthly`);
+
+    // Intent persistido na subscription (provider/customer/método).
+    const db = getDb();
+    const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.workspaceId, wsA));
+    expect(sub).toBeDefined();
+    expect(sub!.paymentProvider).toBe('abacatepay');
+    expect(sub!.paymentMethod).toBe('card');
+    expect(sub!.externalCustomerId).toBe(`cust_mock_${wsA}`);
+  });
+
+  it('plano inexistente -> 404', async () => {
+    const res = await request(app)
+      .post(`/api/platform/tenants/${wsA}/billing/checkout`)
+      .set('Cookie', adminCookie)
+      .send({ planId: randomUUID(), cycle: 'monthly', method: 'pix' });
+    expect(res.status).toBe(404);
+  });
+
+  it('workspace inexistente -> 404', async () => {
+    const res = await request(app)
+      .post(`/api/platform/tenants/${randomUUID()}/billing/checkout`)
+      .set('Cookie', adminCookie)
+      .send({ planId: planProId, cycle: 'monthly', method: 'pix' });
+    expect(res.status).toBe(404);
+  });
+
+  it('body invalido (method fora do enum) -> 400', async () => {
+    const res = await request(app)
+      .post(`/api/platform/tenants/${wsA}/billing/checkout`)
+      .set('Cookie', adminCookie)
+      .send({ planId: planProId, cycle: 'monthly', method: 'boleto' });
+    expect(res.status).toBe(400);
+  });
+
+  it('plano sem preco -> 422 (nao faturavel)', async () => {
+    const res = await request(app)
+      .post(`/api/platform/tenants/${wsA}/billing/checkout`)
+      .set('Cookie', adminCookie)
+      .send({ planId: planBasicId, cycle: 'monthly', method: 'pix' });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('plan_not_billable');
   });
 });

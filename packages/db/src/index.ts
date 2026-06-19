@@ -9,6 +9,8 @@ export { encryptSecret, decryptSecret } from './crypto';
 export * as schema from './schema';
 export { RLS_TABLES } from './schema';
 export { workspacesRepo, membersRepo } from './repos';
+export { paymentEventsRepo } from './repos/payment-events';
+export type { PaymentEvent, NewPaymentEvent } from './schema/billing';
 export {
   contactsRepo,
   conversationsRepo,

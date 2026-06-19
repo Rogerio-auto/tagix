@@ -43,6 +43,9 @@ export const plans = pgTable('plans', {
   stripeProductId: text('stripe_product_id'),
   stripeMonthlyPriceId: text('stripe_monthly_price_id'),
   stripeYearlyPriceId: text('stripe_yearly_price_id'),
+  // F41 (provider-agnóstico): id do `product` no gateway real (AbacatePay),
+  // sincronizado via `externalId = plan.id`. Usado para assinatura nativa (cartão).
+  paymentProviderProductId: text('payment_provider_product_id'),
   isActive: boolean('is_active').notNull().default(true),
   position: integer('position').notNull().default(0),
   createdAt: ts('created_at').notNull().defaultNow(),
@@ -166,6 +169,13 @@ export const subscriptions = pgTable(
     stripeCustomerId: text('stripe_customer_id'),
     stripeSubscriptionId: text('stripe_subscription_id'),
     stripeLatestInvoiceId: text('stripe_latest_invoice_id'),
+    // F41 (provider-agnóstico): gateway real (AbacatePay). Reusa
+    // current_period_start/end, cancel_at_period_end, canceled_at já existentes.
+    paymentProvider: text('payment_provider'),
+    externalCustomerId: text('external_customer_id'),
+    externalSubscriptionId: text('external_subscription_id'),
+    externalProductId: text('external_product_id'),
+    paymentMethod: text('payment_method'),
     customLimits: jsonb('custom_limits').$type<Record<string, number>>(),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at'),
@@ -174,6 +184,7 @@ export const subscriptions = pgTable(
     index('idx_subscriptions_status').on(t.status),
     check('subscriptions_status_chk', sql`${t.status} in ('trial','active','past_due','canceled','expired')`),
     check('subscriptions_cycle_chk', sql`${t.billingCycle} in ('monthly','yearly')`),
+    check('subscriptions_payment_method_chk', sql`${t.paymentMethod} is null or ${t.paymentMethod} in ('card','pix')`),
   ],
 );
 
@@ -322,6 +333,12 @@ export * from './help';
 // support_threads (espelha flow_versions / event_participants).
 export * from './support';
 
+// --- Billing / Payments (F41-S02: PAYMENTS_ABACATEPAY.md §2) ---
+// payment_events: ledger + idempotência de DOMÍNIO do gateway (AbacatePay). RLS por
+// workspace_id (NULLABLE, como audit_logs → eventos sem workspace só p/ owner/bypass).
+// As colunas provider-agnósticas de plans/subscriptions são adicionadas na migration 0046.
+export * from './billing';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -412,4 +429,8 @@ export const RLS_TABLES = [
   // support_threads (espelha flow_versions) → NÃO entra nesta lista.
   'help_article_feedback',
   'support_threads',
+  // Billing / Payments (F41). payment_events tem workspace_id NULLABLE → RLS isola
+  // por workspace quando presente; eventos sem workspace (catálogo/pré-mapeamento)
+  // ficam visíveis só ao owner/bypass (leitura platform). Espelha audit_logs.
+  'payment_events',
 ] as const;
