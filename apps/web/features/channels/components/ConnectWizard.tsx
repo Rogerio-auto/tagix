@@ -394,6 +394,9 @@ function WaSignupStep({
   const { toast } = useToast();
   const sdkReady = isFbSdkAvailable();
   const [loading, setLoading] = useState(false);
+  // Quando o Embedded Signup está disponível, a entrada manual fica recolhida
+  // atrás de um link; sem SDK, ela aparece direto (único caminho possível).
+  const [manualOpen, setManualOpen] = useState(!sdkReady);
 
   const [code, setCode] = useState('');
   const [phoneNumberId, setPhoneNumberId] = useState('');
@@ -429,23 +432,41 @@ function WaSignupStep({
         Trocar modo
       </button>
 
-      <div className="rounded-md border border-border bg-surface-inset px-4 py-3">
-        <Button
-          variant="secondary"
-          size="sm"
-          loading={loading}
-          disabled={!sdkReady}
-          onClick={() => void onSignup()}
-        >
-          {mode === 'coexistence' ? 'Conectar número existente' : 'Entrar com a Meta'}
-        </Button>
-        <p className="mt-2 font-body text-xs text-text-low">
-          {sdkReady
-            ? 'Conclua o Embedded Signup na janela da Meta — vamos capturar o número e a conta automaticamente.'
-            : 'Login da Meta indisponível neste ambiente. Cole abaixo o code e os ids obtidos no painel da Meta.'}
-        </p>
-      </div>
+      {sdkReady && (
+        <div className="rounded-md border border-border bg-surface-inset px-4 py-3">
+          <Button
+            variant="primary"
+            size="sm"
+            loading={loading}
+            onClick={() => void onSignup()}
+          >
+            {mode === 'coexistence' ? 'Conectar número existente' : 'Conectar com a Meta'}
+          </Button>
+          <p className="mt-2 font-body text-xs text-text-low">
+            Conclua o Embedded Signup na janela da Meta — vamos capturar o número e a conta
+            automaticamente.
+          </p>
+        </div>
+      )}
 
+      {sdkReady && !manualOpen && (
+        <button
+          type="button"
+          onClick={() => setManualOpen(true)}
+          className="self-start rounded-sm px-1 py-0.5 font-head text-xs text-text-low underline-offset-2 outline-none hover:text-text hover:underline focus-visible:shadow-glow-md"
+        >
+          Inserir manualmente
+        </button>
+      )}
+
+      {!sdkReady && (
+        <p className="rounded-md border border-border-2 bg-surface-inset px-3 py-2 font-body text-xs text-text-low">
+          Login da Meta indisponível neste ambiente. Cole abaixo o code e os ids obtidos no painel
+          da Meta.
+        </p>
+      )}
+
+      {manualOpen && (
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {
@@ -484,6 +505,7 @@ function WaSignupStep({
           </Button>
         </div>
       </form>
+      )}
     </div>
   );
 }
