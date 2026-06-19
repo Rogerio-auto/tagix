@@ -62,5 +62,16 @@ export {
   type PlatformThreadFilters,
 } from './repos/support';
 export type { SupportAttachment } from './schema/support';
+// Onboarding & verticalização (F43-S01 estado/repo, F43-S02 engine, F43-S03 registry).
+// Exposto no barrel para os consumidores da API (F43-S04+) sem deep-import no src.
+export {
+  onboardingRepo,
+  type WorkspaceOnboarding,
+  type MemberTourState,
+  type TourEntry,
+} from './repos/onboarding';
+export { instantiateNicheBlueprint } from './seed/niches/instantiate';
+export { getBlueprint, isNicheKey, NICHE_KEYS, type NicheKey } from './seed/niches';
+export type { NicheBlueprint, InstantiateResult } from './seed/niches/types';
 
 export const DB_PKG = '@hm/db' as const;
