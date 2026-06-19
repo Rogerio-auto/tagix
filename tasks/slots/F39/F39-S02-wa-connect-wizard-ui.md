@@ -2,7 +2,7 @@
 id: F39-S02
 title: WhatsApp connect wizard UI — Embedded Signup (FB Login) + seleção de número + modo coexistência
 phase: F39
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F39-S01]
@@ -11,6 +11,8 @@ source_docs:
   - docs/features/INSTAGRAM.md
   - docs/UX_PRINCIPLES.md
 blocks: [F39-S05]
+claimed_at: 2026-06-19T05:27:41Z
+
 ---
 # F39-S02 — WhatsApp connect wizard UI
 
