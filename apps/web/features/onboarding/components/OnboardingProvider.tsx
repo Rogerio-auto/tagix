@@ -30,14 +30,19 @@ export function OnboardingProvider({ children }: { children: ReactNode }): React
   const [resolved, setResolved] = useState(false);
 
   const { data } = useOnboardingState(canOnboard);
-  const nicheKey = data?.onboarding.niche_key ?? null;
-  const initialSurvey = data?.onboarding.survey ?? null;
+  // Acesso defensivo: este provider envolve o shell inteiro do app — nunca pode
+  // assumir a forma da resposta (uma API legada/erro/proxy poderia devolver um
+  // corpo sem `onboarding`). Optional chaining em cada nível evita derrubar o app.
+  const onboarding = data?.onboarding ?? null;
+  const nicheKey = onboarding?.niche_key ?? null;
+  const initialSurvey = onboarding?.survey ?? null;
 
-  // Abre o wizard só quando o estado confirma que o workspace nunca foi verticalizado.
+  // Abre o wizard só quando o estado confirma que o workspace nunca foi verticalizado
+  // (precisa de um objeto `onboarding` real; se não veio, degrada sem wizard).
   useEffect(() => {
     if (!canOnboard || resolved) return;
-    if (data && nicheKey == null) setOpen(true);
-  }, [canOnboard, resolved, data, nicheKey]);
+    if (onboarding && nicheKey == null) setOpen(true);
+  }, [canOnboard, resolved, onboarding, nicheKey]);
 
   function handleDismiss(): void {
     setOpen(false);
