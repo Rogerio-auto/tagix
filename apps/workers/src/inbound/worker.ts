@@ -179,7 +179,20 @@ export async function startInboundWorker(
   await channel.prefetch(16);
 
   await consume(channel, INBOUND_QUEUE, async (envelope) => {
-    await handleInboundEnvelope(envelope, options);
+    try {
+      await handleInboundEnvelope(envelope, options);
+    } catch (err: unknown) {
+      // Diagnóstico: o `consume` nack→descarta sem logar (DLX sem consumer). Sem
+      // este log, uma exceção na persistência some silenciosamente (0 mensagens,
+      // 0 log). Logamos o motivo real e re-lançamos (mantém o nack).
+      logger.error('inbound: handler lançou — mensagem nack/descartada', {
+        envelopeId: envelope.id,
+        type: envelope.type,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      throw err;
+    }
   });
 
   logger.info('inbound worker iniciado', { queue: INBOUND_QUEUE });

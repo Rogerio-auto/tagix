@@ -101,6 +101,11 @@ export async function runInboundPipeline(
 
   if (events.length === 0) {
     // Evento não-suportado, ou raw sem mensagens: nada a fazer.
+    // Log de diagnóstico: distingue "parser não extraiu eventos" de "persist falhou".
+    logger.info('inbound: pipeline sem eventos (nada a persistir)', {
+      provider,
+      rawEvents: rawEvents.length,
+    });
     return { events: 0, mediaJobs: 0, persisted: false };
   }
 
