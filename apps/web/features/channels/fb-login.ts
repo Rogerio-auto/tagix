@@ -64,6 +64,8 @@ interface FbLoginResponse {
 
 interface FbLoginOptions {
   config_id?: string;
+  /** `rerequest` evita o erro "usuário já está logado" em novas tentativas. */
+  auth_type?: 'rerequest' | 'reauthorize' | 'reauthenticate';
   response_type?: 'code' | 'token';
   override_default_response_type?: boolean;
   scope?: string;
@@ -391,11 +393,17 @@ export async function startWhatsAppSignup(mode: WaConnectMode): Promise<WaSignup
       },
       {
         config_id: META_CONFIG_ID,
+        // rerequest evita "usuário já logado" em retentativas (doc Tech Provider).
+        auth_type: 'rerequest',
         response_type: 'code',
         override_default_response_type: true,
         extras: {
           setup: {},
           featureType: mode === 'coexistence' ? 'whatsapp_business_app_onboarding' : '',
+          // OBRIGATÓRIO: sem `sessionInfoVersion` a Meta NÃO emite o postMessage
+          // WA_EMBEDDED_SIGNUP com phone_number_id/waba_id — o fluxo travava no
+          // timeout de 5s e nunca chegava no passo do PIN. Doc Meta/Twilio: '3'.
+          sessionInfoVersion: '3',
         },
       },
     );
