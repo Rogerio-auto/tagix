@@ -93,6 +93,11 @@ describe('uuidParamGuard', () => {
       '/api/stages/reorder',
       '/api/members/me',
       '/api/members/me/sessions/current',
+      // /api/channels/* — sub-rotas literais do wizard de conexão Meta (não :id).
+      '/api/channels/connect',
+      '/api/channels/whatsapp/connect',
+      '/api/channels/instagram/accounts',
+      '/api/channels/instagram/connect',
     ]) {
       expect(run(p).nexted, p).toBe(true);
     }
