@@ -114,38 +114,26 @@ const igConnectSchema = z.object({
 
 /**
  * Wizard WA: connect server-side (Embedded Signup / Tech Provider). Troca o
- * `code` por token long-lived, registra o numero (PIN — so na coexistencia),
- * inscreve a WABA no app (subscribed_apps — com campos de coexistencia quando
- * `mode=coexistence`), cria o canal e cifra o token. O token NUNCA volta ao cliente.
+ * `code` por token long-lived, inscreve a WABA no app (subscribed_apps — com
+ * campos de coexistencia quando `mode=coexistence`), cria o canal e cifra o token.
+ * O token NUNCA volta ao cliente.
  *
- * **PIN**: obrigatorio SO na coexistencia (numero existente registra na Cloud API
- * com seu 2FA). Numero novo (`cloud_api`) e provisionado pelo Embedded Signup —
- * sem register/PIN. Regra validada via superRefine (espelha o fluxo do v1).
+ * **Sem PIN / sem /register:** a Graph rejeita `/{phone_number_id}/register` para
+ * numeros SMB ("Register endpoint is not available for SMB businesses", code 100) —
+ * confirmado em producao 2026-06-20. Na coexistencia o numero ja e verificado no
+ * app WhatsApp Business durante o Embedded Signup; numero novo (`cloud_api`) e
+ * provisionado pelo proprio Signup. `pin` permanece opcional/ignorado (compat).
  */
-const waConnectSchema = z
-  .object({
-    code: z.string().trim().min(1),
-    phoneNumberId: z.string().trim().min(1).max(64),
-    wabaId: z.string().trim().min(1).max(64),
-    pin: z
-      .string()
-      .trim()
-      .regex(/^\d{6}$/, 'O PIN do WhatsApp deve ter 6 digitos.')
-      .optional(),
-    mode: z.enum(['cloud_api', 'coexistence']),
-    name: z.string().trim().min(1).max(120),
-    phoneNumber: z.string().trim().min(1).max(32).optional(),
-    displayHandle: z.string().trim().min(1).max(120).optional(),
-  })
-  .superRefine((val, ctx) => {
-    if (val.mode === 'coexistence' && (val.pin === undefined || val.pin.length === 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['pin'],
-        message: 'O PIN de 6 digitos e obrigatorio na coexistencia.',
-      });
-    }
-  });
+const waConnectSchema = z.object({
+  code: z.string().trim().min(1),
+  phoneNumberId: z.string().trim().min(1).max(64),
+  wabaId: z.string().trim().min(1).max(64),
+  pin: z.string().trim().optional(),
+  mode: z.enum(['cloud_api', 'coexistence']),
+  name: z.string().trim().min(1).max(120),
+  phoneNumber: z.string().trim().min(1).max(32).optional(),
+  displayHandle: z.string().trim().min(1).max(120).optional(),
+});
 
 /** Narrowing de `req.params['x']` (string | string[] no @types/express 5). */
 function param(req: Request, key: string): string {
