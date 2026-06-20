@@ -20,6 +20,7 @@ import { Button } from '@hm/ui';
 import { PriorityBadge, StatusBadge } from './badges';
 import { usePatchThread, usePlatformReply, usePlatformThread } from './queries';
 import { usePlatformSupportSocket } from './usePlatformSupportSocket';
+import { useAuthStore } from '@/shared/stores/auth.store';
 
 const STATUS_LABEL: Record<SupportThreadStatusT, string> = {
   open: 'Aberto',
@@ -50,6 +51,7 @@ export function InboxThread({ threadId }: { threadId: string }) {
   const { data, isLoading, isError, refetch } = usePlatformThread(threadId);
   const reply = usePlatformReply(threadId);
   const patch = usePatchThread(threadId);
+  const memberId = useAuthStore((st) => st.auth?.memberId);
   const [draft, setDraft] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -128,19 +130,36 @@ export function InboxThread({ threadId }: { threadId: string }) {
             {thread.assignedTo ? (
               <>
                 <span className="font-body text-xs text-text-low">
-                  Atribuido: <span className="font-price text-text-mid">{thread.assignedTo}</span>
+                  Atribuido:{' '}
+                  <span className="font-price text-text-mid">
+                    {thread.assignedTo === memberId ? 'Voce' : thread.assignedTo}
+                  </span>
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   loading={patch.isPending}
                   onClick={() => patch.mutate({ assignedTo: null })}
+                  aria-label="Desatribuir conversa"
                 >
                   Desatribuir
                 </Button>
               </>
             ) : (
-              <span className="font-body text-xs text-text-low">Nao atribuido</span>
+              <>
+                <span className="font-body text-xs text-text-low">Nao atribuido</span>
+                {memberId ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={patch.isPending}
+                    onClick={() => patch.mutate({ assignedTo: memberId })}
+                    aria-label="Atribuir conversa a mim"
+                  >
+                    Atribuir a mim
+                  </Button>
+                ) : null}
+              </>
             )}
           </span>
         </div>
