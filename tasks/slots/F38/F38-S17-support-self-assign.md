@@ -2,7 +2,7 @@
 id: F38-S17
 title: Self-assign no inbox de suporte platform ("Atribuir a mim")
 phase: F38
-status: in-progress
+status: review
 priority: medium
 estimated_size: S
 depends_on: []
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/SUPPORT.md
 agent_id: frontend-engineer
 claimed_at: 2026-06-20T15:23:11Z
+completed_at: 2026-06-20T15:26:32Z
 
 ---
 # F38-S17 — Self-assign no inbox de suporte
