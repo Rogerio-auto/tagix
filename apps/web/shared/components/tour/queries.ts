@@ -17,8 +17,13 @@ import type { TourStateInput, TourStateMap } from './types';
  * resposta do próprio PUT. Falha fechado, sem ruído de erro.
  */
 
+// Key PRÓPRIA — NÃO compartilhar com `useOnboardingState` (que usa
+// ['onboarding','state'] e retorna a resposta inteira). Dois observers na mesma key
+// com queryFn diferentes fazem o cache ping-pongar (refetch infinito) e ainda
+// sobrescrevem o shape um do outro (o tour gravava só o TourStateMap na key da
+// resposta completa → quebrava `data.onboarding`). Key distinta isola os dois.
 export const tourKeys = {
-  state: ['onboarding', 'state'] as const,
+  state: ['onboarding', 'tour-state'] as const,
 };
 
 /** Subset de `GET /api/onboarding/state` que nos interessa (só o tourState). */
