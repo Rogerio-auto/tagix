@@ -2,7 +2,7 @@
 id: F38-S17
 title: Self-assign no inbox de suporte platform ("Atribuir a mim")
 phase: F38
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: []
