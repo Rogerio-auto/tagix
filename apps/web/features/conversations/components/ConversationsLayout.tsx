@@ -10,6 +10,7 @@ import { Sheet } from '@/shared/components/Sheet';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { cn } from '@/shared/lib/cn';
 import { useMessages, useConversationDetail } from '../queries';
+import { useConversationMessagesLive } from '../hooks/useConversationSocket';
 import { ConversationsHelp } from '../help';
 import { ChatList } from './ChatList';
 import { MessageComposer } from './MessageComposer';
@@ -254,6 +255,8 @@ function ThreadMessages({
   className?: string;
 }) {
   const messages = useMessages(conversationId);
+  // Thread ao vivo: invalida as mensagens desta conversa ao chegar `message:new`.
+  useConversationMessagesLive(conversationId);
   const role = useAuthStore((st) => st.auth?.role);
   const canModerateComments = role ? can(role, 'conversation.delete_message') : false;
 
@@ -263,7 +266,9 @@ function ThreadMessages({
         <SkeletonList rows={5} />
       ) : messages.data && messages.data.messages.length > 0 ? (
         <ul className="flex flex-col gap-3">
-          {messages.data.messages.map((m) => {
+          {/* A API devolve DESC (mais nova primeiro); a thread exibe cronológico
+              (mais antiga no topo, mais nova embaixo) → cópia + reverse. */}
+          {[...messages.data.messages].reverse().map((m) => {
             const ig =
               m.type === 'comment' || m.type === 'comment_reply'
                 ? igCommentFromMessage(m)

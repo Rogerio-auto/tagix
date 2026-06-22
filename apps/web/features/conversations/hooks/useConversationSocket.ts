@@ -71,3 +71,30 @@ export function useConversationSocket(): void {
     };
   }, [queryClient]);
 }
+
+/**
+ * Mantém a THREAD aberta viva em tempo real: ao chegar `message:new` da conversa
+ * atual, invalida `['conversation', id, 'messages']` para o TanStack Query
+ * rebuscar (a `useConversationSocket` acima só cuida da LISTA). Sem isto, uma
+ * resposta nova só aparecia após refresh manual. No-op sem socket / sem id.
+ */
+export function useConversationMessagesLive(conversationId: string | undefined): void {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const socket = resolveSocket();
+    if (!socket || !conversationId) return;
+
+    const onMessageNew = (p: MessageNewPayload): void => {
+      if (p.conversationId !== conversationId) return;
+      void queryClient.invalidateQueries({
+        queryKey: ['conversation', conversationId, 'messages'],
+      });
+    };
+
+    socket.on('message:new', onMessageNew);
+    return () => {
+      socket.off('message:new', onMessageNew);
+    };
+  }, [queryClient, conversationId]);
+}

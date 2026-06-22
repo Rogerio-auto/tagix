@@ -191,7 +191,11 @@ export class MqInboundSocketEmit implements InboundSocketPort {
         content: input.content,
         direction: 'inbound',
       },
-    });
+      // `workspace: true` → o relay emite também para `ws:{workspaceId}`, não só
+      // para a sala da conversa. Sem isto, uma conversa NOVA (que ninguém abriu
+      // ainda) não aparecia na lista ao vivo (ninguém está na sala dela). Assim a
+      // ChatList (que escuta o socket do workspace) atualiza sozinha.
+    }, { workspace: true });
     await Promise.resolve();
   }
 
