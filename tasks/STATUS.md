@@ -34,7 +34,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F41   | 4     | 0   | 0   | 0   | 0   | 0   | 4   |
 | F42   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F43   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F44   | 8     | 3   | 5   | 0   | 0   | 0   | 0   |
+| F44   | 8     | 2   | 5   | 0   | 0   | 1   | 0   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -416,7 +416,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID      | Titulo                                                                                            | Status      | Prioridade | Depende de                         |
 | ------- | ------------------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------------------- |
-| F44-S01 | Estende IAuthProvider com signup/reset/resend/verify (contrato + supabase + mock)                 | 🟢 available | high       | —                                  |
+| F44-S01 | Estende IAuthProvider com signup/reset/resend/verify (contrato + supabase + mock)                 | 🟣 review    | high       | —                                  |
 | F44-S02 | Provisioner isolado provisionWorkspaceWithOwner (privilegiado, idempotente, RLS-safe)             | 🟢 available | high       | —                                  |
 | F44-S03 | Rate-limit Redis (IP+email) + Turnstile verify + CSP do captcha                                   | 🟢 available | high       | —                                  |
 | F44-S04 | Rotas POST /auth/signup, /auth/reset (real), /auth/verify — anti-enum, captcha, rollback          | ⏸️ blocked  | high       | F44-S01, F44-S02, F44-S03          |
