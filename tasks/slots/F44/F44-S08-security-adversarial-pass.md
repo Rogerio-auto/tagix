@@ -2,7 +2,7 @@
 id: F44-S08
 title: Pass final /hm-security + /hm-adversarial + testes de integracao de fluxo
 phase: F44
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F44-S04, F44-S05, F44-S06, F44-S07]
@@ -11,6 +11,9 @@ agent_id: security-auditor
 security_review: required
 source_docs:
   - docs/features/SELF_SERVE_SIGNUP.md
+claimed_at: 2026-06-22T19:04:35Z
+completed_at: 2026-06-22T19:09:19Z
+
 ---
 # F44-S08 [SEC] — Pass final de seguranca + adversarial
 
