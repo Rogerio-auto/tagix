@@ -71,6 +71,16 @@ export {
   type TourEntry,
 } from './repos/onboarding';
 export { instantiateNicheBlueprint } from './seed/niches/instantiate';
+// Provisionamento self-serve (F44-S02): cria workspace + owner (sem platform admin)
+// + subscription trial free, idempotente. Caminho privilegiado isolado.
+export {
+  provisionWorkspaceWithOwner,
+  type ProvisionWorkspaceInput,
+  type ProvisionWorkspaceResult,
+  slugifyWorkspaceName,
+  slugCandidate,
+} from './provisioning';
+
 export { getBlueprint, isNicheKey, NICHE_KEYS, type NicheKey } from './seed/niches';
 export type { NicheBlueprint, InstantiateResult } from './seed/niches/types';
 

@@ -2,7 +2,7 @@
 id: F44-S02
 title: Provisioner isolado provisionWorkspaceWithOwner (privilegiado, idempotente, RLS-safe)
 phase: F44
-status: available
+status: review
 priority: high
 estimated_size: M
 depends_on: []
@@ -11,6 +11,9 @@ agent_id: backend-engineer
 security_review: required
 source_docs:
   - docs/features/SELF_SERVE_SIGNUP.md
+claimed_at: 2026-06-22T18:31:53Z
+completed_at: 2026-06-22T18:35:41Z
+
 ---
 # F44-S02 [SEC] — Provisioner de workspace + owner
 
