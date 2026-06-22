@@ -2,20 +2,16 @@
 
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSocket } from '@/shared/realtime';
 import type {
   ConversationUpdatedPayload,
   MessageNewPayload,
 } from '@hm/shared';
 
 /**
- * Assinatura mínima de um cliente Socket.io (Server→Client) que a ChatList
- * precisa. Tipada contra o mapa de eventos de `@hm/shared` — sem acoplar a
- * `socket.io-client` (que ainda não é dependência de @hm/web).
- *
- * O orquestrador injeta a instância real em `window.__hmSocket` quando o
- * provider de socket for montado (slot de infra de real-time). Enquanto não
- * existir, a ChatList degrada graciosamente para "sem live updates" — sem
- * quebrar typecheck/build.
+ * Assinatura mínima do cliente Socket.io consumida por hooks "transport-agnostic"
+ * (TypingIndicator, MessageBubble/status) que ainda leem `window.__hmSocket`
+ * direto. Mantida aqui só para a declaração de tipo do global.
  */
 export interface ConversationSocket {
   on(event: 'conversation:updated', listener: (p: ConversationUpdatedPayload) => void): unknown;
@@ -31,28 +27,23 @@ declare global {
   }
 }
 
-function resolveSocket(): ConversationSocket | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return window.__hmSocket;
-}
-
 /**
- * Mantém a lista de conversas viva em tempo real (LIVECHAT.md §6).
+ * Mantém a LISTA de conversas viva em tempo real (LIVECHAT.md §6).
  *
- * Escuta `conversation:updated` e `message:new` no socket compartilhado e
- * invalida a query `['conversations']` para que o TanStack Query rebusque a
- * ordenação/contadores de não-lidas autoritativos do backend. Invalidar (em vez
- * de fazer patch otimista do payload `unknown`) é a opção correta: o payload do
- * evento é `unknown` no boundary e a ordenação/agregação de não-lidas é
- * responsabilidade do servidor.
+ * **Usa o socket REATIVO do `useSocket()` (contexto), NÃO `window.__hmSocket`.**
+ * Os efeitos do React rodam filho-antes-do-pai, então ler o global direto rodava
+ * ANTES do `SocketProvider` setá-lo → `socket` undefined → nenhum listener era
+ * registrado, e o efeito (deps `[queryClient]`) nunca re-rodava ao conectar. Com
+ * `socket` no dep, o listener é anexado assim que a conexão fica disponível.
  *
- * Sem socket injetado, é um no-op silencioso.
+ * Escuta `conversation:updated` e `message:new` e invalida `['conversations']`
+ * para o TanStack Query rebuscar a ordenação/contadores autoritativos.
  */
 export function useConversationSocket(): void {
   const queryClient = useQueryClient();
+  const { socket } = useSocket();
 
   useEffect(() => {
-    const socket = resolveSocket();
     if (!socket) return;
 
     const invalidate = (): void => {
@@ -69,20 +60,20 @@ export function useConversationSocket(): void {
       socket.off('conversation:updated', onConversationUpdated);
       socket.off('message:new', onMessageNew);
     };
-  }, [queryClient]);
+  }, [queryClient, socket]);
 }
 
 /**
- * Mantém a THREAD aberta viva em tempo real: ao chegar `message:new` da conversa
- * atual, invalida `['conversation', id, 'messages']` para o TanStack Query
- * rebuscar (a `useConversationSocket` acima só cuida da LISTA). Sem isto, uma
- * resposta nova só aparecia após refresh manual. No-op sem socket / sem id.
+ * Mantém a THREAD aberta viva: ao chegar `message:new` da conversa atual,
+ * invalida `['conversation', id, 'messages']` para rebuscar (a `useConversationSocket`
+ * acima só cuida da LISTA). Mesmo motivo do socket reativo — sem isto uma resposta
+ * nova só aparecia após refresh. No-op sem socket / sem id.
  */
 export function useConversationMessagesLive(conversationId: string | undefined): void {
   const queryClient = useQueryClient();
+  const { socket } = useSocket();
 
   useEffect(() => {
-    const socket = resolveSocket();
     if (!socket || !conversationId) return;
 
     const onMessageNew = (p: MessageNewPayload): void => {
@@ -96,5 +87,5 @@ export function useConversationMessagesLive(conversationId: string | undefined):
     return () => {
       socket.off('message:new', onMessageNew);
     };
-  }, [queryClient, conversationId]);
+  }, [queryClient, socket, conversationId]);
 }
