@@ -2,7 +2,7 @@
 id: F44-S06
 title: UI de reset real (tira o mock) + /verify + NewPasswordForm — branding Leadium
 phase: F44
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F44-S04]
@@ -11,6 +11,8 @@ agent_id: frontend-engineer
 security_review: optional
 source_docs:
   - docs/features/SELF_SERVE_SIGNUP.md
+claimed_at: 2026-06-22T18:53:22Z
+
 ---
 # F44-S06 — UI de reset real + verify
 
