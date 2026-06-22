@@ -2,7 +2,7 @@
 id: F44-S01
 title: Estende IAuthProvider com signup/reset/resend/verify (contrato + supabase + mock)
 phase: F44
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: []
@@ -12,6 +12,7 @@ security_review: required
 source_docs:
   - docs/features/SELF_SERVE_SIGNUP.md
 claimed_at: 2026-06-22T18:14:14Z
+completed_at: 2026-06-22T18:31:05Z
 
 ---
 # F44-S01 [SEC] — Extensão do contrato de autenticação
