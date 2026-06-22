@@ -2,7 +2,7 @@
 id: F44-S07
 title: Hardening de loading/sessao — splash deterministico, unverified, open-redirect, store fail-closed
 phase: F44
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F44-S04, F44-S05]
@@ -12,6 +12,7 @@ security_review: required
 source_docs:
   - docs/features/SELF_SERVE_SIGNUP.md
 claimed_at: 2026-06-22T18:57:46Z
+completed_at: 2026-06-22T19:04:22Z
 
 ---
 # F44-S07 [SEC] — Hardening de loading e sessao

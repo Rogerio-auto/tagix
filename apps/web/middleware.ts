@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE } from '@/shared/lib/session';
 
-const PUBLIC_PREFIXES = ['/login', '/reset-password', '/signup'];
+const PUBLIC_PREFIXES = ['/login', '/reset-password', '/signup', '/verify'];
 
 /** Cookie de claim de view-as (espelha IMPERSONATION_COOKIE da API, F26-S05). */
 const IMPERSONATION_COOKIE = 'hm_impersonation';
@@ -19,6 +19,13 @@ export function middleware(req: NextRequest): NextResponse {
   if (!isPublic && !hasSession) {
     const url = req.nextUrl.clone();
     url.pathname = '/login';
+    // Preserva o destino p/ pós-login. O valor vem do pathname interno (same-origin
+    // por construção); o consumo no LoginForm ainda passa por safeNextPath (T11).
+    const intended = req.nextUrl.pathname;
+    url.search = '';
+    if (intended && intended !== '/' && intended.startsWith('/') && !intended.startsWith('//')) {
+      url.searchParams.set('next', intended);
+    }
     return NextResponse.redirect(url);
   }
   // Camada de plataforma (F25-S06): exige sessao no edge (defesa primaria). O
