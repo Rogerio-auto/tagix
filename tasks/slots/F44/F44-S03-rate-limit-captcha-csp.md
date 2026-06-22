@@ -2,7 +2,7 @@
 id: F44-S03
 title: Rate-limit Redis (IP+email) + Turnstile verify + CSP do captcha
 phase: F44
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
