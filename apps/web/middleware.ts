@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE } from '@/shared/lib/session';
 
-const PUBLIC_PREFIXES = ['/login', '/reset-password'];
+const PUBLIC_PREFIXES = ['/login', '/reset-password', '/signup'];
 
 /** Cookie de claim de view-as (espelha IMPERSONATION_COOKIE da API, F26-S05). */
 const IMPERSONATION_COOKIE = 'hm_impersonation';
