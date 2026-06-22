@@ -2,7 +2,7 @@
 id: F44-S04
 title: Rotas POST /auth/signup, /auth/reset (real), /auth/verify — anti-enum, captcha, rollback
 phase: F44
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F44-S01, F44-S02, F44-S03]
