@@ -2,7 +2,7 @@
 id: F44-S04
 title: Rotas POST /auth/signup, /auth/reset (real), /auth/verify — anti-enum, captcha, rollback
 phase: F44
-status: blocked
+status: review
 priority: high
 estimated_size: L
 depends_on: [F44-S01, F44-S02, F44-S03]
@@ -11,6 +11,9 @@ agent_id: backend-engineer
 security_review: required
 source_docs:
   - docs/features/SELF_SERVE_SIGNUP.md
+claimed_at: 2026-06-22T18:40:52Z
+completed_at: 2026-06-22T18:48:27Z
+
 ---
 # F44-S04 [SEC] — Rotas de auth do cadastro self-serve
 
