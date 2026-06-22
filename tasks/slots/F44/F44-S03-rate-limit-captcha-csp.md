@@ -2,7 +2,7 @@
 id: F44-S03
 title: Rate-limit Redis (IP+email) + Turnstile verify + CSP do captcha
 phase: F44
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: []
@@ -12,6 +12,7 @@ security_review: required
 source_docs:
   - docs/features/SELF_SERVE_SIGNUP.md
 claimed_at: 2026-06-22T18:35:56Z
+completed_at: 2026-06-22T18:40:42Z
 
 ---
 # F44-S03 [SEC] — Rate-limit + captcha verify + CSP

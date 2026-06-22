@@ -82,20 +82,40 @@ function corsOptions(): CorsOptions {
  * (Swagger UI em `/api/v1/docs`). Sem `unsafe-eval`. `connect-src` inclui a
  * allowlist de CORS (o web fala com a API) e extras opcionais (telemetria).
  */
+const DEFAULT_CAPTCHA_SRC = 'https://challenges.cloudflare.com';
+
+/**
+ * Origens do provedor de captcha (Cloudflare Turnstile, F44-S03). Liberadas SÓ em
+ * script-src/frame-src/connect-src — sem `unsafe-*`. Configurável por env
+ * `CSP_CAPTCHA_SRC` (CSV); default no domínio oficial do Turnstile.
+ */
+function captchaSources(): readonly string[] {
+  const configured = parseCsvEnv(process.env['CSP_CAPTCHA_SRC']);
+  return configured.length > 0 ? configured : [DEFAULT_CAPTCHA_SRC];
+}
+
 function cspDirectives(): Record<string, readonly string[]> {
-  const connect = ["'self'", ...corsAllowlist(), ...parseCsvEnv(process.env['CSP_CONNECT_SRC'])];
+  const captcha = captchaSources();
+  const connect = [
+    "'self'",
+    ...corsAllowlist(),
+    ...parseCsvEnv(process.env['CSP_CONNECT_SRC']),
+    ...captcha,
+  ];
   return {
     'default-src': ["'self'"],
     'base-uri': ["'self'"],
     'font-src': ["'self'", 'https:', 'data:'],
     'form-action': ["'self'"],
     'frame-ancestors': ["'none'"],
-    'frame-src': ["'none'"],
+    // Widget do captcha é embutido via <iframe> da Cloudflare.
+    'frame-src': [...captcha],
     'img-src': ["'self'", 'data:', 'https:'],
     'object-src': ["'none'"],
     // Swagger UI injeta estilos inline; sem isso a página de docs quebra.
     'style-src': ["'self'", "'unsafe-inline'", 'https:'],
-    'script-src': ["'self'"],
+    // Script do Turnstile carregado do domínio da Cloudflare (sem unsafe-*).
+    'script-src': ["'self'", ...captcha],
     'connect-src': [...new Set(connect)],
     'upgrade-insecure-requests': [],
   };
