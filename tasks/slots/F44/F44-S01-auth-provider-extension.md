@@ -2,7 +2,7 @@
 id: F44-S01
 title: Estende IAuthProvider com signup/reset/resend/verify (contrato + supabase + mock)
 phase: F44
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
