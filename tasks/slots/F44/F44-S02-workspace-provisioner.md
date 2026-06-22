@@ -2,7 +2,7 @@
 id: F44-S02
 title: Provisioner isolado provisionWorkspaceWithOwner (privilegiado, idempotente, RLS-safe)
 phase: F44
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
