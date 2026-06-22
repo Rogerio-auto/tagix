@@ -227,6 +227,9 @@ vi.mock('drizzle-orm', () => ({
   eq: db.eq,
   isNull: db.isNull,
   and: db.and,
+  // `sql` tagged template: o fake de onConflict ignora o predicado `where` (dedup
+  // por target), então um stub que não quebra a chamada basta.
+  sql: () => ({}),
 }));
 
 // Importa DEPOIS dos mocks.

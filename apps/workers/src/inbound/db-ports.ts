@@ -612,7 +612,13 @@ export class DbInboundPersistence implements InboundPersistencePort {
             ...(comment.fromUsername !== undefined ? { fromUsername: comment.fromUsername } : {}),
           },
         })
-        .onConflictDoNothing({ target: [messages.conversationId, messages.externalId] })
+        .onConflictDoNothing({
+        target: [messages.conversationId, messages.externalId],
+        // `uq_messages_external` é PARCIAL (WHERE external_id IS NOT NULL). O ON
+        // CONFLICT só casa um índice parcial repetindo o predicado — sem isto o
+        // Postgres rejeita ("no unique constraint matching") e a mensagem some.
+        where: sql`${messages.externalId} is not null`,
+      })
         .returning({ id: messages.id });
 
       if (msg !== undefined) {
@@ -839,7 +845,13 @@ async function insertMessages(
         createdAt: toDate(event.rawTimestamp),
         ...(event.metadata !== undefined ? { metadata: event.metadata } : {}),
       })
-      .onConflictDoNothing({ target: [messages.conversationId, messages.externalId] })
+      .onConflictDoNothing({
+        target: [messages.conversationId, messages.externalId],
+        // `uq_messages_external` é PARCIAL (WHERE external_id IS NOT NULL). O ON
+        // CONFLICT só casa um índice parcial repetindo o predicado — sem isto o
+        // Postgres rejeita ("no unique constraint matching") e a mensagem some.
+        where: sql`${messages.externalId} is not null`,
+      })
       .returning({ id: messages.id });
 
     if (row !== undefined) {

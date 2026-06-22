@@ -28,7 +28,7 @@
  * Idempotência: reprocessar qualquer evento é seguro. O dedup por id externo
  * garante zero duplicação de mensagens/contatos em reentrega/reprocesso.
  */
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { getDb, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import type {
@@ -136,7 +136,10 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
           createdAt: toDate(payload.timestamp),
           metadata: { origin: ECHO_ORIGIN },
         })
-        .onConflictDoNothing({ target: [schema.messages.conversationId, schema.messages.externalId] })
+        .onConflictDoNothing({
+          target: [schema.messages.conversationId, schema.messages.externalId],
+          where: sql`${schema.messages.externalId} is not null`,
+        })
         .returning({ id: schema.messages.id });
 
       if (inserted !== undefined) {
@@ -229,6 +232,9 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
           .values(rows)
           .onConflictDoNothing({
             target: [schema.messages.conversationId, schema.messages.externalId],
+            // Índice parcial uq_messages_external (WHERE external_id IS NOT NULL):
+            // o ON CONFLICT precisa repetir o predicado, senão a Graph nega o match.
+            where: sql`${schema.messages.externalId} is not null`,
           })
           .returning({ id: schema.messages.id });
         messagesInserted += inserted.length;
