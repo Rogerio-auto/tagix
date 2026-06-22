@@ -131,8 +131,19 @@ describe('POST /auth/signup', () => {
     expect(provisionMock).not.toHaveBeenCalled();
   });
 
-  it('email já existente → 202 uniforme, sem reprovisionar (T13)', async () => {
+  it('email já existente → 202 uniforme; provisiona idempotente (fecha órfão #3 / T13)', async () => {
+    // created:false (usuário já existe no provider). O provisioner é chamado e é
+    // idempotente — no-op se já tem workspace, ou completa o tenant de um órfão.
     providerState.signUpResult = { authUserId: 'existing', created: false };
+    provisionMock.mockResolvedValue({ workspaceId: 'ws-1', memberId: 'm-1', slug: 'acme', created: false });
+    const res = await request(app).post('/auth/signup').send(validSignup());
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ status: 'verification_sent' });
+    expect(provisionMock).toHaveBeenCalledOnce();
+  });
+
+  it('authUserId vazio (lookup do provider falhou) → 202 uniforme, sem provisionar', async () => {
+    providerState.signUpResult = { authUserId: '', created: false };
     const res = await request(app).post('/auth/signup').send(validSignup());
     expect(res.status).toBe(202);
     expect(res.body).toEqual({ status: 'verification_sent' });

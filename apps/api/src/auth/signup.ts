@@ -73,12 +73,18 @@ export async function performSignup(input: SignupInput, req: Request): Promise<v
     return;
   }
 
-  // Email já registrado: resposta uniforme, sem reprovisionar (T13).
-  if (!signUp.created) {
-    await auditAuthEvent('auth.signup', req, { email: input.email, outcome: 'already_exists' });
+  // Sem authUserId (lookup do provider falhou): resposta uniforme, nada a provisionar.
+  if (!signUp.authUserId) {
+    await auditAuthEvent('auth.signup', req, { email: input.email, outcome: 'no_provider_user' });
     return;
   }
 
+  // Provisiona o tenant — IDEMPOTENTE (o provisioner ancora por email). Roda tanto para
+  // cadastro novo (created:true) quanto para usuário já existente (created:false). Isso
+  // FECHA a armadilha do órfão (#3): se um signup anterior criou o usuário no provider
+  // mas o tenant falhou (transação revertida → sem member/workspace), o retry agora
+  // provisiona o workspace que faltava. Para um usuário que JÁ tem workspace, o
+  // provisioner é no-op (created:false) — sem duplicar (T13) e sem reenviar email.
   try {
     const result = await provisionWorkspaceWithOwner({
       ownerEmail: input.email,
@@ -88,14 +94,15 @@ export async function performSignup(input: SignupInput, req: Request): Promise<v
     });
     await auditAuthEvent('auth.signup', req, {
       email: input.email,
-      outcome: 'provisioned',
+      outcome: result.created ? 'provisioned' : 'already_provisioned',
       workspaceId: result.workspaceId,
       slug: result.slug,
     });
   } catch (err) {
     // Compensação (T14): tenant falhou após criar o usuário no provider. Marca o
     // evento para reconciliação; o usuário órfão fica sem workspace e nunca acessa
-    // (resolveSession exige member active). Não relança — resposta uniforme.
+    // (resolveSession exige member active) — e o PRÓXIMO retry o reprovisiona (acima).
+    // Não relança — resposta uniforme.
     await auditAuthEvent('auth.signup', req, {
       email: input.email,
       outcome: 'provision_failed_orphan_user',

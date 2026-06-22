@@ -34,7 +34,7 @@ export function TopBar({ compact = false }: { compact?: boolean }) {
             ◢
           </span>
           <h1 className="truncate font-head text-base font-semibold text-text">
-            {title ?? 'Highermind'}
+            {title ?? 'Leadium'}
           </h1>
         </div>
       ) : (

@@ -25,7 +25,7 @@ export function Sidebar() {
         <span className="font-display text-lg text-brand" aria-hidden>
           ◢
         </span>
-        <span className="font-head text-lg font-semibold text-text">Highermind</span>
+        <span className="font-head text-lg font-semibold text-text">Leadium</span>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-2">
         {items.map((item) => {

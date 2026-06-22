@@ -10,7 +10,12 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['features/**/*.test.ts', 'features/**/*.test.tsx'],
+    include: [
+      'features/**/*.test.ts',
+      'features/**/*.test.tsx',
+      'shared/**/*.test.ts',
+      'shared/**/*.test.tsx',
+    ],
     globals: true,
   },
 });

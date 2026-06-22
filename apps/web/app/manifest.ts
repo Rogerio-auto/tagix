@@ -10,8 +10,8 @@ import type { MetadataRoute } from 'next';
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Highermind',
-    short_name: 'Highermind',
+    name: 'Leadium',
+    short_name: 'Leadium',
     description: 'Atendimento ao cliente, vendas conversacionais e automação.',
     id: '/',
     start_url: '/',
