@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { getDb, schema } from '@hm/db';
 import { getAuthProvider } from './provider';
+import { strongPassword } from './signup';
 import { auditAuthEvent } from '../middlewares/rate-limit';
 
 export const resetSchema = z
@@ -14,6 +15,10 @@ export const resetSchema = z
   .strict();
 
 export const verifySchema = z.object({ token: z.string().min(1).max(4096) }).strict();
+
+export const confirmResetSchema = z
+  .object({ token: z.string().min(1).max(4096), password: strongPassword })
+  .strict();
 
 /** POST /auth/reset — sempre 200 uniforme (anti-enumeração). */
 export async function resetHandler(req: Request, res: Response): Promise<void> {
@@ -53,5 +58,26 @@ export async function verifyHandler(req: Request, res: Response): Promise<void> 
     .set({ status: 'active', joinedAt: new Date() })
     .where(eq(members.email, identity.email));
   await auditAuthEvent('auth.verify', req, { email: identity.email, outcome: 'verified' });
+  res.status(200).json({ ok: true });
+}
+
+/**
+ * POST /auth/reset/confirm — valida o token de recuperação do link e define a nova
+ * senha (server-side, via provider). Token inválido/expirado → 400 uniforme. NÃO faz
+ * auto-login: o usuário segue para /login com a senha nova. A senha nunca é logada (T6).
+ */
+export async function confirmResetHandler(req: Request, res: Response): Promise<void> {
+  const parsed = confirmResetSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: 'Dados inválidos. Confira a senha e tente de novo.' });
+    return;
+  }
+  const ok = await getAuthProvider().confirmPasswordReset(parsed.data.token, parsed.data.password);
+  if (!ok) {
+    await auditAuthEvent('auth.reset_confirmed', req, { outcome: 'invalid_token' });
+    res.status(400).json({ message: 'Link inválido ou expirado. Solicite um novo.' });
+    return;
+  }
+  await auditAuthEvent('auth.reset_confirmed', req, { outcome: 'reset' });
   res.status(200).json({ ok: true });
 }

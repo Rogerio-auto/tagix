@@ -11,7 +11,7 @@ import {
   setSessionCookie,
 } from './session';
 import { signupHandler } from './signup';
-import { resetHandler, verifyHandler } from './reset';
+import { resetHandler, verifyHandler, confirmResetHandler } from './reset';
 import { auditAuthEvent, rateLimit, verifyTurnstile, clientIp } from '../middlewares/rate-limit';
 
 const loginSchema = z.object({
@@ -23,6 +23,14 @@ const loginSchema = z.object({
 const loginLimiter = rateLimit({ bucket: 'login', max: 10, windowSec: 15 * 60 });
 const signupLimiter = rateLimit({ bucket: 'signup', max: 5, windowSec: 60 * 60 });
 const resetLimiter = rateLimit({ bucket: 'reset', max: 5, windowSec: 60 * 60 });
+// confirm: por IP (o body não tem email, só token+senha). Tolera retentativas de
+// quem clicou no link, mas trava brute-force do token.
+const resetConfirmLimiter = rateLimit({
+  bucket: 'reset_confirm',
+  max: 10,
+  windowSec: 60 * 60,
+  byEmail: false,
+});
 const verifyLimiter = rateLimit({ bucket: 'verify', max: 20, windowSec: 60 * 60, byEmail: false });
 
 /**
@@ -74,6 +82,7 @@ export function createAuthRouter(): Router {
   });
 
   router.post('/auth/reset', resetLimiter, resetHandler);
+  router.post('/auth/reset/confirm', resetConfirmLimiter, confirmResetHandler);
   router.post('/auth/verify', verifyLimiter, verifyHandler);
 
   router.post('/auth/logout', async (req: Request, res: Response) => {

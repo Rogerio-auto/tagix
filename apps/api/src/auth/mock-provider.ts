@@ -85,6 +85,19 @@ export class MockAuthProvider implements IAuthProvider {
       return null;
     }
   }
+
+  /**
+   * dev: aceita um token de recuperação bem-formado (base64url de um email) e
+   * "troca" a senha (no-op em memória). Token malformado → false.
+   */
+  async confirmPasswordReset(token: string): Promise<boolean> {
+    try {
+      const email = Buffer.from(token, 'base64url').toString('utf8').trim().toLowerCase();
+      return email.includes('@');
+    } catch {
+      return false;
+    }
+  }
 }
 
 /** Helper de teste/dev: gera o token de verificação aceito pelo MockAuthProvider. */

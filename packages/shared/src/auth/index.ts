@@ -61,6 +61,13 @@ export interface IAuthProvider {
    * confirmada ou `null` se inválido/expirado. Não lança para token inválido.
    */
   verifyEmailToken(token: string): Promise<AuthIdentity | null>;
+
+  /**
+   * Confirma a redefinição de senha: valida o token de recuperação (do link de
+   * email) e troca a senha. Retorna `true` em sucesso; `false` se o token for
+   * inválido/expirado. Não lança. A senha nova nunca é logada (T6).
+   */
+  confirmPasswordReset(token: string, newPassword: string): Promise<boolean>;
 }
 
 export type AuthErrorCode = 'invalid_credentials' | 'unauthenticated' | 'provider_error';

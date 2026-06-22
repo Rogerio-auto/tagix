@@ -79,6 +79,13 @@ export function createApp(): Express {
   initSentry();
   const app = express();
 
+  // Atrás do Traefik (1 hop) em produção: só o proxy reverso é confiável para
+  // resolver o IP real do cliente (`req.ip`). CRÍTICO para o rate-limit de auth —
+  // sem isto o `X-Forwarded-For` enviado pelo cliente seria confiável e o limite por
+  // IP seria burlável por spoof (gira a chave do Redis a cada request). Em dev (sem
+  // proxy) NÃO confia em XFF → `req.ip` = IP do socket.
+  app.set('trust proxy', process.env['NODE_ENV'] === 'production' ? 1 : false);
+
   // Seam onStageChanged (F5-S06/S07): socket emit + automation scheduling.
   registerDealHooks();
   // Seam onEventChanged (F7-S05): cancelamento de evento → notifica participantes.

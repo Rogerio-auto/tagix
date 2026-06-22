@@ -17,7 +17,7 @@ import { auditAuthEvent } from '../middlewares/rate-limit';
 import { DISPOSABLE_EMAIL_DOMAINS } from './disposable-domains';
 
 /** Força de senha mínima: ≥10, com letra e número (defesa server-side, T6). */
-const strongPassword = z
+export const strongPassword = z
   .string()
   .min(10, 'A senha precisa de ao menos 10 caracteres.')
   .max(200)

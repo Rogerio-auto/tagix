@@ -14,11 +14,13 @@ const providerState: {
   signUpThrows: boolean;
   verifyIdentity: { authUserId: string; email: string } | null;
   signInThrows: boolean;
+  confirmReset: boolean;
 } = {
   signUpResult: { authUserId: 'auth-user-1', created: true },
   signUpThrows: false,
   verifyIdentity: null,
   signInThrows: true,
+  confirmReset: true,
 };
 
 const fakeProvider: IAuthProvider = {
@@ -39,6 +41,9 @@ const fakeProvider: IAuthProvider = {
   async resendVerification() {},
   async verifyEmailToken() {
     return providerState.verifyIdentity;
+  },
+  async confirmPasswordReset() {
+    return providerState.confirmReset;
   },
 };
 
@@ -80,6 +85,7 @@ beforeEach(() => {
   providerState.signUpResult = { authUserId: 'auth-user-1', created: true };
   providerState.signUpThrows = false;
   providerState.verifyIdentity = null;
+  providerState.confirmReset = true;
   provisionMock.mockReset();
   provisionMock.mockResolvedValue({ workspaceId: 'ws-1', memberId: 'm-1', slug: 'acme', created: true });
 });
@@ -155,6 +161,36 @@ describe('POST /auth/reset', () => {
   });
   it('email inválido → 400', async () => {
     const res = await request(app).post('/auth/reset').send({ email: 'nope' });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /auth/reset/confirm', () => {
+  it('token válido + senha forte → 200 ok', async () => {
+    providerState.confirmReset = true;
+    const res = await request(app)
+      .post('/auth/reset/confirm')
+      .send({ token: 'good', password: 'senhaForte123' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+  });
+  it('token inválido/expirado → 400 uniforme', async () => {
+    providerState.confirmReset = false;
+    const res = await request(app)
+      .post('/auth/reset/confirm')
+      .send({ token: 'bad', password: 'senhaForte123' });
+    expect(res.status).toBe(400);
+  });
+  it('senha fraca → 400 (força validada server-side)', async () => {
+    const res = await request(app)
+      .post('/auth/reset/confirm')
+      .send({ token: 'good', password: 'curta' });
+    expect(res.status).toBe(400);
+  });
+  it('campos extras → 400 (strict)', async () => {
+    const res = await request(app)
+      .post('/auth/reset/confirm')
+      .send({ token: 'good', password: 'senhaForte123', email: 'x@y.z' });
     expect(res.status).toBe(400);
   });
 });

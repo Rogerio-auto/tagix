@@ -32,13 +32,13 @@ export async function closeRateLimit(): Promise<void> {
   }
 }
 
-/** IP do cliente respeitando proxy reverso confiável (Traefik em prod). */
+/**
+ * IP do cliente. Express resolve via `trust proxy` (configurado em `app.ts`): só o
+ * hop que o Traefik adiciona é confiável. NUNCA usar o 1º elemento do
+ * `X-Forwarded-For` — ele é controlado pelo cliente e seria spoofável, burlando o
+ * rate-limit (cada request com um XFF diferente viraria uma chave Redis nova).
+ */
 export function clientIp(req: Request): string {
-  const fwd = req.headers['x-forwarded-for'];
-  if (typeof fwd === 'string' && fwd.length > 0) {
-    const first = fwd.split(',')[0]?.trim();
-    if (first) return first;
-  }
   return req.ip ?? req.socket.remoteAddress ?? 'unknown';
 }
 
@@ -135,6 +135,7 @@ export type AuthAuditAction =
   | 'auth.signup'
   | 'auth.login_failed'
   | 'auth.reset_requested'
+  | 'auth.reset_confirmed'
   | 'auth.verify';
 
 /**

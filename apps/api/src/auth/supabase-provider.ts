@@ -131,6 +131,40 @@ export class SupabaseAuthProvider implements IAuthProvider {
     }
   }
 
+  /**
+   * Confirma a redefinição: valida o token de recuperação (`verifyOtp type:recovery`)
+   * e troca a senha do usuário via admin API (server-side). Token inválido/expirado
+   * ou sem service key → `false`, sem lançar. A senha vai só no body HTTPS, nunca logada.
+   */
+  async confirmPasswordReset(token: string, newPassword: string): Promise<boolean> {
+    if (!this.serviceKey) return false;
+    let userId: string;
+    try {
+      const { data, error } = await this.client.auth.verifyOtp({
+        token_hash: token,
+        type: 'recovery',
+      });
+      if (error || !data.user) return false;
+      userId = data.user.id;
+    } catch {
+      return false;
+    }
+    try {
+      const res = await fetch(`${this.url}/auth/v1/admin/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          apikey: this.serviceKey,
+          Authorization: `Bearer ${this.serviceKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password: newPassword }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   /** Reenvia/dispara o email de confirmação (anti-enumeração: sempre resolve). */
   private async dispatchVerificationEmail(email: string): Promise<void> {
     try {
