@@ -35,8 +35,15 @@ export class SupabaseAuthProvider implements IAuthProvider {
     });
   }
 
-  private get emailRedirectTo(): string | undefined {
-    return process.env['AUTH_EMAIL_REDIRECT_URL'] || undefined;
+  /**
+   * Destino do link de email para um caminho específico do app. `AUTH_EMAIL_REDIRECT_URL`
+   * é a BASE (ex.: https://app.leadium.com.br); cada fluxo aponta para a SUA página
+   * (`/verify`, `/reset-password`) — onde a allowlist do Supabase espera e onde o token
+   * é lido. Sem base → undefined (Supabase cai no Site URL configurado).
+   */
+  private redirectFor(path: string): string | undefined {
+    const base = process.env['AUTH_EMAIL_REDIRECT_URL'];
+    return base ? base.replace(/\/+$/, '') + path : undefined;
   }
 
   async signIn({ email, password }: AuthCredentials): Promise<AuthSession> {
@@ -103,7 +110,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
   async requestPasswordReset(email: string): Promise<void> {
     try {
       await this.client.auth.resetPasswordForEmail(email, {
-        redirectTo: this.emailRedirectTo,
+        redirectTo: this.redirectFor('/reset-password'),
       });
     } catch {
       // Anti-enumeração: sempre resolve, mesmo em erro/email inexistente.
@@ -171,7 +178,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
       await this.client.auth.resend({
         type: 'signup',
         email,
-        options: { emailRedirectTo: this.emailRedirectTo },
+        options: { emailRedirectTo: this.redirectFor('/verify') },
       });
     } catch {
       // best-effort; não revela existência do email.
