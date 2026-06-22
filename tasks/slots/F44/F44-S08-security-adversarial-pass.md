@@ -2,7 +2,7 @@
 id: F44-S08
 title: Pass final /hm-security + /hm-adversarial + testes de integracao de fluxo
 phase: F44
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F44-S04, F44-S05, F44-S06, F44-S07]
