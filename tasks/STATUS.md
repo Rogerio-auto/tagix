@@ -34,7 +34,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F41   | 4     | 0   | 0   | 0   | 0   | 0   | 4   |
 | F42   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F43   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F44   | 8     | 0   | 4   | 0   | 0   | 0   | 4   |
+| F44   | 8     | 0   | 3   | 0   | 0   | 1   | 4   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -420,7 +420,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F44-S02 | Provisioner isolado provisionWorkspaceWithOwner (privilegiado, idempotente, RLS-safe)             | ✅ done     | high       | —                                  |
 | F44-S03 | Rate-limit Redis (IP+email) + Turnstile verify + CSP do captcha                                   | ✅ done     | high       | —                                  |
 | F44-S04 | Rotas POST /auth/signup, /auth/reset (real), /auth/verify — anti-enum, captcha, rollback          | ✅ done     | high       | F44-S01, F44-S02, F44-S03          |
-| F44-S05 | UI de cadastro self-serve — /signup + SignupForm + Turnstile + PUBLIC_PREFIXES                    | ⏸️ blocked | high       | F44-S04                            |
+| F44-S05 | UI de cadastro self-serve — /signup + SignupForm + Turnstile + PUBLIC_PREFIXES                    | 🟣 review   | high       | F44-S04                            |
 | F44-S06 | UI de reset real (tira o mock) + /verify + NewPasswordForm — branding Leadium                     | ⏸️ blocked | high       | F44-S04                            |
 | F44-S07 | Hardening de loading/sessao — splash deterministico, unverified, open-redirect, store fail-closed | ⏸️ blocked | high       | F44-S04, F44-S05                   |
 | F44-S08 | Pass final /hm-security + /hm-adversarial + testes de integracao de fluxo                         | ⏸️ blocked | high       | F44-S04, F44-S05, F44-S06, F44-S07 |

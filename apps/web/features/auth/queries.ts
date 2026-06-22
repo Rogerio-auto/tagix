@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { api } from '@/shared/lib/api-client';
 import { snapshotFromMember, useAuthStore } from '@/shared/stores/auth.store';
 import type { Role } from '@hm/shared';
-import type { LoginInput, ResetInput } from './schema';
+import type { LoginInput, ResetInput, SignupInput } from './schema';
 
 interface LoginResponse {
   member: { id: string; workspaceId: string; name: string; role: Role };
@@ -24,17 +24,33 @@ export function useLogin() {
   });
 }
 
-// Mock só ativo em dev explicitamente. Em produção (NODE_ENV=production) nunca
-// aplica, independente da env: impede que a flag vaze comportamento em prod.
-const AUTH_MOCK =
-  process.env['NODE_ENV'] !== 'production' &&
-  process.env['NEXT_PUBLIC_AUTH_MOCK'] !== 'false';
-
+/** Reset real (F44-S04): POST /auth/reset — resposta uniforme anti-enumeração. */
 export function useRequestReset() {
   return useMutation({
-    mutationFn: async (input: ResetInput) => {
-      if (AUTH_MOCK) return { ok: true } as const;
-      return api.post<{ ok: true }>('/auth/reset', input);
-    },
+    mutationFn: (input: ResetInput) => api.post<{ ok: true }>('/auth/reset', input),
+  });
+}
+
+/** Payload do signup self-serve: form + token do Turnstile. */
+export interface SignupPayload extends SignupInput {
+  turnstileToken: string;
+}
+
+/**
+ * Cadastro self-serve (F44-S04). POST /auth/signup → 202 uniforme
+ * { status:'verification_sent' }. SEM auto-login: o usuário confirma o email antes
+ * de acessar. Não hidrata sessão.
+ */
+export function useSignup() {
+  return useMutation({
+    mutationFn: (input: SignupPayload) =>
+      api.post<{ status: 'verification_sent' }>('/auth/signup', input),
+  });
+}
+
+/** Confirma o email a partir do token do link (F44-S06). POST /auth/verify. */
+export function useVerifyEmail() {
+  return useMutation({
+    mutationFn: (token: string) => api.post<{ ok: true }>('/auth/verify', { token }),
   });
 }
