@@ -9,6 +9,11 @@ import { loadConfig } from '../config';
 import { startSocketRelay } from './relay';
 import { wireSupportRealtime } from '../services/support-realtime';
 import { registerSupportSocketHandlers } from '../sockets/support';
+import { createLogger } from '@hm/logger';
+
+// Diagnóstico de tempo real: loga handshake (auth ok/falha), conexão + rooms e
+// join de conversa. Sem isto, "socket não atualiza" é uma caixa-preta.
+const socketLog = createLogger('info', { svc: 'socket' });
 
 interface SocketData {
   session?: SessionContext;
@@ -53,6 +58,10 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
       const token = parseCookie(socket.handshake.headers.cookie ?? '', SESSION_COOKIE);
       const session = token ? await resolveSession(token) : null;
       if (!session) {
+        socketLog.warn('handshake unauthorized', {
+          hasCookieHeader: Boolean(socket.handshake.headers.cookie),
+          hasSessionCookie: token !== null,
+        });
         next(new Error('unauthorized'));
         return;
       }
@@ -70,6 +79,11 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
     const wsRoom = `ws:${session.workspace.id}`;
     socket.join([wsRoom, `member:${session.member.id}`]);
     io.to(wsRoom).emit('member:online', { memberId: session.member.id });
+    socketLog.info('socket conectado', {
+      memberId: session.member.id,
+      workspaceId: session.workspace.id,
+      transport: socket.conn.transport.name,
+    });
 
     // F38: handlers de suporte (join autorizado por visibilidade; platform → support:platform).
     registerSupportSocketHandlers(socket, {
