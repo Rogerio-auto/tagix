@@ -2,7 +2,7 @@
 id: F44-S05
 title: UI de cadastro self-serve — /signup + SignupForm + Turnstile + PUBLIC_PREFIXES
 phase: F44
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F44-S04]
