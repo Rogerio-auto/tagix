@@ -2,7 +2,7 @@
 id: F44-S06
 title: UI de reset real (tira o mock) + /verify + NewPasswordForm — branding Leadium
 phase: F44
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F44-S04]
