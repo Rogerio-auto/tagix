@@ -410,3 +410,50 @@ Validacao por slot: pnpm typecheck + lint + build web + unit/integration. E2E Pl
 hidrata neste host -> nao depender dele.
 
 Integracao 1-por-vez via stash dance (working tree compartilhado). Sem migration nova em S02.
+
+---
+
+## F44-S08 — Pass final /hm-security + /hm-adversarial (orchestrator, 2026-06-22)
+
+Veredito por ameaça (T1–T14) sobre o código integrado (S01–S07):
+
+- T1 (segredo no bundle): PASS. Client chunks (.next/static/chunks) sem SUPABASE_SERVICE_KEY/
+  TURNSTILE_SECRET_KEY/service_role. Matches só em .next/cache/webpack (build-time, não servido).
+  Só NEXT_PUBLIC_TURNSTILE_SITE_KEY no cliente.
+- T2 (validação): PASS. Zod .strict() em signup/reset/verify; campos extras rejeitados (teste).
+- T3 (anti-enumeração): PASS (com 1 residual). Signup→202 uniforme (novo/duplicado/descartável/
+  provider-error); reset→200 uniforme; verify→400 uniforme. RESIDUAL BAIXO: provisionamento só
+  roda no caminho de email novo → delta de timing observável (oráculo de existência). Mascarado
+  pela chamada ao provider (incorrida em ambos). Mitigação opcional (não-bloqueante): provisionar
+  async após responder, ou jitter. Aceito como residual.
+- T4 (brute-force/mass-signup): PASS. rateLimit Redis IP+email em login/signup/reset/verify +
+  Turnstile server-side. Teste prova bloqueio em max+1 e chaveamento por email.
+- T5 (cookie/sessão): PASS. httpOnly+sameSite:lax+secure(prod); rotação no login; clear no logout.
+- T6 (senha): PASS. Nenhum console.* de senha em auth/ ou rate-limit; senha só no body HTTPS.
+- T7 (acesso pós-verify): PASS. provisioner cria member status='invited'; resolveSession exige
+  'active'; verify promove a 'active'. auth.store distingue 'unverified' e falha-fecha. Teste e2e
+  de fluxo prova invited→active no verify.
+- T8 (isolamento provisioner): PASS. Passo privilegiado (workspace+member+sub) em getDb() (owner,
+  fora de RLS); recurso scoped só via withWorkspace. Teste RLS prova A não vaza p/ B.
+- T9 (sem escalonamento): PASS. isPlatformAdmin:false hardcoded; strict() barra role/workspaceId/
+  isPlatformAdmin do body. 2 testes (rota + fluxo) provam.
+- T10 (audit): PASS. auditAuthEvent em signup/login_failed/reset_requested/verify (audit_logs,
+  metadata sem senha).
+- T11 (open-redirect): PASS. safeNextPath rejeita //host/esquemas/backslash/control chars; 8 testes;
+  wired no LoginForm; middleware só seta next de pathname interno.
+- T12 (CSP): PASS. Só challenges.cloudflare.com em script/frame/connect-src; zero unsafe-* novo.
+- T13 (duplicado idempotente): PASS. created:false → 202 sem reprovisionar; teste prova 1 member.
+- T14 (rollback parcial): PASS (compensação por auditoria). Falha de provisionamento pós-criação do
+  user → resposta uniforme + evento 'provision_failed_orphan_user'; user órfão sem workspace nunca
+  acessa (resolveSession exige active). Hard-delete do user órfão no provider é follow-up opcional.
+
+Validação S08: pnpm typecheck (verde), pnpm lint (zero erro/any), @hm/api 62 files/604 tests verde,
+@hm/web build + 28 unit verdes, flow.integration 5/5 verde. E2E Playwright não roda neste host
+(não hidrata) — validado por typecheck/lint/build/unit conforme protocolo.
+
+FOLLOW-UPS (não-bloqueantes, registrados): (a) timing async do provision p/ fechar o residual T3;
+(b) hard-delete do user Supabase órfão na compensação T14; (c) POST /auth/reset/confirm backend
+(NewPasswordForm já wired ao endpoint); (d) consumir auth.store.status (splash/unverified) no
+AppLayout; (e) login/page.tsx ainda diz "Highermind" (fora de files_allowed de qualquer slot F44);
+(f) vitest.config do @hm/web inclui só features/** — incluir shared/** p/ rodar safe-redirect.test
+no CI.
