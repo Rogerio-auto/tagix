@@ -34,6 +34,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F41   | 4     | 0   | 0   | 0   | 0   | 0   | 4   |
 | F42   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F43   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
+| F44   | 8     | 3   | 5   | 0   | 0   | 0   | 0   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -410,6 +411,19 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F43-S07 | Engine de tour guiado in-house (DS v2, spotlight, estado por membro)    | ✅ done | medium     | F43-S01, F43-S04, F43-S05 |
 | F43-S08 | Conteúdo dos tours + âncoras data-tour-id nas telas                     | ✅ done | medium     | F43-S06, F43-S07          |
 | F43-S09 | Flows dos 4 nichos restantes (Educação/Solar/Varejo/Agências)           | ✅ done | low        | F43-S03                   |
+
+## Fase 44
+
+| ID      | Titulo                                                                                            | Status      | Prioridade | Depende de                         |
+| ------- | ------------------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------------------- |
+| F44-S01 | Estende IAuthProvider com signup/reset/resend/verify (contrato + supabase + mock)                 | 🟢 available | high       | —                                  |
+| F44-S02 | Provisioner isolado provisionWorkspaceWithOwner (privilegiado, idempotente, RLS-safe)             | 🟢 available | high       | —                                  |
+| F44-S03 | Rate-limit Redis (IP+email) + Turnstile verify + CSP do captcha                                   | 🟢 available | high       | —                                  |
+| F44-S04 | Rotas POST /auth/signup, /auth/reset (real), /auth/verify — anti-enum, captcha, rollback          | ⏸️ blocked  | high       | F44-S01, F44-S02, F44-S03          |
+| F44-S05 | UI de cadastro self-serve — /signup + SignupForm + Turnstile + PUBLIC_PREFIXES                    | ⏸️ blocked  | high       | F44-S04                            |
+| F44-S06 | UI de reset real (tira o mock) + /verify + NewPasswordForm — branding Leadium                     | ⏸️ blocked  | high       | F44-S04                            |
+| F44-S07 | Hardening de loading/sessao — splash deterministico, unverified, open-redirect, store fail-closed | ⏸️ blocked  | high       | F44-S04, F44-S05                   |
+| F44-S08 | Pass final /hm-security + /hm-adversarial + testes de integracao de fluxo                         | ⏸️ blocked  | high       | F44-S04, F44-S05, F44-S06, F44-S07 |
 
 ## Fase 5 — Calendar
 

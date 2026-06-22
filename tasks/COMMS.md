@@ -386,3 +386,27 @@ VEREDITO: ZERO critico/alto. Os dois muros sao SOLIDOS. 1 gap de INFRA de teste 
 #### Gap de INFRA (nao e bug de produto) -> follow-up F41-S04
 - `@hm/web` NAO tem harness de teste unitario (sem `vitest` em devDeps, sem config, sem script "test"). E o mesmo gap ja documentado pelo @hm/ui (F10-S05) e pela memoria "e2e-no-hydration". Por isso os 20 testes acima, embora verdes sob vitest, QUEBRAM `pnpm --filter @hm/web typecheck` (TS2307 'Cannot find module vitest') porque o tsconfig do web inclui `**/*.ts`. Esse arquivo de wiring (package.json + vitest.config.ts + exclude no tsconfig) esta FORA do files_allowed do S03 (so `*.test.ts(x)` + e2e + COMMS).
 - ACAO: criado follow-up F41-S04 (size S) para wirar vitest no @hm/web e integrar os 2 test files verdes. Ate la os testes vivem na branch feat/f41-s03 como artefato comprovadamente verde; a referencia/console (S01/S02) ja estao integrados e verdes na main, sem regressao.
+
+---
+
+## F44 — Loading & Cadastro self-serve (orchestrator, 2026-06-22, worktree isolado)
+
+Plano aprovado por Rogerio. Worktree isolado (sessao concorrente mexe em livechat na arvore
+principal — nao tocar). GUARDRAIL: NAO merge na main, NAO push, NAO deploy. Reportar ao final.
+
+Doc: docs/features/SELF_SERVE_SIGNUP.md. Slots: tasks/slots/F44/ (8).
+
+Ondas de despacho (paralelizar so quando files_allowed disjuntos):
+- Onda 1 (paralela): S01 (packages/shared + apps/api/src/auth/{supabase,mock}-provider.ts) e
+  S02 (packages/db/src/provisioning + index + seed-owner). Pacotes disjuntos -> paralelo OK.
+- Onda 2: S03 (apps/api/src/middlewares/*) pode rodar em paralelo com S01/S02 (disjunto). S04
+  (apps/api/src/auth/routes+signup+reset) depende de S01+S02+S03 -> serial apos eles.
+- Onda 3: S05 (signup UI + middleware.ts) e S06 (reset/verify UI) disjuntos -> paralelo. S07
+  hardening tambem edita middleware.ts -> SEQUENCIAR apos S05 (conflito de arquivo).
+- Onda 4: S08 pass final /hm-security + /hm-adversarial + integracao (so testes).
+
+Gate [SEC] obrigatorio (security-auditor) antes do finish em: S01, S02, S03, S04, S07, S08.
+Validacao por slot: pnpm typecheck + lint + build web + unit/integration. E2E Playwright NAO
+hidrata neste host -> nao depender dele.
+
+Integracao 1-por-vez via stash dance (working tree compartilhado). Sem migration nova em S02.
