@@ -2,7 +2,7 @@
 id: F44-S05
 title: UI de cadastro self-serve — /signup + SignupForm + Turnstile + PUBLIC_PREFIXES
 phase: F44
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F44-S04]
@@ -11,6 +11,8 @@ agent_id: frontend-engineer
 security_review: optional
 source_docs:
   - docs/features/SELF_SERVE_SIGNUP.md
+claimed_at: 2026-06-22T18:48:41Z
+
 ---
 # F44-S05 — UI de cadastro
 
