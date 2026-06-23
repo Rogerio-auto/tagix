@@ -67,6 +67,8 @@ loop de 401, e o usuário "preso" sem entender. Este slot fecha esse gap.
 - `apps/web/shared/stores/auth.store.ts` (método de purge, se faltar)
 - `apps/web/shared/realtime/SocketProvider.tsx` (desconectar no expiry)
 - `apps/web/shared/lib/safe-redirect.ts` (reuso; só ler/estender se necessário)
+- `apps/web/shared/lib/query-client.ts` (wiring do onError global do QueryClient)
+- `apps/web/vitest.config.ts` (alias `@/` para o teste unit resolver o grafo)
 
 ## Arquivos proibidos
 
