@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSocket } from '@/shared/realtime';
+import { api } from '@/shared/lib/api-client';
 import type {
   ConversationUpdatedPayload,
   MessageNewPayload,
@@ -92,6 +93,42 @@ export function useConversationMessagesLive(conversationId: string | undefined):
       socket.off('message:new', onMessageNew);
     };
   }, [queryClient, socket, conversationId]);
+}
+
+/**
+ * Marca a conversa como LIDA: zera o contador de não-lidas ao ABRIR e a cada
+ * `message:new` que chega enquanto ela está aberta. POST /api/conversations/:id/read
+ * (o worker de inbound só incrementa; sem isto o badge nunca limpava) + invalida a
+ * lista para o badge sumir na hora. Best-effort: falha não quebra a thread. No-op
+ * sem id. Usa o socket REATIVO (mesmo motivo dos demais hooks).
+ */
+export function useMarkConversationRead(conversationId: string | undefined): void {
+  const queryClient = useQueryClient();
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const markRead = (): void => {
+      void api
+        .post<{ ok: true }>(`/api/conversations/${conversationId}/read`, {})
+        .then(() => queryClient.invalidateQueries({ queryKey: ['conversations'] }))
+        .catch(() => {
+          /* marcar lida é best-effort; nunca derruba a conversa */
+        });
+    };
+
+    markRead(); // ao abrir a conversa
+
+    if (!socket) return;
+    const onMessageNew = (p: MessageNewPayload): void => {
+      if (p.conversationId === conversationId) markRead(); // msg nova com a conversa aberta
+    };
+    socket.on('message:new', onMessageNew);
+    return () => {
+      socket.off('message:new', onMessageNew);
+    };
+  }, [conversationId, socket, queryClient]);
 }
 
 /**

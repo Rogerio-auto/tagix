@@ -13,6 +13,7 @@ import { useMessages, useConversationDetail } from '../queries';
 import {
   useConversationDetailLive,
   useConversationMessagesLive,
+  useMarkConversationRead,
 } from '../hooks/useConversationSocket';
 import { ConversationsHelp } from '../help';
 import { ChatList } from './ChatList';
@@ -264,6 +265,8 @@ function ThreadMessages({
   const messages = useMessages(conversationId);
   // Thread ao vivo: invalida as mensagens desta conversa ao chegar `message:new`.
   useConversationMessagesLive(conversationId);
+  // Marca como lida ao abrir + a cada nova mensagem enquanto aberta (zera o badge).
+  useMarkConversationRead(conversationId);
   const role = useAuthStore((st) => st.auth?.role);
   const canModerateComments = role ? can(role, 'conversation.delete_message') : false;
 
