@@ -2,7 +2,7 @@
 id: F46-S01
 title: Token expirado → purga caches + desconecta socket + redireciona p/ login
 phase: F46
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: []
@@ -11,6 +11,7 @@ agent_id: frontend-engineer
 source_docs:
   - docs/features/SELF_SERVE_SIGNUP.md
 claimed_at: 2026-06-23T12:10:11Z
+completed_at: 2026-06-23T12:18:28Z
 
 ---
 # F46-S01 — Expiração de sessão no runtime do cliente (401 global → purge + redirect)

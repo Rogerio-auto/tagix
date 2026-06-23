@@ -36,7 +36,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F43   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F44   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F45   | 7     | 3   | 4   | 0   | 0   | 0   | 0   |
-| F46   | 1     | 0   | 0   | 0   | 1   | 0   | 0   |
+| F46   | 1     | 0   | 0   | 0   | 0   | 1   | 0   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -441,9 +441,9 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 46
 
-| ID      | Titulo                                                                   | Status        | Prioridade | Depende de |
-| ------- | ------------------------------------------------------------------------ | ------------- | ---------- | ---------- |
-| F46-S01 | Token expirado → purga caches + desconecta socket + redireciona p/ login | 🔵 in-progress | high       | —          |
+| ID      | Titulo                                                                   | Status   | Prioridade | Depende de |
+| ------- | ------------------------------------------------------------------------ | -------- | ---------- | ---------- |
+| F46-S01 | Token expirado → purga caches + desconecta socket + redireciona p/ login | 🟣 review | high       | —          |
 
 ## Fase 5 — Calendar
 
