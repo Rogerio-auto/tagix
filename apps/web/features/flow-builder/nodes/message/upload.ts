@@ -1,34 +1,34 @@
 /**
- * Upload de midia do node `message` do Flow Builder (F31-S02).
+ * Upload de mídia do node `message` do Flow Builder.
  *
- * SEAM (relatado): nao existe endpoint generico de upload de midia de flow hoje
- * — o pipeline de signed-url existente (`/api/deals/:id/attachments/signed-url`)
- * e deal-scoped e nao serve a flows. Este helper aponta para o endpoint canonico
- * `POST /api/flows/media/signed-url` (workspace-scoped, retorna `{ url, key }`),
- * que AINDA PRECISA SER IMPLEMENTADO no backend. Enquanto nao existir, a chamada
- * falha e o componente degrada para entrada manual de storage key.
+ * Reutiliza o pipeline server-side EXISTENTE `POST /api/uploads?filename=<nome>` (o mesmo
+ * do MessageComposer do LiveChat): o arquivo cru sobe same-origin (cookie de sessão) → API
+ * → R2 e volta `{ key, fileUrl }`. Em UM passo — sem CORS/presign de PUT no R2. O flow
+ * guarda a `key` em `mediaStorageKey`; o outbound publisher resolve a signed URL no envio.
+ *
+ * (Antes apontava para `POST /api/flows/media/signed-url`, um SEAM que nunca foi
+ * implementado no backend — daí o 404 ao anexar mídia no Flow Builder.)
  */
-import { api } from '@/shared/lib/api-client';
 
-export interface FlowMediaSignedUrl {
-  url: string;
+export interface FlowMediaUploaded {
+  /** Storage key canônica — vai em `mediaStorageKey` do node. */
   key: string;
+  /** URL assinada de leitura (preview imediato). */
+  fileUrl: string;
 }
 
-/** Pede uma signed URL de upload de midia de flow (SEAM: endpoint pendente). */
-export function requestFlowMediaUploadUrl(input: {
-  filename: string;
-  mime: string;
-}): Promise<FlowMediaSignedUrl> {
-  return api.post<FlowMediaSignedUrl>('/api/flows/media/signed-url', input);
-}
-
-/** PUT direto do arquivo na signed URL do storage. */
-export async function uploadToSignedUrl(url: string, file: File): Promise<void> {
-  const res = await fetch(url, {
-    method: 'PUT',
+/** Sobe um arquivo de mídia de flow e devolve a storage key + URL de leitura. */
+export async function uploadFlowMedia(file: File): Promise<FlowMediaUploaded> {
+  const res = await fetch(`/api/uploads?filename=${encodeURIComponent(file.name)}`, {
+    method: 'POST',
     headers: { 'Content-Type': file.type || 'application/octet-stream' },
     body: file,
+    credentials: 'include',
   });
-  if (!res.ok) throw new Error(`Falha no upload (${res.status}).`);
+  if (!res.ok) {
+    throw new Error(
+      res.status === 415 ? 'Tipo de arquivo não suportado.' : `Falha no upload (${res.status}).`,
+    );
+  }
+  return (await res.json()) as FlowMediaUploaded;
 }

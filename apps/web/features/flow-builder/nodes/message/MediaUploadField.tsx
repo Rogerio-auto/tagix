@@ -3,8 +3,7 @@
 import { useId, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, Upload } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
-import { ApiError } from '@/shared/lib/api-client';
-import { requestFlowMediaUploadUrl, uploadToSignedUrl } from './upload';
+import { uploadFlowMedia } from './upload';
 
 export interface UploadedMedia {
   key: string;
@@ -61,18 +60,13 @@ export function MediaUploadField({
     }
     setBusy(true);
     try {
-      const signed = await requestFlowMediaUploadUrl({ filename: file.name, mime: file.type });
-      await uploadToSignedUrl(signed.url, file);
+      const uploaded = await uploadFlowMedia(file);
       if (lastUrlRef.current) URL.revokeObjectURL(lastUrlRef.current);
       const objectUrl = URL.createObjectURL(file);
       lastUrlRef.current = objectUrl;
-      onUploaded({ key: signed.key, mime: file.type, filename: file.name, objectUrl });
+      onUploaded({ key: uploaded.key, mime: file.type, filename: file.name, objectUrl });
     } catch (err) {
-      if (err instanceof ApiError && err.status === 404) {
-        setError('Upload de midia de flow ainda nao disponivel. Cole a storage key abaixo.');
-      } else {
-        setError(err instanceof Error ? err.message : 'Falha no upload da midia.');
-      }
+      setError(err instanceof Error ? err.message : 'Falha no upload da midia.');
     } finally {
       setBusy(false);
     }
