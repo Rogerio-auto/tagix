@@ -9,6 +9,7 @@
  *   POST   /api/flows/:id/publish     valida -> nova version + ativa      (flow.publish)
  *   POST   /api/flows/:id/unpublish   status=paused (nao cancela exec)    (flow.publish)
  *   POST   /api/flows/:id/archive     status=archived                     (flow.edit)
+ *   DELETE /api/flows/:id             exclui definitivamente + historico  (flow.edit)
  *   POST   /api/flows/:id/trigger     dispara manual                      (flow.trigger)
  *   GET    /api/flows/:id/versions    historico de versions               (flow.list)
  *   PATCH  /api/flows/manual-order    atualiza manual_position (FX-029a)  (flow.edit)
@@ -24,7 +25,7 @@ import { validateFlow } from '@hm/flow-engine';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { flowEngine } from './engine';
 
-const { flows, flowVersions } = schema;
+const { flows, flowVersions, flowExecutions } = schema;
 
 /** Narrowing de req.params (string | undefined no @types/express 5). */
 function param(req: Request, key: string): string {
@@ -264,6 +265,25 @@ export function createFlowsCrudRouter(): Router {
       return;
     }
     res.json({ flow: updated });
+  });
+
+  // DELETE /api/flows/:id — exclui o flow definitivamente (e seu historico).
+  router.delete('/api/flows/:id', ...editGuard, async (req: Request, res: Response) => {
+    const id = param(req, 'id');
+    const deleted = await req.scoped!(async (tx) => {
+      const [flow] = await tx.select({ id: flows.id }).from(flows).where(eq(flows.id, id)).limit(1);
+      if (!flow) return null;
+      // flow_executions.flow_version_id e ON DELETE RESTRICT: apaga as execucoes (flow_logs
+      // cascateiam por execution_id) ANTES do flow — cujo delete cascateia flow_versions.
+      await tx.delete(flowExecutions).where(eq(flowExecutions.flowId, id));
+      await tx.delete(flows).where(eq(flows.id, id));
+      return flow;
+    });
+    if (!deleted) {
+      res.sendStatus(404);
+      return;
+    }
+    res.sendStatus(204);
   });
 
   // GET /api/flows/:id/versions — historico.

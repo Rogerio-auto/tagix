@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Archive, Pause, Pencil, Play } from 'lucide-react';
+import { Archive, Pause, Pencil, Play, Trash2 } from 'lucide-react';
 import { Button } from '@hm/ui';
 import { cn } from '@/shared/lib/cn';
 import { FlowStatusBadge } from './FlowStatusBadge';
@@ -15,6 +15,7 @@ interface Props {
   onPublish: (flow: Flow) => void;
   onUnpublish: (flow: Flow) => void;
   onArchive: (flow: Flow) => void;
+  onDelete: (flow: Flow) => void;
 }
 
 const TRIGGER_LABEL: Record<string, string> = {
@@ -36,6 +37,7 @@ export function FlowCard({
   onPublish,
   onUnpublish,
   onArchive,
+  onDelete,
 }: Props) {
   const isArchived = flow.status === 'archived';
   return (
@@ -92,6 +94,19 @@ export function FlowCard({
             onClick={() => onArchive(flow)}
           >
             Arquivar
+          </Button>
+        )}
+        {canEdit && (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            leftIcon={<Trash2 className="size-3.5" aria-hidden />}
+            onClick={() => onDelete(flow)}
+            className="text-danger hover:bg-danger/10 hover:text-danger"
+            aria-label={`Excluir flow ${flow.name}`}
+          >
+            Excluir
           </Button>
         )}
       </div>

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Workflow } from 'lucide-react';
 import { can } from '@hm/shared';
-import { Button, Card, useToast } from '@hm/ui';
+import { Button, Card, Modal, useToast } from '@hm/ui';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/components/feedback';
 import { HelpPanel } from '@/shared/components/help';
 import { PageHeader } from '@/shared/components/layout/PageHeader';
@@ -14,7 +14,7 @@ import { CreateFlowModal } from './CreateFlowModal';
 import { FlowCard } from './FlowCard';
 import { FlowsHelp } from './help';
 import { ManualFlowsReorder } from './ManualFlowsReorder';
-import { useFlowLifecycle, useFlows } from './queries';
+import { useDeleteFlow, useFlowLifecycle, useFlows } from './queries';
 import type { Flow } from './types';
 
 /** Tela de lista de flows (F4-S09). Estados default/empty/error 3-partes (UX secao 2.7). */
@@ -27,9 +27,27 @@ export function FlowsListPage() {
   const { toast } = useToast();
   const flows = useFlows();
   const lifecycle = useFlowLifecycle();
+  const deleteFlow = useDeleteFlow();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [flowToDelete, setFlowToDelete] = useState<Flow | null>(null);
+
+  const confirmDelete = async (): Promise<void> => {
+    if (!flowToDelete) return;
+    const flow = flowToDelete;
+    try {
+      await deleteFlow.mutateAsync(flow.id);
+      toast({ variant: 'success', title: 'Flow excluído', description: flow.name });
+      setFlowToDelete(null);
+    } catch (err) {
+      toast({
+        variant: 'error',
+        title: 'Não foi possível excluir',
+        description: err instanceof ApiError ? err.message : 'Tente novamente.',
+      });
+    }
+  };
 
   const runLifecycle = async (flow: Flow, action: 'publish' | 'unpublish' | 'archive') => {
     setPendingId(flow.id);
@@ -113,6 +131,7 @@ export function FlowsListPage() {
                   onPublish={(f) => void runLifecycle(f, 'publish')}
                   onUnpublish={(f) => void runLifecycle(f, 'unpublish')}
                   onArchive={(f) => void runLifecycle(f, 'archive')}
+                  onDelete={(f) => setFlowToDelete(f)}
                 />
               ))}
             </ul>
@@ -126,6 +145,31 @@ export function FlowsListPage() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreated={(id) => router.push(`/flows/${id}`)}
+      />
+
+      <Modal
+        open={flowToDelete !== null}
+        onClose={() => !deleteFlow.isPending && setFlowToDelete(null)}
+        title="Excluir flow"
+        description={
+          flowToDelete
+            ? `Tem certeza que deseja excluir “${flowToDelete.name}”? Esta ação é permanente e remove também o histórico de execuções. Não dá para desfazer.`
+            : ''
+        }
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setFlowToDelete(null)}
+              disabled={deleteFlow.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button variant="danger" loading={deleteFlow.isPending} onClick={() => void confirmDelete()}>
+              Excluir
+            </Button>
+          </>
+        }
       />
     </div>
   );

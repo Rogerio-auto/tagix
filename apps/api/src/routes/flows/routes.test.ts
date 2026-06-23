@@ -49,6 +49,10 @@ describe('rotas de flows (autorizacao)', () => {
     expect((await request(app).post('/api/flows/abc/trigger').send({})).status).toBe(401);
   });
 
+  it('DELETE /api/flows/:id sem sessao -> 401', async () => {
+    expect((await request(app).delete('/api/flows/abc')).status).toBe(401);
+  });
+
   it('GET /api/flows/:id/versions sem sessao -> 401', async () => {
     expect((await request(app).get('/api/flows/abc/versions')).status).toBe(401);
   });

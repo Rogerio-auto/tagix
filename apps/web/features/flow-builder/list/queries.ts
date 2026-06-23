@@ -42,6 +42,15 @@ export function useFlowLifecycle() {
   });
 }
 
+/** Exclui um flow definitivamente (DELETE /api/flows/:id). Invalida a lista. */
+export function useDeleteFlow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/api/flows/${id}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: flowKeys.lists() }),
+  });
+}
+
 export function useReorderManualFlows() {
   const qc = useQueryClient();
   return useMutation({
