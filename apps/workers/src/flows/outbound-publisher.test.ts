@@ -12,6 +12,7 @@ import type { IStorageDriver, PutObjectInput, SignedUrl } from '@hm/storage';
 import { parseOutboundJob } from '../outbound/job';
 import {
   createOutboundPublisher,
+  type OutboundMessageNewEmit,
   type OutboundPersistencePort,
   type PersistOutboundMessageInput,
 } from './outbound-publisher';
@@ -63,12 +64,14 @@ function makePersistence(opts?: {
 interface Harness {
   readonly publisher: ReturnType<typeof createOutboundPublisher>;
   readonly jobs: Record<string, unknown>[];
+  readonly emits: OutboundMessageNewEmit[];
   readonly storage: FakeStorage;
   readonly persistence: FakePersistence;
 }
 
 function makeHarness(opts?: Parameters<typeof makePersistence>[0]): Harness {
   const jobs: Record<string, unknown>[] = [];
+  const emits: OutboundMessageNewEmit[] = [];
   const storage = new FakeStorage();
   const persistence = makePersistence(opts);
   const publisher = createOutboundPublisher({
@@ -79,8 +82,11 @@ function makeHarness(opts?: Parameters<typeof makePersistence>[0]): Harness {
       jobs.push(job);
       return true;
     },
+    emitMessageNew: async (input) => {
+      emits.push(input);
+    },
   });
-  return { publisher, jobs, storage, persistence };
+  return { publisher, jobs, emits, storage, persistence };
 }
 
 describe('createOutboundPublisher.publishMessage', () => {
@@ -100,6 +106,15 @@ describe('createOutboundPublisher.publishMessage', () => {
     });
     expect(() => parseOutboundJob(job)).not.toThrow();
     expect(h.persistence.inserts[0]).toMatchObject({ type: 'text', content: 'Olá mundo' });
+    // LiveChat em tempo real: emite message:new (direction outbound) ao persistir.
+    expect(h.emits).toHaveLength(1);
+    expect(h.emits[0]).toMatchObject({
+      workspaceId: 'ws-1',
+      conversationId: 'conv-1',
+      messageId: 'msg-1',
+      type: 'text',
+      content: 'Olá mundo',
+    });
   });
 
   it('imagem → resolve signed url e emite job media com publicMediaUrl/mime/caption', async () => {
@@ -129,6 +144,7 @@ describe('createOutboundPublisher.publishMessage', () => {
       mediaCaption: 'minha foto',
       mediaUrl: 'https://cdn.test/ws-1/media/foto.png?sig=abc',
     });
+    expect(h.emits[0]).toMatchObject({ type: 'image', content: 'minha foto', messageId: 'msg-1' });
   });
 
   it('documento sem mediaKind explicito → deriva do MIME (application/pdf → document)', async () => {
@@ -232,10 +248,11 @@ describe('createOutboundPublisher.publishMessage', () => {
     expect(h.jobs).toHaveLength(0);
   });
 
-  it('conversa inexistente/invisivel → no-op', async () => {
+  it('conversa inexistente/invisivel → no-op (não enfileira nem emite socket)', async () => {
     const h = makeHarness({ conversationExists: false });
     await h.publisher.publishMessage('ws-1', { conversationId: 'conv-x', text: 'olá' });
     expect(h.jobs).toHaveLength(0);
+    expect(h.emits).toHaveLength(0);
   });
 });
 

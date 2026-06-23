@@ -23,6 +23,7 @@
  * Tudo injetavel (storage / persistencia RLS / publicacao MQ) para testabilidade sem
  * Postgres/RabbitMQ no loop; os defaults usam a infra real.
  */
+import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { connectMq, makeEnvelope, publish, QUEUES, type MqHandle } from '@hm/shared/mq';
@@ -39,6 +40,8 @@ import type { Logger } from '@hm/logger';
 /** Tipo do envelope publicado (bind: `hm.q.outbound.#`), igual ao publisher da API. */
 const OUTBOUND_JOB_TYPE = 'outbound.job' as const;
 const OUTBOUND_ROUTING_KEY = `${QUEUES.outbound}.send`;
+/** Fila de relay de socket (mesma constante de `apps/api/src/socket/relay.ts`). */
+const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
 
 /** TTL da URL assinada de midia. O provider (Meta) precisa busca-la durante o envio. */
 const DEFAULT_MEDIA_URL_TTL_SECONDS = 60 * 60;
@@ -62,6 +65,47 @@ async function publishOutboundJob(workspaceId: string, job: Record<string, unkno
   const { channel } = await getHandle();
   const envelope = makeEnvelope(OUTBOUND_JOB_TYPE, workspaceId, job);
   return publish(channel, OUTBOUND_ROUTING_KEY, envelope);
+}
+
+/** Dados mínimos para emitir `message:new` de uma mensagem outbound de flow. */
+export interface OutboundMessageNewEmit {
+  readonly workspaceId: string;
+  readonly conversationId: string;
+  readonly messageId: string;
+  readonly type: string;
+  readonly content: string | null;
+}
+
+/**
+ * Emite `message:new` (direction outbound) no `hm.q.socket.relay` — espelha o inbound
+ * (`MqInboundSocketEmit`) para que o LiveChat atualize EM TEMPO REAL quando um flow envia
+ * mensagem. Sem isto, a mensagem do flow era persistida mas só aparecia na inbox após
+ * recarregar (o flow publisher não emitia socket algum). `workspace: true` faz a ChatList
+ * (sala do workspace) atualizar mesmo sem ninguém na sala da conversa. `externalId` nasce
+ * null (o id Meta vem depois, no finalize do outbound, via `message:status_changed`).
+ */
+async function emitMessageNewRelay(input: OutboundMessageNewEmit): Promise<void> {
+  const { channel } = await getHandle();
+  const envelope = makeEnvelope('socket.relay', input.workspaceId, {
+    event: 'message:new',
+    target: { conversationId: input.conversationId, workspace: true },
+    data: {
+      workspaceId: input.workspaceId,
+      conversationId: input.conversationId,
+      message: {
+        id: input.messageId,
+        conversationId: input.conversationId,
+        externalId: null,
+        type: input.type,
+        content: input.content,
+        direction: 'outbound',
+      },
+    },
+  });
+  channel.sendToQueue(SOCKET_RELAY_QUEUE, Buffer.from(JSON.stringify(envelope)), {
+    persistent: true,
+    contentType: 'application/json',
+  });
 }
 
 /** Encerra o canal/conn (testes / shutdown). */
@@ -226,6 +270,8 @@ export interface OutboundPublisherDeps {
   readonly persistence?: OutboundPersistencePort;
   /** Publicacao do envelope (default: RabbitMQ real). Injetavel nos testes. */
   readonly publishJob?: (workspaceId: string, job: Record<string, unknown>) => Promise<boolean>;
+  /** Emissao de `message:new` (default: socket relay real). Injetavel nos testes. */
+  readonly emitMessageNew?: (input: OutboundMessageNewEmit) => Promise<void>;
   /** TTL (s) da URL assinada de midia (default 1h). */
   readonly mediaUrlTtlSeconds?: number;
 }
@@ -240,6 +286,7 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
   const storage = deps.storage ?? createStorage();
   const persistence = deps.persistence ?? createDbOutboundPersistence();
   const publishJob = deps.publishJob ?? publishOutboundJob;
+  const emitMessageNew = deps.emitMessageNew ?? emitMessageNewRelay;
   const ttl = deps.mediaUrlTtlSeconds ?? DEFAULT_MEDIA_URL_TTL_SECONDS;
 
   return {
@@ -276,6 +323,13 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
             // O InteractivePayloadSchema usa o discriminador 'type'; o handler envia
             // 'kind' como alias — normalizamos aqui para que o parseOutboundJob valide.
             payload: { ...ip, type: kind },
+          });
+          await emitMessageNew({
+            workspaceId,
+            conversationId: message.conversationId,
+            messageId: target.messageId,
+            type: 'interactive',
+            content: null,
           });
           return;
         }
@@ -325,6 +379,13 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
             languageCode,
             components,
           });
+          await emitMessageNew({
+            workspaceId,
+            conversationId: message.conversationId,
+            messageId: target.messageId,
+            type: 'template',
+            content: templateName,
+          });
           return;
         }
 
@@ -368,6 +429,13 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
           messageId: target.messageId,
           chatId: target.remoteId,
           text,
+        });
+        await emitMessageNew({
+          workspaceId,
+          conversationId: message.conversationId,
+          messageId: target.messageId,
+          type: 'text',
+          content: text,
         });
         return;
       }
@@ -429,6 +497,13 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
         publicMediaUrl,
         mime,
         ...(caption ? { caption } : {}),
+      });
+      await emitMessageNew({
+        workspaceId,
+        conversationId: message.conversationId,
+        messageId: target.messageId,
+        type: kind,
+        content: caption ?? null,
       });
     },
 
