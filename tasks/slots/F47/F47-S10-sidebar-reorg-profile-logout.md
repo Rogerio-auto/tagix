@@ -2,7 +2,7 @@
 id: F47-S10
 title: Reorg da Sidebar — perfil do usuário + logout + nav
 phase: F47
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: []
