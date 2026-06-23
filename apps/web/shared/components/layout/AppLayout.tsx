@@ -31,7 +31,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   }, [hydrateAuth]);
 
   return (
-    <div className="flex h-dvh bg-bg">
+    <div className="flex h-dvh overflow-hidden bg-bg">
       <SkipLink />
       {!isMobile && <Sidebar />}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -41,7 +41,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="flex-1 overflow-y-auto px-4 py-6 outline-none lg:px-8"
+          className="min-h-0 flex-1 overflow-y-auto px-4 py-6 outline-none lg:px-8"
         >
           {children}
         </main>
