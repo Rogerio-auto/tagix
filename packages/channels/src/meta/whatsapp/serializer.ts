@@ -40,18 +40,25 @@ export function serializeText(input: SendTextInput): JsonBody {
 /**
  * media → `{ type:<kind>, <kind>:{ link, caption? } }`.
  *
- * WA não tem tipo `voice` na API: PTT é enviado como `audio` (a flag PTT é
- * inferida no recebimento). `sticker`/`audio` não aceitam caption.
+ * `voice` mapeia para o objeto `audio` da Graph COM `voice: true` — é o que faz o
+ * WhatsApp renderizar como nota de voz (PTT, com a onda, "gravada agora") em vez de um
+ * arquivo de áudio comum. O flag só é honrado para `audio/ogg; codecs=opus` (garantido no
+ * Content-Type da URL assinada); para outros formatos a Graph o ignora. O modo
+ * `audio` (audio_file) NÃO leva o flag — vai como áudio comum (arquivo/encaminhado).
+ * `sticker`/`audio` não aceitam caption.
  */
 export function serializeMedia(input: SendMediaInput): JsonBody {
-  // `voice` mapeia para o objeto `audio` da Graph.
-  const waKind = input.mediaKind === 'voice' ? 'audio' : input.mediaKind;
+  const isVoice = input.mediaKind === 'voice';
+  const waKind = isVoice ? 'audio' : input.mediaKind;
   const supportsCaption =
     waKind === 'image' || waKind === 'video' || waKind === 'document';
 
   const mediaObj: JsonBody = { link: input.publicMediaUrl };
   if (supportsCaption && input.caption !== undefined) {
     mediaObj['caption'] = input.caption;
+  }
+  if (isVoice) {
+    mediaObj['voice'] = true;
   }
 
   const body: JsonBody = {

@@ -40,13 +40,24 @@ describe('serializeMedia', () => {
     expect(body['image']).toEqual({ link: 'https://cdn/x.jpg', caption: 'foto' });
   });
 
-  it('voice mapeia para objeto audio sem caption', () => {
+  it('voice mapeia para objeto audio com voice:true (PTT) e sem caption', () => {
     const body = serializeMedia({
       contactRemoteId: TO,
       mediaKind: 'voice',
       publicMediaUrl: 'https://cdn/x.ogg',
       mime: 'audio/ogg',
       caption: 'ignorado',
+    });
+    expect(body['type']).toBe('audio');
+    expect(body['audio']).toEqual({ link: 'https://cdn/x.ogg', voice: true });
+  });
+
+  it('audio (audio_file) vai como áudio comum, SEM voice:true', () => {
+    const body = serializeMedia({
+      contactRemoteId: TO,
+      mediaKind: 'audio',
+      publicMediaUrl: 'https://cdn/x.ogg',
+      mime: 'audio/ogg',
     });
     expect(body['type']).toBe('audio');
     expect(body['audio']).toEqual({ link: 'https://cdn/x.ogg' });
