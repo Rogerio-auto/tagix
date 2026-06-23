@@ -18,6 +18,7 @@ import {
   conversionTypes,
   departments,
   flows,
+  flowVersions,
   pipelines,
   quickReplies,
   stages,
@@ -54,6 +55,17 @@ const buildBlueprint = (): NicheBlueprint => ({
   quickReplies: [{ title: `Saudação ${sfx}`, body: 'Olá! Como posso ajudar?', departmentName: `Vendas ${sfx}` }],
   flows: [
     { name: `Boas-vindas ${sfx}`, description: 'Flow de boas-vindas.', status: 'draft', triggerType: 'manual' },
+    {
+      name: `Ativo ${sfx}`,
+      description: 'Flow ATIVO — exige flow_version publicada (senão trigger dá 500).',
+      status: 'active',
+      triggerType: 'manual',
+      nodes: [
+        { id: 'start', type: 'trigger', data: { label: 'Manual' } },
+        { id: 'msg', type: 'send_message', data: { text: 'Olá!' } },
+      ],
+      edges: [{ id: 'e1', source: 'start', target: 'msg' }],
+    },
   ],
 });
 
@@ -163,10 +175,26 @@ describe('instantiateNicheBlueprint — idempotência multi-recurso', () => {
     // Quick reply foi ligada ao departamento resolvido pelo nome.
     expect(qrRows[0]?.departmentId).toBe(deptRows[0]?.id);
 
-    const flowCount = await count(
-      withWorkspace(ws, (tx) => tx.select({ id: flows.id }).from(flows).where(eq(flows.workspaceId, ws))),
+    const flowRows = await withWorkspace(ws, (tx) =>
+      tx.select({ id: flows.id, name: flows.name }).from(flows).where(eq(flows.workspaceId, ws)),
     );
-    expect(flowCount).toBe(blueprint.flows.length);
+    expect(flowRows).toHaveLength(blueprint.flows.length);
+
+    // Invariante: o flow ATIVO tem EXATAMENTE 1 flow_version após 2 aplicações
+    // (criada uma vez, não duplicada) — sem ela o trigger falharia com 500.
+    const activeFlowId = flowRows.find((f) => f.name === `Ativo ${sfx}`)?.id;
+    expect(activeFlowId).toBeTruthy();
+    const activeVersions = await withWorkspace(ws, (tx) =>
+      tx.select({ id: flowVersions.id }).from(flowVersions).where(eq(flowVersions.flowId, activeFlowId!)),
+    );
+    expect(activeVersions).toHaveLength(1);
+
+    // O flow DRAFT não materializa version (só publica sob demanda).
+    const draftFlowId = flowRows.find((f) => f.name === `Boas-vindas ${sfx}`)?.id;
+    const draftVersions = await withWorkspace(ws, (tx) =>
+      tx.select({ id: flowVersions.id }).from(flowVersions).where(eq(flowVersions.flowId, draftFlowId!)),
+    );
+    expect(draftVersions).toHaveLength(0);
 
     // industry gravado no workspace.
     const [wsRow] = await withWorkspace(ws, (tx) =>

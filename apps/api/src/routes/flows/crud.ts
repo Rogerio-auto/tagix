@@ -21,8 +21,8 @@ import { z } from 'zod';
 import { asc, desc, eq, max } from 'drizzle-orm';
 import { schema } from '@hm/db';
 import { validateFlow } from '@hm/flow-engine';
-import { triggerFlow as engineTriggerFlow } from '@hm/flow-engine';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
+import { flowEngine } from './engine';
 
 const { flows, flowVersions } = schema;
 
@@ -302,7 +302,7 @@ export function createFlowsCrudRouter(): Router {
       return;
     }
 
-    const { executionId } = await engineTriggerFlow({
+    const { executionId } = await flowEngine.triggerFlow({
       workspaceId,
       flowId: id,
       conversationId: parsed.data.conversationId,

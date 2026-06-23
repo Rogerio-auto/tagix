@@ -14,8 +14,8 @@ import { Router, type Request, type Response } from 'express';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb, schema, withWorkspace } from '@hm/db';
-import { triggerFlow as engineTriggerFlow } from '@hm/flow-engine';
 import { createLogger, type Logger } from '@hm/logger';
+import { flowEngine } from './engine';
 
 const { channels, flows, flowSubmissions, conversations } = schema;
 
@@ -165,9 +165,9 @@ export async function processMetaFlowSubmission(
   });
 }
 
-/** Deps default (engine real). */
+/** Deps default (engine real, com enqueue RabbitMQ — ver `./engine`). */
 export function createSubmissionDeps(logger: Logger = createLogger('info')): SubmissionDeps {
-  return { engine: { triggerFlow: engineTriggerFlow }, logger };
+  return { engine: { triggerFlow: flowEngine.triggerFlow }, logger };
 }
 
 /**

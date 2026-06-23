@@ -31,6 +31,7 @@ import {
   conversionTypes,
   departments,
   flows,
+  flowVersions,
   pipelines,
   stages,
   tags,
@@ -211,23 +212,54 @@ export async function instantiateNicheBlueprint(
   createdCounts['quickReplies'] = blueprint.quickReplies.length;
 
   // ─── Flows (idempotente por workspace+name; `flows` não tem UNIQUE natural).
+  // Invariante crítica: um flow `active` SEMPRE tem ao menos uma flow_version publicada.
+  // A engine (createExecution) referencia a VERSION, nunca o flow — sem ela, todo trigger
+  // falha com "flow sem version publicada" (500). Por isso, ao criar (ou ao reaplicar sobre
+  // um flow active legado que ficou sem version) materializamos a version 1 a partir do
+  // snapshot inline do blueprint, espelhando o contrato do endpoint /publish.
   for (const flow of blueprint.flows) {
     const [existingFlow] = await tx
       .select({ id: flows.id })
       .from(flows)
       .where(and(eq(flows.workspaceId, workspaceId), eq(flows.name, flow.name)))
       .limit(1);
-    if (existingFlow) continue;
-    await tx.insert(flows).values({
-      workspaceId,
-      name: flow.name,
-      description: flow.description ?? null,
-      status: flow.status,
-      triggerType: flow.triggerType,
-      triggerConfig: flow.triggerConfig ?? {},
-      nodes: flow.nodes ?? [],
-      edges: flow.edges ?? [],
-    });
+
+    let flowId = existingFlow?.id;
+    if (!flowId) {
+      const [created] = await tx
+        .insert(flows)
+        .values({
+          workspaceId,
+          name: flow.name,
+          description: flow.description ?? null,
+          status: flow.status,
+          triggerType: flow.triggerType,
+          triggerConfig: flow.triggerConfig ?? {},
+          nodes: flow.nodes ?? [],
+          edges: flow.edges ?? [],
+        })
+        .returning({ id: flows.id });
+      if (!created) throw new Error('Falha ao criar flow do blueprint.');
+      flowId = created.id;
+    }
+
+    // Garante a version publicada de flows ativos (idempotente: só insere se faltar).
+    if (flow.status === 'active') {
+      const [existingVersion] = await tx
+        .select({ id: flowVersions.id })
+        .from(flowVersions)
+        .where(eq(flowVersions.flowId, flowId))
+        .limit(1);
+      if (!existingVersion) {
+        await tx.insert(flowVersions).values({
+          flowId,
+          version: 1,
+          nodes: flow.nodes ?? [],
+          edges: flow.edges ?? [],
+          triggerConfig: flow.triggerConfig ?? {},
+        });
+      }
+    }
   }
   createdCounts['flows'] = blueprint.flows.length;
 
