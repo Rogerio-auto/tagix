@@ -2,7 +2,7 @@
 id: F47-S01
 title: Schema products + deal_items + contacts.address/document (RLS)
 phase: F47
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: []
@@ -11,6 +11,7 @@ agent_id: db-engineer
 source_docs:
   - docs/features/COCKPIT_CLIENT_ENRICHMENT.md
 claimed_at: 2026-06-23T23:46:25Z
+completed_at: 2026-06-23T23:46:41Z
 
 ---
 # F47-S01 — Schema: products, deal_items, contacts.address/document + RLS

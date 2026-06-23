@@ -14,6 +14,8 @@ import { supportRepo } from './repos/support';
 import { paymentEventsRepo } from './repos/payment-events';
 import { quickRepliesRepo } from './repos/quick-replies';
 import { onboardingRepo } from './repos/onboarding';
+import { productsRepo } from './repos/products';
+import { dealItemsRepo } from './repos/deal_items';
 import {
   agentDepartments,
   agents,
@@ -28,6 +30,11 @@ import {
   contacts,
   conversationEvaluations,
   conversations,
+  deals,
+  dealItems,
+  pipelines,
+  products,
+  stages,
   objections,
   dataExportJobs,
   dashboardSnapshots,
@@ -1917,5 +1924,170 @@ describe('RLS Onboarding / quick_replies (F43-S01)', () => {
     expect(tours['pipeline']?.dismissed).toBe(true);
 
     await db.delete(workspaces).where(eq(workspaces.id, w.id));
+  });
+});
+
+describe('RLS Products + Deal items (F47-S01)', () => {
+  // Cria um card (deal) mínimo num workspace: pipeline → stage → contact → deal.
+  async function seedDeal(workspaceId: string, sfx: string): Promise<string> {
+    const db = getDb(); // owner bypassa RLS no seed
+    const [pl] = await db
+      .insert(pipelines)
+      .values({ workspaceId, name: `Pipe ${sfx}` })
+      .returning();
+    if (!pl) throw new Error('seed pipeline');
+    const [st] = await db
+      .insert(stages)
+      .values({ workspaceId, pipelineId: pl.id, name: `Stage ${sfx}`, position: 0 })
+      .returning();
+    if (!st) throw new Error('seed stage');
+    const [ct] = await db
+      .insert(contacts)
+      .values({ workspaceId, displayName: `Contato ${sfx}` })
+      .returning();
+    if (!ct) throw new Error('seed contact');
+    const [dl] = await db
+      .insert(deals)
+      .values({ workspaceId, pipelineId: pl.id, stageId: st.id, contactId: ct.id, title: `Card ${sfx}` })
+      .returning();
+    if (!dl) throw new Error('seed deal');
+    return dl.id;
+  }
+
+  it('products isola por workspace; cross-tenant nega', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+
+    const [prodA] = await db
+      .insert(products)
+      .values({ workspaceId: wsA, name: `Produto A ${sfx}`, priceCents: 1000 })
+      .returning();
+    const [prodB] = await db
+      .insert(products)
+      .values({ workspaceId: wsB, name: `Produto B ${sfx}`, priceCents: 2000 })
+      .returning();
+    if (!prodA || !prodB) throw new Error('Falha ao criar produtos.');
+
+    // A só enxerga os próprios; B não enxerga nada de A.
+    const listA = await withWorkspace(wsA, (tx) => productsRepo.list(tx, wsA));
+    expect(listA.every((p) => p.workspaceId === wsA)).toBe(true);
+    expect(listA.some((p) => p.id === prodA.id)).toBe(true);
+    expect(listA.some((p) => p.id === prodB.id)).toBe(false);
+
+    const listB = await withWorkspace(wsB, (tx) => productsRepo.list(tx, wsB));
+    expect(listB.some((p) => p.id === prodA.id)).toBe(false);
+
+    // INSERT cross-tenant via app: WITH CHECK barra workspace_id de B sob escopo A.
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.insert(products).values({ workspaceId: wsB, name: `Intruso ${sfx}` }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('products: unique sku parcial (mesmo workspace) — só vivos disputam', async () => {
+    const sfx = randomUUID().slice(0, 8);
+    const sku = `SKU-${sfx}`;
+
+    const created = await withWorkspace(wsA, (tx) =>
+      productsRepo.create(tx, { workspaceId: wsA, name: 'P1', sku }),
+    );
+    expect(created.sku).toBe(sku);
+
+    // Segundo produto vivo com o mesmo SKU no mesmo workspace viola o unique parcial.
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        productsRepo.create(tx, { workspaceId: wsA, name: 'P2', sku }),
+      ),
+    ).rejects.toThrow();
+
+    // Soft-delete libera o SKU para um novo produto vivo.
+    await withWorkspace(wsA, (tx) => productsRepo.softDelete(tx, wsA, created.id));
+    const reused = await withWorkspace(wsA, (tx) =>
+      productsRepo.create(tx, { workspaceId: wsA, name: 'P3', sku }),
+    );
+    expect(reused.sku).toBe(sku);
+  });
+
+  it('deal_items isola por workspace; cross-tenant nega; recompute soma', async () => {
+    const sfx = randomUUID().slice(0, 8);
+    const dealA = await seedDeal(wsA, sfx);
+    const dealB = await seedDeal(wsB, `${sfx}-b`);
+
+    // Itens em A (via app, sob RLS).
+    await withWorkspace(wsA, (tx) =>
+      dealItemsRepo.create(tx, {
+        workspaceId: wsA,
+        dealId: dealA,
+        nameSnapshot: 'Item 1',
+        qty: 2,
+        unitPriceCents: 1500,
+        position: 0,
+      }),
+    );
+    await withWorkspace(wsA, (tx) =>
+      dealItemsRepo.create(tx, {
+        workspaceId: wsA,
+        dealId: dealA,
+        nameSnapshot: 'Item 2',
+        qty: 1,
+        unitPriceCents: 500,
+        position: 1,
+      }),
+    );
+
+    // A só enxerga os próprios; B não enxerga itens de A.
+    const itemsA = await withWorkspace(wsA, (tx) => dealItemsRepo.listByDeal(tx, wsA, dealA));
+    expect(itemsA.length).toBe(2);
+    expect(itemsA.every((i) => i.workspaceId === wsA)).toBe(true);
+
+    const itemsBView = await withWorkspace(wsB, (tx) => dealItemsRepo.listByDeal(tx, wsB, dealA));
+    expect(itemsBView.length).toBe(0);
+
+    // recompute apenas SOMA (2×1500 + 1×500 = 3500) — não grava em deals.value_cents.
+    const total = await withWorkspace(wsA, (tx) => dealItemsRepo.recomputeDealValue(tx, dealA));
+    expect(total).toBe(3500);
+
+    // INSERT cross-tenant via app: WITH CHECK barra workspace_id de B sob escopo A.
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.insert(dealItems).values({
+          workspaceId: wsB,
+          dealId: dealB,
+          nameSnapshot: 'Intruso',
+          qty: 1,
+          unitPriceCents: 100,
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('deal_items: CHECK qty>0 e unit_price_cents>=0', async () => {
+    const sfx = randomUUID().slice(0, 8);
+    const dealA = await seedDeal(wsA, `chk-${sfx}`);
+
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.insert(dealItems).values({
+          workspaceId: wsA,
+          dealId: dealA,
+          nameSnapshot: 'qty zero',
+          qty: 0,
+          unitPriceCents: 100,
+        }),
+      ),
+    ).rejects.toThrow();
+
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.insert(dealItems).values({
+          workspaceId: wsA,
+          dealId: dealA,
+          nameSnapshot: 'preço negativo',
+          qty: 1,
+          unitPriceCents: -1,
+        }),
+      ),
+    ).rejects.toThrow();
   });
 });

@@ -15,6 +15,10 @@ export * from './payment-events';
 // Onboarding (F43-S01): respostas rápidas + estado de first-run/tour.
 export * from './quick-replies';
 export * from './onboarding';
+// Catálogo de produtos (F47-S01): CRUD workspace-scoped + soft-delete.
+export * from './products';
+// Itens do card / line-items (F47-S01): CRUD + soma do valor (recompute helper).
+export * from './deal_items';
 
 export const workspacesRepo = {
   async findById(id: string) {

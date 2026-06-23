@@ -271,8 +271,13 @@ export * from './flows'; // flows, flow_versions, flow_executions, flow_logs, fl
 // tags + contact_tags (contact_tags com workspace_id denormalizado p/ RLS direta).
 export * from './tags'; // tags, contact_tags
 
+// --- Products catalog (F47-S01: COCKPIT_CLIENT_ENRICHMENT §3) ---
+// products: catálogo comercial do workspace (workspace-scoped, soft-delete, RLS
+// direto). Exportado ANTES de pipeline porque deal_items referencia products.
+export * from './products';
+
 // --- Pipeline domain (DATA_MODEL §10) ---
-// pipelines/stages/deals/deal_history/deal_attachments/pending_automations.
+// pipelines/stages/deals/deal_items/deal_history/deal_attachments/pending_automations.
 // Todas workspace-scoped (RLS direto). SEM deal_tasks.
 export * from './pipeline';
 
@@ -401,10 +406,13 @@ export const RLS_TABLES = [
   // Tags domain (workspace-scoped; contact_tags com workspace_id denormalizado).
   'tags',
   'contact_tags',
-  // Pipeline domain (workspace-scoped).
+  // Products catalog (F47). products tem workspace_id próprio → RLS direto.
+  'products',
+  // Pipeline domain (workspace-scoped). deal_items tem workspace_id próprio → RLS direto.
   'pipelines',
   'stages',
   'deals',
+  'deal_items',
   'deal_history',
   'deal_attachments',
   'pending_automations',
