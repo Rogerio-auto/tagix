@@ -6,6 +6,7 @@ import { useSocket } from '@/shared/realtime';
 import { api } from '@/shared/lib/api-client';
 import type {
   ConversationUpdatedPayload,
+  MessageMediaReadyPayload,
   MessageNewPayload,
 } from '@hm/shared';
 import { conversationAgentKey, conversationDetailKey } from '../queries';
@@ -81,16 +82,27 @@ export function useConversationMessagesLive(conversationId: string | undefined):
   useEffect(() => {
     if (!socket || !conversationId) return;
 
-    const onMessageNew = (p: MessageNewPayload): void => {
-      if (p.conversationId !== conversationId) return;
+    const invalidateMessages = (): void => {
       void queryClient.invalidateQueries({
         queryKey: ['conversation', conversationId, 'messages'],
       });
     };
 
+    const onMessageNew = (p: MessageNewPayload): void => {
+      if (p.conversationId === conversationId) invalidateMessages();
+    };
+    // Mídia (áudio/imagem/etc.) baixada de forma assíncrona pelo media-worker:
+    // ao terminar, ele emite `message:media_ready` → rebusca para o player aparecer
+    // sem reload (antes a mensagem ficava presa em "carregando áudio" no cache).
+    const onMediaReady = (p: MessageMediaReadyPayload): void => {
+      if (p.conversationId === conversationId) invalidateMessages();
+    };
+
     socket.on('message:new', onMessageNew);
+    socket.on('message:media_ready', onMediaReady);
     return () => {
       socket.off('message:new', onMessageNew);
+      socket.off('message:media_ready', onMediaReady);
     };
   }, [queryClient, socket, conversationId]);
 }
