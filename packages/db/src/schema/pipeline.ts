@@ -20,7 +20,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { contacts, conversations, members, workspaces } from './index';
+import { contacts, conversations, members, products, workspaces } from './index';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 
@@ -162,6 +162,39 @@ export const deals = pgTable(
     ),
     index('idx_deals_contact').on(t.contactId),
     index('idx_deals_owner').on(t.ownerId).where(sql`${t.ownerId} is not null`),
+  ],
+);
+
+/**
+ * Itens (line-items) de um card (F47-S01). Σ(qty × unit_price_cents) alimenta
+ * `deals.value_cents` — o recompute é feito no servidor (S03), não aqui.
+ *
+ * `product_id` é NULLABLE: item ad-hoc ("digitar valor direto" sem produto de
+ * catálogo) ou produto removido (SET NULL). `name_snapshot` preserva o nome exibido
+ * no momento do lançamento (fidelidade histórica mesmo se o produto mudar/sumir).
+ */
+export const dealItems = pgTable(
+  'deal_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    dealId: uuid('deal_id')
+      .notNull()
+      .references(() => deals.id, { onDelete: 'cascade' }),
+    productId: uuid('product_id').references(() => products.id, { onDelete: 'set null' }),
+    nameSnapshot: text('name_snapshot').notNull(),
+    qty: integer('qty').notNull().default(1),
+    unitPriceCents: bigint('unit_price_cents', { mode: 'number' }).notNull().default(0),
+    currency: text('currency').notNull().default('BRL'),
+    position: integer('position').notNull().default(0),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('idx_deal_items_deal').on(t.dealId),
+    check('deal_items_qty_chk', sql`${t.qty} > 0`),
+    check('deal_items_unit_price_chk', sql`${t.unitPriceCents} >= 0`),
   ],
 );
 

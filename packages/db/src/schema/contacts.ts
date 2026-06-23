@@ -21,6 +21,21 @@ const citext = customType<{ data: string }>({
 });
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 
+/**
+ * Endereço estruturado do contato (F47-S01). Tipo forte (zero `any`); a validação
+ * runtime fica na API (Zod). Autopreenchimento via ViaCEP no frontend (S06). Campos
+ * por nicho continuam em `custom_fields`.
+ */
+export type ContactAddress = {
+  cep?: string;
+  street?: string;
+  number?: string;
+  complement?: string;
+  district?: string;
+  city?: string;
+  state?: string;
+};
+
 export const contacts = pgTable(
   'contacts',
   {
@@ -43,6 +58,9 @@ export const contacts = pgTable(
     optOutReason: text('opt_out_reason'),
     ownerId: uuid('owner_id').references(() => members.id, { onDelete: 'set null' }),
     customFields: jsonb('custom_fields').$type<Record<string, unknown>>().notNull().default({}),
+    // Cadastro estruturado (F47-S01): endereço tipado + documento (CPF/CNPJ).
+    address: jsonb('address').$type<ContactAddress>().notNull().default({}),
+    document: text('document'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at'),
     deletedAt: ts('deleted_at'),

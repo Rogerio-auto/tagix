@@ -37,7 +37,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F44   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F45   | 7     | 3   | 4   | 0   | 0   | 0   | 0   |
 | F46   | 1     | 0   | 0   | 0   | 0   | 0   | 1   |
-| F47   | 11     | 2   | 9   | 0   | 0   | 0   | 0   |
+| F47   | 11     | 1   | 9   | 0   | 0   | 1   | 0   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -450,7 +450,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID      | Titulo                                                         | Status      | Prioridade | Depende de                                                                      |
 | ------- | -------------------------------------------------------------- | ----------- | ---------- | ------------------------------------------------------------------------------- |
-| F47-S01 | Schema products + deal_items + contacts.address/document (RLS) | 🟢 available | critical   | —                                                                               |
+| F47-S01 | Schema products + deal_items + contacts.address/document (RLS) | 🟣 review    | critical   | —                                                                               |
 | F47-S02 | API Produtos — CRUD /api/products + perms product.*            | ⏸️ blocked  | high       | F47-S01                                                                         |
 | F47-S03 | API Itens do card + recompute de value_cents                   | ⏸️ blocked  | high       | F47-S01                                                                         |
 | F47-S04 | API Card-da-conversa + cadastro read-through + snapshot        | ⏸️ blocked  | high       | F47-S01                                                                         |
