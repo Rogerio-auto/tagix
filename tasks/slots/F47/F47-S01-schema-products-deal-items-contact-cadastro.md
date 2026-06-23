@@ -2,7 +2,7 @@
 id: F47-S01
 title: Schema products + deal_items + contacts.address/document (RLS)
 phase: F47
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
