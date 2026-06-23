@@ -2,7 +2,7 @@
 id: F47-S10
 title: Reorg da Sidebar — perfil do usuário + logout + nav
 phase: F47
-status: in-progress
+status: review
 priority: medium
 estimated_size: S
 depends_on: []
@@ -17,6 +17,7 @@ ux_considerations:
   - "Aplica 2.9 — logout é reversível (re-login), confirmação simples ou direta."
   - "Aplica 8 (mobile) — paridade: identidade/sessão acessível no mobile (TopBar/BottomNav)."
 claimed_at: 2026-06-23T23:47:19Z
+completed_at: 2026-06-23T23:47:29Z
 
 ---
 # F47-S10 — Sidebar mais profissional: perfil do usuário + logout

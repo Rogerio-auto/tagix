@@ -19,10 +19,19 @@ import { can, type Permission, type Role } from '@hm/shared';
  * (desktop), `BottomNav` (mobile, zona do polegar) e `TopBar` (título da rota).
  * NÃO inventar destinos por canal — espelhar exatamente a IA da Sidebar.
  */
+/**
+ * Agrupamento visual da nav (UX §2.4 — hierarquia legível, não uma lista chapada).
+ * `operate` = trabalho do dia a dia; `manage` = configuração/suporte. A Sidebar
+ * insere uma divisória sutil entre grupos; mobile (BottomNav) ignora (flat).
+ */
+export type NavGroup = 'operate' | 'manage';
+
 export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Grupo visual (default `operate`). Só afeta a Sidebar desktop. */
+  group?: NavGroup;
   /** Se presente, o item só aparece quando o papel atual tem a permissão. */
   perm?: Permission;
 }
@@ -40,8 +49,8 @@ export const NAV: readonly NavItem[] = [
   { href: '/campaigns', label: 'Campanhas', icon: Megaphone, perm: 'campaign.list' },
   { href: '/calendar', label: 'Agenda', icon: Calendar, perm: 'calendar.view' },
   { href: '/contacts', label: 'Contatos', icon: Users, perm: 'contact.view' },
-  { href: '/help', label: 'Ajuda', icon: LifeBuoy },
-  { href: '/settings', label: 'Configurações', icon: Settings },
+  { href: '/help', label: 'Ajuda', icon: LifeBuoy, group: 'manage' },
+  { href: '/settings', label: 'Configurações', icon: Settings, group: 'manage' },
 ];
 
 /**
