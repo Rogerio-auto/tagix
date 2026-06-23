@@ -121,6 +121,8 @@ export interface FlowExecutionContext {
   log(level: FlowLogLevel, message: string, payload?: Record<string, unknown>): void;
   /** relogio injetavel (testabilidade). */
   now(): Date;
+  /** espera N ms antes de prosseguir (simula digitacao/gravacao). Injetavel p/ testes. */
+  sleep(ms: number): Promise<void>;
 }
 
 export type FlowLogLevel = 'debug' | 'info' | 'warn' | 'error';

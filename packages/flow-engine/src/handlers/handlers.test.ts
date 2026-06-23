@@ -27,6 +27,7 @@ function makeCtx(over: Partial<FlowExecutionContext> = {}): FlowExecutionContext
     httpRequest: vi.fn(async () => ({ status: 200, ok: true, body: { ok: 1 }, headers: {} })),
     log: vi.fn(),
     now: () => new Date('2026-06-10T00:00:00.000Z'),
+    sleep: vi.fn(async () => {}),
     ...over,
   };
 }
@@ -41,10 +42,35 @@ describe('message handler', () => {
       expect.objectContaining({ text: 'Ola Ana', conversationId: 'c1' }),
     );
   });
-  it('preAction dispara presenca', async () => {
+  it('preAction dispara presenca E espera a duração ANTES de enviar', async () => {
     const ctx = makeCtx();
-    await messageHandler.execute(node({ text: 'oi', preAction: 'typing' }), ctx);
+    const order: string[] = [];
+    (ctx.sendPresence as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      order.push('presence');
+    });
+    (ctx.sleep as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      order.push('sleep');
+    });
+    (ctx.sendMessage as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      order.push('message');
+    });
+    await messageHandler.execute(
+      node({ text: 'oi', preAction: 'typing', preActionDurationMs: 3000 }),
+      ctx,
+    );
     expect(ctx.sendPresence).toHaveBeenCalledOnce();
+    expect(ctx.sleep).toHaveBeenCalledWith(3000);
+    // ordem garantida: indicador → espera → envio (a mensagem NÃO sai antes do tempo).
+    expect(order).toEqual(['presence', 'sleep', 'message']);
+  });
+
+  it('preAction respeita o teto de 30s', async () => {
+    const ctx = makeCtx();
+    await messageHandler.execute(
+      node({ text: 'oi', preAction: 'recording', preActionDurationMs: 600000 }),
+      ctx,
+    );
+    expect(ctx.sleep).toHaveBeenCalledWith(30000);
   });
 });
 

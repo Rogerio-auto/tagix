@@ -111,6 +111,9 @@ function buildContext(
     now() {
       return deps.now();
     },
+    sleep(ms: number) {
+      return new Promise<void>((resolve) => setTimeout(resolve, ms));
+    },
   };
 }
 

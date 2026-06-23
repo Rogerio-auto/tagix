@@ -269,10 +269,15 @@ export function MessageInspector({ nodeId }: { nodeId: string }) {
         />
         {preAction && (
           <NumberField
-            label="Duração da pré-ação (ms)"
-            value={preActionDurationMs}
-            hint="Padrão 1500ms."
-            onChange={(v) => set({ preActionDurationMs: v })}
+            label="Duração (segundos)"
+            value={preActionDurationMs !== undefined ? preActionDurationMs / 1000 : undefined}
+            hint="Tempo mostrando “digitando/gravando” ANTES de enviar (a mensagem só sai depois). Padrão 1,5s · máx. 30s."
+            onChange={(v) =>
+              set({
+                preActionDurationMs:
+                  Number.isFinite(v) && v > 0 ? Math.round(v * 1000) : undefined,
+              })
+            }
           />
         )}
       </div>
