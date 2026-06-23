@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { IStorageDriver, PutObjectInput, SignedUrl } from './types';
+import type { IStorageDriver, PutObjectInput, SignedUrl, SignedUrlOptions } from './types';
 import { toBuffer } from './stream';
 
 export interface LocalDriverOptions {
@@ -27,7 +27,13 @@ export class LocalDriver implements IStorageDriver {
     await writeFile(fp, await toBuffer(input.body));
   }
 
-  async getSignedUrl(key: string, ttlSeconds: number): Promise<SignedUrl> {
+  // `opts` (responseContentType) é honrado só no R2 (prod); no dev o content-type sai do
+  // arquivo servido pela rota /media. Aceito o parâmetro para casar a interface.
+  async getSignedUrl(
+    key: string,
+    ttlSeconds: number,
+    _opts?: SignedUrlOptions,
+  ): Promise<SignedUrl> {
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
     const exp = Math.floor(expiresAt.getTime() / 1000);
     const secret = this.opts.signingSecret ?? 'dev-signing-secret';

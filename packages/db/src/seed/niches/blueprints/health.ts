@@ -60,8 +60,8 @@ export const healthBlueprint: NicheBlueprint = {
       triggerType: 'new_lead',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Novo contato' } },
-        { id: 'welcome', type: 'send_message', data: { text: 'Olá! Bem-vindo(a). Posso ajudar a marcar uma consulta ou tirar dúvidas.' } },
-        { id: 'ask_need', type: 'send_message', data: { text: 'Qual especialidade ou procedimento você procura?' } },
+        { id: 'welcome', type: 'message', data: { text: 'Olá! Bem-vindo(a). Posso ajudar a marcar uma consulta ou tirar dúvidas.' } },
+        { id: 'ask_need', type: 'message', data: { text: 'Qual especialidade ou procedimento você procura?' } },
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'welcome' },
@@ -76,7 +76,7 @@ export const healthBlueprint: NicheBlueprint = {
       triggerConfig: { keywords: ['consulta', 'agendar', 'marcar', 'exame'] },
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Palavra-chave' } },
-        { id: 'ask_insurance', type: 'send_message', data: { text: 'Você tem convênio ou será particular?' } },
+        { id: 'ask_insurance', type: 'message', data: { text: 'Você tem convênio ou será particular?' } },
         { id: 'tag', type: 'add_tag', data: { tag: 'Primeira consulta' } },
         { id: 'move', type: 'move_stage', data: { stage: 'Triagem' } },
       ],
@@ -93,8 +93,8 @@ export const healthBlueprint: NicheBlueprint = {
       triggerType: 'manual',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
-        { id: 'ask_slot', type: 'send_message', data: { text: 'Qual o melhor dia e horário para sua consulta?' } },
-        { id: 'schedule', type: 'schedule_event', data: { title: 'Consulta' } },
+        { id: 'ask_slot', type: 'message', data: { text: 'Qual o melhor dia e horário para sua consulta?' } },
+        { id: 'schedule', type: 'message', data: { text: 'Perfeito! Vou organizar sua consulta e já te confirmo os detalhes. 📅' } },
         { id: 'move', type: 'move_stage', data: { stage: 'Consulta agendada' } },
       ],
       edges: [
@@ -111,7 +111,7 @@ export const healthBlueprint: NicheBlueprint = {
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
         { id: 'wait', type: 'wait', data: { duration: '1d' } },
-        { id: 'reminder', type: 'send_message', data: { text: 'Lembrete: sua consulta está agendada. Confirma sua presença?' } },
+        { id: 'reminder', type: 'message', data: { text: 'Lembrete: sua consulta está agendada. Confirma sua presença?' } },
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'wait' },

@@ -61,8 +61,8 @@ export const lawBlueprint: NicheBlueprint = {
       triggerType: 'new_lead',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Novo contato' } },
-        { id: 'welcome', type: 'send_message', data: { text: 'Olá! Bem-vindo(a). Suas informações são tratadas com sigilo e segundo a LGPD.' } },
-        { id: 'ask_case', type: 'send_message', data: { text: 'Pode me contar resumidamente sobre o seu caso?' } },
+        { id: 'welcome', type: 'message', data: { text: 'Olá! Bem-vindo(a). Suas informações são tratadas com sigilo e segundo a LGPD.' } },
+        { id: 'ask_case', type: 'message', data: { text: 'Pode me contar resumidamente sobre o seu caso?' } },
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'welcome' },
@@ -77,7 +77,7 @@ export const lawBlueprint: NicheBlueprint = {
       triggerConfig: { keywords: ['processo', 'advogado', 'direito', 'consulta', 'caso'] },
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Palavra-chave' } },
-        { id: 'ask_area', type: 'send_message', data: { text: 'Sua questão é trabalhista, cível, de família, criminal, tributária ou outra?' } },
+        { id: 'ask_area', type: 'message', data: { text: 'Sua questão é trabalhista, cível, de família, criminal, tributária ou outra?' } },
         { id: 'tag', type: 'add_tag', data: { tag: 'Trabalhista' } },
         { id: 'move', type: 'move_stage', data: { stage: 'Triagem do caso' } },
       ],
@@ -94,8 +94,8 @@ export const lawBlueprint: NicheBlueprint = {
       triggerType: 'manual',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
-        { id: 'ask_slot', type: 'send_message', data: { text: 'Qual o melhor dia e horário para a consulta com o advogado?' } },
-        { id: 'schedule', type: 'schedule_event', data: { title: 'Consulta jurídica' } },
+        { id: 'ask_slot', type: 'message', data: { text: 'Qual o melhor dia e horário para a consulta com o advogado?' } },
+        { id: 'schedule', type: 'message', data: { text: 'Perfeito! Vou organizar sua consulta jurídica e já te confirmo os detalhes. 📅' } },
         { id: 'move', type: 'move_stage', data: { stage: 'Consulta agendada' } },
       ],
       edges: [
@@ -112,7 +112,7 @@ export const lawBlueprint: NicheBlueprint = {
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
         { id: 'wait', type: 'wait', data: { duration: '3d' } },
-        { id: 'nudge', type: 'send_message', data: { text: 'Olá! Ainda quer dar andamento ao seu caso? Posso agendar a consulta.' } },
+        { id: 'nudge', type: 'message', data: { text: 'Olá! Ainda quer dar andamento ao seu caso? Posso agendar a consulta.' } },
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'wait' },

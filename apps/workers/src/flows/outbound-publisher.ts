@@ -389,8 +389,15 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
         return;
       }
 
-      // Resolve a URL publica temporaria FORA da transacao (IO de storage).
-      const signed = await storage.getSignedUrl(message.mediaStorageKey, ttl);
+      // Resolve a URL publica temporaria FORA da transacao (IO de storage). Para nota de
+      // voz, força o Content-Type `audio/ogg; codecs=opus` na URL assinada: sem o hint de
+      // codec o WhatsApp Cloud API trata como audio plano (sem a onda PTT). Os demais kinds
+      // usam o Content-Type nativo do objeto.
+      const signed = await storage.getSignedUrl(
+        message.mediaStorageKey,
+        ttl,
+        kind === 'voice' ? { responseContentType: 'audio/ogg; codecs=opus' } : undefined,
+      );
       const publicMediaUrl = signed.url;
 
       const rawCaption = message.caption ?? message.text;

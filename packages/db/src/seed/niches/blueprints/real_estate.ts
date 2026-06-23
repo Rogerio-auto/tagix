@@ -61,8 +61,8 @@ export const realEstateBlueprint: NicheBlueprint = {
       triggerType: 'new_lead',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Novo lead' } },
-        { id: 'welcome', type: 'send_message', data: { text: 'Olá! Bem-vindo(a). Você procura comprar ou alugar?' } },
-        { id: 'ask_region', type: 'send_message', data: { text: 'Em qual bairro ou região você tem interesse?' } },
+        { id: 'welcome', type: 'message', data: { text: 'Olá! Bem-vindo(a). Você procura comprar ou alugar?' } },
+        { id: 'ask_region', type: 'message', data: { text: 'Em qual bairro ou região você tem interesse?' } },
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'welcome' },
@@ -77,8 +77,8 @@ export const realEstateBlueprint: NicheBlueprint = {
       triggerConfig: { keywords: ['comprar', 'alugar', 'imóvel', 'apartamento', 'casa'] },
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Palavra-chave' } },
-        { id: 'ask_budget', type: 'send_message', data: { text: 'Qual a faixa de orçamento que você tem em mente?' } },
-        { id: 'ask_type', type: 'send_message', data: { text: 'Está procurando apartamento, casa, terreno ou comercial?' } },
+        { id: 'ask_budget', type: 'message', data: { text: 'Qual a faixa de orçamento que você tem em mente?' } },
+        { id: 'ask_type', type: 'message', data: { text: 'Está procurando apartamento, casa, terreno ou comercial?' } },
         { id: 'tag', type: 'add_tag', data: { tag: 'Comprador' } },
       ],
       edges: [
@@ -94,8 +94,8 @@ export const realEstateBlueprint: NicheBlueprint = {
       triggerType: 'manual',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
-        { id: 'ask_slot', type: 'send_message', data: { text: 'Qual o melhor dia e horário para a visita?' } },
-        { id: 'schedule', type: 'schedule_event', data: { title: 'Visita ao imóvel' } },
+        { id: 'ask_slot', type: 'message', data: { text: 'Qual o melhor dia e horário para a visita?' } },
+        { id: 'schedule', type: 'message', data: { text: 'Perfeito! Vou organizar a visita ao imóvel e já te confirmo os detalhes. 📅' } },
         { id: 'move', type: 'move_stage', data: { stage: 'Visita agendada' } },
       ],
       edges: [
@@ -112,7 +112,7 @@ export const realEstateBlueprint: NicheBlueprint = {
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
         { id: 'wait', type: 'wait', data: { duration: '2d' } },
-        { id: 'nudge', type: 'send_message', data: { text: 'Oi! Ainda tem interesse no imóvel? Posso te mostrar novas opções.' } },
+        { id: 'nudge', type: 'message', data: { text: 'Oi! Ainda tem interesse no imóvel? Posso te mostrar novas opções.' } },
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'wait' },

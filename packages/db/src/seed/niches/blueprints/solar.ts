@@ -59,8 +59,8 @@ export const solarBlueprint: NicheBlueprint = {
       triggerType: 'new_lead',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Novo lead' } },
-        { id: 'welcome', type: 'send_message', data: { text: 'Olá! Vamos calcular quanto você pode economizar com energia solar?' } },
-        { id: 'ask_bill', type: 'send_message', data: { text: 'Qual o valor médio da sua conta de luz por mês?' } },
+        { id: 'welcome', type: 'message', data: { text: 'Olá! Vamos calcular quanto você pode economizar com energia solar?' } },
+        { id: 'ask_bill', type: 'message', data: { text: 'Qual o valor médio da sua conta de luz por mês?' } },
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'welcome' },
@@ -75,8 +75,8 @@ export const solarBlueprint: NicheBlueprint = {
       triggerConfig: { keywords: ['solar', 'energia', 'placa', 'placas', 'fotovoltaico', 'conta de luz', 'economia'] },
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Palavra-chave' } },
-        { id: 'ask_consumption', type: 'send_message', data: { text: 'Você sabe seu consumo mensal em kWh? Se tiver a conta em mãos, pode me enviar uma foto.' } },
-        { id: 'ask_property', type: 'send_message', data: { text: 'O imóvel é residencial, comercial, rural ou industrial?' } },
+        { id: 'ask_consumption', type: 'message', data: { text: 'Você sabe seu consumo mensal em kWh? Se tiver a conta em mãos, pode me enviar uma foto.' } },
+        { id: 'ask_property', type: 'message', data: { text: 'O imóvel é residencial, comercial, rural ou industrial?' } },
         { id: 'tag', type: 'add_tag', data: { tag: 'Residencial' } },
         { id: 'move', type: 'move_stage', data: { stage: 'Qualificação (conta de luz)' } },
       ],
@@ -94,8 +94,8 @@ export const solarBlueprint: NicheBlueprint = {
       triggerType: 'manual',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
-        { id: 'ask_slot', type: 'send_message', data: { text: 'Para dimensionar seu sistema, qual o melhor dia e horário para a visita técnica no local?' } },
-        { id: 'schedule', type: 'schedule_event', data: { title: 'Visita técnica' } },
+        { id: 'ask_slot', type: 'message', data: { text: 'Para dimensionar seu sistema, qual o melhor dia e horário para a visita técnica no local?' } },
+        { id: 'schedule', type: 'message', data: { text: 'Perfeito! Vou organizar a visita técnica e já te confirmo os detalhes. 📅' } },
         { id: 'move', type: 'move_stage', data: { stage: 'Dimensionamento' } },
       ],
       edges: [
@@ -112,7 +112,7 @@ export const solarBlueprint: NicheBlueprint = {
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
         { id: 'wait', type: 'wait', data: { duration: '3d' } },
-        { id: 'nudge', type: 'send_message', data: { text: 'Oi! Ainda quer parar de pagar caro na conta de luz? Posso revisar sua proposta e as condições de financiamento.' } },
+        { id: 'nudge', type: 'message', data: { text: 'Oi! Ainda quer parar de pagar caro na conta de luz? Posso revisar sua proposta e as condições de financiamento.' } },
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'wait' },

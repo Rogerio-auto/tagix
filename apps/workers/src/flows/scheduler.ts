@@ -68,6 +68,11 @@ interface DueExecution {
  * de tenants do follow-up). Usa o indice parcial `idx_flow_executions_status_next`.
  */
 async function selectDue(now: Date, limit: number): Promise<DueExecution[]> {
+  // postgres-js NÃO serializa um Date cru passado a um template `sql` (drizzle não
+  // conhece o tipo-alvo aqui, diferente do query builder): falha com
+  // "Received an instance of Date". Passamos o timestamp como ISO string — o Postgres
+  // coage para timestamptz na comparação. Sem isto, TODO tick falhava e nenhum `wait`/
+  // `wait_for_response`/timeout jamais retomava.
   const rows = await getDb().execute<
     { id: string; workspace_id: string } & Record<string, unknown>
   >(sql`
@@ -75,7 +80,7 @@ async function selectDue(now: Date, limit: number): Promise<DueExecution[]> {
     from flow_executions
     where status = 'waiting'
       and next_step_at is not null
-      and next_step_at <= ${now}
+      and next_step_at <= ${now.toISOString()}
     order by next_step_at asc
     limit ${limit}
   `);

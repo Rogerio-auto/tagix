@@ -59,8 +59,8 @@ export const retailBlueprint: NicheBlueprint = {
       triggerType: 'new_lead',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Novo contato' } },
-        { id: 'welcome', type: 'send_message', data: { text: 'Olá! Bem-vindo(a) à nossa loja. Quer ver o catálogo ou já sabe o que procura?' } },
-        { id: 'ask_interest', type: 'send_message', data: { text: 'Me conta qual produto ou categoria te interessa que eu te ajudo.' } },
+        { id: 'welcome', type: 'message', data: { text: 'Olá! Bem-vindo(a) à nossa loja. Quer ver o catálogo ou já sabe o que procura?' } },
+        { id: 'ask_interest', type: 'message', data: { text: 'Me conta qual produto ou categoria te interessa que eu te ajudo.' } },
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'welcome' },
@@ -75,8 +75,8 @@ export const retailBlueprint: NicheBlueprint = {
       triggerConfig: { keywords: ['catálogo', 'catalogo', 'preço', 'preco', 'produto', 'comprar', 'promoção', 'promocao'] },
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Palavra-chave' } },
-        { id: 'send_catalog', type: 'send_message', data: { text: 'Aqui está nosso catálogo atualizado. Qual produto chamou sua atenção?' } },
-        { id: 'ask_payment', type: 'send_message', data: { text: 'Como prefere pagar: Pix, cartão, boleto ou dinheiro? E é entrega ou retirada?' } },
+        { id: 'send_catalog', type: 'message', data: { text: 'Aqui está nosso catálogo atualizado. Qual produto chamou sua atenção?' } },
+        { id: 'ask_payment', type: 'message', data: { text: 'Como prefere pagar: Pix, cartão, boleto ou dinheiro? E é entrega ou retirada?' } },
         { id: 'tag', type: 'add_tag', data: { tag: 'Novo cliente' } },
         { id: 'move', type: 'move_stage', data: { stage: 'Catálogo enviado' } },
       ],
@@ -94,7 +94,7 @@ export const retailBlueprint: NicheBlueprint = {
       triggerType: 'manual',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
-        { id: 'confirm', type: 'send_message', data: { text: 'Vou confirmar seu pedido: itens, valor e forma de pagamento. Posso fechar?' } },
+        { id: 'confirm', type: 'message', data: { text: 'Vou confirmar seu pedido: itens, valor e forma de pagamento. Posso fechar?' } },
         { id: 'order', type: 'register_conversion', data: { conversionType: 'order' } },
         { id: 'move', type: 'move_stage', data: { stage: 'Pedido fechado' } },
       ],
@@ -112,7 +112,7 @@ export const retailBlueprint: NicheBlueprint = {
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
         { id: 'wait', type: 'wait', data: { duration: '1d' } },
-        { id: 'nudge', type: 'send_message', data: { text: 'Oi! Você deixou itens no carrinho. Quer que eu finalize seu pedido? Tenho uma condição especial pra hoje.' } },
+        { id: 'nudge', type: 'message', data: { text: 'Oi! Você deixou itens no carrinho. Quer que eu finalize seu pedido? Tenho uma condição especial pra hoje.' } },
         { id: 'tag', type: 'add_tag', data: { tag: 'Carrinho abandonado' } },
       ],
       edges: [

@@ -5,7 +5,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl as presign } from '@aws-sdk/s3-request-presigner';
-import type { IStorageDriver, PutObjectInput, SignedUrl } from './types';
+import type { IStorageDriver, PutObjectInput, SignedUrl, SignedUrlOptions } from './types';
 import { toBuffer } from './stream';
 
 export interface R2DriverOptions {
@@ -38,10 +38,20 @@ export class R2Driver implements IStorageDriver {
     );
   }
 
-  async getSignedUrl(key: string, ttlSeconds: number): Promise<SignedUrl> {
+  async getSignedUrl(
+    key: string,
+    ttlSeconds: number,
+    opts?: SignedUrlOptions,
+  ): Promise<SignedUrl> {
     const url = await presign(
       this.client,
-      new GetObjectCommand({ Bucket: this.opts.bucket, Key: key }),
+      new GetObjectCommand({
+        Bucket: this.opts.bucket,
+        Key: key,
+        // `response-content-type` faz o R2 devolver este Content-Type no download — o
+        // provider (Meta) usa o header da resposta para classificar a mídia.
+        ...(opts?.responseContentType ? { ResponseContentType: opts.responseContentType } : {}),
+      }),
       { expiresIn: ttlSeconds },
     );
     return { url, expiresAt: new Date(Date.now() + ttlSeconds * 1000) };

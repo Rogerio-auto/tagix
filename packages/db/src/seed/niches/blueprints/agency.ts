@@ -59,8 +59,8 @@ export const agencyBlueprint: NicheBlueprint = {
       triggerType: 'new_lead',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Novo lead' } },
-        { id: 'welcome', type: 'send_message', data: { text: 'Olá! Obrigado pelo contato. Somos especialistas em crescimento de marcas.' } },
-        { id: 'ask_service', type: 'send_message', data: { text: 'Qual serviço você procura: tráfego pago, social media, branding ou site/landing?' } },
+        { id: 'welcome', type: 'message', data: { text: 'Olá! Obrigado pelo contato. Somos especialistas em crescimento de marcas.' } },
+        { id: 'ask_service', type: 'message', data: { text: 'Qual serviço você procura: tráfego pago, social media, branding ou site/landing?' } },
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'welcome' },
@@ -75,8 +75,8 @@ export const agencyBlueprint: NicheBlueprint = {
       triggerConfig: { keywords: ['tráfego', 'trafego', 'anúncio', 'anuncio', 'marketing', 'agência', 'agencia', 'social media', 'site'] },
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Palavra-chave' } },
-        { id: 'ask_segment', type: 'send_message', data: { text: 'Qual o segmento da sua empresa e o que você quer alcançar com esse investimento?' } },
-        { id: 'ask_budget', type: 'send_message', data: { text: 'Qual a verba que você pretende investir por mês?' } },
+        { id: 'ask_segment', type: 'message', data: { text: 'Qual o segmento da sua empresa e o que você quer alcançar com esse investimento?' } },
+        { id: 'ask_budget', type: 'message', data: { text: 'Qual a verba que você pretende investir por mês?' } },
         { id: 'tag', type: 'add_tag', data: { tag: 'Tráfego pago' } },
         { id: 'move', type: 'move_stage', data: { stage: 'Qualificação' } },
       ],
@@ -94,8 +94,8 @@ export const agencyBlueprint: NicheBlueprint = {
       triggerType: 'manual',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
-        { id: 'ask_slot', type: 'send_message', data: { text: 'Vamos marcar uma reunião de diagnóstico? Qual o melhor dia e horário para você?' } },
-        { id: 'schedule', type: 'schedule_event', data: { title: 'Reunião de diagnóstico' } },
+        { id: 'ask_slot', type: 'message', data: { text: 'Vamos marcar uma reunião de diagnóstico? Qual o melhor dia e horário para você?' } },
+        { id: 'schedule', type: 'message', data: { text: 'Perfeito! Vou organizar a reunião de diagnóstico e já te confirmo os detalhes. 📅' } },
         { id: 'move', type: 'move_stage', data: { stage: 'Reunião agendada' } },
       ],
       edges: [
@@ -112,7 +112,7 @@ export const agencyBlueprint: NicheBlueprint = {
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
         { id: 'wait', type: 'wait', data: { duration: '3d' } },
-        { id: 'nudge', type: 'send_message', data: { text: 'Oi! Ainda quer escalar seus resultados? Posso revisar a proposta e te mostrar cases do seu segmento.' } },
+        { id: 'nudge', type: 'message', data: { text: 'Oi! Ainda quer escalar seus resultados? Posso revisar a proposta e te mostrar cases do seu segmento.' } },
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'wait' },

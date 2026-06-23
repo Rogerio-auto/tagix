@@ -59,8 +59,8 @@ export const educationBlueprint: NicheBlueprint = {
       triggerType: 'new_lead',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Novo interessado' } },
-        { id: 'welcome', type: 'send_message', data: { text: 'Olá! Que bom seu interesse na nossa instituição. Posso te ajudar a escolher o curso ideal.' } },
-        { id: 'ask_course', type: 'send_message', data: { text: 'Qual curso você gostaria de conhecer?' } },
+        { id: 'welcome', type: 'message', data: { text: 'Olá! Que bom seu interesse na nossa instituição. Posso te ajudar a escolher o curso ideal.' } },
+        { id: 'ask_course', type: 'message', data: { text: 'Qual curso você gostaria de conhecer?' } },
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'welcome' },
@@ -75,8 +75,8 @@ export const educationBlueprint: NicheBlueprint = {
       triggerConfig: { keywords: ['curso', 'matrícula', 'matricula', 'graduação', 'graduacao', 'inscrição', 'inscricao'] },
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Palavra-chave' } },
-        { id: 'ask_shift', type: 'send_message', data: { text: 'Você prefere estudar de manhã, à tarde ou à noite?' } },
-        { id: 'ask_goal', type: 'send_message', data: { text: 'Qual seu objetivo: ingressar no mercado, mudar de área ou se especializar?' } },
+        { id: 'ask_shift', type: 'message', data: { text: 'Você prefere estudar de manhã, à tarde ou à noite?' } },
+        { id: 'ask_goal', type: 'message', data: { text: 'Qual seu objetivo: ingressar no mercado, mudar de área ou se especializar?' } },
         { id: 'tag', type: 'add_tag', data: { tag: 'Graduação' } },
         { id: 'move', type: 'move_stage', data: { stage: 'Dúvidas' } },
       ],
@@ -94,8 +94,8 @@ export const educationBlueprint: NicheBlueprint = {
       triggerType: 'manual',
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
-        { id: 'ask_slot', type: 'send_message', data: { text: 'Qual o melhor dia e horário para você conhecer a escola ou fazer uma aula experimental?' } },
-        { id: 'schedule', type: 'schedule_event', data: { title: 'Visita / aula experimental' } },
+        { id: 'ask_slot', type: 'message', data: { text: 'Qual o melhor dia e horário para você conhecer a escola ou fazer uma aula experimental?' } },
+        { id: 'schedule', type: 'message', data: { text: 'Perfeito! Vou organizar sua visita / aula experimental e já te confirmo os detalhes. 📅' } },
         { id: 'move', type: 'move_stage', data: { stage: 'Nutrição' } },
       ],
       edges: [
@@ -112,7 +112,7 @@ export const educationBlueprint: NicheBlueprint = {
       nodes: [
         { id: 'start', type: 'trigger', data: { label: 'Manual' } },
         { id: 'wait', type: 'wait', data: { duration: '2d' } },
-        { id: 'nudge', type: 'send_message', data: { text: 'Oi! As vagas estão acabando. Quer garantir sua matrícula? Posso te ajudar com bolsa e parcelamento.' } },
+        { id: 'nudge', type: 'message', data: { text: 'Oi! As vagas estão acabando. Quer garantir sua matrícula? Posso te ajudar com bolsa e parcelamento.' } },
       ],
       edges: [
         { id: 'e1', source: 'start', target: 'wait' },
