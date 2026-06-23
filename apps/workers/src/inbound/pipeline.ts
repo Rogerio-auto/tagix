@@ -111,16 +111,22 @@ export async function runInboundPipeline(
 
   const routing = extractRoutingHints(provider, raw);
 
-  // 1) Enfileira mídia (a MediaRef vem do raw — não depende de DB).
+  // 1) Persiste in-process PRIMEIRO (@hm/db+RLS): dedup→contact→conversation→message→
+  //    last→cache→socket(message:new)→status(S20)→flow(ai_mode='on').
+  //    ORDEM CRÍTICA: a mensagem precisa EXISTIR (commitada) antes da mídia ser
+  //    enfileirada. O media-worker casa a `media_url` por `external_id`; enfileirar
+  //    ANTES criava uma corrida — o worker pegava o job na hora e descartava
+  //    ("media: mensagem-alvo inexistente") porque a mensagem ainda não fora
+  //    inserida → media_url ficava null pra sempre ("carregando áudio").
+  const request: PersistInboundRequest = { provider, routing, events };
+  const result = await deps.persistence.persist(request);
+
+  // 2) Só ENTÃO enfileira a mídia (a MediaRef vem do raw; a mensagem já está
+  //    commitada → o worker acha o alvo e casa a URL).
   const mediaJobs = mediaJobsFromEvents(provider, routing, events);
   for (const job of mediaJobs) {
     await deps.media.enqueue(job);
   }
-
-  // 2) Persiste in-process (@hm/db+RLS): dedup→contact→conversation→message→
-  //    last→cache→socket(message:new)→status(S20)→flow(ai_mode='on').
-  const request: PersistInboundRequest = { provider, routing, events };
-  const result = await deps.persistence.persist(request);
 
   logger.info('inbound: pipeline processado', {
     provider,
