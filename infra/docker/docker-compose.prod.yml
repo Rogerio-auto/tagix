@@ -41,6 +41,19 @@ x-app-env: &app-env
   R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
   R2_BUCKET: ${R2_BUCKET:-}
   BILLING_ENABLED: ${BILLING_ENABLED:-false}
+  # Pagamentos AbacatePay (F42). VALORES vêm do .env de deploy na VPS — NUNCA
+  # commitados. Sem ABACATEPAY_API_KEY, o provider cai no Mock (mock.pay.local).
+  ABACATEPAY_API_KEY: ${ABACATEPAY_API_KEY:-}
+  ABACATEPAY_WEBHOOK_SECRET: ${ABACATEPAY_WEBHOOK_SECRET:-}
+  ABACATEPAY_PUBLIC_KEY: ${ABACATEPAY_PUBLIC_KEY:-}
+  # Base pública do app (monta return/completion URLs do checkout). Sem isto cairia
+  # no CORS_ORIGIN (lista separada por vírgula) → URL inválida.
+  APP_PUBLIC_URL: ${APP_PUBLIC_URL:-https://app.leadium.com.br}
+  # Régua de cobrança PIX (dunning) — opcionais; o worker tem defaults (3/3/7d).
+  BILLING_DUNNING_LEAD_DAYS: ${BILLING_DUNNING_LEAD_DAYS:-}
+  BILLING_DUNNING_GRACE_DAYS: ${BILLING_DUNNING_GRACE_DAYS:-}
+  BILLING_DUNNING_PASTDUE_DAYS: ${BILLING_DUNNING_PASTDUE_DAYS:-}
+  BILLING_PIX_EXPIRES_SECONDS: ${BILLING_PIX_EXPIRES_SECONDS:-}
 
 services:
   # ==========================================================================
