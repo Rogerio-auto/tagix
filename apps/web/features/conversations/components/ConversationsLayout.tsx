@@ -62,6 +62,42 @@ function igCommentFromMessage(m: {
   };
 }
 
+/** DIAGNÓSTICO TEMPORÁRIO de layout: mede as alturas reais p/ achar o overflow. */
+function HeightDebug(): React.JSX.Element {
+  const [info, setInfo] = useState('medindo…');
+  useEffect(() => {
+    const update = (): void => {
+      const de = document.documentElement;
+      const main = document.getElementById('main-content');
+      const cont = document.querySelector('[data-livechat-container]');
+      const over = de.scrollHeight - window.innerHeight;
+      setInfo(
+        `win=${window.innerHeight} over=${over} main=${main?.scrollHeight ?? '?'}/${main?.clientHeight ?? '?'} cont=${cont?.clientHeight ?? '?'}`,
+      );
+    };
+    update();
+    const id = window.setInterval(update, 700);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        bottom: 2,
+        right: 2,
+        zIndex: 99999,
+        background: '#000',
+        color: '#0f0',
+        font: '11px monospace',
+        padding: '2px 6px',
+        pointerEvents: 'none',
+      }}
+    >
+      {info}
+    </div>
+  );
+}
+
 export function ConversationsLayout({ conversationId }: { conversationId?: string }) {
   // Regra de ouro (MOBILE_UX §3.2): a ESTRUTURA muda por `isMobile`, não por
   // classes Tailwind `md:`. Mobile = pilha de views (Lista→Thread→Cockpit);
@@ -87,7 +123,11 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
 
   // ── Desktop: 3 colunas fixas (inalterado — regressão zero) ──────────────────
   return (
-    <div className="flex h-[calc(100dvh-7rem)] overflow-hidden rounded-lg border border-border">
+    <div
+      data-livechat-container
+      className="flex h-[calc(100dvh-7rem)] overflow-hidden rounded-lg border border-border"
+    >
+      <HeightDebug />
       {/* Coluna 1 — lista (F1-S14: filtros/busca/unread/real-time) */}
       <aside
         data-tour-id="inbox-list"
