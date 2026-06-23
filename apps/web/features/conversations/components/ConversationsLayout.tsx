@@ -10,7 +10,10 @@ import { Sheet } from '@/shared/components/Sheet';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { cn } from '@/shared/lib/cn';
 import { useMessages, useConversationDetail } from '../queries';
-import { useConversationMessagesLive } from '../hooks/useConversationSocket';
+import {
+  useConversationDetailLive,
+  useConversationMessagesLive,
+} from '../hooks/useConversationSocket';
 import { ConversationsHelp } from '../help';
 import { ChatList } from './ChatList';
 import { MessageComposer } from './MessageComposer';
@@ -194,6 +197,10 @@ function MobileThread({
   const { joinConversation, leaveConversation } = useSocket();
   const detail = detailData?.conversation;
 
+  // Header/identidade vivos: status/aiMode/assignee/department ao vivo (mesmo
+  // socket do desktop — fecha o gap de detail stale quando outro operador muda).
+  useConversationDetailLive(conversationId);
+
   // Entra na room realtime (mesmas queries/socket do desktop — sem alteração).
   useEffect(() => {
     joinConversation(conversationId);
@@ -308,6 +315,10 @@ function ConversationPanel({
 }) {
   const { data: detailData } = useConversationDetail(conversationId);
   const { joinConversation, leaveConversation } = useSocket();
+
+  // Header + Cockpit vivos: invalida o detail/agent/lista quando status/aiMode/
+  // assignee/department mudam por outro operador ou pela IA (human_takeover).
+  useConversationDetailLive(conversationId);
 
   // Entra na room realtime da conversa aberta (recebe message:new, typing, status…).
   useEffect(() => {
