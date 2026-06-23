@@ -13,7 +13,8 @@ import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { ExecutionsPanel } from './canvas/ExecutionsPanel';
 import { NodePalette } from './canvas/NodePalette';
 import { ToolbarTop } from './canvas/ToolbarTop';
-import { useFlow, usePublishFlow, useSaveFlow } from './hooks/useFlow';
+import { EditableFlowName } from './canvas/EditableFlowName';
+import { useFlow, usePublishFlow, useRenameFlow, useSaveFlow } from './hooks/useFlow';
 import { useFlowEditor } from './hooks/useFlowEditor';
 import { InspectorPanel } from './inspector/InspectorPanel';
 import { MobileDegradationBanner } from './mobile/MobileDegradationBanner';
@@ -50,6 +51,19 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
   const flow = useFlow(flowId);
   const save = useSaveFlow(flowId);
   const publish = usePublishFlow(flowId);
+  const rename = useRenameFlow(flowId);
+
+  const handleRename = (name: string): void => {
+    rename.mutate(name, {
+      onSuccess: () => toast({ variant: 'success', title: 'Nome atualizado.' }),
+      onError: (err) =>
+        toast({
+          variant: 'error',
+          title: 'Não foi possível renomear.',
+          description: err instanceof ApiError ? err.message : undefined,
+        }),
+    });
+  };
 
   const load = useFlowEditor((s) => s.load);
   const dirty = useFlowEditor((s) => s.dirty);
@@ -174,9 +188,13 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
         <FlowHelpersAutoProvider>
           <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
             <header className="flex min-w-0 items-center gap-2 border-b border-border-2 bg-surface-1 px-4 py-2.5">
-              <h1 className="min-w-0 flex-1 truncate font-head text-sm font-semibold text-text">
-                {flow.data.flow.name}
-              </h1>
+              <div className="min-w-0 flex-1">
+                <EditableFlowName
+                  name={flow.data.flow.name}
+                  onRename={handleRename}
+                  saving={rename.isPending}
+                />
+              </div>
               <span
                 className={
                   dirty
@@ -245,11 +263,13 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
           dirty={dirty}
           saving={save.isPending}
           publishing={publish.isPending}
+          renaming={rename.isPending}
           canUndo={canUndo}
           canRedo={canRedo}
           canPublish={canPublish}
           onSave={() => void handleSave()}
           onPublish={() => void handlePublish()}
+          onRename={handleRename}
           onUndo={undo}
           onRedo={redo}
         />

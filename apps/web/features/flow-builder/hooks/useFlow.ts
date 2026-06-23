@@ -30,6 +30,22 @@ export function useSaveFlow(id: string) {
   });
 }
 
+/**
+ * Renomeia o flow (PUT /api/flows/:id { name }) sem tocar em nodes/edges. Invalida o detalhe
+ * do editor E a lista de flows para o novo nome refletir em ambos. Renomear é só metadado —
+ * não exige republicar (não cria nova version).
+ */
+export function useRenameFlow(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => flowEditorService.update(id, { name }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: editorKeys.detail(id) });
+      void qc.invalidateQueries({ queryKey: ['flows', 'list'] });
+    },
+  });
+}
+
 export function usePublishFlow(id: string) {
   const qc = useQueryClient();
   return useMutation({

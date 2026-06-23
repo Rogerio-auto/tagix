@@ -4,17 +4,20 @@ import { Redo2, Save, Send, Undo2 } from 'lucide-react';
 import { Button } from '@hm/ui';
 import { HelpHint } from '@/shared/components/help';
 import { cn } from '@/shared/lib/cn';
+import { EditableFlowName } from './EditableFlowName';
 
 interface Props {
   flowName: string;
   dirty: boolean;
   saving: boolean;
   publishing: boolean;
+  renaming: boolean;
   canUndo: boolean;
   canRedo: boolean;
   canPublish: boolean;
   onSave: () => void;
   onPublish: () => void;
+  onRename: (name: string) => void;
   onUndo: () => void;
   onRedo: () => void;
 }
@@ -25,18 +28,20 @@ export function ToolbarTop({
   dirty,
   saving,
   publishing,
+  renaming,
   canUndo,
   canRedo,
   canPublish,
   onSave,
   onPublish,
+  onRename,
   onUndo,
   onRedo,
 }: Props) {
   return (
     <header className="flex items-center justify-between gap-3 border-b border-border-2 bg-surface-1 px-4 py-2.5">
       <div className="flex min-w-0 items-center gap-2">
-        <h1 className="truncate font-head text-sm font-semibold text-text">{flowName}</h1>
+        <EditableFlowName name={flowName} onRename={onRename} saving={renaming} />
         <HelpHint k="flow.canvas" />
         <span
           className={cn(
