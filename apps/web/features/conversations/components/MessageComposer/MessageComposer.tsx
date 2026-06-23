@@ -94,12 +94,16 @@ export function MessageComposer({
 
     try {
       let mediaUrl: string | null = null;
+      let mediaMime: string | null = null;
       let type = 'text';
       if (current) {
         mediaUrl = await upload(current);
         type = current.kind;
+        // O backend exige mediaMime junto da mediaUrl para mídia (o provider precisa
+        // do content-type). Sem isto o /messages devolvia 400.
+        mediaMime = current.file.type || 'application/octet-stream';
       }
-      await send.mutateAsync({ conversationId, content, type, mediaUrl });
+      await send.mutateAsync({ conversationId, content, type, mediaUrl, mediaMime });
       resetComposer();
     } catch (err) {
       const ref = err instanceof ApiError ? err.ref : undefined;

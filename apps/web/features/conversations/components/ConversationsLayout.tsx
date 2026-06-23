@@ -87,7 +87,7 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
 
   // ── Desktop: 3 colunas fixas (inalterado — regressão zero) ──────────────────
   return (
-    <div className="flex h-[calc(100dvh-7rem)] overflow-hidden rounded-lg border border-border">
+    <div className="flex h-full overflow-hidden rounded-lg border border-border">
       {/* Coluna 1 — lista (F1-S14: filtros/busca/unread/real-time) */}
       <aside
         data-tour-id="inbox-list"
@@ -154,7 +154,7 @@ function MobileConversationsLayout({
     return (
       <div
         data-tour-id="inbox-list"
-        className="flex h-[calc(100dvh-10rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface"
+        className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-surface"
       >
         <div className="flex items-center justify-between border-b border-border-2 px-4 py-3">
           <span className="font-head text-sm font-semibold text-text">Conversas</span>
@@ -169,7 +169,7 @@ function MobileConversationsLayout({
 
   // Conversa aberta → Thread em tela cheia + Cockpit como full-sheet.
   return (
-    <div className="flex h-[calc(100dvh-10rem)] flex-col overflow-hidden rounded-lg border border-border bg-bg">
+    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-bg">
       <MobileThread
         conversationId={conversationId}
         onBack={() => router.back()}
@@ -271,7 +271,7 @@ function ThreadMessages({
   const canModerateComments = role ? can(role, 'conversation.delete_message') : false;
 
   return (
-    <div className={cn('flex-1 overflow-y-auto py-4', className)} aria-live="polite">
+    <div className={cn('flex-1 overflow-y-auto overscroll-contain py-4', className)} aria-live="polite">
       {messages.isLoading ? (
         <SkeletonList rows={5} />
       ) : messages.data && messages.data.messages.length > 0 ? (

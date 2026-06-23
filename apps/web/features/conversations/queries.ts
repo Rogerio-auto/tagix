@@ -71,6 +71,8 @@ export interface SendMessageInput {
   type: string;
   /** URL pública/assinada da mídia já enviada ao storage (R2). */
   mediaUrl?: string | null;
+  /** MIME da mídia (o backend exige junto da mediaUrl p/ o provider). */
+  mediaMime?: string | null;
 }
 
 interface SendMutationContext {
@@ -91,11 +93,12 @@ export function useSendMessage() {
   const queryClient = useQueryClient();
 
   return useMutation<{ message: MessageItem }, Error, SendMessageInput, SendMutationContext>({
-    mutationFn: ({ conversationId, content, type, mediaUrl }) =>
+    mutationFn: ({ conversationId, content, type, mediaUrl, mediaMime }) =>
       api.post<{ message: MessageItem }>(`/api/conversations/${conversationId}/messages`, {
         content,
         type,
         mediaUrl: mediaUrl ?? null,
+        mediaMime: mediaMime ?? null,
       }),
 
     onMutate: async (input): Promise<SendMutationContext> => {
