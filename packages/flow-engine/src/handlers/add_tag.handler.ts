@@ -10,12 +10,23 @@
  * trigger pg de conversao (F5-S14) — ambos reagem ao INSERT em contact_tags.
  */
 import { z } from 'zod';
+import { and, eq } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
 import type { FlowHandler } from '../types';
 
-const addTagSchema = z.object({ tagId: z.string().uuid() });
+// Aceita `tagId` (UUID — flows da UI) OU `tag` (nome — templates de nicho, resolvido em
+// runtime). Os Niche Blueprints referenciam a tag por nome porque o UUID só existe após
+// a provisionagem; resolver aqui conserta os templates sem reescrever o snapshot do flow.
+const addTagSchema = z
+  .object({
+    tagId: z.string().uuid().optional(),
+    tag: z.string().min(1).optional(),
+  })
+  .refine((d) => d.tagId !== undefined || d.tag !== undefined, {
+    message: 'add_tag exige tagId ou tag',
+  });
 
-const { contactTags } = schema;
+const { contactTags, tags } = schema;
 
 export const addTagHandler: FlowHandler<z.infer<typeof addTagSchema>> = {
   schema: addTagSchema,
@@ -25,16 +36,28 @@ export const addTagHandler: FlowHandler<z.infer<typeof addTagSchema>> = {
       ctx.log('warn', 'add_tag: execucao sem contactId; no-op', { nodeType: 'add_tag' });
       return { status: 'SUCCESS' };
     }
-    await withWorkspace(ctx.workspaceId, async (tx) => {
+    const tagId = await withWorkspace(ctx.workspaceId, async (tx) => {
+      let resolved = data.tagId;
+      if (!resolved && data.tag) {
+        const [row] = await tx
+          .select({ id: tags.id })
+          .from(tags)
+          .where(and(eq(tags.workspaceId, ctx.workspaceId), eq(tags.name, data.tag)))
+          .limit(1);
+        resolved = row?.id;
+      }
+      if (!resolved) return null;
       await tx
         .insert(contactTags)
-        .values({ contactId: ctx.contactId!, tagId: data.tagId, workspaceId: ctx.workspaceId })
+        .values({ contactId: ctx.contactId!, tagId: resolved, workspaceId: ctx.workspaceId })
         .onConflictDoNothing();
+      return resolved;
     });
-    ctx.log('info', 'add_tag: tag aplicada ao contato', {
-      contactId: ctx.contactId,
-      tagId: data.tagId,
-    });
+    if (!tagId) {
+      ctx.log('warn', 'add_tag: tag nao resolvida (nome inexistente); no-op', { tag: data.tag });
+      return { status: 'SUCCESS' };
+    }
+    ctx.log('info', 'add_tag: tag aplicada ao contato', { contactId: ctx.contactId, tagId });
     return { status: 'SUCCESS' };
   },
 };

@@ -49,11 +49,30 @@ describe('message handler', () => {
 });
 
 describe('wait handler', () => {
-  it('retorna WAITING com nextStepAt correto', async () => {
+  it('1a entrada -> WAITING com nextStepAt + marcador de deadline', async () => {
     const ctx = makeCtx();
     const r = await waitHandler.execute(node({ minutes: 5 }), ctx);
     expect(r.status).toBe('WAITING');
-    if (r.status === 'WAITING') expect(r.nextStepAt).toBe('2026-06-10T00:05:00.000Z');
+    if (r.status === 'WAITING') {
+      expect(r.nextStepAt).toBe('2026-06-10T00:05:00.000Z');
+      // deadline persistido p/ a engine reconhecer a re-entrada (ms de 00:05).
+      expect(r.variables?.['_wait_until_n']).toBe(Date.parse('2026-06-10T00:05:00.000Z'));
+    }
+  });
+
+  it('re-entrada com deadline vencido -> SUCCESS (limpa marcador) — sem loop infinito', async () => {
+    const ctx = makeCtx({ variables: { _wait_until_n: Date.parse('2026-06-09T23:59:00.000Z') } });
+    const r = await waitHandler.execute(node({ minutes: 5 }), ctx);
+    expect(r.status).toBe('SUCCESS');
+    if (r.status === 'SUCCESS') expect(r.variables?.['_wait_until_n']).toBeNull();
+  });
+
+  it('re-entrada com deadline futuro -> WAITING no MESMO deadline (não re-agenda)', async () => {
+    const future = Date.parse('2026-06-10T00:10:00.000Z');
+    const ctx = makeCtx({ variables: { _wait_until_n: future } });
+    const r = await waitHandler.execute(node({ minutes: 5 }), ctx);
+    expect(r.status).toBe('WAITING');
+    if (r.status === 'WAITING') expect(r.nextStepAt).toBe('2026-06-10T00:10:00.000Z');
   });
 });
 

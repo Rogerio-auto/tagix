@@ -13,11 +13,17 @@ import { and, eq } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
 import type { FlowHandler } from '../types';
 
-const registerConversionSchema = z.object({
-  conversionTypeKey: z.string().min(1),
-  valueCents: z.number().int().min(0).optional(),
-  note: z.string().max(1000).optional(),
-});
+// Aceita `conversionTypeKey` (UI) ou o alias `conversionType` (templates de nicho).
+const registerConversionSchema = z
+  .object({
+    conversionTypeKey: z.string().min(1).optional(),
+    conversionType: z.string().min(1).optional(),
+    valueCents: z.number().int().min(0).optional(),
+    note: z.string().max(1000).optional(),
+  })
+  .refine((d) => d.conversionTypeKey !== undefined || d.conversionType !== undefined, {
+    message: 'register_conversion exige conversionTypeKey',
+  });
 
 const { conversionTypes, conversionEvents } = schema;
 const UNIQUE_VIOLATION = '23505';
@@ -35,6 +41,7 @@ export const registerConversionHandler: FlowHandler<z.infer<typeof registerConve
   schema: registerConversionSchema,
   async execute(node, ctx) {
     const data = registerConversionSchema.parse(node.data);
+    const conversionTypeKey = data.conversionTypeKey ?? data.conversionType!;
     if (!ctx.contactId) {
       ctx.log('warn', 'register_conversion: execucao sem contactId; no-op', {
         nodeType: 'register_conversion',
@@ -49,7 +56,7 @@ export const registerConversionHandler: FlowHandler<z.infer<typeof registerConve
         .where(
           and(
             eq(conversionTypes.workspaceId, ctx.workspaceId),
-            eq(conversionTypes.key, data.conversionTypeKey),
+            eq(conversionTypes.key, conversionTypeKey),
           ),
         )
         .limit(1);
@@ -81,17 +88,17 @@ export const registerConversionHandler: FlowHandler<z.infer<typeof registerConve
 
     if (outcome.kind === 'type_not_found') {
       ctx.log('error', 'register_conversion: tipo inexistente', {
-        conversionTypeKey: data.conversionTypeKey,
+        conversionTypeKey: conversionTypeKey,
       });
     } else if (outcome.kind === 'value_required') {
       ctx.log('error', 'register_conversion: tipo exige valor', {
-        conversionTypeKey: data.conversionTypeKey,
+        conversionTypeKey: conversionTypeKey,
       });
     } else if (outcome.kind === 'created') {
       ctx.log('info', 'register_conversion: conversao registrada', { conversionEventId: outcome.id });
     } else {
       ctx.log('info', 'register_conversion: conversao deduplicada (same-day)', {
-        conversionTypeKey: data.conversionTypeKey,
+        conversionTypeKey: conversionTypeKey,
       });
     }
     return { status: 'SUCCESS' };
