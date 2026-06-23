@@ -2,7 +2,7 @@
 id: F46-S01
 title: Token expirado → purga caches + desconecta socket + redireciona p/ login
 phase: F46
-status: available
+status: review
 priority: high
 estimated_size: S
 depends_on: []
@@ -10,8 +10,10 @@ blocks: []
 agent_id: frontend-engineer
 source_docs:
   - docs/features/SELF_SERVE_SIGNUP.md
----
+claimed_at: 2026-06-23T12:10:11Z
+completed_at: 2026-06-23T12:18:28Z
 
+---
 # F46-S01 — Expiração de sessão no runtime do cliente (401 global → purge + redirect)
 
 > **source_docs:** `docs/features/SELF_SERVE_SIGNUP.md` (F44 — loading/session hardening)
@@ -66,6 +68,8 @@ loop de 401, e o usuário "preso" sem entender. Este slot fecha esse gap.
 - `apps/web/shared/stores/auth.store.ts` (método de purge, se faltar)
 - `apps/web/shared/realtime/SocketProvider.tsx` (desconectar no expiry)
 - `apps/web/shared/lib/safe-redirect.ts` (reuso; só ler/estender se necessário)
+- `apps/web/shared/lib/query-client.ts` (wiring do onError global do QueryClient)
+- `apps/web/vitest.config.ts` (alias `@/` para o teste unit resolver o grafo)
 
 ## Arquivos proibidos
 
