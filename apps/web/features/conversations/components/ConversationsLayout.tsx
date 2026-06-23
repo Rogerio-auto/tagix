@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Info, MessageSquare } from 'lucide-react';
 import { useSocket } from '@/shared/realtime';
@@ -87,7 +87,7 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
 
   // ── Desktop: 3 colunas fixas (inalterado — regressão zero) ──────────────────
   return (
-    <div className="flex h-full overflow-hidden rounded-lg border border-border">
+    <div className="flex h-[calc(100dvh-7rem)] overflow-hidden rounded-lg border border-border">
       {/* Coluna 1 — lista (F1-S14: filtros/busca/unread/real-time) */}
       <aside
         data-tour-id="inbox-list"
@@ -103,7 +103,7 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
       </aside>
 
       {/* Coluna 2 — painel da conversa (bolhas ricas em F1-S15) */}
-      <section className="flex min-w-0 flex-1 flex-col bg-bg">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-bg">
         {conversationId ? (
           <ConversationPanel
             conversationId={conversationId}
@@ -154,7 +154,7 @@ function MobileConversationsLayout({
     return (
       <div
         data-tour-id="inbox-list"
-        className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-surface"
+        className="flex h-[calc(100dvh-10rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface"
       >
         <div className="flex items-center justify-between border-b border-border-2 px-4 py-3">
           <span className="font-head text-sm font-semibold text-text">Conversas</span>
@@ -169,7 +169,7 @@ function MobileConversationsLayout({
 
   // Conversa aberta → Thread em tela cheia + Cockpit como full-sheet.
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-bg">
+    <div className="flex h-[calc(100dvh-10rem)] flex-col overflow-hidden rounded-lg border border-border bg-bg">
       <MobileThread
         conversationId={conversationId}
         onBack={() => router.back()}
@@ -270,8 +270,21 @@ function ThreadMessages({
   const role = useAuthStore((st) => st.auth?.role);
   const canModerateComments = role ? can(role, 'conversation.delete_message') : false;
 
+  // Ancora no FIM (mensagem mais recente) ao ABRIR a conversa e quando o nº de
+  // mensagens muda (mensagem nova) — antes a thread abria no topo (histórico antigo).
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const messageCount = messages.data?.messages.length ?? 0;
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [conversationId, messageCount]);
+
   return (
-    <div className={cn('flex-1 overflow-y-auto overscroll-contain py-4', className)} aria-live="polite">
+    <div
+      ref={scrollRef}
+      className={cn('flex-1 min-h-0 overflow-y-auto overscroll-contain py-4', className)}
+      aria-live="polite"
+    >
       {messages.isLoading ? (
         <SkeletonList rows={5} />
       ) : messages.data && messages.data.messages.length > 0 ? (
