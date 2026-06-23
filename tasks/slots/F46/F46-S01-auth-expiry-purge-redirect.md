@@ -2,7 +2,7 @@
 id: F46-S01
 title: Token expirado → purga caches + desconecta socket + redireciona p/ login
 phase: F46
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: []
