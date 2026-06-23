@@ -33,6 +33,7 @@ import { createCampaignsRouter } from './routes/campaigns';
 import { createCampaignRecipientsRouter } from './routes/campaigns/recipients';
 import { createContactsRouter } from './routes/contacts';
 import { createUsageRouter } from './routes/usage';
+import { createUploadsRouter } from './routes/uploads';
 import { createOnboardingRouter } from './routes/onboarding';
 import { createCalendarRouter } from './routes/calendar';
 import { createDashboardRouter } from './routes/dashboard';
@@ -205,6 +206,9 @@ export function createApp(): Express {
   // Uso e custo LLM do workspace (tenant-scoped via RLS) — alimenta /settings/usage,
   // destino de drill dos cards "Custo IA" do dashboard. Gated por agent.view_costs.
   app.use(createUsageRouter());
+  // Upload de mídia do LiveChat (outbound): recebe o arquivo cru, sobe no R2 e
+  // devolve a URL assinada (mediaUrl da mensagem). express.raw é por-rota.
+  app.use(createUploadsRouter());
 
   // Super-admin de plataforma (F2.5/F25): catálogo de modelos, políticas por
   // workspace, rotação de secrets e rollup de custo LLM. Cada router já é gated
