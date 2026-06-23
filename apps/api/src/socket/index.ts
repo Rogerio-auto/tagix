@@ -61,6 +61,8 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
         socketLog.warn('handshake unauthorized', {
           hasCookieHeader: Boolean(socket.handshake.headers.cookie),
           hasSessionCookie: token !== null,
+          url: socket.handshake.url,
+          transport: socket.conn.transport.name,
         });
         next(new Error('unauthorized'));
         return;
@@ -83,6 +85,23 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
       memberId: session.member.id,
       workspaceId: session.workspace.id,
       transport: socket.conn.transport.name,
+    });
+
+    // Diagnóstico de instabilidade: registra o upgrade de transporte
+    // (polling→websocket) e o MOTIVO da desconexão (ping timeout / transport close
+    // / transport error / client disconnect) — para isolar onde a conexão morre.
+    socket.conn.on('upgrade', () => {
+      socketLog.info('transport upgraded', {
+        memberId: session.member.id,
+        transport: socket.conn.transport.name,
+      });
+    });
+    socket.on('disconnect', (reason) => {
+      socketLog.info('socket desconectado', {
+        memberId: session.member.id,
+        reason,
+        transport: socket.conn.transport.name,
+      });
     });
 
     // F38: handlers de suporte (join autorizado por visibilidade; platform → support:platform).
