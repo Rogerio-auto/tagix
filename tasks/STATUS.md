@@ -35,6 +35,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F42   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F43   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F44   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
+| F45   | 7     | 3   | 4   | 0   | 0   | 0   | 0   |
+| F46   | 1     | 1   | 0   | 0   | 0   | 0   | 0   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -424,6 +426,24 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F44-S06 | UI de reset real (tira o mock) + /verify + NewPasswordForm — branding Leadium                     | ✅ done | high       | F44-S04                            |
 | F44-S07 | Hardening de loading/sessao — splash deterministico, unverified, open-redirect, store fail-closed | ✅ done | high       | F44-S04, F44-S05                   |
 | F44-S08 | Pass final /hm-security + /hm-adversarial + testes de integracao de fluxo                         | ✅ done | high       | F44-S04, F44-S05, F44-S06, F44-S07 |
+
+## Fase 45
+
+| ID      | Titulo                                                                       | Status      | Prioridade | Depende de                         |
+| ------- | ---------------------------------------------------------------------------- | ----------- | ---------- | ---------------------------------- |
+| F45-S01 | Normalização de mídia no upload (voz→ogg/opus, sticker→webp 512²)            | 🟢 available | high       | —                                  |
+| F45-S02 | Expansão do protocolo outbound (voice:true + location + contacts + reaction) | 🟢 available | high       | —                                  |
+| F45-S03 | Refactor da barra de ações do composer + emoji picker                        | 🟢 available | high       | —                                  |
+| F45-S04 | Gravador de nota de voz no composer (MediaRecorder)                          | ⏸️ blocked  | high       | F45-S01, F45-S02, F45-S03          |
+| F45-S05 | Menu de anexo rico — enviar sticker + localização                            | ⏸️ blocked  | medium     | F45-S01, F45-S02, F45-S03, F45-S04 |
+| F45-S06 | Reações de emoji nas bolhas de mensagem                                      | ⏸️ blocked  | medium     | F45-S02                            |
+| F45-S07 | Enviar contato do workspace                                                  | ⏸️ blocked  | low        | F45-S02, F45-S03, F45-S05          |
+
+## Fase 46
+
+| ID      | Titulo                                                                   | Status      | Prioridade | Depende de |
+| ------- | ------------------------------------------------------------------------ | ----------- | ---------- | ---------- |
+| F46-S01 | Token expirado → purga caches + desconecta socket + redireciona p/ login | 🟢 available | high       | —          |
 
 ## Fase 5 — Calendar
 
