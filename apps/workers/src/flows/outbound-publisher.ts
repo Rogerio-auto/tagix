@@ -164,6 +164,30 @@ export interface OutboundPersistencePort {
   }): Promise<ResolvedPresenceTarget | null>;
 }
 
+/** Preview pt-BR p/ a ChatList: usa o texto/legenda; senão um rótulo por tipo. */
+function previewForChatList(type: string, content: string | null): string {
+  const trimmed = content?.trim();
+  if (trimmed) return trimmed.slice(0, 280);
+  switch (type) {
+    case 'image':
+      return '📷 Imagem';
+    case 'video':
+      return '🎬 Vídeo';
+    case 'voice':
+      return '🎤 Mensagem de voz';
+    case 'audio':
+      return '🎧 Áudio';
+    case 'document':
+      return '📄 Documento';
+    case 'interactive':
+      return '💬 Mensagem interativa';
+    case 'template':
+      return '💬 Template';
+    default:
+      return '💬 Mensagem';
+  }
+}
+
 /** Implementacao real: espelha `messages.ts` (insert pending) sob RLS. */
 export function createDbOutboundPersistence(): OutboundPersistencePort {
   return {
@@ -197,6 +221,22 @@ export function createDbOutboundPersistence(): OutboundPersistencePort {
           })
           .returning({ id: schema.messages.id });
         if (!row) return null;
+
+        // Denormaliza last_message_* na conversa (MESMA tx/RLS) — sem isto a ChatList
+        // (ordenada por last_message_at, preview pelo last_message_preview) NAO refletia a
+        // mensagem enviada pelo flow: ela invalidava a lista mas rebuscava dados iguais.
+        // `last_message_from = 'system'` (flow é autoridade do sistema; check constraint OK).
+        const now = new Date();
+        await tx
+          .update(schema.conversations)
+          .set({
+            lastMessageId: row.id,
+            lastMessagePreview: previewForChatList(input.type, input.content),
+            lastMessageAt: now,
+            lastMessageFrom: 'system',
+            updatedAt: now,
+          })
+          .where(eq(schema.conversations.id, input.conversationId));
 
         return { channelId: conv.channelId, remoteId: conv.remoteId, messageId: row.id };
       });
