@@ -457,3 +457,13 @@ FOLLOW-UPS (não-bloqueantes, registrados): (a) timing async do provision p/ fec
 AppLayout; (e) login/page.tsx ainda diz "Highermind" (fora de files_allowed de qualquer slot F44);
 (f) vitest.config do @hm/web inclui só features/** — incluir shared/** p/ rodar safe-redirect.test
 no CI.
+
+## F47 Onda A — despacho (2026-06-23, orchestrator)
+
+Lote paralelo de 2 (files_allowed disjuntos, sem overlap):
+- F47-S01 [critical] → db-engineer — packages/db/** (schema products+deal_items, contacts.address/document, RLS, repos, rls.test). Destrava S02/S03/S04.
+- F47-S10 [medium] → frontend-engineer — apps/web/shared/components/layout/** (sidebar profile+logout+nav). Independente.
+
+Disjunção: packages/db vs apps/web/shared/components/layout → zero overlap, paralelizáveis.
+Workers instruídos a SÓ escrever+typecheck/lint no próprio escopo (sem git, sem pnpm install). Integração 1-por-vez pelo orchestrator (stash disjunto → claim → pop → add -A → validate → finish → merge --no-ff → done).
+Próxima onda (B): S02/S03/S04 dependem de S01.
