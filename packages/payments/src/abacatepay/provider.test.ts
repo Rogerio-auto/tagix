@@ -190,19 +190,19 @@ describe('AbacatePayProvider', () => {
     expect(req.body).toEqual({ id: 'subs_1' });
   });
 
-  it('createPixCharge usa /transparents/create com wrapper {data} e devolve brCode', async () => {
+  it('createPixCharge gera checkout só-PIX (product no valor do ciclo) e devolve payUrl', async () => {
     const captured: CapturedRequest[] = [];
+    // ensureProduct (valor do ciclo) + checkout só-PIX: duas respostas sequenciais.
     const p = makeProvider(
       seqFetchCapturing(
         [
+          { data: { id: 'prod_pix' }, success: true },
           {
             data: {
-              id: 'pix_1',
-              status: 'PENDING',
+              id: 'bill_pix',
+              url: 'https://app.abacatepay.com/pay/bill_pix',
               amount: 9900,
-              brCode: '00020126BR',
-              brCodeBase64: 'aGVsbG8=',
-              expiresAt: '2026-07-01T00:00:00Z',
+              status: 'PENDING',
             },
             success: true,
           },
@@ -218,15 +218,19 @@ describe('AbacatePayProvider', () => {
       amountCents: 9900,
       expiresInSeconds: 3600,
     });
-    expect(r.externalId).toBe('pix_1');
+    expect(r.externalId).toBe('bill_pix');
     expect(r.status).toBe('pending');
-    expect(r.brCode).toBe('00020126BR');
-    expect(r.brCodeBase64).toBe('aGVsbG8=');
+    expect(r.payUrl).toBe('https://app.abacatepay.com/pay/bill_pix');
+    expect(r.amountCents).toBe(9900);
 
-    const req = captured[0]!;
-    expect(req.url).toContain('/transparents/create');
-    const body = req.body as Record<string, unknown>;
-    expect(body['data']).toMatchObject({ amount: 9900, expiresIn: 3600 });
+    // 1º: product avulso no valor do ciclo; 2º: checkout só-PIX referenciando-o.
+    expect(captured[0]!.url).toContain('/products/create');
+    const co = captured[1]!;
+    expect(co.url).toContain('/checkouts/create');
+    const body = co.body as Record<string, unknown>;
+    expect(body['methods']).toEqual(['PIX']);
+    expect(body['items']).toEqual([{ id: 'prod_pix', quantity: 1 }]);
+    expect(body['customerId']).toBe('cust_1');
   });
 
   it('normaliza erro HTTP 401 como kind auth', async () => {

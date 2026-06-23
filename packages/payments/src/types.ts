@@ -141,8 +141,14 @@ export interface PixChargeResult {
   readonly amountCents: number;
   /** QR Code em base64 (imagem), se o gateway devolver. */
   readonly brCodeBase64?: string;
-  /** Payload copia-e-cola (EMV) do PIX. */
+  /** Payload copia-e-cola (EMV) do PIX, quando o gateway entrega QR embutido. */
   readonly brCode?: string;
+  /**
+   * URL de pagamento hospedada (checkout só-PIX). É o canal utilizável na v2 da
+   * AbacatePay — o QR embutido (`/transparents/create`) não está disponível, então
+   * a cobrança PIX por ciclo é um link hospedado. Enviar ao tenant na régua de cobrança.
+   */
+  readonly payUrl?: string;
   /** Vencimento ISO-8601, se houver. */
   readonly expiresAt?: string;
 }

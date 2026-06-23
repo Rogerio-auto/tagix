@@ -36,13 +36,11 @@ import {
   CheckoutDataSchema,
   SubscriptionDataSchema,
   CancelSubscriptionDataSchema,
-  PixChargeDataSchema,
   CreateProductRequestSchema,
   CreateCustomerRequestSchema,
   CreateCheckoutRequestSchema,
   CreateSubscriptionRequestSchema,
   CancelSubscriptionRequestSchema,
-  CreatePixChargeRequestSchema,
 } from './schemas';
 
 /** Paths dos endpoints v2 (confirmados). Todos POST salvo `get`/`check` (GET). */
@@ -53,8 +51,6 @@ const ENDPOINTS = {
   subscriptionsCreate: '/subscriptions/create',
   subscriptionsCancel: '/subscriptions/cancel',
   subscriptionsList: '/subscriptions/list',
-  pixCreate: '/transparents/create',
-  pixCheck: '/transparents/check',
 } as const;
 
 /** Mapeia o ciclo de domínio → `cycle` do gateway (monthly→MONTHLY, yearly→ANNUALLY). */
@@ -210,33 +206,33 @@ export class AbacatePayProvider implements IPaymentProvider {
   }
 
   async createPixCharge(input: CreatePixChargeInput): Promise<PixChargeResult> {
-    // `/transparents/create` aninha tudo sob `{ data: {...} }`.
-    const body = CreatePixChargeRequestSchema.parse({
-      data: {
-        amount: input.amountCents,
-        expiresIn: input.expiresInSeconds,
-        description: `${input.plan.name} (${input.cycle})`,
-        customer: {
-          name: input.workspace.name,
-          email: input.workspace.billingEmail,
-          taxId: input.workspace.taxId,
-          cellphone: input.workspace.billingPhone,
-        },
-        metadata: input.metadata ?? {
-          workspaceId: input.workspace.id,
-          planId: input.plan.id,
-          cycle: input.cycle,
-        },
+    // O QR PIX embutido (`/transparents/create`) NÃO está utilizável na API v2
+    // (responde 422 opaco a qualquer shape; doc 404). A cobrança PIX por ciclo é
+    // gerada como um CHECKOUT hospedado só-PIX (contrato provado): product avulso
+    // no valor EXATO do ciclo + `/checkouts/create` methods:['PIX']. Retorna a URL
+    // de pagamento (`payUrl`) para a régua de cobrança enviar ao tenant.
+    const product = await this.ensureProduct({
+      id: `${input.plan.id}-pix-${input.amountCents}`,
+      name: `${input.plan.name} (PIX ${input.cycle})`,
+      priceMonthlyCents: input.amountCents,
+    });
+
+    const body = CreateCheckoutRequestSchema.parse({
+      items: [{ id: product.externalProductId, quantity: 1 }],
+      methods: ['PIX'],
+      customerId: input.customer.externalCustomerId,
+      metadata: input.metadata ?? {
+        workspaceId: input.workspace.id,
+        planId: input.plan.id,
+        cycle: input.cycle,
       },
     });
-    const data = await this.client.post(ENDPOINTS.pixCreate, body, PixChargeDataSchema);
+    const data = await this.client.post(ENDPOINTS.checkoutsCreate, body, CheckoutDataSchema);
     return {
       externalId: data.id,
       status: toProviderStatus(data.status),
       amountCents: data.amount ?? input.amountCents,
-      brCodeBase64: data.brCodeBase64,
-      brCode: data.brCode,
-      expiresAt: data.expiresAt,
+      payUrl: data.url,
     };
   }
 

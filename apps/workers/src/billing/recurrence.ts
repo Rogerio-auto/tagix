@@ -517,6 +517,9 @@ async function generateCharge(
     workspaceId: sub.workspaceId,
     externalChargeId: charge.externalId,
     amountCents: charge.amountCents,
+    // Link de pagamento hospedado (checkout só-PIX). SEAM: ainda não há envio
+    // automático ao tenant — a régua de cobrança deve disparar este link.
+    payUrl: charge.payUrl,
   });
   return 'charged';
 }

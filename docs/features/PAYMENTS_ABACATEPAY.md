@@ -93,6 +93,12 @@ Toda transição grava `audit_logs` (before/after) + `payment_events.processed_a
 - **PIX:** sem débito automático. Worker (in-process scheduler dos workers) varre assinaturas PIX
   perto do `current_period_end`, gera a cobrança do próximo ciclo e aplica **régua de dunning**
   (lembrete → tolerância → `past_due` → corte). Idempotente por ciclo.
+  - **Como a cobrança PIX é gerada (validado ao vivo, 2026-06-23):** o QR PIX embutido
+    (`/transparents/create`) **não está utilizável** na v2 (responde `422` opaco a qualquer shape; doc
+    404). A cobrança PIX por ciclo é um **checkout hospedado só-PIX** (`/checkouts/create` methods
+    `['PIX']`, contrato provado em devMode) — `createPixCharge` retorna `payUrl`.
+  - **SEAM:** o worker gera o `payUrl` mas ainda **não envia** ao tenant — falta plugar o disparo do
+    link na régua de cobrança (notificação por canal/e-mail).
 
 ## 7. Fluxo assistido (plataforma)
 
