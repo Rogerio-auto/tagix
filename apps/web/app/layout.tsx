@@ -10,14 +10,14 @@ const price = Chakra_Petch({ subsets: ['latin'], weight: ['500', '600', '700'], 
 const display = Orbitron({ subsets: ['latin'], weight: ['600', '700', '800'], variable: '--font-display-next', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'Highermind',
+  title: 'Leadium',
   description: 'Atendimento ao cliente, vendas conversacionais e automação.',
   // PWA: manifest gerado por app/manifest.ts (Next injeta o <link rel="manifest">).
   manifest: '/manifest.webmanifest',
-  applicationName: 'Highermind',
+  applicationName: 'Leadium',
   appleWebApp: {
     capable: true,
-    title: 'Highermind',
+    title: 'Leadium',
     // Combina com o tema dark-first; a barra de status some no standalone.
     statusBarStyle: 'black-translucent',
   },

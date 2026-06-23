@@ -14,7 +14,8 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, asc, eq } from 'drizzle-orm';
 import { encryptSecret, schema } from '@hm/db';
-import { GraphClient } from '@hm/channels';
+import { GraphClient, MetaError } from '@hm/channels';
+import { createLogger } from '@hm/logger';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import {
   IgConnectError,
@@ -24,6 +25,12 @@ import {
 } from '../../services/channels/instagram-connect';
 import { WaConnectError, runWhatsAppConnect } from '../../services/channels/whatsapp-connect';
 import { platformSecrets } from '../../secrets';
+
+// Logger do connect de canais. As falhas de connect Meta (exchange/register/
+// subscribe) eram invisíveis: a rota devolvia 502 genérico e descartava o motivo
+// real da Graph. Aqui logamos código/subcódigo/mensagem da Meta (sem segredos)
+// e devolvemos a razão real ao cliente — diagnóstico de connect deixa de ser cego.
+const connectLogger = createLogger('info', { svc: 'channel-connect' });
 
 /**
  * Campos de canal seguros para devolver ao cliente. NUNCA inclui colunas de
@@ -107,38 +114,26 @@ const igConnectSchema = z.object({
 
 /**
  * Wizard WA: connect server-side (Embedded Signup / Tech Provider). Troca o
- * `code` por token long-lived, registra o numero (PIN — so na coexistencia),
- * inscreve a WABA no app (subscribed_apps — com campos de coexistencia quando
- * `mode=coexistence`), cria o canal e cifra o token. O token NUNCA volta ao cliente.
+ * `code` por token long-lived, inscreve a WABA no app (subscribed_apps — com
+ * campos de coexistencia quando `mode=coexistence`), cria o canal e cifra o token.
+ * O token NUNCA volta ao cliente.
  *
- * **PIN**: obrigatorio SO na coexistencia (numero existente registra na Cloud API
- * com seu 2FA). Numero novo (`cloud_api`) e provisionado pelo Embedded Signup —
- * sem register/PIN. Regra validada via superRefine (espelha o fluxo do v1).
+ * **Sem PIN / sem /register:** a Graph rejeita `/{phone_number_id}/register` para
+ * numeros SMB ("Register endpoint is not available for SMB businesses", code 100) —
+ * confirmado em producao 2026-06-20. Na coexistencia o numero ja e verificado no
+ * app WhatsApp Business durante o Embedded Signup; numero novo (`cloud_api`) e
+ * provisionado pelo proprio Signup. `pin` permanece opcional/ignorado (compat).
  */
-const waConnectSchema = z
-  .object({
-    code: z.string().trim().min(1),
-    phoneNumberId: z.string().trim().min(1).max(64),
-    wabaId: z.string().trim().min(1).max(64),
-    pin: z
-      .string()
-      .trim()
-      .regex(/^\d{6}$/, 'O PIN do WhatsApp deve ter 6 digitos.')
-      .optional(),
-    mode: z.enum(['cloud_api', 'coexistence']),
-    name: z.string().trim().min(1).max(120),
-    phoneNumber: z.string().trim().min(1).max(32).optional(),
-    displayHandle: z.string().trim().min(1).max(120).optional(),
-  })
-  .superRefine((val, ctx) => {
-    if (val.mode === 'coexistence' && (val.pin === undefined || val.pin.length === 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['pin'],
-        message: 'O PIN de 6 digitos e obrigatorio na coexistencia.',
-      });
-    }
-  });
+const waConnectSchema = z.object({
+  code: z.string().trim().min(1),
+  phoneNumberId: z.string().trim().min(1).max(64),
+  wabaId: z.string().trim().min(1).max(64),
+  pin: z.string().trim().optional(),
+  mode: z.enum(['cloud_api', 'coexistence']),
+  name: z.string().trim().min(1).max(120),
+  phoneNumber: z.string().trim().min(1).max(32).optional(),
+  displayHandle: z.string().trim().min(1).max(120).optional(),
+});
 
 /** Narrowing de `req.params['x']` (string | string[] no @types/express 5). */
 function param(req: Request, key: string): string {
@@ -330,9 +325,23 @@ export function createChannelsRouter(): Router {
         });
       } catch (err: unknown) {
         if (err instanceof IgConnectError) {
+          connectLogger.warn('instagram accounts: erro de domínio', { stage: err.code, message: err.message });
           res.status(422).json({ code: err.code, message: err.message });
           return;
         }
+        if (err instanceof MetaError) {
+          connectLogger.error('instagram accounts: Graph API recusou', {
+            httpStatus: err.httpStatus,
+            graphCode: err.code,
+            graphSubcode: err.subcode,
+            message: err.message,
+          });
+          res.status(502).json({ code: 'IG_CONNECT_GRAPH_ERROR', message: `A Meta recusou: ${err.message}` });
+          return;
+        }
+        connectLogger.error('instagram accounts: erro inesperado', {
+          message: err instanceof Error ? err.message : String(err),
+        });
         res.status(502).json({ code: 'IG_CONNECT_GRAPH_ERROR', message: 'Falha ao consultar a Meta. Tente novamente.' });
       }
     },
@@ -358,7 +367,19 @@ export function createChannelsRouter(): Router {
       try {
         await subscribeInstagramWebhook(graph, input.pageId, input.pageAccessToken);
       } catch (err: unknown) {
-        const message = err instanceof IgConnectError ? err.message : 'Falha ao subscrever o webhook na Meta.';
+        if (err instanceof MetaError) {
+          connectLogger.error('instagram connect: Graph API recusou subscribe', {
+            httpStatus: err.httpStatus,
+            graphCode: err.code,
+            graphSubcode: err.subcode,
+            message: err.message,
+          });
+        } else {
+          connectLogger.error('instagram connect: erro ao subscrever webhook', {
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+        const message = err instanceof Error ? err.message : 'Falha ao subscrever o webhook na Meta.';
         res.status(502).json({ code: 'IG_CONNECT_SUBSCRIBE_FAILED', message });
         return;
       }
@@ -456,9 +477,33 @@ export function createChannelsRouter(): Router {
         );
       } catch (err: unknown) {
         if (err instanceof WaConnectError) {
+          connectLogger.warn('whatsapp connect: erro de domínio', {
+            stage: err.code,
+            message: err.message,
+            mode: input.mode,
+          });
           res.status(422).json({ code: err.code, message: err.message });
           return;
         }
+        if (err instanceof MetaError) {
+          // Motivo REAL da recusa da Meta (ex.: code 100 param inválido, code 190
+          // token, code 10/200 permissão/IP). fbtrace_id ajuda o suporte da Meta.
+          connectLogger.error('whatsapp connect: Graph API recusou', {
+            httpStatus: err.httpStatus,
+            graphCode: err.code,
+            graphSubcode: err.subcode,
+            message: err.message,
+            mode: input.mode,
+          });
+          res.status(502).json({
+            code: 'WA_CONNECT_GRAPH_ERROR',
+            message: `A Meta recusou a conexão: ${err.message}`,
+          });
+          return;
+        }
+        connectLogger.error('whatsapp connect: erro inesperado', {
+          message: err instanceof Error ? err.message : String(err),
+        });
         res.status(502).json({
           code: 'WA_CONNECT_GRAPH_ERROR',
           message: 'Falha ao conectar o WhatsApp na Meta. Tente novamente.',

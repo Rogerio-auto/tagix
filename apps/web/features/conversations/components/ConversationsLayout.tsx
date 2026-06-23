@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Info, MessageSquare } from 'lucide-react';
 import { useSocket } from '@/shared/realtime';
@@ -10,6 +10,11 @@ import { Sheet } from '@/shared/components/Sheet';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { cn } from '@/shared/lib/cn';
 import { useMessages, useConversationDetail } from '../queries';
+import {
+  useConversationDetailLive,
+  useConversationMessagesLive,
+  useMarkConversationRead,
+} from '../hooks/useConversationSocket';
 import { ConversationsHelp } from '../help';
 import { ChatList } from './ChatList';
 import { MessageComposer } from './MessageComposer';
@@ -84,7 +89,10 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
   return (
     <div className="flex h-[calc(100dvh-7rem)] overflow-hidden rounded-lg border border-border">
       {/* Coluna 1 — lista (F1-S14: filtros/busca/unread/real-time) */}
-      <aside className="flex w-80 shrink-0 flex-col border-r border-border bg-surface">
+      <aside
+        data-tour-id="inbox-list"
+        className="flex w-80 shrink-0 flex-col border-r border-border bg-surface"
+      >
         <div className="flex items-center justify-between border-b border-border-2 px-4 py-3">
           <span className="font-head text-sm font-semibold text-text">Conversas</span>
           <HelpPanel title="Conversas">
@@ -95,7 +103,7 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
       </aside>
 
       {/* Coluna 2 — painel da conversa (bolhas ricas em F1-S15) */}
-      <section className="flex min-w-0 flex-1 flex-col bg-bg">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-bg">
         {conversationId ? (
           <ConversationPanel
             conversationId={conversationId}
@@ -144,7 +152,10 @@ function MobileConversationsLayout({
   // Sem conversa selecionada → Lista em tela cheia (uma intenção por view, §2/§4).
   if (!conversationId) {
     return (
-      <div className="flex h-[calc(100dvh-10rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface">
+      <div
+        data-tour-id="inbox-list"
+        className="flex h-[calc(100dvh-10rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface"
+      >
         <div className="flex items-center justify-between border-b border-border-2 px-4 py-3">
           <span className="font-head text-sm font-semibold text-text">Conversas</span>
           <HelpPanel title="Conversas">
@@ -186,6 +197,10 @@ function MobileThread({
   const { data: detailData } = useConversationDetail(conversationId);
   const { joinConversation, leaveConversation } = useSocket();
   const detail = detailData?.conversation;
+
+  // Header/identidade vivos: status/aiMode/assignee/department ao vivo (mesmo
+  // socket do desktop — fecha o gap de detail stale quando outro operador muda).
+  useConversationDetailLive(conversationId);
 
   // Entra na room realtime (mesmas queries/socket do desktop — sem alteração).
   useEffect(() => {
@@ -248,16 +263,35 @@ function ThreadMessages({
   className?: string;
 }) {
   const messages = useMessages(conversationId);
+  // Thread ao vivo: invalida as mensagens desta conversa ao chegar `message:new`.
+  useConversationMessagesLive(conversationId);
+  // Marca como lida ao abrir + a cada nova mensagem enquanto aberta (zera o badge).
+  useMarkConversationRead(conversationId);
   const role = useAuthStore((st) => st.auth?.role);
   const canModerateComments = role ? can(role, 'conversation.delete_message') : false;
 
+  // Ancora no FIM (mensagem mais recente) ao ABRIR a conversa e quando o nº de
+  // mensagens muda (mensagem nova) — antes a thread abria no topo (histórico antigo).
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const messageCount = messages.data?.messages.length ?? 0;
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [conversationId, messageCount]);
+
   return (
-    <div className={cn('flex-1 overflow-y-auto py-4', className)} aria-live="polite">
+    <div
+      ref={scrollRef}
+      className={cn('flex-1 min-h-0 overflow-y-auto overscroll-contain py-4', className)}
+      aria-live="polite"
+    >
       {messages.isLoading ? (
         <SkeletonList rows={5} />
       ) : messages.data && messages.data.messages.length > 0 ? (
         <ul className="flex flex-col gap-3">
-          {messages.data.messages.map((m) => {
+          {/* A API devolve DESC (mais nova primeiro); a thread exibe cronológico
+              (mais antiga no topo, mais nova embaixo) → cópia + reverse. */}
+          {[...messages.data.messages].reverse().map((m) => {
             const ig =
               m.type === 'comment' || m.type === 'comment_reply'
                 ? igCommentFromMessage(m)
@@ -297,6 +331,10 @@ function ConversationPanel({
 }) {
   const { data: detailData } = useConversationDetail(conversationId);
   const { joinConversation, leaveConversation } = useSocket();
+
+  // Header + Cockpit vivos: invalida o detail/agent/lista quando status/aiMode/
+  // assignee/department mudam por outro operador ou pela IA (human_takeover).
+  useConversationDetailLive(conversationId);
 
   // Entra na room realtime da conversa aberta (recebe message:new, typing, status…).
   useEffect(() => {

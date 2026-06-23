@@ -18,6 +18,9 @@ ARG NEXT_PUBLIC_META_APP_ID=
 ARG NEXT_PUBLIC_META_CONFIG_ID=
 ENV NEXT_PUBLIC_META_APP_ID=${NEXT_PUBLIC_META_APP_ID}
 ENV NEXT_PUBLIC_META_CONFIG_ID=${NEXT_PUBLIC_META_CONFIG_ID}
+# Cloudflare Turnstile (captcha do signup — NEXT_PUBLIC = inlinado no build do browser).
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY=
+ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=${NEXT_PUBLIC_TURNSTILE_SITE_KEY}
 COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile

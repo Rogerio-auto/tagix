@@ -19,7 +19,7 @@
  * Idempotência: cada fluxo é ancorado no id externo (`externalId`/`waId`) — ver
  * `db-ports.ts`. Reprocessar o mesmo envelope é no-op.
  */
-import { connectMq, consume, QUEUES, COEXISTENCE_EVENT_TYPES } from '@hm/shared/mq';
+import { connectMq, consume, QUEUES, COEXISTENCE_EVENT_TYPES, type MqHandle } from '@hm/shared/mq';
 import {
   coexistenceAppStateSchema,
   coexistenceEchoSchema,
@@ -27,8 +27,15 @@ import {
   type Envelope,
 } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
-import { DbCoexistencePersistence } from './db-ports';
+import {
+  DbCoexistencePersistence,
+  MqCoexistenceSocketEmit,
+  NoopCoexistenceSocketEmit,
+} from './db-ports';
 import type { CoexistenceDeps } from './ports';
+
+/** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
+type MqChannel = MqHandle['channel'];
 
 /** Fila canônica de coexistência (`QUEUES.coexistence`). */
 export const COEXISTENCE_QUEUE = QUEUES.coexistence;
@@ -42,9 +49,16 @@ export interface CoexistenceWorkerHandle {
   stop(): Promise<void>;
 }
 
-/** Monta as dependências default a partir da infra real (persistência `@hm/db`). */
-export function createCoexistenceDeps(logger: Logger): CoexistenceDeps {
-  return { persistence: new DbCoexistencePersistence(logger) };
+/**
+ * Monta as dependências default a partir da infra real (persistência `@hm/db`).
+ * Recebe o `channel` AMQP do composition root para empurrar `message:new`
+ * (echoes) e `conversation:updated` (history) ao relay de socket — sem ele, a
+ * coexistência persistia mas NÃO atualizava o LiveChat ao vivo. Quando ausente
+ * (testes/sem broker), usa um emissor no-op.
+ */
+export function createCoexistenceDeps(logger: Logger, channel?: MqChannel): CoexistenceDeps {
+  const socket = channel ? new MqCoexistenceSocketEmit(channel) : new NoopCoexistenceSocketEmit();
+  return { persistence: new DbCoexistencePersistence(logger, undefined, socket) };
 }
 
 /**

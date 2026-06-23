@@ -25,9 +25,17 @@ export function getAuthProvider(): IAuthProvider {
 
   const url = process.env['SUPABASE_URL'];
   const anonKey = process.env['SUPABASE_ANON_KEY'];
+  // Service key (server-side) habilita o cadastro self-serve (admin createUser com
+  // email_confirm:false). Opcional: sem ela, signUp falha explicitamente (provider_error),
+  // nunca cai num caminho inseguro. NUNCA exposta ao cliente.
+  const serviceKey = process.env['SUPABASE_SERVICE_KEY'];
 
   if (isUsable(url, 'your-project') && url.startsWith('https://') && isUsable(anonKey, 'your-anon')) {
-    cached = new SupabaseAuthProvider(url, anonKey);
+    cached = new SupabaseAuthProvider(
+      url,
+      anonKey,
+      isUsable(serviceKey, 'your-service') ? serviceKey : undefined,
+    );
   } else {
     cached = new MockAuthProvider();
   }

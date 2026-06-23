@@ -21,7 +21,11 @@ import type {
   CoexistenceEchoPayload,
   CoexistenceHistoryBatchPayload,
 } from '@hm/shared/mq';
-import type { CoexistencePersistencePort } from './ports';
+import type {
+  CoexistenceMessageNewEmit,
+  CoexistencePersistencePort,
+  CoexistenceSocketPort,
+} from './ports';
 
 const logger = {
   debug: vi.fn(),
@@ -227,6 +231,9 @@ vi.mock('drizzle-orm', () => ({
   eq: db.eq,
   isNull: db.isNull,
   and: db.and,
+  // `sql` tagged template: o fake de onConflict ignora o predicado `where` (dedup
+  // por target), então um stub que não quebra a chamada basta.
+  sql: () => ({}),
 }));
 
 // Importa DEPOIS dos mocks.
@@ -377,6 +384,86 @@ describe('DbCoexistencePersistence — echo', () => {
     expect(result.resolved).toBe(false);
     expect(result.inserted).toBe(false);
     expect(store.messages).toHaveLength(0);
+  });
+});
+
+// ─── 3. Socket emit (real-time) — echo + history ──────────────────────────────
+
+/** Spy de socket que captura os eventos emitidos pela persistência. */
+function makeSocketSpy(): CoexistenceSocketPort & {
+  messageNew: CoexistenceMessageNewEmit[];
+  updated: Array<{ workspaceId: string; conversationId: string }>;
+} {
+  const messageNew: CoexistenceMessageNewEmit[] = [];
+  const updated: Array<{ workspaceId: string; conversationId: string }> = [];
+  return {
+    messageNew,
+    updated,
+    async emitMessageNew(input) {
+      messageNew.push(input);
+    },
+    async emitConversationUpdated(workspaceId, conversationId) {
+      updated.push({ workspaceId, conversationId });
+    },
+  };
+}
+
+describe('DbCoexistencePersistence — socket emit', () => {
+  beforeEach(() => db.reset());
+
+  it('echo inserido → emite message:new outbound uma vez; dedup NÃO reemite', async () => {
+    const socket = makeSocketSpy();
+    const p = new DbCoexistencePersistence(logger, undefined, socket);
+
+    await p.persistEcho(echoPayload);
+    expect(socket.messageNew).toHaveLength(1);
+    expect(socket.messageNew[0]).toMatchObject({
+      externalId: 'wamid.echo.1',
+      direction: 'outbound',
+      type: 'text',
+      content: 'enviado pelo app',
+    });
+
+    // Reentrega: dedup → sem novo message:new (espelha o inbound).
+    await p.persistEcho(echoPayload);
+    expect(socket.messageNew).toHaveLength(1);
+  });
+
+  it('echo órfão (sem canal) → não emite nada', async () => {
+    const socket = makeSocketSpy();
+    const p = new DbCoexistencePersistence(logger, undefined, socket);
+    await p.persistEcho({ ...echoPayload, phoneNumberId: 'PN_ORPHAN' });
+    expect(socket.messageNew).toHaveLength(0);
+  });
+
+  it('history → emite conversation:updated uma vez por conversa afetada (sem flood de message:new)', async () => {
+    const socket = makeSocketSpy();
+    const p = new DbCoexistencePersistence(logger, undefined, socket);
+
+    const batch: CoexistenceHistoryBatchPayload = {
+      phoneNumberId: 'PN123',
+      contacts: [
+        { waId: '5511999', raw: {} },
+        { waId: '5511888', raw: {} },
+      ],
+      messages: [
+        { externalId: 'h.1', from: '5511999', type: 'text', text: 'a', fromMe: false, raw: {} },
+        { externalId: 'h.2', from: '5511999', type: 'text', text: 'b', fromMe: false, raw: {} },
+        { externalId: 'h.3', from: '5511888', type: 'text', text: 'c', fromMe: false, raw: {} },
+      ],
+      raw: {},
+    };
+
+    await p.importHistory(batch);
+    // Backfill NÃO empurra bolhas individuais.
+    expect(socket.messageNew).toHaveLength(0);
+    // Uma sinalização por conversa (2 contrapartes), sem duplicar.
+    expect(socket.updated).toHaveLength(2);
+
+    // Reprocesso: tudo dedup → nada novo emitido.
+    socket.updated.length = 0;
+    await p.importHistory(batch);
+    expect(socket.updated).toHaveLength(0);
   });
 });
 

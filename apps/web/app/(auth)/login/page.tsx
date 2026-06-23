@@ -9,7 +9,7 @@ export default function LoginPage() {
         <span className="font-display text-2xl text-brand" aria-hidden>
           ◢
         </span>
-        <span className="font-head text-2xl font-semibold text-text">Highermind</span>
+        <span className="font-head text-2xl font-semibold text-text">Leadium</span>
       </div>
       <h1 className="mb-1 font-head text-3xl font-semibold text-text">Entrar</h1>
       <p className="mb-6 font-body text-text-mid">Acesse o seu workspace.</p>

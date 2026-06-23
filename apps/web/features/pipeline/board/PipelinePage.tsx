@@ -172,7 +172,7 @@ export function PipelinePage(): React.JSX.Element {
   return (
     <div className="flex h-full flex-col gap-4 p-6">
       <header className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" data-tour-id="pipeline-selector">
           <select
             value={pipelineId}
             onChange={(e) => setSelectedId(e.target.value)}
@@ -204,48 +204,50 @@ export function PipelinePage(): React.JSX.Element {
         </Button>
       </header>
 
-      {detail.isLoading ? (
-        isMobile ? (
-          <div className="flex flex-col gap-2">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-20 animate-pulse rounded-lg bg-surface-raised" />
-            ))}
-          </div>
+      <div className="flex min-h-0 flex-1 flex-col" data-tour-id="pipeline-board">
+        {detail.isLoading ? (
+          isMobile ? (
+            <div className="flex flex-col gap-2">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-20 animate-pulse rounded-lg bg-surface-raised" />
+              ))}
+            </div>
+          ) : (
+            <div className="flex gap-4">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-64 w-72 animate-pulse rounded-lg bg-surface-raised" />
+              ))}
+            </div>
+          )
+        ) : isMobile ? (
+          // Mobile: kanban horizontal+drag é inviável no toque → seletor de estágio
+          // + lista vertical + mover por ação explícita (MOBILE_UX §2 "Kanban").
+          <MobileBoard
+            stages={stages}
+            dealsByStage={dealsByStage}
+            onOpenDeal={setOpenDealId}
+            onMoveDeal={moveDeal}
+          />
         ) : (
-          <div className="flex gap-4">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-64 w-72 animate-pulse rounded-lg bg-surface-raised" />
-            ))}
-          </div>
-        )
-      ) : isMobile ? (
-        // Mobile: kanban horizontal+drag é inviável no toque → seletor de estágio
-        // + lista vertical + mover por ação explícita (MOBILE_UX §2 "Kanban").
-        <MobileBoard
-          stages={stages}
-          dealsByStage={dealsByStage}
-          onOpenDeal={setOpenDealId}
-          onMoveDeal={moveDeal}
-        />
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragEnd={onDragEnd}
-          accessibility={{ announcements }}
-        >
-          <div className="flex flex-1 gap-4 overflow-x-auto pb-4">
-            {stages.map((stage) => (
-              <StageColumn
-                key={stage.id}
-                stage={stage}
-                deals={dealsByStage.get(stage.id) ?? []}
-                onOpenDeal={setOpenDealId}
-              />
-            ))}
-          </div>
-        </DndContext>
-      )}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragEnd={onDragEnd}
+            accessibility={{ announcements }}
+          >
+            <div className="flex flex-1 gap-4 overflow-x-auto pb-4">
+              {stages.map((stage) => (
+                <StageColumn
+                  key={stage.id}
+                  stage={stage}
+                  deals={dealsByStage.get(stage.id) ?? []}
+                  onOpenDeal={setOpenDealId}
+                />
+              ))}
+            </div>
+          </DndContext>
+        )}
+      </div>
 
       <CreatePipelineModal
         open={showCreate}

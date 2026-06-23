@@ -39,7 +39,6 @@ export class SectionBoundary extends Component<
   componentDidCatch(error: Error, info: ErrorInfo): void {
     // Diagnóstico em dev; em produção degrada em silêncio.
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
       console.error(
         `[SectionBoundary${this.props.name ? `:${this.props.name}` : ""}]`,
         error,

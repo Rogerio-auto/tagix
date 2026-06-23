@@ -18,6 +18,8 @@ export {
 export {
   DbCoexistencePersistence,
   DbCoexistenceChannelResolver,
+  MqCoexistenceSocketEmit,
+  NoopCoexistenceSocketEmit,
   type CoexistenceChannelResolver,
   type ResolvedCoexistenceChannel,
 } from './db-ports';
@@ -25,6 +27,8 @@ export {
 export type {
   CoexistenceDeps,
   CoexistencePersistencePort,
+  CoexistenceSocketPort,
+  CoexistenceMessageNewEmit,
   CoexistenceEchoResult,
   CoexistenceHistoryResult,
   CoexistenceAppStateResult,

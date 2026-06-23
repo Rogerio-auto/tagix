@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangle } from 'lucide-react';
 import { Button, Input, useToast } from '@hm/ui';
 import { ApiError } from '@/shared/lib/api-client';
+import { safeNextPath } from '@/shared/lib/safe-redirect';
 import { loginSchema, type LoginInput } from '../schema';
 import { useLogin } from '../queries';
 
@@ -32,7 +33,13 @@ export function LoginForm() {
     setSubmitError(null);
     try {
       await login.mutateAsync(data);
-      router.push('/');
+      // Open-redirect guard (T11): lê ?next= do location (client-only, sem Suspense)
+      // e só permite caminho interno same-origin.
+      const rawNext =
+        typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.search).get('next')
+          : null;
+      router.push(safeNextPath(rawNext));
       router.refresh();
     } catch (err) {
       // UX §2.11: erro com o quê / por quê / o que fazer. Mostrado inline (no

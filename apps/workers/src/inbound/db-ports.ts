@@ -191,7 +191,11 @@ export class MqInboundSocketEmit implements InboundSocketPort {
         content: input.content,
         direction: 'inbound',
       },
-    });
+      // `workspace: true` → o relay emite também para `ws:{workspaceId}`, não só
+      // para a sala da conversa. Sem isto, uma conversa NOVA (que ninguém abriu
+      // ainda) não aparecia na lista ao vivo (ninguém está na sala dela). Assim a
+      // ChatList (que escuta o socket do workspace) atualiza sozinha.
+    }, { workspace: true });
     await Promise.resolve();
   }
 
@@ -612,7 +616,13 @@ export class DbInboundPersistence implements InboundPersistencePort {
             ...(comment.fromUsername !== undefined ? { fromUsername: comment.fromUsername } : {}),
           },
         })
-        .onConflictDoNothing({ target: [messages.conversationId, messages.externalId] })
+        .onConflictDoNothing({
+        target: [messages.conversationId, messages.externalId],
+        // `uq_messages_external` é PARCIAL (WHERE external_id IS NOT NULL). O ON
+        // CONFLICT só casa um índice parcial repetindo o predicado — sem isto o
+        // Postgres rejeita ("no unique constraint matching") e a mensagem some.
+        where: sql`${messages.externalId} is not null`,
+      })
         .returning({ id: messages.id });
 
       if (msg !== undefined) {
@@ -839,7 +849,13 @@ async function insertMessages(
         createdAt: toDate(event.rawTimestamp),
         ...(event.metadata !== undefined ? { metadata: event.metadata } : {}),
       })
-      .onConflictDoNothing({ target: [messages.conversationId, messages.externalId] })
+      .onConflictDoNothing({
+        target: [messages.conversationId, messages.externalId],
+        // `uq_messages_external` é PARCIAL (WHERE external_id IS NOT NULL). O ON
+        // CONFLICT só casa um índice parcial repetindo o predicado — sem isto o
+        // Postgres rejeita ("no unique constraint matching") e a mensagem some.
+        where: sql`${messages.externalId} is not null`,
+      })
       .returning({ id: messages.id });
 
     if (row !== undefined) {

@@ -128,29 +128,29 @@ describe('runWhatsAppConnect (regra do PIN)', () => {
     expect(body?.subscribed_fields).toBe(WA_CLOUD_API_SUBSCRIBED_FIELDS.join(','));
   });
 
-  it('coexistence: registra com PIN e subscribe com campos de coexistencia', async () => {
+  it('coexistence: NAO registra (Meta rejeita /register p/ SMB); subscribe com campos de coexistencia', async () => {
     const post = okPost();
     await runWhatsAppConnect(
       graphWithToken(post),
-      { code: 'C', phoneNumberId: 'PNID', wabaId: 'WABA', pin: '123456', mode: 'coexistence' },
+      { code: 'C', phoneNumberId: 'PNID', wabaId: 'WABA', mode: 'coexistence' },
       creds,
     );
-    const register = post.mock.calls.find((c) => c[0] === 'PNID/register');
-    expect(register?.[1]).toMatchObject({ messaging_product: 'whatsapp', pin: '123456' });
+    // Nunca chama /register: a Graph responde "Register endpoint is not available
+    // for SMB businesses" — o numero ja e verificado no app WhatsApp Business.
+    expect(post.mock.calls.some((c) => c[0] === 'PNID/register')).toBe(false);
     const sub = post.mock.calls.find((c) => c[0] === 'WABA/subscribed_apps');
     const body = sub?.[1] as { subscribed_fields: string } | undefined;
     expect(body?.subscribed_fields).toBe(WA_COEXISTENCE_SUBSCRIBED_FIELDS.join(','));
   });
 
-  it('coexistence SEM PIN → WaConnectError (e nao chega a registrar)', async () => {
+  it('coexistence: PIN e ignorado (nao registra mesmo se enviado)', async () => {
     const post = okPost();
-    await expect(
-      runWhatsAppConnect(
-        graphWithToken(post),
-        { code: 'C', phoneNumberId: 'PNID', wabaId: 'WABA', mode: 'coexistence' },
-        creds,
-      ),
-    ).rejects.toBeInstanceOf(WaConnectError);
+    const token = await runWhatsAppConnect(
+      graphWithToken(post),
+      { code: 'C', phoneNumberId: 'PNID', wabaId: 'WABA', pin: '123456', mode: 'coexistence' },
+      creds,
+    );
+    expect(token).toBe('LONG_LIVED');
     expect(post.mock.calls.some((c) => c[0] === 'PNID/register')).toBe(false);
   });
 });

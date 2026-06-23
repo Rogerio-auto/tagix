@@ -9,9 +9,13 @@
 import { z } from 'zod';
 import { connectMq, consume } from '@hm/shared/mq';
 import { SERVER_TO_CLIENT_EVENTS, type ServerToClientEvent } from '@hm/shared';
+import { createLogger } from '@hm/logger';
 import type { IoServer } from './index';
 
 const RELAY_QUEUE = 'hm.q.socket.relay';
+
+// Diagnóstico: loga cada emit (evento + salas) e quantos sockets há nas salas.
+const relayLog = createLogger('info', { svc: 'socket-relay' });
 
 /** Alvo de roteamento dentro de um workspace. */
 const relayTargetSchema = z.object({
@@ -60,6 +64,10 @@ export async function startSocketRelay(io: IoServer): Promise<void> {
     const payload = relayPayloadSchema.parse(envelope.payload);
     const event: ServerToClientEvent = payload.event;
     const rooms = resolveRooms(payload, envelope.workspaceId);
+    // Quantos sockets há em cada sala destino (diagnóstico de entrega).
+    const adapterRooms = io.of('/').adapter.rooms;
+    const counts = rooms.map((r) => `${r}=${adapterRooms.get(r)?.size ?? 0}`);
+    relayLog.info('relay emit', { event, rooms: counts });
     // io aceita evento arbitrário (DefaultEventsMap); o shape do `data` é o
     // contrato tipado de socket-events validado na publicação.
     io.to(rooms).emit(event, payload.data);

@@ -17,6 +17,40 @@ import type {
   CoexistenceHistoryBatchPayload,
 } from '@hm/shared/mq';
 
+/** Dados de um `message:new` emitido pela coexistência (espelha o inbound). */
+export interface CoexistenceMessageNewEmit {
+  readonly workspaceId: string;
+  readonly conversationId: string;
+  readonly messageId: string;
+  readonly externalId: string;
+  readonly type: string;
+  readonly content: string | null;
+  /** `outbound` para echoes (enviadas pelo app); histórico varia por `fromMe`. */
+  readonly direction: 'inbound' | 'outbound';
+}
+
+/**
+ * Porta de socket da coexistência: publica eventos no `hm.q.socket.relay`
+ * (consumido por `apps/api/src/socket/relay.ts`), com `workspace: true` para que
+ * a ChatList do workspace atualize ao vivo mesmo sem ninguém na sala da conversa.
+ * Best-effort: falha de broker nunca derruba a persistência (já commitada).
+ */
+export interface CoexistenceSocketPort {
+  /**
+   * `message:new` para um echo (mensagem enviada pelo app WhatsApp Business) —
+   * atividade ao vivo, empurra a bolha + atualiza a ChatList.
+   */
+  emitMessageNew(input: CoexistenceMessageNewEmit): Promise<void>;
+  /**
+   * `conversation:updated` para uma conversa afetada por import de HISTÓRICO. O
+   * histórico é um backfill em lote de mensagens passadas: emitir N `message:new`
+   * inundaria a thread e bagunçaria a ordenação (timestamps antigos). Em vez
+   * disso, um único sinal por conversa faz a ChatList revalidar a projeção (last
+   * message/contadores) sem floodar a thread aberta.
+   */
+  emitConversationUpdated(workspaceId: string, conversationId: string): Promise<void>;
+}
+
 /** Resultado da materialização de um echo (observável em log/teste). */
 export interface CoexistenceEchoResult {
   /** `false` quando nenhum canal casou o `phoneNumberId` (echo órfão). */

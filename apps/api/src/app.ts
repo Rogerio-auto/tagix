@@ -33,6 +33,7 @@ import { createCampaignsRouter } from './routes/campaigns';
 import { createCampaignRecipientsRouter } from './routes/campaigns/recipients';
 import { createContactsRouter } from './routes/contacts';
 import { createUsageRouter } from './routes/usage';
+import { createUploadsRouter } from './routes/uploads';
 import { createOnboardingRouter } from './routes/onboarding';
 import { createCalendarRouter } from './routes/calendar';
 import { createDashboardRouter } from './routes/dashboard';
@@ -78,6 +79,13 @@ export function createApp(): Express {
   // Observabilidade (F10-S01): Sentry opt-in (no-op sem DSN) iniciado no boot.
   initSentry();
   const app = express();
+
+  // Atrás do Traefik (1 hop) em produção: só o proxy reverso é confiável para
+  // resolver o IP real do cliente (`req.ip`). CRÍTICO para o rate-limit de auth —
+  // sem isto o `X-Forwarded-For` enviado pelo cliente seria confiável e o limite por
+  // IP seria burlável por spoof (gira a chave do Redis a cada request). Em dev (sem
+  // proxy) NÃO confia em XFF → `req.ip` = IP do socket.
+  app.set('trust proxy', process.env['NODE_ENV'] === 'production' ? 1 : false);
 
   // Seam onStageChanged (F5-S06/S07): socket emit + automation scheduling.
   registerDealHooks();
@@ -198,6 +206,9 @@ export function createApp(): Express {
   // Uso e custo LLM do workspace (tenant-scoped via RLS) — alimenta /settings/usage,
   // destino de drill dos cards "Custo IA" do dashboard. Gated por agent.view_costs.
   app.use(createUsageRouter());
+  // Upload de mídia do LiveChat (outbound): recebe o arquivo cru, sobe no R2 e
+  // devolve a URL assinada (mediaUrl da mensagem). express.raw é por-rota.
+  app.use(createUploadsRouter());
 
   // Super-admin de plataforma (F2.5/F25): catálogo de modelos, políticas por
   // workspace, rotação de secrets e rollup de custo LLM. Cada router já é gated

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { api, ApiError } from '@/shared/lib/api-client';
+import { ApiError } from '@/shared/lib/api-client';
 
 /** Estado de um anexo de mídia selecionado pelo agente. */
 export interface PendingMedia {
@@ -10,13 +10,6 @@ export interface PendingMedia {
   kind: string;
   /** Object URL local para preview (revogue ao limpar). */
   previewUrl: string;
-}
-
-interface SignResponse {
-  /** URL pré-assinada para `PUT` direto no R2. */
-  uploadUrl: string;
-  /** URL final/assinada que vai no payload da mensagem (mediaUrl). */
-  fileUrl: string;
 }
 
 function kindFromMime(mime: string): string {
@@ -31,16 +24,13 @@ export function mediaFromFile(file: File): PendingMedia {
 }
 
 /**
- * Upload de mídia via URL assinada (R2).
+ * Upload de mídia em UM passo (server-side): `POST /api/uploads?filename=<nome>`
+ * com o arquivo cru no body → `{ fileUrl }`. A API sobe no R2 e devolve a URL
+ * assinada (7d), que vira a `mediaUrl` da mensagem (o WhatsApp busca via link).
+ * Same-origin → o cookie de sessão vai junto. Sem presign de PUT nem CORS de R2.
  *
- * Contrato backend (pendente — ver F1 API de storage/signed-URL):
- *   1. `POST /api/uploads/sign` `{ filename, contentType, size }` → `{ uploadUrl, fileUrl }`.
- *   2. `PUT uploadUrl` com o blob (direto no bucket).
- *   3. `fileUrl` vira `mediaUrl` da mensagem.
- *
- * Enquanto o endpoint não existir, ative o stub com
- * `NEXT_PUBLIC_UPLOAD_MOCK=true` para manter o fluxo navegável (devolve o
- * object URL local como `mediaUrl`). Em produção o stub fica desligado.
+ * `NEXT_PUBLIC_UPLOAD_MOCK=true` (apenas fora de produção) devolve o object URL
+ * local como `mediaUrl` para manter o fluxo navegável sem backend.
  */
 export function useMediaUpload() {
   const [uploading, setUploading] = useState(false);
@@ -56,24 +46,22 @@ export function useMediaUpload() {
       setUploading(true);
       try {
         if (uploadMock) {
-          // Stub: sem backend de signed-URL, devolve o preview local.
+          // Stub dev: sem backend de upload, devolve o preview local.
           return media.previewUrl;
         }
 
-        const { uploadUrl, fileUrl } = await api.post<SignResponse>('/api/uploads/sign', {
-          filename: media.file.name,
-          contentType: media.file.type || 'application/octet-stream',
-          size: media.file.size,
-        });
-
-        const put = await fetch(uploadUrl, {
-          method: 'PUT',
+        // Upload em UM passo: arquivo cru → API (same-origin, cookie de sessão) →
+        // R2 → URL assinada. `api` envia JSON, então aqui usamos fetch direto.
+        const res = await fetch(`/api/uploads?filename=${encodeURIComponent(media.file.name)}`, {
+          method: 'POST',
           headers: { 'Content-Type': media.file.type || 'application/octet-stream' },
           body: media.file,
+          credentials: 'include',
         });
-        if (!put.ok) {
-          throw new ApiError(put.status, 'Falha ao enviar a mídia para o armazenamento.');
+        if (!res.ok) {
+          throw new ApiError(res.status, 'Falha ao enviar a mídia.');
         }
+        const { fileUrl } = (await res.json()) as { fileUrl: string };
         return fileUrl;
       } finally {
         setUploading(false);

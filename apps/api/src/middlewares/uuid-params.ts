@@ -77,6 +77,13 @@ const ID_AFTER_NESTED = new Set<string>([
 const NON_UUID_LITERALS = new Set<string>([
   'me',
   'current',
+  // /api/channels/* — sub-rotas literais (NÃO são :id de canal): o wizard de
+  // conexão Meta bate em /api/channels/connect, /api/channels/whatsapp/connect e
+  // /api/channels/instagram/{accounts,connect}. Sem estes, o guard 404'ava o
+  // connect inteiro para usuários autenticados (o guard só age com sessão).
+  'connect',
+  'whatsapp',
+  'instagram',
   // /api/agents/*
   'models',
   'tools',

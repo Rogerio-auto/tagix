@@ -155,12 +155,17 @@ export interface WaConnectAppCreds {
 }
 
 /**
- * Orquestra o connect WA: exchange → (coexistencia? register com PIN) → subscribe.
+ * Orquestra o connect WA: exchange → subscribe. **NAO chama `/register` em nenhum
+ * modo.**
  *
- * **Regra do PIN (espelha o fluxo comprovado do v1):** numero NOVO (`cloud_api`) e
- * provisionado pelo proprio Embedded Signup — NAO registra nem pede PIN. So a
- * COEXISTENCIA registra o numero JA existente na Cloud API, e ai o PIN do 2FA e
- * obrigatorio. Retorna o token long-lived (a rota cifra e persiste).
+ * Por que sem register/PIN (confirmado contra a Graph real, 2026-06-20): para a
+ * COEXISTENCIA a Meta responde `code 100 "Register endpoint is not available for
+ * SMB businesses"` — o numero ja e verificado no app WhatsApp Business durante o
+ * Embedded Signup (nao ha 2FA/PIN a registrar via API). Para numero NOVO
+ * (`cloud_api`) o proprio Embedded Signup provisiona. Em ambos, so o
+ * `subscribed_apps` e necessario para a WABA entregar webhooks (com os campos de
+ * coexistencia quando aplicavel). `params.pin` e aceito mas ignorado (compat).
+ * Retorna o token long-lived (a rota cifra e persiste).
  */
 export async function runWhatsAppConnect(
   graph: GraphClient,
@@ -169,17 +174,6 @@ export async function runWhatsAppConnect(
 ): Promise<string> {
   const token = await exchangeCodeForToken(graph, params.code, creds.appId, creds.appSecret);
   const coexistence = params.mode === 'coexistence';
-
-  if (coexistence) {
-    if (params.pin === undefined || params.pin.length === 0) {
-      throw new WaConnectError(
-        'WA_CONNECT_PIN_REQUIRED',
-        'O PIN de 6 digitos do numero e obrigatorio na coexistencia.',
-      );
-    }
-    await registerPhoneNumber(graph, params.phoneNumberId, params.pin, token);
-  }
-
   await subscribeWabaApp(graph, params.wabaId, token, { coexistence });
   return token;
 }

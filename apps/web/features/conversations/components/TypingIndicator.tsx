@@ -2,36 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/shared/lib/cn';
+import { useSocket } from '@/shared/realtime';
 import type { ContactPresence, TypingFromContactPayload } from '@hm/shared';
-
-/**
- * Assinatura mínima do cliente Socket.io (Server→Client) que o indicador de
- * presença precisa. Tipada contra o mapa de eventos de `@hm/shared` — sem
- * acoplar a `socket.io-client` (ainda não é dependência de @hm/web).
- *
- * O orquestrador injeta a instância real em `window.__hmSocket` quando o
- * provider de real-time for montado. Enquanto não existir, o indicador degrada
- * para no-op (nunca aparece) — sem quebrar typecheck/build. Mesmo padrão de
- * `hooks/useConversationSocket.ts` (S14).
- */
-export interface TypingSocket {
-  on(event: 'typing:from_contact', listener: (p: TypingFromContactPayload) => void): unknown;
-  off(event: 'typing:from_contact', listener: (p: TypingFromContactPayload) => void): unknown;
-}
-
-/**
- * O global `window.__hmSocket` é declarado em `hooks/useConversationSocket.ts`
- * com uma fatia (`ConversationSocket`) do mesmo cliente Socket.io injetado. Não
- * redeclaramos o global (colidiria); resolvemos a instância e a estreitamos
- * para `TypingSocket` via `unknown` — em runtime é o mesmo socket.io client,
- * que suporta todos os eventos do mapa Server→Client de `@hm/shared`.
- */
-function resolveSocket(): TypingSocket | undefined {
-  if (typeof window === 'undefined') return undefined;
-  const shared = window.__hmSocket;
-  if (shared === undefined) return undefined;
-  return shared as unknown as TypingSocket;
-}
 
 /**
  * Janela de "vida" de um sinal de presença. O provider emite `typing` de forma
@@ -55,9 +27,14 @@ export interface TypingIndicatorProps {
 /**
  * Indicador "digitando…/gravando…" do contato (LIVECHAT.md §6).
  *
- * Assina `typing:from_contact` no socket compartilhado e filtra pela conversa
- * atual. Cada sinal rearma um timer de `PRESENCE_TTL_MS`; quando ele expira (o
- * contato parou), o indicador some. Sem socket injetado, nunca aparece.
+ * Assina `typing:from_contact` no socket REATIVO (`useSocket`) e filtra pela
+ * conversa atual. Cada sinal rearma um timer de `PRESENCE_TTL_MS`; quando ele
+ * expira (o contato parou), o indicador some. Sem socket conectado, nunca aparece.
+ *
+ * Migrado de `window.__hmSocket` para o socket de contexto: ler o global na
+ * montagem corria com o `SocketProvider` (efeito filho-antes-do-pai) e o listener
+ * nunca era anexado → "digitando…" não aparecia ao vivo. Com `socket` no dep do
+ * efeito, anexa assim que a conexão existe (mesma correção de S14).
  *
  * Acessibilidade: `aria-live="polite"` com texto somente-leitor para que o
  * estado seja anunciado a leitores de tela. A animação dos três pontos é
@@ -67,9 +44,9 @@ export interface TypingIndicatorProps {
 export function TypingIndicator({ conversationId, className }: TypingIndicatorProps) {
   const [presence, setPresence] = useState<ContactPresence | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { socket } = useSocket();
 
   useEffect(() => {
-    const socket = resolveSocket();
     if (!socket) return;
 
     const clearTimer = (): void => {
@@ -96,7 +73,7 @@ export function TypingIndicator({ conversationId, className }: TypingIndicatorPr
       clearTimer();
       setPresence(null);
     };
-  }, [conversationId]);
+  }, [conversationId, socket]);
 
   if (presence === null) return null;
 

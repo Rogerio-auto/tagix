@@ -27,12 +27,14 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F35   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F36   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F37   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
-| F38   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
+| F38   | 17     | 0   | 0   | 0   | 0   | 0   | 17   |
 | F39   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
 | F40   | 1     | 1   | 0   | 0   | 0   | 0   | 0   |
 | F41   | 4     | 0   | 0   | 0   | 0   | 0   | 4   |
 | F42   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
+| F43   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
+| F44   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -336,6 +338,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F38-S14 | QA da fase (integration + e2e happy paths)                      | ✅ done | high       | —          |
 | F38-S15 | Auditoria de segurança da fase (RLS, gates, XSS MD, scopes)     | ✅ done | critical   | —          |
 | F38-S16 | Fix 500 no dedup de conversões (ON CONFLICT DO NOTHING)         | ✅ done | high       | —          |
+| F38-S17 | Self-assign no inbox de suporte platform ("Atribuir a mim")     | ✅ done | medium     | —          |
 
 ## Fase 39
 
@@ -394,6 +397,33 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F42-S07 | Plataforma assistida — gerar cobrança/checkout para um tenant (API)             | ✅ done | medium     | F42-S01, F42-S04                   |
 | F42-S08 | Plataforma assistida — botão "gerar cobrança" no Workspace 360 (UI)             | ✅ done | medium     | F42-S07                            |
 | F42-S09 | Hardening de billing — auditoria de segurança + integração + validação sandbox  | ✅ done | high       | F42-S03, F42-S04, F42-S05, F42-S07 |
+
+## Fase 43
+
+| ID      | Titulo                                                                  | Status | Prioridade | Depende de                |
+| ------- | ----------------------------------------------------------------------- | ------ | ---------- | ------------------------- |
+| F43-S01 | Schema — quick_replies + estado de onboarding/tour + RLS + repos        | ✅ done | critical   | —                         |
+| F43-S02 | Engine de Niche Blueprint — tipo declarativo + instanciador idempotente | ✅ done | critical   | F43-S01                   |
+| F43-S03 | Conteúdo dos 7 nichos + registry (flows escalonados)                    | ✅ done | high       | F43-S02                   |
+| F43-S04 | API de onboarding — aplicar blueprint + estado + pesquisa + checklist   | ✅ done | high       | F43-S01, F43-S02, F43-S03 |
+| F43-S05 | First-run — welcome + pesquisa + escolha de nicho (aplica blueprint)    | ✅ done | high       | F43-S04                   |
+| F43-S06 | Checklist "Primeiros passos" no dashboard (estado derivado)             | ✅ done | medium     | F43-S04                   |
+| F43-S07 | Engine de tour guiado in-house (DS v2, spotlight, estado por membro)    | ✅ done | medium     | F43-S01, F43-S04, F43-S05 |
+| F43-S08 | Conteúdo dos tours + âncoras data-tour-id nas telas                     | ✅ done | medium     | F43-S06, F43-S07          |
+| F43-S09 | Flows dos 4 nichos restantes (Educação/Solar/Varejo/Agências)           | ✅ done | low        | F43-S03                   |
+
+## Fase 44
+
+| ID      | Titulo                                                                                            | Status | Prioridade | Depende de                         |
+| ------- | ------------------------------------------------------------------------------------------------- | ------ | ---------- | ---------------------------------- |
+| F44-S01 | Estende IAuthProvider com signup/reset/resend/verify (contrato + supabase + mock)                 | ✅ done | high       | —                                  |
+| F44-S02 | Provisioner isolado provisionWorkspaceWithOwner (privilegiado, idempotente, RLS-safe)             | ✅ done | high       | —                                  |
+| F44-S03 | Rate-limit Redis (IP+email) + Turnstile verify + CSP do captcha                                   | ✅ done | high       | —                                  |
+| F44-S04 | Rotas POST /auth/signup, /auth/reset (real), /auth/verify — anti-enum, captcha, rollback          | ✅ done | high       | F44-S01, F44-S02, F44-S03          |
+| F44-S05 | UI de cadastro self-serve — /signup + SignupForm + Turnstile + PUBLIC_PREFIXES                    | ✅ done | high       | F44-S04                            |
+| F44-S06 | UI de reset real (tira o mock) + /verify + NewPasswordForm — branding Leadium                     | ✅ done | high       | F44-S04                            |
+| F44-S07 | Hardening de loading/sessao — splash deterministico, unverified, open-redirect, store fail-closed | ✅ done | high       | F44-S04, F44-S05                   |
+| F44-S08 | Pass final /hm-security + /hm-adversarial + testes de integracao de fluxo                         | ✅ done | high       | F44-S04, F44-S05, F44-S06, F44-S07 |
 
 ## Fase 5 — Calendar
 

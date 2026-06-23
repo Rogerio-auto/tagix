@@ -53,13 +53,15 @@ export function FlowsListPage() {
   };
 
   const createButton = canEdit ? (
-    <Button
-      variant="primary"
-      leftIcon={<Plus className="size-4" aria-hidden />}
-      onClick={() => setCreateOpen(true)}
-    >
-      Criar flow
-    </Button>
+    <span data-tour-id="flows-create">
+      <Button
+        variant="primary"
+        leftIcon={<Plus className="size-4" aria-hidden />}
+        onClick={() => setCreateOpen(true)}
+      >
+        Criar flow
+      </Button>
+    </span>
   ) : null;
 
   const list = flows.data?.flows ?? [];
@@ -99,7 +101,7 @@ export function FlowsListPage() {
         />
       ) : (
         <div className="space-y-6">
-          <Card elevation={1}>
+          <Card elevation={1} data-tour-id="flows-list">
             <ul className="divide-y divide-border-2">
               {list.map((flow) => (
                 <FlowCard

@@ -510,7 +510,8 @@ function WaSignupStep({
   );
 }
 
-/** Passo 3: PIN (6 dígitos) + nome do canal → connect server-side. */
+/** Passo 3: nome do canal (interno) → connect server-side. Sem PIN (a Meta não usa
+ *  register/PIN nesses fluxos — ver `whatsapp-connect.ts`). */
 function WaFinishStep({
   mode,
   signup,
@@ -525,12 +526,10 @@ function WaFinishStep({
   onSubmit: (input: WaConnectInput) => void;
 }) {
   const [name, setName] = useState('');
-  const [pin, setPin] = useState('');
 
-  const isCoexistence = mode === 'coexistence';
-  const pinValid = /^\d{6}$/.test(pin);
-  // Número novo (cloud_api) é provisionado pelo Embedded Signup → não pede PIN.
-  const valid = signup !== null && name.trim() !== '' && (!isCoexistence || pinValid);
+  // Sem PIN em nenhum modo: a Meta rejeita /register para coexistência (SMB) e o
+  // número novo é provisionado pelo próprio Embedded Signup. Só o nome (interno).
+  const valid = signup !== null && name.trim() !== '';
 
   return (
     <form
@@ -545,7 +544,6 @@ function WaFinishStep({
           phoneNumber: signup.phoneNumber,
           mode,
           name: name.trim(),
-          ...(isCoexistence ? { pin } : {}),
         });
       }}
     >
@@ -570,19 +568,6 @@ function WaFinishStep({
         onChange={(e) => setName(e.target.value)}
         required
       />
-      {isCoexistence && (
-        <Input
-          label="PIN do WhatsApp (6 dígitos)"
-          value={pin}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          hint="PIN de verificação em duas etapas do número existente. Se nunca definiu, escolha um agora na Meta."
-          error={pin !== '' && !pinValid ? 'O PIN precisa ter exatamente 6 dígitos.' : undefined}
-          required
-        />
-      )}
-
       {mode === 'coexistence' && (
         <p className="flex gap-2 rounded-md border border-border-2 bg-surface-inset px-3 py-2 font-body text-xs text-text-low">
           <Info className="mt-0.5 size-3.5 shrink-0 text-text-mid" aria-hidden />

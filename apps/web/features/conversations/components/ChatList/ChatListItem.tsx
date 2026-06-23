@@ -17,6 +17,7 @@ import { Bot } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { FlowExecutionsBadge } from '@/features/flow-builder/livechat';
 import { ConversationKindBadge } from '../IgComments/ConversationKindBadge';
+import { MessagePreview } from './MessagePreview';
 import type { ConversationSummary } from '../../types';
 
 export interface ChatListItemProps {
@@ -113,14 +114,9 @@ export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(fun
             </div>
           </div>
           <div className="flex items-center justify-between gap-2">
-            <p
-              className={cn(
-                'truncate font-body text-sm',
-                hasUnread ? 'text-text-mid' : 'text-text-low',
-              )}
-            >
-              {conversation.lastMessagePreview ?? 'Sem mensagens'}
-            </p>
+            <div className="min-w-0 flex-1">
+              <MessagePreview preview={conversation.lastMessagePreview} unread={hasUnread} />
+            </div>
             <div className="flex shrink-0 items-center gap-1.5">
               {/* F30-S03: badge de IA (on/paused) */}
               <AiBadge aiMode={conversation.aiMode} />

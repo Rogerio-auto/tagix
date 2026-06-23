@@ -31,6 +31,7 @@ import { AlertsBanner } from './AlertsBanner';
 import { DrillDownDrawer } from './DrillDownDrawer';
 import { CustomizeDashboardButton } from './customization';
 import { renderCard } from './cards/registry';
+import { SetupChecklist } from '@/features/onboarding/checklist';
 import type { DashboardCard, MetricCategory } from './types';
 
 const CATEGORY_LABEL: Record<MetricCategory, string> = {
@@ -122,9 +123,13 @@ export function DashboardClient() {
 
   return (
     <>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between" data-tour-id="dashboard-header">
         <PageHeader title="Dashboard" helpSlot={<HelpHint k="dashboard.overview" />} />
-        {data && <CustomizeDashboardButton />}
+        {data && (
+          <span data-tour-id="dashboard-customize">
+            <CustomizeDashboardButton />
+          </span>
+        )}
       </div>
       {isLoading && <SkeletonList rows={6} />}
       {isError && (
@@ -133,7 +138,10 @@ export function DashboardClient() {
         </div>
       )}
       {data && (
-        <div className="flex flex-col gap-10">
+        <div className="flex flex-col gap-10" data-tour-id="dashboard-grid">
+          {/* Onboarding: checklist "Primeiros passos" — só ADMIN/OWNER, some quando
+              tudo concluído ou dispensado (F43-S06). Auto-gated internamente. */}
+          <SetupChecklist />
           <AlertsBanner alerts={data.alerts} />
           {grouped.length === 0 && (
             <div className="rounded-lg border border-border bg-surface p-8">

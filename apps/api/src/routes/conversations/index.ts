@@ -4,7 +4,7 @@ import { and, desc, eq, ilike, lt, sql, type SQL } from 'drizzle-orm';
 import { assertConversationVisible, buildVisibilityPredicate, schema } from '@hm/db';
 import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
-import { cached, getVersion } from '../../cache';
+import { bumpVersion, cached, getVersion } from '../../cache';
 
 const PROVIDERS = ['meta_whatsapp', 'meta_instagram', 'waha'] as const;
 const STATUSES = ['open', 'pending', 'closed', 'resolved', 'snoozed'] as const;
@@ -284,6 +284,43 @@ export function createConversationsRouter(): Router {
       return;
     }
     res.json({ messages });
+  });
+
+  /**
+   * POST /api/conversations/:id/read — zera `unread_count` ao abrir/ler a conversa.
+   * O worker de inbound só INCREMENTA o contador; sem este endpoint nada o baixava
+   * (o contador nunca limpava ao abrir a conversa). Guard de visibilidade (404 fora
+   * de escopo, igual aos demais /:id). Bumpa a versão do cache da lista p/ o próximo
+   * GET /api/conversations refletir o zero (senão o cache de 120s mascarava).
+   */
+  router.post('/api/conversations/:id/read', ...guard, async (req: Request, res: Response) => {
+    const rawId = req.params['id'];
+    const conversationId = typeof rawId === 'string' ? rawId : '';
+    if (!conversationId) {
+      res.status(400).json({ message: 'id ausente.' });
+      return;
+    }
+    const memberId = req.auth!.member.id;
+    const role = req.auth!.member.role as Role;
+    const workspaceId = req.auth!.workspace.id;
+
+    const ok = await req.scoped!(async (tx) => {
+      if (!(await assertConversationVisible(tx, { memberId, role, workspaceId }, conversationId))) {
+        return false;
+      }
+      await tx
+        .update(schema.conversations)
+        .set({ unreadCount: 0 })
+        .where(eq(schema.conversations.id, conversationId));
+      return true;
+    });
+
+    if (!ok) {
+      res.status(404).json({ message: 'Conversa não encontrada.' });
+      return;
+    }
+    await bumpVersion(`hm:ws:v:${workspaceId}`);
+    res.json({ ok: true });
   });
 
   return router;

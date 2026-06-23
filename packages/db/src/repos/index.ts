@@ -12,6 +12,9 @@ export * from './help';
 export * from './support';
 // Payments (F41-S02): ledger de eventos de pagamento (idempotente por provider+event).
 export * from './payment-events';
+// Onboarding (F43-S01): respostas rápidas + estado de first-run/tour.
+export * from './quick-replies';
+export * from './onboarding';
 
 export const workspacesRepo = {
   async findById(id: string) {

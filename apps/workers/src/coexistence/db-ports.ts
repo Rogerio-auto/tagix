@@ -28,9 +28,12 @@
  * Idempotência: reprocessar qualquer evento é seguro. O dedup por id externo
  * garante zero duplicação de mensagens/contatos em reentrega/reprocesso.
  */
-import { and, eq, isNull } from 'drizzle-orm';
+import { Buffer } from 'node:buffer';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { getDb, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
+import { makeEnvelope, type MqHandle } from '@hm/shared/mq';
+import type { ServerToClientEvent } from '@hm/shared';
 import type {
   CoexistenceAppStatePayload,
   CoexistenceEchoPayload,
@@ -42,8 +45,16 @@ import type {
   CoexistenceAppStateResult,
   CoexistenceEchoResult,
   CoexistenceHistoryResult,
+  CoexistenceMessageNewEmit,
   CoexistencePersistencePort,
+  CoexistenceSocketPort,
 } from './ports';
+
+/** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
+type MqChannel = MqHandle['channel'];
+
+/** Fila de relay de socket (mesma constante de `apps/api/src/socket/relay.ts`). */
+export const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
 
 /** Provider dos canais de coexistência (WhatsApp Business / WABA). */
 const COEXISTENCE_PROVIDER = 'meta_whatsapp' as const;
@@ -85,6 +96,74 @@ export class DbCoexistenceChannelResolver implements CoexistenceChannelResolver 
   }
 }
 
+// ─── Socket (MQ relay) ────────────────────────────────────────────────────────
+
+/** Publica `{ event, target:{conversationId, workspace:true}, data }` no relay. */
+function relayEnvelope(
+  channel: MqChannel,
+  workspaceId: string,
+  event: ServerToClientEvent,
+  conversationId: string,
+  data: unknown,
+): void {
+  const envelope = makeEnvelope('socket.relay', workspaceId, {
+    event,
+    target: { conversationId, workspace: true },
+    data,
+  });
+  channel.sendToQueue(SOCKET_RELAY_QUEUE, Buffer.from(JSON.stringify(envelope)), {
+    persistent: true,
+    contentType: 'application/json',
+  });
+}
+
+/**
+ * Emissor default de socket da coexistência: publica `message:new` no relay com
+ * `workspace: true` (espelha `MqInboundSocketEmit` do inbound). Mesma forma de
+ * payload do inbound para o front reagir igual (ChatList + thread aberta).
+ */
+export class MqCoexistenceSocketEmit implements CoexistenceSocketPort {
+  constructor(private readonly channel: MqChannel) {}
+
+  async emitMessageNew(input: CoexistenceMessageNewEmit): Promise<void> {
+    relayEnvelope(this.channel, input.workspaceId, 'message:new', input.conversationId, {
+      workspaceId: input.workspaceId,
+      conversationId: input.conversationId,
+      message: {
+        id: input.messageId,
+        conversationId: input.conversationId,
+        externalId: input.externalId,
+        type: input.type,
+        content: input.content,
+        direction: input.direction,
+      },
+    });
+    await Promise.resolve();
+  }
+
+  async emitConversationUpdated(workspaceId: string, conversationId: string): Promise<void> {
+    relayEnvelope(this.channel, workspaceId, 'conversation:updated', conversationId, {
+      workspaceId,
+      conversation: { id: conversationId },
+    });
+    await Promise.resolve();
+  }
+}
+
+/**
+ * Emissor no-op: usado quando não há canal AMQP (testes) ou quando o relay não é
+ * desejado. Mantém a persistência funcional sem emitir nada.
+ */
+export class NoopCoexistenceSocketEmit implements CoexistenceSocketPort {
+  async emitMessageNew(): Promise<void> {
+    await Promise.resolve();
+  }
+
+  async emitConversationUpdated(): Promise<void> {
+    await Promise.resolve();
+  }
+}
+
 function toDate(timestamp: number | undefined): Date {
   if (timestamp === undefined) return new Date();
   // Webhooks WhatsApp expõem epoch em segundos; tolera milissegundos.
@@ -106,6 +185,12 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
   constructor(
     private readonly logger: Logger,
     private readonly channels: CoexistenceChannelResolver = new DbCoexistenceChannelResolver(),
+    /**
+     * Emissor de socket (`message:new`). Default no-op para manter os testes (que
+     * instanciam só com `logger`) e o caminho sem broker funcionais; o composition
+     * root injeta `MqCoexistenceSocketEmit(channel)` para empurrar ao vivo.
+     */
+    private readonly socket: CoexistenceSocketPort = new NoopCoexistenceSocketEmit(),
   ) {}
 
   async persistEcho(payload: CoexistenceEchoPayload): Promise<CoexistenceEchoResult> {
@@ -136,7 +221,10 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
           createdAt: toDate(payload.timestamp),
           metadata: { origin: ECHO_ORIGIN },
         })
-        .onConflictDoNothing({ target: [schema.messages.conversationId, schema.messages.externalId] })
+        .onConflictDoNothing({
+          target: [schema.messages.conversationId, schema.messages.externalId],
+          where: sql`${schema.messages.externalId} is not null`,
+        })
         .returning({ id: schema.messages.id });
 
       if (inserted !== undefined) {
@@ -151,10 +239,24 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
           .where(eq(schema.conversations.id, conversationId));
       }
 
-      return inserted !== undefined;
+      return { conversationId, messageId: inserted?.id };
     });
 
-    return { resolved: true, inserted: result };
+    // Pós-persist (fora da transação): empurra o echo ao vivo. Só quando inseriu
+    // de fato (dedup não reemite — espelha `insertMessages` do inbound).
+    if (result.messageId !== undefined) {
+      await this.socket.emitMessageNew({
+        workspaceId,
+        conversationId: result.conversationId,
+        messageId: result.messageId,
+        externalId: payload.externalId,
+        type: payload.type,
+        content: payload.text ?? null,
+        direction: 'outbound',
+      });
+    }
+
+    return { resolved: true, inserted: result.messageId !== undefined };
   }
 
   async importHistory(payload: CoexistenceHistoryBatchPayload): Promise<CoexistenceHistoryResult> {
@@ -167,7 +269,10 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
     }
     const { channelId, workspaceId } = channel;
 
-    return withWorkspace(workspaceId, async (tx) => {
+    const outcome = await withWorkspace(workspaceId, async (tx) => {
+      // Conversas que receberam pelo menos uma mensagem nova (para sinalizar a
+      // ChatList uma vez por conversa, fora da transação — sem floodar threads).
+      const touchedConversations = new Set<string>();
       // 1) Upsert idempotente de contatos por (workspace, phone=waId). Insert em
       //    lote com onConflictDoNothing → reprocesso não duplica nem N+1.
       const contactRows = payload.contacts.map((c) => ({
@@ -229,11 +334,15 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
           .values(rows)
           .onConflictDoNothing({
             target: [schema.messages.conversationId, schema.messages.externalId],
+            // Índice parcial uq_messages_external (WHERE external_id IS NOT NULL):
+            // o ON CONFLICT precisa repetir o predicado, senão a Graph nega o match.
+            where: sql`${schema.messages.externalId} is not null`,
           })
           .returning({ id: schema.messages.id });
         messagesInserted += inserted.length;
 
         if (inserted.length > 0) {
+          touchedConversations.add(conversationId);
           const last = msgs[msgs.length - 1];
           if (last !== undefined) {
             await tx
@@ -250,12 +359,26 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
       }
 
       return {
-        resolved: true,
+        resolved: true as const,
         contactsInserted,
         messagesInserted,
         messagesDeduped: messagesTotal - messagesInserted,
+        touchedConversations: [...touchedConversations],
       };
     });
+
+    // Pós-persist: um sinal por conversa afetada → a ChatList revalida a projeção
+    // (last message/contadores) sem reordenar/floodar a thread com timestamps antigos.
+    for (const conversationId of outcome.touchedConversations) {
+      await this.socket.emitConversationUpdated(workspaceId, conversationId);
+    }
+
+    return {
+      resolved: outcome.resolved,
+      contactsInserted: outcome.contactsInserted,
+      messagesInserted: outcome.messagesInserted,
+      messagesDeduped: outcome.messagesDeduped,
+    };
   }
 
   async syncAppState(payload: CoexistenceAppStatePayload): Promise<CoexistenceAppStateResult> {

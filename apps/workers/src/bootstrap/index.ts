@@ -200,7 +200,7 @@ export async function startWorkers(
   // (echoes/history/app_state de F39-S03) -> materializa conversas/mensagens/
   // contatos/estado-do-canal via @hm/db+RLS, idempotente por id externo.
   const coexistence = await startCoexistenceWorker({
-    deps: createCoexistenceDeps(logger),
+    deps: createCoexistenceDeps(logger, channel),
     logger,
   });
 

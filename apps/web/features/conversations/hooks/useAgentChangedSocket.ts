@@ -2,44 +2,29 @@
 
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSocket } from '@/shared/realtime';
 import type { ConversationAgentChangedPayload } from '@hm/shared';
 import { conversationAgentKey, conversationDetailKey } from '../queries';
 
 /**
  * Reflete a troca manual de agente (F34-S04) em tempo real no cockpit.
  *
- * Escuta `conversation:agent_changed` no socket compartilhado (`window.__hmSocket`,
- * injetado pelo provider de real-time) e, quando o evento é da conversa aberta,
- * invalida a query do agente + o detalhe — para que o seletor reflita o novo
- * agente sem reload, mesmo quando a troca veio de outro operador.
+ * **Usa o socket REATIVO do `useSocket()` (contexto), NÃO `window.__hmSocket`.**
+ * Ler o global na montagem corria com o `SocketProvider` (efeitos React rodam
+ * filho-antes-do-pai): o listener nunca era anexado e o efeito (sem `socket` no
+ * dep) não re-rodava ao conectar. Com `socket` no dep, anexa assim que a conexão
+ * existe — mesma correção de `useConversationSocket`.
  *
- * Sem socket injetado, é um no-op silencioso (degrada para "sem live updates").
+ * Quando o evento é da conversa aberta, invalida a query do agente + o detalhe
+ * para o seletor refletir o novo agente sem reload, mesmo vindo de outro operador.
+ * No-op sem socket / sem id (degrada para "sem live updates").
  */
-interface AgentChangedSocket {
-  on(
-    event: 'conversation:agent_changed',
-    listener: (p: ConversationAgentChangedPayload) => void,
-  ): unknown;
-  off(
-    event: 'conversation:agent_changed',
-    listener: (p: ConversationAgentChangedPayload) => void,
-  ): unknown;
-}
-
-function resolveSocket(): AgentChangedSocket | undefined {
-  if (typeof window === 'undefined') return undefined;
-  // O socket compartilhado expõe o mapa tipado de ServerToClient; reusamos só
-  // o subconjunto que este hook precisa (evita acoplar a socket.io-client).
-  return window.__hmSocket as unknown as AgentChangedSocket | undefined;
-}
-
 export function useAgentChangedSocket(conversationId: string | undefined): void {
   const queryClient = useQueryClient();
+  const { socket } = useSocket();
 
   useEffect(() => {
-    if (!conversationId) return;
-    const socket = resolveSocket();
-    if (!socket) return;
+    if (!socket || !conversationId) return;
 
     const onAgentChanged = (p: ConversationAgentChangedPayload): void => {
       if (p.conversationId !== conversationId) return;
@@ -51,5 +36,5 @@ export function useAgentChangedSocket(conversationId: string | undefined): void 
     return () => {
       socket.off('conversation:agent_changed', onAgentChanged);
     };
-  }, [conversationId, queryClient]);
+  }, [conversationId, queryClient, socket]);
 }

@@ -7,10 +7,11 @@
  * mensagem no cache do TanStack Query (`['conversation', id, 'messages']`), e a
  * bolha re-renderiza com o novo ícone (clock → check → double-check → eye verde).
  *
- * Transporte-agnóstico: ouve `window.__hmSocket` (mesmo padrão de
- * `useConversationSocket`, S14) — sem acoplar a `socket.io-client` (que não é
- * dependência de @hm/web). Sem socket injetado, é um no-op silencioso (degrada
- * para "sem live receipts", sem quebrar build).
+ * Ouve `message:status_changed` no socket REATIVO (`useSocket`, contexto do
+ * `SocketProvider`) — migrado de `window.__hmSocket`, que corria com o provider
+ * na montagem (efeito filho-antes-do-pai) e não anexava o listener, deixando os
+ * recibos (sent→delivered→read) sem atualizar ao vivo. Sem socket conectado, é
+ * um no-op silencioso (degrada para "sem live receipts").
  *
  * Patch (em vez de invalidate): o payload do evento é totalmente tipado
  * (`MessageStatusChangedPayload {conversationId, messageId, status}`) e a
@@ -27,34 +28,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSocket } from '@/shared/realtime';
 import type { MessageStatusChangedPayload, ViewStatus } from '@hm/shared';
 import { messagesKey } from '../../queries';
 import type { MessageItem } from '../../types';
-
-/**
- * Assinatura mínima de socket que os receipts precisam — tipada contra o mapa de
- * eventos de `@hm/shared`, sem acoplar a `socket.io-client`. Espelha o padrão de
- * `useConversationSocket` (a instância real é injetada em `window.__hmSocket`
- * pelo provider de real-time).
- */
-export interface MessageStatusSocket {
-  on(
-    event: 'message:status_changed',
-    listener: (p: MessageStatusChangedPayload) => void,
-  ): unknown;
-  off(
-    event: 'message:status_changed',
-    listener: (p: MessageStatusChangedPayload) => void,
-  ): unknown;
-}
-
-function resolveSocket(): MessageStatusSocket | undefined {
-  if (typeof window === 'undefined') return undefined;
-  // `window.__hmSocket` é declarado por `useConversationSocket` (mesma instância).
-  const candidate: unknown = window.__hmSocket;
-  if (candidate === undefined || candidate === null) return undefined;
-  return candidate as MessageStatusSocket;
-}
 
 /** Estado entregue ao announcer acessível (aria-live). */
 export interface StatusAnnouncement {
@@ -115,15 +92,14 @@ export interface UseMessageStatusReceiptsOptions {
 export function useMessageStatusReceipts(options: UseMessageStatusReceiptsOptions): void {
   const { conversationId, onAnnounce } = options;
   const queryClient = useQueryClient();
+  const { socket } = useSocket();
 
   // Mantém o callback estável sem re-assinar o socket a cada render.
   const announceRef = useRef<UseMessageStatusReceiptsOptions['onAnnounce']>(onAnnounce);
   announceRef.current = onAnnounce;
 
   useEffect(() => {
-    if (conversationId === undefined) return;
-    const socket = resolveSocket();
-    if (socket === undefined) return;
+    if (conversationId === undefined || !socket) return;
 
     const onStatusChanged = (p: MessageStatusChangedPayload): void => {
       if (p.conversationId !== conversationId) return;
@@ -145,7 +121,7 @@ export function useMessageStatusReceipts(options: UseMessageStatusReceiptsOption
     return () => {
       socket.off('message:status_changed', onStatusChanged);
     };
-  }, [conversationId, queryClient]);
+  }, [conversationId, queryClient, socket]);
 }
 
 /**
