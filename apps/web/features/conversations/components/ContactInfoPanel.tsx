@@ -17,13 +17,14 @@
  * via `focus-visible:shadow-glow-md`. Verde-neon (`brand`) usado no máximo 1×.
  */
 
-import { Bot, Info, RefreshCw, User, X, Zap } from 'lucide-react';
+import { Bot, Info, Receipt, RefreshCw, User, X, Zap } from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
 import { can } from '@hm/shared';
 import { cn } from '@/shared/lib/cn';
 import { Skeleton } from '@/shared/components/feedback';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { ContactPanel } from '@/features/contacts/components/ContactPanel';
+import { DealSection } from './DealSection';
 import { NotesPanel } from './Notes';
 import { RoutingMenu } from './RoutingMenu';
 import { AgentSelector } from './AgentSelector';
@@ -141,6 +142,7 @@ export function ContactInfoPanel({
   const canSnooze = role ? can(role, 'conversation.snooze') : false;
   const canAiMode = role ? can(role, 'conversation.ai_mode') : false;
   const canAssignAgent = role ? can(role, 'conversation.assign_agent') : false;
+  const canDealEdit = role ? can(role, 'deal.edit') : false;
 
   const status = detail?.status ?? 'open';
   const aiMode = detail?.aiMode ?? 'off';
@@ -275,6 +277,24 @@ export function ContactInfoPanel({
             <p className="font-body text-sm text-text-low">
               Esta conversa ainda não tem um contato vinculado.
             </p>
+          )}
+        </Section>
+
+        {/* ── 1.6 Card/Negócio — deal da pipeline + itens/valor (F47-S07) ── */}
+        {/* Ponto de inserção limpo: S08 acrescenta a Conversão logo após esta
+            seção, reusando o valor do card. Não mexer nas seções vizinhas. */}
+        <Section title="Card / Negócio" icon={Receipt}>
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-9 w-1/2" />
+            </div>
+          ) : (
+            <DealSection
+              conversationId={conversationId}
+              deal={detail?.deal ?? null}
+              canEdit={canDealEdit}
+            />
           )}
         </Section>
 

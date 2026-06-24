@@ -2,7 +2,7 @@
 id: F47-S07
 title: Cockpit — Card + Itens/Produto + valor + auto-enrich
 phase: F47
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F47-S03, F47-S04, F47-S06]
@@ -17,6 +17,7 @@ ux_considerations:
   - "Aplica 2.7 — adicionar item/valor com feedback imediato; valor recomputado vem da API."
   - "Aplica 8 (mobile) — seção no Sheet do cockpit; alvos ≥44px."
 claimed_at: 2026-06-24T00:54:02Z
+completed_at: 2026-06-24T00:54:04Z
 
 ---
 # F47-S07 — Cockpit: seção Card/Negócio (itens, produto, valor, auto-criação)
