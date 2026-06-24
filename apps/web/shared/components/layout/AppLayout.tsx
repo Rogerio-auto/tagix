@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { BottomNav } from './BottomNav';
 import { SkipLink } from './SkipLink';
@@ -10,6 +11,16 @@ import { CommandPalette } from '@/shared/components/command';
 import { useUIStore } from '@/shared/stores/ui.store';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
+import { cn } from '@/shared/lib/cn';
+
+/**
+ * Rotas full-bleed: a tela ocupa toda a área do `<main>` (sem gutter/scroll do
+ * shell — ela gere o próprio scroll e preenche edge-to-edge). Hoje: o LiveChat,
+ * que precisa ficar TOTALMENTE integrado à página (sem card flutuante).
+ */
+function isFullBleed(pathname: string): boolean {
+  return pathname === '/conversations' || pathname.startsWith('/conversations/');
+}
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const hydrate = useUIStore((s) => s.hydrate);
@@ -18,6 +29,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   // alterna por `isMobile`, não por classe Tailwind `md:` (que só montaria/
   // ocultaria via CSS, mantendo ambas no DOM). SSR-safe: snapshot mobile primeiro.
   const { isMobile } = useBreakpoint();
+  const pathname = usePathname();
+  const fullBleed = isFullBleed(pathname ?? '');
 
   // Restaura a preferência de density persistida.
   useEffect(() => {
@@ -41,7 +54,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="min-h-0 flex-1 overflow-y-auto px-4 py-6 outline-none lg:px-8"
+          className={cn(
+            'min-h-0 flex-1 outline-none',
+            // Full-bleed (LiveChat): sem gutter nem scroll do shell — a tela
+            // preenche tudo e gere o próprio scroll interno. Demais rotas mantêm
+            // o gutter editorial + scroll vertical do conteúdo.
+            fullBleed ? 'overflow-hidden' : 'overflow-y-auto px-4 py-6 lg:px-8',
+          )}
         >
           {children}
         </main>

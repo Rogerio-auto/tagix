@@ -335,18 +335,49 @@ export function useProductPicker(q: string, enabled: boolean) {
 
 export interface CreateConversationDealInput {
   conversationId: string;
+  /** Pipeline escolhido no picker do cockpit; ausente → default do backend. */
+  pipelineId?: string | null;
+  /** Estágio escolhido; ausente → estágio de entrada do pipeline. */
+  stageId?: string | null;
+}
+
+/** Pipeline (subset p/ o picker de "Criar card"). */
+export interface PickerPipeline {
+  id: string;
+  name: string;
+  isDefault: boolean;
+}
+
+/**
+ * Lista os pipelines do workspace para o picker de "Criar card" no cockpit.
+ * GET /api/pipelines → `{ data }`. Gated por `pipeline.view` no backend.
+ */
+export function usePipelines(enabled = true) {
+  return useQuery({
+    queryKey: ['pipelines', 'list'] as const,
+    queryFn: async () => {
+      const res = await api.get<{ data: PickerPipeline[] }>('/api/pipelines');
+      return res.data;
+    },
+    enabled,
+    staleTime: 60_000,
+  });
 }
 
 /**
  * Cria/auto-cria o card ligado à conversa — IDEMPOTENTE no backend
- * (POST /api/conversations/:id/deal, gated `deal.edit`). Invalida o detalhe da
- * conversa para o cockpit refletir o `deal` recém-vinculado.
+ * (POST /api/conversations/:id/deal, gated `deal.edit`). Aceita `pipelineId`/
+ * `stageId` opcionais (picker). Invalida o detalhe da conversa para o cockpit
+ * refletir o `deal` recém-vinculado.
  */
 export function useCreateConversationDeal() {
   const queryClient = useQueryClient();
   return useMutation<{ deal: ConversationDeal }, Error, CreateConversationDealInput>({
-    mutationFn: ({ conversationId }) =>
-      api.post<{ deal: ConversationDeal }>(`/api/conversations/${conversationId}/deal`),
+    mutationFn: ({ conversationId, pipelineId, stageId }) =>
+      api.post<{ deal: ConversationDeal }>(`/api/conversations/${conversationId}/deal`, {
+        pipelineId: pipelineId ?? null,
+        stageId: stageId ?? null,
+      }),
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({
         queryKey: conversationDetailKey(input.conversationId),

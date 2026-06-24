@@ -34,6 +34,39 @@ import type { ContactAddress, ContactDeal, ContactConversion } from '../types';
 import { useContact, useUpdateContact } from '../queries';
 import { AddressForm } from './AddressForm';
 
+/** Rótulos amigáveis dos campos do cadastro (último segmento do path da issue). */
+const FIELD_LABELS: Record<string, string> = {
+  cep: 'CEP',
+  state: 'UF',
+  street: 'Rua',
+  number: 'Número',
+  complement: 'Complemento',
+  district: 'Bairro',
+  city: 'Cidade',
+  document: 'Documento',
+  phone: 'Telefone',
+  email: 'E-mail',
+  displayName: 'Nome',
+};
+
+/**
+ * Descrição acionável do erro de save (§2.11): se o backend mandou `issues` do
+ * Zod, mostra "Campo: motivo" por campo; senão a `message`; senão um fallback.
+ */
+function describeSaveError(err: unknown): string {
+  if (err instanceof ApiError && err.issues && err.issues.length > 0) {
+    return err.issues
+      .map((i) => {
+        const key = String(i.path[i.path.length - 1] ?? '');
+        const label = FIELD_LABELS[key] ?? key;
+        return label ? `${label}: ${i.message}` : i.message;
+      })
+      .join(' · ');
+  }
+  if (err instanceof ApiError && err.message) return err.message;
+  return 'Tente novamente em instantes.';
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const currencyFmt = new Intl.NumberFormat('pt-BR', {
@@ -228,12 +261,9 @@ export function ContactPanel({ contactId, editable = false }: ContactPanelProps)
         onError: (err) =>
           toast({
             title: 'Falha ao salvar cadastro',
-            // Surface o motivo do backend (ex.: validação Zod por campo) em vez de
-            // um texto genérico — o usuário precisa saber qual campo corrigir (§2.11).
-            description:
-              err instanceof ApiError && err.message
-                ? err.message
-                : 'Tente novamente em instantes.',
+            // Surface o motivo do backend (validação Zod por campo via `issues`) em
+            // vez de um texto genérico — o usuário sabe qual campo corrigir (§2.11).
+            description: describeSaveError(err),
             variant: 'error',
           }),
       },

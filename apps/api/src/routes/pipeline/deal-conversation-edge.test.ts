@@ -89,13 +89,13 @@ vi.mock('../../middlewares/auth', () => ({
 const { createDealConversationRouter } = await import('./deal-conversation');
 const { createDealsCrudRouter } = await import('../deals/crud');
 
-// Ordem fiel a app.ts: pipeline (shadow GET + pré-handler de snapshot) ANTES de deals/crud.
+// Ordem fiel a app.ts: pipeline (POST do card + pré-handler de snapshot) ANTES de deals/crud.
 const app = express();
 app.use(express.json());
 app.use(createDealConversationRouter());
 app.use(createDealsCrudRouter());
 
-// App "só canônico" (sem o pipeline) p/ contrastar o shape do GET shadow vs canônico.
+// App "só canônico" (sem o pipeline) p/ provar que o GET consolidado é a fonte única.
 const canonicalOnly = express();
 canonicalOnly.use(express.json());
 canonicalOnly.use(createDealsCrudRouter());
@@ -221,32 +221,71 @@ const maybe = (name: string, fn: () => Promise<void>) =>
     await fn();
   });
 
-// ── 1. Escrutínio arquitetural: shadow GET vs canônico ───────────────────────
-describe('GET /api/deals/:id — shadow (pipeline) vence o canônico (deals/crud)', () => {
-  maybe('com pipeline montado ANTES: resposta inclui `contact` (read-through)', async () => {
+// ── 1. GET /api/deals/:id CONSOLIDADO no canônico (deals/crud) — F47-S15 ──────
+// O shadow em pipeline foi removido; o handler canônico é a fonte única e já
+// anexa o cadastro vivo do contato (read-through) via `loadContactReadThrough`.
+describe('GET /api/deals/:id — canônico consolidado (deal + cadastro read-through)', () => {
+  maybe('app completo: resposta inclui `contact` (read-through)', async () => {
     const conv = await freshConversation();
     const created = await request(app).post(`/api/conversations/${conv}/deal`);
     const dealId = created.body.deal.id as string;
 
     const res = await request(app).get(`/api/deals/${dealId}`);
     expect(res.status).toBe(200);
-    // Shape do shadow (S04): { deal, contact } — o canônico devolveria só { deal }.
     expect(res.body.deal.id).toBe(dealId);
     expect(res.body.contact).toBeTruthy();
     expect(res.body.contact.document).toBe('12345678901');
   });
 
-  maybe('canônico isolado devolve o shape legado { deal } (sem contact)', async () => {
+  maybe('canônico isolado também devolve { deal, contact } (sem shadow)', async () => {
     const conv = await freshConversation();
     const created = await request(app).post(`/api/conversations/${conv}/deal`);
     const dealId = created.body.deal.id as string;
 
-    // No app SEM o pipeline, o handler canônico responde — prova que ele continua
-    // funcional (não é removido), apenas é "sombreado" na app real.
+    // Sem o router de pipeline montado: o canônico (deals/crud) é a ÚNICA fonte e
+    // já entrega o read-through enriquecido — prova a consolidação (shadow removido).
     const res = await request(canonicalOnly).get(`/api/deals/${dealId}`);
     expect(res.status).toBe(200);
     expect(res.body.deal.id).toBe(dealId);
-    expect(res.body.contact).toBeUndefined();
+    expect(res.body.contact).toBeTruthy();
+  });
+});
+
+// ── 1c. Picker de pipeline: POST escolhe onde ancorar o card (F47-S15) ───────
+describe('POST /api/conversations/:id/deal — picker de pipeline', () => {
+  maybe('cria o card no pipeline/estágio escolhidos', async () => {
+    const db = getDb();
+    const altPipeline = randomUUID();
+    const altStage = randomUUID();
+    await db
+      .insert(schema.pipelines)
+      .values({ id: altPipeline, workspaceId: WS, name: 'Funil B', isDefault: false });
+    await db
+      .insert(schema.stages)
+      .values({ id: altStage, workspaceId: WS, pipelineId: altPipeline, name: 'Entrada B', position: 0 });
+
+    const conv = await freshConversation();
+    const res = await request(app)
+      .post(`/api/conversations/${conv}/deal`)
+      .send({ pipelineId: altPipeline, stageId: altStage });
+    expect(res.status).toBe(201);
+    expect(res.body.deal.pipelineId).toBe(altPipeline);
+    expect(res.body.deal.stageId).toBe(altStage);
+  });
+
+  maybe('sem pipelineId cai no pipeline default', async () => {
+    const conv = await freshConversation();
+    const res = await request(app).post(`/api/conversations/${conv}/deal`).send({});
+    expect(res.status).toBe(201);
+    expect(res.body.deal.pipelineId).toBe(PIPELINE);
+  });
+
+  maybe('pipelineId malformado (não-uuid) → 400', async () => {
+    const conv = await freshConversation();
+    const res = await request(app)
+      .post(`/api/conversations/${conv}/deal`)
+      .send({ pipelineId: 'not-a-uuid' });
+    expect(res.status).toBe(400);
   });
 });
 

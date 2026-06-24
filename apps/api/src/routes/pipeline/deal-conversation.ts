@@ -9,9 +9,11 @@
  *
  * Endpoints (todos sob /api, RLS via req.scoped):
  *   POST /api/conversations/:id/deal   cria/auto-cria o card ligado à conversa   (deal.edit)
- *   GET  /api/deals/:id                detalhe do card + cadastro read-through    (deal.edit)
  *   POST /api/deals/:id/close-won      [pré-handler] grava snapshot, depois next() (deal.edit)
  *   POST /api/deals/:id/close-lost     [pré-handler] grava snapshot, depois next() (deal.edit)
+ *
+ * `loadContactReadThrough` é exportado e consumido pelo `GET /api/deals/:id`
+ * canônico (deals/crud.ts) para anexar o cadastro vivo do contato ao detalhe.
  *
  * Decisões (founder, §2):
  *  - READ-THROUGH: o card exibe o cadastro VIVO do contato (`deal.contact_id` →
@@ -27,6 +29,7 @@
  *    tem deal, devolve o existente (nunca cria um segundo).
  */
 import { Router, type Request, type Response, type NextFunction } from 'express';
+import { z } from 'zod';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { assertConversationVisible, schema } from '@hm/db';
 import type { DbTx } from '@hm/db';
@@ -65,7 +68,14 @@ export type EnsuredDeal = typeof schema.deals.$inferSelect;
 export async function ensureDealForConversation(
   tx: DbTx,
   conversationId: string,
-  opts: { workspaceId: string; actorMemberId?: string | null },
+  opts: {
+    workspaceId: string;
+    actorMemberId?: string | null;
+    /** Pipeline escolhido no cockpit; ausente/inválido → pipeline default. */
+    pipelineId?: string | null;
+    /** Estágio escolhido; ausente/inválido → estágio de entrada do pipeline. */
+    stageId?: string | null;
+  },
 ): Promise<EnsuredDeal | null> {
   // 1. Já existe deal para esta conversa? Idempotência: devolve o existente.
   const [existing] = await tx
@@ -90,21 +100,43 @@ export async function ensureDealForConversation(
     .where(eq(contacts.id, conv.contactId))
     .limit(1);
 
-  // 3. Pipeline default (fallback: o mais antigo) + estágio de entrada.
-  const [pipeline] = await tx
-    .select({ id: pipelines.id })
-    .from(pipelines)
-    .where(eq(pipelines.isActive, true))
-    .orderBy(desc(pipelines.isDefault), pipelines.createdAt)
-    .limit(1);
+  // 3. Pipeline: o escolhido (se válido no workspace via RLS) ou o default
+  //    (fallback: o mais antigo). Estágio: o escolhido (se pertencer ao pipeline)
+  //    ou o de entrada (menor `position`).
+  let pipeline: { id: string } | undefined;
+  if (opts.pipelineId) {
+    [pipeline] = await tx
+      .select({ id: pipelines.id })
+      .from(pipelines)
+      .where(eq(pipelines.id, opts.pipelineId))
+      .limit(1);
+  }
+  if (!pipeline) {
+    [pipeline] = await tx
+      .select({ id: pipelines.id })
+      .from(pipelines)
+      .where(eq(pipelines.isActive, true))
+      .orderBy(desc(pipelines.isDefault), pipelines.createdAt)
+      .limit(1);
+  }
   if (!pipeline) return null;
 
-  const [stage] = await tx
-    .select({ id: stages.id })
-    .from(stages)
-    .where(eq(stages.pipelineId, pipeline.id))
-    .orderBy(stages.position)
-    .limit(1);
+  let stage: { id: string } | undefined;
+  if (opts.stageId) {
+    [stage] = await tx
+      .select({ id: stages.id })
+      .from(stages)
+      .where(and(eq(stages.id, opts.stageId), eq(stages.pipelineId, pipeline.id)))
+      .limit(1);
+  }
+  if (!stage) {
+    [stage] = await tx
+      .select({ id: stages.id })
+      .from(stages)
+      .where(eq(stages.pipelineId, pipeline.id))
+      .orderBy(stages.position)
+      .limit(1);
+  }
   if (!stage) return null;
 
   const title = contact?.displayName?.trim() || contact?.phone?.trim() || 'Negócio';
@@ -268,6 +300,11 @@ export function createDealConversationRouter(): Router {
   // ─── POST /api/conversations/:id/deal — cria/auto-cria o card (idempotente) ──
   // Guard de visibilidade por-conversa (F30-S07.1): 404 = não confirma a conversa
   // a quem não a enxerga (evita IDOR), precedendo qualquer criação.
+  const createDealBodySchema = z.object({
+    pipelineId: z.string().uuid().nullish(),
+    stageId: z.string().uuid().nullish(),
+  });
+
   router.post(
     '/api/conversations/:id/deal',
     ...editGuard,
@@ -275,6 +312,13 @@ export function createDealConversationRouter(): Router {
       const conversationId = param(req, 'id');
       if (!conversationId) {
         res.status(400).json({ message: 'id ausente.' });
+        return;
+      }
+      // Body opcional: o cockpit pode escolher o pipeline/estágio (picker). Sem
+      // body, o auto-create (itens/valor) cai no pipeline default.
+      const parsed = createDealBodySchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        res.status(400).json({ error: 'invalid_payload', issues: parsed.error.issues });
         return;
       }
       const memberId = req.auth!.member.id;
@@ -288,6 +332,8 @@ export function createDealConversationRouter(): Router {
         const deal = await ensureDealForConversation(tx, conversationId, {
           workspaceId,
           actorMemberId: memberId,
+          pipelineId: parsed.data.pipelineId ?? null,
+          stageId: parsed.data.stageId ?? null,
         });
         if (!deal) return { kind: 'no_pipeline' as const };
         return { kind: 'ok' as const, deal };
@@ -308,24 +354,10 @@ export function createDealConversationRouter(): Router {
     },
   );
 
-  // ─── GET /api/deals/:id — detalhe do card + cadastro read-through ────────────
-  // Montado ANTES do router de deals (app.ts) → é a fonte do detalhe enriquecido.
-  // Devolve `{ deal, contact }` (contract S04): o `deal` preserva o shape do CRUD
-  // e `contact` é o cadastro VIVO (read-through), nunca uma cópia.
-  router.get('/api/deals/:id', ...editGuard, async (req: Request, res: Response) => {
-    const dealId = param(req, 'id');
-    const result = await req.scoped!(async (tx) => {
-      const [deal] = await tx.select().from(deals).where(eq(deals.id, dealId)).limit(1);
-      if (!deal) return null;
-      const contact = await loadContactReadThrough(tx, deal.contactId);
-      return { deal, contact };
-    });
-    if (!result) {
-      res.sendStatus(404);
-      return;
-    }
-    res.json({ deal: result.deal, contact: result.contact });
-  });
+  // NOTA: `GET /api/deals/:id` (detalhe + cadastro read-through) foi CONSOLIDADO no
+  // handler canônico em `deals/crud.ts` (F47-S15), que importa `loadContactReadThrough`
+  // daqui. Antes havia um shadow aqui montado antes do canônico — removido para
+  // eliminar a rota duplicada e a dependência de ordem de mount.
 
   // ─── Snapshot no fechamento (pré-handler, mesma rota) ────────────────────────
   // Grava `custom_fields.contact_snapshot` ANTES de o close real (deals/crud)

@@ -62,11 +62,11 @@ function igCommentFromMessage(m: {
   };
 }
 
-/** Altura útil da tela do LiveChat = viewport menos o chrome (topbar + paddings do
- *  <main>). Inline porque a classe Tailwind `h-[calc(...)]` não estava aplicando em
- *  prod (container esticava com as mensagens) — inline vence qualquer cascade. */
-const DESKTOP_SHELL_HEIGHT = 'calc(100dvh - 7rem)';
-const MOBILE_SHELL_HEIGHT = 'calc(100dvh - 10rem)';
+/** O LiveChat roda numa rota full-bleed (AppLayout: `<main>` sem padding/scroll
+ *  em /conversations), então preenche 100% da área do `<main>`. `height: 100%`
+ *  inline porque o projeto evita `h-[calc/full]` por cascade instável em prod
+ *  (container esticava com as mensagens) — inline vence qualquer cascade. */
+const FILL_HEIGHT = '100%';
 
 export function ConversationsLayout({ conversationId }: { conversationId?: string }) {
   // Regra de ouro (MOBILE_UX §3.2): a ESTRUTURA muda por `isMobile`, não por
@@ -91,12 +91,9 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
     );
   }
 
-  // ── Desktop: 3 colunas fixas (inalterado — regressão zero) ──────────────────
+  // ── Desktop: 3 colunas fixas, full-bleed (integradas à página) ──────────────
   return (
-    <div
-      style={{ height: DESKTOP_SHELL_HEIGHT }}
-      className="flex overflow-hidden rounded-lg border border-border"
-    >
+    <div style={{ height: FILL_HEIGHT }} className="flex overflow-hidden">
       {/* Coluna 1 — lista (F1-S14: filtros/busca/unread/real-time) */}
       <aside
         data-tour-id="inbox-list"
@@ -163,8 +160,8 @@ function MobileConversationsLayout({
     return (
       <div
         data-tour-id="inbox-list"
-        style={{ height: MOBILE_SHELL_HEIGHT }}
-        className="flex flex-col overflow-hidden rounded-lg border border-border bg-surface"
+        style={{ height: FILL_HEIGHT }}
+        className="flex flex-col overflow-hidden bg-surface"
       >
         <div className="flex items-center justify-between border-b border-border-2 px-4 py-3">
           <span className="font-head text-sm font-semibold text-text">Conversas</span>
@@ -180,8 +177,8 @@ function MobileConversationsLayout({
   // Conversa aberta → Thread em tela cheia + Cockpit como full-sheet.
   return (
     <div
-      style={{ height: MOBILE_SHELL_HEIGHT }}
-      className="flex flex-col overflow-hidden rounded-lg border border-border bg-bg"
+      style={{ height: FILL_HEIGHT }}
+      className="flex flex-col overflow-hidden bg-bg"
     >
       <MobileThread
         conversationId={conversationId}
