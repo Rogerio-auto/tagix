@@ -2,7 +2,7 @@
 id: F47-S08
 title: Cockpit — Conversão herdando valor + resumo financeiro
 phase: F47
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F47-S07]
