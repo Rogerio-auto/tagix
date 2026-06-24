@@ -2,7 +2,7 @@
 id: F47-S03
 title: API Itens do card + recompute de value_cents
 phase: F47
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F47-S01]
