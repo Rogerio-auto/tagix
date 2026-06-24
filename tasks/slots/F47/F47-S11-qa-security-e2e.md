@@ -2,7 +2,7 @@
 id: F47-S11
 title: QA + Segurança + e2e da F47
 phase: F47
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F47-S02, F47-S03, F47-S04, F47-S05, F47-S06, F47-S07, F47-S08, F47-S09, F47-S10]
