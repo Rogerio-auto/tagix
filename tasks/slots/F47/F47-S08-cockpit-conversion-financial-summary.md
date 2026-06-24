@@ -2,7 +2,7 @@
 id: F47-S08
 title: Cockpit — Conversão herdando valor + resumo financeiro
 phase: F47
-status: blocked
+status: review
 priority: medium
 estimated_size: S
 depends_on: [F47-S07]
@@ -16,8 +16,10 @@ ux_considerations:
   - "Aplica 2.3 — marcar conversão reusa MarkConversionModal (sheet no mobile), não tela cheia."
   - "Aplica 2.7 — botão com loading; dedup 409 → mensagem amigável (já existe no modal)."
   - "Aplica 2.6 — resumo financeiro vazio (cliente sem conversão) tem estado honesto."
----
+claimed_at: 2026-06-24T00:59:31Z
+completed_at: 2026-06-24T00:59:32Z
 
+---
 # F47-S08 — Cockpit: Conversão (valor herdado) + resumo financeiro do contato
 
 ## Objetivo

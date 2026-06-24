@@ -14,6 +14,12 @@ export interface MarkConversionModalProps {
   contactId: string;
   conversationId?: string | null;
   dealId?: string | null;
+  /**
+   * Valor (em centavos) herdado do card/deal (F47-S08). Quando informado e o
+   * modal abre, pré-preenche o campo de valor (convertido para reais) — sem
+   * travar a edição. `undefined`/`null` = comportamento original (campo vazio).
+   */
+  valueCents?: number | null;
   onRegistered?: () => void;
 }
 
@@ -29,6 +35,7 @@ export function MarkConversionModal({
   contactId,
   conversationId,
   dealId,
+  valueCents,
   onRegistered,
 }: MarkConversionModalProps): React.JSX.Element {
   const { toast } = useToast();
@@ -49,6 +56,14 @@ export function MarkConversionModal({
       setTypeId((types.find((t) => t.isDefault) ?? types[0]!).id);
     }
   }, [types, typeId]);
+
+  // Valor herdado do card (F47-S08): ao abrir, pré-preenche o campo de valor em
+  // reais. Não trava a edição — o usuário pode sobrescrever livremente.
+  useEffect(() => {
+    if (open && valueCents != null && valueCents > 0) {
+      setValueReais((valueCents / 100).toFixed(2));
+    }
+  }, [open, valueCents]);
 
   const selected = types.find((t) => t.id === typeId);
 

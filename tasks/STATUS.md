@@ -37,7 +37,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F44   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F45   | 7     | 3   | 4   | 0   | 0   | 0   | 0   |
 | F46   | 1     | 0   | 0   | 0   | 0   | 0   | 1   |
-| F47   | 11     | 0   | 2   | 0   | 0   | 0   | 9   |
+| F47   | 11     | 0   | 1   | 0   | 0   | 1   | 9   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -457,7 +457,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F47-S05 | UI Catálogo de Produtos em Settings (/settings/products)       | ✅ done     | medium     | F47-S02                                                                         |
 | F47-S06 | <ContactPanel> reutilizável + Cockpit seção Cliente (ViaCEP)   | ✅ done     | high       | F47-S04                                                                         |
 | F47-S07 | Cockpit — Card + Itens/Produto + valor + auto-enrich           | ✅ done     | high       | F47-S03, F47-S04, F47-S06                                                       |
-| F47-S08 | Cockpit — Conversão herdando valor + resumo financeiro         | ⏸️ blocked | medium     | F47-S07                                                                         |
+| F47-S08 | Cockpit — Conversão herdando valor + resumo financeiro         | 🟣 review   | medium     | F47-S07                                                                         |
 | F47-S09 | Cross-surface — <ContactPanel> na Pipeline + Contatos          | ✅ done     | medium     | F47-S04, F47-S06                                                                |
 | F47-S10 | Reorg da Sidebar — perfil do usuário + logout + nav            | ✅ done     | medium     | —                                                                               |
 | F47-S11 | QA + Segurança + e2e da F47                                    | ⏸️ blocked | high       | F47-S02, F47-S03, F47-S04, F47-S05, F47-S06, F47-S07, F47-S08, F47-S09, F47-S10 |
