@@ -2,7 +2,7 @@
 id: F47-S09
 title: Cross-surface — <ContactPanel> na Pipeline + Contatos
 phase: F47
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F47-S04, F47-S06]
