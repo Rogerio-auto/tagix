@@ -2,7 +2,7 @@
 id: F47-S07
 title: Cockpit — Card + Itens/Produto + valor + auto-enrich
 phase: F47
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F47-S03, F47-S04, F47-S06]
