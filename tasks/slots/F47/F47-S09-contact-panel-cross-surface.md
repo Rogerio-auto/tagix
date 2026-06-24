@@ -2,7 +2,7 @@
 id: F47-S09
 title: Cross-surface — <ContactPanel> na Pipeline + Contatos
 phase: F47
-status: in-progress
+status: review
 priority: medium
 estimated_size: S
 depends_on: [F47-S04, F47-S06]
@@ -16,6 +16,7 @@ ux_considerations:
   - "Aplica 8 (mobile) — MobileDealSheet recebe o painel read-only; alvos ≥44px."
   - "Aplica 3.1 — read-only por padrão fora do cockpit (evita edição acidental)."
 claimed_at: 2026-06-24T00:54:17Z
+completed_at: 2026-06-24T00:54:19Z
 
 ---
 # F47-S09 — Cadastro do cliente visível na Pipeline e em Contatos

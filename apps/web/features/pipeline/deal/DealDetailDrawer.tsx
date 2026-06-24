@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { ExternalLink, X } from 'lucide-react';
 import { CustomFieldsView, type CustomFieldDef, type CustomFieldValues } from '../custom-fields';
 import { MarkConversionButton } from '@/features/conversions';
+import { ContactPanel } from '@/features/contacts/components/ContactPanel';
 import { CardImageCapture } from './CardImageCapture';
 import { CardImageGallery } from './CardImageGallery';
 import { HistoryTimeline } from './HistoryTimeline';
@@ -104,6 +105,14 @@ export function DealDetailDrawer({
               dealId={deal.id}
               variant="secondary"
             />
+          </Section>
+        ) : null}
+
+        {/* Cadastro vivo do cliente (read-through). Read-only: na pipeline nunca
+            editamos o cadastro daqui — §3.1 evita edição acidental fora do cockpit. */}
+        {deal?.contactId ? (
+          <Section title="Cliente">
+            <ContactPanel contactId={deal.contactId} />
           </Section>
         ) : null}
 

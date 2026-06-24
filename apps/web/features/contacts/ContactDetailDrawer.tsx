@@ -6,6 +6,7 @@ import { Pencil, Plus, X } from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
 import { can, type Role } from '@hm/shared';
 import { MarkConversionButton } from '@/features/conversions';
+import { ContactPanel } from './components/ContactPanel';
 import { cn } from '@/shared/lib/cn';
 import { Sheet } from '@/shared/components/Sheet';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
@@ -104,14 +105,19 @@ export function ContactDetailDrawer({
             <p className="text-sm text-danger">Falha ao carregar contato.</p>
           )}
 
-          {data && tab === 'dados' && (
+          {data && c && tab === 'dados' && (
             <div className="flex flex-col gap-4">
-              <dl className="grid grid-cols-1 gap-3 text-sm">
-                <Field label="E-mail" value={c?.email ?? '—'} />
-                <Field label="Telefone" value={c?.phone ?? '—'} />
-                <Field label="Origem" value={c?.source ?? '—'} />
-                <Field label="Idioma" value={c?.language ?? '—'} />
-                <Field label="Criado em" value={dt(c?.createdAt ?? null)} />
+              {/* Cadastro vivo (nome/telefone/e-mail/documento/endereço/custom
+                  fields/resumo) reusa o <ContactPanel> — sem duplicar a
+                  renderização. Editável conforme `contact.edit` (§2.3 cadastro no
+                  drawer; §3.1 read-only quando sem permissão). */}
+              <ContactPanel contactId={c.id} editable />
+
+              {/* Metadados que o painel não cobre (origem/idioma/criado/marketing). */}
+              <dl className="grid grid-cols-1 gap-3 border-t border-border-2 pt-4 text-sm">
+                <Field label="Origem" value={c.source ?? '—'} />
+                <Field label="Idioma" value={c.language ?? '—'} />
+                <Field label="Criado em" value={dt(c.createdAt ?? null)} />
                 <Field
                   label="Marketing"
                   value={data.marketingOptIn ? 'Opt-in ativo' : 'Sem opt-in'}

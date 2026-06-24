@@ -3,6 +3,7 @@
 import { ExternalLink } from 'lucide-react';
 import { Sheet } from '@/shared/components/Sheet';
 import { MarkConversionButton } from '@/features/conversions';
+import { ContactPanel } from '@/features/contacts/components/ContactPanel';
 import {
   CardImageCapture,
   CardImageGallery,
@@ -70,6 +71,14 @@ export function MobileDealSheet({
       {deal?.contactId ? (
         <Section title="Ações">
           <MarkConversionButton contactId={deal.contactId} dealId={deal.id} variant="secondary" />
+        </Section>
+      ) : null}
+
+      {/* Cadastro vivo do cliente (read-through), read-only — §3.1/§8: mesmo
+          painel da Pipeline desktop dentro do Sheet mobile. */}
+      {deal?.contactId ? (
+        <Section title="Cliente">
+          <ContactPanel contactId={deal.contactId} />
         </Section>
       ) : null}
 
