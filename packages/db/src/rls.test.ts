@@ -2062,6 +2062,71 @@ describe('RLS Products + Deal items (F47-S01)', () => {
     ).rejects.toThrow();
   });
 
+  it('deals: unique parcial em conversation_id fecha a race de auto-create (F47-S12)', async () => {
+    // ensureDealForConversation precisa ser idempotente: no máximo 1 deal por
+    // conversa. O unique parcial uq_deals_conversation rejeita o 2º insert com o
+    // mesmo conversation_id; deals SEM conversa (NULL) coexistem livremente.
+    const db = getDb(); // owner bypassa RLS no seed
+    const sfx = randomUUID().slice(0, 8);
+
+    const [ch] = await db
+      .insert(channels)
+      .values({
+        workspaceId: wsA,
+        provider: 'meta_whatsapp',
+        name: `WA deal ${sfx}`,
+        phoneNumberId: `pnid-deal-${sfx}`,
+        wabaId: `waba-deal-${sfx}`,
+      })
+      .returning();
+    if (!ch) throw new Error('seed channel');
+    const [conv] = await db
+      .insert(conversations)
+      .values({ workspaceId: wsA, channelId: ch.id, remoteId: `rem-deal-${sfx}`, status: 'open' })
+      .returning();
+    if (!conv) throw new Error('seed conversation');
+    const [pl] = await db.insert(pipelines).values({ workspaceId: wsA, name: `P ${sfx}` }).returning();
+    if (!pl) throw new Error('seed pipeline');
+    const [st] = await db
+      .insert(stages)
+      .values({ workspaceId: wsA, pipelineId: pl.id, name: `S ${sfx}`, position: 0 })
+      .returning();
+    if (!st) throw new Error('seed stage');
+    const [ct] = await db
+      .insert(contacts)
+      .values({ workspaceId: wsA, displayName: `C ${sfx}` })
+      .returning();
+    if (!ct) throw new Error('seed contact');
+
+    const base = {
+      workspaceId: wsA,
+      pipelineId: pl.id,
+      stageId: st.id,
+      contactId: ct.id,
+      conversationId: conv.id,
+    };
+
+    // 1º deal com a conversa: ok.
+    await db.insert(deals).values({ ...base, title: `Card 1 ${sfx}` });
+    // 2º deal com a MESMA conversa: viola o unique parcial.
+    await expect(
+      db.insert(deals).values({ ...base, title: `Card 2 ${sfx}` }),
+    ).rejects.toThrow();
+
+    // Dois deals SEM conversa (NULL) coexistem — o índice é parcial.
+    await db
+      .insert(deals)
+      .values({ workspaceId: wsA, pipelineId: pl.id, stageId: st.id, contactId: ct.id, title: `No-conv A ${sfx}` });
+    await db
+      .insert(deals)
+      .values({ workspaceId: wsA, pipelineId: pl.id, stageId: st.id, contactId: ct.id, title: `No-conv B ${sfx}` });
+    const noConv = await db
+      .select()
+      .from(deals)
+      .where(sql`${deals.pipelineId} = ${pl.id} and ${deals.conversationId} is null`);
+    expect(noConv.length).toBe(2);
+  });
+
   it('products: UPDATE não consegue mover linha para outro workspace (WITH CHECK)', async () => {
     // Defesa F47-S11 (QA): a USING isola a leitura; a WITH CHECK precisa barrar
     // tentativa de "exfiltrar" uma linha trocando o workspace_id para o tenant B.

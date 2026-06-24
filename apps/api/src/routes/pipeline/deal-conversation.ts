@@ -40,6 +40,19 @@ function param(req: Request, key: string): string {
   return typeof raw === 'string' ? raw : '';
 }
 
+/**
+ * unique_violation do Postgres (23505). O Drizzle envolve o erro do driver num
+ * `DrizzleQueryError`, expondo o original em `cause` — checamos os dois níveis.
+ * Usado para fechar a race do auto-create do card (F47-S12): com o unique parcial
+ * `uq_deals_conversation`, o 2º insert concorrente bate em 23505 e nós re-lemos
+ * o deal já existente em vez de propagar 500.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  const direct = (err as { code?: string } | null)?.code;
+  const cause = (err as { cause?: { code?: string } } | null)?.cause?.code;
+  return direct === '23505' || cause === '23505';
+}
+
 /** Linha de deal retornada pelo ensure/detalhe (campos estáveis p/ o frontend). */
 export type EnsuredDeal = typeof schema.deals.$inferSelect;
 
@@ -109,20 +122,38 @@ export async function ensureDealForConversation(
 
   const title = contact?.displayName?.trim() || contact?.phone?.trim() || 'Negócio';
 
-  const [created] = await tx
-    .insert(deals)
-    .values({
-      workspaceId: opts.workspaceId,
-      pipelineId: pipeline.id,
-      stageId: stage.id,
-      contactId: conv.contactId,
-      conversationId,
-      title,
-      valueCents: 0,
-      currency: 'BRL',
-      source: 'conversation',
-    })
-    .returning();
+  // 4. INSERT do card. Sob concorrência (duplo-clique / auto-enrich + criação
+  //    manual) duas requisições podem ambas passar pelo check do passo 1 e tentar
+  //    inserir. O unique parcial `uq_deals_conversation` (deals.conversation_id
+  //    WHERE NOT NULL) garante que apenas uma vence; a perdedora bate em 23505.
+  //    Capturamos isso, re-selecionamos o deal vencedor (MESMA tx/RLS) e o
+  //    devolvemos — idempotência fechada, sem 500. (F47-S12)
+  let created: EnsuredDeal | undefined;
+  try {
+    [created] = await tx
+      .insert(deals)
+      .values({
+        workspaceId: opts.workspaceId,
+        pipelineId: pipeline.id,
+        stageId: stage.id,
+        contactId: conv.contactId,
+        conversationId,
+        title,
+        valueCents: 0,
+        currency: 'BRL',
+        source: 'conversation',
+      })
+      .returning();
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    const [winner] = await tx
+      .select()
+      .from(deals)
+      .where(eq(deals.conversationId, conversationId))
+      .orderBy(desc(deals.createdAt))
+      .limit(1);
+    return winner ?? null;
+  }
   if (!created) return null;
 
   await tx.insert(schema.dealHistory).values({

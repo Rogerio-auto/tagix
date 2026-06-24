@@ -2,7 +2,7 @@
 id: F47-S12
 title: Fix race de auto-create do card (unique conversation_id + 23505)
 phase: F47
-status: in-progress
+status: review
 priority: high
 estimated_size: XS
 depends_on: [F47-S01, F47-S04]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/COCKPIT_CLIENT_ENRICHMENT.md
   - tasks/slots/F47/F47-S11-qa-security-e2e.md
 claimed_at: 2026-06-24T01:22:50Z
+completed_at: 2026-06-24T01:22:52Z
 
 ---
 # F47-S12 — Fechar a race de auto-criação de card (follow-up MÉDIO do QA S11)
