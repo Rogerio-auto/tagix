@@ -17,7 +17,7 @@
  * via `focus-visible:shadow-glow-md`. Verde-neon (`brand`) usado no máximo 1×.
  */
 
-import { Bot, Info, Receipt, RefreshCw, User, X, Zap } from 'lucide-react';
+import { Bot, Info, Receipt, RefreshCw, Target, User, X, Zap } from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
 import { can } from '@hm/shared';
 import { cn } from '@/shared/lib/cn';
@@ -25,6 +25,7 @@ import { Skeleton } from '@/shared/components/feedback';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { ContactPanel } from '@/features/contacts/components/ContactPanel';
 import { DealSection } from './DealSection';
+import { ConversionSection } from './ConversionSection';
 import { NotesPanel } from './Notes';
 import { RoutingMenu } from './RoutingMenu';
 import { AgentSelector } from './AgentSelector';
@@ -143,6 +144,7 @@ export function ContactInfoPanel({
   const canAiMode = role ? can(role, 'conversation.ai_mode') : false;
   const canAssignAgent = role ? can(role, 'conversation.assign_agent') : false;
   const canDealEdit = role ? can(role, 'deal.edit') : false;
+  const canConvert = role ? can(role, 'deal.convert') : false;
 
   const status = detail?.status ?? 'open';
   const aiMode = detail?.aiMode ?? 'off';
@@ -297,6 +299,31 @@ export function ContactInfoPanel({
             />
           )}
         </Section>
+
+        {/* ── 1.7 Conversão — marcar conversão herdando o valor do card (F47-S08) ── */}
+        {/* Reusa o MarkConversionModal; o valor do card vem pré-preenchido. Gate
+            `deal.convert` (READONLY não vê). Precisa de contato vinculado. */}
+        {canConvert && (
+          <Section title="Conversão" icon={Target}>
+            {isLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-9 w-1/2" />
+              </div>
+            ) : detail?.contact ? (
+              <ConversionSection
+                contactId={detail.contact.id}
+                conversationId={conversationId}
+                dealId={detail.deal?.id ?? null}
+                valueCents={detail.deal?.valueCents ?? null}
+              />
+            ) : (
+              <p className="font-body text-sm text-text-low">
+                Vincule um contato a esta conversa para registrar a conversão.
+              </p>
+            )}
+          </Section>
+        )}
 
         {/* ── 2. IA — toggle + estado de handoff ─────────────────────────── */}
         <Section title="Agente IA" icon={Bot}>
