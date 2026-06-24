@@ -2,7 +2,7 @@
 id: F47-S06
 title: <ContactPanel> reutilizável + Cockpit seção Cliente (ViaCEP)
 phase: F47
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F47-S04]
