@@ -40,6 +40,45 @@ const listQuerySchema = z.object({
   sort: z.enum(['recent', 'name']).default('recent'),
 });
 
+// UFs brasileiras (validação de `address.state`). 2 letras maiúsculas.
+const UF_RE = /^[A-Z]{2}$/;
+// CEP brasileiro: 8 dígitos, com ou sem hífen (00000-000 ou 00000000).
+const CEP_RE = /^\d{5}-?\d{3}$/;
+
+/**
+ * Endereço estruturado do contato (F47-S04, espelha `ContactAddress` do schema).
+ * Todos os campos opcionais — o cadastro é incremental. Validação leniente: UF
+ * com 2 letras, CEP com formato BR; o resto é texto livre limitado.
+ */
+const addressSchema = z.object({
+  cep: z.string().trim().regex(CEP_RE, 'CEP inválido (use 00000-000).').optional(),
+  street: z.string().trim().max(200).optional(),
+  number: z.string().trim().max(40).optional(),
+  complement: z.string().trim().max(120).optional(),
+  district: z.string().trim().max(120).optional(),
+  city: z.string().trim().max(120).optional(),
+  state: z
+    .string()
+    .trim()
+    .transform((v) => v.toUpperCase())
+    .pipe(z.string().regex(UF_RE, 'UF inválida (2 letras, ex.: SP).'))
+    .optional(),
+});
+
+// Documento CPF/CNPJ — validação de FORMATO leniente (11 ou 14 dígitos após
+// remover máscara). Não exige (cadastro pode não ter) e não valida dígito
+// verificador (decisão founder: não obrigar). Aceita string vazia/null p/ limpar.
+const documentSchema = z
+  .string()
+  .trim()
+  .max(32)
+  .refine((v) => {
+    if (v.length === 0) return true;
+    const digits = v.replace(/\D/g, '');
+    return digits.length === 11 || digits.length === 14;
+  }, 'Documento inválido (CPF com 11 ou CNPJ com 14 dígitos).')
+  .nullish();
+
 const createSchema = z.object({
   displayName: z.string().trim().min(1).max(200),
   phone: z.string().trim().min(1).max(40).nullish(),
@@ -49,6 +88,9 @@ const createSchema = z.object({
   source: z.string().trim().max(120).nullish(),
   ownerId: z.string().uuid().nullish(),
   customFields: z.record(z.string(), z.unknown()).optional(),
+  // Cadastro estruturado (F47-S04): endereço tipado + documento (CPF/CNPJ).
+  address: addressSchema.optional(),
+  document: documentSchema,
 });
 
 const updateSchema = createSchema.partial();
@@ -272,6 +314,8 @@ export function createContactsCrudRouter(): Router {
             source: d.source ?? 'manual',
             ownerId: d.ownerId ?? null,
             customFields: d.customFields ?? {},
+            address: d.address ?? {},
+            document: d.document ?? null,
           })
           .returning(),
       );
