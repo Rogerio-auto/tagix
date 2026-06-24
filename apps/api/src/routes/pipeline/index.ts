@@ -5,15 +5,18 @@
  * Montado em app.ts pelo orchestrator (padrao F2-S19/F4-S08).
  */
 import { Router } from 'express';
+import { createDealItemsRouter } from './items';
 import { createPipelinesRouter } from './pipelines';
 import { createStagesRouter } from './stages';
 
 export function createPipelineRouter(): Router {
   const router = Router();
   router.use(createStagesRouter());
+  router.use(createDealItemsRouter());
   router.use(createPipelinesRouter());
   return router;
 }
 
+export { createDealItemsRouter } from './items';
 export { createPipelinesRouter } from './pipelines';
 export { createStagesRouter } from './stages';
