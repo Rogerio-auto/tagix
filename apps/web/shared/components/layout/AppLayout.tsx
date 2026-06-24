@@ -43,6 +43,31 @@ export function AppLayout({ children }: { children: ReactNode }) {
     void hydrateAuth();
   }, [hydrateAuth]);
 
+  // Trava o scroll do DOCUMENTO enquanto o shell do app está montado. O app é um
+  // shell de altura fixa (`h-dvh`) com scroll APENAS interno (no `<main>` ou nas
+  // áreas internas do LiveChat). Sem esta trava, um overflow residual de qualquer
+  // camada interna fazia a página inteira (sidebar incluída) scrollar — o "scroll
+  // fantasma" em chats com histórico longo. Escopado e reversível: só vale enquanto
+  // o AppLayout (rotas do grupo `(app)`) está montado; auth/platform (que usam
+  // `min-h-dvh` + scroll de documento) têm layout próprio e não são afetados.
+  useEffect(() => {
+    const html = document.documentElement;
+    const { body } = document;
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      bodyOverscroll: body.style.overscrollBehavior,
+    };
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    body.style.overscrollBehavior = 'none';
+    return () => {
+      html.style.overflow = prev.htmlOverflow;
+      body.style.overflow = prev.bodyOverflow;
+      body.style.overscrollBehavior = prev.bodyOverscroll;
+    };
+  }, []);
+
   return (
     <div className="flex h-dvh overflow-hidden bg-bg">
       <SkipLink />
