@@ -2,7 +2,7 @@
 id: F47-S12
 title: Fix race de auto-create do card (unique conversation_id + 23505)
 phase: F47
-status: review
+status: done
 priority: high
 estimated_size: XS
 depends_on: [F47-S01, F47-S04]
