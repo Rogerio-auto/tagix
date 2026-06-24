@@ -2,7 +2,7 @@
 id: F47-S04
 title: API Card-da-conversa + cadastro read-through + snapshot
 phase: F47
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F47-S01]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/COCKPIT_CLIENT_ENRICHMENT.md
   - docs/features/LIVECHAT_OPS.md
 claimed_at: 2026-06-24T00:36:04Z
+completed_at: 2026-06-24T00:36:05Z
 
 ---
 # F47-S04 — Card a partir da conversa + cadastro do contato (read-through + snapshot)

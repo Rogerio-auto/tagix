@@ -199,17 +199,44 @@ export function createConversationsRouter(): Router {
         .limit(1);
       if (!row) return null;
 
-      // Estágio: a conversa não referencia stage; vem do deal vinculado a ela
-      // (deals.conversation_id). Pega o mais recente + o nome do stage.
+      // Estágio + card (deal) vinculado à conversa (deals.conversation_id). Pega o
+      // mais recente. O card alimenta o cockpit (S07): id/stage/value para vincular
+      // itens/valor/conversão. Read-through — nada é copiado.
       const [deal] = await tx
-        .select({ stageName: schema.stages.name })
+        .select({
+          id: schema.deals.id,
+          stageId: schema.deals.stageId,
+          stageName: schema.stages.name,
+          valueCents: schema.deals.valueCents,
+          currency: schema.deals.currency,
+          closedAt: schema.deals.closedAt,
+          closedWon: schema.deals.closedWon,
+        })
         .from(schema.deals)
         .innerJoin(schema.stages, eq(schema.deals.stageId, schema.stages.id))
         .where(eq(schema.deals.conversationId, conversationId))
         .orderBy(desc(schema.deals.createdAt))
         .limit(1);
 
-      return { ...row, stageName: deal?.stageName ?? null };
+      // Cadastro VIVO do contato (read-through, F47-S04): endereço + documento +
+      // custom_fields. O cockpit (S06) edita; as demais telas só leem.
+      const [contact] = row.conversation.contactId
+        ? await tx
+            .select({
+              id: schema.contacts.id,
+              displayName: schema.contacts.displayName,
+              phone: schema.contacts.phone,
+              email: schema.contacts.email,
+              document: schema.contacts.document,
+              address: schema.contacts.address,
+              customFields: schema.contacts.customFields,
+            })
+            .from(schema.contacts)
+            .where(eq(schema.contacts.id, row.conversation.contactId))
+            .limit(1)
+        : [undefined];
+
+      return { ...row, deal: deal ?? null, contact: contact ?? null };
     });
 
     if (detail === null) {
@@ -238,7 +265,21 @@ export function createConversationsRouter(): Router {
         agentId: c.agentId,
         agentName: detail.agentName,
         // Estágio do deal vinculado à conversa (null se não houver deal).
-        stageName: detail.stageName,
+        stageName: detail.deal?.stageName ?? null,
+        // Card (deal) vinculado à conversa — read-through (F47-S04). null se não há.
+        deal: detail.deal
+          ? {
+              id: detail.deal.id,
+              stageId: detail.deal.stageId,
+              stageName: detail.deal.stageName,
+              valueCents: detail.deal.valueCents,
+              currency: detail.deal.currency,
+              closedAt: detail.deal.closedAt,
+              closedWon: detail.deal.closedWon,
+            }
+          : null,
+        // Cadastro vivo do contato (read-through, F47-S04).
+        contact: detail.contact ?? null,
         unreadCount: c.unreadCount,
         lastMessageAt: c.lastMessageAt,
         createdAt: c.createdAt,
