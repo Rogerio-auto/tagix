@@ -28,6 +28,7 @@ import { AlertCircle, Check, MapPin, Pencil, X } from 'lucide-react';
 import { Button, Input, useToast } from '@hm/ui';
 import { can } from '@hm/shared';
 import { useAuthStore } from '@/shared/stores/auth.store';
+import { ApiError } from '@/shared/lib/api-client';
 import { ErrorState, Skeleton } from '@/shared/components/feedback';
 import type { ContactAddress, ContactDeal, ContactConversion } from '../types';
 import { useContact, useUpdateContact } from '../queries';
@@ -55,6 +56,27 @@ function formatCents(cents: number, currency = 'BRL'): string {
 function isAddressEmpty(a: ContactAddress | undefined | null): boolean {
   if (!a) return true;
   return !(a.cep || a.street || a.number || a.complement || a.district || a.city || a.state);
+}
+
+/**
+ * Normaliza o address do draft para envio: campos vazios (`''`) viram `undefined`
+ * em vez de string vazia — o backend rejeita `cep: ''`/`state: ''` com 400 (bug_006).
+ * Espelha o tratamento de phone/email/document (vazio → null).
+ */
+function normalizeAddress(a: ContactAddress): ContactAddress {
+  const clean = (s: string | undefined): string | undefined => {
+    const t = s?.trim();
+    return t ? t : undefined;
+  };
+  return {
+    cep: clean(a.cep),
+    street: clean(a.street),
+    number: clean(a.number),
+    complement: clean(a.complement),
+    district: clean(a.district),
+    city: clean(a.city),
+    state: clean(a.state),
+  };
 }
 
 /** Resumo financeiro: total fechado/ganho, nº de deals e ticket médio. */
@@ -194,7 +216,7 @@ export function ContactPanel({ contactId, editable = false }: ContactPanelProps)
           phone: draft.phone.trim() || null,
           email: draft.email.trim() || null,
           document: draft.document.trim() || null,
-          address: draft.address,
+          address: normalizeAddress(draft.address),
         },
       },
       {
@@ -203,10 +225,15 @@ export function ContactPanel({ contactId, editable = false }: ContactPanelProps)
           setEditing(false);
           setDraft(null);
         },
-        onError: () =>
+        onError: (err) =>
           toast({
             title: 'Falha ao salvar cadastro',
-            description: 'Tente novamente em instantes.',
+            // Surface o motivo do backend (ex.: validação Zod por campo) em vez de
+            // um texto genérico — o usuário precisa saber qual campo corrigir (§2.11).
+            description:
+              err instanceof ApiError && err.message
+                ? err.message
+                : 'Tente novamente em instantes.',
             variant: 'error',
           }),
       },

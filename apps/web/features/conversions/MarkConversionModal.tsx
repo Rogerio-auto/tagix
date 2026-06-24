@@ -6,6 +6,7 @@ import { Button, Input, Modal, useToast } from '@hm/ui';
 import { Sheet } from '@/shared/components/Sheet';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { ApiError } from '@/shared/lib/api-client';
+import { parseToCents } from '@/features/products/money';
 import { useConversionTypes, useRegisterConversion } from './queries';
 
 export interface MarkConversionModalProps {
@@ -61,7 +62,7 @@ export function MarkConversionModal({
   // reais. Não trava a edição — o usuário pode sobrescrever livremente.
   useEffect(() => {
     if (open && valueCents != null && valueCents > 0) {
-      setValueReais((valueCents / 100).toFixed(2));
+      setValueReais((valueCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
     }
   }, [open, valueCents]);
 
@@ -69,8 +70,8 @@ export function MarkConversionModal({
 
   async function submit(): Promise<void> {
     if (!selected) return;
-    const valueCents = valueReais ? Math.round(Number(valueReais) * 100) : null;
-    if (selected.valueRequired && (valueCents == null || Number.isNaN(valueCents))) {
+    const valueCents = valueReais ? parseToCents(valueReais) : null;
+    if (selected.valueRequired && valueCents == null) {
       toast({ variant: 'warn', title: 'Informe o valor desta conversão.' });
       return;
     }
@@ -127,9 +128,9 @@ export function MarkConversionModal({
           </label>
           <Input
             id="conv-value"
-            type="number"
-            step="0.01"
+            type="text"
             inputMode="decimal"
+            placeholder="0,00"
             value={valueReais}
             onChange={(e) => setValueReais(e.target.value)}
           />

@@ -26,6 +26,7 @@ import { Check, Package, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Button, Input, useToast } from '@hm/ui';
 import { cn } from '@/shared/lib/cn';
 import { ErrorState, Skeleton } from '@/shared/components/feedback';
+import { parseToCents } from '@/features/products/money';
 import {
   useAddDealItem,
   useDealItems,
@@ -46,15 +47,6 @@ function formatCents(cents: number, currency = 'BRL'): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(cents / 100);
   }
   return currencyFmt.format(cents / 100);
-}
-
-/** "12,34" → 1234 centavos. Aceita vírgula ou ponto; vazio/inválido → null. */
-function parseReaisToCents(raw: string): number | null {
-  const normalized = raw.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
-  if (normalized === '') return null;
-  const value = Number(normalized);
-  if (!Number.isFinite(value) || value < 0) return null;
-  return Math.round(value * 100);
 }
 
 // ── Linha de item (leitura + edição inline) ───────────────────────────────────
@@ -88,7 +80,7 @@ function ItemRow({
   function save(): void {
     if (update.isPending) return;
     const nextQty = Number(qty);
-    const nextCents = parseReaisToCents(price);
+    const nextCents = parseToCents(price);
     if (!Number.isInteger(nextQty) || nextQty < 1 || nextCents === null) {
       toast({ title: 'Quantidade e valor inválidos', variant: 'error' });
       return;
@@ -248,7 +240,7 @@ export function AddItemForm({
       if (!selected) return;
       onAdd({ productId: selected.id, qty: nextQty });
     } else {
-      const cents = parseReaisToCents(price);
+      const cents = parseToCents(price);
       const trimmed = name.trim();
       if (!trimmed || cents === null) return;
       onAdd({ nameSnapshot: trimmed, unitPriceCents: cents, qty: nextQty });
@@ -258,7 +250,7 @@ export function AddItemForm({
   const canSubmit =
     mode === 'product'
       ? selected !== null
-      : name.trim().length > 0 && parseReaisToCents(price) !== null;
+      : name.trim().length > 0 && parseToCents(price) !== null;
 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border-2 bg-surface-2 p-3">

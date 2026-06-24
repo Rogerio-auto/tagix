@@ -41,6 +41,11 @@ export function AddressForm({
   const [cepState, setCepState] = useState<CepState>({ kind: 'idle' });
   // Evita corrida: só a busca mais recente pode aplicar resultado.
   const lookupSeq = useRef(0);
+  // Espelha o `value` mais recente para que o resultado do ViaCEP mescle contra o
+  // que o usuário digitou DURANTE o fetch (Número/Complemento), não contra o snapshot
+  // capturado no início da busca (bug_003 — perda de dado).
+  const valueRef = useRef(value);
+  valueRef.current = value;
 
   function patch(partial: Partial<ContactAddress>): void {
     onChange({ ...value, ...partial });
@@ -54,11 +59,12 @@ export function AddressForm({
 
     if (result.status === 'ok') {
       setCepState({ kind: 'idle' });
+      const latest = valueRef.current;
       onChange({
-        ...value,
+        ...latest,
         cep: formatCep(result.address.cep),
-        street: result.address.street || value.street,
-        district: result.address.district || value.district,
+        street: result.address.street || latest.street,
+        district: result.address.district || latest.district,
         city: result.address.city,
         state: result.address.state,
       });
