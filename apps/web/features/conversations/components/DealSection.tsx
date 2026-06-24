@@ -25,11 +25,11 @@
  */
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowUpRight, FileText, Plus } from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
 import type { ConversationDeal } from '../types';
-import { useAddDealItem, useCreateConversationDeal } from '../queries';
+import { useAddDealItem, useCreateConversationDeal, usePipelines } from '../queries';
 import { AddItemForm, DealItemsEditor, type NewItemInput } from './DealItemsEditor';
 
 const currencyFmt = new Intl.NumberFormat('pt-BR', {
@@ -59,15 +59,30 @@ export function DealSection({
   const createDeal = useCreateConversationDeal();
   const addItem = useAddDealItem();
 
+  // Pipelines p/ o picker — só busca quando há intenção de criar (sem deal + canEdit).
+  const pipelinesQuery = usePipelines(!deal && canEdit);
+  const pipelines = pipelinesQuery.data ?? [];
+
   // No-deal: alterna entre o CTA e o formulário de auto-enrich (1º item cria o card).
   const [enriching, setEnriching] = useState(false);
+  // Pipeline escolhido no picker (default = o pipeline default do workspace).
+  const [pipelineId, setPipelineId] = useState<string>('');
+
+  // Pré-seleciona o pipeline default assim que a lista chega (sem sobrescrever
+  // uma escolha manual do atendente).
+  useEffect(() => {
+    if (pipelineId || pipelines.length === 0) return;
+    setPipelineId((pipelines.find((p) => p.isDefault) ?? pipelines[0]!).id);
+  }, [pipelines, pipelineId]);
 
   const busy = createDeal.isPending || addItem.isPending;
+  // `null` = deixa o backend escolher o default (sem pipelines carregados ainda).
+  const chosenPipelineId = pipelineId || null;
 
   function handleCreateEmpty(): void {
     if (createDeal.isPending) return;
     createDeal.mutate(
-      { conversationId },
+      { conversationId, pipelineId: chosenPipelineId },
       {
         onSuccess: () => toast({ title: 'Card criado na pipeline', variant: 'success' }),
         onError: () => toast({ title: 'Falha ao criar o card', variant: 'error' }),
@@ -83,7 +98,7 @@ export function DealSection({
   function handleAutoEnrich(input: NewItemInput): void {
     if (busy) return;
     createDeal.mutate(
-      { conversationId },
+      { conversationId, pipelineId: chosenPipelineId },
       {
         onSuccess: ({ deal: created }) => {
           addItem.mutate(
@@ -126,6 +141,26 @@ export function DealSection({
             registrar o valor.
           </p>
         </div>
+
+        {/* Picker de pipeline — só quando há mais de um (com 1, o default basta). */}
+        {pipelines.length > 1 && (
+          <label className="flex flex-col gap-1">
+            <span className="font-body text-xs text-text-low">Pipeline</span>
+            <select
+              value={pipelineId}
+              onChange={(e) => setPipelineId(e.target.value)}
+              disabled={busy}
+              className="touch-target rounded-md border border-border bg-surface px-3 font-body text-sm text-text outline-none focus-visible:shadow-glow-md disabled:opacity-50"
+            >
+              {pipelines.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.isDefault ? ' (padrão)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         {enriching ? (
           <AddItemForm

@@ -26,6 +26,7 @@ import {
   type DealActor,
 } from '../../services/deal-move';
 import { emitDealCreated, emitDealUpdated } from '../../services/deal-events';
+import { loadContactReadThrough } from '../pipeline/deal-conversation';
 
 const { deals, dealHistory } = schema;
 
@@ -134,16 +135,24 @@ export function createDealsCrudRouter(): Router {
     res.status(201).json({ deal: result });
   });
 
-  // GET /api/deals/:id — detalhe.
+  // GET /api/deals/:id — detalhe + cadastro VIVO do contato (read-through, F47-S15).
+  // Consolidado aqui (antes havia um shadow em pipeline/deal-conversation.ts).
   router.get('/api/deals/:id', ...editGuard, async (req: Request, res: Response) => {
-    const [deal] = await req.scoped!((tx) =>
-      tx.select().from(deals).where(eq(deals.id, param(req, 'id'))).limit(1),
-    );
-    if (!deal) {
+    const result = await req.scoped!(async (tx) => {
+      const [deal] = await tx
+        .select()
+        .from(deals)
+        .where(eq(deals.id, param(req, 'id')))
+        .limit(1);
+      if (!deal) return null;
+      const contact = await loadContactReadThrough(tx, deal.contactId);
+      return { deal, contact };
+    });
+    if (!result) {
       res.sendStatus(404);
       return;
     }
-    res.json({ deal });
+    res.json({ deal: result.deal, contact: result.contact });
   });
 
   // PUT /api/deals/:id — update (NAO muda stage).

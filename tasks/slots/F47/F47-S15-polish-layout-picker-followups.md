@@ -2,7 +2,7 @@
 id: F47-S15
 title: Polish — LiveChat full-bleed + picker de pipeline + 2 follow-ups
 phase: F47
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F47-S04, F47-S07, F47-S13]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/COCKPIT_CLIENT_ENRICHMENT.md
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-06-24T14:31:54Z
+completed_at: 2026-06-24T14:45:38Z
 
 ---
 # F47-S15 — Layout integrado do LiveChat + escolha de pipeline + follow-ups

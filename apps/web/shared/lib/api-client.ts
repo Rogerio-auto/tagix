@@ -10,11 +10,20 @@ const BASE_URL =
   process.env['NEXT_PUBLIC_API_URL'] ??
   (typeof window === 'undefined' ? 'http://localhost:3001' : '');
 
+/** Issue de validação (shape do Zod) propagada pelo backend em 400. */
+export interface ApiIssue {
+  /** Caminho do campo (ex.: `['address', 'cep']`). */
+  path: (string | number)[];
+  message: string;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
     readonly ref?: string,
+    /** Issues de validação por campo (quando o backend manda `issues`). */
+    readonly issues?: ApiIssue[],
   ) {
     super(message);
     this.name = 'ApiError';
@@ -32,14 +41,20 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (!res.ok) {
     let message = `Falha na requisição (${res.status})`;
     let ref: string | undefined;
+    let issues: ApiIssue[] | undefined;
     try {
-      const data = (await res.json()) as { message?: string; ref?: string };
+      const data = (await res.json()) as {
+        message?: string;
+        ref?: string;
+        issues?: ApiIssue[];
+      };
       if (data.message) message = data.message;
       ref = data.ref;
+      if (Array.isArray(data.issues) && data.issues.length > 0) issues = data.issues;
     } catch {
       // resposta sem corpo JSON
     }
-    throw new ApiError(res.status, message, ref);
+    throw new ApiError(res.status, message, ref, issues);
   }
 
   if (res.status === 204) return undefined as T;
