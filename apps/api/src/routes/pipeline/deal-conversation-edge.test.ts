@@ -38,6 +38,13 @@ interface Session {
 }
 let session: Session | null = null;
 
+/**
+ * Injeção de falha controlada no `req.scoped` (F47-S13 bug_012). Quando >0, as
+ * próximas N invocações de `req.scoped(fn)` rejeitam em vez de rodar a tx real —
+ * usado para provar que a falha do snapshot (best-effort) não derruba o close.
+ */
+let scopedFailCount = 0;
+
 vi.mock('../../middlewares/auth', () => ({
   requireAuth: (req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (!session) {
@@ -58,7 +65,13 @@ vi.mock('../../middlewares/auth', () => ({
     const wsId = req.auth.workspace.id;
     (req as unknown as { scoped: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T> }).scoped = (
       fn,
-    ) => withWorkspace(wsId, fn as never);
+    ) => {
+      if (scopedFailCount > 0) {
+        scopedFailCount -= 1;
+        return Promise.reject(new Error('scoped boom (fault-injected)'));
+      }
+      return withWorkspace(wsId, fn as never);
+    };
     next();
   },
   requireRole:
@@ -199,6 +212,7 @@ async function dealsForConversation(conversationId: string): Promise<string[]> {
 
 beforeEach(() => {
   session = { workspaceId: WS, memberId: MEMBER, role: 'OWNER' };
+  scopedFailCount = 0;
 });
 
 const maybe = (name: string, fn: () => Promise<void>) =>
@@ -261,6 +275,82 @@ describe('close-won/close-lost — pré-handler atravessa p/ o close canônico',
   maybe('close-won de deal inexistente -> 404 (canônico decide; pré-handler só segue)', async () => {
     const res = await request(app).post(`/api/deals/${randomUUID()}/close-won`);
     expect(res.status).toBe(404);
+  });
+
+  // ── 1c. Re-close PRESERVA o snapshot original (F47-S13 bug_012) ──────────────
+  maybe('re-close (reopen + close de novo) preserva o snapshot do 1º fechamento', async () => {
+    const conv = await freshConversation();
+    const created = await request(app).post(`/api/conversations/${conv}/deal`);
+    const dealId = created.body.deal.id as string;
+
+    // 1º close grava o snapshot com o cadastro vigente.
+    await request(app).post(`/api/deals/${dealId}/close-won`);
+    const [first] = await getDb()
+      .select({ cf: schema.deals.customFields })
+      .from(schema.deals)
+      .where(eq(schema.deals.id, dealId));
+    const firstSnap = (first?.cf as Record<string, unknown>)['contact_snapshot'] as Record<
+      string,
+      unknown
+    >;
+    expect(firstSnap).toBeTruthy();
+    const firstCapturedAt = firstSnap['capturedAt'];
+
+    // Muda o cadastro VIVO do contato APÓS o 1º close.
+    await getDb()
+      .update(schema.contacts)
+      .set({ displayName: 'Nome Alterado Pós-Venda', document: '99988877766' })
+      .where(eq(schema.contacts.id, CONTACT));
+
+    // Reabre e fecha de novo — o pré-handler de snapshot roda outra vez.
+    await request(app).post(`/api/deals/${dealId}/reopen`);
+    const reclose = await request(app).post(`/api/deals/${dealId}/close-won`);
+    expect(reclose.status).toBe(200);
+
+    // O snapshot PRESERVA o estado da venda original (guard): NÃO foi sobrescrito
+    // com o cadastro atual.
+    const [second] = await getDb()
+      .select({ cf: schema.deals.customFields })
+      .from(schema.deals)
+      .where(eq(schema.deals.id, dealId));
+    const secondSnap = (second?.cf as Record<string, unknown>)['contact_snapshot'] as Record<
+      string,
+      unknown
+    >;
+    expect(secondSnap['capturedAt']).toBe(firstCapturedAt);
+    expect(secondSnap['displayName']).toBe(firstSnap['displayName']);
+    expect(secondSnap['displayName']).not.toBe('Nome Alterado Pós-Venda');
+
+    // Restaura o contato para não contaminar os demais testes do WS compartilhado.
+    await getDb()
+      .update(schema.contacts)
+      .set({ displayName: 'Maria Souza', document: '12345678901' })
+      .where(eq(schema.contacts.id, CONTACT));
+  });
+
+  // ── 1d. Falha do snapshot NÃO bloqueia o close (F47-S13 bug_012) ────────────
+  maybe('snapshot que falha não derruba o close (best-effort, try/catch)', async () => {
+    const conv = await freshConversation();
+    const created = await request(app).post(`/api/conversations/${conv}/deal`);
+    const dealId = created.body.deal.id as string;
+
+    // Falha-injeta a 1ª invocação de req.scoped da requisição de close: ela é a do
+    // pré-handler de SNAPSHOT. A 2ª invocação (close canônico em deals/crud) roda
+    // normal. Sem o try/catch no pré-handler, a rejeição viraria 500 e o deal NUNCA
+    // fecharia.
+    scopedFailCount = 1;
+    const close = await request(app).post(`/api/deals/${dealId}/close-won`);
+    expect(close.status).toBe(200);
+    expect(close.body.deal.closedWon).toBe(true);
+    expect(close.body.deal.closedAt).toBeTruthy();
+
+    // O snapshot falhou de propósito -> não foi gravado, mas o close persistiu.
+    const [row] = await getDb()
+      .select({ cf: schema.deals.customFields, closedWon: schema.deals.closedWon })
+      .from(schema.deals)
+      .where(eq(schema.deals.id, dealId));
+    expect(row?.closedWon).toBe(true);
+    expect((row?.cf as Record<string, unknown>)['contact_snapshot']).toBeUndefined();
   });
 });
 

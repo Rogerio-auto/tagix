@@ -400,4 +400,27 @@ describe('validação, RLS e concorrência', () => {
     // independentemente da ordem, o valor final é exato.
     expect(await dealValue(dealId)).toBe(3000);
   });
+
+  maybe(
+    'concorrência pesada com lock FOR UPDATE: value_cents exato (F47-S13 bug_008)',
+    async () => {
+      // 8 POSTs simultâneos de 100 centavos cada no MESMO deal. Sem o
+      // `SELECT ... FOR UPDATE` em loadDeal, o read-modify-write de value_cents
+      // sob READ COMMITTED sofreria lost-update (cada tx lê o baseline stale e o
+      // recompute de uma sobrescreve o da outra na trilha). Com o lock, as tx
+      // serializam por deal e o total final é exatamente Σ = 8 × 100 = 800.
+      const dealId = await freshDeal();
+      const N = 8;
+      const responses = await Promise.all(
+        Array.from({ length: N }, (_, i) =>
+          request(app)
+            .post(`/api/deals/${dealId}/items`)
+            .send({ nameSnapshot: `it-${i}`, unitPriceCents: 100, qty: 1 }),
+        ),
+      );
+      // Nenhuma requisição falhou (lock só serializa, não rejeita).
+      for (const r of responses) expect(r.status).toBe(201);
+      expect(await dealValue(dealId)).toBe(N * 100);
+    },
+  );
 });

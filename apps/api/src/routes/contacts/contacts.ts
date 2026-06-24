@@ -49,20 +49,33 @@ const CEP_RE = /^\d{5}-?\d{3}$/;
  * Endereço estruturado do contato (F47-S04, espelha `ContactAddress` do schema).
  * Todos os campos opcionais — o cadastro é incremental. Validação leniente: UF
  * com 2 letras, CEP com formato BR; o resto é texto livre limitado.
+ *
+ * VAZIO-COMO-LIMPAR (F47-S13 bug_006): a UI manda `''` para limpar CEP/UF. Sem
+ * tratamento, o `''` falhava o `.regex()` ANTES do `.optional()` (que só cobre
+ * `undefined`) → 400. Normalizamos `''` → `undefined` (campo limpo) ANTES do
+ * regex, então só strings não-vazias passam pela validação de formato.
  */
+const emptyToUndefined = (v: unknown): unknown => (v === '' ? undefined : v);
+
 const addressSchema = z.object({
-  cep: z.string().trim().regex(CEP_RE, 'CEP inválido (use 00000-000).').optional(),
+  cep: z.preprocess(
+    emptyToUndefined,
+    z.string().trim().regex(CEP_RE, 'CEP inválido (use 00000-000).').optional(),
+  ),
   street: z.string().trim().max(200).optional(),
   number: z.string().trim().max(40).optional(),
   complement: z.string().trim().max(120).optional(),
   district: z.string().trim().max(120).optional(),
   city: z.string().trim().max(120).optional(),
-  state: z
-    .string()
-    .trim()
-    .transform((v) => v.toUpperCase())
-    .pipe(z.string().regex(UF_RE, 'UF inválida (2 letras, ex.: SP).'))
-    .optional(),
+  state: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .trim()
+      .transform((v) => v.toUpperCase())
+      .pipe(z.string().regex(UF_RE, 'UF inválida (2 letras, ex.: SP).'))
+      .optional(),
+  ),
 });
 
 // Documento CPF/CNPJ — validação de FORMATO leniente (11 ou 14 dígitos após

@@ -27,7 +27,7 @@
  *    tem deal, devolve o existente (nunca cria um segundo).
  */
 import { Router, type Request, type Response, type NextFunction } from 'express';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { assertConversationVisible, schema } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import type { Role } from '@hm/shared';
@@ -38,19 +38,6 @@ const { conversations, contacts, deals, pipelines, stages } = schema;
 function param(req: Request, key: string): string {
   const raw = req.params[key];
   return typeof raw === 'string' ? raw : '';
-}
-
-/**
- * unique_violation do Postgres (23505). O Drizzle envolve o erro do driver num
- * `DrizzleQueryError`, expondo o original em `cause` — checamos os dois níveis.
- * Usado para fechar a race do auto-create do card (F47-S12): com o unique parcial
- * `uq_deals_conversation`, o 2º insert concorrente bate em 23505 e nós re-lemos
- * o deal já existente em vez de propagar 500.
- */
-function isUniqueViolation(err: unknown): boolean {
-  const direct = (err as { code?: string } | null)?.code;
-  const cause = (err as { cause?: { code?: string } } | null)?.cause?.code;
-  return direct === '23505' || cause === '23505';
 }
 
 /** Linha de deal retornada pelo ensure/detalhe (campos estáveis p/ o frontend). */
@@ -125,27 +112,38 @@ export async function ensureDealForConversation(
   // 4. INSERT do card. Sob concorrência (duplo-clique / auto-enrich + criação
   //    manual) duas requisições podem ambas passar pelo check do passo 1 e tentar
   //    inserir. O unique parcial `uq_deals_conversation` (deals.conversation_id
-  //    WHERE NOT NULL) garante que apenas uma vence; a perdedora bate em 23505.
-  //    Capturamos isso, re-selecionamos o deal vencedor (MESMA tx/RLS) e o
-  //    devolvemos — idempotência fechada, sem 500. (F47-S12)
-  let created: EnsuredDeal | undefined;
-  try {
-    [created] = await tx
-      .insert(deals)
-      .values({
-        workspaceId: opts.workspaceId,
-        pipelineId: pipeline.id,
-        stageId: stage.id,
-        contactId: conv.contactId,
-        conversationId,
-        title,
-        valueCents: 0,
-        currency: 'BRL',
-        source: 'conversation',
-      })
-      .returning();
-  } catch (err) {
-    if (!isUniqueViolation(err)) throw err;
+  //    WHERE NOT NULL) garante que apenas uma vence.
+  //
+  //    Resolvemos o conflito NO Postgres com `ON CONFLICT (conversation_id) DO
+  //    NOTHING RETURNING` (padrão de `conversions/register.ts`): sem o ON CONFLICT,
+  //    o 23505 ABORTA a transação RLS inteira (25P02) e o re-SELECT subsequente
+  //    estoura 500 na requisição perdedora. Com ele a tx fica saudável: o vencedor
+  //    recebe a linha; o perdedor recebe 0 linhas e re-lê o deal já existente.
+  //    Idempotência fechada, sem 500. (F47-S12 / F47-S13 bug_001)
+  const [created] = await tx
+    .insert(deals)
+    .values({
+      workspaceId: opts.workspaceId,
+      pipelineId: pipeline.id,
+      stageId: stage.id,
+      contactId: conv.contactId,
+      conversationId,
+      title,
+      valueCents: 0,
+      currency: 'BRL',
+      source: 'conversation',
+    })
+    // `uq_deals_conversation` é PARCIAL (WHERE conversation_id IS NOT NULL); o
+    // `where` (predicado do target) precisa espelhar o predicado do índice, senão o
+    // Postgres não casa o ON CONFLICT ("no unique or exclusion constraint matching").
+    .onConflictDoNothing({
+      target: deals.conversationId,
+      where: sql`${deals.conversationId} is not null`,
+    })
+    .returning();
+
+  if (!created) {
+    // Perdedor da corrida: a tx NÃO abortou (ON CONFLICT). Re-lê o vencedor.
     const [winner] = await tx
       .select()
       .from(deals)
@@ -154,7 +152,6 @@ export async function ensureDealForConversation(
       .limit(1);
     return winner ?? null;
   }
-  if (!created) return null;
 
   await tx.insert(schema.dealHistory).values({
     dealId: created.id,
@@ -169,9 +166,13 @@ export async function ensureDealForConversation(
 
 /**
  * Lê o cadastro VIVO do contato dono do deal e grava-o em
- * `deal.custom_fields.contact_snapshot` na MESMA transação. Idempotente
- * (sempre sobrescreve com o cadastro vigente). `null` se o deal não existir
- * no escopo RLS.
+ * `deal.custom_fields.contact_snapshot` na MESMA transação. `null` se o deal não
+ * existir no escopo RLS.
+ *
+ * PRESERVA O PRIMEIRO SNAPSHOT (F47-S13 bug_012): se `custom_fields.contact_snapshot`
+ * já existe (ex.: re-close via /reopen + close de novo), devolve o deal SEM
+ * reescrever — fidelidade histórica do estado da venda original, em vez de
+ * sobrescrever com o cadastro atual.
  */
 export async function snapshotContactForDeal(tx: DbTx, dealId: string): Promise<EnsuredDeal | null> {
   const [deal] = await tx
@@ -180,6 +181,10 @@ export async function snapshotContactForDeal(tx: DbTx, dealId: string): Promise<
     .where(eq(deals.id, dealId))
     .limit(1);
   if (!deal) return null;
+
+  // Guard: o 1º snapshot é canônico — não o sobrescreve em re-close.
+  const existingFields = (deal.customFields ?? {}) as Record<string, unknown>;
+  if (existingFields['contact_snapshot']) return deal;
 
   const [contact] = await tx
     .select({
@@ -326,11 +331,22 @@ export function createDealConversationRouter(): Router {
   // Grava `custom_fields.contact_snapshot` ANTES de o close real (deals/crud)
   // rodar. `next()` deixa o handler canônico fazer o fechamento. Se o deal não
   // existir (null), apenas segue — o close canônico responde 404.
+  //
+  // O snapshot é ADITIVO/best-effort (F47-S13 bug_012): roda em tx própria, então
+  // uma falha sua NÃO pode derrubar o close. Envolvemos em try/catch e seguimos —
+  // o close (efeito principal) sempre acontece. (O close canônico vive em
+  // deals/crud.ts, fora do muro deste slot, por isso o snapshot fica em pré-handler
+  // separado em vez de dobrado na tx do close.) A preservação do 1º snapshot em
+  // re-close é garantida pelo guard dentro de `snapshotContactForDeal`.
   const snapshotThenNext = [
     ...editGuard,
     async (req: Request, res: Response, next: NextFunction) => {
       const dealId = param(req, 'id');
-      await req.scoped!((tx) => snapshotContactForDeal(tx, dealId));
+      try {
+        await req.scoped!((tx) => snapshotContactForDeal(tx, dealId));
+      } catch {
+        // Snapshot é aditivo; sua falha não bloqueia o close. Segue para o handler.
+      }
       next();
     },
   ] as const;

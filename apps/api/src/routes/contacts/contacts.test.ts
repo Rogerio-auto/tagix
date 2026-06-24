@@ -182,6 +182,22 @@ describe('PATCH /api/contacts/:id — cadastro estruturado', () => {
     expect(res.status).toBe(400);
   });
 
+  maybe('limpar CEP/UF com string vazia -> 200 (campo limpo, não 400) (F47-S13 bug_006)', async () => {
+    // Primeiro popula CEP + UF válidos…
+    await request(app)
+      .patch(`/api/contacts/${CONTACT}`)
+      .send({ address: { cep: '01001-000', state: 'SP', city: 'São Paulo' } });
+    // …depois a UI manda '' para limpar. Antes do fix, o '' batia no regex -> 400.
+    const res = await request(app)
+      .patch(`/api/contacts/${CONTACT}`)
+      .send({ address: { cep: '', state: '', city: 'São Paulo' } });
+    expect(res.status).toBe(200);
+    // '' normaliza para undefined: o campo sai do objeto de endereço persistido.
+    expect(res.body.contact.address.cep).toBeUndefined();
+    expect(res.body.contact.address.state).toBeUndefined();
+    expect(res.body.contact.address.city).toBe('São Paulo');
+  });
+
   maybe('documento com dígitos errados -> 400', async () => {
     const res = await request(app)
       .patch(`/api/contacts/${CONTACT}`)

@@ -2,7 +2,7 @@
 id: F47-S13
 title: Ultrareview fixes — backend (23505, race tx abortada, value_cents lock, snapshot, CEP clear)
 phase: F47
-status: available
+status: review
 priority: high
 estimated_size: M
 depends_on: [F47-S04, F47-S12]
@@ -10,8 +10,10 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - docs/features/COCKPIT_CLIENT_ENRICHMENT.md
----
+claimed_at: 2026-06-24T02:16:30Z
+completed_at: 2026-06-24T02:16:31Z
 
+---
 # F47-S13 — Correções de backend do ultrareview
 
 Achados do cloud review (todos `normal`, todos reais) no backend da F47:

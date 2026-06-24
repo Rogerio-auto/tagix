@@ -47,9 +47,16 @@ function likePattern(term: string): string {
   return `%${escaped}%`;
 }
 
-/** True se `err` é a violação de unique do Postgres (SKU duplicado por workspace). */
+/**
+ * True se `err` é a violação de unique do Postgres (SKU duplicado por workspace).
+ * O Drizzle embrulha o erro do driver num `DrizzleQueryError`, expondo o original
+ * em `cause` — checamos os dois níveis (mesmo padrão de `platform/plans.ts` e
+ * `pipeline/deal-conversation.ts`). Sem o `cause`, SKU duplicado vazava como 500.
+ */
 function isUniqueViolation(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505';
+  const direct = (err as { code?: string } | null)?.code;
+  const cause = (err as { cause?: { code?: string } } | null)?.cause?.code;
+  return direct === '23505' || cause === '23505';
 }
 
 export function createProductsRouter(): Router {
