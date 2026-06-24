@@ -2,7 +2,7 @@
 id: F47-S14
 title: Ultrareview fixes — frontend (parser de dinheiro, archive mobile, ViaCEP stale, CEP clear)
 phase: F47
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F47-S05, F47-S06, F47-S07, F47-S08]
