@@ -2,7 +2,7 @@
 id: F47-S03
 title: API Itens do card + recompute de value_cents
 phase: F47
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F47-S01]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/COCKPIT_CLIENT_ENRICHMENT.md
   - docs/DATA_MODEL.md
 claimed_at: 2026-06-24T00:21:14Z
+completed_at: 2026-06-24T00:21:15Z
 
 ---
 # F47-S03 — API de itens do card (line-items) + recompute do valor
