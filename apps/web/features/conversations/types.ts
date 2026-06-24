@@ -1,6 +1,35 @@
 /** Tipos do inbox no frontend (correspondem ao retorno JSON da API @hm/api). */
 
 import type { AiMode } from '@hm/shared';
+import type { ContactAddress } from '@/features/contacts/types';
+
+/**
+ * Card (deal) vinculado à conversa — read-through do cadastro vivo (F47-S04).
+ * Exposto por GET /api/conversations/:id; `null` quando não há deal ligado.
+ */
+export interface ConversationDeal {
+  id: string;
+  stageId: string;
+  stageName: string | null;
+  valueCents: number;
+  currency: string;
+  closedAt: string | null;
+  closedWon: boolean | null;
+}
+
+/**
+ * Cadastro vivo do contato exposto no detalhe da conversa (F47-S04). Subset do
+ * contato com os campos que o Cockpit consome direto (read-through).
+ */
+export interface ConversationContact {
+  id: string;
+  displayName: string | null;
+  phone: string | null;
+  email: string | null;
+  document: string | null;
+  address: ContactAddress;
+  customFields: Record<string, unknown>;
+}
 
 export interface ConversationSummary {
   id: string;
@@ -44,6 +73,10 @@ export interface ConversationDetail {
   agentName: string | null;
   /** Stage do pipeline (exibição de contexto). */
   stageName: string | null;
+  /** Card (deal) vinculado à conversa — read-through (F47-S04). `null` se não há. */
+  deal: ConversationDeal | null;
+  /** Cadastro vivo do contato — read-through (F47-S04). `null` se conversa sem contato. */
+  contact: ConversationContact | null;
   unreadCount: number;
   lastMessageAt: string | null;
   createdAt: string;
