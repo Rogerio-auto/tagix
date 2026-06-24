@@ -11,10 +11,10 @@
  *     close canônico — o `next()` atravessa o sub-router e chega no handler real
  *     (deal fica closed E o snapshot é gravado na mesma requisição).
  *
- *  2. IDEMPOTÊNCIA SOB CONCORRÊNCIA — `deals.conversation_id` NÃO tem unique no
- *     schema (pipeline.ts). `ensureDealForConversation` é read-then-insert sem
- *     guard de DB; duas chamadas SIMULTÂNEAS podem ambas passar pelo "não existe"
- *     e inserir. O teste DOCUMENTA o comportamento real (gap reportado no relatório).
+ *  2. IDEMPOTÊNCIA SOB CONCORRÊNCIA (F47-S12) — o unique parcial
+ *     `uq_deals_conversation` (deals.conversation_id WHERE NOT NULL) + o catch de
+ *     23505 em `ensureDealForConversation` fecham a race: a requisição perdedora
+ *     re-lê o deal vencedor. Duas chamadas SIMULTÂNEAS = EXATAMENTE 1 deal, sem 500.
  *
  *  3. SNAPSHOT DEGRADADO — deal cujo contato tem cadastro vazio (address {}, sem
  *     document) ainda grava um snapshot bem-formado no fechamento (sem explodir).
@@ -264,30 +264,29 @@ describe('close-won/close-lost — pré-handler atravessa p/ o close canônico',
   });
 });
 
-// ── 2. Idempotência sob CONCORRÊNCIA (race documentada) ──────────────────────
+// ── 2. Idempotência sob CONCORRÊNCIA (race FECHADA em F47-S12) ────────────────
 describe('POST /api/conversations/:id/deal — concorrência', () => {
   maybe(
-    'duas chamadas SIMULTÂNEAS: sem unique em conversation_id, pode haver race (DOCUMENTA o comportamento)',
+    'duas chamadas SIMULTÂNEAS resultam em EXATAMENTE 1 deal, sem 500 (race fechada)',
     async () => {
       const conv = await freshConversation();
       const [a, b] = await Promise.all([
         request(app).post(`/api/conversations/${conv}/deal`),
         request(app).post(`/api/conversations/${conv}/deal`),
       ]);
+      // O unique parcial `uq_deals_conversation` + catch de 23505 garantem que a
+      // requisição perdedora re-lê o deal vencedor em vez de explodir: ambas 201,
+      // nenhuma 500. (F47-S12)
       expect(a.status).toBe(201);
       expect(b.status).toBe(201);
+      expect(a.status).not.toBe(500);
+      expect(b.status).not.toBe(500);
+      // Ambas devolvem o MESMO deal (o vencedor da corrida).
+      expect(a.body.deal.id).toBe(b.body.deal.id);
 
+      // E o banco tem EXATAMENTE 1 deal para a conversa — idempotência real.
       const ids = await dealsForConversation(conv);
-      // CONTRATO DESEJADO: 1 deal. REALIDADE: sem guard de DB, pode haver 2 sob
-      // concorrência real. O teste NÃO falha o slot (gap latente reportado), mas
-      // ancora a expectativa: idealmente === 1. Aceitamos 1..2 e logamos se >1.
-      expect(ids.length).toBeGreaterThanOrEqual(1);
-      if (ids.length > 1) {
-        console.warn(
-          `[F47-S11] RACE confirmada: ${ids.length} deals criados p/ a mesma conversa ` +
-            `(falta unique parcial em deals.conversation_id). Ver relatório de QA.`,
-        );
-      }
+      expect(ids).toHaveLength(1);
     },
   );
 

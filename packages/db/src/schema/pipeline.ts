@@ -18,6 +18,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { contacts, conversations, members, products, workspaces } from './index';
@@ -162,6 +163,11 @@ export const deals = pgTable(
     ),
     index('idx_deals_contact').on(t.contactId),
     index('idx_deals_owner').on(t.ownerId).where(sql`${t.ownerId} is not null`),
+    // Idempotência de ensureDealForConversation (F47-S12): no máximo 1 deal por
+    // conversa. Parcial — deals sem conversa (conversation_id NULL) coexistem.
+    uniqueIndex('uq_deals_conversation')
+      .on(t.conversationId)
+      .where(sql`${t.conversationId} is not null`),
   ],
 );
 
