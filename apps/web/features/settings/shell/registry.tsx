@@ -287,6 +287,16 @@ const WORKSPACE: SettingsSection[] = [
     permission: 'pipeline.edit',
     externalHref: '/pipeline/settings',
   },
+  // F47-S05: catálogo de produtos do workspace (CRUD), gated por `product.edit`.
+  {
+    id: 'produtos',
+    group: 'workspace',
+    label: 'Produtos',
+    description: 'Catálogo de produtos e serviços do workspace: nome, SKU, preço.',
+    keywords: ['produtos', 'catálogo', 'preço', 'sku', 'estoque', 'itens'],
+    permission: 'product.edit',
+    externalHref: '/settings/products',
+  },
   // Dev (F9-S06): API keys da API pública + webhooks outbound + delivery log.
   {
     id: 'dev',
