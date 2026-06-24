@@ -2,7 +2,7 @@
 id: F47-S05
 title: UI Catálogo de Produtos em Settings (/settings/products)
 phase: F47
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F47-S02]
