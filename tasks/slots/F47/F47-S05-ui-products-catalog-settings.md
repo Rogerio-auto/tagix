@@ -2,7 +2,7 @@
 id: F47-S05
 title: UI Catálogo de Produtos em Settings (/settings/products)
 phase: F47
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F47-S02]
@@ -18,6 +18,7 @@ ux_considerations:
   - "Aplica 2.7 — loading nos saves + skeleton na lista."
   - "Aplica 2.9 — produto = soft-delete com confirmação simples."
 claimed_at: 2026-06-24T00:36:14Z
+completed_at: 2026-06-24T00:36:15Z
 
 ---
 # F47-S05 — Catálogo de Produtos em Configurações
