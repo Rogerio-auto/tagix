@@ -2062,6 +2062,109 @@ describe('RLS Products + Deal items (F47-S01)', () => {
     ).rejects.toThrow();
   });
 
+  it('products: UPDATE não consegue mover linha para outro workspace (WITH CHECK)', async () => {
+    // Defesa F47-S11 (QA): a USING isola a leitura; a WITH CHECK precisa barrar
+    // tentativa de "exfiltrar" uma linha trocando o workspace_id para o tenant B.
+    const sfx = randomUUID().slice(0, 8);
+    const created = await withWorkspace(wsA, (tx) =>
+      productsRepo.create(tx, { workspaceId: wsA, name: `Mvbl ${sfx}`, priceCents: 100 }),
+    );
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.update(products).set({ workspaceId: wsB }).where(eq(products.id, created.id)),
+      ),
+    ).rejects.toThrow();
+    // A linha permanece em A, intacta.
+    const stillA = await withWorkspace(wsA, (tx) => productsRepo.findById(tx, wsA, created.id));
+    expect(stillA?.workspaceId).toBe(wsA);
+    // B nunca a enxerga.
+    const fromB = await withWorkspace(wsB, (tx) => tx.select().from(products));
+    expect(fromB.some((p) => p.id === created.id)).toBe(false);
+  });
+
+  it('deal_items: UPDATE não consegue mover linha para outro workspace (WITH CHECK)', async () => {
+    const sfx = randomUUID().slice(0, 8);
+    const dealA = await seedDeal(wsA, `mv-${sfx}`);
+    const item = await withWorkspace(wsA, (tx) =>
+      dealItemsRepo.create(tx, {
+        workspaceId: wsA,
+        dealId: dealA,
+        nameSnapshot: 'Item movível',
+        qty: 1,
+        unitPriceCents: 1000,
+      }),
+    );
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.update(dealItems).set({ workspaceId: wsB }).where(eq(dealItems.id, item.id)),
+      ),
+    ).rejects.toThrow();
+    const fromB = await withWorkspace(wsB, (tx) => tx.select().from(dealItems));
+    expect(fromB.some((i) => i.id === item.id)).toBe(false);
+  });
+
+  it('deal_items: produto soft-deletado APÓS lançado mantém SET NULL e snapshot vivo', async () => {
+    // Schema: deal_items.product_id ON DELETE SET NULL. Como o produto é
+    // SOFT-deletado (deleted_at, não DELETE físico), product_id continua apontando;
+    // o name_snapshot/unit_price são imutáveis de qualquer forma. Provamos que a
+    // linha do item sobrevive e a soma não é corrompida quando o produto "some".
+    const sfx = randomUUID().slice(0, 8);
+    const dealA = await seedDeal(wsA, `snap-${sfx}`);
+    const prod = await withWorkspace(wsA, (tx) =>
+      productsRepo.create(tx, { workspaceId: wsA, name: 'Vivo agora', priceCents: 7000 }),
+    );
+    const item = await withWorkspace(wsA, (tx) =>
+      dealItemsRepo.create(tx, {
+        workspaceId: wsA,
+        dealId: dealA,
+        productId: prod.id,
+        nameSnapshot: 'Vivo agora',
+        qty: 2,
+        unitPriceCents: 7000,
+      }),
+    );
+    await withWorkspace(wsA, (tx) => productsRepo.softDelete(tx, wsA, prod.id));
+    const items = await withWorkspace(wsA, (tx) => dealItemsRepo.listByDeal(tx, wsA, dealA));
+    const kept = items.find((i) => i.id === item.id);
+    expect(kept).toBeTruthy();
+    expect(kept?.nameSnapshot).toBe('Vivo agora');
+    expect(kept?.unitPriceCents).toBe(7000);
+    // product_id permanece (soft-delete não dispara o SET NULL).
+    expect(kept?.productId).toBe(prod.id);
+    // A soma autoritativa segue exata.
+    const total = await withWorkspace(wsA, (tx) => dealItemsRepo.recomputeDealValue(tx, dealA));
+    expect(total).toBe(14000);
+  });
+
+  it('deal_items: HARD-delete do produto dispara SET NULL mas preserva o item (snapshot)', async () => {
+    // Se o produto for fisicamente removido (hard delete), a FK SET NULL zera
+    // product_id no item, MAS o item continua exibível pelo name_snapshot.
+    const sfx = randomUUID().slice(0, 8);
+    const dealA = await seedDeal(wsA, `hard-${sfx}`);
+    const db = getDb(); // owner: hard delete bypassa RLS
+    const [prod] = await db
+      .insert(products)
+      .values({ workspaceId: wsA, name: `Hard ${sfx}`, priceCents: 300 })
+      .returning();
+    if (!prod) throw new Error('setup hard product');
+    const item = await withWorkspace(wsA, (tx) =>
+      dealItemsRepo.create(tx, {
+        workspaceId: wsA,
+        dealId: dealA,
+        productId: prod.id,
+        nameSnapshot: `Hard ${sfx}`,
+        qty: 1,
+        unitPriceCents: 300,
+      }),
+    );
+    await db.delete(products).where(eq(products.id, prod.id));
+    const items = await withWorkspace(wsA, (tx) => dealItemsRepo.listByDeal(tx, wsA, dealA));
+    const kept = items.find((i) => i.id === item.id);
+    expect(kept).toBeTruthy();
+    expect(kept?.productId).toBeNull(); // SET NULL disparou
+    expect(kept?.nameSnapshot).toBe(`Hard ${sfx}`); // snapshot imutável sobrevive
+  });
+
   it('deal_items: CHECK qty>0 e unit_price_cents>=0', async () => {
     const sfx = randomUUID().slice(0, 8);
     const dealA = await seedDeal(wsA, `chk-${sfx}`);

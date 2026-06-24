@@ -2,7 +2,7 @@
 id: F47-S11
 title: QA + Segurança + e2e da F47
 phase: F47
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F47-S02, F47-S03, F47-S04, F47-S05, F47-S06, F47-S07, F47-S08, F47-S09, F47-S10]
@@ -11,8 +11,10 @@ agent_id: qa-engineer
 source_docs:
   - docs/features/COCKPIT_CLIENT_ENRICHMENT.md
   - docs/features/PERMISSIONS.md
----
+claimed_at: 2026-06-24T01:16:35Z
+completed_at: 2026-06-24T01:16:37Z
 
+---
 # F47-S11 — QA, Segurança e e2e da feature
 
 ## Objetivo
