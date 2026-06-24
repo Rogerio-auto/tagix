@@ -2,7 +2,7 @@
 id: F47-S02
 title: API Produtos — CRUD /api/products + perms product.*
 phase: F47
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F47-S01]
