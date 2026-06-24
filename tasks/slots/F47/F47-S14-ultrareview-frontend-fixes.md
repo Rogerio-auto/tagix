@@ -2,7 +2,7 @@
 id: F47-S14
 title: Ultrareview fixes — frontend (parser de dinheiro, archive mobile, ViaCEP stale, CEP clear)
 phase: F47
-status: available
+status: review
 priority: high
 estimated_size: M
 depends_on: [F47-S05, F47-S06, F47-S07, F47-S08]
@@ -14,8 +14,10 @@ source_docs:
 ux_considerations:
   - "Aplica 8 (mobile) — botão Arquivar visível no touch (sem depender de hover)."
   - "Aplica 2.7/2.11 — erros de cadastro acionáveis (surfacing de issue do Zod)."
----
+claimed_at: 2026-06-24T02:16:44Z
+completed_at: 2026-06-24T02:16:47Z
 
+---
 # F47-S14 — Correções de frontend do ultrareview
 
 Achados do cloud review (todos `normal`, reais) no frontend da F47:

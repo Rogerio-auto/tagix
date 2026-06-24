@@ -313,7 +313,7 @@ export function ProductsCatalog(): React.JSX.Element {
                     }}
                     aria-label={`Arquivar ${product.name}`}
                     title="Arquivar"
-                    className="touch-target grid shrink-0 place-items-center rounded-md text-text-low opacity-0 outline-none transition-[color,opacity] duration-150 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100 focus-visible:shadow-glow-md"
+                    className="touch-target grid shrink-0 place-items-center rounded-md text-text-low outline-none transition-colors duration-150 hover:text-danger focus-visible:shadow-glow-md"
                   >
                     <Archive className="size-4" />
                   </button>
