@@ -56,10 +56,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
           tabIndex={-1}
           className={cn(
             'min-h-0 flex-1 outline-none',
-            // Full-bleed (LiveChat): sem gutter nem scroll do shell — a tela
-            // preenche tudo e gere o próprio scroll interno. Demais rotas mantêm
-            // o gutter editorial + scroll vertical do conteúdo.
-            fullBleed ? 'overflow-hidden' : 'overflow-y-auto px-4 py-6 lg:px-8',
+            // Full-bleed (LiveChat): sem gutter nem scroll do shell. Vira um FLEX
+            // COLUMN para a tela-filha preencher a altura via `flex-1 min-h-0`
+            // (determinístico — sem `height:%` que não resolve sob flex e fazia a
+            // página inteira scrollar). Demais rotas mantêm o gutter + scroll.
+            fullBleed
+              ? 'flex flex-col overflow-hidden'
+              : 'overflow-y-auto px-4 py-6 lg:px-8',
           )}
         >
           {children}

@@ -62,11 +62,12 @@ function igCommentFromMessage(m: {
   };
 }
 
-/** O LiveChat roda numa rota full-bleed (AppLayout: `<main>` sem padding/scroll
- *  em /conversations), então preenche 100% da área do `<main>`. `height: 100%`
- *  inline porque o projeto evita `h-[calc/full]` por cascade instável em prod
- *  (container esticava com as mensagens) — inline vence qualquer cascade. */
-const FILL_HEIGHT = '100%';
+// O LiveChat roda numa rota full-bleed: o `<main>` do AppLayout é um FLEX COLUMN
+// (sem padding/scroll), então o container raiz aqui preenche a altura com
+// `flex-1 min-h-0` — determinístico, sem `height:%` (que não resolve sob flex e
+// fazia a página inteira virar scrollável). O scroll vive só nas áreas internas
+// (ChatList / ThreadMessages, ambas `overflow-y-auto min-h-0`).
+const FILL = 'flex-1 min-h-0 overflow-hidden';
 
 export function ConversationsLayout({ conversationId }: { conversationId?: string }) {
   // Regra de ouro (MOBILE_UX §3.2): a ESTRUTURA muda por `isMobile`, não por
@@ -93,7 +94,7 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
 
   // ── Desktop: 3 colunas fixas, full-bleed (integradas à página) ──────────────
   return (
-    <div style={{ height: FILL_HEIGHT }} className="flex overflow-hidden">
+    <div className={cn('flex', FILL)}>
       {/* Coluna 1 — lista (F1-S14: filtros/busca/unread/real-time) */}
       <aside
         data-tour-id="inbox-list"
@@ -160,8 +161,7 @@ function MobileConversationsLayout({
     return (
       <div
         data-tour-id="inbox-list"
-        style={{ height: FILL_HEIGHT }}
-        className="flex flex-col overflow-hidden bg-surface"
+        className={cn('flex flex-col bg-surface', FILL)}
       >
         <div className="flex items-center justify-between border-b border-border-2 px-4 py-3">
           <span className="font-head text-sm font-semibold text-text">Conversas</span>
@@ -176,10 +176,7 @@ function MobileConversationsLayout({
 
   // Conversa aberta → Thread em tela cheia + Cockpit como full-sheet.
   return (
-    <div
-      style={{ height: FILL_HEIGHT }}
-      className="flex flex-col overflow-hidden bg-bg"
-    >
+    <div className={cn('flex flex-col bg-bg', FILL)}>
       <MobileThread
         conversationId={conversationId}
         onBack={() => router.back()}
