@@ -32,6 +32,7 @@ import { createConversionsRouter } from './routes/conversions';
 import { createCampaignsRouter } from './routes/campaigns';
 import { createCampaignRecipientsRouter } from './routes/campaigns/recipients';
 import { createContactsRouter } from './routes/contacts';
+import { createProductsRouter } from './routes/products';
 import { createUsageRouter } from './routes/usage';
 import { createUploadsRouter } from './routes/uploads';
 import { createOnboardingRouter } from './routes/onboarding';
@@ -173,6 +174,9 @@ export function createApp(): Express {
   app.use(createCampaignRecipientsRouter());
   // Contatos (F8-S09): CRUD geral + busca/filtros + tags + consentimento; inclui opt-in (F6).
   app.use(createContactsRouter());
+  // Catálogo de produtos (F47-S02): CRUD do catálogo comercial do workspace
+  // (product.view/product.edit), consumido pelo cockpit (S07) e settings (S05).
+  app.use(createProductsRouter());
   // Onboarding por nicho (F5-S15): cria pipeline + agente a partir de template.
   app.use(createOnboardingRouter());
   // Calendar (F7): CRUD calendars + availability rules/exceptions + slots.

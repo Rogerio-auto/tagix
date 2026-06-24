@@ -2,7 +2,7 @@
 id: F47-S02
 title: API Produtos — CRUD /api/products + perms product.*
 phase: F47
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F47-S01]
@@ -11,8 +11,10 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/COCKPIT_CLIENT_ENRICHMENT.md
   - docs/features/PERMISSIONS.md
----
+claimed_at: 2026-06-24T00:20:59Z
+completed_at: 2026-06-24T00:21:00Z
 
+---
 # F47-S02 — API de Produtos (catálogo do workspace)
 
 ## Objetivo
