@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/shared/lib/api-client';
 import type {
+  ConversationDeal,
   ConversationDetail,
   ConversationFilters,
   ConversationSummary,
@@ -254,6 +255,187 @@ export function useConversationAgent(conversationId: string | undefined, enabled
       api.get<ConversationAgentResult>(`/api/conversations/${conversationId}/agent`),
     enabled: Boolean(conversationId) && enabled,
     staleTime: 30_000,
+  });
+}
+
+// ── Card/Negócio: itens, produto-picker, criação (F47-S07) ────────────────────
+//
+// Espinha do valor: a API recompõe `deals.value_cents = Σ(qty × unit_price)` em
+// TODA mutação de item e devolve `dealValueCents`. O cliente NUNCA soma como
+// verdade (UX §2.7 evita drift) — exibe o `dealValueCents` que a resposta traz e
+// invalida o detalhe da conversa para refletir o novo valor read-through.
+
+/** Item (line-item) de um card — espelha `deal_items` (resposta JSON camelCase). */
+export interface DealItem {
+  id: string;
+  workspaceId: string;
+  dealId: string;
+  productId: string | null;
+  nameSnapshot: string;
+  qty: number;
+  unitPriceCents: number;
+  currency: string;
+  position: number;
+  createdAt: string;
+}
+
+/** Produto do catálogo exposto pelo picker (subset consumido pelo cockpit). */
+export interface PickerProduct {
+  id: string;
+  name: string;
+  sku: string | null;
+  priceCents: number;
+  currency: string;
+  active: boolean;
+}
+
+interface ProductsListResult {
+  products: PickerProduct[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+/** Chave de cache dos itens de um card. */
+export function dealItemsKey(dealId: string) {
+  return ['deal', dealId, 'items'] as const;
+}
+
+/**
+ * Itens (line-items) do card. GET /api/deals/:id/items (gated `pipeline.view`).
+ * Habilitado só quando há deal — sem deal a seção mostra o CTA de criação.
+ */
+export function useDealItems(dealId: string | null | undefined) {
+  return useQuery({
+    queryKey: dealItemsKey(dealId ?? ''),
+    queryFn: () => api.get<{ items: DealItem[] }>(`/api/deals/${dealId}/items`),
+    enabled: Boolean(dealId),
+    staleTime: 10_000,
+  });
+}
+
+/**
+ * Busca no catálogo p/ vincular produto a um item (GET /api/products, `product.view`).
+ * Só ativos por padrão; `q` filtra por nome/SKU. Habilitado quando o picker abre.
+ */
+export function useProductPicker(q: string, enabled: boolean) {
+  const term = q.trim();
+  return useQuery({
+    queryKey: ['products', 'picker', term],
+    queryFn: () => {
+      const params = new URLSearchParams({ active: 'true', pageSize: '20' });
+      if (term) params.set('q', term);
+      return api.get<ProductsListResult>(`/api/products?${params.toString()}`);
+    },
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export interface CreateConversationDealInput {
+  conversationId: string;
+}
+
+/**
+ * Cria/auto-cria o card ligado à conversa — IDEMPOTENTE no backend
+ * (POST /api/conversations/:id/deal, gated `deal.edit`). Invalida o detalhe da
+ * conversa para o cockpit refletir o `deal` recém-vinculado.
+ */
+export function useCreateConversationDeal() {
+  const queryClient = useQueryClient();
+  return useMutation<{ deal: ConversationDeal }, Error, CreateConversationDealInput>({
+    mutationFn: ({ conversationId }) =>
+      api.post<{ deal: ConversationDeal }>(`/api/conversations/${conversationId}/deal`),
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({
+        queryKey: conversationDetailKey(input.conversationId),
+      });
+    },
+  });
+}
+
+/** Corpo do POST de item: produto do catálogo (productId) OU ad-hoc (nome+preço). */
+export interface AddDealItemInput {
+  dealId: string;
+  conversationId: string;
+  productId?: string | null;
+  nameSnapshot?: string;
+  unitPriceCents?: number;
+  qty: number;
+}
+
+interface MutateItemResult {
+  item: DealItem;
+  dealValueCents: number;
+}
+
+/**
+ * Adiciona um item ao card. A resposta traz `dealValueCents` recomputado pelo
+ * servidor — invalidamos os itens e o detalhe da conversa (que carrega
+ * `deal.valueCents` read-through) para a UI mostrar o valor autoritativo.
+ */
+export function useAddDealItem() {
+  const queryClient = useQueryClient();
+  return useMutation<MutateItemResult, Error, AddDealItemInput>({
+    mutationFn: ({ dealId, productId, nameSnapshot, unitPriceCents, qty }) =>
+      api.post<MutateItemResult>(`/api/deals/${dealId}/items`, {
+        ...(productId ? { productId } : {}),
+        ...(nameSnapshot !== undefined ? { nameSnapshot } : {}),
+        ...(unitPriceCents !== undefined ? { unitPriceCents } : {}),
+        qty,
+      }),
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: dealItemsKey(input.dealId) });
+      void queryClient.invalidateQueries({
+        queryKey: conversationDetailKey(input.conversationId),
+      });
+    },
+  });
+}
+
+export interface UpdateDealItemInput {
+  dealId: string;
+  conversationId: string;
+  itemId: string;
+  patch: { qty?: number; unitPriceCents?: number; nameSnapshot?: string };
+}
+
+/** Edita qty/preço/nome de um item (PATCH /api/deals/:id/items/:itemId). */
+export function useUpdateDealItem() {
+  const queryClient = useQueryClient();
+  return useMutation<MutateItemResult, Error, UpdateDealItemInput>({
+    mutationFn: ({ dealId, itemId, patch }) =>
+      api.patch<MutateItemResult>(`/api/deals/${dealId}/items/${itemId}`, patch),
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: dealItemsKey(input.dealId) });
+      void queryClient.invalidateQueries({
+        queryKey: conversationDetailKey(input.conversationId),
+      });
+    },
+  });
+}
+
+export interface RemoveDealItemInput {
+  dealId: string;
+  conversationId: string;
+  itemId: string;
+}
+
+/** Remove um item do card (DELETE /api/deals/:id/items/:itemId). */
+export function useRemoveDealItem() {
+  const queryClient = useQueryClient();
+  return useMutation<{ ok: true; dealValueCents: number }, Error, RemoveDealItemInput>({
+    mutationFn: ({ dealId, itemId }) =>
+      api.delete<{ ok: true; dealValueCents: number }>(
+        `/api/deals/${dealId}/items/${itemId}`,
+      ),
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: dealItemsKey(input.dealId) });
+      void queryClient.invalidateQueries({
+        queryKey: conversationDetailKey(input.conversationId),
+      });
+    },
   });
 }
 
