@@ -2,7 +2,7 @@
 id: F47-S05
 title: UI Catálogo de Produtos em Settings (/settings/products)
 phase: F47
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: M
 depends_on: [F47-S02]
@@ -17,8 +17,9 @@ ux_considerations:
   - "Aplica 2.3 — criar/editar em drawer lateral (sheet no mobile), não modal full-screen."
   - "Aplica 2.7 — loading nos saves + skeleton na lista."
   - "Aplica 2.9 — produto = soft-delete com confirmação simples."
----
+claimed_at: 2026-06-24T00:36:14Z
 
+---
 # F47-S05 — Catálogo de Produtos em Configurações
 
 ## Objetivo
