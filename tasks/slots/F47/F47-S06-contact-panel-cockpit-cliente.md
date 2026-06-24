@@ -2,7 +2,7 @@
 id: F47-S06
 title: <ContactPanel> reutilizável + Cockpit seção Cliente (ViaCEP)
 phase: F47
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F47-S04]
@@ -16,8 +16,10 @@ ux_considerations:
   - "Aplica 2.7 — save com loading + toast; skeleton enquanto carrega o contato."
   - "Aplica 2.11 — erro em 3 partes (ex.: CEP não encontrado → o que fazer)."
   - "Aplica 8 (mobile) — painel embutido no Sheet no mobile, inputs ≥16px, alvos ≥44px."
----
+claimed_at: 2026-06-24T00:43:11Z
+completed_at: 2026-06-24T00:43:12Z
 
+---
 # F47-S06 — Componente <ContactPanel> + seção Cliente no Cockpit
 
 ## Objetivo

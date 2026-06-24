@@ -17,12 +17,13 @@
  * via `focus-visible:shadow-glow-md`. Verde-neon (`brand`) usado no máximo 1×.
  */
 
-import { Bot, Info, RefreshCw, X, Zap } from 'lucide-react';
+import { Bot, Info, RefreshCw, User, X, Zap } from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
 import { can } from '@hm/shared';
 import { cn } from '@/shared/lib/cn';
 import { Skeleton } from '@/shared/components/feedback';
 import { useAuthStore } from '@/shared/stores/auth.store';
+import { ContactPanel } from '@/features/contacts/components/ContactPanel';
 import { NotesPanel } from './Notes';
 import { RoutingMenu } from './RoutingMenu';
 import { AgentSelector } from './AgentSelector';
@@ -255,6 +256,25 @@ export function ContactInfoPanel({
                 )}
               </div>
             </div>
+          )}
+        </Section>
+
+        {/* ── 1.5 Cliente — cadastro vivo (F47-S06) ──────────────────────── */}
+        {/* Espinha compartilhada com S07 (Card) e S08 (Conversão): mantemos a
+            seção Cliente como bloco bem delimitado, sem mexer nas demais. */}
+        <Section title="Cliente" icon={User}>
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          ) : detail?.contact ? (
+            <ContactPanel contactId={detail.contact.id} editable />
+          ) : (
+            <p className="font-body text-sm text-text-low">
+              Esta conversa ainda não tem um contato vinculado.
+            </p>
           )}
         </Section>
 

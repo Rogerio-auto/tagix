@@ -1,5 +1,19 @@
 /** Tipos do domínio Contatos (CRM) — espelham as respostas de @hm/api (F8-S09). */
 
+/**
+ * Endereço estruturado do contato (F47-S04). Espelha o jsonb `contacts.address`
+ * — todos os campos opcionais (cadastro incremental). `state` = UF (2 letras).
+ */
+export interface ContactAddress {
+  cep?: string;
+  street?: string;
+  number?: string;
+  complement?: string;
+  district?: string;
+  city?: string;
+  state?: string;
+}
+
 export interface Contact {
   id: string;
   workspaceId: string;
@@ -18,6 +32,9 @@ export interface Contact {
   optOutReason: string | null;
   ownerId: string | null;
   customFields: Record<string, unknown>;
+  /** Cadastro estruturado (F47-S04): endereço tipado + documento (CPF/CNPJ). */
+  address: ContactAddress;
+  document: string | null;
   createdAt: string;
   updatedAt: string | null;
   deletedAt: string | null;
@@ -99,6 +116,9 @@ export interface ContactInput {
   email?: string | null;
   notes?: string | null;
   source?: string | null;
+  /** Cadastro estruturado (F47-S04): endereço + documento. */
+  address?: ContactAddress;
+  document?: string | null;
 }
 
 export interface Tag {

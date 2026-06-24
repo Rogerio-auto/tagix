@@ -37,7 +37,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F44   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F45   | 7     | 3   | 4   | 0   | 0   | 0   | 0   |
 | F46   | 1     | 0   | 0   | 0   | 0   | 0   | 1   |
-| F47   | 11     | 0   | 5   | 0   | 0   | 0   | 6   |
+| F47   | 11     | 0   | 4   | 0   | 0   | 1   | 6   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -455,7 +455,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F47-S03 | API Itens do card + recompute de value_cents                   | ✅ done     | high       | F47-S01                                                                         |
 | F47-S04 | API Card-da-conversa + cadastro read-through + snapshot        | ✅ done     | high       | F47-S01                                                                         |
 | F47-S05 | UI Catálogo de Produtos em Settings (/settings/products)       | ✅ done     | medium     | F47-S02                                                                         |
-| F47-S06 | <ContactPanel> reutilizável + Cockpit seção Cliente (ViaCEP)   | ⏸️ blocked | high       | F47-S04                                                                         |
+| F47-S06 | <ContactPanel> reutilizável + Cockpit seção Cliente (ViaCEP)   | 🟣 review   | high       | F47-S04                                                                         |
 | F47-S07 | Cockpit — Card + Itens/Produto + valor + auto-enrich           | ⏸️ blocked | high       | F47-S03, F47-S04, F47-S06                                                       |
 | F47-S08 | Cockpit — Conversão herdando valor + resumo financeiro         | ⏸️ blocked | medium     | F47-S07                                                                         |
 | F47-S09 | Cross-surface — <ContactPanel> na Pipeline + Contatos          | ⏸️ blocked | medium     | F47-S04, F47-S06                                                                |
