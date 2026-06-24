@@ -94,6 +94,19 @@ function uniqueViolation(): Error & { code: string } {
   });
 }
 
+/**
+ * Erro EMBRULHADO pelo Drizzle: o `DrizzleQueryError` expõe o erro do driver em
+ * `cause`, então o `23505` vive em `err.cause.code` (NÃO em `err.code`). É a forma
+ * real que chega ao handler em runtime — antes do F47-S13 isto vazava como 500.
+ */
+function wrappedUniqueViolation(): Error & { cause: { code: string } } {
+  return Object.assign(new Error('Failed query: insert into "products" ...'), {
+    cause: Object.assign(new Error('duplicate key value violates unique constraint'), {
+      code: '23505',
+    }),
+  });
+}
+
 beforeEach(() => {
   authState.role = 'ADMIN';
   authState.authenticated = true;
@@ -178,6 +191,15 @@ describe('POST /api/products', () => {
     expect(res.body.error).toBe('duplicate_sku');
   });
 
+  it('409 duplicate_sku quando o 23505 vem EMBRULHADO em cause (F47-S13 bug_004)', async () => {
+    scopedState.handler = () => Promise.reject(wrappedUniqueViolation());
+    const res = await request(buildApp())
+      .post('/api/products')
+      .send({ name: 'Plano Pro', sku: 'PRO-1' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('duplicate_sku');
+  });
+
   it('400 sem name', async () => {
     const res = await request(buildApp()).post('/api/products').send({ priceCents: 100 });
     expect(res.status).toBe(400);
@@ -249,6 +271,15 @@ describe('PATCH /api/products/:id', () => {
 
   it('409 duplicate_sku ao colidir SKU (23505)', async () => {
     scopedState.handler = () => Promise.reject(uniqueViolation());
+    const res = await request(buildApp())
+      .patch(`/api/products/${PRODUCT_ID}`)
+      .send({ sku: 'OUTRO' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('duplicate_sku');
+  });
+
+  it('409 duplicate_sku com 23505 EMBRULHADO em cause no PATCH (F47-S13 bug_004)', async () => {
+    scopedState.handler = () => Promise.reject(wrappedUniqueViolation());
     const res = await request(buildApp())
       .patch(`/api/products/${PRODUCT_ID}`)
       .send({ sku: 'OUTRO' });

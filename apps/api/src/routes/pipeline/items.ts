@@ -79,16 +79,27 @@ async function persistRecomputedValue(
   return nextValueCents;
 }
 
-/** Carrega o deal dentro do escopo RLS; `null` se fora do workspace (→ 404). */
+/**
+ * Carrega o deal dentro do escopo RLS; `null` se fora do workspace (→ 404).
+ *
+ * `forUpdate` (F47-S13 bug_008): nas mutações (POST/PATCH/DELETE) travamos a linha
+ * do deal com `SELECT ... FOR UPDATE` no início da tx. Isso serializa o
+ * read-modify-write de `deals.value_cents` por deal: sob READ COMMITTED, duas
+ * mutações concorrentes liam o snapshot stale de `value_cents` e o recompute de
+ * uma sobrescrevia o da outra (lost update na trilha `deal_history`). Com o lock,
+ * a 2ª mutação espera a 1ª commitar antes de recomputar. O GET (leitura) NÃO trava.
+ */
 async function loadDeal(
   tx: DbTx,
   dealId: string,
+  forUpdate = false,
 ): Promise<{ id: string; valueCents: number } | null> {
-  const [row] = await tx
+  const base = tx
     .select({ id: deals.id, valueCents: deals.valueCents })
     .from(deals)
     .where(eq(deals.id, dealId))
     .limit(1);
+  const [row] = await (forUpdate ? base.for('update') : base);
   return row ?? null;
 }
 
@@ -152,7 +163,7 @@ export function createDealItemsRouter(): Router {
     const d = parsed.data;
 
     const result = await req.scoped!(async (tx) => {
-      const deal = await loadDeal(tx, dealId);
+      const deal = await loadDeal(tx, dealId, true);
       if (!deal) return { kind: 'deal_not_found' as const };
 
       let nameSnapshot = d.nameSnapshot ?? '';
@@ -234,7 +245,7 @@ export function createDealItemsRouter(): Router {
       }
 
       const result = await req.scoped!(async (tx) => {
-        const deal = await loadDeal(tx, dealId);
+        const deal = await loadDeal(tx, dealId, true);
         if (!deal) return { kind: 'not_found' as const };
 
         const [item] = await tx
@@ -272,7 +283,7 @@ export function createDealItemsRouter(): Router {
       const actorMemberId = req.auth!.member.id;
 
       const result = await req.scoped!(async (tx) => {
-        const deal = await loadDeal(tx, dealId);
+        const deal = await loadDeal(tx, dealId, true);
         if (!deal) return { kind: 'not_found' as const };
 
         const removed = await tx
