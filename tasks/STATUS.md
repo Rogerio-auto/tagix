@@ -37,7 +37,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F44   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F45   | 7     | 3   | 4   | 0   | 0   | 0   | 0   |
 | F46   | 1     | 0   | 0   | 0   | 0   | 0   | 1   |
-| F47   | 15     | 0   | 0   | 0   | 0   | 1   | 14   |
+| F47   | 15     | 0   | 0   | 0   | 0   | 0   | 15   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -448,23 +448,23 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 47
 
-| ID      | Titulo                                                                                       | Status   | Prioridade | Depende de                                                                      |
-| ------- | -------------------------------------------------------------------------------------------- | -------- | ---------- | ------------------------------------------------------------------------------- |
-| F47-S01 | Schema products + deal_items + contacts.address/document (RLS)                               | ✅ done   | critical   | —                                                                               |
-| F47-S02 | API Produtos — CRUD /api/products + perms product.*                                          | ✅ done   | high       | F47-S01                                                                         |
-| F47-S03 | API Itens do card + recompute de value_cents                                                 | ✅ done   | high       | F47-S01                                                                         |
-| F47-S04 | API Card-da-conversa + cadastro read-through + snapshot                                      | ✅ done   | high       | F47-S01                                                                         |
-| F47-S05 | UI Catálogo de Produtos em Settings (/settings/products)                                     | ✅ done   | medium     | F47-S02                                                                         |
-| F47-S06 | <ContactPanel> reutilizável + Cockpit seção Cliente (ViaCEP)                                 | ✅ done   | high       | F47-S04                                                                         |
-| F47-S07 | Cockpit — Card + Itens/Produto + valor + auto-enrich                                         | ✅ done   | high       | F47-S03, F47-S04, F47-S06                                                       |
-| F47-S08 | Cockpit — Conversão herdando valor + resumo financeiro                                       | ✅ done   | medium     | F47-S07                                                                         |
-| F47-S09 | Cross-surface — <ContactPanel> na Pipeline + Contatos                                        | ✅ done   | medium     | F47-S04, F47-S06                                                                |
-| F47-S10 | Reorg da Sidebar — perfil do usuário + logout + nav                                          | ✅ done   | medium     | —                                                                               |
-| F47-S11 | QA + Segurança + e2e da F47                                                                  | ✅ done   | high       | F47-S02, F47-S03, F47-S04, F47-S05, F47-S06, F47-S07, F47-S08, F47-S09, F47-S10 |
-| F47-S12 | Fix race de auto-create do card (unique conversation_id + 23505)                             | ✅ done   | high       | F47-S01, F47-S04                                                                |
-| F47-S13 | Ultrareview fixes — backend (23505, race tx abortada, value_cents lock, snapshot, CEP clear) | ✅ done   | high       | F47-S04, F47-S12                                                                |
-| F47-S14 | Ultrareview fixes — frontend (parser de dinheiro, archive mobile, ViaCEP stale, CEP clear)   | ✅ done   | high       | F47-S05, F47-S06, F47-S07, F47-S08                                              |
-| F47-S15 | Polish — LiveChat full-bleed + picker de pipeline + 2 follow-ups                             | 🟣 review | medium     | F47-S04, F47-S07, F47-S13                                                       |
+| ID      | Titulo                                                                                       | Status | Prioridade | Depende de                                                                      |
+| ------- | -------------------------------------------------------------------------------------------- | ------ | ---------- | ------------------------------------------------------------------------------- |
+| F47-S01 | Schema products + deal_items + contacts.address/document (RLS)                               | ✅ done | critical   | —                                                                               |
+| F47-S02 | API Produtos — CRUD /api/products + perms product.*                                          | ✅ done | high       | F47-S01                                                                         |
+| F47-S03 | API Itens do card + recompute de value_cents                                                 | ✅ done | high       | F47-S01                                                                         |
+| F47-S04 | API Card-da-conversa + cadastro read-through + snapshot                                      | ✅ done | high       | F47-S01                                                                         |
+| F47-S05 | UI Catálogo de Produtos em Settings (/settings/products)                                     | ✅ done | medium     | F47-S02                                                                         |
+| F47-S06 | <ContactPanel> reutilizável + Cockpit seção Cliente (ViaCEP)                                 | ✅ done | high       | F47-S04                                                                         |
+| F47-S07 | Cockpit — Card + Itens/Produto + valor + auto-enrich                                         | ✅ done | high       | F47-S03, F47-S04, F47-S06                                                       |
+| F47-S08 | Cockpit — Conversão herdando valor + resumo financeiro                                       | ✅ done | medium     | F47-S07                                                                         |
+| F47-S09 | Cross-surface — <ContactPanel> na Pipeline + Contatos                                        | ✅ done | medium     | F47-S04, F47-S06                                                                |
+| F47-S10 | Reorg da Sidebar — perfil do usuário + logout + nav                                          | ✅ done | medium     | —                                                                               |
+| F47-S11 | QA + Segurança + e2e da F47                                                                  | ✅ done | high       | F47-S02, F47-S03, F47-S04, F47-S05, F47-S06, F47-S07, F47-S08, F47-S09, F47-S10 |
+| F47-S12 | Fix race de auto-create do card (unique conversation_id + 23505)                             | ✅ done | high       | F47-S01, F47-S04                                                                |
+| F47-S13 | Ultrareview fixes — backend (23505, race tx abortada, value_cents lock, snapshot, CEP clear) | ✅ done | high       | F47-S04, F47-S12                                                                |
+| F47-S14 | Ultrareview fixes — frontend (parser de dinheiro, archive mobile, ViaCEP stale, CEP clear)   | ✅ done | high       | F47-S05, F47-S06, F47-S07, F47-S08                                              |
+| F47-S15 | Polish — LiveChat full-bleed + picker de pipeline + 2 follow-ups                             | ✅ done | medium     | F47-S04, F47-S07, F47-S13                                                       |
 
 ## Fase 5 — Calendar
 

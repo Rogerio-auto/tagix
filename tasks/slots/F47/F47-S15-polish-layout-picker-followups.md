@@ -2,7 +2,7 @@
 id: F47-S15
 title: Polish — LiveChat full-bleed + picker de pipeline + 2 follow-ups
 phase: F47
-status: review
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F47-S04, F47-S07, F47-S13]
