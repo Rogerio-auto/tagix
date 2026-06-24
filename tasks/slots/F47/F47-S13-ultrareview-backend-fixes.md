@@ -2,7 +2,7 @@
 id: F47-S13
 title: Ultrareview fixes — backend (23505, race tx abortada, value_cents lock, snapshot, CEP clear)
 phase: F47
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F47-S04, F47-S12]

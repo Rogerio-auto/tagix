@@ -37,7 +37,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F44   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F45   | 7     | 3   | 4   | 0   | 0   | 0   | 0   |
 | F46   | 1     | 0   | 0   | 0   | 0   | 0   | 1   |
-| F47   | 14     | 1   | 0   | 0   | 0   | 1   | 12   |
+| F47   | 14     | 1   | 0   | 0   | 0   | 0   | 13   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -462,7 +462,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F47-S10 | Reorg da Sidebar — perfil do usuário + logout + nav                                          | ✅ done      | medium     | —                                                                               |
 | F47-S11 | QA + Segurança + e2e da F47                                                                  | ✅ done      | high       | F47-S02, F47-S03, F47-S04, F47-S05, F47-S06, F47-S07, F47-S08, F47-S09, F47-S10 |
 | F47-S12 | Fix race de auto-create do card (unique conversation_id + 23505)                             | ✅ done      | high       | F47-S01, F47-S04                                                                |
-| F47-S13 | Ultrareview fixes — backend (23505, race tx abortada, value_cents lock, snapshot, CEP clear) | 🟣 review    | high       | F47-S04, F47-S12                                                                |
+| F47-S13 | Ultrareview fixes — backend (23505, race tx abortada, value_cents lock, snapshot, CEP clear) | ✅ done      | high       | F47-S04, F47-S12                                                                |
 | F47-S14 | Ultrareview fixes — frontend (parser de dinheiro, archive mobile, ViaCEP stale, CEP clear)   | 🟢 available | high       | F47-S05, F47-S06, F47-S07, F47-S08                                              |
 
 ## Fase 5 — Calendar
