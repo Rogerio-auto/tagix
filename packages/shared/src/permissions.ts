@@ -40,6 +40,10 @@ export const ROLE_CAN = {
   'contact.delete': ADMINS,
   'pipeline.view': ALL,
   'pipeline.edit': ADMINS,
+  // §2.2 Catálogo de produtos (COCKPIT_CLIENT_ENRICHMENT §2.2): leitura ampla
+  // (todos vinculam produto no cockpit); gestão do catálogo é de admin (settings).
+  'product.view': ALL,
+  'product.edit': ADMINS,
   'deal.move': STAFF,
   'deal.edit': STAFF,
   'deal.convert': STAFF,

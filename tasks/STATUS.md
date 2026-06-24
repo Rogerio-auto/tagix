@@ -37,7 +37,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F44   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F45   | 7     | 3   | 4   | 0   | 0   | 0   | 0   |
 | F46   | 1     | 0   | 0   | 0   | 0   | 0   | 1   |
-| F47   | 11     | 0   | 8   | 0   | 1   | 0   | 2   |
+| F47   | 11     | 0   | 8   | 0   | 0   | 1   | 2   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -448,19 +448,19 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 47
 
-| ID      | Titulo                                                         | Status        | Prioridade | Depende de                                                                      |
-| ------- | -------------------------------------------------------------- | ------------- | ---------- | ------------------------------------------------------------------------------- |
-| F47-S01 | Schema products + deal_items + contacts.address/document (RLS) | ✅ done        | critical   | —                                                                               |
-| F47-S02 | API Produtos — CRUD /api/products + perms product.*            | 🔵 in-progress | high       | F47-S01                                                                         |
-| F47-S03 | API Itens do card + recompute de value_cents                   | ⏸️ blocked    | high       | F47-S01                                                                         |
-| F47-S04 | API Card-da-conversa + cadastro read-through + snapshot        | ⏸️ blocked    | high       | F47-S01                                                                         |
-| F47-S05 | UI Catálogo de Produtos em Settings (/settings/products)       | ⏸️ blocked    | medium     | F47-S02                                                                         |
-| F47-S06 | <ContactPanel> reutilizável + Cockpit seção Cliente (ViaCEP)   | ⏸️ blocked    | high       | F47-S04                                                                         |
-| F47-S07 | Cockpit — Card + Itens/Produto + valor + auto-enrich           | ⏸️ blocked    | high       | F47-S03, F47-S04, F47-S06                                                       |
-| F47-S08 | Cockpit — Conversão herdando valor + resumo financeiro         | ⏸️ blocked    | medium     | F47-S07                                                                         |
-| F47-S09 | Cross-surface — <ContactPanel> na Pipeline + Contatos          | ⏸️ blocked    | medium     | F47-S04, F47-S06                                                                |
-| F47-S10 | Reorg da Sidebar — perfil do usuário + logout + nav            | ✅ done        | medium     | —                                                                               |
-| F47-S11 | QA + Segurança + e2e da F47                                    | ⏸️ blocked    | high       | F47-S02, F47-S03, F47-S04, F47-S05, F47-S06, F47-S07, F47-S08, F47-S09, F47-S10 |
+| ID      | Titulo                                                         | Status     | Prioridade | Depende de                                                                      |
+| ------- | -------------------------------------------------------------- | ---------- | ---------- | ------------------------------------------------------------------------------- |
+| F47-S01 | Schema products + deal_items + contacts.address/document (RLS) | ✅ done     | critical   | —                                                                               |
+| F47-S02 | API Produtos — CRUD /api/products + perms product.*            | 🟣 review   | high       | F47-S01                                                                         |
+| F47-S03 | API Itens do card + recompute de value_cents                   | ⏸️ blocked | high       | F47-S01                                                                         |
+| F47-S04 | API Card-da-conversa + cadastro read-through + snapshot        | ⏸️ blocked | high       | F47-S01                                                                         |
+| F47-S05 | UI Catálogo de Produtos em Settings (/settings/products)       | ⏸️ blocked | medium     | F47-S02                                                                         |
+| F47-S06 | <ContactPanel> reutilizável + Cockpit seção Cliente (ViaCEP)   | ⏸️ blocked | high       | F47-S04                                                                         |
+| F47-S07 | Cockpit — Card + Itens/Produto + valor + auto-enrich           | ⏸️ blocked | high       | F47-S03, F47-S04, F47-S06                                                       |
+| F47-S08 | Cockpit — Conversão herdando valor + resumo financeiro         | ⏸️ blocked | medium     | F47-S07                                                                         |
+| F47-S09 | Cross-surface — <ContactPanel> na Pipeline + Contatos          | ⏸️ blocked | medium     | F47-S04, F47-S06                                                                |
+| F47-S10 | Reorg da Sidebar — perfil do usuário + logout + nav            | ✅ done     | medium     | —                                                                               |
+| F47-S11 | QA + Segurança + e2e da F47                                    | ⏸️ blocked | high       | F47-S02, F47-S03, F47-S04, F47-S05, F47-S06, F47-S07, F47-S08, F47-S09, F47-S10 |
 
 ## Fase 5 — Calendar
 
