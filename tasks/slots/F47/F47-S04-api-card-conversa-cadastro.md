@@ -2,7 +2,7 @@
 id: F47-S04
 title: API Card-da-conversa + cadastro read-through + snapshot
 phase: F47
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F47-S01]
