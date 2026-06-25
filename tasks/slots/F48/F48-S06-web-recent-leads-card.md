@@ -2,7 +2,7 @@
 id: F48-S06
 title: Widget RecentLeadsCard (lista estilo chatlist, atividade recente)
 phase: F48
-status: blocked
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F48-S04]
@@ -16,8 +16,9 @@ ux_considerations:
   - "Aplica 3.6 — skeleton/forma estável; sem foto cai em iniciais (via <Avatar>)."
   - "Aplica 2.6 — vazio convida ('nenhum lead ativo ainda'), com CTA para Contatos."
   - "Aplica 8 (mobile) — linhas alvo ≥44px, avatar 40px, preview truncado sem overflow."
----
+completed_at: 2026-06-25T23:25:33Z
 
+---
 # F48-S06 — Widget RecentLeadsCard
 
 ## Objetivo

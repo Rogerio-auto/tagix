@@ -2,7 +2,7 @@
 id: F48-S05
 title: Widget LeaderboardCard (pódio com foto, produtividade)
 phase: F48
-status: blocked
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F48-S04]
@@ -16,8 +16,9 @@ ux_considerations:
   - "Aplica 3.6 — skeleton/forma estável enquanto carrega; sem foto cai em iniciais (via <Avatar>)."
   - "Aplica 2.6 — estado vazio convida ('sem atividade no período'), não zero enganoso."
   - "Aplica 8 (mobile) — card full-width, linhas com alvo ≥44px, sem overflow horizontal."
----
+completed_at: 2026-06-25T23:25:33Z
 
+---
 # F48-S05 — Widget LeaderboardCard
 
 ## Objetivo

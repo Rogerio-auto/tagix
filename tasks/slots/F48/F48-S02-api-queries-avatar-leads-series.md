@@ -2,7 +2,7 @@
 id: F48-S02
 title: Queries — avatar no ranking, leads recentes, série 30d
 phase: F48
-status: blocked
+status: done
 priority: high
 estimated_size: M
 depends_on: [F48-S01]
@@ -10,8 +10,9 @@ blocks: [F48-S03]
 agent_id: backend-engineer
 source_docs:
   - docs/features/DASHBOARD.md
----
+completed_at: 2026-06-25T23:25:33Z
 
+---
 # F48-S02 — Queries de dados do Command Center v2
 
 ## Objetivo
