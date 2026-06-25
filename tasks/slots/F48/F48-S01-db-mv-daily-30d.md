@@ -2,7 +2,7 @@
 id: F48-S01
 title: MV diária 30d (mv_dashboard_daily_30d) + registro no refresh
 phase: F48
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: [F48-S02, F48-S03]
 agent_id: db-engineer
 source_docs:
   - docs/features/DASHBOARD.md
----
+completed_at: 2026-06-25T23:05:42Z
 
+---
 # F48-S01 — MV diária de desempenho (30 dias)
 
 ## Objetivo
