@@ -38,6 +38,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F45   | 7     | 3   | 4   | 0   | 0   | 0   | 0   |
 | F46   | 1     | 0   | 0   | 0   | 0   | 0   | 1   |
 | F47   | 15     | 0   | 0   | 0   | 0   | 0   | 15   |
+| F48   | 8     | 3   | 5   | 0   | 0   | 0   | 0   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -465,6 +466,19 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F47-S13 | Ultrareview fixes — backend (23505, race tx abortada, value_cents lock, snapshot, CEP clear) | ✅ done | high       | F47-S04, F47-S12                                                                |
 | F47-S14 | Ultrareview fixes — frontend (parser de dinheiro, archive mobile, ViaCEP stale, CEP clear)   | ✅ done | high       | F47-S05, F47-S06, F47-S07, F47-S08                                              |
 | F47-S15 | Polish — LiveChat full-bleed + picker de pipeline + 2 follow-ups                             | ✅ done | medium     | F47-S04, F47-S07, F47-S13                                                       |
+
+## Fase 48
+
+| ID      | Titulo                                                               | Status      | Prioridade | Depende de                         |
+| ------- | -------------------------------------------------------------------- | ----------- | ---------- | ---------------------------------- |
+| F48-S01 | MV diária 30d (mv_dashboard_daily_30d) + registro no refresh         | 🟢 available | high       | —                                  |
+| F48-S02 | Queries — avatar no ranking, leads recentes, série 30d               | ⏸️ blocked  | high       | F48-S01                            |
+| F48-S03 | Definitions + load-dashboard — cardTypes leaderboard/feed/timeseries | ⏸️ blocked  | high       | F48-S02                            |
+| F48-S04 | Componente <Avatar> em @hm/ui (foto + fallback iniciais)             | 🟢 available | high       | —                                  |
+| F48-S05 | Widget LeaderboardCard (pódio com foto, produtividade)               | ⏸️ blocked  | medium     | F48-S04                            |
+| F48-S06 | Widget RecentLeadsCard (lista estilo chatlist, atividade recente)    | ⏸️ blocked  | medium     | F48-S04                            |
+| F48-S07 | Widget TimeSeriesCard (desempenho 30d, linha com toggle)             | 🟢 available | medium     | —                                  |
+| F48-S08 | Integração Command Center — tiers, HeroCard, registry, types         | ⏸️ blocked  | high       | F48-S03, F48-S05, F48-S06, F48-S07 |
 
 ## Fase 5 — Calendar
 
