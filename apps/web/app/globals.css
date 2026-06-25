@@ -56,3 +56,63 @@ body {
     font-size: 16px;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Borda neon "viva" — card de conversa selecionado (LiveChat / ChatList).
+ * Uma linha de luz na cor de marca percorre continuamente o perímetro do card,
+ * com glow ao redor (sensação cyber-tech / painel de IA). Sem hex hardcoded:
+ * usa os tokens --brand / --brand-bright. Respeita prefers-reduced-motion.
+ *
+ * Técnica: conic-gradient ancorado num ângulo animável (@property) + máscara
+ * de borda (mantém só o anel, recortando o centro) + drop-shadow para o glow.
+ * ────────────────────────────────────────────────────────────────────────── */
+@property --hm-neon-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes hm-neon-travel {
+  to {
+    --hm-neon-angle: 360deg;
+  }
+}
+
+.hm-chat-neon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px; /* espessura da linha neon */
+  /* Anel-base tênue contínuo (borda sempre insinuada) + "cometa" luminoso que
+     percorre a borda; ponto mais quente em --brand-bright. */
+  background: conic-gradient(
+    from var(--hm-neon-angle),
+    color-mix(in oklab, var(--brand) 12%, transparent) 0deg,
+    color-mix(in oklab, var(--brand) 12%, transparent) 205deg,
+    color-mix(in oklab, var(--brand) 35%, transparent) 285deg,
+    var(--brand) 330deg,
+    var(--brand-bright) 343deg,
+    var(--brand) 356deg,
+    color-mix(in oklab, var(--brand) 12%, transparent) 360deg
+  );
+  /* Recorta tudo menos o anel da borda (padding). */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  /* Glow que acompanha a linha — profundidade sem saturar. */
+  filter:
+    drop-shadow(0 0 2px color-mix(in oklab, var(--brand) 75%, transparent))
+    drop-shadow(0 0 5px color-mix(in oklab, var(--brand) 45%, transparent));
+  animation: hm-neon-travel 4.5s linear infinite;
+  pointer-events: none;
+}
+
+/* Acessibilidade: sem movimento contínuo — mantém a linha neon estática. */
+@media (prefers-reduced-motion: reduce) {
+  .hm-chat-neon::before {
+    animation: none;
+  }
+}
