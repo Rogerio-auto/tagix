@@ -24,6 +24,13 @@ export interface ChatListItemProps {
   conversation: ConversationSummary;
   active: boolean;
   /**
+   * `true` quando há OUTRA conversa selecionada e este item não é o ativo —
+   * recua visualmente (opacidade + leve queda de luminosidade + véu escuro) para
+   * dar profundidade e conduzir o olhar ao chat ativo. Volta ao normal no
+   * hover/foco. Nunca aplicado ao item ativo.
+   */
+  dimmed?: boolean;
+  /**
    * Roving tabindex (UX §2.10 / WAI-ARIA list pattern): apenas o item com foco
    * lógico participa da tab order; os demais recebem `-1` e são alcançados pelas
    * setas ↑/↓.
@@ -69,7 +76,7 @@ function AiBadge({ aiMode }: { aiMode: string }) {
 }
 
 export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(function ChatListItem(
-  { conversation, active, tabIndex, focused },
+  { conversation, active, dimmed = false, tabIndex, focused },
   ref,
 ) {
   const hasUnread = conversation.unreadCount > 0;
@@ -85,9 +92,9 @@ export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(fun
         data-conversation-id={conversation.id}
         className={cn(
           'relative flex items-center gap-3 rounded-lg px-3 py-3 outline-none',
-          // Transição fluida do estado de seleção (glow + fundo) — premium e
-          // discreta; respeita prefers-reduced-motion.
-          'transition-[background-color,background-image,box-shadow] duration-300 ease-out',
+          // Transição fluida do estado de seleção (glow + fundo + recuo dos
+          // demais) — premium e discreta; respeita prefers-reduced-motion.
+          'transition-[background-color,background-image,box-shadow,opacity,filter] duration-300 ease-out',
           'motion-reduce:transition-none',
           active
             ? // Estado "ativo/vivo": linha neon animada percorrendo a borda
@@ -95,6 +102,16 @@ export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(fun
               // vinda do canto superior-esquerdo.
               'hm-chat-neon bg-surface-3 bg-gradient-to-br from-brand/10 via-transparent to-transparent shadow-glow-active'
             : 'hover:bg-surface-2',
+          // Hierarquia de foco: quando OUTRA conversa está aberta, os demais
+          // itens recuam para o segundo plano. Véu escuro em degradê (::after,
+          // sempre presente nos não-ativos para a transição ser fluida nos dois
+          // sentidos) + leve queda de opacidade/luminosidade. Hover e foco por
+          // teclado restauram 100% — nunca fica "desabilitado", só discreto.
+          !active &&
+            'after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:bg-gradient-to-t after:from-bg/15 after:to-transparent after:opacity-0 after:transition-opacity after:duration-300',
+          !active && dimmed && 'opacity-[0.7] [filter:brightness(0.94)] after:opacity-100',
+          !active &&
+            'hover:opacity-100 hover:[filter:none] hover:after:opacity-0 focus-visible:opacity-100 focus-visible:[filter:none] focus-visible:after:opacity-0',
           // Foco real (focus-visible) e foco lógico do roving tabindex pintam o
           // mesmo anel — §3.5 (focus nunca suprimido).
           'focus-visible:bg-surface-2 focus-visible:shadow-glow-md',

@@ -43,6 +43,11 @@ export function ChatList({ activeConversationId }: ChatListProps) {
   const showSkeleton = isLoading || isDebouncing;
   const isEmpty = !showSkeleton && !isError && conversations.length === 0;
 
+  // Hierarquia de foco (F47+): só esmaecemos os demais itens quando há de fato
+  // uma conversa aberta E ela está na lista atual. Sem seleção → todos normais.
+  const hasActiveSelection =
+    !!activeConversationId && conversations.some((c) => c.id === activeConversationId);
+
   // Roving tabindex (UX §2.10): ↑/↓ movem o foco entre conversas, Enter abre
   // (o próprio <Link> focado segue a navegação nativamente). `focusedIndex` é o
   // item que detém o tabindex 0; -1 = nenhum foco lógico fixado ainda.
@@ -183,6 +188,7 @@ export function ChatList({ activeConversationId }: ChatListProps) {
                 }}
                 conversation={conv}
                 active={conv.id === activeConversationId}
+                dimmed={hasActiveSelection && conv.id !== activeConversationId}
                 tabIndex={index === focusedIndex ? 0 : -1}
                 focused={index === focusedIndex}
               />
