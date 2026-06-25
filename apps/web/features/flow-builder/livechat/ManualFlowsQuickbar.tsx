@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Workflow, Zap } from 'lucide-react';
 import { can } from '@hm/shared';
 import { useAuthStore } from '@/shared/stores/auth.store';
+import { useNeonBorderSteady } from '@/shared/hooks/useNeonBorderSteady';
 import { useManualFlows, type ManualFlow } from './queries';
 import { TriggerConfirmModal } from './TriggerConfirmModal';
 
@@ -16,6 +17,9 @@ export function ManualFlowsQuickbar({ conversationId }: { conversationId: string
   const canTrigger = role ? can(role, 'flow.trigger') : false;
   const manualFlows = useManualFlows();
   const [selected, setSelected] = useState<ManualFlow | null>(null);
+  // Barra larga (~900px): linha neon em velocidade constante e calma (volta mais
+  // longa que o padrão 4.5s), para a luz não "correr" nem variar de ritmo.
+  const neonRef = useNeonBorderSteady<HTMLDivElement>();
 
   if (!canTrigger) return null;
   const flows = manualFlows.data ?? [];
@@ -26,7 +30,7 @@ export function ManualFlowsQuickbar({ conversationId }: { conversationId: string
       {/* Container externo: recebe a linha neon viva (não recorta o glow).
           A barra vira um cartão flutuante arredondado — acabamento premium
           consistente com o card de conversa ativo (.hm-flow-neon). */}
-      <div className="hm-flow-neon relative mx-3 mb-1 mt-2 rounded-lg bg-surface-1">
+      <div ref={neonRef} className="hm-flow-neon relative mx-3 mb-1 mt-2 rounded-lg bg-surface-1">
         {/* Interno: rola horizontalmente quando há muitos flows (o overflow
             fica aqui para não cortar o brilho da borda). */}
         <div className="flex items-center gap-1.5 overflow-x-auto rounded-lg px-3 py-2">

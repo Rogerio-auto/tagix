@@ -122,7 +122,12 @@ body {
   mask-composite: exclude;
   /* Glow que acompanha a linha — intensidade definida por --hm-neon-filter. */
   filter: var(--hm-neon-filter);
-  animation: hm-neon-travel 4.5s linear infinite;
+  /* Duração de uma volta. O padrão (4.5s) é calibrado para componentes
+     pequenos (card de conversa, item de menu). Componentes grandes e
+     horizontais (ex.: barra de Flows) sobrescrevem --hm-neon-duration via o
+     hook `useNeonBorder`, que a deriva do perímetro para manter a velocidade
+     visual (px/s) constante em qualquer tamanho. */
+  animation: hm-neon-travel var(--hm-neon-duration, 4.5s) linear infinite;
   pointer-events: none;
 }
 
