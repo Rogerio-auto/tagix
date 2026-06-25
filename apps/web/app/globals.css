@@ -78,7 +78,25 @@ body {
   }
 }
 
-.hm-chat-neon::before {
+/* Glow padrão — referência de intensidade (card de conversa ativo). */
+.hm-chat-neon {
+  --hm-neon-filter:
+    drop-shadow(0 0 2px color-mix(in oklab, var(--brand) 75%, transparent))
+    drop-shadow(0 0 5px color-mix(in oklab, var(--brand) 45%, transparent));
+}
+
+/* Variante para a barra de Flows (quickbar do chat): MESMA linguagem visual —
+   cor, velocidade, blur e comportamento idênticos — com glow levemente
+   inferior, para hierarquia: valoriza a interface sem competir com o card de
+   conversa ativo nem com os blocos do fluxo. */
+.hm-flow-neon {
+  --hm-neon-filter:
+    drop-shadow(0 0 1.5px color-mix(in oklab, var(--brand) 55%, transparent))
+    drop-shadow(0 0 4px color-mix(in oklab, var(--brand) 26%, transparent));
+}
+
+.hm-chat-neon::before,
+.hm-flow-neon::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -102,17 +120,16 @@ body {
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  /* Glow que acompanha a linha — profundidade sem saturar. */
-  filter:
-    drop-shadow(0 0 2px color-mix(in oklab, var(--brand) 75%, transparent))
-    drop-shadow(0 0 5px color-mix(in oklab, var(--brand) 45%, transparent));
+  /* Glow que acompanha a linha — intensidade definida por --hm-neon-filter. */
+  filter: var(--hm-neon-filter);
   animation: hm-neon-travel 4.5s linear infinite;
   pointer-events: none;
 }
 
 /* Acessibilidade: sem movimento contínuo — mantém a linha neon estática. */
 @media (prefers-reduced-motion: reduce) {
-  .hm-chat-neon::before {
+  .hm-chat-neon::before,
+  .hm-flow-neon::before {
     animation: none;
   }
 }
