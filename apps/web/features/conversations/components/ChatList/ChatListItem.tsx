@@ -84,10 +84,16 @@ export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(fun
         tabIndex={tabIndex}
         data-conversation-id={conversation.id}
         className={cn(
-          'flex items-center gap-3 border-l-2 px-4 py-3 outline-none transition-colors',
+          'relative flex items-center gap-3 rounded-lg px-3 py-3 outline-none',
+          // Transição fluida do estado de seleção (glow + fundo) — premium e
+          // discreta; respeita prefers-reduced-motion.
+          'transition-[background-color,background-image,box-shadow] duration-300 ease-out',
+          'motion-reduce:transition-none',
           active
-            ? 'border-brand bg-surface-3'
-            : 'border-transparent hover:bg-surface-2',
+            ? // Estado "ativo/energizado": glow verde contornando todo o cartão +
+              // leve iluminação tecnológica vinda do canto superior-esquerdo.
+              'bg-surface-3 bg-gradient-to-br from-brand/10 via-transparent to-transparent shadow-glow-active'
+            : 'hover:bg-surface-2',
           // Foco real (focus-visible) e foco lógico do roving tabindex pintam o
           // mesmo anel — §3.5 (focus nunca suprimido).
           'focus-visible:bg-surface-2 focus-visible:shadow-glow-md',

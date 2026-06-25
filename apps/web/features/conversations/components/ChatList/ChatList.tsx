@@ -173,7 +173,7 @@ export function ChatList({ activeConversationId }: ChatListProps) {
                 focusItem(idx);
               }
             }}
-            className="outline-none"
+            className="space-y-0.5 px-2 py-1.5 outline-none"
           >
             {conversations.map((conv, index) => (
               <ChatListItem

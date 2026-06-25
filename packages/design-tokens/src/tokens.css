@@ -87,6 +87,14 @@
     0 0 0 3px rgba(31, 255, 19, 0.25), 0 0 12px rgba(31, 255, 19, 0.4);
   --glow-lg:
     0 0 0 4px rgba(31, 255, 19, 0.3), 0 0 24px rgba(31, 255, 19, 0.55);
+  /* Glow de seleção (estado "ativo/energizado") — refinado, premium:
+     anel fino nítido + halo suave + bloom externo difuso + brilho interno sutil.
+     Discreto por design: nunca saturado, preserva legibilidade do conteúdo. */
+  --glow-active:
+    0 0 0 1px rgba(31, 255, 19, 0.4),
+    0 0 0 4px rgba(31, 255, 19, 0.07),
+    0 0 18px rgba(31, 255, 19, 0.2),
+    inset 0 0 14px rgba(31, 255, 19, 0.045);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -125,4 +133,11 @@
     0 0 0 3px rgba(31, 255, 19, 0.3), 0 0 12px rgba(31, 255, 19, 0.3);
   --glow-lg:
     0 0 0 4px rgba(31, 255, 19, 0.35), 0 0 24px rgba(31, 255, 19, 0.4);
+  /* Glow de seleção — variante para fundo claro (matiz idêntica, opacidades
+     levemente reforçadas para o verde "pegar" sobre superfície clara). */
+  --glow-active:
+    0 0 0 1px rgba(31, 255, 19, 0.45),
+    0 0 0 4px rgba(31, 255, 19, 0.1),
+    0 0 18px rgba(31, 255, 19, 0.22),
+    inset 0 0 14px rgba(31, 255, 19, 0.05);
 }

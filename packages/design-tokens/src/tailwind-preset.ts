@@ -71,6 +71,7 @@ export const tailwindPreset: TailwindPreset = {
         'glow-sm': 'var(--glow-sm)',
         'glow-md': 'var(--glow-md)',
         'glow-lg': 'var(--glow-lg)',
+        'glow-active': 'var(--glow-active)',
       },
       // Largura máxima do conteúdo centralizado (DESIGN_SYSTEM "Largura de conteúdo").
       // `content` é o default das páginas de fluxo; `content-narrow` para forms.
