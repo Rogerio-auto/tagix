@@ -59,6 +59,12 @@ export interface UserMenuProps {
   placement?: 'up' | 'down';
   /** Estilo do gatilho: `block` (bloco de perfil largo) ou `compact` (só avatar). */
   variant?: 'block' | 'compact';
+  /**
+   * Sidebar recolhida: força o gatilho a só-avatar (centralizado) e abre o
+   * dropdown ancorado à esquerda (para a direita, sobre o conteúdo). O dropdown
+   * passa a exibir o cabeçalho de identidade (nome/papel), como no `compact`.
+   */
+  collapsed?: boolean;
 }
 
 /**
@@ -68,7 +74,13 @@ export interface UserMenuProps {
  * com ring visível. UX §2.4 (path óbvio p/ perfil+logout), §2.7 (feedback +
  * redirect limpo), §8 (paridade mobile via `variant`/`placement`).
  */
-export function UserMenu({ name, role, placement = 'up', variant = 'block' }: UserMenuProps) {
+export function UserMenu({
+  name,
+  role,
+  placement = 'up',
+  variant = 'block',
+  collapsed = false,
+}: UserMenuProps) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -126,15 +138,18 @@ export function UserMenu({ name, role, placement = 'up', variant = 'block' }: Us
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
+        title={collapsed ? `${name} · ${roleLabel}` : undefined}
         className={cn(
           'group flex items-center rounded-sm outline-none transition-colors duration-200 focus-visible:shadow-glow-md',
-          variant === 'block'
-            ? 'w-full gap-3 px-2 py-2 text-left hover:bg-surface-2'
-            : 'touch-target justify-center text-text-mid hover:text-text',
+          collapsed
+            ? 'w-full justify-center py-2 hover:bg-surface-2'
+            : variant === 'block'
+              ? 'w-full gap-3 px-2 py-2 text-left hover:bg-surface-2'
+              : 'touch-target justify-center text-text-mid hover:text-text',
         )}
       >
         {Avatar}
-        {variant === 'block' && (
+        {variant === 'block' && !collapsed && (
           <>
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate font-head text-sm font-medium text-text">{name}</span>
@@ -160,11 +175,12 @@ export function UserMenu({ name, role, placement = 'up', variant = 'block' }: Us
             'absolute right-0 z-20 overflow-hidden rounded-sm border border-border bg-surface-2 py-1 shadow-lg',
             // `block` ocupa a largura do gatilho (rodapé da Sidebar); `compact`
             // abre um popover de largura fixa ancorado à direita (TopBar mobile).
-            variant === 'block' ? 'left-0' : 'w-56',
+            // `collapsed` (sidebar recolhida) ancora à esquerda e abre p/ a direita.
+            collapsed ? 'left-0 w-56' : variant === 'block' ? 'left-0' : 'w-56',
             placement === 'up' ? 'bottom-full mb-2' : 'top-full mt-2',
           )}
         >
-          {variant === 'compact' && (
+          {(variant === 'compact' || collapsed) && (
             <div className="border-b border-border px-3 py-2">
               <p className="truncate font-head text-sm font-medium text-text">{name}</p>
               <p className="truncate text-xs text-text-low">{roleLabel}</p>
