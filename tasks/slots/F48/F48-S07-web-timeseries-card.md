@@ -2,7 +2,7 @@
 id: F48-S07
 title: Widget TimeSeriesCard (desempenho 30d, linha com toggle)
 phase: F48
-status: available
+status: done
 priority: medium
 estimated_size: S
 depends_on: []
@@ -16,8 +16,9 @@ ux_considerations:
   - "Aplica 2.6 — sem dados na janela mostra mensagem clara, não eixo vazio confuso."
   - "Aplica 3.5 — toggle de série com estados de hover/seleção claros."
   - "Aplica 8 (mobile) — altura por breakpoint, ResponsiveContainer 100% largura, sem estourar viewport."
----
+completed_at: 2026-06-25T22:53:01Z
 
+---
 # F48-S07 — Widget TimeSeriesCard
 
 ## Objetivo

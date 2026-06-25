@@ -2,7 +2,7 @@
 id: F48-S04
 title: Componente <Avatar> em @hm/ui (foto + fallback iniciais)
 phase: F48
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: []
@@ -14,8 +14,9 @@ ux_considerations:
   - "Aplica 3.6 — sem foto carregada não mostra quadro quebrado; cai em iniciais imediatas (sem flash)."
   - "Aplica 3.5 — quando interativo, cursor/hover ensinam; por padrão é apresentacional (não clicável)."
   - "Aplica 8 (mobile) — tamanhos em múltiplos de 4; alvo mínimo respeitado quando usado como botão."
----
+completed_at: 2026-06-25T22:53:01Z
 
+---
 # F48-S04 — <Avatar> reutilizável no Design System
 
 ## Objetivo
