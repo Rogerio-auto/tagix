@@ -4,6 +4,9 @@
  */
 import type { ButtonVariant, ButtonSize } from './Button/Button';
 
+export { Avatar } from './Avatar/Avatar';
+export type { AvatarProps, AvatarSize } from './Avatar/Avatar';
+
 export { Button } from './Button/Button';
 export type { ButtonProps, ButtonVariant, ButtonSize } from './Button/Button';
 
