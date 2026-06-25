@@ -486,6 +486,7 @@ export async function conversoesPorAtendenteHumano(tx: DbTx): Promise<TableMetri
     .select({
       memberId: conversionEvents.triggeredByMemberId,
       nome: members.name,
+      avatarUrl: members.avatarUrl,
       conversoes: count(),
       valorCents: sum(conversionEvents.valueCents),
     })
@@ -498,9 +499,11 @@ export async function conversoesPorAtendenteHumano(tx: DbTx): Promise<TableMetri
         isNull(conversionEvents.cancelledAt),
       ),
     )
-    .groupBy(conversionEvents.triggeredByMemberId, members.name)
+    .groupBy(conversionEvents.triggeredByMemberId, members.name, members.avatarUrl)
     .orderBy(desc(count()));
   return {
+    // `avatarUrl` é campo extra nas rows (não em `columns`) — o TableCard atual o ignora;
+    // o leaderboard/avatar (S03+) o consome para o <Avatar> com fallback de iniciais.
     columns: [
       { key: 'nome', label: 'Atendente' },
       { key: 'conversoes', label: 'Conversoes', align: 'right' },
@@ -509,6 +512,7 @@ export async function conversoesPorAtendenteHumano(tx: DbTx): Promise<TableMetri
     rows: rows.map((r) => ({
       memberId: r.memberId,
       nome: r.nome ?? 'Sem nome',
+      avatarUrl: r.avatarUrl ?? null,
       conversoes: Number(r.conversoes ?? 0),
       valor_cents: Number(r.valorCents ?? 0),
     })),
@@ -638,6 +642,7 @@ export async function qualidadePorAtendente(tx: DbTx): Promise<TableMetricValue 
     .select({
       memberId: conversationEvaluations.primaryMemberId,
       nome: members.name,
+      avatarUrl: members.avatarUrl,
       media: avg(conversationEvaluations.qualityScore),
       amostra: count(),
     })
@@ -649,10 +654,11 @@ export async function qualidadePorAtendente(tx: DbTx): Promise<TableMetricValue 
         isNotNull(conversationEvaluations.primaryMemberId),
       ),
     )
-    .groupBy(conversationEvaluations.primaryMemberId, members.name)
+    .groupBy(conversationEvaluations.primaryMemberId, members.name, members.avatarUrl)
     .orderBy(desc(avg(conversationEvaluations.qualityScore)));
   if (rows.length === 0) return null;
   return {
+    // `avatarUrl` extra nas rows (não em `columns`) — ignorado pelo TableCard, usado pela face nova.
     columns: [
       { key: 'nome', label: 'Atendente' },
       { key: 'qualidade_media', label: 'Qualidade média', align: 'right' },
@@ -661,6 +667,7 @@ export async function qualidadePorAtendente(tx: DbTx): Promise<TableMetricValue 
     rows: rows.map((r) => ({
       memberId: r.memberId,
       nome: r.nome ?? 'Sem nome',
+      avatarUrl: r.avatarUrl ?? null,
       qualidade_media: r.media == null ? null : Math.round(Number(r.media)),
       avaliacoes: Number(r.amostra ?? 0),
     })),
@@ -731,4 +738,171 @@ export async function objecoesExemplos(
       occurred_at: r.occurredAt instanceof Date ? r.occurredAt.toISOString() : String(r.occurredAt),
     })),
   };
+}
+
+// ─── F48-S02 — Command Center v2: leaderboard com avatar, leads recentes, série 30d ──
+// Três novas fontes de dado (jsonb-like). Tudo sob a tx com RLS; a MV não tem RLS, então
+// a leitura filtra `workspace_id` explicitamente (defesa em profundidade — DASHBOARD §5/§9.3).
+
+/** Linha do leaderboard de produtividade (com a foto do atendente). */
+export interface LeaderboardRow {
+  memberId: string;
+  nome: string;
+  avatarUrl: string | null;
+  resolvidas: number;
+  abertas: number;
+  tmr_seg: number | null;
+}
+
+/**
+ * Leaderboard de produtividade dos atendentes (com avatar). Resolvidas hoje + abertas
+ * agora + tempo médio de 1ª resposta (FRT lateral, reusando a lógica de
+ * `performancePorAtendente`). Ordena por `resolvidas` desc, depois `tmr_seg` asc
+ * (NULLS LAST: quem ainda não respondeu não fura a fila à frente de quem respondeu rápido).
+ */
+export async function leaderboardProdutividade(
+  tx: DbTx,
+  workspaceId: string,
+): Promise<MetricValue> {
+  const dayStart = startOfDay().toISOString();
+  const rows = await tx.execute<{
+    member_id: string;
+    nome: string | null;
+    avatar_url: string | null;
+    resolvidas: number;
+    abertas: number;
+    tmr_seg: number | null;
+  }>(sql`
+    SELECT
+      m.id AS member_id,
+      m.name AS nome,
+      m.avatar_url AS avatar_url,
+      count(*) FILTER (
+        WHERE c.status IN ('resolved', 'closed') AND c.updated_at >= ${dayStart}::timestamptz
+      ) AS resolvidas,
+      count(*) FILTER (WHERE c.status = 'open') AS abertas,
+      avg(frt.first_response_seconds) AS tmr_seg
+    FROM members m
+    JOIN conversations c ON c.assigned_to = m.id AND c.workspace_id = ${workspaceId}
+    LEFT JOIN LATERAL (
+      SELECT EXTRACT(EPOCH FROM (
+        (SELECT min(om.created_at) FROM messages om
+          WHERE om.conversation_id = c.id AND om.direction = 'outbound')
+        - (SELECT min(im.created_at) FROM messages im
+            WHERE im.conversation_id = c.id AND im.direction = 'inbound')
+      )) AS first_response_seconds
+    ) frt ON true
+    WHERE m.workspace_id = ${workspaceId} AND m.status = 'active'
+    GROUP BY m.id, m.name, m.avatar_url
+    HAVING count(*) > 0
+    ORDER BY resolvidas DESC, tmr_seg ASC NULLS LAST
+  `);
+  const list: LeaderboardRow[] = Array.from(rows).map((r) => ({
+    memberId: r.member_id,
+    nome: r.nome ?? 'Sem nome',
+    avatarUrl: r.avatar_url ?? null,
+    resolvidas: Number(r.resolvidas ?? 0),
+    abertas: Number(r.abertas ?? 0),
+    tmr_seg: r.tmr_seg == null ? null : Math.round(Number(r.tmr_seg)),
+  }));
+  return { rows: list };
+}
+
+/** Linha de lead recente (atividade mais recente do contato). */
+export interface LeadRow {
+  contactId: string;
+  nome: string;
+  avatarUrl: string | null;
+  canal: string;
+  lastActivityAt: string;
+  preview: string | null;
+}
+
+/**
+ * Leads recentes por atividade: um contato por linha (a conversa de `last_message_at`
+ * mais recente), ordenados do mais recente ao mais antigo. `DISTINCT ON (contact_id)`
+ * num subselect colapsa as várias conversas de um mesmo contato; o outer reordena por
+ * `last_message_at DESC` (o `DISTINCT ON` obriga `contact_id` como primeiro critério).
+ * Traz nome, avatar e canal do contato e o preview da última mensagem.
+ */
+export async function leadsRecentes(tx: DbTx, limit = 8): Promise<MetricValue> {
+  const rows = await tx.execute<{
+    contact_id: string;
+    nome: string | null;
+    avatar_url: string | null;
+    canal: string;
+    last_message_at: string | Date;
+    preview: string | null;
+  }>(sql`
+    SELECT contact_id, nome, avatar_url, canal, last_message_at, preview
+    FROM (
+      SELECT DISTINCT ON (c.contact_id)
+        c.contact_id        AS contact_id,
+        ct.display_name     AS nome,
+        ct.avatar_url       AS avatar_url,
+        ch.provider         AS canal,
+        c.last_message_at   AS last_message_at,
+        c.last_message_preview AS preview
+      FROM conversations c
+      JOIN contacts ct ON ct.id = c.contact_id AND ct.deleted_at IS NULL
+      JOIN channels ch ON ch.id = c.channel_id
+      WHERE c.contact_id IS NOT NULL
+        AND c.last_message_at IS NOT NULL
+      ORDER BY c.contact_id, c.last_message_at DESC
+    ) sub
+    ORDER BY sub.last_message_at DESC
+    LIMIT ${limit}
+  `);
+  const list: LeadRow[] = Array.from(rows).map((r) => ({
+    contactId: r.contact_id,
+    nome: r.nome ?? 'Sem nome',
+    avatarUrl: r.avatar_url ?? null,
+    canal: r.canal,
+    lastActivityAt:
+      r.last_message_at instanceof Date
+        ? r.last_message_at.toISOString()
+        : new Date(r.last_message_at).toISOString(),
+    preview: r.preview ?? null,
+  }));
+  return { rows: list };
+}
+
+/** Ponto diário da série de desempenho 30d (lido da MV). */
+export interface SeriePoint {
+  day: string;
+  resolvidas: number;
+  conversoes: number;
+  conversoes_valor_cents: number;
+  novos_contatos: number;
+}
+
+/**
+ * Série diária de desempenho dos últimos 30 dias, lida da MV `mv_dashboard_daily_30d`
+ * (refresh pelo job do worker). MV não tem RLS → filtro de workspace OBRIGATÓRIO e
+ * explícito. Ordenado por `day` asc (eixo temporal dos gráficos).
+ */
+export async function serieDesempenho30d(tx: DbTx, workspaceId: string): Promise<MetricValue> {
+  const rows = await tx.execute<{
+    day: string | Date;
+    resolvidas: number;
+    conversoes: number;
+    conversoes_valor_cents: number | string;
+    novos_contatos: number;
+  }>(sql`
+    SELECT day, resolvidas, conversoes, conversoes_valor_cents, novos_contatos
+    FROM mv_dashboard_daily_30d
+    WHERE workspace_id = ${workspaceId}
+    ORDER BY day ASC
+  `);
+  const series: SeriePoint[] = Array.from(rows).map((r) => ({
+    day:
+      r.day instanceof Date
+        ? r.day.toISOString().slice(0, 10)
+        : String(r.day).slice(0, 10),
+    resolvidas: Number(r.resolvidas ?? 0),
+    conversoes: Number(r.conversoes ?? 0),
+    conversoes_valor_cents: Number(r.conversoes_valor_cents ?? 0),
+    novos_contatos: Number(r.novos_contatos ?? 0),
+  }));
+  return { series };
 }
