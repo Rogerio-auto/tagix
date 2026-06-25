@@ -76,10 +76,14 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
   const { isMobile } = useBreakpoint();
   const [infoOpen, setInfoOpen] = useState(false);
 
-  // Fecha o cockpit ao trocar de conversa (UX §2.3 — não acumula contexto stale).
+  // Cockpit como área de trabalho do atendente: no DESKTOP abre automaticamente
+  // ao selecionar uma conversa (sem clique extra). Trocar de conversa reabre; o
+  // fechamento manual é respeitado até a próxima conversa, porque este efeito só
+  // re-roda quando `conversationId`/`isMobile` mudam. No mobile o cockpit segue
+  // sob demanda (full-sheet — não invade a thread). Sem conversa → fechado.
   useEffect(() => {
-    setInfoOpen(false);
-  }, [conversationId]);
+    setInfoOpen(!isMobile && !!conversationId);
+  }, [conversationId, isMobile]);
 
   if (isMobile) {
     return (

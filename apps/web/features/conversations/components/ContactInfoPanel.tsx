@@ -72,6 +72,30 @@ const timeFmt = new Intl.DateTimeFormat('pt-BR', {
 
 // ── Sub-componente: seção genérica ────────────────────────────────────────────
 
+/**
+ * Card elevado — superfície base de cada bloco do cockpit. Cantos arredondados +
+ * borda sutil + sombra suave sobre a trilha recuada (`bg-surface-inset`) criam a
+ * sensação de painel executivo (profundidade, organização). DS v2: só tokens.
+ */
+function Card({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-md border border-border-2 bg-surface-2 p-4 shadow-elev-1',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 function Section({
   title,
   icon: Icon,
@@ -82,13 +106,13 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-b border-border-2 p-4">
+    <Card>
       <header className="mb-3 flex items-center gap-2">
         <Icon className="size-4 text-text-low" aria-hidden />
         <h3 className="font-head text-sm font-semibold text-text">{title}</h3>
       </header>
       {children}
-    </section>
+    </Card>
   );
 }
 
@@ -426,7 +450,7 @@ export function ContactInfoPanel({
         </Section>
 
         {/* ── 3. Roteamento (Atribuição / Transferência) ─────────────────── */}
-        <div className="border-b border-border-2 p-4">
+        <Card>
           {isLoading ? (
             <div className="space-y-2">
               <Skeleton className="h-4 w-28" />
@@ -439,7 +463,7 @@ export function ContactInfoPanel({
               departmentId={detail?.departmentId ?? null}
             />
           )}
-        </div>
+        </Card>
 
         {/* ── 4. Contexto (canal / dept / atendente / estágio) ───────────── */}
         <Section title="Contexto" icon={Info}>
@@ -473,21 +497,25 @@ export function ContactInfoPanel({
         </Section>
 
         {/* ── 5. Notas internas + @menções (F1-S22) ──────────────────────── */}
-        <NotesPanel conversationId={conversationId} />
+        <Card>
+          <NotesPanel conversationId={conversationId} />
+        </Card>
     </>
   );
 
   // Mobile: o cockpit é renderizado dentro de um `Sheet` (chrome + scroll +
-  // safe-area vêm do Sheet). Aqui devolvemos só as seções, sem `<aside>`.
+  // safe-area vêm do Sheet, que já padda `px-5 pb-5`). Aqui devolvemos as seções
+  // como pilha de cards com respiro vertical.
   if (embedded) {
-    return sections;
+    return <div className="flex flex-col gap-2.5 pt-4">{sections}</div>;
   }
 
-  // Desktop: terceira coluna fixa com cabeçalho e scroll próprios.
+  // Desktop: terceira coluna fixa com cabeçalho e trilha de cards com scroll.
+  // Animação de entrada discreta (slide+fade) ao abrir — motion-safe.
   return (
     <aside
       aria-label="Cockpit da conversa"
-      className="flex w-80 shrink-0 flex-col border-l border-border bg-surface"
+      className="flex w-80 shrink-0 flex-col border-l border-border bg-surface motion-safe:animate-[hm-cockpit-in_280ms_cubic-bezier(0.22,1,0.36,1)]"
     >
       {/* Cabeçalho do painel */}
       <div className="flex h-14 items-center justify-between border-b border-border-2 px-4">
@@ -505,7 +533,11 @@ export function ContactInfoPanel({
         </button>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-y-auto">{sections}</div>
+      {/* Trilha recuada (bg-surface-inset) — os cards "flutuam" acima dela,
+          criando profundidade de dashboard. */}
+      <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto bg-surface-inset p-3">
+        {sections}
+      </div>
     </aside>
   );
 }

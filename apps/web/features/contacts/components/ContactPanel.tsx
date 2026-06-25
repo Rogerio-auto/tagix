@@ -24,9 +24,21 @@
  */
 
 import { useMemo, useState } from 'react';
-import { AlertCircle, Check, MapPin, Pencil, X } from 'lucide-react';
+import {
+  AlertCircle,
+  Check,
+  FileText,
+  Mail,
+  MapPin,
+  Pencil,
+  Phone,
+  Tag,
+  User,
+  X,
+} from 'lucide-react';
 import { Button, Input, useToast } from '@hm/ui';
 import { can } from '@hm/shared';
+import { cn } from '@/shared/lib/cn';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { ApiError } from '@/shared/lib/api-client';
 import { ErrorState, Skeleton } from '@/shared/components/feedback';
@@ -130,13 +142,36 @@ function financialSummary(deals: ContactDeal[], conversions: ContactConversion[]
 
 // ── Linha de campo (read-only) ─────────────────────────────────────────────────
 
-function FieldRow({ label, value }: { label: string; value: string | null | undefined }) {
+function FieldRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string | null | undefined;
+}) {
+  const has = !!value && value.length > 0;
   return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className="shrink-0 font-body text-xs text-text-low">{label}</span>
-      <span className="truncate text-right font-body text-sm font-medium text-text">
-        {value && value.length > 0 ? value : '—'}
+    <div className="flex items-center gap-3">
+      {/* Tile de ícone — identifica o tipo da informação num relance (scan rápido). */}
+      <span
+        className="grid size-8 shrink-0 place-items-center rounded-md bg-surface-3 text-text-mid"
+        aria-hidden
+      >
+        <Icon className="size-4" />
       </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-body text-[0.65rem] uppercase tracking-wide text-text-low">{label}</p>
+        <p
+          className={cn(
+            'truncate font-body text-sm font-medium',
+            has ? 'text-text' : 'text-text-low',
+          )}
+        >
+          {has ? value : '—'}
+        </p>
+      </div>
     </div>
   );
 }
@@ -147,9 +182,9 @@ function CustomFields({ fields }: { fields: Record<string, unknown> }) {
   const entries = Object.entries(fields).filter(([, v]) => v != null && v !== '');
   if (entries.length === 0) return null;
   return (
-    <div className="flex flex-col gap-1.5 border-t border-border-2 pt-3">
+    <div className="flex flex-col gap-2.5 border-t border-border-2 pt-3">
       {entries.map(([key, raw]) => (
-        <FieldRow key={key} label={key} value={String(raw)} />
+        <FieldRow key={key} icon={Tag} label={key} value={String(raw)} />
       ))}
     </div>
   );
@@ -351,11 +386,11 @@ export function ContactPanel({ contactId, editable = false }: ContactPanelProps)
       )}
 
       {/* Dados gerais */}
-      <div className="flex flex-col gap-1.5">
-        <FieldRow label="Nome" value={contact.displayName} />
-        <FieldRow label="Telefone" value={contact.phone} />
-        <FieldRow label="E-mail" value={contact.email} />
-        <FieldRow label="Documento" value={contact.document} />
+      <div className="flex flex-col gap-2.5">
+        <FieldRow icon={User} label="Nome" value={contact.displayName} />
+        <FieldRow icon={Phone} label="Telefone" value={contact.phone} />
+        <FieldRow icon={Mail} label="E-mail" value={contact.email} />
+        <FieldRow icon={FileText} label="Documento" value={contact.document} />
       </div>
 
       {/* Endereço */}
