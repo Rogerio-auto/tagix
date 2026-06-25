@@ -30,6 +30,7 @@ const MATERIALIZED_VIEWS = [
   'mv_dashboard_volume_24h',
   'mv_dashboard_llm_cost_month',
   'mv_dashboard_conversions_month',
+  'mv_dashboard_daily_30d',
 ] as const;
 
 export async function runMvRefreshTick(deps: MvRefreshDeps): Promise<MvRefreshResult> {

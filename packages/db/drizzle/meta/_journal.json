@@ -379,6 +379,13 @@
       "when": 1781452814000,
       "tag": "0053_f47_deals_conversation_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1781452815000,
+      "tag": "0054_f48_mv_dashboard_daily_30d",
+      "breakpoints": true
     }
   ]
 }
