@@ -96,11 +96,11 @@ export function BottomNav() {
                   onClick={() => setMoreOpen(false)}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'touch-target flex items-center gap-3 rounded-sm border-l-2 px-3 py-3 font-head text-sm font-medium outline-none transition-colors duration-150',
+                    'relative touch-target flex items-center gap-3 rounded-sm px-3 py-3 font-head text-sm font-medium outline-none transition-colors duration-150',
                     'focus-visible:shadow-glow-md',
                     active
-                      ? 'border-brand bg-surface-3 text-text'
-                      : 'border-transparent text-text-mid hover:bg-surface-2 hover:text-text',
+                      ? 'hm-flow-neon bg-surface-3 text-text'
+                      : 'text-text-mid hover:bg-surface-2 hover:text-text',
                   )}
                 >
                   <Icon className="size-5 shrink-0" aria-hidden />

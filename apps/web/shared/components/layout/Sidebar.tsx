@@ -73,11 +73,13 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
         href={item.href}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'flex items-center gap-3 rounded-sm border-l-2 px-3 py-2 font-head text-sm font-medium outline-none transition-colors duration-200',
+          'relative flex items-center gap-3 rounded-sm px-3 py-2 font-head text-sm font-medium outline-none transition-colors duration-200',
           'focus-visible:shadow-glow-md',
           active
-            ? 'border-brand bg-surface-3 text-text'
-            : 'border-transparent text-text-mid hover:bg-surface-2 hover:text-text',
+            ? // Opção selecionada: linha neon viva (variante discreta — nav é
+              // chrome persistente, não deve competir com o conteúdo).
+              'hm-flow-neon bg-surface-3 text-text'
+            : 'text-text-mid hover:bg-surface-2 hover:text-text',
         )}
       >
         <Icon className="size-5 shrink-0" aria-hidden />
