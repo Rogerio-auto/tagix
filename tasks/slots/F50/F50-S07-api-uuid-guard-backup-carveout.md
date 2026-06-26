@@ -2,7 +2,7 @@
 id: F50-S07
 title: Fix — uuidParamGuard 404 nas rotas /api/flows/backup/* (carve-out)
 phase: F50
-status: in-progress
+status: review
 priority: high
 estimated_size: XS
 depends_on: [F50-S04]
@@ -11,6 +11,7 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/FLOW_BUILDER.md
 claimed_at: 2026-06-26T21:01:03Z
+completed_at: 2026-06-26T21:02:37Z
 
 ---
 # F50-S07 — Carve-out de `backup` no uuidParamGuard
