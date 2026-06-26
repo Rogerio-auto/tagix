@@ -41,7 +41,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F48   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F49   | 2     | 0   | 0   | 0   | 0   | 0   | 2   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F50   | 5     | 1   | 3   | 0   | 1   | 0   | 0   |
+| F50   | 5     | 1   | 3   | 0   | 0   | 1   | 0   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -512,13 +512,13 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 50
 
-| ID      | Titulo                                                            | Status        | Prioridade | Depende de       |
-| ------- | ----------------------------------------------------------------- | ------------- | ---------- | ---------------- |
-| F50-S01 | Contrato do backup + módulo puro de referências (@hm/flow-engine) | 🔵 in-progress | high       | —                |
-| F50-S02 | Permissão flow.backup (@hm/shared)                                | 🟢 available   | high       | —                |
-| F50-S03 | Serviço de backup + checksum + resolver de referências (API)      | ⏸️ blocked    | high       | F50-S01          |
-| F50-S04 | Rotas de backup de Flows (export/preview/import)                  | ⏸️ blocked    | high       | F50-S02, F50-S03 |
-| F50-S05 | UI — item na sidebar + página de Backup de Flows (export/import)  | ⏸️ blocked    | high       | F50-S02, F50-S04 |
+| ID      | Titulo                                                            | Status      | Prioridade | Depende de       |
+| ------- | ----------------------------------------------------------------- | ----------- | ---------- | ---------------- |
+| F50-S01 | Contrato do backup + módulo puro de referências (@hm/flow-engine) | 🟣 review    | high       | —                |
+| F50-S02 | Permissão flow.backup (@hm/shared)                                | 🟢 available | high       | —                |
+| F50-S03 | Serviço de backup + checksum + resolver de referências (API)      | ⏸️ blocked  | high       | F50-S01          |
+| F50-S04 | Rotas de backup de Flows (export/preview/import)                  | ⏸️ blocked  | high       | F50-S02, F50-S03 |
+| F50-S05 | UI — item na sidebar + página de Backup de Flows (export/import)  | ⏸️ blocked  | high       | F50-S02, F50-S04 |
 
 ## Fase 6 — Pipeline
 

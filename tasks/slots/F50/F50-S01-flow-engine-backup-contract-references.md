@@ -2,7 +2,7 @@
 id: F50-S01
 title: Contrato do backup + módulo puro de referências (@hm/flow-engine)
 phase: F50
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: []
@@ -11,6 +11,7 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/FLOW_BUILDER.md
 claimed_at: 2026-06-26T19:37:20Z
+completed_at: 2026-06-26T19:43:37Z
 
 ---
 # F50-S01 — Contrato do backup + módulo puro de referências
