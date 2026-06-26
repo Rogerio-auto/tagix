@@ -2,7 +2,7 @@
 id: F50-S03
 title: Serviço de backup + checksum + resolver de referências (API)
 phase: F50
-status: blocked
+status: in-progress
 priority: high
 estimated_size: L
 depends_on: [F50-S01]
@@ -10,8 +10,9 @@ blocks: [F50-S04]
 agent_id: backend-engineer
 source_docs:
   - docs/features/FLOW_BUILDER.md
----
+claimed_at: 2026-06-26T19:45:48Z
 
+---
 # F50-S03 — Serviço de backup (export/preview/import) + checksum
 
 ## Objetivo
