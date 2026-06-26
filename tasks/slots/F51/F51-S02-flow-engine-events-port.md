@@ -2,7 +2,7 @@
 id: F51-S02
 title: FlowEventsPort + emissão de estado no dispatcher (@hm/flow-engine)
 phase: F51
-status: available
+status: review
 priority: high
 estimated_size: M
 depends_on: []
@@ -10,8 +10,10 @@ blocks: [F51-S03]
 agent_id: backend-engineer
 source_docs:
   - docs/features/FLOW_BUILDER.md
----
+claimed_at: 2026-06-26T21:31:30Z
+completed_at: 2026-06-26T21:35:56Z
 
+---
 # F51-S02 — FlowEventsPort + emissão no dispatcher
 
 ## Objetivo

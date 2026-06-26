@@ -10,6 +10,7 @@ import type {
   ExecutionPatch,
   FlowDbPort,
   FlowEngineDeps,
+  FlowExecutionEvent,
   FlowLogEntry,
   LoadedExecution,
 } from './deps';
@@ -42,6 +43,7 @@ function makeDeps(exec: LoadedExecution, opts: { result?: FlowHandlerResult } = 
   const patches: { id: string; patch: ExecutionPatch }[] = [];
   const logs: FlowLogEntry[] = [];
   const enqueued: { workspaceId: string; executionId: string }[] = [];
+  const events: FlowExecutionEvent[] = [];
   let current = exec;
 
   const db: FlowDbPort = {
@@ -69,6 +71,7 @@ function makeDeps(exec: LoadedExecution, opts: { result?: FlowHandlerResult } = 
     },
     http: { request: vi.fn(async () => ({ status: 200, ok: true, body: null, headers: {} })) },
     logger: { log: vi.fn() },
+    events: { executionChanged: vi.fn((e: FlowExecutionEvent) => void events.push(e)) },
     now: () => new Date('2026-06-10T00:00:00.000Z'),
   };
 
@@ -79,7 +82,7 @@ function makeDeps(exec: LoadedExecution, opts: { result?: FlowHandlerResult } = 
   };
   deps.resolveHandler = () => handler;
 
-  return { deps, patches, logs, enqueued, handler };
+  return { deps, patches, logs, enqueued, events, handler };
 }
 
 describe('processFlowStep (algoritmo secao 3.2)', () => {
@@ -194,6 +197,61 @@ describe('cancelFlowExecution', () => {
     const { deps, patches } = makeDeps(makeExec({ status: 'completed' }));
     await cancelFlowExecution(deps, WS, EX);
     expect(patches).toHaveLength(0);
+  });
+});
+
+describe('eventos de execução (F51-S02)', () => {
+  it('triggerFlow emite running uma vez', async () => {
+    const { deps, events } = makeDeps(makeExec());
+    await triggerFlow(deps, { workspaceId: WS, flowId: 'f1', conversationId: 'c1', triggeredBy: 'manual' });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ status: 'running', flowId: 'f1', conversationId: 'c1', nextStepAt: null });
+  });
+
+  it('WAITING emite waiting com nextStepAt', async () => {
+    const next = '2026-06-10T00:05:00.000Z';
+    const { deps, events } = makeDeps(makeExec(), { result: { status: 'WAITING', nextStepAt: next } });
+    await processFlowStepScoped(deps, WS, EX);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ status: 'waiting' });
+    expect(events[0]?.nextStepAt).toEqual(new Date(next));
+  });
+
+  it('advance running→running NÃO emite (anti-ruído)', async () => {
+    // n_trigger → n_msg: avança para o próximo node, segue running. Nenhum evento.
+    const { deps, events } = makeDeps(makeExec());
+    await processFlowStepScoped(deps, WS, EX);
+    expect(events).toHaveLength(0);
+  });
+
+  it('completa (sem próxima edge) emite completed', async () => {
+    const { deps, events } = makeDeps(makeExec({ currentNodeId: 'n_msg' }));
+    await processFlowStepScoped(deps, WS, EX);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ status: 'completed', nextStepAt: null });
+  });
+
+  it('ERROR sem fallback emite failed', async () => {
+    const { deps, events } = makeDeps(makeExec(), { result: { status: 'ERROR', error: 'boom' } });
+    await processFlowStepScoped(deps, WS, EX);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ status: 'failed' });
+  });
+
+  it('cancel de execução viva emite cancelled; terminal não emite', async () => {
+    const live = makeDeps(makeExec());
+    await cancelFlowExecution(live.deps, WS, EX, 'user');
+    expect(live.events).toEqual([expect.objectContaining({ status: 'cancelled' })]);
+
+    const terminal = makeDeps(makeExec({ status: 'completed' }));
+    await cancelFlowExecution(terminal.deps, WS, EX);
+    expect(terminal.events).toHaveLength(0);
+  });
+
+  it('engine sem events port não lança', async () => {
+    const { deps } = makeDeps(makeExec());
+    const noEvents: FlowEngineDeps = { ...deps, events: undefined };
+    await expect(processFlowStepScoped(noEvents, WS, EX)).resolves.toBeUndefined();
   });
 });
 

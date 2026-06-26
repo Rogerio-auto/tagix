@@ -105,6 +105,26 @@ export interface FlowLoggerPort {
   log(level: FlowLogLevel, message: string, fields?: Record<string, unknown>): void;
 }
 
+/** Mudança de estado de uma execução (F51 — monitoramento em tempo real no cockpit). */
+export interface FlowExecutionEvent {
+  readonly workspaceId: string;
+  readonly executionId: string;
+  readonly flowId: string;
+  readonly conversationId: string | null;
+  readonly status: LoadedExecution['status'];
+  /** Deadline do próximo passo quando `waiting`; null em running/terminal. */
+  readonly nextStepAt: Date | null;
+}
+
+/**
+ * Port de eventos de execução. A impl real (worker) publica no socket relay; o defaultEngine
+ * não tem port (no-op). Best-effort por contrato: a impl NUNCA deve lançar — uma falha de
+ * notificação não pode abortar um step de flow.
+ */
+export interface FlowEventsPort {
+  executionChanged(event: FlowExecutionEvent): Promise<void> | void;
+}
+
 /** Conjunto completo de dependencias da engine. */
 export interface FlowEngineDeps {
   readonly db: FlowDbPort;
@@ -112,6 +132,8 @@ export interface FlowEngineDeps {
   readonly outbound: FlowOutboundPort;
   readonly http: FlowHttpPort;
   readonly logger: FlowLoggerPort;
+  /** Notificação de mudança de estado (opcional). Wireada pelo worker; no-op no defaultEngine. */
+  readonly events?: FlowEventsPort;
   /** relogio injetavel (testabilidade do WAITING/next_step_at). */
   now(): Date;
   /** override do resolvedor de handler (DI para testes); default = registry.getHandler. */

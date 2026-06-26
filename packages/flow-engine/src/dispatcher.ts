@@ -5,7 +5,7 @@
  * Puro em relacao a infra: recebe FlowEngineDeps (ports). O index.ts wireia a impl real;
  * os testes injetam fakes.
  */
-import type { ExecutionPatch, FlowEngineDeps, LoadedExecution } from './deps';
+import type { ExecutionPatch, FlowEngineDeps, FlowExecutionEvent, LoadedExecution } from './deps';
 import { getHandler } from './registry';
 import type {
   FlowEdge,
@@ -27,6 +27,35 @@ export interface TriggerFlowInput {
   triggeredByMemberId?: string;
 }
 
+/**
+ * Notifica mudança de estado (F51). Best-effort: NUNCA propaga erro — uma falha de socket
+ * jamais pode abortar um step de flow. Só emite em transições relevantes (criação/waiting/
+ * terminal/resume), nunca em running→running (anti-ruído).
+ */
+async function emitEvent(deps: FlowEngineDeps, event: FlowExecutionEvent): Promise<void> {
+  try {
+    await deps.events?.executionChanged(event);
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Monta o evento a partir de uma execução carregada. */
+function execEvent(
+  exec: LoadedExecution,
+  status: LoadedExecution['status'],
+  nextStepAt: Date | null,
+): FlowExecutionEvent {
+  return {
+    workspaceId: exec.workspaceId,
+    executionId: exec.executionId,
+    flowId: exec.flowId,
+    conversationId: exec.conversationId,
+    status,
+    nextStepAt,
+  };
+}
+
 export async function triggerFlow(
   deps: FlowEngineDeps,
   input: TriggerFlowInput,
@@ -40,6 +69,14 @@ export async function triggerFlow(
     triggeredBy: input.triggeredBy,
     triggeredByMemberId: input.triggeredByMemberId,
     variables,
+  });
+  await emitEvent(deps, {
+    workspaceId: input.workspaceId,
+    executionId,
+    flowId: input.flowId,
+    conversationId: input.conversationId ?? null,
+    status: 'running',
+    nextStepAt: null,
   });
   await deps.queue.enqueueStep({ workspaceId: input.workspaceId, executionId });
   return { executionId };
@@ -148,6 +185,7 @@ async function runStep(deps: FlowEngineDeps, exec: LoadedExecution): Promise<voi
       status: 'completed',
       completedAt: deps.now(),
     });
+    await emitEvent(deps, execEvent(exec, 'completed', null));
     return;
   }
 
@@ -200,12 +238,14 @@ async function runStep(deps: FlowEngineDeps, exec: LoadedExecution): Promise<voi
       : rawMergedVars;
 
   if (result.status === 'WAITING') {
+    const nextStepAt = new Date(result.nextStepAt);
     await deps.db.patchExecution(exec.workspaceId, exec.executionId, {
       status: 'waiting',
       currentNodeId: node.id,
       variables: mergedVars,
-      nextStepAt: new Date(result.nextStepAt),
+      nextStepAt,
     });
+    await emitEvent(deps, execEvent(exec, 'waiting', nextStepAt));
     return;
   }
 
@@ -257,8 +297,10 @@ async function advance(
       variables,
       completedAt: deps.now(),
     });
+    await emitEvent(deps, execEvent(exec, 'completed', null));
     return;
   }
+  // running→running (avança para o próximo node): NÃO emite (anti-ruído).
   await deps.db.patchExecution(exec.workspaceId, exec.executionId, {
     status: 'running',
     currentNodeId: target,
@@ -288,6 +330,7 @@ async function persistFailure(
     ...(variables ? { variables } : {}),
     completedAt: deps.now(),
   });
+  await emitEvent(deps, execEvent(exec, 'failed', null));
 }
 
 export async function resumeFlowWithResponse(
@@ -309,6 +352,7 @@ export async function resumeFlowWithResponse(
       status: 'running',
       variables,
     });
+    await emitEvent(deps, execEvent(exec, 'running', null));
     await deps.queue.enqueueStep({ workspaceId: exec.workspaceId, executionId: exec.executionId });
   }
 }
@@ -328,6 +372,7 @@ export async function cancelFlowExecution(
     lastError: reason ?? null,
     completedAt: deps.now(),
   });
+  await emitEvent(deps, execEvent(exec, 'cancelled', null));
 }
 
 export async function cancelAllForConversation(
@@ -341,6 +386,7 @@ export async function cancelAllForConversation(
       status: 'cancelled',
       completedAt: deps.now(),
     });
+    await emitEvent(deps, execEvent(exec, 'cancelled', null));
     count += 1;
   }
   return count;

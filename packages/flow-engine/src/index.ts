@@ -29,6 +29,8 @@ export function createFlowEngine(overrides: Partial<FlowEngineDeps> = {}): FlowE
     outbound: overrides.outbound ?? flowOutboundPort,
     http: overrides.http ?? flowHttpPort,
     logger: overrides.logger ?? loggerPort,
+    // Port de eventos opcional: wireado pelo worker (socket relay); undefined = no-op.
+    events: overrides.events,
     now: overrides.now ?? (() => new Date()),
   };
   return {
