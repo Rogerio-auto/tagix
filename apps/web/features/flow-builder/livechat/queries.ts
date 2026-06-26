@@ -14,9 +14,15 @@ export interface ManualFlow {
 export interface ConversationExecution {
   id: string;
   flowId: string;
+  /** Nome do flow (F51 — enriquecido no GET por leftJoin; null se flow deletado). */
+  flowName: string | null;
   status: 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
   currentNodeId: string | null;
   startedAt: string;
+  /** Deadline do próximo passo quando `waiting` (ISO); null em running/terminal. */
+  nextStepAt: string | null;
+  completedAt: string | null;
+  lastError: string | null;
 }
 
 export interface ExecutionLog {
@@ -54,6 +60,27 @@ export function useConversationExecutions(conversationId: string) {
         }>(`/api/flows/executions?conversationId=${conversationId}`)
         .catch(() => ({ executions: [] as ConversationExecution[] }));
       return executions.filter((e) => ACTIVE.has(e.status));
+    },
+    enabled: conversationId.length > 0,
+    refetchInterval: 8000,
+  });
+}
+
+/**
+ * TODAS as execuções de uma conversa (cockpit F51 — ativas + recém-finalizadas). Mesma queryKey
+ * do badge (uma invalidação atualiza ambos); o recorte ativos/terminais é feito no componente.
+ * Socket é o caminho primário (`useFlowExecutionsLive`); `refetchInterval` é rede de segurança.
+ */
+export function useCockpitExecutions(conversationId: string) {
+  return useQuery({
+    queryKey: ['flow-executions', 'conversation', conversationId],
+    queryFn: async () => {
+      const { executions } = await api
+        .get<{
+          executions: ConversationExecution[];
+        }>(`/api/flows/executions?conversationId=${conversationId}`)
+        .catch(() => ({ executions: [] as ConversationExecution[] }));
+      return executions;
     },
     enabled: conversationId.length > 0,
     refetchInterval: 8000,
