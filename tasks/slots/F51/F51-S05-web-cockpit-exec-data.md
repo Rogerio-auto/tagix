@@ -2,7 +2,7 @@
 id: F51-S05
 title: Web dados — query enriquecida + hooks (live + countdown)
 phase: F51
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F51-S01, F51-S04]
@@ -11,6 +11,7 @@ agent_id: frontend-engineer
 source_docs:
   - docs/features/FLOW_BUILDER.md
 claimed_at: 2026-06-26T21:41:12Z
+completed_at: 2026-06-26T21:43:21Z
 
 ---
 # F51-S05 — Camada de dados do cockpit (execuções)
