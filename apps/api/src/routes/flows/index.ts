@@ -9,9 +9,12 @@
 import { Router } from 'express';
 import { createFlowsCrudRouter } from './crud';
 import { createFlowExecutionsRouter } from './executions';
+import { createFlowBackupRouter } from './backup';
 
 export function createFlowsRouter(): Router {
   const router = Router();
+  // Backup ANTES do CRUD: as rotas literais `/api/flows/backup/*` têm precedência sobre `/:id`.
+  router.use(createFlowBackupRouter());
   router.use(createFlowExecutionsRouter());
   router.use(createFlowsCrudRouter());
   return router;
@@ -19,3 +22,4 @@ export function createFlowsRouter(): Router {
 
 export { createFlowsCrudRouter } from './crud';
 export { createFlowExecutionsRouter } from './executions';
+export { createFlowBackupRouter } from './backup';

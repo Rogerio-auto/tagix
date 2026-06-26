@@ -105,6 +105,10 @@ export function createApp(): Express {
   // (exige os bytes exatos recebidos). Ver routes/webhooks/index.ts.
   app.use(createWebhooksRouter());
 
+  // Backup de Flows (F50): import/preview trafegam o bundle JSON (pode passar de 1mb) — parser
+  // dedicado ANTES do json global (que rejeitaria com 413). Caps de contagem no Zod evitam DoS.
+  app.use(['/api/flows/backup/import', '/api/flows/backup/preview'], express.json({ limit: '10mb' }));
+
   app.use(express.json({ limit: '1mb' }));
 
   app.get('/health', healthHandler);
