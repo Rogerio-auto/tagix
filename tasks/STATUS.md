@@ -42,6 +42,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F49   | 2     | 0   | 0   | 0   | 0   | 0   | 2   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F50   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
+| F51   | 6     | 2   | 4   | 0   | 0   | 0   | 0   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -521,6 +522,17 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F50-S05 | UI — item na sidebar + página de Backup de Flows (export/import)   | ✅ done | high       | F50-S02, F50-S04 |
 | F50-S06 | Fix — download do export não dispara (revoke do blob cedo demais)  | ✅ done | high       | F50-S05          |
 | F50-S07 | Fix — uuidParamGuard 404 nas rotas /api/flows/backup/* (carve-out) | ✅ done | high       | F50-S04          |
+
+## Fase 51
+
+| ID      | Titulo                                                               | Status      | Prioridade | Depende de       |
+| ------- | -------------------------------------------------------------------- | ----------- | ---------- | ---------------- |
+| F51-S01 | Evento socket flow_execution:updated (@hm/shared)                    | 🟢 available | high       | —                |
+| F51-S02 | FlowEventsPort + emissão de estado no dispatcher (@hm/flow-engine)   | 🟢 available | high       | —                |
+| F51-S03 | Publisher real do FlowEventsPort → socket relay (apps/workers)       | ⏸️ blocked  | high       | F51-S01, F51-S02 |
+| F51-S04 | Enriquecer GET executions com flowName + emitir no cancel (apps/api) | ⏸️ blocked  | high       | F51-S01          |
+| F51-S05 | Web dados — query enriquecida + hooks (live + countdown)             | ⏸️ blocked  | high       | F51-S01, F51-S04 |
+| F51-S06 | Web UI — seção "Execuções Ativas" + cards no Cockpit                 | ⏸️ blocked  | high       | F51-S05          |
 
 ## Fase 6 — Pipeline
 
