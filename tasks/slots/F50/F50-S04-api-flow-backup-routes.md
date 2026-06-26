@@ -2,7 +2,7 @@
 id: F50-S04
 title: Rotas de backup de Flows (export/preview/import)
 phase: F50
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F50-S02, F50-S03]
