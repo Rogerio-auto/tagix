@@ -97,6 +97,20 @@ export interface FlowExecutionPayload {
   executionId: string;
 }
 
+/**
+ * Mudança de estado de uma execução de flow (F51 — cockpit em tempo real). Emitido pela
+ * engine/worker e pelo cancel da API a cada transição relevante (running/waiting/terminal).
+ * `conversationId` null = execução sem conversa (cai só na room `ws:{id}`); `nextStepAt` é o
+ * deadline do próximo passo quando `waiting` (ISO), senão null.
+ */
+export interface FlowExecutionUpdatedPayload {
+  conversationId: string | null;
+  flowId: string;
+  executionId: string;
+  status: 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+  nextStepAt: string | null;
+}
+
 /** Menção `@member` numa nota interna (F1-S22), entregue ao mencionado. */
 export interface NoteMentionedPayload {
   conversationId: string;
@@ -170,6 +184,7 @@ export interface ServerToClient {
   'agent_execution:completed': (p: AgentExecutionPayload) => void;
   'flow_execution:started': (p: FlowExecutionPayload) => void;
   'flow_execution:cancelled': (p: FlowExecutionPayload) => void;
+  'flow_execution:updated': (p: FlowExecutionUpdatedPayload) => void;
   'deal:created': (p: DealCreatedPayload) => void;
   'deal:updated': (p: DealUpdatedPayload) => void;
   'deal:stage_changed': (p: DealStageChangedPayload) => void;
@@ -201,6 +216,7 @@ export const SERVER_TO_CLIENT_EVENTS = [
   'agent_execution:completed',
   'flow_execution:started',
   'flow_execution:cancelled',
+  'flow_execution:updated',
   'deal:created',
   'deal:updated',
   'deal:stage_changed',
