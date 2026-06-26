@@ -39,6 +39,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F46   | 1     | 0   | 0   | 0   | 0   | 0   | 1   |
 | F47   | 15     | 0   | 0   | 0   | 0   | 0   | 15   |
 | F48   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
+| F49   | 2     | 1   | 1   | 0   | 0   | 0   | 0   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -479,6 +480,13 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F48-S06 | Widget RecentLeadsCard (lista estilo chatlist, atividade recente)    | ✅ done | medium     | F48-S04                            |
 | F48-S07 | Widget TimeSeriesCard (desempenho 30d, linha com toggle)             | ✅ done | medium     | —                                  |
 | F48-S08 | Integração Command Center — tiers, HeroCard, registry, types         | ✅ done | high       | F48-S03, F48-S05, F48-S06, F48-S07 |
+
+## Fase 49
+
+| ID      | Titulo                                                                 | Status      | Prioridade | Depende de |
+| ------- | ---------------------------------------------------------------------- | ----------- | ---------- | ---------- |
+| F49-S01 | Delay de envio não-bloqueante no nó de mensagem (WAITING + compat)     | 🟢 available | high       | —          |
+| F49-S02 | Inspector do nó de mensagem — campo de delay + teto de 30s na pré-ação | ⏸️ blocked  | high       | F49-S01    |
 
 ## Fase 5 — Calendar
 
