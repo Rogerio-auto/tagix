@@ -2,7 +2,7 @@
 id: F50-S04
 title: Rotas de backup de Flows (export/preview/import)
 phase: F50
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F50-S02, F50-S03]
@@ -10,8 +10,9 @@ blocks: [F50-S05]
 agent_id: backend-engineer
 source_docs:
   - docs/features/FLOW_BUILDER.md
----
+claimed_at: 2026-06-26T19:58:00Z
 
+---
 # F50-S04 — Rotas de backup de Flows
 
 ## Objetivo
