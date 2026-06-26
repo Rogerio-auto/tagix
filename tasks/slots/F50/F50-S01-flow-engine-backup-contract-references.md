@@ -2,7 +2,7 @@
 id: F50-S01
 title: Contrato do backup + módulo puro de referências (@hm/flow-engine)
 phase: F50
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
