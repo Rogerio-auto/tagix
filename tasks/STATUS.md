@@ -39,7 +39,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F46   | 1     | 0   | 0   | 0   | 0   | 0   | 1   |
 | F47   | 15     | 0   | 0   | 0   | 0   | 0   | 15   |
 | F48   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
-| F49   | 2     | 1   | 1   | 0   | 0   | 0   | 0   |
+| F49   | 2     | 0   | 1   | 0   | 1   | 0   | 0   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -483,10 +483,10 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 49
 
-| ID      | Titulo                                                                 | Status      | Prioridade | Depende de |
-| ------- | ---------------------------------------------------------------------- | ----------- | ---------- | ---------- |
-| F49-S01 | Delay de envio não-bloqueante no nó de mensagem (WAITING + compat)     | 🟢 available | high       | —          |
-| F49-S02 | Inspector do nó de mensagem — campo de delay + teto de 30s na pré-ação | ⏸️ blocked  | high       | F49-S01    |
+| ID      | Titulo                                                                 | Status        | Prioridade | Depende de |
+| ------- | ---------------------------------------------------------------------- | ------------- | ---------- | ---------- |
+| F49-S01 | Delay de envio não-bloqueante no nó de mensagem (WAITING + compat)     | 🔵 in-progress | high       | —          |
+| F49-S02 | Inspector do nó de mensagem — campo de delay + teto de 30s na pré-ação | ⏸️ blocked    | high       | F49-S01    |
 
 ## Fase 5 — Calendar
 
