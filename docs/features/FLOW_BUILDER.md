@@ -163,6 +163,17 @@ export const messageHandler: FlowHandler<z.infer<typeof messageSchema>> = {
 };
 ```
 
+> **Dois atrasos distintos no node `message` (F49):**
+> - `delayMs` — espera **não-bloqueante** ANTES de enviar (espaça mensagens do flow). Implementada como
+>   o node `wait`: o handler retorna `WAITING` com `nextStepAt`; o scheduler re-enfileira ao vencer. Sem
+>   teto e sem segurar o flow-worker. É o mecanismo correto para pausas longas entre mensagens.
+> - `preAction` + `preActionDurationMs` — indicador **cosmético** ("digitando"/"gravando") mostrado logo
+>   antes do envio, via `ctx.sleep` curto, **clampado em `MESSAGE_PRE_ACTION_MAX_MS` (30s)** (o indicador
+>   do WhatsApp expira ~25s; sleeps longos bloqueariam o prefetch do worker).
+>
+> Compat: flows legados com `preActionDurationMs > 30s` tinham o excedente truncado em silêncio; agora o
+> excedente vira `delayMs` em runtime (sem migração de dados), honrando a espera total pretendida.
+
 ---
 
 ## 4. Os 22 node types (v2 — F31)

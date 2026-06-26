@@ -90,6 +90,7 @@ export {
   type EnvelopePublisher,
 } from './ports/queue.port';
 export { createOutboundPort, type OutboundPublisher } from './ports/outbound.port';
+export { MESSAGE_PRE_ACTION_MAX_MS, MESSAGE_DELAY_MAX_MS } from './handlers/message.handler';
 export type { TriggerFlowInput } from './dispatcher';
 
 export const FLOW_ENGINE_PKG = '@hm/flow-engine' as const;
