@@ -2,7 +2,7 @@
 id: F51-S01
 title: Evento socket flow_execution:updated (@hm/shared)
 phase: F51
-status: in-progress
+status: review
 priority: high
 estimated_size: XS
 depends_on: []
@@ -11,6 +11,7 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/FLOW_BUILDER.md
 claimed_at: 2026-06-26T21:29:46Z
+completed_at: 2026-06-26T21:31:23Z
 
 ---
 # F51-S01 — Evento `flow_execution:updated`
