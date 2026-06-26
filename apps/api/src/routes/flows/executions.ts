@@ -5,13 +5,52 @@
  *   GET    /api/flow-executions/:id          detalhe + logs                   (flow.view_logs)
  *   POST   /api/flow-executions/:id/cancel   cancela execucao                 (flow.cancel)
  */
+import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { asc, desc, eq } from 'drizzle-orm';
 import { schema } from '@hm/db';
 import { cancelFlowExecution } from '@hm/flow-engine';
+import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
+import type { FlowExecutionUpdatedPayload } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
-const { flowExecutions, flowLogs } = schema;
+const { flowExecutions, flowLogs, flows } = schema;
+
+/** Fila de relay do socket (mesma constante de `apps/api/src/socket/relay.ts`). */
+const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
+
+// ── Publisher MQ (canal AMQP lazy, compartilhado por processo) ────────────────
+let handlePromise: Promise<MqHandle> | null = null;
+async function getMqHandle(): Promise<MqHandle> {
+  handlePromise ??= connectMq();
+  try {
+    return await handlePromise;
+  } catch (err) {
+    handlePromise = null;
+    throw err;
+  }
+}
+
+/** Publica `flow_execution:updated` nas rooms da conversa + workspace. Best-effort. */
+async function emitFlowExecutionUpdated(
+  workspaceId: string,
+  data: FlowExecutionUpdatedPayload,
+): Promise<void> {
+  try {
+    const { channel } = await getMqHandle();
+    const envelope = makeEnvelope('socket.relay', workspaceId, {
+      event: 'flow_execution:updated',
+      target: { conversationId: data.conversationId ?? undefined, workspace: true },
+      data,
+    });
+    channel.sendToQueue(SOCKET_RELAY_QUEUE, Buffer.from(JSON.stringify(envelope)), {
+      persistent: true,
+      contentType: 'application/json',
+    });
+  } catch {
+    // best-effort: o cancel já persistiu; um relay perdido é coberto pelo polling do front.
+  }
+}
 
 /** Narrowing de req.params (string | undefined no @types/express 5). */
 function param(req: Request, key: string): string {
@@ -37,10 +76,22 @@ export function createFlowExecutionsRouter(): Router {
       res.json({ executions: [] });
       return;
     }
+    // leftJoin em flows p/ o nome (cockpit F51). leftJoin: flow deletado → flowName null.
     const rows = await req.scoped!((tx) =>
       tx
-        .select()
+        .select({
+          id: flowExecutions.id,
+          flowId: flowExecutions.flowId,
+          flowName: flows.name,
+          status: flowExecutions.status,
+          currentNodeId: flowExecutions.currentNodeId,
+          startedAt: flowExecutions.startedAt,
+          nextStepAt: flowExecutions.nextStepAt,
+          completedAt: flowExecutions.completedAt,
+          lastError: flowExecutions.lastError,
+        })
         .from(flowExecutions)
+        .leftJoin(flows, eq(flows.id, flowExecutions.flowId))
         .where(eq(flowExecutions.conversationId, conversationId))
         .orderBy(desc(flowExecutions.startedAt)),
     );
@@ -91,22 +142,36 @@ export function createFlowExecutionsRouter(): Router {
       const id = param(req, 'id');
       const workspaceId = req.auth!.workspace.id;
 
-      // 404 se a execucao nao existe no workspace (RLS).
-      const exists = await req.scoped!(async (tx) => {
+      // 404 se a execucao nao existe no workspace (RLS). Traz conversa/flow p/ o evento.
+      const target = await req.scoped!(async (tx) => {
         const [row] = await tx
-          .select({ id: flowExecutions.id })
+          .select({
+            id: flowExecutions.id,
+            conversationId: flowExecutions.conversationId,
+            flowId: flowExecutions.flowId,
+          })
           .from(flowExecutions)
           .where(eq(flowExecutions.id, id))
           .limit(1);
-        return row !== undefined;
+        return row;
       });
-      if (!exists) {
+      if (!target) {
         res.sendStatus(404);
         return;
       }
 
       const reason = typeof req.body?.reason === 'string' ? (req.body.reason as string) : undefined;
       await cancelFlowExecution(workspaceId, id, reason);
+
+      // F51: notifica o cockpit em tempo real (defaultEngine da API não tem events port).
+      await emitFlowExecutionUpdated(workspaceId, {
+        conversationId: target.conversationId,
+        flowId: target.flowId,
+        executionId: id,
+        status: 'cancelled',
+        nextStepAt: null,
+      });
+
       res.sendStatus(204);
     },
   );
