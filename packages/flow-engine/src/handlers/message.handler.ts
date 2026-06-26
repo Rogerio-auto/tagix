@@ -5,12 +5,27 @@
  * (`audioMessageKind='audio_file'`). Suporta `preAction` (typing/recording) antes
  * do envio. Publica via ctx.sendMessage/ctx.sendPresence — nunca toca infra direto.
  *
- * Retrocompat: `mediaUrl` (key crua dos flows antigos) ainda e aceito como
- * `mediaStorageKey`. Todos os campos novos sao opcionais.
+ * DOIS atrasos, com naturezas distintas:
+ *   - `delayMs` — espera NÃO-BLOQUEANTE antes de enviar (espaça mensagens do flow). Implementada
+ *     como o node `wait`: retorna WAITING com `nextStepAt`; o scheduler re-enfileira ao vencer.
+ *     Não segura o flow-worker e não tem teto de 30s.
+ *   - `preAction` + `preActionDurationMs` — indicador cosmético (digitando/gravando) mostrado
+ *     LOGO ANTES do envio, com `ctx.sleep` curto e clampado em `MESSAGE_PRE_ACTION_MAX_MS` (o
+ *     indicador do WhatsApp expira ~25s; sleeps longos bloqueariam o prefetch do worker).
+ *
+ * Retrocompat: `mediaUrl` (key crua dos flows antigos) ainda e aceito como `mediaStorageKey`.
+ * Flows legados que setaram `preActionDurationMs` acima do teto (ex.: 88s) tinham o excedente
+ * silenciosamente truncado; agora esse excedente vira `delayMs` em runtime (sem migração de dados),
+ * honrando a espera total pretendida. Todos os campos novos sao opcionais.
  */
 import { z } from 'zod';
 import { interpolate } from '../utils/interpolate';
-import type { FlowHandler, FlowOutboundMediaKind } from '../types';
+import type { FlowHandler, FlowHandlerResult, FlowOutboundMediaKind } from '../types';
+
+/** Teto da pré-ação (digitando/gravando). O indicador do WhatsApp expira ~25s. */
+export const MESSAGE_PRE_ACTION_MAX_MS = 30_000;
+/** Teto sano do delay de envio não-bloqueante (24h). Esperas maiores → use o node `wait`. */
+export const MESSAGE_DELAY_MAX_MS = 24 * 60 * 60 * 1000;
 
 const messageSchema = z.object({
   /** Tipo selecionado no inspector. Ausente => derivado (texto/midia por MIME). */
@@ -28,12 +43,23 @@ const messageSchema = z.object({
   mediaKind: z.enum(['image', 'video', 'audio', 'voice', 'document', 'sticker']).optional(),
   preAction: z.enum(['typing', 'recording']).optional(),
   preActionDurationMs: z.number().min(0).max(600_000).optional(),
+  /** Espera NÃO-BLOQUEANTE (ms) antes de enviar — WAITING + scheduler, sem segurar o worker. */
+  delayMs: z.number().min(0).max(MESSAGE_DELAY_MAX_MS).optional(),
   /** Audio: nota de voz (`voice`) vs arquivo de audio encaminhado (`audio_file`). */
   audioMessageKind: z.enum(['voice', 'audio_file']).optional(),
 });
 
-/** Teto da espera da pré-ação (digitando/gravando). Acima disto use o node `wait`. */
-const PRE_ACTION_MAX_MS = 30_000;
+/** Delay efetivo (ms): `delayMs` explícito; senão o excedente legado de `preActionDurationMs`. */
+function resolveDelayMs(data: z.infer<typeof messageSchema>): number {
+  if (typeof data.delayMs === 'number' && data.delayMs > 0) {
+    return Math.min(data.delayMs, MESSAGE_DELAY_MAX_MS);
+  }
+  const dur = data.preActionDurationMs ?? 0;
+  if (dur > MESSAGE_PRE_ACTION_MAX_MS) {
+    return Math.min(dur - MESSAGE_PRE_ACTION_MAX_MS, MESSAGE_DELAY_MAX_MS);
+  }
+  return 0;
+}
 
 /** Deriva o `mediaKind` explicito quando possivel (explicito > audio > undefined). */
 function resolveMediaKind(
@@ -53,13 +79,36 @@ export const messageHandler: FlowHandler<z.infer<typeof messageSchema>> = {
       return { status: 'ERROR', error: 'message handler exige conversationId' };
     }
 
+    // ── Fase 1: delay de envio NÃO-BLOQUEANTE (WAITING + scheduler) ──
+    // Espelha o node `wait`: marcador por-node guarda o deadline. 1ª entrada agenda WAITING;
+    // re-entrega (timer vencido) limpa o marcador e segue para o envio. Idempotente: re-entrega
+    // ANTES do vencimento re-agenda no MESMO deadline (não duplica o envio).
+    const delayMarker = `_msg_delay_until_${node.id}`;
+    const pendingUntil = ctx.variables[delayMarker];
+    const cleanupMarker = typeof pendingUntil === 'number';
+    if (typeof pendingUntil === 'number') {
+      if (ctx.now().getTime() < pendingUntil) {
+        return { status: 'WAITING', nextStepAt: new Date(pendingUntil).toISOString() };
+      }
+      // vencido: segue para o envio; o marcador é limpo no SUCCESS final.
+    } else {
+      const delayMs = resolveDelayMs(data);
+      if (delayMs > 0) {
+        const until = ctx.now().getTime() + delayMs;
+        return {
+          status: 'WAITING',
+          nextStepAt: new Date(until).toISOString(),
+          variables: { [delayMarker]: until },
+        };
+      }
+    }
+
+    // ── Fase 2: pré-ação (indicador, ≤30s) + envio ──
     // Pré-ação (digitando/gravando): mostra o indicador E espera de fato a duração antes
-    // de enviar — assim a mensagem parece estar sendo digitada/gravada na hora, e as
-    // mensagens do flow saem espaçadas (uma após a outra) em vez de todas de uma vez.
-    // Teto de 30s: o indicador do WhatsApp expira ~25s e evita segurar o worker demais
-    // (para pausas longas entre mensagens, use o node `wait`).
+    // de enviar — assim a mensagem parece estar sendo digitada/gravada na hora. Teto de 30s:
+    // o indicador do WhatsApp expira ~25s e evita segurar o worker (pausas longas = `delayMs`).
     if (data.preAction) {
-      const ms = Math.min(Math.max(data.preActionDurationMs ?? 1500, 0), PRE_ACTION_MAX_MS);
+      const ms = Math.min(Math.max(data.preActionDurationMs ?? 1500, 0), MESSAGE_PRE_ACTION_MAX_MS);
       await ctx.sendPresence({
         conversationId: ctx.conversationId,
         presence: data.preAction,
@@ -80,6 +129,11 @@ export const messageHandler: FlowHandler<z.infer<typeof messageSchema>> = {
       audioMessageKind: data.audioMessageKind,
     });
 
-    return { status: 'SUCCESS' };
+    // Limpa o marcador quando havia delay (re-entrada vencida) — evita re-WAITING numa
+    // re-entrega tardia do mesmo step após o envio.
+    const result: FlowHandlerResult = cleanupMarker
+      ? { status: 'SUCCESS', variables: { [delayMarker]: null } }
+      : { status: 'SUCCESS' };
+    return result;
   },
 };

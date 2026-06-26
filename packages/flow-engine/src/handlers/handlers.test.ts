@@ -64,13 +64,60 @@ describe('message handler', () => {
     expect(order).toEqual(['presence', 'sleep', 'message']);
   });
 
-  it('preAction respeita o teto de 30s', async () => {
+  it('delayMs > 0 -> WAITING (não envia) + marcador de deadline', async () => {
     const ctx = makeCtx();
-    await messageHandler.execute(
+    const r = await messageHandler.execute(node({ text: 'oi', delayMs: 120000 }), ctx);
+    expect(r.status).toBe('WAITING');
+    if (r.status === 'WAITING') {
+      expect(r.nextStepAt).toBe('2026-06-10T00:02:00.000Z');
+      expect(r.variables?.['_msg_delay_until_n']).toBe(Date.parse('2026-06-10T00:02:00.000Z'));
+    }
+    expect(ctx.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('delayMs vencido na re-entrada -> envia UMA vez e limpa marcador', async () => {
+    const ctx = makeCtx({ variables: { _msg_delay_until_n: Date.parse('2026-06-09T23:59:00.000Z') } });
+    const r = await messageHandler.execute(node({ text: 'oi', delayMs: 120000 }), ctx);
+    expect(ctx.sendMessage).toHaveBeenCalledOnce();
+    expect(r.status).toBe('SUCCESS');
+    if (r.status === 'SUCCESS') expect(r.variables?.['_msg_delay_until_n']).toBeNull();
+  });
+
+  it('delayMs com deadline futuro na re-entrada -> WAITING no MESMO deadline (não duplica)', async () => {
+    const future = Date.parse('2026-06-10T00:05:00.000Z');
+    const ctx = makeCtx({ variables: { _msg_delay_until_n: future } });
+    const r = await messageHandler.execute(node({ text: 'oi', delayMs: 120000 }), ctx);
+    expect(r.status).toBe('WAITING');
+    if (r.status === 'WAITING') expect(r.nextStepAt).toBe('2026-06-10T00:05:00.000Z');
+    expect(ctx.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('compat: preActionDurationMs > 30s vira delay não-bloqueante (excedente) -> WAITING', async () => {
+    const ctx = makeCtx();
+    const r = await messageHandler.execute(
+      node({ text: 'oi', preAction: 'recording', preActionDurationMs: 600000 }),
+      ctx,
+    );
+    // excedente = 600s - 30s = 570s de espera não-bloqueante; nada é enviado ainda.
+    expect(r.status).toBe('WAITING');
+    if (r.status === 'WAITING') {
+      expect(r.variables?.['_msg_delay_until_n']).toBe(
+        Date.parse('2026-06-10T00:00:00.000Z') + 570000,
+      );
+    }
+    expect(ctx.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('compat: re-entrada (delay vencido) envia com indicador clampado em 30s e limpa marcador', async () => {
+    const ctx = makeCtx({ variables: { _msg_delay_until_n: Date.parse('2026-06-09T23:59:00.000Z') } });
+    const r = await messageHandler.execute(
       node({ text: 'oi', preAction: 'recording', preActionDurationMs: 600000 }),
       ctx,
     );
     expect(ctx.sleep).toHaveBeenCalledWith(30000);
+    expect(ctx.sendMessage).toHaveBeenCalledOnce();
+    expect(r.status).toBe('SUCCESS');
+    if (r.status === 'SUCCESS') expect(r.variables?.['_msg_delay_until_n']).toBeNull();
   });
 });
 
