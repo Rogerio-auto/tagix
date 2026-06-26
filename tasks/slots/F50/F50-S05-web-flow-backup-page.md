@@ -2,7 +2,7 @@
 id: F50-S05
 title: UI — item na sidebar + página de Backup de Flows (export/import)
 phase: F50
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F50-S02, F50-S04]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/FLOW_BUILDER.md
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-06-26T20:00:42Z
+completed_at: 2026-06-26T20:05:45Z
 
 ---
 # F50-S05 — Sidebar + página de Backup de Flows
