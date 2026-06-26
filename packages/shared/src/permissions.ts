@@ -67,6 +67,8 @@ export const ROLE_CAN = {
   'flow.trigger': STAFF,
   'flow.cancel': STAFF,
   'flow.view_logs': ALL,
+  // Backup/restauração (export/import) — pode conter URLs/headers sensíveis e muta dados.
+  'flow.backup': ADMINS,
 
   // §2.5 Campanhas
   'campaign.list': ['OWNER', 'ADMIN', 'SUPERVISOR', 'READONLY'],
