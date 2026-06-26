@@ -2,7 +2,7 @@
 id: F48-S08
 title: Integração Command Center — tiers, HeroCard, registry, types
 phase: F48
-status: blocked
+status: done
 priority: high
 estimated_size: M
 depends_on: [F48-S03, F48-S05, F48-S06, F48-S07]
@@ -17,8 +17,9 @@ ux_considerations:
   - "Aplica 3.6 — SkeletonList/ChartSkeleton seguram a forma durante o load."
   - "Aplica 2.6 — tiers vazios não renderizam (sem seção fantasma); nunca zero enganoso."
   - "Aplica 8 (mobile) — tiers viram 1 coluna full-width; sem overflow; alvos adequados."
----
+completed_at: 2026-06-26T01:30:14Z
 
+---
 # F48-S08 — Reestruturação do DashboardClient em tiers (Command Center)
 
 ## Objetivo
