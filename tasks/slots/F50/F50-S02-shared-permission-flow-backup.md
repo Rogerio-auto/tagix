@@ -2,7 +2,7 @@
 id: F50-S02
 title: Permissão flow.backup (@hm/shared)
 phase: F50
-status: available
+status: in-progress
 priority: high
 estimated_size: XS
 depends_on: []
@@ -10,8 +10,9 @@ blocks: [F50-S04, F50-S05]
 agent_id: backend-engineer
 source_docs:
   - docs/features/PERMISSIONS.md
----
+claimed_at: 2026-06-26T19:43:51Z
 
+---
 # F50-S02 — Permissão `flow.backup`
 
 ## Objetivo
