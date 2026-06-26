@@ -2,7 +2,7 @@
 id: F50-S06
 title: Fix — download do export não dispara (revoke do blob cedo demais)
 phase: F50
-status: review
+status: done
 priority: high
 estimated_size: XS
 depends_on: [F50-S05]
