@@ -2,7 +2,7 @@
 id: F50-S05
 title: UI — item na sidebar + página de Backup de Flows (export/import)
 phase: F50
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F50-S02, F50-S04]
