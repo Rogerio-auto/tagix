@@ -2,7 +2,7 @@
 id: F51-S05
 title: Web dados — query enriquecida + hooks (live + countdown)
 phase: F51
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F51-S01, F51-S04]
