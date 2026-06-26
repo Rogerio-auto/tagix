@@ -29,6 +29,7 @@ import { ConversionSection } from './ConversionSection';
 import { NotesPanel } from './Notes';
 import { RoutingMenu } from './RoutingMenu';
 import { AgentSelector } from './AgentSelector';
+import { ActiveExecutionsSection } from './ActiveExecutionsSection';
 import { SnoozeMenu } from './SnoozeMenu';
 import { useConversationDetail, useChangeStatus, useChangeAiMode } from '../queries';
 
@@ -448,6 +449,10 @@ export function ContactInfoPanel({
             </div>
           )}
         </Section>
+
+        {/* ── Execuções Ativas (F51): monitoramento de flows em tempo real ─ */}
+        {/* A seção se esconde sozinha quando não há execuções ativas/recentes. */}
+        <ActiveExecutionsSection conversationId={conversationId} />
 
         {/* ── 3. Roteamento (Atribuição / Transferência) ─────────────────── */}
         <Card>

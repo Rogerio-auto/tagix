@@ -2,7 +2,7 @@
 id: F51-S06
 title: Web UI — seção "Execuções Ativas" + cards no Cockpit
 phase: F51
-status: blocked
+status: review
 priority: high
 estimated_size: M
 depends_on: [F51-S05]
@@ -11,8 +11,10 @@ agent_id: frontend-engineer
 source_docs:
   - docs/features/FLOW_BUILDER.md
   - docs/UX_PRINCIPLES.md
----
+claimed_at: 2026-06-26T21:43:25Z
+completed_at: 2026-06-26T21:47:44Z
 
+---
 # F51-S06 — Seção Execuções Ativas no Cockpit
 
 ## Objetivo
