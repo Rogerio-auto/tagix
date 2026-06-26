@@ -2,7 +2,7 @@
 id: F49-S02
 title: Inspector do nó de mensagem — campo de delay + teto de 30s na pré-ação
 phase: F49
-status: review
+status: done
 priority: high
 estimated_size: XS
 depends_on: [F49-S01]
