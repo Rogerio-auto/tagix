@@ -41,6 +41,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F48   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F49   | 2     | 0   | 0   | 0   | 0   | 0   | 2   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
+| F50   | 5     | 2   | 3   | 0   | 0   | 0   | 0   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -508,6 +509,16 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F5-S14 | Conversões automações — flow handler register_conversion + tag pg-trigger + fecha F2-S20                  | ✅ done | medium     | F5-S03, F5-S06, F5-S12 |
 | F5-S15 | Seeds de nicho — pipeline templates (imobiliária + clínica) + agent_template variants + onboarding wizard | ✅ done | medium     | F5-S02, F5-S04         |
 | F5-S16 | Fecha stubs da F4 — handlers move_stage/add_tag/remove_tag + triggers stage_change/tag_added              | ✅ done | high       | F5-S01, F5-S02, F5-S05 |
+
+## Fase 50
+
+| ID      | Titulo                                                            | Status      | Prioridade | Depende de       |
+| ------- | ----------------------------------------------------------------- | ----------- | ---------- | ---------------- |
+| F50-S01 | Contrato do backup + módulo puro de referências (@hm/flow-engine) | 🟢 available | high       | —                |
+| F50-S02 | Permissão flow.backup (@hm/shared)                                | 🟢 available | high       | —                |
+| F50-S03 | Serviço de backup + checksum + resolver de referências (API)      | ⏸️ blocked  | high       | F50-S01          |
+| F50-S04 | Rotas de backup de Flows (export/preview/import)                  | ⏸️ blocked  | high       | F50-S02, F50-S03 |
+| F50-S05 | UI — item na sidebar + página de Backup de Flows (export/import)  | ⏸️ blocked  | high       | F50-S02, F50-S04 |
 
 ## Fase 6 — Pipeline
 
