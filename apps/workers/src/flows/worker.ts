@@ -32,6 +32,7 @@ import {
 } from '@hm/flow-engine';
 import type { Logger } from '@hm/logger';
 import { createOutboundPublisher } from './outbound-publisher';
+import { createFlowEventsPublisher } from './execution-events-publisher';
 
 type MqChannel = MqHandle['channel'];
 
@@ -57,7 +58,9 @@ export function createFlowWorkerDeps(channel: MqChannel, logger: Logger): FlowWo
     },
   });
   const outbound = createOutboundPort(createOutboundPublisher({ logger }));
-  const engine = createFlowEngine({ queue, outbound });
+  // F51: notifica o cockpit em tempo real publicando flow_execution:updated no socket relay.
+  const events = createFlowEventsPublisher({ logger });
+  const engine = createFlowEngine({ queue, outbound, events });
   return { engine, logger };
 }
 
