@@ -2,6 +2,7 @@ import {
   BookOpen,
   Bot,
   Calendar,
+  DatabaseBackup,
   GitBranch,
   LayoutDashboard,
   LifeBuoy,
@@ -49,6 +50,7 @@ export const NAV: readonly NavItem[] = [
   { href: '/campaigns', label: 'Campanhas', icon: Megaphone, perm: 'campaign.list' },
   { href: '/calendar', label: 'Agenda', icon: Calendar, perm: 'calendar.view' },
   { href: '/contacts', label: 'Contatos', icon: Users, perm: 'contact.view' },
+  { href: '/flows/backup', label: 'Backup de Flows', icon: DatabaseBackup, group: 'manage', perm: 'flow.backup' },
   { href: '/help', label: 'Ajuda', icon: LifeBuoy, group: 'manage' },
   { href: '/settings', label: 'Configurações', icon: Settings, group: 'manage' },
 ];
