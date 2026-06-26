@@ -17,11 +17,16 @@ function downloadEnvelope(envelope: BackupEnvelope): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
+  a.rel = 'noopener';
   a.download = `leadium-flows-backup-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(a);
   a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  // Limpeza ADIADA: revogar o object URL no mesmo tick do click() cancela o download
+  // em Chrome/Firefox (o browser ainda não leu o blob). Deixar o URL vivo ~1s.
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 1000);
 }
 
 export function BackupPage() {
