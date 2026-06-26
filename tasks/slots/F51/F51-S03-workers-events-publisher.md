@@ -2,7 +2,7 @@
 id: F51-S03
 title: Publisher real do FlowEventsPort → socket relay (apps/workers)
 phase: F51
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F51-S01, F51-S02]
