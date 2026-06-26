@@ -77,11 +77,17 @@ export function NumberField({
   label,
   value,
   hint,
+  min,
+  max,
   onChange,
 }: {
   label: string;
   value: number | undefined;
   hint?: string;
+  /** Limite inferior nativo do input (opcional, retrocompatível). */
+  min?: number;
+  /** Limite superior nativo do input (opcional, retrocompatível). */
+  max?: number;
   onChange: (v: number) => void;
 }) {
   return (
@@ -89,6 +95,8 @@ export function NumberField({
       <input
         type="number"
         value={value ?? ''}
+        min={min}
+        max={max}
         onChange={(e) => onChange(Number(e.target.value))}
         className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
       />

@@ -10,6 +10,14 @@ import { MediaUploadField, type UploadedMedia } from './MediaUploadField';
 import { MessageBubblePreview } from './MessageBubblePreview';
 import { mediaKindForType, type AudioMessageKind, type MessageType } from './types';
 
+/**
+ * Teto da pré-ação em segundos. Espelha `MESSAGE_PRE_ACTION_MAX_MS` (30_000ms) do
+ * `@hm/flow-engine` (message.handler) — o runtime clampa a pré-ação nesse valor; o input
+ * impõe o mesmo limite para a UI não prometer um tempo que o worker ignora. Esperas maiores
+ * são o campo "Aguardar antes de enviar" (delayMs), que é não-bloqueante.
+ */
+const PRE_ACTION_MAX_SECONDS = 30;
+
 const TYPE_OPTIONS: readonly { value: MessageType; label: string; icon: typeof Type }[] = [
   { value: 'text', label: 'Texto', icon: Type },
   { value: 'image', label: 'Imagem', icon: ImageIcon },
@@ -123,6 +131,7 @@ export function MessageInspector({ nodeId }: { nodeId: string }) {
   const audioMessageKind = ((d['audioMessageKind'] as string) ?? 'voice') as AudioMessageKind;
   const preAction = (d['preAction'] as string) ?? '';
   const preActionDurationMs = d['preActionDurationMs'] as number | undefined;
+  const delayMs = d['delayMs'] as number | undefined;
 
   const selectType = (type: MessageType) => {
     setPreviewUrl(undefined);
@@ -254,12 +263,25 @@ export function MessageInspector({ nodeId }: { nodeId: string }) {
         />
       </div>
 
-      {/* Pré-ação (presença) */}
+      {/* Aguardar antes de enviar (delay não-bloqueante) */}
+      <div className="flex flex-col gap-3 border-t border-border-2 pt-4">
+        <NumberField
+          label="Aguardar antes de enviar (segundos)"
+          value={delayMs !== undefined ? delayMs / 1000 : undefined}
+          min={0}
+          hint="Espera antes de enviar esta mensagem — use para espaçar as mensagens do fluxo. Não bloqueia o atendimento e não tem limite prático."
+          onChange={(v) =>
+            set({ delayMs: Number.isFinite(v) && v > 0 ? Math.round(v * 1000) : undefined })
+          }
+        />
+      </div>
+
+      {/* Pré-ação (presença) — indicador cosmético, ≤30s */}
       <div className="flex flex-col gap-3 border-t border-border-2 pt-4">
         <SelectField
           label="Pré-ação"
           value={preAction}
-          hint="Mostra “digitando/gravando” antes de enviar."
+          hint="Mostra “digitando/gravando” logo antes de enviar (indicador visual)."
           options={[
             { value: '', label: 'Nenhuma' },
             { value: 'typing', label: 'Digitando' },
@@ -271,13 +293,17 @@ export function MessageInspector({ nodeId }: { nodeId: string }) {
           <NumberField
             label="Duração (segundos)"
             value={preActionDurationMs !== undefined ? preActionDurationMs / 1000 : undefined}
-            hint="Tempo mostrando “digitando/gravando” ANTES de enviar (a mensagem só sai depois). Padrão 1,5s · máx. 30s."
-            onChange={(v) =>
-              set({
-                preActionDurationMs:
-                  Number.isFinite(v) && v > 0 ? Math.round(v * 1000) : undefined,
-              })
-            }
+            min={0}
+            max={PRE_ACTION_MAX_SECONDS}
+            hint="Tempo mostrando “digitando/gravando” ANTES de enviar. Padrão 1,5s · máx. 30s (acima disso, use “Aguardar antes de enviar”)."
+            onChange={(v) => {
+              if (!Number.isFinite(v) || v <= 0) {
+                set({ preActionDurationMs: undefined });
+                return;
+              }
+              const capped = Math.min(v, PRE_ACTION_MAX_SECONDS);
+              set({ preActionDurationMs: Math.round(capped * 1000) });
+            }}
           />
         )}
       </div>
