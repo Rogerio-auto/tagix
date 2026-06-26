@@ -408,3 +408,58 @@ describe('dashboard Onda B: qualidade / CSAT / objeções (F29-S04)', () => {
     }
   });
 });
+
+describe('dashboard F48 Command Center v2: leaderboard / feed / timeseries (F48-S03)', () => {
+  const NEW_KEYS = ['leaderboard_produtividade', 'leads_recentes', 'desempenho_30d'] as const;
+
+  it('os 3 cards novos são de supervisão+ (SUP_RO) e não vazam pro AGENT (§10)', () => {
+    const agent = new Set(visibleMetricKeys('AGENT'));
+    const sup = new Set(visibleMetricKeys('SUPERVISOR'));
+    const admin = new Set(visibleMetricKeys('ADMIN'));
+    const owner = new Set(visibleMetricKeys('OWNER'));
+    const readonly = new Set(visibleMetricKeys('READONLY'));
+
+    for (const key of NEW_KEYS) {
+      // SUP_RO: SUPERVISOR/ADMIN/OWNER/READONLY veem; AGENT nunca.
+      expect(sup.has(key)).toBe(true);
+      expect(admin.has(key)).toBe(true);
+      expect(owner.has(key)).toBe(true);
+      expect(readonly.has(key)).toBe(true);
+      expect(agent.has(key)).toBe(false);
+    }
+  });
+
+  it('cardType/cadence corretos no catálogo', () => {
+    const byKey = new Map(metricsForRole('OWNER', true).map((m) => [m.key, m]));
+    expect(byKey.get('leaderboard_produtividade')?.cardType).toBe('leaderboard');
+    expect(byKey.get('leads_recentes')?.cardType).toBe('feed');
+    expect(byKey.get('desempenho_30d')?.cardType).toBe('timeseries');
+    expect(byKey.get('leads_recentes')?.cadence).toBe('socket');
+    expect(byKey.get('desempenho_30d')?.cadence).toBe('mv_1d');
+  });
+
+  it('loadDashboard entrega os 3 cards ao SUPERVISOR e nenhum ao AGENT', async () => {
+    const sup = await withWorkspace(ws, (tx) =>
+      loadDashboard(tx, { workspaceId: ws, memberId, role: 'SUPERVISOR' }),
+    );
+    const supKeys = new Set(sup.cards.map((c) => c.key));
+    for (const key of NEW_KEYS) expect(supKeys.has(key)).toBe(true);
+
+    const agent = await withWorkspace(ws, (tx) =>
+      loadDashboard(tx, { workspaceId: ws, memberId, role: 'AGENT' }),
+    );
+    const agentKeys = new Set(agent.cards.map((c) => c.key));
+    for (const key of NEW_KEYS) expect(agentKeys.has(key)).toBe(false);
+
+    // Shapes do S02: leaderboard/feed → { rows }, série → { series }.
+    const leaderboard = sup.cards.find((c) => c.key === 'leaderboard_produtividade');
+    expect(Array.isArray(leaderboard?.value?.['rows'])).toBe(true);
+    const leads = sup.cards.find((c) => c.key === 'leads_recentes');
+    expect(Array.isArray(leads?.value?.['rows'])).toBe(true);
+    const serie = sup.cards.find((c) => c.key === 'desempenho_30d');
+    expect(Array.isArray(serie?.value?.['series'])).toBe(true);
+
+    // Feed de leads aponta o drill-down para /contacts.
+    expect(leads?.drillHref).toBe('/contacts');
+  });
+});

@@ -61,6 +61,9 @@ import {
   qualidadePorAtendente,
   satisfacaoMedia,
   objecoesRankeadas,
+  leaderboardProdutividade,
+  leadsRecentes,
+  serieDesempenho30d,
   type MetricValue,
 } from './queries';
 import { buildAlerts, type DashboardAlert } from './alerts';
@@ -194,6 +197,13 @@ async function resolveValue(
       return satisfacaoMedia(tx);
     case 'objecoes_rankeadas':
       return objecoesRankeadas(tx);
+    // ── §F48 Command Center v2 — leaderboard / feed de leads / série 30d ──
+    case 'leaderboard_produtividade':
+      return leaderboardProdutividade(tx, workspaceId);
+    case 'leads_recentes':
+      return leadsRecentes(tx);
+    case 'desempenho_30d':
+      return serieDesempenho30d(tx, workspaceId);
     default:
       return null;
   }

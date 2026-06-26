@@ -20,7 +20,14 @@ import type { Role } from '@hm/shared';
 
 export type MetricCadence = 'socket' | 'snapshot_5min' | 'mv_1h' | 'mv_1d';
 export type MetricScope = 'personal' | 'team' | 'workspace';
-export type CardType = 'stat' | 'chart' | 'table' | 'list';
+export type CardType =
+  | 'stat'
+  | 'chart'
+  | 'table'
+  | 'list'
+  | 'leaderboard'
+  | 'feed'
+  | 'timeseries';
 export type MetricCategory =
   | 'atendimento'
   | 'pipeline'
@@ -422,6 +429,37 @@ export const METRIC_DEFINITIONS: readonly MetricDefinition[] = [
     cadence: 'snapshot_5min',
     scope: 'workspace',
     cardType: 'table',
+  },
+  // ── §F48 Command Center v2 — leaderboard / feed de leads / série 30d ──────────
+  // Cards ricos de supervisão (SUP_RO). O front renderiza por cardType novo
+  // (leaderboard/feed/timeseries) via registry (S08) — sem if(role) no client.
+  {
+    key: 'leaderboard_produtividade',
+    label: 'Leaderboard de produtividade',
+    category: 'atendimento',
+    roles: SUP_RO,
+    cadence: 'snapshot_5min',
+    scope: 'team',
+    cardType: 'leaderboard',
+  },
+  {
+    key: 'leads_recentes',
+    label: 'Leads recentes',
+    category: 'atendimento',
+    roles: SUP_RO,
+    cadence: 'socket',
+    scope: 'workspace',
+    cardType: 'feed',
+    drillHref: () => '/contacts',
+  },
+  {
+    key: 'desempenho_30d',
+    label: 'Desempenho (30 dias)',
+    category: 'negocio',
+    roles: SUP_RO,
+    cadence: 'mv_1d',
+    scope: 'workspace',
+    cardType: 'timeseries',
   },
 ];
 
