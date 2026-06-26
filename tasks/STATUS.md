@@ -42,7 +42,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F49   | 2     | 0   | 0   | 0   | 0   | 0   | 2   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F50   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F51   | 6     | 0   | 4   | 0   | 0   | 1   | 1   |
+| F51   | 6     | 0   | 4   | 0   | 0   | 0   | 2   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -528,7 +528,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ID      | Titulo                                                               | Status     | Prioridade | Depende de       |
 | ------- | -------------------------------------------------------------------- | ---------- | ---------- | ---------------- |
 | F51-S01 | Evento socket flow_execution:updated (@hm/shared)                    | ✅ done     | high       | —                |
-| F51-S02 | FlowEventsPort + emissão de estado no dispatcher (@hm/flow-engine)   | 🟣 review   | high       | —                |
+| F51-S02 | FlowEventsPort + emissão de estado no dispatcher (@hm/flow-engine)   | ✅ done     | high       | —                |
 | F51-S03 | Publisher real do FlowEventsPort → socket relay (apps/workers)       | ⏸️ blocked | high       | F51-S01, F51-S02 |
 | F51-S04 | Enriquecer GET executions com flowName + emitir no cancel (apps/api) | ⏸️ blocked | high       | F51-S01          |
 | F51-S05 | Web dados — query enriquecida + hooks (live + countdown)             | ⏸️ blocked | high       | F51-S01, F51-S04 |

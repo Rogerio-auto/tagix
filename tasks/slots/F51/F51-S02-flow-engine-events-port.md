@@ -2,7 +2,7 @@
 id: F51-S02
 title: FlowEventsPort + emissão de estado no dispatcher (@hm/flow-engine)
 phase: F51
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
