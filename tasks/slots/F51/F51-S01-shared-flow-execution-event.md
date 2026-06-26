@@ -2,7 +2,7 @@
 id: F51-S01
 title: Evento socket flow_execution:updated (@hm/shared)
 phase: F51
-status: review
+status: done
 priority: high
 estimated_size: XS
 depends_on: []
