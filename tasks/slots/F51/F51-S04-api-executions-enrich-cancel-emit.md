@@ -2,7 +2,7 @@
 id: F51-S04
 title: Enriquecer GET executions com flowName + emitir no cancel (apps/api)
 phase: F51
-status: blocked
+status: review
 priority: high
 estimated_size: S
 depends_on: [F51-S01]
@@ -10,8 +10,10 @@ blocks: [F51-S05]
 agent_id: backend-engineer
 source_docs:
   - docs/features/FLOW_BUILDER.md
----
+claimed_at: 2026-06-26T21:38:24Z
+completed_at: 2026-06-26T21:41:07Z
 
+---
 # F51-S04 — flowName no GET + socket no cancel
 
 ## Objetivo
