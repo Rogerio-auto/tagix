@@ -2,7 +2,7 @@
 id: F51-S04
 title: Enriquecer GET executions com flowName + emitir no cancel (apps/api)
 phase: F51
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F51-S01]
