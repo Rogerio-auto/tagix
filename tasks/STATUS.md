@@ -41,7 +41,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F48   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F49   | 2     | 0   | 0   | 0   | 0   | 0   | 2   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
-| F50   | 6     | 1   | 0   | 0   | 0   | 0   | 5   |
+| F50   | 6     | 0   | 0   | 0   | 1   | 0   | 5   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -512,14 +512,14 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 50
 
-| ID      | Titulo                                                            | Status      | Prioridade | Depende de       |
-| ------- | ----------------------------------------------------------------- | ----------- | ---------- | ---------------- |
-| F50-S01 | Contrato do backup + módulo puro de referências (@hm/flow-engine) | ✅ done      | high       | —                |
-| F50-S02 | Permissão flow.backup (@hm/shared)                                | ✅ done      | high       | —                |
-| F50-S03 | Serviço de backup + checksum + resolver de referências (API)      | ✅ done      | high       | F50-S01          |
-| F50-S04 | Rotas de backup de Flows (export/preview/import)                  | ✅ done      | high       | F50-S02, F50-S03 |
-| F50-S05 | UI — item na sidebar + página de Backup de Flows (export/import)  | ✅ done      | high       | F50-S02, F50-S04 |
-| F50-S06 | Fix — download do export não dispara (revoke do blob cedo demais) | 🟢 available | high       | F50-S05          |
+| ID      | Titulo                                                            | Status        | Prioridade | Depende de       |
+| ------- | ----------------------------------------------------------------- | ------------- | ---------- | ---------------- |
+| F50-S01 | Contrato do backup + módulo puro de referências (@hm/flow-engine) | ✅ done        | high       | —                |
+| F50-S02 | Permissão flow.backup (@hm/shared)                                | ✅ done        | high       | —                |
+| F50-S03 | Serviço de backup + checksum + resolver de referências (API)      | ✅ done        | high       | F50-S01          |
+| F50-S04 | Rotas de backup de Flows (export/preview/import)                  | ✅ done        | high       | F50-S02, F50-S03 |
+| F50-S05 | UI — item na sidebar + página de Backup de Flows (export/import)  | ✅ done        | high       | F50-S02, F50-S04 |
+| F50-S06 | Fix — download do export não dispara (revoke do blob cedo demais) | 🔵 in-progress | high       | F50-S05          |
 
 ## Fase 6 — Pipeline
 

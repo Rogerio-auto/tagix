@@ -2,7 +2,7 @@
 id: F50-S06
 title: Fix — download do export não dispara (revoke do blob cedo demais)
 phase: F50
-status: available
+status: in-progress
 priority: high
 estimated_size: XS
 depends_on: [F50-S05]
@@ -10,8 +10,9 @@ blocks: []
 agent_id: frontend-engineer
 source_docs:
   - docs/features/FLOW_BUILDER.md
----
+claimed_at: 2026-06-26T20:45:26Z
 
+---
 # F50-S06 — Fix do download do export de Flows
 
 ## Objetivo
