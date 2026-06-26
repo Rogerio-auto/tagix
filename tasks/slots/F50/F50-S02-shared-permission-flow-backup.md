@@ -2,7 +2,7 @@
 id: F50-S02
 title: Permissão flow.backup (@hm/shared)
 phase: F50
-status: review
+status: done
 priority: high
 estimated_size: XS
 depends_on: []
