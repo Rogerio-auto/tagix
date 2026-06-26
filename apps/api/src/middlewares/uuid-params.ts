@@ -96,6 +96,8 @@ const NON_UUID_LITERALS = new Set<string>([
   // /api/flows/*
   'executions',
   'manual-order',
+  'backup', // /api/flows/backup/{export,preview,import} (F50) — não é :id de flow
+
   // /api/stages/*
   'reorder',
 ]);

@@ -88,6 +88,10 @@ describe('uuidParamGuard', () => {
       '/api/agents/templates',
       '/api/flows/executions',
       '/api/flows/manual-order',
+      // /api/flows/backup/* (F50): 'backup' não é :id de flow — deve passar (autenticado).
+      '/api/flows/backup/export',
+      '/api/flows/backup/preview',
+      '/api/flows/backup/import',
       '/api/conversations/routing-targets',
       '/api/contacts/bulk-opt-in',
       '/api/stages/reorder',
