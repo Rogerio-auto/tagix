@@ -2,7 +2,7 @@
 id: F48-S03
 title: Definitions + load-dashboard — cardTypes leaderboard/feed/timeseries
 phase: F48
-status: blocked
+status: done
 priority: high
 estimated_size: S
 depends_on: [F48-S02]
@@ -10,8 +10,9 @@ blocks: [F48-S08]
 agent_id: backend-engineer
 source_docs:
   - docs/features/DASHBOARD.md
----
+completed_at: 2026-06-26T01:15:27Z
 
+---
 # F48-S03 — Registrar métricas novas e cardTypes no server-driven
 
 ## Objetivo
@@ -72,6 +73,15 @@ metric_key → query. Mantém o contrato: o front só renderiza por `cardType` (
 
 - Os 3 cards são SUP_RO (SUPERVISOR/ADMIN/OWNER/READONLY) — supervisão de equipe e negócio
   (DASHBOARD §3.2/§3.3/§3.4). AGENT não vê leaderboard/feed/série. READONLY vê sem ação.
+
+## Validação
+
+```bash
+pnpm install
+pnpm typecheck
+pnpm lint
+pnpm --filter @hm/api test
+```
 
 ## Notas
 

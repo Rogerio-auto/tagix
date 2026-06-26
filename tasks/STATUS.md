@@ -38,7 +38,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F45   | 7     | 3   | 4   | 0   | 0   | 0   | 0   |
 | F46   | 1     | 0   | 0   | 0   | 0   | 0   | 1   |
 | F47   | 15     | 0   | 0   | 0   | 0   | 0   | 15   |
-| F48   | 8     | 0   | 2   | 0   | 0   | 0   | 6   |
+| F48   | 8     | 0   | 1   | 0   | 0   | 0   | 7   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -473,7 +473,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ------- | -------------------------------------------------------------------- | ---------- | ---------- | ---------------------------------- |
 | F48-S01 | MV diária 30d (mv_dashboard_daily_30d) + registro no refresh         | ✅ done     | high       | —                                  |
 | F48-S02 | Queries — avatar no ranking, leads recentes, série 30d               | ✅ done     | high       | F48-S01                            |
-| F48-S03 | Definitions + load-dashboard — cardTypes leaderboard/feed/timeseries | ⏸️ blocked | high       | F48-S02                            |
+| F48-S03 | Definitions + load-dashboard — cardTypes leaderboard/feed/timeseries | ✅ done     | high       | F48-S02                            |
 | F48-S04 | Componente <Avatar> em @hm/ui (foto + fallback iniciais)             | ✅ done     | high       | —                                  |
 | F48-S05 | Widget LeaderboardCard (pódio com foto, produtividade)               | ✅ done     | medium     | F48-S04                            |
 | F48-S06 | Widget RecentLeadsCard (lista estilo chatlist, atividade recente)    | ✅ done     | medium     | F48-S04                            |
