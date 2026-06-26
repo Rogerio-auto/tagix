@@ -2,7 +2,7 @@
 id: F49-S01
 title: Delay de envio não-bloqueante no nó de mensagem (WAITING + compat)
 phase: F49
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: []
@@ -11,6 +11,7 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/FLOW_BUILDER.md
 claimed_at: 2026-06-26T16:02:38Z
+completed_at: 2026-06-26T16:06:22Z
 
 ---
 # F49-S01 — Delay de envio não-bloqueante no nó de mensagem
