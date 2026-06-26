@@ -2,7 +2,7 @@
 id: F50-S03
 title: Serviço de backup + checksum + resolver de referências (API)
 phase: F50
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F50-S01]
