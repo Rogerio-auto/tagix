@@ -2,7 +2,7 @@
 id: F49-S02
 title: Inspector do nó de mensagem — campo de delay + teto de 30s na pré-ação
 phase: F49
-status: in-progress
+status: review
 priority: high
 estimated_size: XS
 depends_on: [F49-S01]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/FLOW_BUILDER.md
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-06-26T16:06:46Z
+completed_at: 2026-06-26T16:10:08Z
 
 ---
 # F49-S02 — Inspector: campo de delay + enforcement do teto da pré-ação
