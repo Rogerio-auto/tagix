@@ -5,7 +5,14 @@
  */
 
 export type MetricCadence = 'socket' | 'snapshot_5min' | 'mv_1h' | 'mv_1d';
-export type CardType = 'stat' | 'chart' | 'table' | 'list';
+export type CardType =
+  | 'stat'
+  | 'chart'
+  | 'table'
+  | 'list'
+  | 'leaderboard'
+  | 'feed'
+  | 'timeseries';
 export type MetricCategory =
   | 'atendimento'
   | 'pipeline'

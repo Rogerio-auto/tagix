@@ -12,6 +12,8 @@ import { ChartSkeleton } from '@/shared/components/feedback';
 import type { CardType, DashboardCard } from '../types';
 import { StatCard } from './StatCard';
 import { TableCard } from './TableCard';
+import { LeaderboardCard } from './LeaderboardCard';
+import { RecentLeadsCard } from './RecentLeadsCard';
 
 /**
  * recharts é pesado e só aparece em cards `chart`. Carregamos o `ChartCard` (e a lib
@@ -21,6 +23,16 @@ import { TableCard } from './TableCard';
  */
 const ChartCard = lazyClient<CardRenderProps>(
   () => import('./ChartCard').then((m) => m.ChartCard),
+  { loading: () => <ChartSkeleton />, ssr: false },
+);
+
+/**
+ * O `TimeSeriesCard` (F48-S07) também importa recharts. Mesmo tratamento do
+ * `ChartCard`: lazy via `next/dynamic`, `ssr: false` (SVG não hidrata) e
+ * `ChartSkeleton` segurando a forma enquanto o chunk baixa (UX §3.6).
+ */
+const TimeSeriesCard = lazyClient<CardRenderProps>(
+  () => import('./TimeSeriesCard').then((m) => m.TimeSeriesCard),
   { loading: () => <ChartSkeleton />, ssr: false },
 );
 
@@ -39,6 +51,9 @@ const REGISTRY: Record<CardType, CardComponent> = {
   chart: ChartCard,
   table: TableCard,
   list: StatCard,
+  leaderboard: LeaderboardCard,
+  feed: RecentLeadsCard,
+  timeseries: TimeSeriesCard,
 };
 
 export function renderCard(card: DashboardCard, onDrill?: (card: DashboardCard) => void): React.JSX.Element {
