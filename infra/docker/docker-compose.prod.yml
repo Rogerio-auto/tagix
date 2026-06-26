@@ -230,6 +230,9 @@ services:
         NEXT_PUBLIC_META_APP_ID: ${META_APP_ID:-}
         NEXT_PUBLIC_META_CONFIG_ID: ${META_CONFIG_ID:-}
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
+        # Build-time: o Next congela os rewrites de /api,/auth,/socket.io no
+        # manifest. Sem isto o SSR proxia p/ localhost:3001 → ECONNREFUSED.
+        API_PROXY_TARGET: http://api:3001
     environment:
       NODE_ENV: production
       PORT: "3000"

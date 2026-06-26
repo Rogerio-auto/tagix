@@ -21,6 +21,11 @@ ENV NEXT_PUBLIC_META_CONFIG_ID=${NEXT_PUBLIC_META_CONFIG_ID}
 # Cloudflare Turnstile (captcha do signup — NEXT_PUBLIC = inlinado no build do browser).
 ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY=
 ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=${NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+# Alvo do proxy SSR (/api, /auth, /socket.io). O Next CONGELA os rewrites no
+# routes-manifest em BUILD-TIME, então isto PRECISA existir no build — env de
+# runtime é ignorado pelo manifest já gerado. Default = nome do serviço no Swarm.
+ARG API_PROXY_TARGET=http://api:3001
+ENV API_PROXY_TARGET=${API_PROXY_TARGET}
 COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile

@@ -23,6 +23,28 @@ export function backoffMs(attempt: number): number {
   return 30_000 * 4 ** Math.max(0, attempt - 1);
 }
 
+/**
+ * Serializa um erro de tick para log. Drizzle envolve a falha do driver em
+ * "Failed query: …" e o `.message` esconde a causa REAL (postgres.js anexa
+ * `code`/`severity`/`detail` direto no erro, ou em `.cause`). Captura esses
+ * campos sem `any` para a falha intermitente deixar de ser opaca.
+ */
+export function describeTickError(err: unknown): Record<string, unknown> {
+  if (!(err instanceof Error)) return { error: String(err) };
+  const rec = err as unknown as Record<string, unknown>;
+  const out: Record<string, unknown> = { error: err.message, stack: err.stack };
+  for (const k of ['code', 'severity', 'detail', 'routine', 'constraint', 'where']) {
+    if (rec[k] !== undefined) out[k] = rec[k];
+  }
+  const cause = rec['cause'];
+  if (cause !== undefined) {
+    out['cause'] = cause instanceof Error ? cause.message : String(cause);
+    const causeCode = (cause as Record<string, unknown> | null)?.['code'];
+    if (causeCode !== undefined) out['causeCode'] = causeCode;
+  }
+  return out;
+}
+
 export type SelectDuePort = (now: Date, limit: number) => Promise<PendingAutomationRow[]>;
 
 /** Seleciona automacoes vencidas (cross-tenant, owner bypassa RLS). */
@@ -150,9 +172,7 @@ export function startAutomationWorker(
     running = true;
     void runAutomationTick(deps)
       .catch((err: unknown) => {
-        deps.logger.error('automations: tick falhou', {
-          error: err instanceof Error ? err.message : String(err),
-        });
+        deps.logger.error('automations: tick falhou', describeTickError(err));
       })
       .finally(() => {
         running = false;

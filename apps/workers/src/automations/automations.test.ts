@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { backoffMs, runAutomationTick, MAX_ATTEMPTS } from './worker';
+import { backoffMs, describeTickError, runAutomationTick, MAX_ATTEMPTS } from './worker';
 import { createActionExecutor, MissingPortError } from './executors';
 import type { ActionExecutor, PendingAutomationRow } from './types';
 
@@ -39,6 +39,34 @@ describe('backoffMs', () => {
     expect(backoffMs(1)).toBe(30_000);
     expect(backoffMs(2)).toBe(120_000);
     expect(backoffMs(3)).toBe(480_000);
+  });
+});
+
+describe('describeTickError', () => {
+  it('extrai code/severity/detail de um erro estilo postgres.js', () => {
+    const err = Object.assign(new Error('Failed query: select …'), {
+      code: '57P01',
+      severity: 'FATAL',
+      detail: 'terminating connection due to administrator command',
+    });
+    const out = describeTickError(err);
+    expect(out['error']).toBe('Failed query: select …');
+    expect(out['code']).toBe('57P01');
+    expect(out['severity']).toBe('FATAL');
+    expect(out['detail']).toBe('terminating connection due to administrator command');
+    expect(out['stack']).toBeTypeOf('string');
+  });
+
+  it('desce na cause aninhada (code da causa)', () => {
+    const cause = Object.assign(new Error('Connection terminated'), { code: 'CONNECTION_CLOSED' });
+    const err = new Error('Failed query: …', { cause });
+    const out = describeTickError(err);
+    expect(out['cause']).toBe('Connection terminated');
+    expect(out['causeCode']).toBe('CONNECTION_CLOSED');
+  });
+
+  it('aceita valor não-Error', () => {
+    expect(describeTickError('boom')).toEqual({ error: 'boom' });
   });
 });
 
