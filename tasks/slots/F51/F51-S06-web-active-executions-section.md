@@ -2,7 +2,7 @@
 id: F51-S06
 title: Web UI — seção "Execuções Ativas" + cards no Cockpit
 phase: F51
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F51-S05]
