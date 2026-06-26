@@ -2,7 +2,7 @@
 id: F51-S03
 title: Publisher real do FlowEventsPort → socket relay (apps/workers)
 phase: F51
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: [F51-S01, F51-S02]
@@ -11,6 +11,7 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/FLOW_BUILDER.md
 claimed_at: 2026-06-26T21:36:01Z
+completed_at: 2026-06-26T21:38:17Z
 
 ---
 # F51-S03 — Publisher de eventos de execução (worker)
