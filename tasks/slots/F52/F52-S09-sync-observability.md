@@ -2,7 +2,7 @@
 id: F52-S09
 title: Observabilidade da sincronização — métricas de tick, profundidade de fila, status WhatsApp
 phase: F52
-status: available
+status: done
 priority: medium
 estimated_size: L
 depends_on: []
@@ -11,6 +11,8 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/LIVECHAT.md
   - docs/features/LIVECHAT_OPS.md
+completed_at: 2026-06-27T12:25:50Z
+
 ---
 # F52-S09 — Observabilidade da camada de sincronização
 

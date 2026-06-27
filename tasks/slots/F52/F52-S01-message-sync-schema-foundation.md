@@ -2,7 +2,7 @@
 id: F52-S01
 title: Schema foundation da sincronização (media_status, provider_timestamp, idempotency_key)
 phase: F52
-status: available
+status: done
 priority: critical
 estimated_size: S
 depends_on: [F40-S01]
@@ -10,6 +10,8 @@ blocks: [F52-S04, F52-S05, F52-S08]
 agent_id: db-engineer
 source_docs:
   - docs/features/LIVECHAT.md
+completed_at: 2026-06-27T12:25:50Z
+
 ---
 # F52-S01 — Schema foundation da camada de sincronização
 

@@ -2,7 +2,7 @@
 id: F52-S06
 title: Endpoint de refresh de signed URL de mídia expirada
 phase: F52
-status: available
+status: done
 priority: medium
 estimated_size: S
 depends_on: []
@@ -10,6 +10,8 @@ blocks: [F52-S07]
 agent_id: backend-engineer
 source_docs:
   - docs/features/LIVECHAT.md
+completed_at: 2026-06-27T12:25:50Z
+
 ---
 # F52-S06 — Refresh de signed URL de mídia
 
