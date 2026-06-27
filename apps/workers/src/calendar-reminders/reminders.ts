@@ -67,8 +67,8 @@ async function selectDue(now: Date, offsets: readonly number[], limit: number): 
     select e.id, e.workspace_id, e.calendar_id, e.title, e.start_at, e.contact_id, e.metadata
     from events e
     where e.status <> 'cancelled'
-      and e.start_at > ${now}
-      and e.start_at <= ${new Date(now.getTime() + maxOffset * 60_000)}
+      and e.start_at > ${now.toISOString()}
+      and e.start_at <= ${new Date(now.getTime() + maxOffset * 60_000).toISOString()}
     order by e.start_at asc
     limit ${limit}
   `);

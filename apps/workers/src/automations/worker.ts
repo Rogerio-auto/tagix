@@ -58,7 +58,7 @@ async function selectDue(now: Date, limit: number): Promise<PendingAutomationRow
   }>(sql`
     select id, workspace_id, deal_id, rule, attempts
     from pending_automations
-    where status = 'pending' and scheduled_at <= ${now}
+    where status = 'pending' and scheduled_at <= ${now.toISOString()}
     order by scheduled_at asc
     limit ${limit}
     for update skip locked
@@ -90,7 +90,7 @@ async function markRetryOrFail(row: PendingAutomationRow, err: unknown, now: Dat
   const next = new Date(now.getTime() + backoffMs(attempts));
   await getDb().execute(sql`
     update pending_automations
-    set attempts = ${attempts}, last_error = ${lastError}, scheduled_at = ${next}
+    set attempts = ${attempts}, last_error = ${lastError}, scheduled_at = ${next.toISOString()}
     where id = ${row.id}
   `);
 }
