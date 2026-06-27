@@ -43,7 +43,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F50   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F51   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F52   | 10     | 2   | 6   | 0   | 0   | 0   | 2   |
+| F52   | 10     | 3   | 5   | 0   | 0   | 0   | 2   |
 | F53   | 7     | 1   | 6   | 0   | 0   | 0   | 0   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -541,7 +541,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID      | Titulo                                                                                     | Status      | Prioridade | Depende de                |
 | ------- | ------------------------------------------------------------------------------------------ | ----------- | ---------- | ------------------------- |
-| F52-S01 | Schema foundation da sincronização (media_status, provider_timestamp, idempotency_key)     | ⏸️ blocked  | critical   | F40-S01                   |
+| F52-S01 | Schema foundation da sincronização (media_status, provider_timestamp, idempotency_key)     | 🟢 available | critical   | F40-S01                   |
 | F52-S02 | Webhook à prova de perda (dedup pós-enqueue + backpressure + redelivery counter)           | ✅ done      | critical   | —                         |
 | F52-S03 | DLX + retry exponencial + DLQ inspecionável para inbound/outbound/media                    | ✅ done      | critical   | —                         |
 | F52-S04 | Outbound confiável — idempotência de envio + race do callback de status                    | ⏸️ blocked  | high       | F52-S01                   |

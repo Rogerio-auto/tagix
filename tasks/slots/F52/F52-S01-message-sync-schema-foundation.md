@@ -2,7 +2,7 @@
 id: F52-S01
 title: Schema foundation da sincronização (media_status, provider_timestamp, idempotency_key)
 phase: F52
-status: blocked
+status: available
 priority: critical
 estimated_size: S
 depends_on: [F40-S01]
