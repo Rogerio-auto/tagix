@@ -2,7 +2,7 @@
 id: F52-S10
 title: Lock distribuído Redis para outbound (ordem multi-instância) + tuning
 phase: F52
-status: available
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F52-S04]
@@ -10,6 +10,8 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - docs/features/LIVECHAT.md
+completed_at: 2026-06-27T13:24:17Z
+
 ---
 # F52-S10 — Lock distribuído + tuning de performance
 

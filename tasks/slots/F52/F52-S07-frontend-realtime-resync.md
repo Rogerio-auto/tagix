@@ -2,7 +2,7 @@
 id: F52-S07
 title: Frontend realtime — resync ao reconectar + listener de status + UI de mídia (erro/retry)
 phase: F52
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: [F52-S04, F52-S05, F52-S06]
@@ -11,6 +11,8 @@ agent_id: frontend-engineer
 source_docs:
   - docs/features/LIVECHAT.md
   - docs/UX_PRINCIPLES.md
+completed_at: 2026-06-27T13:24:15Z
+
 ---
 # F52-S07 — Frontend realtime resiliente
 
