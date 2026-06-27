@@ -5,6 +5,7 @@ import { assertConversationVisible, buildVisibilityPredicate, schema } from '@hm
 import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { bumpVersion, cached, getVersion } from '../../cache';
+import { createMediaRouter } from './media';
 
 const PROVIDERS = ['meta_whatsapp', 'meta_instagram', 'waha'] as const;
 const STATUSES = ['open', 'pending', 'closed', 'resolved', 'snoozed'] as const;
@@ -363,6 +364,12 @@ export function createConversationsRouter(): Router {
     await bumpVersion(`hm:ws:v:${workspaceId}`);
     res.json({ ok: true });
   });
+
+  // GET /api/conversations/:id/messages/:messageId/refresh-media-url —
+  // regenera a signed URL de uma mídia já armazenada (F52-S06). Agregado aqui
+  // pois `createConversationsRouter()` é o único montado em app.ts; a rota tem
+  // mais segmentos que `/:id` e `/:id/messages`, então não há conflito de match.
+  router.use(createMediaRouter());
 
   return router;
 }
