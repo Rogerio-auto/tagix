@@ -43,6 +43,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F50   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F51   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
+| F52   | 10     | 4   | 6   | 0   | 0   | 0   | 0   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -534,6 +535,21 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F51-S05 | Web dados — query enriquecida + hooks (live + countdown)              | ✅ done | high       | F51-S01, F51-S04 |
 | F51-S06 | Web UI — seção "Execuções Ativas" + cards no Cockpit                  | ✅ done | high       | F51-S05          |
 | F51-S07 | Refino — painel de execuções no topo + card neon compacto (só ativas) | ✅ done | high       | F51-S06          |
+
+## Fase 52
+
+| ID      | Titulo                                                                                     | Status      | Prioridade | Depende de                |
+| ------- | ------------------------------------------------------------------------------------------ | ----------- | ---------- | ------------------------- |
+| F52-S01 | Schema foundation da sincronização (media_status, provider_timestamp, idempotency_key)     | ⏸️ blocked  | critical   | F40-S01                   |
+| F52-S02 | Webhook à prova de perda (dedup pós-enqueue + backpressure + redelivery counter)           | 🟢 available | critical   | —                         |
+| F52-S03 | DLX + retry exponencial + DLQ inspecionável para inbound/outbound/media                    | 🟢 available | critical   | —                         |
+| F52-S04 | Outbound confiável — idempotência de envio + race do callback de status                    | ⏸️ blocked  | high       | F52-S01                   |
+| F52-S05 | Resiliência de mídia — media_status, retry de download, evento media_failed                | ⏸️ blocked  | high       | F52-S01                   |
+| F52-S06 | Endpoint de refresh de signed URL de mídia expirada                                        | 🟢 available | medium     | —                         |
+| F52-S07 | Frontend realtime — resync ao reconectar + listener de status + UI de mídia (erro/retry)   | ⏸️ blocked  | high       | F52-S04, F52-S05, F52-S06 |
+| F52-S08 | Inbound consistente — ordenação fiel (provider_timestamp) + dedup de disparo de flow       | ⏸️ blocked  | high       | F52-S01                   |
+| F52-S09 | Observabilidade da sincronização — métricas de tick, profundidade de fila, status WhatsApp | 🟢 available | medium     | —                         |
+| F52-S10 | Lock distribuído Redis para outbound (ordem multi-instância) + tuning                      | ⏸️ blocked  | medium     | F52-S04                   |
 
 ## Fase 6 — Pipeline
 
