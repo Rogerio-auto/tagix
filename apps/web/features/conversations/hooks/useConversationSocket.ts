@@ -6,10 +6,13 @@ import { useSocket } from '@/shared/realtime';
 import { api } from '@/shared/lib/api-client';
 import type {
   ConversationUpdatedPayload,
+  MessageMediaFailedPayload,
   MessageMediaReadyPayload,
   MessageNewPayload,
 } from '@hm/shared';
-import { conversationAgentKey, conversationDetailKey } from '../queries';
+import { conversationAgentKey, conversationDetailKey, messagesKey } from '../queries';
+import { resyncConversationData } from './realtimeResync';
+import { markMediaFailed, type MessagesPage } from './messageCache';
 
 /**
  * Assinatura mínima do cliente Socket.io publicada como global. O
@@ -58,13 +61,18 @@ export function useConversationSocket(): void {
 
     const onConversationUpdated = (_p: ConversationUpdatedPayload): void => invalidate();
     const onMessageNew = (_p: MessageNewPayload): void => invalidate();
+    // Resync ao (re)conectar: eventos perdidos enquanto offline (nova conversa,
+    // mudança de ordenação/contadores) somem; rebuscar a lista fecha o gap.
+    const onConnect = (): void => resyncConversationData(queryClient, undefined);
 
     socket.on('conversation:updated', onConversationUpdated);
     socket.on('message:new', onMessageNew);
+    socket.on('connect', onConnect);
 
     return () => {
       socket.off('conversation:updated', onConversationUpdated);
       socket.off('message:new', onMessageNew);
+      socket.off('connect', onConnect);
     };
   }, [queryClient, socket]);
 }
@@ -97,12 +105,30 @@ export function useConversationMessagesLive(conversationId: string | undefined):
     const onMediaReady = (p: MessageMediaReadyPayload): void => {
       if (p.conversationId === conversationId) invalidateMessages();
     };
+    // Falha definitiva no download da mídia (F52-S05): em vez de deixar a bolha
+    // presa em "carregando…", marca-a localmente como falha (patch determinístico,
+    // sem refetch) → a UI mostra erro acionável + "Tentar novamente".
+    const onMediaFailed = (p: MessageMediaFailedPayload): void => {
+      if (p.conversationId !== conversationId) return;
+      const key = messagesKey(conversationId);
+      queryClient.setQueryData(
+        key,
+        markMediaFailed(queryClient.getQueryData<MessagesPage>(key), p.messageId),
+      );
+    };
+    // Resync ao (re)conectar: rebusca mensagens + detalhe + lista desta conversa
+    // (fecha o gap de eventos perdidos offline). Idempotente entre hooks no tick.
+    const onConnect = (): void => resyncConversationData(queryClient, conversationId);
 
     socket.on('message:new', onMessageNew);
     socket.on('message:media_ready', onMediaReady);
+    socket.on('message:media_failed', onMediaFailed);
+    socket.on('connect', onConnect);
     return () => {
       socket.off('message:new', onMessageNew);
       socket.off('message:media_ready', onMediaReady);
+      socket.off('message:media_failed', onMediaFailed);
+      socket.off('connect', onConnect);
     };
   }, [queryClient, socket, conversationId]);
 }

@@ -24,13 +24,16 @@ import type { LucideIcon } from 'lucide-react';
 import {
   ExternalLink,
   FileText,
+  FileWarning,
   Heart,
   Image as ImageIcon,
+  ImageOff,
   LayoutTemplate,
   ListChecks,
   MapPin,
   MessageSquareReply,
   MousePointerClick,
+  RefreshCw,
   Smile,
   Sparkles,
   User,
@@ -39,6 +42,7 @@ import type { MessageItem } from '../../types';
 import { cn } from '@/shared/lib/cn';
 import { StatusIcon } from './StatusIcon';
 import { assertNever, toMessageType, toViewStatus, type MessageType } from './types';
+import { useMediaResource, type MediaResource } from './useMediaResource';
 
 /** Rótulos legíveis do remetente (pt-BR). */
 const SENDER_LABEL: Record<string, string> = {
@@ -147,16 +151,16 @@ function MessageBody({ message, type }: { message: MessageItem; type: MessageTyp
     case 'text':
       return <TextBody content={message.content} />;
     case 'image':
-      return <ImageBody mediaUrl={message.mediaUrl} caption={message.content} />;
+      return <ImageBody message={message} />;
     case 'sticker':
-      return <StickerBody mediaUrl={message.mediaUrl} />;
+      return <StickerBody message={message} />;
     case 'video':
-      return <VideoBody mediaUrl={message.mediaUrl} caption={message.content} />;
+      return <VideoBody message={message} />;
     case 'audio':
     case 'voice':
-      return <AudioBody mediaUrl={message.mediaUrl} isVoice={type === 'voice'} />;
+      return <AudioBody message={message} isVoice={type === 'voice'} />;
     case 'document':
-      return <DocumentBody mediaUrl={message.mediaUrl} caption={message.content} />;
+      return <DocumentBody message={message} />;
     case 'location':
       return <LocationBody content={message.content} />;
     case 'contact':
@@ -221,7 +225,7 @@ function TextBody({ content }: { content: string | null }) {
   return <p className="break-words whitespace-pre-wrap">{content}</p>;
 }
 
-/** Placeholder enquanto a mídia ainda não chegou (async via F1-S10). */
+/** Placeholder enquanto a mídia ainda não chegou (async via F1-S10) / reidrata. */
 function MediaPending({ label }: { label: string }) {
   return (
     <span
@@ -235,70 +239,221 @@ function MediaPending({ label }: { label: string }) {
   );
 }
 
-function ImageBody({ mediaUrl, caption }: { mediaUrl: string | null; caption: string | null }) {
-  if (mediaUrl === null) return <MediaPending label="carregando mídia…" />;
-  const alt = caption ?? 'Imagem recebida';
+/**
+ * Estado de erro acionável da mídia (UX §2: nunca um beco sem saída). Mensagem
+ * amigável + "Tentar novamente" (reidrata a signed URL via F52-S06). `icon`
+ * varia por tipo (imagem/áudio/documento) para o contexto ficar claro.
+ */
+function MediaError({
+  icon: Icon,
+  label,
+  onRetry,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onRetry: () => void;
+}) {
   return (
-    <figure className="flex flex-col gap-1">
-      {/* mediaUrl é R2 assinado (recurso remoto fora do otimizador do Next) → <img> simples. */}
-      <img
-        src={mediaUrl}
-        alt={alt}
-        loading="lazy"
-        className="max-h-72 w-full rounded-sm object-cover"
-      />
-      {caption !== null && caption !== '' && (
-        <figcaption className="break-words whitespace-pre-wrap">{caption}</figcaption>
-      )}
-    </figure>
-  );
-}
-
-function StickerBody({ mediaUrl }: { mediaUrl: string | null }) {
-  if (mediaUrl === null) return <MediaPending label="carregando sticker…" />;
-  return (
-    // mediaUrl é R2 assinado (recurso remoto fora do otimizador do Next) → <img> simples.
-    <img src={mediaUrl} alt="Sticker" loading="lazy" className="size-28 object-contain" />
-  );
-}
-
-function VideoBody({ mediaUrl, caption }: { mediaUrl: string | null; caption: string | null }) {
-  if (mediaUrl === null) return <MediaPending label="carregando vídeo…" />;
-  return (
-    <figure className="flex flex-col gap-1">
-      <video
-        src={mediaUrl}
-        controls
-        preload="metadata"
-        className="max-h-72 w-full rounded-sm"
-        aria-label={caption ?? 'Vídeo recebido'}
+    <div className="flex flex-col items-start gap-1.5" role="alert">
+      <span className="flex items-center gap-2 text-sm text-danger">
+        <Icon className="size-4 shrink-0" aria-hidden />
+        {label}
+      </span>
+      <button
+        type="button"
+        onClick={onRetry}
+        className={cn(
+          'inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-xs font-medium text-text-mid outline-none',
+          'transition-colors hover:bg-surface hover:text-text focus-visible:shadow-glow-md',
+        )}
       >
-        <track kind="captions" />
-      </video>
-      {caption !== null && caption !== '' && (
-        <figcaption className="break-words whitespace-pre-wrap">{caption}</figcaption>
-      )}
-    </figure>
-  );
-}
-
-function AudioBody({ mediaUrl, isVoice }: { mediaUrl: string | null; isVoice: boolean }) {
-  const label = isVoice ? 'Mensagem de voz' : 'Áudio';
-  if (mediaUrl === null) return <MediaPending label="carregando áudio…" />;
-  return (
-    <div className="flex min-w-[12rem] flex-col gap-1">
-      <span className="text-xs text-text-low">{label}</span>
-      <audio src={mediaUrl} controls preload="metadata" className="w-full" aria-label={label} />
+        <RefreshCw className="size-3.5" aria-hidden />
+        Tentar novamente
+      </button>
     </div>
   );
 }
 
-function DocumentBody({ mediaUrl, caption }: { mediaUrl: string | null; caption: string | null }) {
-  if (mediaUrl === null) return <MediaPending label="carregando documento…" />;
+/**
+ * Casca comum dos três estados de mídia (pending → ready → error). Escolhe o que
+ * renderizar a partir do `resource`; o `render` recebe a URL pronta e o handler
+ * de `onError` (reidratação) para plugar no elemento de mídia.
+ */
+function MediaSurface({
+  resource,
+  pendingLabel,
+  errorIcon,
+  errorLabel,
+  render,
+}: {
+  resource: MediaResource;
+  pendingLabel: string;
+  errorIcon: LucideIcon;
+  errorLabel: string;
+  render: (url: string, onError: () => void) => ReactNode;
+}) {
+  if (resource.state === 'error') {
+    return <MediaError icon={errorIcon} label={errorLabel} onRetry={resource.retry} />;
+  }
+  if (resource.url === null) {
+    return <MediaPending label={pendingLabel} />;
+  }
+  return <>{render(resource.url, resource.onMediaError)}</>;
+}
+
+function ImageBody({ message }: { message: MessageItem }) {
+  const resource = useMediaResource({
+    conversationId: message.conversationId,
+    messageId: message.id,
+    initialUrl: message.mediaUrl,
+    failed: message.mediaFailed,
+  });
+  const caption = message.content;
+  const alt = caption ?? 'Imagem recebida';
+  return (
+    <MediaSurface
+      resource={resource}
+      pendingLabel="carregando mídia…"
+      errorIcon={ImageOff}
+      errorLabel="Não foi possível carregar a imagem."
+      render={(url, onError) => (
+        <figure className="flex flex-col gap-1">
+          {/* mediaUrl é R2 assinado (recurso remoto fora do otimizador do Next) → <img> simples. */}
+          <img
+            src={url}
+            alt={alt}
+            loading="lazy"
+            onError={onError}
+            className="max-h-72 w-full rounded-sm object-cover"
+          />
+          {caption !== null && caption !== '' && (
+            <figcaption className="break-words whitespace-pre-wrap">{caption}</figcaption>
+          )}
+        </figure>
+      )}
+    />
+  );
+}
+
+function StickerBody({ message }: { message: MessageItem }) {
+  const resource = useMediaResource({
+    conversationId: message.conversationId,
+    messageId: message.id,
+    initialUrl: message.mediaUrl,
+    failed: message.mediaFailed,
+  });
+  return (
+    <MediaSurface
+      resource={resource}
+      pendingLabel="carregando sticker…"
+      errorIcon={ImageOff}
+      errorLabel="Não foi possível carregar o sticker."
+      render={(url, onError) => (
+        // mediaUrl é R2 assinado (recurso remoto fora do otimizador do Next) → <img> simples.
+        <img
+          src={url}
+          alt="Sticker"
+          loading="lazy"
+          onError={onError}
+          className="size-28 object-contain"
+        />
+      )}
+    />
+  );
+}
+
+function VideoBody({ message }: { message: MessageItem }) {
+  const resource = useMediaResource({
+    conversationId: message.conversationId,
+    messageId: message.id,
+    initialUrl: message.mediaUrl,
+    failed: message.mediaFailed,
+  });
+  const caption = message.content;
+  return (
+    <MediaSurface
+      resource={resource}
+      pendingLabel="carregando vídeo…"
+      errorIcon={ImageOff}
+      errorLabel="Não foi possível carregar o vídeo."
+      render={(url, onError) => (
+        <figure className="flex flex-col gap-1">
+          <video
+            src={url}
+            controls
+            preload="metadata"
+            onError={onError}
+            className="max-h-72 w-full rounded-sm"
+            aria-label={caption ?? 'Vídeo recebido'}
+          >
+            <track kind="captions" />
+          </video>
+          {caption !== null && caption !== '' && (
+            <figcaption className="break-words whitespace-pre-wrap">{caption}</figcaption>
+          )}
+        </figure>
+      )}
+    />
+  );
+}
+
+function AudioBody({ message, isVoice }: { message: MessageItem; isVoice: boolean }) {
+  const label = isVoice ? 'Mensagem de voz' : 'Áudio';
+  const resource = useMediaResource({
+    conversationId: message.conversationId,
+    messageId: message.id,
+    initialUrl: message.mediaUrl,
+    failed: message.mediaFailed,
+  });
+  return (
+    <div className="flex min-w-[12rem] flex-col gap-1">
+      <span className="text-xs text-text-low">{label}</span>
+      <MediaSurface
+        resource={resource}
+        pendingLabel="carregando áudio…"
+        errorIcon={FileWarning}
+        errorLabel={`Não foi possível carregar ${isVoice ? 'a mensagem de voz' : 'o áudio'}.`}
+        render={(url, onError) => (
+          <audio
+            src={url}
+            controls
+            preload="metadata"
+            onError={onError}
+            className="w-full"
+            aria-label={label}
+          />
+        )}
+      />
+    </div>
+  );
+}
+
+function DocumentBody({ message }: { message: MessageItem }) {
+  const resource = useMediaResource({
+    conversationId: message.conversationId,
+    messageId: message.id,
+    initialUrl: message.mediaUrl,
+    failed: message.mediaFailed,
+  });
+  const caption = message.content;
   const name = caption !== null && caption !== '' ? caption : 'Documento';
+  // Um <a> não dispara `onError` de carregamento (não é elemento de mídia), então
+  // aqui só distinguimos pending vs error definitivo (failed) — sem auto-refresh.
+  if (resource.state === 'error') {
+    return (
+      <MediaError
+        icon={FileWarning}
+        label="Não foi possível carregar o documento."
+        onRetry={resource.retry}
+      />
+    );
+  }
+  if (resource.url === null) {
+    return <MediaPending label="carregando documento…" />;
+  }
   return (
     <a
-      href={mediaUrl}
+      href={resource.url}
       target="_blank"
       rel="noopener noreferrer"
       download

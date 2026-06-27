@@ -15,6 +15,7 @@ import {
   useConversationMessagesLive,
   useMarkConversationRead,
 } from '../hooks/useConversationSocket';
+import { dedupeMessages } from '../hooks/messageCache';
 import { ConversationsHelp } from '../help';
 import { ChatList } from './ChatList';
 import { MessageComposer } from './MessageComposer';
@@ -301,8 +302,9 @@ function ThreadMessages({
       ) : messages.data && messages.data.messages.length > 0 ? (
         <ul className="flex flex-col gap-3">
           {/* A API devolve DESC (mais nova primeiro); a thread exibe cronológico
-              (mais antiga no topo, mais nova embaixo) → cópia + reverse. */}
-          {[...messages.data.messages].reverse().map((m) => {
+              (mais antiga no topo, mais nova embaixo) → dedup defensivo (socket +
+              refetch nunca duplica bolha) + reverse. */}
+          {dedupeMessages(messages.data.messages).reverse().map((m) => {
             const ig =
               m.type === 'comment' || m.type === 'comment_reply'
                 ? igCommentFromMessage(m)

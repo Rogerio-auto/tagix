@@ -97,6 +97,14 @@ export interface MessageItem {
   externalId?: string | null;
   /** F15-S08: metadados IG (mediaId/commentId/parentCommentId). Opcional. */
   metadata?: Record<string, unknown> | null;
+  /**
+   * F52-S07: flag CLIENT-ONLY de falha definitiva no download da mídia inbound.
+   * Não vem do servidor — é setada localmente ao receber o evento de socket
+   * `message:media_failed` (o worker esgotou as tentativas). A UI troca o
+   * placeholder "carregando" por um estado de erro acionável. Limpa sozinha no
+   * próximo refetch (`message:media_ready` invalida → servidor reidrata sem ela).
+   */
+  mediaFailed?: boolean;
 }
 
 export interface ConversationFilters {
