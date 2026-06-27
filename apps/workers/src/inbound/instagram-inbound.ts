@@ -31,6 +31,17 @@ function metaWithStory(storyId: string, extra?: Record<string, unknown>): Record
 }
 
 /**
+ * Horário do evento: usa o `rawTimestamp` real do provider quando o parser o
+ * propaga (F52-S08); só cai para `new Date()` quando o payload IG genuinamente
+ * não o traz. Garante ordenação fiel da timeline (e `provider_timestamp` correto)
+ * mesmo em reprocessamento/entrega fora de ordem — antes era sempre `new Date()`,
+ * embaralhando story/share/postback/referral.
+ */
+function eventTimestamp(rawTimestamp: string | undefined): string {
+  return rawTimestamp ?? new Date().toISOString();
+}
+
+/**
  * Converte um InboundEvent IG em NormalizedMessageEvent quando aplicavel.
  * Retorna undefined para eventos que nao viram mensagem (reaction/status) ou
  * que sao tratados a parte (comment).
@@ -48,7 +59,7 @@ function toMessageEvent(event: InboundEvent): NormalizedMessageEvent | undefined
         externalId: event.externalId,
         messageType: 'story_mention' as MessageType,
         mediaRef: event.mediaRef,
-        rawTimestamp: new Date().toISOString(),
+        rawTimestamp: eventTimestamp(event.rawTimestamp),
         metadata: metaWithStory(event.storyId, { storyUrl: event.mediaRef.refOrUrl }),
       };
       return ev;
@@ -61,7 +72,7 @@ function toMessageEvent(event: InboundEvent): NormalizedMessageEvent | undefined
         externalId: event.externalId,
         messageType: 'story_reply' as MessageType,
         content: event.content,
-        rawTimestamp: new Date().toISOString(),
+        rawTimestamp: eventTimestamp(event.rawTimestamp),
         metadata: metaWithStory(event.storyId),
       };
     case 'share': {
@@ -74,7 +85,7 @@ function toMessageEvent(event: InboundEvent): NormalizedMessageEvent | undefined
         externalId: event.externalId,
         messageType: 'share' as MessageType,
         ...(mediaRef ? { mediaRef } : {}),
-        rawTimestamp: new Date().toISOString(),
+        rawTimestamp: eventTimestamp(event.rawTimestamp),
       };
     }
     case 'postback':
@@ -85,7 +96,7 @@ function toMessageEvent(event: InboundEvent): NormalizedMessageEvent | undefined
         externalId: event.externalId,
         messageType: 'ig_postback' as MessageType,
         content: event.payload,
-        rawTimestamp: new Date().toISOString(),
+        rawTimestamp: eventTimestamp(event.rawTimestamp),
         metadata: { payload: event.payload, ...(event.title !== undefined ? { title: event.title } : {}) },
       };
     case 'referral':
@@ -95,7 +106,7 @@ function toMessageEvent(event: InboundEvent): NormalizedMessageEvent | undefined
         contactRemoteId: event.contactRemoteId,
         externalId: 'ref_' + event.contactRemoteId + '_' + event.source,
         messageType: 'referral' as MessageType,
-        rawTimestamp: new Date().toISOString(),
+        rawTimestamp: eventTimestamp(event.rawTimestamp),
         metadata: { source: event.source, referral: event.referralData },
       };
     default:

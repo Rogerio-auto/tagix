@@ -1,5 +1,5 @@
 import type { PeerVisibility, Role } from '@hm/shared';
-import { type SQL, and, desc, eq, lt, sql } from 'drizzle-orm';
+import { type SQL, and, desc, eq, sql } from 'drizzle-orm';
 import { getDb, type DbTx } from '../client';
 import { contacts, conversations, inboxVisibilitySettings, messages, teams } from '../schema';
 
@@ -191,17 +191,26 @@ export async function pickAutoAssignee(input: AutoAssignInput): Promise<string |
 }
 
 export const messagesRepo = {
-  /** Página de mensagens por conversa, ordenada por created_at desc, com cursor. */
+  /**
+   * Página de mensagens por conversa, ordenada pelo horário AUTORITATIVO do
+   * provider — `coalesce(provider_timestamp, created_at) desc` (F52-S08) — com
+   * cursor. Ordenar pela hora do provider (e não pela hora de inserção) garante
+   * que uma mensagem reprocessada/entregue fora de ordem apareça na posição
+   * cronológica real em vez de "pular para o fim". Servido pelo índice
+   * `idx_messages_conversation_provider_ts` (F52-S01). O cursor `before` compara
+   * contra a MESMA expressão para paginar de forma consistente.
+   */
   async listByConversation(conversationId: string, opts: { before?: Date; limit?: number } = {}) {
     const limit = Math.min(opts.limit ?? 50, 100);
+    const orderTs = sql`coalesce(${messages.providerTimestamp}, ${messages.createdAt})`;
     const where = opts.before
-      ? and(eq(messages.conversationId, conversationId), lt(messages.createdAt, opts.before))
+      ? and(eq(messages.conversationId, conversationId), sql`${orderTs} < ${opts.before}`)
       : eq(messages.conversationId, conversationId);
     return getDb()
       .select()
       .from(messages)
       .where(where)
-      .orderBy(desc(messages.createdAt))
+      .orderBy(desc(orderTs))
       .limit(limit);
   },
 };

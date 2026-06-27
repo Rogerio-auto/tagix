@@ -76,6 +76,26 @@ describe('parseInstagramWebhook', () => {
     });
   });
 
+  it('story_mention preserva o timestamp do provider (F52-S08, nao new Date)', () => {
+    const events = parseInstagramWebhook(
+      envelope({
+        sender: { id: 'IGSID_1' },
+        recipient: { id: 'IG_USER_ID' },
+        timestamp: 1718000000000,
+        message: {
+          mid: 'mid.SM',
+          attachments: [
+            { type: 'story_mention', payload: { url: 'https://lookaside/story.jpg', id: 'STORY_9' } },
+          ],
+        },
+      }),
+    );
+    expect(events[0]).toMatchObject({
+      type: 'story_mention',
+      rawTimestamp: new Date(1718000000000).toISOString(),
+    });
+  });
+
   it('parseia story_reply (reply_to.story)', () => {
     const events = parseInstagramWebhook(
       envelope({

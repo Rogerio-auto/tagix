@@ -138,6 +138,8 @@ export type InboundEvent =
       externalId: string;
       mediaRef: MediaRef;
       storyId: string;
+      /** Horário autoritativo do provider (epoch ms→ISO). Ordenação fiel (F52-S08). */
+      rawTimestamp?: string;
     }
   | {
       type: 'story_reply';
@@ -146,6 +148,8 @@ export type InboundEvent =
       externalId: string;
       storyId: string;
       content: string;
+      /** Horário autoritativo do provider (epoch ms→ISO). Ordenação fiel (F52-S08). */
+      rawTimestamp?: string;
     }
   | {
       type: 'share';
@@ -153,6 +157,8 @@ export type InboundEvent =
       contactRemoteId: string;
       externalId: string;
       mediaRef: MediaRef;
+      /** Horário autoritativo do provider (epoch ms→ISO). Ordenação fiel (F52-S08). */
+      rawTimestamp?: string;
     }
   | {
       type: 'comment';
@@ -172,6 +178,8 @@ export type InboundEvent =
       externalId: string;
       payload: string;
       title?: string;
+      /** Horário autoritativo do provider (epoch ms→ISO). Ordenação fiel (F52-S08). */
+      rawTimestamp?: string;
     }
   | {
       type: 'reaction';
@@ -186,6 +194,8 @@ export type InboundEvent =
       contactRemoteId: string;
       source: string;
       referralData: Record<string, unknown>;
+      /** Horário autoritativo do provider (epoch ms→ISO). Ordenação fiel (F52-S08). */
+      rawTimestamp?: string;
     };
 
 // --- Resultado de envio (LIVECHAT.md §2.1) ---

@@ -122,6 +122,7 @@ function parseMessagingItem(m: JsonRecord): InboundEvent | undefined {
           externalId,
           mediaRef,
           storyId,
+          rawTimestamp: ts,
         };
       }
     }
@@ -138,6 +139,7 @@ function parseMessagingItem(m: JsonRecord): InboundEvent | undefined {
         externalId,
         storyId,
         content,
+        rawTimestamp: ts,
       };
     }
 
@@ -150,6 +152,7 @@ function parseMessagingItem(m: JsonRecord): InboundEvent | undefined {
         contactRemoteId,
         externalId,
         mediaRef,
+        rawTimestamp: ts,
       };
     }
 
@@ -206,6 +209,7 @@ function parseNonMessageItem(
       externalId,
       payload,
       ...(title !== undefined ? { title } : {}),
+      rawTimestamp: ts,
     };
   }
 
@@ -243,6 +247,7 @@ function parseNonMessageItem(
       contactRemoteId,
       source,
       referralData: referral,
+      rawTimestamp: ts,
     };
   }
 

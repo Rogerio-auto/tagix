@@ -323,6 +323,18 @@ function toDate(rawTimestamp: string): Date {
 }
 
 /**
+ * Horário autoritativo do provider para `messages.provider_timestamp` (F52-S08).
+ * Diferente de `toDate`: quando o provider NÃO envia um timestamp válido,
+ * retorna `null` (não `new Date()`) para que a ordenação por
+ * `coalesce(provider_timestamp, created_at)` caia no `created_at` em vez de
+ * fixar um horário de inserção como se fosse do provider.
+ */
+function toProviderTimestamp(rawTimestamp: string): Date | null {
+  const date = new Date(rawTimestamp);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
  * Persistência default do inbound via `@hm/db`. Resolve channel→workspace e
  * aplica todo o trecho DB-bound sob RLS. Recebe as portas de socket/flow por
  * injeção (composição em `createInboundDeps`).
@@ -478,6 +490,14 @@ export class DbInboundPersistence implements InboundPersistencePort {
 
     // Trigger dispatcher de flows (F4-S13): avalia/dispara flows e retoma waiting por
     // mensagem do contato. Hook opcional — so inbound dispara triggers (secao 5.1).
+    //
+    // DEDUP DE DISPARO (F52-S08): só itera `outcome.inserted`, que vem do RETURNING
+    // do `INSERT ... ON CONFLICT DO NOTHING` (ver `insertMessages`) — logo contém
+    // APENAS mensagens efetivamente inseridas. Em reentrega do envelope (retry/nack)
+    // a mensagem já existe → é dedup'd → não retorna linha → não entra em `inserted`
+    // → o hook NÃO roda de novo. Resultado: o mesmo flow não é disparado 2×. O
+    // `resume` de execuções WAITING também só corre nesse caminho (mensagem nova),
+    // mas é idempotente por natureza (resumeFlowWithResponse só age sobre waiting).
     if (this.contactMessageHook && outcome.inserted.length > 0) {
       for (const msg of outcome.inserted) {
         try {
@@ -847,6 +867,9 @@ async function insertMessages(
         content: event.content ?? null,
         viewStatus: 'delivered',
         createdAt: toDate(event.rawTimestamp),
+        // F52-S08: horário autoritativo do provider (NULL quando ausente) →
+        // ordenação fiel via coalesce(provider_timestamp, created_at).
+        providerTimestamp: toProviderTimestamp(event.rawTimestamp),
         ...(event.metadata !== undefined ? { metadata: event.metadata } : {}),
       })
       .onConflictDoNothing({
