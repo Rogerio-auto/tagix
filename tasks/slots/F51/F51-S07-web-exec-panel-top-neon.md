@@ -2,7 +2,7 @@
 id: F51-S07
 title: Refino — painel de execuções no topo + card neon compacto (só ativas)
 phase: F51
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F51-S06]
@@ -11,8 +11,9 @@ agent_id: frontend-engineer
 source_docs:
   - docs/features/FLOW_BUILDER.md
   - docs/UX_PRINCIPLES.md
----
+claimed_at: 2026-06-27T02:19:33Z
 
+---
 # F51-S07 — Painel de execuções premium no topo do Cockpit
 
 ## Objetivo
