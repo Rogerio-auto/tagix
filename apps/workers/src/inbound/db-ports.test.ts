@@ -38,8 +38,9 @@ const noopFlow: InboundFlowEnqueuePort = {
 
 const noopStatusDeps: StatusDeps = {
   channels: { async resolve() { return null; } },
-  persistence: { async applyStatus() { return null; } },
+  persistence: { async applyStatus() { return { outcome: 'not_found' as const }; } },
   socket: { async emitStatusChanged() {} },
+  orphan: { async record() {}, async drain() { return null; } },
 };
 
 /** Hook de flows que apenas conta quantas vezes foi acionado (por mensagem). */
