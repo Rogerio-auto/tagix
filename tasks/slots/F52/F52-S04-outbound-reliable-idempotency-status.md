@@ -2,7 +2,7 @@
 id: F52-S04
 title: Outbound confiável — idempotência de envio + race do callback de status
 phase: F52
-status: blocked
+status: available
 priority: high
 estimated_size: L
 depends_on: [F52-S01]

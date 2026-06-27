@@ -2,7 +2,7 @@
 id: F52-S05
 title: Resiliência de mídia — media_status, retry de download, evento media_failed
 phase: F52
-status: blocked
+status: available
 priority: high
 estimated_size: M
 depends_on: [F52-S01]

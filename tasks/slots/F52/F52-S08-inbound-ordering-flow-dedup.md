@@ -2,7 +2,7 @@
 id: F52-S08
 title: Inbound consistente — ordenação fiel (provider_timestamp) + dedup de disparo de flow
 phase: F52
-status: blocked
+status: available
 priority: high
 estimated_size: M
 depends_on: [F52-S01]
