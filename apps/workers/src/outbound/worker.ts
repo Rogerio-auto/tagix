@@ -18,6 +18,7 @@
 import { connectMq, consume, type Envelope, type MqHandle } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
 import { runWithDistributedLock, type LockStore } from '../lock';
+import { resolveOutboundLockStore } from '../redis';
 import { parseOutboundJob, type OutboundJob } from './job';
 import { dispatchOutbound } from './dispatch';
 import { recordIgMessageTagUsed, recordIgWindowBlocked } from './ig-metrics';
@@ -29,7 +30,7 @@ import {
   type ChannelAdapterFactory,
 } from './db-ports';
 import { MqSocketEmit } from './mq-ports';
-import type { OutboundDeps } from './ports';
+import type { ChannelResolver, OutboundDeps, ResolvedChannel } from './ports';
 
 /** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
 type MqChannel = MqHandle['channel'];
@@ -43,6 +44,78 @@ export const OUTBOUND_LOCK_TTL_MS = 90_000;
 /** Chave de lock FIFO por conversa. */
 export function lockKey(conversationId: string): string {
   return `hm:lock:outbound:${conversationId}`;
+}
+
+/** Prefetch default do consumer outbound (tuning F52-S10). */
+export const DEFAULT_OUTBOUND_PREFETCH = 16;
+
+/** TTL default do cache de canal+adapter por workspace (tuning F52-S10). */
+export const DEFAULT_CHANNEL_CACHE_TTL_MS = 30_000;
+
+/**
+ * Lê o prefetch do consumer outbound do ambiente (`OUTBOUND_PREFETCH`).
+ *
+ * Com o lock por conversa (FIFO local + Redis), jobs de conversas DISTINTAS
+ * podem ser processados em paralelo numa instância sem violar a ordem — então o
+ * prefetch deixa de precisar ser 1. Jobs da MESMA conversa continuam
+ * serializados pelo lock. Default 16.
+ */
+export function outboundPrefetchFromEnv(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env['OUTBOUND_PREFETCH'];
+  if (raw === undefined || raw.length === 0) return DEFAULT_OUTBOUND_PREFETCH;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_OUTBOUND_PREFETCH;
+}
+
+/** Lê o TTL do cache de canal do ambiente (`OUTBOUND_CHANNEL_CACHE_TTL_MS`). */
+export function channelCacheTtlFromEnv(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env['OUTBOUND_CHANNEL_CACHE_TTL_MS'];
+  if (raw === undefined || raw.length === 0) return DEFAULT_CHANNEL_CACHE_TTL_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_CHANNEL_CACHE_TTL_MS;
+}
+
+interface CacheEntry {
+  readonly promise: Promise<ResolvedChannel>;
+  readonly expiresAt: number;
+}
+
+/**
+ * Decorator de `ChannelResolver` com cache TTL por `workspace:channel` (tuning
+ * F52-S10). Resolver o canal hoje implica consulta ao DB (RLS) + decifrar a
+ * credencial + instanciar o adapter — caro para repetir a cada job. O cache
+ * elimina esse round-trip nos envios subsequentes da mesma conversa/canal.
+ *
+ * - Cacheia a **Promise** (não só o valor) → dedupa resolves concorrentes
+ *   (stampede) quando vários jobs chegam juntos.
+ * - Rejeição é evictada na hora (não envenena o cache).
+ * - TTL curto (default 30s) mantém a rotação de token/estado do canal fresca.
+ */
+export class CachingChannelResolver implements ChannelResolver {
+  private readonly cache = new Map<string, CacheEntry>();
+
+  constructor(
+    private readonly inner: ChannelResolver,
+    private readonly ttlMs: number = DEFAULT_CHANNEL_CACHE_TTL_MS,
+  ) {}
+
+  async resolve(channelId: string, workspaceId: string): Promise<ResolvedChannel> {
+    if (this.ttlMs <= 0) return this.inner.resolve(channelId, workspaceId);
+
+    const key = `${workspaceId}:${channelId}`;
+    const now = Date.now();
+    const hit = this.cache.get(key);
+    if (hit && hit.expiresAt > now) return hit.promise;
+
+    const promise = this.inner.resolve(channelId, workspaceId);
+    this.cache.set(key, { promise, expiresAt: now + this.ttlMs });
+    // Não envenena o cache com falhas.
+    promise.catch(() => {
+      const current = this.cache.get(key);
+      if (current?.promise === promise) this.cache.delete(key);
+    });
+    return promise;
+  }
 }
 
 export interface OutboundWorkerOptions {
@@ -63,7 +136,12 @@ export function createOutboundDeps(
   adapterFactory: ChannelAdapterFactory,
 ): OutboundDeps {
   return {
-    channels: new DbChannelResolver(adapterFactory),
+    // Tuning F52-S10: resolve canal+adapter sob cache TTL → 1 round-trip de DB
+    // por canal a cada `ttl`, em vez de a cada job.
+    channels: new CachingChannelResolver(
+      new DbChannelResolver(adapterFactory),
+      channelCacheTtlFromEnv(),
+    ),
     persistence: new DbOutboundPersistence(),
     socket: new MqSocketEmit(channel),
   };
@@ -130,21 +208,32 @@ export async function startOutboundWorker(
   options: OutboundWorkerOptions,
 ): Promise<OutboundWorkerHandle> {
   const { logger } = options;
+
+  // Lock store: o injetado (testes) tem prioridade; senão resolve por ambiente
+  // (Redis em produção/multi-instância, in-memory em dev/teste).
+  const lock = options.lockStore
+    ? { store: options.lockStore, close: async (): Promise<void> => undefined }
+    : resolveOutboundLockStore(logger);
+  const workerOptions: OutboundWorkerOptions = { ...options, lockStore: lock.store };
+
   const { connection, channel } = await connectMq();
   await channel.assertQueue(OUTBOUND_QUEUE, { durable: true });
-  // Um job por vez por conexão → o lock FIFO em memória ordena por conversa.
-  await channel.prefetch(1);
+  // Tuning F52-S10: prefetch > 1 — conversas distintas correm em paralelo
+  // (a ordem da MESMA conversa é mantida pelo lock por conversa).
+  const prefetch = outboundPrefetchFromEnv();
+  await channel.prefetch(prefetch);
 
   await consume(channel, OUTBOUND_QUEUE, async (envelope) => {
-    await handleOutboundEnvelope(envelope, options);
+    await handleOutboundEnvelope(envelope, workerOptions);
   });
 
-  logger.info('outbound worker iniciado', { queue: OUTBOUND_QUEUE });
+  logger.info('outbound worker iniciado', { queue: OUTBOUND_QUEUE, prefetch });
 
   return {
     async stop(): Promise<void> {
       await channel.close();
       await connection.close();
+      await lock.close();
       logger.info('outbound worker parado', { queue: OUTBOUND_QUEUE });
     },
   };

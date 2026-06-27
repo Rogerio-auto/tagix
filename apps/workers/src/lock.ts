@@ -13,10 +13,13 @@
  *   com `prefetch`). É a fonte de verdade de ordenação enquanto roda uma única
  *   instância.
  * - Para múltiplas instâncias do worker, injeta-se um `LockStore` baseado em
- *   Redis (`SET NX PX` + token + unlock por Lua). Esse backend exige `ioredis`
- *   no `package.json` de `@hm/workers` (hoje ausente) — ver nota no relatório do
- *   slot. O contrato `LockStore` já está pronto para recebê-lo sem tocar no
- *   código do worker.
+ *   Redis (`SET NX PX` + token + unlock por Lua) — `RedisLockStore` em
+ *   `redis/lock-store.ts` (F52-S10). Em produção o store outbound é um
+ *   `CompositeLockStore(InMemoryFifoLockStore, RedisLockStore)`: o FIFO local
+ *   ordena estritamente os jobs da MESMA conversa que caem na mesma instância
+ *   (essencial com `prefetch > 1`), e o lock Redis garante **exclusão mútua
+ *   entre processos**. O contrato `LockStore` recebe ambos sem tocar no fluxo
+ *   crítico do worker.
  *
  * `verbatimModuleSyntax` ativo → `import type` para tipos.
  */
@@ -105,6 +108,62 @@ export class InMemoryFifoLockStore implements LockStore {
       state.held = false;
       if (state.queue.length === 0) this.keys.delete(key);
     }
+  }
+}
+
+/**
+ * Compõe vários `LockStore` em cascata: adquire na ordem informada e libera na
+ * ordem inversa (LIFO). Usado em produção como
+ * `CompositeLockStore(InMemoryFifoLockStore, RedisLockStore)`:
+ *
+ * - O store local (FIFO em memória) é adquirido **primeiro** → serializa e
+ *   ordena estritamente os jobs da mesma conversa dentro desta instância.
+ * - O store Redis é adquirido **depois** → garante exclusão mútua entre
+ *   processos. Só o titular local de uma conversa disputa o lock distribuído,
+ *   o que reduz a contenção no Redis ao mínimo necessário.
+ *
+ * Se uma aquisição falhar no meio da cascata, os locks já obtidos são liberados
+ * antes de propagar o erro (sem vazamento de lock).
+ */
+export class CompositeLockStore implements LockStore {
+  private readonly stores: readonly LockStore[];
+
+  constructor(...stores: LockStore[]) {
+    this.stores = stores;
+  }
+
+  async acquire(key: string, ttlMs: number): Promise<ReleaseFn> {
+    const acquired: ReleaseFn[] = [];
+    try {
+      for (const store of this.stores) {
+        acquired.push(await store.acquire(key, ttlMs));
+      }
+    } catch (err) {
+      // Reverte o que já foi obtido (LIFO) antes de propagar.
+      await this.releaseAll(acquired);
+      throw err;
+    }
+
+    let released = false;
+    return async () => {
+      if (released) return;
+      released = true;
+      await this.releaseAll(acquired);
+    };
+  }
+
+  /** Libera em ordem inversa; agrega falhas sem deixar locks pendentes. */
+  private async releaseAll(releases: readonly ReleaseFn[]): Promise<void> {
+    let firstError: unknown;
+    for (let i = releases.length - 1; i >= 0; i -= 1) {
+      try {
+        const release = releases[i];
+        if (release) await release();
+      } catch (err) {
+        firstError ??= err;
+      }
+    }
+    if (firstError !== undefined) throw firstError;
   }
 }
 
