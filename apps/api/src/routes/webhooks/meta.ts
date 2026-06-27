@@ -14,7 +14,7 @@ import { Buffer } from 'node:buffer';
 import express, { Router, type Request, type Response } from 'express';
 import type { ChannelProvider } from '@hm/shared';
 import { platformSecrets } from '../../secrets';
-import { registerWebhookEvent } from './dedup';
+import { hasWebhookEvent, recordWebhookRedelivery, registerWebhookEvent } from './dedup';
 import { deriveEventId } from './event-id';
 import {
   publishInboundMessage,
@@ -183,43 +183,69 @@ export function createMetaWebhookRouter(): Router {
         return;
       }
 
-      // Dedup na borda: evento repetido não re-publica (DoD).
       const eventId = deriveEventId(rawBody, parsed);
-      const isFirst = await registerWebhookEvent({
-        provider,
-        externalEventId: eventId,
-        rawPayload: body,
-      });
 
-      if (isFirst) {
-        await publishInboundMessage({ provider, raw: body });
+      // Reentrega: evento já processado → ack 200 sem republicar (e contabiliza).
+      // A consulta NÃO marca o dedup; a marcação só acontece após o enqueue.
+      if (await hasWebhookEvent({ provider, externalEventId: eventId, rawPayload: body })) {
+        recordWebhookRedelivery(provider);
+        webhookLogger.info('webhook.meta.redelivery', { provider, eventId });
+        res.sendStatus(200);
+        return;
+      }
+
+      // Enqueue ANTES de marcar o dedup (F52-S02). Se o publish lançar OU retornar
+      // false (backpressure), tratamos como falha: NÃO marcamos o dedup e
+      // respondemos 5xx para a Meta reentregar — sem janela de perda de evento.
+      try {
+        const published = await publishInboundMessage({ provider, raw: body });
+        if (!published) {
+          webhookLogger.warn('webhook.meta.enqueue.backpressure', { provider, eventId });
+          res.sendStatus(503);
+          return;
+        }
+      } catch (err) {
+        webhookLogger.error('webhook.meta.enqueue.failed', {
+          provider,
+          eventId,
+          error: err instanceof Error ? err.message : 'unknown',
+        });
+        res.sendStatus(503);
+        return;
+      }
+
+      // Enqueue confirmado → marca o dedup. Se a marcação falhar, o erro propaga
+      // ao error handler (5xx) e a Meta reentrega: uma republicação extra é segura
+      // (idempotência downstream via uq_messages_external).
+      await registerWebhookEvent({ provider, externalEventId: eventId, rawPayload: body });
+
+      // Processamento best-effort específico de canal (não bloqueia o ack 200).
+      if (provider === 'meta_whatsapp') {
         // F4-S14: despacha submissions de WhatsApp Flow (nfm_reply) -> engine.
-        if (provider === 'meta_whatsapp') {
-          for (const submission of extractFlowSubmissions(body)) {
-            try {
-              await processMetaFlowSubmission(submission, submissionDeps);
-            } catch {
-              // Nao bloqueia o ack do webhook; o erro ja e logado no handler.
-            }
-          }
-          // F39-S03: ingestão de coexistência (echoes/history/app_state).
+        for (const submission of extractFlowSubmissions(body)) {
           try {
-            await dispatchCoexistence(body);
-          } catch (err) {
-            webhookLogger.error('webhook.whatsapp.coexistence.failed', {
-              error: err instanceof Error ? err.message : 'unknown',
-            });
+            await processMetaFlowSubmission(submission, submissionDeps);
+          } catch {
+            // Nao bloqueia o ack do webhook; o erro ja e logado no handler.
           }
         }
-        // F15-S02: observabilidade da ingestao IG (sem parse de dominio aqui).
-        if (provider === 'meta_instagram') {
-          const summary = summarizeInstagramEnvelope(body);
-          webhookLogger.info('webhook.instagram.ingested', {
-            igUserIds: summary.igUserIds,
-            counts: summary.counts,
-            total: summary.total,
+        // F39-S03: ingestão de coexistência (echoes/history/app_state).
+        try {
+          await dispatchCoexistence(body);
+        } catch (err) {
+          webhookLogger.error('webhook.whatsapp.coexistence.failed', {
+            error: err instanceof Error ? err.message : 'unknown',
           });
         }
+      }
+      // F15-S02: observabilidade da ingestao IG (sem parse de dominio aqui).
+      if (provider === 'meta_instagram') {
+        const summary = summarizeInstagramEnvelope(body);
+        webhookLogger.info('webhook.instagram.ingested', {
+          igUserIds: summary.igUserIds,
+          counts: summary.counts,
+          total: summary.total,
+        });
       }
 
       // Meta exige resposta < 5s — devolvemos 200 imediatamente.

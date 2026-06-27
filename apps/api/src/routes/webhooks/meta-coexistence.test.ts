@@ -20,6 +20,8 @@ const publishCoexistenceEcho = vi.fn((_payload: unknown): Promise<boolean> => Pr
 const publishHistoryBatch = vi.fn((_payload: unknown): Promise<boolean> => Promise.resolve(true));
 const publishAppState = vi.fn((_payload: unknown): Promise<boolean> => Promise.resolve(true));
 const registerWebhookEvent = vi.fn((_input: unknown): Promise<boolean> => Promise.resolve(true));
+const hasWebhookEvent = vi.fn((_input: unknown): Promise<boolean> => Promise.resolve(false));
+const recordWebhookRedelivery = vi.fn((_provider: unknown): void => undefined);
 
 vi.mock('../../secrets', () => ({
   platformSecrets: {
@@ -33,6 +35,8 @@ vi.mock('../../secrets', () => ({
 
 vi.mock('./dedup', () => ({
   registerWebhookEvent,
+  hasWebhookEvent,
+  recordWebhookRedelivery,
 }));
 
 vi.mock('./publisher', () => ({
@@ -83,6 +87,7 @@ function wabaChange(field: string, value: Record<string, unknown>): Record<strin
 describe('POST /webhooks/meta — coexistência', () => {
   beforeEach(() => {
     registerWebhookEvent.mockResolvedValue(true);
+    hasWebhookEvent.mockResolvedValue(false);
   });
   afterEach(() => {
     vi.clearAllMocks();
@@ -148,14 +153,17 @@ describe('POST /webhooks/meta — coexistência', () => {
     expect(publishAppState).not.toHaveBeenCalled();
   });
 
-  it('duplicata (dedup=false) não re-publica', async () => {
-    registerWebhookEvent.mockResolvedValue(false);
+  it('reentrega (evento já visto) não re-publica e conta a reentrega', async () => {
+    hasWebhookEvent.mockResolvedValue(true);
     const status = await post(
       wabaChange('smb_message_echoes', {
         message_echoes: [{ id: 'wamid.E1', to: '5511999999999', type: 'text' }],
       }),
     );
     expect(status).toBe(200);
+    expect(publishInboundMessage).not.toHaveBeenCalled();
     expect(publishCoexistenceEcho).not.toHaveBeenCalled();
+    expect(registerWebhookEvent).not.toHaveBeenCalled();
+    expect(recordWebhookRedelivery).toHaveBeenCalledWith('meta_whatsapp');
   });
 });

@@ -11,12 +11,15 @@
 import { Buffer } from 'node:buffer';
 import { timingSafeEqual } from 'node:crypto';
 import express, { Router, type Request, type Response } from 'express';
+import { createLogger } from '@hm/logger';
 import { platformSecrets } from '../../secrets';
-import { registerWebhookEvent } from './dedup';
+import { hasWebhookEvent, recordWebhookRedelivery, registerWebhookEvent } from './dedup';
 import { deriveEventId } from './event-id';
 import { publishInboundMessage } from './publisher';
 
 const API_KEY_HEADER = 'x-api-key';
+
+const wahaLogger = createLogger('info', { svc: 'waha-webhook' });
 
 /** Comparação constant-time de strings (evita timing oracle no segredo). */
 function safeEqual(a: string, b: string): boolean {
@@ -65,15 +68,36 @@ export function createWahaWebhookRouter(): Router {
       }
 
       const eventId = deriveEventId(rawBody, parsed);
-      const isFirst = await registerWebhookEvent({
-        provider: 'waha',
-        externalEventId: eventId,
-        rawPayload: body,
-      });
 
-      if (isFirst) {
-        await publishInboundMessage({ provider: 'waha', raw: body });
+      // Reentrega: evento já processado → ack 200 sem republicar (e contabiliza).
+      if (await hasWebhookEvent({ provider: 'waha', externalEventId: eventId, rawPayload: body })) {
+        recordWebhookRedelivery('waha');
+        wahaLogger.info('webhook.waha.redelivery', { eventId });
+        res.sendStatus(200);
+        return;
       }
+
+      // Enqueue ANTES de marcar o dedup (F52-S02). Publish que lança OU retorna
+      // false (backpressure) é falha: não marca dedup e responde 5xx para o WAHA
+      // reentregar — sem janela de perda de evento.
+      try {
+        const published = await publishInboundMessage({ provider: 'waha', raw: body });
+        if (!published) {
+          wahaLogger.warn('webhook.waha.enqueue.backpressure', { eventId });
+          res.sendStatus(503);
+          return;
+        }
+      } catch (err) {
+        wahaLogger.error('webhook.waha.enqueue.failed', {
+          eventId,
+          error: err instanceof Error ? err.message : 'unknown',
+        });
+        res.sendStatus(503);
+        return;
+      }
+
+      // Enqueue confirmado → marca o dedup (idempotência da borda).
+      await registerWebhookEvent({ provider: 'waha', externalEventId: eventId, rawPayload: body });
 
       res.sendStatus(200);
     },

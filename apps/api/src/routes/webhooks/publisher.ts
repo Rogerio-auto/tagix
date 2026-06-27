@@ -32,6 +32,39 @@ const INBOUND_ROUTING_KEY = `${QUEUES.inbound}.message`;
 
 let handlePromise: Promise<MqHandle> | null = null;
 
+/**
+ * Teto de tempo para confirmar o enqueue do `inbound.message` na borda. O
+ * provider (Meta) exige resposta < ~5s e reentrega em erro; se o broker estiver
+ * indisponível, preferimos falhar rápido aqui (e responder 5xx) a pendurar a
+ * requisição até o timeout do provider. F52-S02.
+ */
+export const INBOUND_PUBLISH_TIMEOUT_MS = 3000;
+
+class PublishTimeoutError extends Error {
+  constructor(ms: number) {
+    super(`inbound enqueue timed out after ${ms}ms`);
+    this.name = 'PublishTimeoutError';
+  }
+}
+
+/**
+ * Corre `op` contra um timeout. Em timeout rejeita com `PublishTimeoutError`
+ * (tratado como falha de enqueue pelo caller). O timer é `unref`ado para não
+ * segurar o event loop e sempre limpo no `finally`.
+ */
+async function withTimeout<T>(op: () => Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const guard = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new PublishTimeoutError(ms)), ms);
+    timer.unref();
+  });
+  try {
+    return await Promise.race([op(), guard]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 async function getHandle(): Promise<MqHandle> {
   handlePromise ??= connectMq();
   try {
@@ -51,13 +84,18 @@ export interface InboundMessagePayload {
 }
 
 /**
- * Publica um evento `inbound.message` no exchange de eventos. Retorna `false`
- * se o broker aplicou backpressure (buffer cheio) — o caller decide o status.
+ * Publica um evento `inbound.message` no exchange de eventos. Retorna `false` se
+ * o broker aplicou backpressure (buffer cheio) — o caller trata como falha de
+ * enqueue. Lança (`PublishTimeoutError`/erro de conexão) se o broker estiver
+ * indisponível dentro de `INBOUND_PUBLISH_TIMEOUT_MS`. Em ambos os casos a borda
+ * NÃO marca o dedup e responde 5xx para o provider reentregar (F52-S02).
  */
 export async function publishInboundMessage(payload: InboundMessagePayload): Promise<boolean> {
-  const { channel } = await getHandle();
-  const envelope = makeEnvelope(INBOUND_MESSAGE_TYPE, UNRESOLVED_WORKSPACE_ID, payload);
-  return publish(channel, INBOUND_ROUTING_KEY, envelope);
+  return withTimeout(async () => {
+    const { channel } = await getHandle();
+    const envelope = makeEnvelope(INBOUND_MESSAGE_TYPE, UNRESOLVED_WORKSPACE_ID, payload);
+    return publish(channel, INBOUND_ROUTING_KEY, envelope);
+  }, INBOUND_PUBLISH_TIMEOUT_MS);
 }
 
 // --- Coexistência WhatsApp Business (F39-S03) ---
