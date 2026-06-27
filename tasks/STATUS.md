@@ -42,7 +42,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F49   | 2     | 0   | 0   | 0   | 0   | 0   | 2   |
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F50   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F51   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
+| F51   | 7     | 1   | 0   | 0   | 0   | 0   | 6   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -525,14 +525,15 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 51
 
-| ID      | Titulo                                                               | Status | Prioridade | Depende de       |
-| ------- | -------------------------------------------------------------------- | ------ | ---------- | ---------------- |
-| F51-S01 | Evento socket flow_execution:updated (@hm/shared)                    | ✅ done | high       | —                |
-| F51-S02 | FlowEventsPort + emissão de estado no dispatcher (@hm/flow-engine)   | ✅ done | high       | —                |
-| F51-S03 | Publisher real do FlowEventsPort → socket relay (apps/workers)       | ✅ done | high       | F51-S01, F51-S02 |
-| F51-S04 | Enriquecer GET executions com flowName + emitir no cancel (apps/api) | ✅ done | high       | F51-S01          |
-| F51-S05 | Web dados — query enriquecida + hooks (live + countdown)             | ✅ done | high       | F51-S01, F51-S04 |
-| F51-S06 | Web UI — seção "Execuções Ativas" + cards no Cockpit                 | ✅ done | high       | F51-S05          |
+| ID      | Titulo                                                                | Status      | Prioridade | Depende de       |
+| ------- | --------------------------------------------------------------------- | ----------- | ---------- | ---------------- |
+| F51-S01 | Evento socket flow_execution:updated (@hm/shared)                     | ✅ done      | high       | —                |
+| F51-S02 | FlowEventsPort + emissão de estado no dispatcher (@hm/flow-engine)    | ✅ done      | high       | —                |
+| F51-S03 | Publisher real do FlowEventsPort → socket relay (apps/workers)        | ✅ done      | high       | F51-S01, F51-S02 |
+| F51-S04 | Enriquecer GET executions com flowName + emitir no cancel (apps/api)  | ✅ done      | high       | F51-S01          |
+| F51-S05 | Web dados — query enriquecida + hooks (live + countdown)              | ✅ done      | high       | F51-S01, F51-S04 |
+| F51-S06 | Web UI — seção "Execuções Ativas" + cards no Cockpit                  | ✅ done      | high       | F51-S05          |
+| F51-S07 | Refino — painel de execuções no topo + card neon compacto (só ativas) | 🟢 available | high       | F51-S06          |
 
 ## Fase 6 — Pipeline
 
