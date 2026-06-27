@@ -1,5 +1,4 @@
 import {
-  Activity,
   BookOpen,
   Bot,
   Calendar,
@@ -52,7 +51,6 @@ export const NAV: readonly NavItem[] = [
   { href: '/calendar', label: 'Agenda', icon: Calendar, perm: 'calendar.view' },
   { href: '/contacts', label: 'Contatos', icon: Users, perm: 'contact.view' },
   { href: '/flows/backup', label: 'Backup de Flows', icon: DatabaseBackup, group: 'manage', perm: 'flow.backup' },
-  { href: '/monitoring', label: 'Monitoramento', icon: Activity, group: 'manage', perm: 'workspace.edit' },
   { href: '/help', label: 'Ajuda', icon: LifeBuoy, group: 'manage' },
   { href: '/settings', label: 'Configurações', icon: Settings, group: 'manage' },
 ];

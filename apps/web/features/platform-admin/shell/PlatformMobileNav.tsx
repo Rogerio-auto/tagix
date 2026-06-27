@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Activity,
   ArrowLeft,
   Boxes,
   Bot,
@@ -35,6 +36,7 @@ const ICONS: Record<PlatformNavItem['icon'], LucideIcon> = {
   subscriptions: CreditCard,
   playground: Bot,
   impersonation: Eye,
+  monitoring: Activity,
   help: LifeBuoy,
   support: Headset,
 };

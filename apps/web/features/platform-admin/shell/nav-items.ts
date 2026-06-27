@@ -15,6 +15,7 @@ export interface PlatformNavItem {
     | 'subscriptions'
     | 'playground'
     | 'impersonation'
+    | 'monitoring'
     | 'help'
     | 'support';
   /** Descrição curta para o help inline `?` (UX §3.3), sobretudo em Secrets. */
@@ -78,6 +79,12 @@ export const PLATFORM_NAV: readonly PlatformNavItem[] = [
     icon: 'impersonation',
     help: 'View-as read-only: veja o produto pelos olhos do tenant. Time-boxed e auditado (LGPD).',
     sensitive: true,
+  },
+  {
+    href: '/platform/monitoring',
+    label: 'Monitoramento',
+    icon: 'monitoring',
+    help: 'Saúde da sincronização: profundidade das filas/DLQ, ticks de scheduler e status de conexão dos canais. Ferramenta operacional de infra.',
   },
   {
     href: '/platform/help',
