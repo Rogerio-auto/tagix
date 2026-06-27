@@ -6,14 +6,28 @@
  * orquestração — ver relatório do slot). A lógica não depende de RabbitMQ:
  * `handleOutboundEnvelope` é testado com portas fake.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Channel, IChannelAdapter, SendResult } from '@hm/channels';
 import { InMemoryFifoLockStore, runWithDistributedLock } from '../lock';
 import { parseOutboundJob } from './job';
 import { dispatchOutbound } from './dispatch';
+import { finalizeOutbound } from './finalize';
 import { handleOutboundEnvelope } from './worker';
 import type { OutboundDeps } from './ports';
+import type { OrphanStatusStore } from '../inbound/status';
 import type { Envelope } from '@hm/shared/mq';
+
+// F52-S04: estes são unit tests de roteamento/finalize. O guard de idempotência
+// e o orphan store DEFAULT batem no DB (`@hm/db`); aqui forçamos `DATABASE_URL`
+// vazio para que no-opem — determinístico com ou sem Postgres dev no runner. Os
+// caminhos de idempotência/reconciliação são exercitados com portas FAKE
+// injetadas (ver describes F52-S04 abaixo).
+beforeEach(() => {
+  vi.stubEnv('DATABASE_URL', '');
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function makeChannel(provider: Channel['provider']): Channel {
   return { id: 'ch1', workspaceId: 'ws1', provider, accessToken: 'tok', phoneNumberId: 'pn1' };
@@ -306,5 +320,141 @@ describe('handleOutboundEnvelope — finalize', () => {
     expect(d.persist).toHaveBeenCalledOnce();
     expect(d.emit).toHaveBeenCalledOnce();
     expect(d.persist.mock.calls[0]?.[0]).toMatchObject({ status: 'sent', externalId: 'wamid.X' });
+  });
+});
+
+// ─── F52-S04: idempotência de envio (guard "já enviada") ──────────────────────
+
+describe('dispatchOutbound — idempotência (F52-S04)', () => {
+  function textJob() {
+    return parseOutboundJob({
+      kind: 'text',
+      channelId: 'ch1',
+      conversationId: 'cv1',
+      messageId: 'm1',
+      chatId: 'c',
+      text: 'hi',
+    });
+  }
+
+  it('redelivery: mensagem já tem external_id → NÃO chama o adapter (sem 2º envio)', async () => {
+    const channel = makeChannel('waha');
+    const adapter = okAdapter('waha');
+    const guard = { findSentExternalId: vi.fn(async () => 'wamid.PRIOR') };
+
+    const res = await dispatchOutbound(textJob(), channel, adapter, guard);
+
+    expect(adapter.sendText).not.toHaveBeenCalled();
+    expect(res.dispatched).toBe(false);
+    if (!res.dispatched) expect(res.alreadySent).toBe(true);
+    expect(res.result.ok).toBe(true);
+    if (res.result.ok) expect(res.result.externalId).toBe('wamid.PRIOR');
+    expect(guard.findSentExternalId).toHaveBeenCalledWith('m1', 'ws1');
+  });
+
+  it('primeira entrega: sem external_id → envia normalmente (adapter chamado 1×)', async () => {
+    const channel = makeChannel('waha');
+    const adapter = okAdapter('waha');
+    const guard = { findSentExternalId: vi.fn(async () => null) };
+
+    const res = await dispatchOutbound(textJob(), channel, adapter, guard);
+
+    expect(adapter.sendText).toHaveBeenCalledOnce();
+    expect(res.dispatched).toBe(true);
+  });
+});
+
+// ─── F52-S04: reconciliação de status órfão (callback antes do external_id) ────
+
+describe('finalizeOutbound — reconciliação de órfão (F52-S04)', () => {
+  function fakeDeps(): {
+    deps: OutboundDeps;
+    persist: ReturnType<typeof vi.fn>;
+    emit: ReturnType<typeof vi.fn>;
+  } {
+    const persist = vi.fn(async () => undefined);
+    const emit = vi.fn(async () => undefined);
+    return {
+      persist,
+      emit,
+      deps: {
+        channels: { resolve: vi.fn() },
+        persistence: { persist },
+        socket: { emitStatusChanged: emit },
+      },
+    };
+  }
+
+  const job = parseOutboundJob({
+    kind: 'text',
+    channelId: 'ch1',
+    conversationId: 'cv1',
+    messageId: 'm1',
+    chatId: 'c',
+    text: 'hi',
+  });
+
+  it('aplica o status órfão (delivered) bufferizado quando o external_id é persistido', async () => {
+    const { deps, persist, emit } = fakeDeps();
+    const orphan: OrphanStatusStore = {
+      record: vi.fn(async () => undefined),
+      drain: vi.fn(async () => ({ externalId: 'wamid.X', status: 'delivered' as const, at: new Date() })),
+    };
+
+    await finalizeOutbound(job, { ok: true, externalId: 'wamid.X' }, 'ws1', deps, orphan);
+
+    expect(orphan.drain).toHaveBeenCalledWith('wamid.X');
+    // 1º persist = sent (envio); 2º persist = delivered (reconciliação do órfão).
+    expect(persist).toHaveBeenCalledTimes(2);
+    expect(persist.mock.calls[0]?.[0]).toMatchObject({ status: 'sent', externalId: 'wamid.X' });
+    expect(persist.mock.calls[1]?.[0]).toMatchObject({ status: 'delivered', externalId: 'wamid.X' });
+    expect(emit).toHaveBeenCalledTimes(2);
+    expect(emit.mock.calls[1]?.[0]).toMatchObject({ status: 'delivered' });
+  });
+
+  it('sem órfão bufferizado: persiste e emite uma única vez (sent)', async () => {
+    const { deps, persist, emit } = fakeDeps();
+    const orphan: OrphanStatusStore = {
+      record: vi.fn(async () => undefined),
+      drain: vi.fn(async () => null),
+    };
+
+    await finalizeOutbound(job, { ok: true, externalId: 'wamid.X' }, 'ws1', deps, orphan);
+
+    expect(persist).toHaveBeenCalledOnce();
+    expect(emit).toHaveBeenCalledOnce();
+  });
+
+  it('órfão que não avança (sent sobre sent) não reaplica (monotônico)', async () => {
+    const { deps, persist } = fakeDeps();
+    const orphan: OrphanStatusStore = {
+      record: vi.fn(async () => undefined),
+      drain: vi.fn(async () => ({ externalId: 'wamid.X', status: 'sent' as const, at: new Date() })),
+    };
+
+    await finalizeOutbound(job, { ok: true, externalId: 'wamid.X' }, 'ws1', deps, orphan);
+
+    expect(persist).toHaveBeenCalledOnce();
+  });
+
+  it('falha definitiva → status failed + failedReason persistido, sem drenar órfão', async () => {
+    const { deps, persist, emit } = fakeDeps();
+    const orphan: OrphanStatusStore = {
+      record: vi.fn(async () => undefined),
+      drain: vi.fn(async () => null),
+    };
+
+    await finalizeOutbound(
+      job,
+      { ok: false, errorCode: 'PROVIDER_DOWN', errorMessage: 'boom' },
+      'ws1',
+      deps,
+      orphan,
+    );
+
+    expect(persist).toHaveBeenCalledOnce();
+    expect(persist.mock.calls[0]?.[0]).toMatchObject({ status: 'failed', errorCode: 'PROVIDER_DOWN' });
+    expect(emit.mock.calls[0]?.[0]).toMatchObject({ status: 'failed' });
+    expect(orphan.drain).not.toHaveBeenCalled();
   });
 });

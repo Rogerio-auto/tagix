@@ -15,6 +15,7 @@ import { eq } from 'drizzle-orm';
 import type { Channel, IChannelAdapter } from '@hm/channels';
 import { decryptSecret, schema, withWorkspace } from '@hm/db';
 import type { ChannelProvider } from '@hm/shared';
+import { nextViewStatus } from '../inbound/status';
 import type {
   ChannelResolver,
   OutboundPersistencePort,
@@ -82,6 +83,46 @@ function failedReason(input: PersistOutboundInput): string | null {
   return input.errorCode ?? 'outbound_send_failed';
 }
 
+// ─── Idempotency guard (F52-S04) ──────────────────────────────────────────────
+
+/** True quando há `DATABASE_URL` — fora disso (testes unit puros) o guard no-opa. */
+function dbConfigured(): boolean {
+  const url = process.env['DATABASE_URL'];
+  return typeof url === 'string' && url.length > 0;
+}
+
+/**
+ * Guard de idempotência de envio (F52-S04). Antes de chamar o adapter, o
+ * `dispatch` pergunta se a mensagem JÁ tem `external_id` persistido — se tiver, o
+ * job já foi entregue ao provider numa execução anterior (redelivery após crash
+ * parcial) e NÃO deve reenviar (evita 2 wamids / cobrança dupla). A idempotência
+ * forte é o `external_id` presente; o índice único `uq_messages_outbound_idempotency_key`
+ * + a chave gravada na borda (`messages.ts`) cobrem o duplo-POST do cliente.
+ */
+export interface OutboundSendGuard {
+  /** `external_id` já persistido para a mensagem, ou `null` (ainda não enviada). */
+  findSentExternalId(messageId: string, workspaceId: string): Promise<string | null>;
+}
+
+/** Guard default `@hm/db`+RLS. No-opa (retorna `null`) sem `DATABASE_URL`. */
+export class DbOutboundSendGuard implements OutboundSendGuard {
+  async findSentExternalId(messageId: string, workspaceId: string): Promise<string | null> {
+    if (!dbConfigured()) return null;
+    const { messages } = schema;
+    return withWorkspace(workspaceId, async (tx) => {
+      const [row] = await tx
+        .select({ externalId: messages.externalId })
+        .from(messages)
+        .where(eq(messages.id, messageId))
+        .limit(1);
+      return row?.externalId ?? null;
+    });
+  }
+}
+
+/** Instância default compartilhada (injetada por padrão em `dispatchOutbound`). */
+export const defaultOutboundSendGuard: OutboundSendGuard = new DbOutboundSendGuard();
+
 /**
  * Persistência default do outbound via `@hm/db`. Sob `withWorkspace` (RLS):
  * UPDATE `messages.view_status`/`external_id`/`failed_reason` casando por id e
@@ -94,15 +135,31 @@ export class DbOutboundPersistence implements OutboundPersistencePort {
     const reason = failedReason(input);
 
     await withWorkspace(input.workspaceId, async (tx) => {
+      const [current] = await tx
+        .select({ id: messages.id, viewStatus: messages.viewStatus })
+        .from(messages)
+        .where(eq(messages.id, input.messageId))
+        .limit(1);
+      if (current === undefined) return;
+
+      // Monotônico (F52-S04): só avança o view_status (sent<delivered<read;
+      // failed vence). Garante que redelivery de job e reconciliação de órfão
+      // NUNCA regridem o status (ex.: re-gravar `sent` numa msg já `read`).
+      const advanced = nextViewStatus(current.viewStatus, input.status);
+
       await tx
         .update(messages)
         .set({
-          viewStatus: input.status,
+          // SEMPRE grava o external_id quando presente, mesmo sem avanço de
+          // status — assim o callback de status passa a casar a mensagem (fecha
+          // a janela do órfão na origem).
           ...(input.externalId !== undefined ? { externalId: input.externalId } : {}),
-          ...(reason !== null ? { failedReason: reason } : {}),
+          ...(advanced !== null
+            ? { viewStatus: advanced, ...(reason !== null ? { failedReason: reason } : {}) }
+            : {}),
           updatedAt: new Date(),
         })
-        .where(eq(messages.id, input.messageId));
+        .where(eq(messages.id, current.id));
     });
   }
 }

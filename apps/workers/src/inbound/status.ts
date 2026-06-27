@@ -31,7 +31,7 @@
  * `pipeline.ts`/`worker.ts` (fora dos `files_allowed`).
  */
 import { Buffer } from 'node:buffer';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { getDb, schema, withWorkspace } from '@hm/db';
 import { makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import type { ChannelProvider, ViewStatus } from '@hm/shared';
@@ -68,6 +68,13 @@ export interface StatusEventInput {
 /** Resultado observável do handler (log/teste). */
 export type StatusHandleResult =
   | { readonly outcome: 'updated'; readonly conversationId: string; readonly messageId: string }
+  /**
+   * F52-S04: o callback chegou ANTES do `external_id` ser persistido pelo worker
+   * outbound (race conhecida). O status foi BUFFERIZADO (órfão de primeira
+   * classe) keyed por `externalId` e será aplicado quando o `external_id`
+   * aparecer (ver `finalize.ts`). Nunca se perde.
+   */
+  | { readonly outcome: 'buffered'; readonly externalId: string }
   | { readonly outcome: 'skipped'; readonly reason: StatusSkipReason };
 
 /** Motivos de skip (todos ack'd — reprocessar payload imutável não ajuda). */
@@ -80,7 +87,7 @@ export type StatusSkipReason = 'channel_not_resolved' | 'message_not_found' | 'n
  * e sempre vence (rank máximo). O UPDATE só avança quando o rank do novo status
  * é estritamente maior que o atual → idempotente e tolerante a reordenação.
  */
-const STATUS_RANK: Record<ViewStatus, number> = {
+export const STATUS_RANK: Record<ViewStatus, number> = {
   pending: 0,
   sent: 1,
   delivered: 2,
@@ -185,17 +192,27 @@ export interface StatusMessageTarget {
  */
 export interface StatusPersistencePort {
   /**
-   * Aplica o novo status à mensagem casada por `externalId`. Retorna o alvo
-   * (com `conversationId` para o socket) quando houve avanço; `null` quando a
-   * mensagem não existe ou o status não avança (no-op).
+   * Aplica o novo status à mensagem casada por `externalId`. Resultado
+   * discriminado (F52-S04 — necessário para distinguir o callback órfão do
+   * no-op monotônico):
+   *  - `applied`   → houve avanço; carrega o alvo (`conversationId` p/ socket).
+   *  - `no_advance`→ a mensagem existe mas o status não avança (idempotente).
+   *  - `not_found` → NÃO existe mensagem com esse `externalId` (callback chegou
+   *    antes do `external_id` ser persistido) → o caller BUFFERIZA o órfão.
    */
   applyStatus(input: {
     readonly workspaceId: string;
     readonly externalId: string;
     readonly status: ViewStatus;
     readonly at: Date;
-  }): Promise<StatusMessageTarget | null>;
+  }): Promise<StatusApplyResult>;
 }
+
+/** Resultado discriminado de `applyStatus` (F52-S04). */
+export type StatusApplyResult =
+  | { readonly outcome: 'applied'; readonly target: StatusMessageTarget }
+  | { readonly outcome: 'no_advance' }
+  | { readonly outcome: 'not_found' };
 
 /**
  * Estreita o `view_status` cru da coluna para o rank de progressão. A coluna
@@ -210,6 +227,20 @@ function currentRankOf(raw: string): number | undefined {
   return undefined;
 }
 
+/**
+ * Decisão monotônica pura (F52-S04, reusada pelo worker outbound): dado o
+ * `view_status` cru atual da coluna e um status entrante, devolve o novo status
+ * SE houver avanço de rank (`sent<delivered<read`; `failed` vence), senão `null`
+ * (no-op). `deleted`/desconhecido → `null` (nunca ressuscita uma mensagem
+ * apagada). É a única fonte da verdade da progressão de status — testada em
+ * isolamento e tolerante a acks fora de ordem/reprocessados.
+ */
+export function nextViewStatus(currentRaw: string, incoming: ViewStatus): ViewStatus | null {
+  const cur = currentRankOf(currentRaw);
+  if (cur === undefined) return null;
+  return STATUS_RANK[incoming] > cur ? incoming : null;
+}
+
 /** Persistência default via `@hm/db` + RLS. */
 export class DbStatusPersistence implements StatusPersistencePort {
   async applyStatus(input: {
@@ -217,9 +248,8 @@ export class DbStatusPersistence implements StatusPersistencePort {
     readonly externalId: string;
     readonly status: ViewStatus;
     readonly at: Date;
-  }): Promise<StatusMessageTarget | null> {
+  }): Promise<StatusApplyResult> {
     const { messages } = schema;
-    const nextRank = STATUS_RANK[input.status];
 
     return withWorkspace(input.workspaceId, async (tx) => {
       const [current] = await tx
@@ -232,33 +262,137 @@ export class DbStatusPersistence implements StatusPersistencePort {
         .where(and(eq(messages.externalId, input.externalId), isNull(messages.deletedAt)))
         .limit(1);
 
-      if (current === undefined) return null;
+      // Mensagem inexistente p/ esse externalId → callback chegou antes do
+      // worker outbound gravar o external_id (race). NÃO descarta: o caller
+      // bufferiza o órfão.
+      if (current === undefined) return { outcome: 'not_found' };
 
-      const currentRank = currentRankOf(current.viewStatus);
-      // `deleted`/desconhecido → aborta (nunca ressuscita mensagem apagada).
-      if (currentRank === undefined) return null;
-      // Monotônico: só avança (idempotente / tolerante a acks fora de ordem).
-      if (nextRank <= currentRank) return null;
+      // Monotônico (sent<delivered<read; failed vence): só avança. `deleted`/
+      // desconhecido → null (nunca ressuscita). Tolerante a acks fora de ordem.
+      const advanced = nextViewStatus(current.viewStatus, input.status);
+      if (advanced === null) return { outcome: 'no_advance' };
 
       await tx
         .update(messages)
         .set({
-          viewStatus: input.status,
-          ...(input.status === 'delivered' ? { deliveredAt: input.at } : {}),
-          ...(input.status === 'read' ? { readAt: input.at } : {}),
-          ...(input.status === 'failed' ? { failedReason: 'channel_status_failed' } : {}),
+          viewStatus: advanced,
+          ...(advanced === 'delivered' ? { deliveredAt: input.at } : {}),
+          ...(advanced === 'read' ? { readAt: input.at } : {}),
+          ...(advanced === 'failed' ? { failedReason: 'channel_status_failed' } : {}),
           updatedAt: input.at,
         })
         .where(eq(messages.id, current.id));
 
       return {
-        messageId: current.id,
-        conversationId: current.conversationId,
-        previousStatus: current.viewStatus,
+        outcome: 'applied',
+        target: {
+          messageId: current.id,
+          conversationId: current.conversationId,
+          previousStatus: current.viewStatus,
+        },
       };
     });
   }
 }
+
+// ─── Orphan status store (F52-S04, buffer cross-process) ──────────────────────
+
+/** True quando há `DATABASE_URL` — fora disso (testes unit puros) o store no-opa. */
+function dbConfigured(): boolean {
+  const url = process.env['DATABASE_URL'];
+  return typeof url === 'string' && url.length > 0;
+}
+
+/**
+ * Status de entrega cujo `external_id` ainda NÃO existe em `messages` (callback
+ * tardio). Keyed por `externalId` (= wamid/mid). Buffer de primeira classe,
+ * cross-process (inbound worker escreve; outbound worker drena no `finalize`).
+ */
+export interface OrphanStatusRecord {
+  readonly externalId: string;
+  readonly status: ViewStatus;
+  readonly at: Date;
+}
+
+/**
+ * Porta do buffer de status órfão. A implementação default persiste em
+ * `webhook_events` (tabela platform-level já existente) sob um provider
+ * SENTINELA, sem colidir com a dedup de webhooks (chave namespaced). Mantém só
+ * o status de MAIOR rank por `externalId` (monotônico mesmo no buffer).
+ */
+export interface OrphanStatusStore {
+  /** Bufferiza (upsert) o status órfão, preservando o de maior rank. */
+  record(input: OrphanStatusRecord): Promise<void>;
+  /** Lê+remove (atômico) o status bufferizado para um `externalId`, ou `null`. */
+  drain(externalId: string): Promise<OrphanStatusRecord | null>;
+}
+
+/**
+ * Provider sentinela em `webhook_events` para os registros de status órfão.
+ * Garante chave `(provider, external_event_id)` disjunta da dedup real de
+ * webhooks (que usa o provider real) — zero colisão.
+ */
+const ORPHAN_PROVIDER_SENTINEL = '__orphan_outbound_status';
+
+function parseOrphanPayload(externalId: string, raw: Record<string, unknown>): OrphanStatusRecord | null {
+  const status = raw['status'];
+  if (typeof status !== 'string' || !(status in STATUS_RANK)) return null;
+  const at = raw['at'];
+  const date = typeof at === 'string' ? new Date(at) : new Date();
+  return {
+    externalId,
+    status: status as ViewStatus,
+    at: Number.isNaN(date.getTime()) ? new Date() : date,
+  };
+}
+
+/** Store default: `webhook_events` (platform-level, sem RLS → `getDb()`). */
+export class DbOrphanStatusStore implements OrphanStatusStore {
+  async record(input: OrphanStatusRecord): Promise<void> {
+    if (!dbConfigured()) return;
+    const { webhookEvents } = schema;
+    const rank = STATUS_RANK[input.status];
+    const rawPayload: Record<string, unknown> = {
+      status: input.status,
+      at: input.at.toISOString(),
+      rank,
+    };
+    await getDb()
+      .insert(webhookEvents)
+      .values({
+        provider: ORPHAN_PROVIDER_SENTINEL,
+        externalEventId: input.externalId,
+        rawPayload,
+      })
+      .onConflictDoUpdate({
+        target: [webhookEvents.provider, webhookEvents.externalEventId],
+        set: { rawPayload, receivedAt: new Date() },
+        // Só sobrescreve se o órfão entrante tem rank MAIOR (monotônico no buffer
+        // — tolera acks fora de ordem antes da reconciliação).
+        setWhere: sql`(${webhookEvents.rawPayload} ->> 'rank')::int < ${rank}`,
+      });
+  }
+
+  async drain(externalId: string): Promise<OrphanStatusRecord | null> {
+    if (!dbConfigured()) return null;
+    const { webhookEvents } = schema;
+    const rows = await getDb()
+      .delete(webhookEvents)
+      .where(
+        and(
+          eq(webhookEvents.provider, ORPHAN_PROVIDER_SENTINEL),
+          eq(webhookEvents.externalEventId, externalId),
+        ),
+      )
+      .returning({ rawPayload: webhookEvents.rawPayload });
+    const row = rows[0];
+    if (row === undefined) return null;
+    return parseOrphanPayload(externalId, row.rawPayload);
+  }
+}
+
+/** Instância default compartilhada (worker inbound + finalize outbound). */
+export const defaultOrphanStatusStore: OrphanStatusStore = new DbOrphanStatusStore();
 
 // ─── Socket (MQ relay) ────────────────────────────────────────────────────────
 
@@ -308,6 +442,8 @@ export interface StatusDeps {
   readonly channels: StatusChannelResolver;
   readonly persistence: StatusPersistencePort;
   readonly socket: StatusSocketPort;
+  /** F52-S04: buffer de status órfão (callback antes do external_id). */
+  readonly orphan: OrphanStatusStore;
 }
 
 /**
@@ -320,6 +456,7 @@ export function createStatusDeps(channel: MqChannel): StatusDeps {
     channels: new DbStatusChannelResolver(),
     persistence: new DbStatusPersistence(),
     socket: new MqStatusSocketEmit(channel),
+    orphan: defaultOrphanStatusStore,
   };
 }
 
@@ -352,27 +489,37 @@ export async function handleStatusEvent(
     return { outcome: 'skipped', reason: 'channel_not_resolved' };
   }
 
-  const target = await deps.persistence.applyStatus({
+  const at = toDate(event.rawTimestamp);
+  const applied = await deps.persistence.applyStatus({
     workspaceId: channel.workspaceId,
     externalId: event.externalId,
     status,
-    at: toDate(event.rawTimestamp),
+    at,
   });
 
-  if (target === null) {
-    logger.warn('status: mensagem inexistente ou status sem avanço — descartado', {
+  // F52-S04: callback chegou antes do external_id ser persistido → bufferiza o
+  // órfão keyed por externalId (será aplicado no finalize do worker outbound).
+  // Status NUNCA se perde.
+  if (applied.outcome === 'not_found') {
+    await deps.orphan.record({ externalId: event.externalId, status, at });
+    logger.info('status: callback antes do external_id persistir — bufferizado (órfão)', {
       provider,
       externalId: event.externalId,
       status,
     });
-    return {
-      outcome: 'skipped',
-      // Não distinguimos os dois no caminho default (ambos no-op ack); o motivo
-      // mais provável é a ausência de avanço quando a mensagem já existe.
-      reason: 'no_status_advance',
-    };
+    return { outcome: 'buffered', externalId: event.externalId };
   }
 
+  if (applied.outcome === 'no_advance') {
+    logger.warn('status: status sem avanço — descartado (monotônico)', {
+      provider,
+      externalId: event.externalId,
+      status,
+    });
+    return { outcome: 'skipped', reason: 'no_status_advance' };
+  }
+
+  const { target } = applied;
   await deps.socket.emitStatusChanged({
     workspaceId: channel.workspaceId,
     conversationId: target.conversationId,

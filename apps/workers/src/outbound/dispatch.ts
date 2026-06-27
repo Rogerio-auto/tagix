@@ -12,10 +12,21 @@ import type { Channel, IChannelAdapter, IInstagramAdapter, SendResult } from '@h
 import type { ChannelProvider } from '@hm/shared';
 import type { IgMessageTag, OutboundJob, OutboundJobKind } from './job';
 import { evaluateInstagramWindow, type WindowEvaluation } from './instagram-window';
+import { defaultOutboundSendGuard, type OutboundSendGuard } from './db-ports';
 
 export type DispatchResult =
   | { readonly dispatched: true; readonly result: SendResult; readonly messageTagUsed?: IgMessageTag }
-  | { readonly dispatched: false; readonly result: SendResult; readonly windowBlocked?: boolean };
+  | {
+      readonly dispatched: false;
+      readonly result: SendResult;
+      readonly windowBlocked?: boolean;
+      /**
+       * F52-S04: a mensagem já tinha `external_id` (job reentregue) → o adapter
+       * NÃO foi chamado. `result.ok=true` com o `external_id` existente → o
+       * `finalize` reconcilia o status (monotônico) sem reenviar.
+       */
+      readonly alreadySent?: boolean;
+    };
 
 function mismatch(kind: OutboundJobKind, provider: ChannelProvider): DispatchResult {
   return {
@@ -67,9 +78,21 @@ export async function dispatchOutbound(
   job: OutboundJob,
   channel: Channel,
   adapter: IChannelAdapter,
+  guard: OutboundSendGuard = defaultOutboundSendGuard,
 ): Promise<DispatchResult> {
   if (!isSupported(job.kind, channel.provider)) {
     return mismatch(job.kind, channel.provider);
+  }
+
+  // F52-S04 — guard de idempotência: se a mensagem JÁ tem external_id, o job foi
+  // entregue ao provider numa execução anterior (redelivery). NÃO reenvia — só
+  // sinaliza `alreadySent` com o external_id para o finalize reconciliar o
+  // status. `typing_indicator` não é mensagem persistida → sem guard.
+  if (job.kind !== 'typing_indicator') {
+    const existing = await guard.findSentExternalId(job.messageId, channel.workspaceId);
+    if (existing !== null && existing !== '') {
+      return { dispatched: false, alreadySent: true, result: { ok: true, externalId: existing } };
+    }
   }
 
   switch (job.kind) {

@@ -27,7 +27,7 @@
 import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { assertConversationVisible, schema } from '@hm/db';
 import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import type { AiMode, ConversationAiModeChangedPayload, Role } from '@hm/shared';
@@ -85,6 +85,22 @@ function paramId(req: Request, name: string): string {
   return typeof raw === 'string' ? raw : '';
 }
 
+/** Limite do header `Idempotency-Key` (anti-abuso). */
+const MAX_IDEMPOTENCY_KEY_LEN = 200;
+
+/**
+ * F52-S04 — chave de idempotência de envio na borda. Opt-in via header
+ * `Idempotency-Key`: o cliente que reenvia o MESMO POST (retry/duplo-clique)
+ * recebe a mensagem já criada em vez de duplicá-la. Persistida em
+ * `messages.outbound_idempotency_key` (índice único parcial garante a unicidade
+ * no DB). Ausente/ inválida → `null` (comportamento legado, sem dedup).
+ */
+function parseIdempotencyKey(raw: string | string[] | undefined): string | null {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  if (value.length === 0 || value.length > MAX_IDEMPOTENCY_KEY_LEN) return null;
+  return value;
+}
+
 /** Resolve `type` → kind de mídia, ou `null` quando é texto puro. */
 function mediaKindFor(type: string): MediaKind | null {
   return TYPE_TO_MEDIA_KIND[type] ?? null;
@@ -95,6 +111,24 @@ interface ResolvedConversation {
   readonly remoteId: string;
   readonly aiMode: string;
 }
+
+/** Linha completa de `messages` (resultado de insert `.returning()` / select). */
+type MessageRow = typeof schema.messages.$inferSelect;
+
+/**
+ * Resultado da transação de envio (F52-S04). `null` = conversa inexistente/
+ * invisível (404); `replay` = idempotência (mensagem já criada, 200 sem
+ * enqueue); `created` = inserida agora (201 + enqueue).
+ */
+type SendScopedResult =
+  | { readonly kind: 'replay'; readonly message: MessageRow }
+  | {
+      readonly kind: 'created';
+      readonly conversation: ResolvedConversation;
+      readonly message: MessageRow;
+      readonly aiPausedByHandoff: boolean;
+    }
+  | null;
 
 /**
  * Monta o `OutboundJob` no shape EXATO de `parseOutboundJob`. `chatId` é o id do
@@ -222,11 +256,12 @@ export function createMessagesRouter(): Router {
       const workspaceId = req.auth!.workspace.id;
       const senderMemberId = req.auth!.member.id;
       const senderRole = req.auth!.member.role as Role;
+      const idempotencyKey = parseIdempotencyKey(req.headers['idempotency-key']);
 
       // Persiste a mensagem `pending` sob RLS, validando que a conversa existe no
       // tenant (RLS escopa a query — conversa de outro workspace some).
       // F30-S04: na mesma transação aplica a lógica de auto-pausa de IA.
-      const result = await req.scoped!(async (tx) => {
+      const result = await req.scoped!(async (tx): Promise<SendScopedResult> => {
         // Guard de visibilidade por-conversa (S07.1): fecha o IDOR de escrita — não
         // basta a conversa existir no tenant, precisa ser visível ao remetente
         // (senão um membro enviaria ao contato de outro time/depto). 404 = não confirma.
@@ -250,6 +285,25 @@ export function createMessagesRouter(): Router {
           .limit(1);
         if (!conversation) return null;
 
+        // F52-S04 — idempotência de envio: se o cliente reenviou o MESMO POST
+        // (mesma Idempotency-Key), devolve a mensagem já criada sem duplicar o
+        // INSERT nem o enqueue. Escopo conversa+workspace (defesa em profundidade
+        // sobre o índice único global da chave).
+        if (idempotencyKey !== null) {
+          const [existing] = await tx
+            .select()
+            .from(schema.messages)
+            .where(
+              and(
+                eq(schema.messages.workspaceId, workspaceId),
+                eq(schema.messages.conversationId, conversationId),
+                eq(schema.messages.outboundIdempotencyKey, idempotencyKey),
+              ),
+            )
+            .limit(1);
+          if (existing) return { kind: 'replay', message: existing };
+        }
+
         const [message] = await tx
           .insert(schema.messages)
           .values({
@@ -262,6 +316,7 @@ export function createMessagesRouter(): Router {
             content: body.content ?? null,
             viewStatus: 'pending',
             externalId: null,
+            outboundIdempotencyKey: idempotencyKey,
             mediaUrl: body.mediaUrl ?? null,
             mediaMime: body.mediaMime ?? null,
             mediaCaption: mediaKind && body.content ? body.content : null,
@@ -315,11 +370,17 @@ export function createMessagesRouter(): Router {
             .where(eq(schema.conversations.id, conversationId));
         }
 
-        return { conversation, message, aiPausedByHandoff };
+        return { kind: 'created', conversation, message, aiPausedByHandoff };
       });
 
       if (!result) {
         res.status(404).json({ message: 'Conversa não encontrada.' });
+        return;
+      }
+
+      // Replay idempotente: mensagem já existia → devolve sem reenfileirar.
+      if (result.kind === 'replay') {
+        res.status(200).json({ message: result.message });
         return;
       }
 
