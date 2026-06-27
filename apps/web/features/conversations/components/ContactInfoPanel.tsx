@@ -221,6 +221,10 @@ export function ContactInfoPanel({
 
   const sections = (
     <>
+        {/* ── Execuções Ativas (F51): primeiro elemento do cockpit (monitor em ──
+            tempo real). A seção se esconde sozinha quando não há flow ativo. ─── */}
+        <ActiveExecutionsSection conversationId={conversationId} />
+
         {/* ── 1. Status operacional ───────────────────────────────────────── */}
         <Section title="Status" icon={Zap}>
           {isLoading ? (
@@ -449,10 +453,6 @@ export function ContactInfoPanel({
             </div>
           )}
         </Section>
-
-        {/* ── Execuções Ativas (F51): monitoramento de flows em tempo real ─ */}
-        {/* A seção se esconde sozinha quando não há execuções ativas/recentes. */}
-        <ActiveExecutionsSection conversationId={conversationId} />
 
         {/* ── 3. Roteamento (Atribuição / Transferência) ─────────────────── */}
         <Card>

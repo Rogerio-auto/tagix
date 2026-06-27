@@ -1,23 +1,14 @@
 'use client';
 
 /**
- * Seção "Execuções Ativas" do cockpit (F51) — monitoramento em tempo real dos flows do contato.
- * Lista as execuções em andamento (Executando/Agendado) + as recém-finalizadas (≤10 min) e
- * atualiza ao vivo via socket (`useFlowExecutionsLive`) com countdown client-side. DS v2: só tokens.
+ * Painel "Execuções Ativas" do cockpit (F51 / refino S07) — monitor premium em tempo real, no
+ * TOPO do cockpit. Mostra APENAS execuções ativas (running/waiting); ao cancelar/concluir o card
+ * some sozinho (socket invalida a query + filtro só-ativas). Card compacto com borda neon viva
+ * (`.hm-flow-neon`, mesma da conversa selecionada, intensidade moderada). DS v2: só tokens.
  */
 
 import { useState } from 'react';
-import {
-  Activity,
-  AlertTriangle,
-  CheckCircle2,
-  ChevronDown,
-  Eye,
-  Timer,
-  X,
-  XCircle,
-  Zap,
-} from 'lucide-react';
+import { Activity, Eye, Timer, X, Zap } from 'lucide-react';
 import { can } from '@hm/shared';
 import { Button, Modal, useToast } from '@hm/ui';
 import { cn } from '@/shared/lib/cn';
@@ -31,34 +22,19 @@ import {
 import { useCountdown } from '../hooks/useCountdown';
 import { useFlowExecutionsLive } from '../hooks/useFlowExecutionsLive';
 
-type Status = ConversationExecution['status'];
-
-const RECENT_WINDOW_MS = 10 * 60 * 1000;
+type ActiveStatus = 'running' | 'waiting';
 
 const STATUS_META: Record<
-  Status,
-  { label: string; icon: React.ComponentType<{ className?: string }>; dot: string; text: string; active: boolean }
+  ActiveStatus,
+  { label: string; icon: React.ComponentType<{ className?: string }>; dot: string; text: string }
 > = {
-  running: { label: 'Executando', icon: Activity, dot: 'bg-accent', text: 'text-accent', active: true },
-  waiting: { label: 'Agendado', icon: Timer, dot: 'bg-warning', text: 'text-warning', active: true },
-  completed: { label: 'Concluído', icon: CheckCircle2, dot: 'bg-success', text: 'text-success', active: false },
-  cancelled: { label: 'Cancelado', icon: XCircle, dot: 'bg-text-low', text: 'text-text-low', active: false },
-  failed: { label: 'Erro', icon: AlertTriangle, dot: 'bg-danger', text: 'text-danger', active: false },
+  running: { label: 'Executando', icon: Activity, dot: 'bg-accent', text: 'text-accent' },
+  waiting: { label: 'Agendado', icon: Timer, dot: 'bg-warning', text: 'text-warning' },
 };
 
 function fmtTime(iso: string | null): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-}
-
-function fmtDateTime(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 function fmtRemaining(ms: number): string {
@@ -70,13 +46,7 @@ function fmtRemaining(ms: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-function recentFinished(e: ConversationExecution): boolean {
-  if (e.status === 'running' || e.status === 'waiting') return false;
-  if (!e.completedAt) return false;
-  return Date.now() - new Date(e.completedAt).getTime() <= RECENT_WINDOW_MS;
-}
-
-/** Card de uma execução. Componente próprio para hospedar o countdown e o estado de expansão. */
+/** Card compacto de uma execução ATIVA, com borda neon viva. */
 function ExecutionCard({
   exec,
   canCancel,
@@ -88,70 +58,59 @@ function ExecutionCard({
   onCancel: (id: string) => void;
   onDetails: (id: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const meta = STATUS_META[exec.status];
+  const status = exec.status as ActiveStatus;
+  const meta = STATUS_META[status];
   const Icon = meta.icon;
-  const isWaiting = exec.status === 'waiting';
-  const isActive = meta.active;
+  const isWaiting = status === 'waiting';
   const { remainingMs, isExpired } = useCountdown(isWaiting ? exec.nextStepAt : null);
 
   return (
-    <div
-      className={cn(
-        'rounded-md border bg-surface-2 px-3 py-2.5',
-        isActive ? 'border-border-2 shadow-elev-1' : 'border-border-2/60',
-      )}
-    >
-      {/* Cabeçalho: ícone + nome + status */}
-      <div className="flex items-start justify-between gap-2">
+    // hm-flow-neon: borda neon + glow + animação percorrendo (respeita prefers-reduced-motion).
+    <div className="hm-flow-neon relative rounded-md border border-border-2 bg-surface-2 px-3 py-2.5 shadow-elev-1">
+      {/* Linha 1: nome + status */}
+      <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="relative flex size-2 shrink-0">
-            {isActive && (
-              <span
-                className={cn(
-                  'absolute inline-flex size-full rounded-full opacity-60 motion-safe:animate-ping',
-                  meta.dot,
-                )}
-                aria-hidden
-              />
-            )}
+            <span
+              className={cn('absolute inline-flex size-full rounded-full opacity-60 motion-safe:animate-ping', meta.dot)}
+              aria-hidden
+            />
             <span className={cn('relative inline-flex size-2 rounded-full', meta.dot)} aria-hidden />
           </span>
-          <span className="truncate font-body text-sm font-medium text-text">
+          <span className="truncate font-body text-sm font-semibold text-text">
             {exec.flowName ?? 'Flow'}
           </span>
         </div>
         <span className={cn('inline-flex shrink-0 items-center gap-1 text-[11px] font-medium', meta.text)}>
-          <Icon className={cn('size-3', isActive && 'motion-safe:animate-pulse')} aria-hidden />
+          <Icon className="size-3 motion-safe:animate-pulse" aria-hidden />
           {meta.label}
         </span>
       </div>
 
-      {/* Linha de tempo: iniciado + countdown (waiting) */}
-      <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-text-low">
-        <span>Iniciado {fmtTime(exec.startedAt)}</span>
-        {isWaiting && (
+      {/* Linha 2: countdown + horário previsto do próximo passo */}
+      <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
+        <span className="text-text-low">Iniciado {fmtTime(exec.startedAt)}</span>
+        {isWaiting ? (
           <span className="font-medium text-warning">
-            {isExpired ? 'Retomando…' : `Próximo passo em ${fmtRemaining(remainingMs)}`}
+            {isExpired ? 'Retomando…' : `Conclui ${fmtTime(exec.nextStepAt)} · ${fmtRemaining(remainingMs)}`}
           </span>
+        ) : (
+          <span className="text-text-low">Em execução…</span>
         )}
       </div>
 
-      {/* Barra de progresso: ativa = animada (indeterminada); terminal = ausente */}
-      {isActive && (
-        <div className="mt-2 h-1 overflow-hidden rounded-pill bg-surface-3">
-          <div
-            className={cn(
-              'h-full rounded-pill motion-safe:animate-pulse',
-              isWaiting ? 'bg-warning/70' : 'bg-accent/70',
-            )}
-            style={{ width: '100%' }}
-          />
-        </div>
-      )}
+      {/* Barra discreta (indeterminada — wait window não tem início conhecido) */}
+      <div className="mt-2 h-1 overflow-hidden rounded-pill bg-surface-3">
+        <div
+          className={cn(
+            'h-full w-full rounded-pill motion-safe:animate-pulse',
+            isWaiting ? 'bg-warning/70' : 'bg-accent/70',
+          )}
+        />
+      </div>
 
       {/* Ações */}
-      <div className="mt-2 flex items-center gap-1.5">
+      <div className="mt-2 flex items-center justify-end gap-1">
         <Button
           variant="ghost"
           size="sm"
@@ -160,7 +119,7 @@ function ExecutionCard({
         >
           Detalhes
         </Button>
-        {canCancel && isActive && (
+        {canCancel && (
           <Button
             variant="ghost"
             size="sm"
@@ -170,40 +129,7 @@ function ExecutionCard({
             Cancelar
           </Button>
         )}
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
-          className="ml-auto inline-flex items-center gap-1 rounded-sm px-1.5 py-1 text-[11px] text-text-low hover:text-text-mid focus-visible:shadow-glow-sm focus-visible:outline-none"
-        >
-          Técnico
-          <ChevronDown className={cn('size-3 transition-transform', expanded && 'rotate-180')} aria-hidden />
-        </button>
       </div>
-
-      {/* Info técnica expansível */}
-      {expanded && (
-        <dl className="mt-2 space-y-1 border-t border-border-2 pt-2 text-[11px] text-text-low">
-          <div className="flex justify-between gap-2">
-            <dt>Data e hora</dt>
-            <dd className="text-text-mid">{fmtDateTime(exec.startedAt)}</dd>
-          </div>
-          <div className="flex justify-between gap-2">
-            <dt>Nó atual</dt>
-            <dd className="truncate font-mono text-text-mid">{exec.currentNodeId ?? '—'}</dd>
-          </div>
-          <div className="flex justify-between gap-2">
-            <dt>Execução</dt>
-            <dd className="truncate font-mono text-text-mid">{exec.id}</dd>
-          </div>
-          {exec.lastError && (
-            <div className="flex justify-between gap-2">
-              <dt>Erro</dt>
-              <dd className="truncate text-danger">{exec.lastError}</dd>
-            </div>
-          )}
-        </dl>
-      )}
     </div>
   );
 }
@@ -220,16 +146,13 @@ export function ActiveExecutionsSection({ conversationId }: { conversationId: st
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  const all = executions.data ?? [];
-  const active = all
+  // APENAS ativas (running/waiting). Mais recentes primeiro.
+  const active = (executions.data ?? [])
     .filter((e) => e.status === 'running' || e.status === 'waiting')
     .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
-  const recent = all
-    .filter(recentFinished)
-    .sort((a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime());
 
-  // Cockpit limpo: a seção some quando não há nada a mostrar (mesmo critério do badge).
-  if (active.length === 0 && recent.length === 0) return null;
+  // Vazio → some completamente (não ocupa espaço).
+  if (active.length === 0) return null;
 
   const confirmCancel = async (): Promise<void> => {
     if (!confirmId) return;
@@ -243,16 +166,14 @@ export function ActiveExecutionsSection({ conversationId }: { conversationId: st
   };
 
   return (
-    <div className="rounded-md border border-border-2 bg-surface-2 p-4 shadow-elev-1">
-      <header className="mb-3 flex items-center gap-2">
-        <Zap className="size-4 text-text-low" aria-hidden />
+    <section className="rounded-md border border-border-2 bg-surface-1 p-3 shadow-elev-1">
+      <header className="mb-2.5 flex items-center gap-2">
+        <Zap className="size-4 text-accent" aria-hidden />
         <h3 className="font-head text-sm font-semibold text-text">Execuções Ativas</h3>
-        {active.length > 0 && (
-          <span className="ml-auto inline-flex items-center gap-1 rounded-pill bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent">
-            <Activity className="size-3" aria-hidden />
-            {active.length}
-          </span>
-        )}
+        <span className="ml-auto inline-flex items-center gap-1 rounded-pill bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent">
+          <Activity className="size-3" aria-hidden />
+          {active.length}
+        </span>
       </header>
 
       <div className="flex flex-col gap-2">
@@ -265,25 +186,6 @@ export function ActiveExecutionsSection({ conversationId }: { conversationId: st
             onDetails={setDetailId}
           />
         ))}
-
-        {recent.length > 0 && (
-          <>
-            {active.length > 0 && (
-              <p className="mt-1 font-body text-[11px] font-medium uppercase tracking-wide text-text-low">
-                Recém-finalizadas
-              </p>
-            )}
-            {recent.map((exec) => (
-              <ExecutionCard
-                key={exec.id}
-                exec={exec}
-                canCancel={canCancel}
-                onCancel={setConfirmId}
-                onDetails={setDetailId}
-              />
-            ))}
-          </>
-        )}
       </div>
 
       {/* Detalhes (reusa o drawer do flow-builder) */}
@@ -310,6 +212,6 @@ export function ActiveExecutionsSection({ conversationId }: { conversationId: st
           </>
         }
       />
-    </div>
+    </section>
   );
 }
