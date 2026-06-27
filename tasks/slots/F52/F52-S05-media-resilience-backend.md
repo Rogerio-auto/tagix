@@ -2,7 +2,7 @@
 id: F52-S05
 title: Resiliência de mídia — media_status, retry de download, evento media_failed
 phase: F52
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: [F52-S01]
@@ -10,6 +10,8 @@ blocks: [F52-S07]
 agent_id: backend-engineer
 source_docs:
   - docs/features/LIVECHAT.md
+completed_at: 2026-06-27T13:09:58Z
+
 ---
 # F52-S05 — Resiliência de mídia (backend)
 

@@ -2,7 +2,7 @@
 id: F52-S04
 title: Outbound confiável — idempotência de envio + race do callback de status
 phase: F52
-status: available
+status: done
 priority: high
 estimated_size: L
 depends_on: [F52-S01]
@@ -10,6 +10,8 @@ blocks: [F52-S07, F52-S10]
 agent_id: backend-engineer
 source_docs:
   - docs/features/LIVECHAT.md
+completed_at: 2026-06-27T13:09:58Z
+
 ---
 # F52-S04 — Outbound confiável: idempotência + reconciliação de status
 

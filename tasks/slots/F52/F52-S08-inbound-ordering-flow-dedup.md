@@ -2,7 +2,7 @@
 id: F52-S08
 title: Inbound consistente — ordenação fiel (provider_timestamp) + dedup de disparo de flow
 phase: F52
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: [F52-S01]
@@ -12,6 +12,8 @@ source_docs:
   - docs/features/LIVECHAT.md
   - docs/features/FLOW_BUILDER.md
   - docs/features/INSTAGRAM.md
+completed_at: 2026-06-27T13:09:58Z
+
 ---
 # F52-S08 — Inbound consistente: ordenação + dedup de flow
 
