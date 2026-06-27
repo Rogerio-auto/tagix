@@ -60,6 +60,7 @@ import { createPlatformSubscriptionsRouter } from './routes/platform/subscriptio
 import { createPlatformImpersonationRouter } from './routes/platform/impersonation';
 import { createPlatformPlaygroundRouter } from './routes/platform/playground';
 import { createPlatformHelpRouter, createPlatformSupportRouter } from './routes/platform';
+import { createMonitoringRouter } from './routes/monitoring';
 import {
   IMPERSONATION_COOKIE,
   impersonationMiddleware,
@@ -217,6 +218,11 @@ export function createApp(): Express {
   // Upload de mídia do LiveChat (outbound): recebe o arquivo cru, sobe no R2 e
   // devolve a URL assinada (mediaUrl da mensagem). express.raw é por-rota.
   app.use(createUploadsRouter());
+
+  // Observabilidade da sincronização (F52-S09): GET /api/monitoring/sync-health —
+  // profundidade de filas + DLQ + pendências (RLS) + status de canal WhatsApp.
+  // Gated por OWNER/ADMIN do workspace ou platform-admin (defesa em profundidade).
+  app.use(createMonitoringRouter());
 
   // Super-admin de plataforma (F2.5/F25): catálogo de modelos, políticas por
   // workspace, rotação de secrets e rollup de custo LLM. Cada router já é gated

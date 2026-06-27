@@ -18,9 +18,29 @@ import {
   QUEUES,
   type MqHandle,
 } from '@hm/shared/mq';
-import type { Logger } from '@hm/logger';
+import { getMeter, type Logger } from '@hm/logger';
 
 type MqChannel = MqHandle['channel'];
+
+/**
+ * Observabilidade de ticks de scheduler (F52-S09). Counter OTel ÚNICO compartilhado
+ * por todos os schedulers (flow-wakeup + automations), rotulado por `scheduler` e
+ * `result` — fim do logging cego: um tick que FALHA passa a ser observável por
+ * métrica (não só por uma linha de log). Usa o `Meter` já configurado (@hm/logger /
+ * F10-S01): quando a telemetria OTLP está ligada o collector recebe; quando não,
+ * o meter é no-op (zero overhead). NÃO introduz novo stack de métrica.
+ */
+const schedulerMeter = getMeter('@hm/workers');
+const schedulerTickCounter = schedulerMeter.createCounter('hm.scheduler.tick', {
+  description: 'Ticks de scheduler executados, por scheduler e resultado (success/failed).',
+});
+
+export type SchedulerTickResult = 'success' | 'failed';
+
+/** Registra o resultado de um tick de scheduler (success/failed) por nome de scheduler. */
+export function recordSchedulerTick(scheduler: string, result: SchedulerTickResult): void {
+  schedulerTickCounter.add(1, { scheduler, result });
+}
 
 export const FLOW_EXECUTION_QUEUE = QUEUES.flowExecution;
 
@@ -150,7 +170,12 @@ export async function runFlowWakeupTick(
     if (due.length > 0) {
       deps.logger.info('flow-wakeup: execucoes re-enfileiradas', { enqueued: due.length });
     }
+    recordSchedulerTick('flow-wakeup', 'success');
     return { ran: true, enqueued: due.length };
+  } catch (err: unknown) {
+    // Tick falhou (ex.: DB indisponível): observável por métrica, não só por log.
+    recordSchedulerTick('flow-wakeup', 'failed');
+    throw err;
   } finally {
     await release();
   }

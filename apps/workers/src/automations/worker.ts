@@ -9,7 +9,7 @@
 import { sql } from 'drizzle-orm';
 import { getDb } from '@hm/db';
 import type { Logger } from '@hm/logger';
-import { acquireSchedulerLock, type RedisLike } from '../flows/scheduler';
+import { acquireSchedulerLock, recordSchedulerTick, type RedisLike } from '../flows/scheduler';
 import type { ActionExecutor, PendingAutomationRow } from './types';
 
 export const AUTOMATION_LOCK_KEY = 'hm:lock:scheduler:automations' as const;
@@ -143,7 +143,13 @@ export async function runAutomationTick(
     if (processed > 0 || failed > 0) {
       deps.logger.info('automations: tick concluido', { processed, failed });
     }
+    recordSchedulerTick('automations', 'success');
     return { ran: true, processed, failed };
+  } catch (err: unknown) {
+    // Falha no nível do TICK (ex.: SELECT vencidas falhou): observável por métrica.
+    // Falhas de ação individual são tratadas no loop e NÃO derrubam o tick.
+    recordSchedulerTick('automations', 'failed');
+    throw err;
   } finally {
     await release();
   }
