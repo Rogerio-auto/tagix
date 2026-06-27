@@ -241,6 +241,7 @@ export * from './webhook_events';
 // LiveChat: contacts → conversations → messages (ordem de dependência).
 export * from './contacts';
 export * from './conversations';
+// messages também exporta `mediaStatusEnum` + tipo `MediaStatus` (F52-S01) p/ workers/shared.
 export * from './messages';
 // Notas internas por conversa (+ mentions → notificação). Depende de conversations/members.
 export * from './conversation_notes';
