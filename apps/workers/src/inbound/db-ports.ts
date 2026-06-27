@@ -870,6 +870,11 @@ async function insertMessages(
         // F52-S08: horário autoritativo do provider (NULL quando ausente) →
         // ordenação fiel via coalesce(provider_timestamp, created_at).
         providerTimestamp: toProviderTimestamp(event.rawTimestamp),
+        // F52-S05 follow-up: mensagem COM mídia nasce 'pending' (mesma condição
+        // que enfileira o media job em pipeline.ts) — o media-worker avança para
+        // downloading→ready|failed. Sem mídia fica NULL. Fecha o placeholder
+        // eterno: a UI distingue "carregando" de "sem mídia".
+        ...(event.mediaRef !== undefined ? { mediaStatus: 'pending' as const } : {}),
         ...(event.metadata !== undefined ? { metadata: event.metadata } : {}),
       })
       .onConflictDoNothing({

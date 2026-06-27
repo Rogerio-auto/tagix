@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { and, desc, eq, ilike, lt, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, ilike, sql, type SQL } from 'drizzle-orm';
 import { assertConversationVisible, buildVisibilityPredicate, schema } from '@hm/db';
 import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
@@ -307,7 +307,12 @@ export function createConversationsRouter(): Router {
     const role = req.auth!.member.role as Role;
     const workspaceId = req.auth!.workspace.id;
     const base = eq(schema.messages.conversationId, conversationId);
-    const where = before ? and(base, lt(schema.messages.createdAt, before)) : base;
+    // F52-S08: ordena pela hora REAL do provider (coalesce(provider_timestamp,
+    // created_at)) — uma mensagem reprocessada/fora-de-ordem aparece na posição
+    // cronológica correta, não "pula pro fim". Cursor compara a MESMA expressão.
+    // Servido pelo índice idx_messages_conversation_provider_ts (F52-S01).
+    const orderTs = sql`coalesce(${schema.messages.providerTimestamp}, ${schema.messages.createdAt})`;
+    const where = before ? and(base, sql`${orderTs} < ${before}`) : base;
     // Guard de visibilidade por-conversa (S07.1): a lista esconde, o acesso por id
     // também precisa negar quem não enxerga a conversa. 404 = não confirma existência.
     const messages = await req.scoped!(async (tx) => {
@@ -318,7 +323,7 @@ export function createConversationsRouter(): Router {
         .select()
         .from(schema.messages)
         .where(where)
-        .orderBy(desc(schema.messages.createdAt))
+        .orderBy(desc(orderTs))
         .limit(limit);
     });
     if (messages === null) {
