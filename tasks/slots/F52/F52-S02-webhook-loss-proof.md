@@ -2,7 +2,7 @@
 id: F52-S02
 title: Webhook à prova de perda (dedup pós-enqueue + backpressure + redelivery counter)
 phase: F52
-status: available
+status: done
 priority: critical
 estimated_size: S
 depends_on: []
@@ -10,6 +10,8 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - docs/features/LIVECHAT.md
+completed_at: 2026-06-27T03:13:25Z
+
 ---
 # F52-S02 — Webhook à prova de perda de evento
 

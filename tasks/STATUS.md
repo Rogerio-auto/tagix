@@ -30,7 +30,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F38   | 17     | 0   | 0   | 0   | 0   | 0   | 17   |
 | F39   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F4   | 14     | 0   | 0   | 0   | 0   | 0   | 14   |
-| F40   | 1     | 1   | 0   | 0   | 0   | 0   | 0   |
+| F40   | 1     | 0   | 0   | 0   | 0   | 0   | 1   |
 | F41   | 4     | 0   | 0   | 0   | 0   | 0   | 4   |
 | F42   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F43   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -43,7 +43,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F5   | 16     | 0   | 0   | 0   | 0   | 0   | 16   |
 | F50   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F51   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F52   | 10     | 4   | 6   | 0   | 0   | 0   | 0   |
+| F52   | 10     | 2   | 6   | 0   | 0   | 0   | 2   |
+| F53   | 7     | 1   | 6   | 0   | 0   | 0   | 0   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -379,9 +380,9 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 40
 
-| ID      | Titulo                                                                             | Status      | Prioridade | Depende de |
-| ------- | ---------------------------------------------------------------------------------- | ----------- | ---------- | ---------- |
-| F40-S01 | Fix RLS — GUC app.workspace_id vazio ('') quebra queries cross-tenant (schedulers) | 🟢 available | high       | —          |
+| ID      | Titulo                                                                             | Status | Prioridade | Depende de |
+| ------- | ---------------------------------------------------------------------------------- | ------ | ---------- | ---------- |
+| F40-S01 | Fix RLS — GUC app.workspace_id vazio ('') quebra queries cross-tenant (schedulers) | ✅ done | high       | —          |
 
 ## Fase 41 — Portal do Desenvolvedor — Referência rica + Console Try-it
 
@@ -541,8 +542,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ID      | Titulo                                                                                     | Status      | Prioridade | Depende de                |
 | ------- | ------------------------------------------------------------------------------------------ | ----------- | ---------- | ------------------------- |
 | F52-S01 | Schema foundation da sincronização (media_status, provider_timestamp, idempotency_key)     | ⏸️ blocked  | critical   | F40-S01                   |
-| F52-S02 | Webhook à prova de perda (dedup pós-enqueue + backpressure + redelivery counter)           | 🟢 available | critical   | —                         |
-| F52-S03 | DLX + retry exponencial + DLQ inspecionável para inbound/outbound/media                    | 🟢 available | critical   | —                         |
+| F52-S02 | Webhook à prova de perda (dedup pós-enqueue + backpressure + redelivery counter)           | ✅ done      | critical   | —                         |
+| F52-S03 | DLX + retry exponencial + DLQ inspecionável para inbound/outbound/media                    | ✅ done      | critical   | —                         |
 | F52-S04 | Outbound confiável — idempotência de envio + race do callback de status                    | ⏸️ blocked  | high       | F52-S01                   |
 | F52-S05 | Resiliência de mídia — media_status, retry de download, evento media_failed                | ⏸️ blocked  | high       | F52-S01                   |
 | F52-S06 | Endpoint de refresh de signed URL de mídia expirada                                        | 🟢 available | medium     | —                         |
@@ -550,6 +551,18 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F52-S08 | Inbound consistente — ordenação fiel (provider_timestamp) + dedup de disparo de flow       | ⏸️ blocked  | high       | F52-S01                   |
 | F52-S09 | Observabilidade da sincronização — métricas de tick, profundidade de fila, status WhatsApp | 🟢 available | medium     | —                         |
 | F52-S10 | Lock distribuído Redis para outbound (ordem multi-instância) + tuning                      | ⏸️ blocked  | medium     | F52-S04                   |
+
+## Fase 53
+
+| ID      | Titulo                                                       | Status      | Prioridade | Depende de |
+| ------- | ------------------------------------------------------------ | ----------- | ---------- | ---------- |
+| F53-S01 | Estender events com priority + novos type/status             | 🟢 available | high       | —          |
+| F53-S02 | API/tool aceitam priority, novos type e transições de status | ⏸️ blocked  | high       | F53-S01    |
+| F53-S03 | Modal de agendamento rápido + atalhos de data                | ⏸️ blocked  | high       | F53-S02    |
+| F53-S04 | Card Agenda + Histórico no Cockpit                           | ⏸️ blocked  | high       | F53-S03    |
+| F53-S05 | Lembrete "na hora" + evento socket + due→ação                | ⏸️ blocked  | high       | F53-S01    |
+| F53-S06 | Central de notificações persistente + som                    | ⏸️ blocked  | high       | F53-S05    |
+| F53-S07 | Fechar port create_event da automação                        | ⏸️ blocked  | medium     | F53-S01    |
 
 ## Fase 6 — Pipeline
 

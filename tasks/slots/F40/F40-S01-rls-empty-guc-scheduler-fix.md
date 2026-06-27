@@ -2,7 +2,7 @@
 id: F40-S01
 title: Fix RLS — GUC app.workspace_id vazio ('') quebra queries cross-tenant (schedulers)
 phase: F40
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: []
@@ -10,6 +10,8 @@ agent_id: db-engineer
 source_docs:
   - docs/features/PERMISSIONS.md
 blocks: []
+completed_at: 2026-06-27T03:13:25Z
+
 ---
 # F40-S01 — Fix RLS: GUC vazio quebra schedulers cross-tenant
 

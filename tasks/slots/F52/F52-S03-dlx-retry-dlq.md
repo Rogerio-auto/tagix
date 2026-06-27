@@ -2,7 +2,7 @@
 id: F52-S03
 title: DLX + retry exponencial + DLQ inspecionável para inbound/outbound/media
 phase: F52
-status: available
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
@@ -10,6 +10,8 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - docs/features/LIVECHAT.md
+completed_at: 2026-06-27T03:13:26Z
+
 ---
 # F52-S03 — DLX, retry e DLQ reais
 
