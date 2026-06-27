@@ -14,6 +14,13 @@ import type { Channel, IChannelAdapter } from '@hm/channels';
 import type { MediaJob, MediaJobRoutingHints } from './job';
 
 /**
+ * Estado do pipeline de download de mídia. Espelha o `media_status` enum de
+ * `@hm/db` (F52-S01) — declarado aqui (não importado) para manter as portas do
+ * worker desacopladas do Drizzle; a coluna aceita exatamente estes literais.
+ */
+export type MediaStatus = 'pending' | 'downloading' | 'ready' | 'failed';
+
+/**
  * Canal resolvido a partir das `routing` hints do job: snapshot pronto para o
  * adapter (token descifrado) + o adapter do provider + o `workspaceId` do
  * tenant dono (para escopar a persistência sob RLS).
@@ -71,19 +78,24 @@ export interface MediaPersistInput {
   readonly mediaSha256: string;
   /** Key do objeto no storage (dedup global por conteúdo). */
   readonly mediaKey: string;
+  /** Estado terminal do download a gravar junto (sucesso ⇒ `ready`). */
+  readonly mediaStatus: MediaStatus;
 }
 
 /**
  * Persistência da mídia. `findMessage`/`findKeyBySha256` rodam dentro do tenant
- * (RLS via `withWorkspace`). `update` grava `messages.media_*`.
+ * (RLS via `withWorkspace`). `update` grava `messages.media_*`; `markStatus`
+ * transita só a coluna `media_status` (estados `downloading`/`failed`).
  */
 export interface MediaPersistencePort {
   /** Localiza a mensagem-alvo pela `externalId` dentro do workspace. */
   findMessage(workspaceId: string, externalId: string): Promise<MediaMessageTarget | null>;
   /** Key já subida para este SHA-256 no workspace (dedup) — ou `null`. */
   findKeyBySha256(workspaceId: string, sha256: string): Promise<string | null>;
-  /** Atualiza `messages.media_*`. */
+  /** Atualiza `messages.media_*` (inclui `media_status`). */
   update(input: MediaPersistInput): Promise<void>;
+  /** Transita apenas `messages.media_status` (in-flight `downloading` / `failed`). */
+  markStatus(workspaceId: string, messageId: string, status: MediaStatus): Promise<void>;
 }
 
 /** Emissão do socket `message:media_ready` (room `conversation:{id}`). */
@@ -94,10 +106,46 @@ export interface MediaReadyEmit {
   readonly mediaUrl: string;
 }
 
+/** Emissão do socket `message:media_failed` (download esgotou retries). */
+export interface MediaFailedEmit {
+  readonly workspaceId: string;
+  readonly conversationId: string;
+  readonly messageId: string;
+  readonly reason: string;
+}
+
 /** Porta de socket: publica no `hm.q.socket.relay` (consumido por `relay.ts`). */
 export interface MediaSocketPort {
   emitMediaReady(input: MediaReadyEmit): Promise<void>;
+  emitMediaFailed(input: MediaFailedEmit): Promise<void>;
 }
+
+/**
+ * Política de retry do download (in-process). Cada tentativa re-invoca
+ * `adapter.downloadMedia(refOrUrl, …)` — que, quando `refOrUrl` é um `media_id`
+ * (WhatsApp), re-resolve uma URL temporária fresca via Graph a cada chamada;
+ * logo, *retentar é re-resolver*. `sleep` é injetável para testes determinísticos.
+ */
+export interface MediaRetryConfig {
+  /** Tentativas totais de download (incl. a primeira). */
+  readonly maxAttempts: number;
+  /** Backoff (ms) ANTES de cada retry — `backoffMs[i]` aplica-se ao retry `i+1`. */
+  readonly backoffMs: readonly number[];
+  /** Espera entre tentativas (injetável; default `setTimeout`). */
+  readonly sleep: (ms: number) => Promise<void>;
+}
+
+/**
+ * Política default: 3 tentativas (1 + 2 retries) com backoff curto. O retry curto
+ * cobre blips de rede e a re-resolução de URL expirada; falhas de infra que
+ * persistem além desta janela são re-lançadas e tratadas pela malha DLX/retry de
+ * `@hm/shared/mq` (F52-S03) — não reimplementamos a escada longa aqui.
+ */
+export const defaultMediaRetry: MediaRetryConfig = {
+  maxAttempts: 3,
+  backoffMs: [2_000, 8_000],
+  sleep: (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms)),
+};
 
 /** Dependências completas do worker de mídia. */
 export interface MediaDeps {
@@ -105,4 +153,6 @@ export interface MediaDeps {
   readonly storage: MediaStoragePort;
   readonly persistence: MediaPersistencePort;
   readonly socket: MediaSocketPort;
+  /** Override da política de retry de download (default {@link defaultMediaRetry}). */
+  readonly retry?: MediaRetryConfig;
 }

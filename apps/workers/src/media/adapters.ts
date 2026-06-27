@@ -21,11 +21,13 @@ import type { IStorageDriver } from '@hm/storage';
 import type { MediaJobRoutingHints } from './job';
 import type {
   MediaChannelResolver,
+  MediaFailedEmit,
   MediaMessageTarget,
   MediaPersistencePort,
   MediaPersistInput,
   MediaReadyEmit,
   MediaSocketPort,
+  MediaStatus,
   MediaStoragePort,
   MediaUploadInput,
   ResolvedMediaChannel,
@@ -211,10 +213,21 @@ export class DbMediaPersistence implements MediaPersistencePort {
           mediaMime: input.mediaMime,
           mediaSizeBytes: input.mediaSizeBytes,
           mediaSha256: input.mediaSha256,
+          mediaStatus: input.mediaStatus,
           metadata: sql`${messages.metadata} || ${JSON.stringify({ [MEDIA_KEY_META]: input.mediaKey })}::jsonb`,
           updatedAt: new Date(),
         })
         .where(eq(messages.id, input.messageId));
+    });
+  }
+
+  async markStatus(workspaceId: string, messageId: string, status: MediaStatus): Promise<void> {
+    const { messages } = schema;
+    await withWorkspace(workspaceId, async (tx) => {
+      await tx
+        .update(messages)
+        .set({ mediaStatus: status, updatedAt: new Date() })
+        .where(eq(messages.id, messageId));
     });
   }
 }
@@ -236,6 +249,23 @@ export class MqMediaSocketEmit implements MediaSocketPort {
         conversationId: input.conversationId,
         messageId: input.messageId,
         mediaUrl: input.mediaUrl,
+      },
+    });
+    this.channel.sendToQueue(SOCKET_RELAY_QUEUE, Buffer.from(JSON.stringify(envelope)), {
+      persistent: true,
+      contentType: 'application/json',
+    });
+    await Promise.resolve();
+  }
+
+  async emitMediaFailed(input: MediaFailedEmit): Promise<void> {
+    const envelope = makeEnvelope('socket.relay', input.workspaceId, {
+      event: 'message:media_failed',
+      target: { conversationId: input.conversationId },
+      data: {
+        conversationId: input.conversationId,
+        messageId: input.messageId,
+        reason: input.reason,
       },
     });
     this.channel.sendToQueue(SOCKET_RELAY_QUEUE, Buffer.from(JSON.stringify(envelope)), {

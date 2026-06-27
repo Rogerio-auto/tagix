@@ -41,6 +41,19 @@ export interface MessageMediaReadyPayload {
   mediaUrl: string;
 }
 
+/**
+ * Download de mídia inbound falhou em definitivo (F52-S05): o worker esgotou as
+ * tentativas (incl. re-resolução de URL expirada) ou o provider confirmou a
+ * mídia indisponível. A UI troca o placeholder "carregando" por um estado de
+ * erro acionável — nada fica preso carregando. `reason` é diagnóstico
+ * (`media_unavailable` | `empty_media`), não destinado ao usuário final.
+ */
+export interface MessageMediaFailedPayload {
+  conversationId: string;
+  messageId: string;
+  reason: string;
+}
+
 export interface ConversationUpdatedPayload {
   workspaceId: string;
   conversation: unknown;
@@ -172,6 +185,7 @@ export interface ServerToClient {
   'message:new': (p: MessageNewPayload) => void;
   'message:status_changed': (p: MessageStatusChangedPayload) => void;
   'message:media_ready': (p: MessageMediaReadyPayload) => void;
+  'message:media_failed': (p: MessageMediaFailedPayload) => void;
   'conversation:updated': (p: ConversationUpdatedPayload) => void;
   'conversation:assigned': (p: ConversationAssignedPayload) => void;
   'conversation:routing_changed': (p: ConversationRoutingChangedPayload) => void;
@@ -204,6 +218,7 @@ export const SERVER_TO_CLIENT_EVENTS = [
   'message:new',
   'message:status_changed',
   'message:media_ready',
+  'message:media_failed',
   'conversation:updated',
   'conversation:assigned',
   'conversation:routing_changed',

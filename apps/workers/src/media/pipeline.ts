@@ -29,19 +29,19 @@ import { MetaError } from '@hm/channels';
 import type { Logger } from '@hm/logger';
 import type { MediaJob } from './job';
 import { deriveExtension, effectiveMime, sha256Hex } from './hash';
-import type { MediaDeps, ResolvedMediaChannel } from './ports';
+import { defaultMediaRetry, type MediaDeps, type MediaRetryConfig, type ResolvedMediaChannel } from './ports';
 
 /** Resultado observável do processamento de um job (teste/log/métrica). */
 export type MediaPipelineResult =
   | { readonly outcome: 'done'; readonly mediaUrl: string; readonly deduped: boolean }
-  | { readonly outcome: 'skipped'; readonly reason: MediaSkipReason };
+  | { readonly outcome: 'skipped'; readonly reason: MediaSkipReason }
+  | { readonly outcome: 'failed'; readonly reason: MediaFailureReason };
 
-export type MediaSkipReason =
-  | 'channel_unresolved'
-  | 'message_not_found'
-  | 'already_ingested'
-  | 'media_unavailable'
-  | 'empty_media';
+/** Conteúdo "morto" sem mídia a persistir — ack silencioso, sem marcar falha. */
+export type MediaSkipReason = 'channel_unresolved' | 'message_not_found' | 'already_ingested';
+
+/** Falha terminal de mídia: `media_status='failed'` + evento `media_failed`. */
+export type MediaFailureReason = 'media_unavailable' | 'empty_media';
 
 function skip(reason: MediaSkipReason): MediaPipelineResult {
   return { outcome: 'skipped', reason };
@@ -55,27 +55,71 @@ export function buildMediaKey(workspaceId: string, ext: string, now: Date = new 
   return `${workspaceId}/${yyyy}/${mm}/${dd}/${randomUUID()}.${ext}`;
 }
 
-/** Baixa a mídia; mídia indisponível no provider (404/expirada) vira `null`. */
-async function tryDownload(
+/** Status HTTP de um erro Meta (para log/métrica), ou `undefined`. */
+function metaHttpStatus(err: unknown): number | undefined {
+  return err instanceof MetaError ? err.httpStatus : undefined;
+}
+
+/**
+ * Resultado do download com retry. `ok` traz o binário; `dead` marca mídia
+ * confirmada indisponível pelo provider mesmo após re-resolução (terminal —
+ * retentar pela malha MQ não ajuda). Erro de infra que persiste é re-lançado
+ * (não retorna) para a malha DLX/retry (F52-S03) cuidar do job inteiro.
+ */
+type DownloadOutcome = { readonly kind: 'ok'; readonly bytes: Buffer } | { readonly kind: 'dead' };
+
+/**
+ * Baixa a mídia com retry + backoff. Cada tentativa re-invoca o adapter, o que
+ * **re-resolve uma URL temporária fresca** quando o `refOrUrl` é um `media_id`
+ * (WhatsApp resolve `GET /{media-id}` a cada chamada) — atacando direto a causa
+ * raiz (URL da Meta expira em ~10-30s). Esgotadas as tentativas:
+ *  - erro de provider não-retryável (404/ref expirada que não re-resolveu) ⇒
+ *    `dead` (terminal: marca `failed`, sem reprocessar pela MQ);
+ *  - erro transitório (5xx/rede) ⇒ re-lança ⇒ malha DLX/retry reprocessa o job
+ *    (e re-resolve de novo numa janela maior).
+ */
+async function downloadWithRetry(
   job: MediaJob,
   resolved: ResolvedMediaChannel,
+  retry: MediaRetryConfig,
   logger: Logger,
-): Promise<Buffer | null> {
-  try {
-    return await resolved.adapter.downloadMedia(job.mediaRef.refOrUrl, resolved.channel);
-  } catch (err: unknown) {
-    // Erro de provider não-retryável (ref expirada/inexistente): conteúdo morto.
-    if (err instanceof MetaError && !err.retryable) {
-      logger.warn('media: download falhou (provider, não-retryável) — descartado', {
+): Promise<DownloadOutcome> {
+  const maxAttempts = Math.max(1, retry.maxAttempts);
+  let lastErr: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const bytes = await resolved.adapter.downloadMedia(job.mediaRef.refOrUrl, resolved.channel);
+      if (attempt > 1) {
+        logger.info('media: download recuperado após retry', {
+          externalId: job.externalId,
+          provider: job.provider,
+          attempt,
+        });
+      }
+      return { kind: 'ok', bytes };
+    } catch (err: unknown) {
+      lastErr = err;
+      const isLast = attempt >= maxAttempts;
+      logger.warn('media: download falhou', {
         externalId: job.externalId,
         provider: job.provider,
-        errorCode: err.httpStatus,
+        attempt,
+        maxAttempts,
+        httpStatus: metaHttpStatus(err),
+        retryable: err instanceof MetaError ? err.retryable : true,
+        isLast,
       });
-      return null;
+      if (isLast) break;
+      const delayMs = retry.backoffMs[attempt - 1] ?? retry.backoffMs.at(-1) ?? 0;
+      await retry.sleep(delayMs);
     }
-    // Demais erros (rede/5xx/timeout): infra → propaga para nack→DLX (retry).
-    throw err;
   }
+
+  // Tentativas esgotadas. Provider confirmou mídia morta (não-retryável)? Terminal.
+  if (lastErr instanceof MetaError && !lastErr.retryable) return { kind: 'dead' };
+  // Infra transitória que persistiu além da janela in-process → malha DLX/retry.
+  throw lastErr;
 }
 
 /**
@@ -88,6 +132,8 @@ export async function runMediaPipeline(
   deps: MediaDeps,
   logger: Logger,
 ): Promise<MediaPipelineResult> {
+  const retry = deps.retry ?? defaultMediaRetry;
+
   // 1) Resolve canal → workspace pelas routing hints (cross-tenant lookup).
   const resolved = await deps.channels.resolve(job.provider, job.routing);
   if (resolved === null) {
@@ -111,22 +157,37 @@ export async function runMediaPipeline(
     return skip('message_not_found');
   }
 
-  // 3) Download via adapter (resolve media_id→URL temporária quando preciso).
-  const bytes = await tryDownload(job, resolved, logger);
-  if (bytes === null) return skip('media_unavailable');
-  if (bytes.length === 0) {
-    logger.warn('media: binário vazio — descartado', {
+  /** Marca a mídia como falha definitiva (status + evento) e devolve o resultado. */
+  const fail = async (reason: MediaFailureReason): Promise<MediaPipelineResult> => {
+    await deps.persistence.markStatus(workspaceId, target.messageId, 'failed');
+    await deps.socket.emitMediaFailed({
       workspaceId,
-      externalId: job.externalId,
+      conversationId: target.conversationId,
+      messageId: target.messageId,
+      reason,
     });
-    return skip('empty_media');
-  }
+    logger.warn('media: falha definitiva', {
+      workspaceId,
+      messageId: target.messageId,
+      reason,
+    });
+    return { outcome: 'failed', reason };
+  };
+
+  // 3) Marca o download em voo (`downloading`) e baixa com retry/re-resolve.
+  await deps.persistence.markStatus(workspaceId, target.messageId, 'downloading');
+  const download = await downloadWithRetry(job, resolved, retry, logger);
+  if (download.kind === 'dead') return fail('media_unavailable');
+  const bytes = download.bytes;
+  if (bytes.length === 0) return fail('empty_media');
 
   // 4) SHA-256 (chave de dedup + media_sha256).
   const sha256 = sha256Hex(bytes);
 
   // Idempotência: a mensagem já foi ingerida com este conteúdo → nada a fazer.
+  // Restaura `ready` (o `downloading` acima foi transitório num reprocesso).
   if (target.existingSha256 === sha256) {
+    await deps.persistence.markStatus(workspaceId, target.messageId, 'ready');
     logger.info('media: mensagem já ingerida (mesmo sha) — no-op', {
       workspaceId,
       messageId: target.messageId,
@@ -161,6 +222,7 @@ export async function runMediaPipeline(
     mediaSizeBytes: bytes.length,
     mediaSha256: sha256,
     mediaKey: key,
+    mediaStatus: 'ready',
   });
 
   // 7) Emite `message:media_ready` (placeholder vira mídia carregada na UI).

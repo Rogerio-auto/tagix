@@ -20,10 +20,18 @@ import type {
   MediaDeps,
   MediaMessageTarget,
   MediaPersistencePort,
+  MediaRetryConfig,
   MediaSocketPort,
   MediaStoragePort,
   ResolvedMediaChannel,
 } from './ports';
+
+/** Retry sem espera real (sleep no-op) — testes determinísticos e rápidos. */
+const fastRetry: MediaRetryConfig = {
+  maxAttempts: 3,
+  backoffMs: [0, 0],
+  sleep: async (): Promise<void> => undefined,
+};
 
 const logger = {
   debug: vi.fn(),
@@ -85,6 +93,8 @@ interface Fakes {
   upload: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
   emit: ReturnType<typeof vi.fn>;
+  emitFailed: ReturnType<typeof vi.fn>;
+  markStatus: ReturnType<typeof vi.fn>;
   download: IChannelAdapter['downloadMedia'];
 }
 
@@ -108,6 +118,8 @@ function fakes(opts: {
   const upload = vi.fn(async () => undefined);
   const update = vi.fn(async () => undefined);
   const emit = vi.fn(async () => undefined);
+  const emitFailed = vi.fn(async () => undefined);
+  const markStatus = vi.fn(async () => undefined);
 
   const channels: MediaChannelResolver = { resolve: vi.fn(async () => resolved) };
   const storage: MediaStoragePort = {
@@ -119,14 +131,17 @@ function fakes(opts: {
     findMessage: vi.fn(async () => target),
     findKeyBySha256: vi.fn(async () => opts.keyBySha ?? null),
     update,
+    markStatus,
   };
-  const socket: MediaSocketPort = { emitMediaReady: emit };
+  const socket: MediaSocketPort = { emitMediaReady: emit, emitMediaFailed: emitFailed };
 
   return {
-    deps: { channels, storage, persistence, socket },
+    deps: { channels, storage, persistence, socket, retry: fastRetry },
     upload,
     update,
     emit,
+    emitFailed,
+    markStatus,
     download: adapter.downloadMedia,
   };
 }
@@ -189,12 +204,15 @@ describe('buildMediaKey', () => {
 });
 
 describe('runMediaPipeline — happy path', () => {
-  it('baixa, sobe, persiste media_* e emite media_ready', async () => {
+  it('marca downloading, baixa, sobe, persiste media_*=ready e emite media_ready', async () => {
     const f = fakes({ objectExists: false });
     const res = await runMediaPipeline(makeJob(), f.deps, logger);
 
     expect(res.outcome).toBe('done');
     if (res.outcome === 'done') expect(res.deduped).toBe(false);
+
+    // Transição in-flight ANTES do download.
+    expect(f.markStatus).toHaveBeenCalledWith(WS, 'm1', 'downloading');
 
     expect(f.upload).toHaveBeenCalledOnce();
     expect(f.update).toHaveBeenCalledOnce();
@@ -204,6 +222,7 @@ describe('runMediaPipeline — happy path', () => {
       messageId: 'm1',
       mediaMime: 'image/jpeg',
       mediaSizeBytes: Buffer.from('hello-binary').length,
+      mediaStatus: 'ready',
     });
 
     expect(f.emit).toHaveBeenCalledOnce();
@@ -211,6 +230,74 @@ describe('runMediaPipeline — happy path', () => {
       conversationId: 'cv1',
       messageId: 'm1',
     });
+    expect(f.emitFailed).not.toHaveBeenCalled();
+  });
+});
+
+describe('runMediaPipeline — retry de download', () => {
+  it('falha transitória é retentada e conclui (ready + media_ready)', async () => {
+    let calls = 0;
+    const bytes = Buffer.from('recovered-binary');
+    const f = fakes({
+      objectExists: false,
+      bytes: async () => {
+        calls += 1;
+        if (calls === 1) throw new MetaError('5xx', { httpStatus: 503, retryable: true });
+        return bytes;
+      },
+    });
+
+    const res = await runMediaPipeline(makeJob(), f.deps, logger);
+
+    expect(calls).toBe(2);
+    expect(res.outcome).toBe('done');
+    expect(f.update.mock.calls[0]?.[0]).toMatchObject({ mediaStatus: 'ready' });
+    expect(f.emit).toHaveBeenCalledOnce();
+    expect(f.emitFailed).not.toHaveBeenCalled();
+  });
+
+  it('URL expirada re-resolve fresca e baixa (re-invocação do adapter)', async () => {
+    let calls = 0;
+    const bytes = Buffer.from('fresh-url-binary');
+    const f = fakes({
+      objectExists: false,
+      bytes: async () => {
+        calls += 1;
+        // 1ª: URL temporária expirada (404, não-retryável). 2ª: re-resolveu.
+        if (calls === 1) throw new MetaError('expirada', { httpStatus: 404, retryable: false });
+        return bytes;
+      },
+    });
+
+    const res = await runMediaPipeline(makeJob(), f.deps, logger);
+
+    expect(calls).toBe(2);
+    expect(res.outcome).toBe('done');
+    expect(f.update.mock.calls[0]?.[0]).toMatchObject({ mediaStatus: 'ready' });
+    expect(f.emitFailed).not.toHaveBeenCalled();
+  });
+
+  it('impossível após retries → failed + media_failed', async () => {
+    const f = fakes({
+      bytes: async () => {
+        throw new MetaError('expirada', { httpStatus: 404, retryable: false });
+      },
+    });
+
+    const res = await runMediaPipeline(makeJob(), f.deps, logger);
+
+    expect(res).toEqual({ outcome: 'failed', reason: 'media_unavailable' });
+    // Esgotou as 3 tentativas in-process.
+    expect((f.deps.channels.resolve as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
+    expect(f.download).toHaveBeenCalledTimes(3);
+    expect(f.markStatus).toHaveBeenCalledWith(WS, 'm1', 'failed');
+    expect(f.emitFailed).toHaveBeenCalledOnce();
+    expect(f.emitFailed.mock.calls[0]?.[0]).toMatchObject({
+      conversationId: 'cv1',
+      messageId: 'm1',
+      reason: 'media_unavailable',
+    });
+    expect(f.update).not.toHaveBeenCalled();
   });
 });
 
@@ -226,7 +313,11 @@ describe('runMediaPipeline — dedup por conteúdo', () => {
     expect(res.outcome).toBe('done');
     if (res.outcome === 'done') expect(res.deduped).toBe(true);
     expect(f.upload).not.toHaveBeenCalled();
-    expect(f.update.mock.calls[0]?.[0]).toMatchObject({ mediaKey: existingKey, mediaSha256: sha });
+    expect(f.update.mock.calls[0]?.[0]).toMatchObject({
+      mediaKey: existingKey,
+      mediaSha256: sha,
+      mediaStatus: 'ready',
+    });
     expect(f.emit).toHaveBeenCalledOnce();
   });
 
@@ -253,7 +344,7 @@ describe('runMediaPipeline — skips (conteúdo morto, sem throw)', () => {
     expect(res).toEqual({ outcome: 'skipped', reason: 'message_not_found' });
   });
 
-  it('mensagem já ingerida com o mesmo sha (no-op idempotente)', async () => {
+  it('mensagem já ingerida com o mesmo sha (no-op idempotente, restaura ready)', async () => {
     const bytes = Buffer.from('same');
     const sha = sha256Hex(bytes);
     const f = fakes({ bytes, target: { messageId: 'm1', conversationId: 'cv1', existingSha256: sha } });
@@ -261,34 +352,34 @@ describe('runMediaPipeline — skips (conteúdo morto, sem throw)', () => {
     expect(res).toEqual({ outcome: 'skipped', reason: 'already_ingested' });
     expect(f.upload).not.toHaveBeenCalled();
     expect(f.emit).not.toHaveBeenCalled();
+    // downloading transitório é restaurado para ready (sem re-download).
+    expect(f.markStatus).toHaveBeenCalledWith(WS, 'm1', 'ready');
   });
+});
 
-  it('binário vazio', async () => {
+describe('runMediaPipeline — falhas terminais (failed + media_failed)', () => {
+  it('binário vazio → failed', async () => {
     const f = fakes({ bytes: Buffer.alloc(0) });
     const res = await runMediaPipeline(makeJob(), f.deps, logger);
-    expect(res).toEqual({ outcome: 'skipped', reason: 'empty_media' });
-  });
-
-  it('mídia indisponível (MetaError não-retryável)', async () => {
-    const f = fakes({
-      bytes: async () => {
-        throw new MetaError('expirada', { httpStatus: 404, retryable: false });
-      },
-    });
-    const res = await runMediaPipeline(makeJob(), f.deps, logger);
-    expect(res).toEqual({ outcome: 'skipped', reason: 'media_unavailable' });
-    expect(f.update).not.toHaveBeenCalled();
+    expect(res).toEqual({ outcome: 'failed', reason: 'empty_media' });
+    expect(f.markStatus).toHaveBeenCalledWith(WS, 'm1', 'failed');
+    expect(f.emitFailed).toHaveBeenCalledOnce();
   });
 });
 
 describe('runMediaPipeline — infra propaga (nack→DLX)', () => {
-  it('erro de download retryável propaga', async () => {
+  it('erro de download retryável persistente propaga (malha DLX/retry)', async () => {
     const f = fakes({
       bytes: async () => {
         throw new MetaError('5xx', { httpStatus: 503, retryable: true });
       },
     });
     await expect(runMediaPipeline(makeJob(), f.deps, logger)).rejects.toThrow();
+    // 3 tentativas in-process antes de re-lançar para a malha MQ.
+    expect(f.download).toHaveBeenCalledTimes(3);
+    // Erro transitório NÃO marca failed (status fica downloading; MQ reprocessa).
+    expect(f.emitFailed).not.toHaveBeenCalled();
+    expect(f.markStatus).not.toHaveBeenCalledWith(WS, 'm1', 'failed');
   });
 
   it('falha de storage propaga', async () => {

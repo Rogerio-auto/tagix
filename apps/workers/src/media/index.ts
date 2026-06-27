@@ -25,6 +25,7 @@ export {
   buildMediaKey,
   type MediaPipelineResult,
   type MediaSkipReason,
+  type MediaFailureReason,
 } from './pipeline';
 
 export {
@@ -45,6 +46,8 @@ export {
   type AdapterFactory,
 } from './adapters';
 
+export { defaultMediaRetry } from './ports';
+
 export type {
   MediaDeps,
   MediaChannelResolver,
@@ -56,4 +59,7 @@ export type {
   MediaPersistInput,
   MediaSocketPort,
   MediaReadyEmit,
+  MediaFailedEmit,
+  MediaStatus,
+  MediaRetryConfig,
 } from './ports';
