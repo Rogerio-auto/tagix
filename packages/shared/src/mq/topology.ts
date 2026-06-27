@@ -1,5 +1,9 @@
 import type { Channel } from 'amqplib';
 import { z } from 'zod';
+// NB: import cíclico controlado com retry.ts — ambos só se usam DENTRO de
+// funções (runtime), nunca no topo do módulo, então não há leitura de valor
+// indefinido durante a avaliação dos módulos (ESM).
+import { assertDlq, assertRetryTopology, reliableQueues } from './retry';
 
 export const EXCHANGES = { events: 'hm.events', dlx: 'hm.dlx' } as const;
 
@@ -100,12 +104,17 @@ export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 /**
  * Declara exchanges, filas e bindings (idempotente).
  *
- * As filas são declaradas com `{ durable: true }` apenas — SEM
- * `deadLetterExchange`. Os consumers (inbound/outbound/media/flows/agents/kb)
- * re-declaram a mesma fila com `{ durable: true }`, então qualquer arg extra aqui
- * gera `PRECONDITION_FAILED (406)` no boot. A `hm.dlx` continua declarada para
- * uso futuro, mas nenhuma fila roteia para ela hoje (não há consumer de DLX).
- * TODO(follow-up): DLX de verdade exige alinhar os 6 consumers + nack routing.
+ * As filas de origem continuam declaradas com `{ durable: true }` apenas — SEM
+ * `x-dead-letter-exchange` na declaração. Os consumers (inbound/outbound/media/
+ * flows/agents/kb) re-declaram a mesma fila com `{ durable: true }`, então qualquer
+ * x-argument extra AQUI geraria `PRECONDITION_FAILED (406)` no boot deles.
+ *
+ * O dead-letter de verdade (F52-S03) é feito pela aplicação: o helper `consume`
+ * republica a mensagem que falhou numa wait-queue de retry (com backoff via TTL)
+ * e, esgotadas as tentativas, na DLQ. Só as wait-queues NOVAS — que ninguém
+ * re-declara — carregam os x-arguments de TTL/DLX. As filas de origem só ganham
+ * um *binding* extra em `hm.dlx` (binding não altera a declaração → sem 406) para
+ * receberem a re-entrada após o TTL. Ver `retry.ts` para o desenho completo.
  */
 export async function assertTopology(channel: Channel): Promise<void> {
   await channel.assertExchange(EXCHANGES.events, 'topic', { durable: true });
@@ -113,5 +122,11 @@ export async function assertTopology(channel: Channel): Promise<void> {
   for (const queue of Object.values(QUEUES)) {
     await channel.assertQueue(queue, { durable: true });
     await channel.bindQueue(queue, EXCHANGES.events, `${queue}.#`);
+  }
+
+  // DLQ final + retry ladder das filas cliente-facing (inbound/outbound/media).
+  await assertDlq(channel);
+  for (const queue of reliableQueues()) {
+    await assertRetryTopology(channel, queue);
   }
 }
