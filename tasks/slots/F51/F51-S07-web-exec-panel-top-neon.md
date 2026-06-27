@@ -2,7 +2,7 @@
 id: F51-S07
 title: Refino — painel de execuções no topo + card neon compacto (só ativas)
 phase: F51
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F51-S06]
