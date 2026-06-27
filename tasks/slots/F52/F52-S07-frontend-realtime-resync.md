@@ -2,7 +2,7 @@
 id: F52-S07
 title: Frontend realtime — resync ao reconectar + listener de status + UI de mídia (erro/retry)
 phase: F52
-status: blocked
+status: available
 priority: high
 estimated_size: M
 depends_on: [F52-S04, F52-S05, F52-S06]

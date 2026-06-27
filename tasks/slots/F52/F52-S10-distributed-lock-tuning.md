@@ -2,7 +2,7 @@
 id: F52-S10
 title: Lock distribuído Redis para outbound (ordem multi-instância) + tuning
 phase: F52
-status: blocked
+status: available
 priority: medium
 estimated_size: M
 depends_on: [F52-S04]
