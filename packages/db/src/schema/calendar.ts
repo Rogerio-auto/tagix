@@ -130,6 +130,9 @@ export const events = pgTable(
     startAt: ts('start_at').notNull(),
     endAt: ts('end_at').notNull(),
     status: text('status').notNull().default('scheduled'),
+    // Prioridade do compromisso (F53 — Agenda Inteligente). Default 'medium' ->
+    // retrocompat: linhas legadas ganham prioridade media sem backfill.
+    priority: text('priority').notNull().default('medium'),
     location: text('location'),
     meetingUrl: text('meeting_url'),
     contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
@@ -168,8 +171,15 @@ export const events = pgTable(
     index('idx_events_recurrence_parent')
       .on(t.recurrenceParentId)
       .where(sql`${t.recurrenceParentId} is not null`),
-    check('events_type_chk', sql`${t.type} in ('meeting','demo','follow_up','task','reminder','other')`),
-    check('events_status_chk', sql`${t.status} in ('scheduled','confirmed','cancelled','completed')`),
+    check(
+      'events_type_chk',
+      sql`${t.type} in ('meeting','demo','follow_up','task','reminder','other','call','whatsapp','billing','proposal','custom')`,
+    ),
+    check(
+      'events_status_chk',
+      sql`${t.status} in ('scheduled','confirmed','cancelled','completed','in_progress','postponed')`,
+    ),
+    check('events_priority_chk', sql`${t.priority} in ('low','medium','high')`),
   ],
 );
 
