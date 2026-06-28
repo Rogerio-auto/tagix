@@ -19,7 +19,7 @@
  */
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   ExternalLink,
@@ -35,11 +35,14 @@ import {
   MousePointerClick,
   RefreshCw,
   Smile,
+  SmilePlus,
   Sparkles,
   User,
 } from 'lucide-react';
 import type { MessageItem } from '../../types';
 import { cn } from '@/shared/lib/cn';
+import { useReactions, type UseReactionsResult } from '../../hooks/useReactions';
+import { ReactionPicker } from '../ReactionPicker';
 import { StatusIcon } from './StatusIcon';
 import { assertNever, toMessageType, toViewStatus, type MessageType } from './types';
 import { useMediaResource, type MediaResource } from './useMediaResource';
@@ -68,26 +71,115 @@ export interface MessageBubbleProps {
 }
 
 /**
+ * Lê os campos crus de uma linha `type:'reaction'` que a API devolve (select *)
+ * mas o `MessageItem` do frontend não declara — sem editar `types.ts` (fora do
+ * escopo do slot). `null` quando a reação não referencia um alvo interno (não há
+ * onde ancorar o chip → cai no render padrão de bolha, sem perder o dado).
+ */
+function readReactionRow(message: MessageItem): { targetId: string; emoji: string } | null {
+  const raw = message as unknown as { replyToMessageId?: unknown; reactionEmoji?: unknown };
+  const targetId = typeof raw.replyToMessageId === 'string' ? raw.replyToMessageId : null;
+  if (targetId === null || targetId === '') return null;
+  const emoji =
+    typeof raw.reactionEmoji === 'string' ? raw.reactionEmoji : (message.content ?? '');
+  return { targetId, emoji };
+}
+
+/**
  * Renderiza uma mensagem. `system` é centralizada (meta-evento, sem casca de
  * bolha); os demais tipos usam a casca inbound/outbound.
+ *
+ * Reações (F45-S06): uma linha `type:'reaction'` NÃO vira bolha solta — dobra
+ * num chip ancorado à mensagem-alvo (via `useReactions`); a bolha "reagível"
+ * ganha o gatilho de hover/long-press + o chip da própria reação.
  */
 export function MessageBubble({ message, className }: MessageBubbleProps) {
   const type = toMessageType(message.type);
+  const reactions = useReactions(message.conversationId);
+
+  // Dobra a reação persistida no chip do alvo (idempotente; ver useReactions).
+  const folded = type === 'reaction' ? readReactionRow(message) : null;
+  const foldTarget = folded?.targetId;
+  const foldEmoji = folded?.emoji;
+  const { foldPersisted } = reactions;
+  useEffect(() => {
+    if (foldTarget !== undefined && foldEmoji !== undefined) {
+      foldPersisted(foldTarget, foldEmoji);
+    }
+  }, [foldTarget, foldEmoji, foldPersisted]);
 
   if (type === 'system') {
     return <SystemNote content={message.content} className={className} />;
   }
 
+  // Reação dobrada no chip do alvo → sem bolha própria.
+  if (folded) return null;
+
+  return <ReactableBubble message={message} type={type} className={className} reactions={reactions} />;
+}
+
+/** Janela em ms para o long-press (toque) abrir o picker. */
+const LONG_PRESS_MS = 500;
+
+/**
+ * Bolha "reagível": casca inbound/outbound + gatilho de reação (hover no desktop,
+ * long-press no mobile), picker ancorado e chip da reação própria (otimista).
+ */
+function ReactableBubble({
+  message,
+  type,
+  className,
+  reactions,
+}: {
+  message: MessageItem;
+  type: MessageType;
+  className?: string;
+  reactions: UseReactionsResult;
+}) {
   const isOutbound = message.direction === 'outbound';
   const time = formatTime(message.createdAt);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const longPressTimer = useRef<number | null>(null);
+
+  // Só reage a mensagens com `external_id` resolvido (o provider precisa conhecer
+  // o alvo — a rota resolve external_id sob RLS). Evita 404 garantido em bolhas
+  // otimistas / pendentes ainda sem id externo.
+  const canReact =
+    type !== 'reaction' &&
+    typeof message.externalId === 'string' &&
+    message.externalId.length > 0;
+
+  const myReaction = reactions.reactionFor(message.id);
+  const align: 'start' | 'end' = isOutbound ? 'end' : 'start';
+
+  function clearLongPress() {
+    if (longPressTimer.current !== null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
+  function startLongPress() {
+    if (!canReact) return;
+    clearLongPress();
+    longPressTimer.current = window.setTimeout(() => setPickerOpen(true), LONG_PRESS_MS);
+  }
+  useEffect(() => clearLongPress, []);
+
+  function applyReaction(emoji: string) {
+    reactions.sendReaction(message.id, emoji);
+  }
 
   return (
     <div
-      className={cn('flex w-full', isOutbound ? 'justify-end' : 'justify-start', className)}
+      className={cn(
+        'group/bubble flex w-full',
+        isOutbound ? 'justify-end' : 'justify-start',
+        className,
+      )}
       data-direction={message.direction}
       data-type={type}
     >
-      <div className="flex max-w-[78%] min-w-0 flex-col gap-1">
+      <div className="relative flex max-w-[78%] min-w-0 flex-col gap-1">
         <div
           className={cn(
             'min-w-0 rounded-md px-3 py-2 font-body text-sm',
@@ -96,9 +188,27 @@ export function MessageBubble({ message, className }: MessageBubbleProps) {
               ? 'rounded-br-sm bg-surface-3 text-text'
               : 'rounded-bl-sm bg-surface-2 text-text',
           )}
+          onPointerDown={startLongPress}
+          onPointerUp={clearLongPress}
+          onPointerLeave={clearLongPress}
+          onPointerCancel={clearLongPress}
+          onContextMenu={(e) => {
+            if (canReact) e.preventDefault();
+          }}
         >
           <MessageBody message={message} type={type} />
         </div>
+
+        {/* Chip da reação própria — clique remove (toggle off). */}
+        {myReaction !== '' && (
+          <div className={cn('flex px-1', isOutbound ? 'justify-end' : 'justify-start')}>
+            <ReactionChip
+              emoji={myReaction}
+              disabled={reactions.isPending}
+              onRemove={() => applyReaction(myReaction)}
+            />
+          </div>
+        )}
 
         <BubbleMeta
           senderType={message.senderType}
@@ -107,8 +217,64 @@ export function MessageBubble({ message, className }: MessageBubbleProps) {
           isOutbound={isOutbound}
           viewStatus={message.viewStatus}
         />
+
+        {/* Gatilho (desktop): revelado no hover da bolha. Mobile usa long-press. */}
+        {canReact && (
+          <button
+            type="button"
+            aria-label="Reagir à mensagem"
+            aria-haspopup="menu"
+            aria-expanded={pickerOpen}
+            onClick={() => setPickerOpen((v) => !v)}
+            className={cn(
+              'absolute top-1 grid size-7 place-items-center rounded-pill border border-border bg-surface-3 text-text-mid outline-none',
+              'opacity-0 motion-safe:transition-opacity hover:text-text',
+              'group-hover/bubble:opacity-100 focus-visible:opacity-100 focus-visible:shadow-glow-md',
+              isOutbound ? '-left-9' : '-right-9',
+            )}
+          >
+            <SmilePlus className="size-4" aria-hidden />
+          </button>
+        )}
+
+        {pickerOpen && (
+          <ReactionPicker
+            current={myReaction}
+            onSelect={applyReaction}
+            onClose={() => setPickerOpen(false)}
+            align={align}
+          />
+        )}
       </div>
     </div>
+  );
+}
+
+/** Chip da reação aplicada pela pessoa. Clique remove (re-envia o mesmo emoji). */
+function ReactionChip({
+  emoji,
+  disabled,
+  onRemove,
+}: {
+  emoji: string;
+  disabled: boolean;
+  onRemove: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onRemove}
+      disabled={disabled}
+      aria-label={`Remover reação ${emoji}`}
+      title="Remover reação"
+      className={cn(
+        '-mt-1.5 inline-flex items-center gap-1 rounded-pill border border-border bg-surface-2 px-2 py-0.5 text-sm leading-none outline-none',
+        'motion-safe:transition-colors hover:border-border-2 focus-visible:shadow-glow-md',
+        'disabled:cursor-not-allowed disabled:opacity-60',
+      )}
+    >
+      <span aria-hidden>{emoji}</span>
+    </button>
   );
 }
 
