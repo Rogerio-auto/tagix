@@ -2,15 +2,16 @@
 id: F54-S05
 title: QA + adversarial da sincronização bidirecional Cockpit ↔ Agenda
 phase: F54
-status: available
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F54-S02, F54-S03, F54-S04]
 agent_id: qa-engineer
 source_docs:
   - docs/features/AGENDA_SYNC.md
----
+completed_at: 2026-06-28T20:31:46Z
 
+---
 # F54-S05 — QA + adversarial da sincronização
 
 ## Objetivo
