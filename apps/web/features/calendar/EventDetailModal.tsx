@@ -1,8 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CalendarClock, MapPin, Link2, Repeat, Users, Check, X as XIcon, HelpCircle } from 'lucide-react';
-import { Button, Modal, useToast } from '@hm/ui';
+import { useRouter } from 'next/navigation';
+import {
+  CalendarClock,
+  MapPin,
+  Link2,
+  MessageSquare,
+  Phone,
+  Repeat,
+  Users,
+  Check,
+  X as XIcon,
+  HelpCircle,
+} from 'lucide-react';
+import { Avatar, Button, Modal, useToast } from '@hm/ui';
 import { cn } from '@hm/ui/cn';
 import { Sheet } from '@/shared/components/Sheet';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
@@ -44,12 +56,14 @@ export interface EventDetailModalProps {
 
 export function EventDetailModal(props: EventDetailModalProps): React.JSX.Element {
   const { toast } = useToast();
+  const router = useRouter();
   const { isMobile } = useBreakpoint();
   const detail = useEventDetail(props.eventId);
   const membersQuery = useCalendarMembers();
   const cancel = useCancelEvent();
   const rsvp = useRsvpEvent();
   const event = detail.data?.event ?? null;
+  const contact = detail.data?.contact ?? null;
   const participants = detail.data?.participants ?? [];
   const memberName = new Map((membersQuery.data?.members ?? []).map((m) => [m.id, m.name?.trim() || m.email]));
   const [confirmingCancel, setConfirmingCancel] = useState(false);
@@ -129,6 +143,24 @@ export function EventDetailModal(props: EventDetailModalProps): React.JSX.Elemen
         <p className="text-sm text-text-low">Evento não encontrado.</p>
       ) : (
         <div className="flex flex-col gap-3 text-sm">
+          {/* Cartão do cliente (F54-S01): foto + nome + telefone — quem atender. */}
+          {contact ? (
+            <div className="flex items-center gap-3 rounded-md border border-border-2 bg-surface-2 px-3 py-2.5">
+              <Avatar src={contact.avatarUrl} name={contact.name} size="md" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-head text-sm font-semibold text-text">
+                  {contact.name || 'Contato'}
+                </p>
+                {contact.phone ? (
+                  <p className="flex items-center gap-1.5 truncate font-body text-xs text-text-low">
+                    <Phone className="size-3.5 shrink-0" aria-hidden />
+                    {contact.phone}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex items-center gap-2 text-text">
             <CalendarClock className="size-4 text-text-low" />
             <span>
@@ -163,6 +195,22 @@ export function EventDetailModal(props: EventDetailModalProps): React.JSX.Elemen
             </a>
           )}
           {event.description && <p className="text-text-mid">{event.description}</p>}
+
+          {event.conversationId ? (
+            <Button
+              type="button"
+              size={isMobile ? 'lg' : 'sm'}
+              variant="outline"
+              className="self-start"
+              leftIcon={<MessageSquare className="size-3.5" aria-hidden />}
+              onClick={() => {
+                props.onClose();
+                router.push(`/conversations/${event.conversationId}`);
+              }}
+            >
+              Abrir conversa
+            </Button>
+          ) : null}
 
           {participants.length > 0 && (
             <div className="flex flex-col gap-2 border-t border-border-2 pt-3">

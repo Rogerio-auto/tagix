@@ -10,7 +10,7 @@ import {
   MapPin,
   Repeat,
 } from 'lucide-react';
-import { Button } from '@hm/ui';
+import { Avatar, Button } from '@hm/ui';
 import type { Role } from '@hm/shared';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { EmptyState, ErrorState } from '@/shared/components/feedback';
@@ -315,6 +315,10 @@ function AgendaItem({
   onOpen: () => void;
 }): React.JSX.Element {
   const recurring = isOccurrence(event) || Boolean(event.recurrenceRule);
+  // F54-S03: o cliente vinculado vira a identidade do item (foto + nome). O título
+  // do compromisso fica como subtítulo quando há contato; senão, o título lidera.
+  const contact = event.contact ?? null;
+  const primary = contact?.name?.trim() || event.title;
   return (
     <li className="border-b border-border-2 last:border-b-0">
       <button
@@ -328,6 +332,7 @@ function AgendaItem({
           className="w-1 shrink-0 rounded-pill"
           style={{ backgroundColor: color }}
         />
+        {contact ? <Avatar src={contact.avatarUrl} name={primary} size="md" /> : null}
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex items-center gap-1.5 text-xs font-medium text-text-mid">
             <Clock className="size-3.5 shrink-0" aria-hidden />
@@ -336,7 +341,10 @@ function AgendaItem({
               <Repeat className="size-3.5 shrink-0 text-text-low" aria-label="Evento recorrente" />
             )}
           </span>
-          <span className="truncate text-sm font-medium text-text">{event.title}</span>
+          <span className="truncate text-sm font-medium text-text">{primary}</span>
+          {contact ? (
+            <span className="truncate text-xs text-text-low">{event.title}</span>
+          ) : null}
           {event.location && (
             <span className="flex items-center gap-1.5 truncate text-xs text-text-low">
               <MapPin className="size-3.5 shrink-0" aria-hidden />

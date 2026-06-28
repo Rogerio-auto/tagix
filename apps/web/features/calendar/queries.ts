@@ -7,6 +7,7 @@ import type {
   CalendarMember,
   CalendarRow,
   CreateEventInput,
+  EventContactSummary,
   EventParticipantRow,
   EventRow,
   UpdateEventInput,
@@ -69,7 +70,12 @@ export function useEventDetail(id: string | null) {
     queryKey: calendarKeys.event(id ?? ''),
     enabled: Boolean(id),
     queryFn: () =>
-      api.get<{ event: EventRow; participants: EventParticipantRow[] }>(`/api/events/${id}`),
+      // F54-S01: o detalhe passa a incluir o resumo do contato vinculado (ou null).
+      api.get<{
+        event: EventRow;
+        participants: EventParticipantRow[];
+        contact: EventContactSummary | null;
+      }>(`/api/events/${id}`),
   });
 }
 

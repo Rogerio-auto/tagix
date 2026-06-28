@@ -6,6 +6,17 @@ export { EventForm } from './EventForm';
 export { EventDetailModal } from './EventDetailModal';
 // Visão agenda/dia do mobile (F36-S07). Gate por `isMobile` dentro da CalendarPage.
 export { MobileAgenda } from './MobileAgenda';
+// Visão "Lista" — follow-ups por dia (F54-S03). Toggle dentro da CalendarPage.
+export { AgendaListView } from './AgendaListView';
+export {
+  buildAgendaList,
+  groupAgendaByDay,
+  selectAgendaEvents,
+  isOverdue,
+  isTerminalStatus,
+  dayRelative,
+} from './agendaList';
+export type { AgendaDayGroup, AgendaListItem, DayRelative } from './agendaList';
 // Trilha multi-calendário (S03) — reusada pelo mobile (S04) como sheet.
 export { CalendarRail, CalendarLegend, buildRailGroups } from './CalendarRail';
 export type { CalendarRailProps, CalendarLegendProps, RailGroup, RailCalendar } from './CalendarRail';
@@ -33,12 +44,14 @@ export {
 export type {
   CalendarRow,
   EventRow,
+  EventContactSummary,
   EventParticipantRow,
   CalendarMember,
   CreateEventInput,
   UpdateEventInput,
   EventType,
   EventStatus,
+  EventPriority,
   CalendarType,
   RecurrenceMode,
   WeekdayCode,

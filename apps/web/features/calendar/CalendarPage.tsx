@@ -10,12 +10,13 @@ import type {
   DateSelectArg,
   DatesSetArg,
   EventClickArg,
+  EventContentArg,
   EventDropArg,
   EventInput,
 } from '@fullcalendar/core';
 import type { EventResizeDoneArg } from '@fullcalendar/interaction';
 import { CalendarPlus, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button, useToast } from '@hm/ui';
+import { Avatar, Button, useToast } from '@hm/ui';
 import { cn } from '@hm/ui/cn';
 import { can, type Role } from '@hm/shared';
 import { useAuthStore } from '@/shared/stores/auth.store';
@@ -32,10 +33,14 @@ import {
 import { EventForm } from './EventForm';
 import { EventDetailModal } from './EventDetailModal';
 import { MobileAgenda } from './MobileAgenda';
+import { AgendaListView } from './AgendaListView';
 import { CalendarRail, CalendarLegend } from './CalendarRail';
-import { masterEventId, type EventRow } from './types';
+import { masterEventId, type EventContactSummary, type EventRow } from './types';
 
-type ViewName = 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay';
+/** Visões da grade (FullCalendar). */
+type GridView = 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay';
+/** Visões da Agenda: grade + a visão "Lista" (follow-ups por dia, F54-S03). */
+type ViewName = GridView | 'list';
 
 const ADMIN_ROLES: ReadonlySet<Role> = new Set(['OWNER', 'ADMIN']);
 
@@ -102,7 +107,8 @@ export function CalendarPage(): React.JSX.Element {
             borderColor: color,
             // Só permite arrastar/redimensionar quem pode editar este evento (criador/admin).
             editable: canEdit && (e.createdBy === myMemberId || canSeeOthers),
-            extendedProps: { calendarId: e.calendarId },
+            // F54-S03: o contato viaja no chip do evento (quem atender) — render em eventContent.
+            extendedProps: { calendarId: e.calendarId, contact: e.contact ?? null },
           } satisfies EventInput;
         }),
     [events, colorByCalendar, canEdit, myMemberId, canSeeOthers],
@@ -110,7 +116,11 @@ export function CalendarPage(): React.JSX.Element {
 
   const calendarRef = useRef<FullCalendar>(null);
   const [view, setView] = useState<ViewName>('timeGridWeek');
+  // Última visão de GRADE — usada como `initialView` ao voltar da Lista (a grade
+  // remonta, pois a Lista a desmonta) para reabrir na mesma visão.
+  const [gridView, setGridView] = useState<GridView>('timeGridWeek');
   const [title, setTitle] = useState('');
+  const isList = view === 'list';
 
   // Estado dos modais.
   const [formOpen, setFormOpen] = useState(false);
@@ -179,6 +189,9 @@ export function CalendarPage(): React.JSX.Element {
   const setFcView = useCallback(
     (next: ViewName): void => {
       setView(next);
+      // A Lista não é uma visão do FullCalendar — só troca o modo de render.
+      if (next === 'list') return;
+      setGridView(next);
       api()?.changeView(next);
     },
     [api],
@@ -209,6 +222,9 @@ export function CalendarPage(): React.JSX.Element {
           break;
         case '3':
           setFcView('timeGridDay');
+          break;
+        case '4':
+          setFcView('list');
           break;
         default:
           break;
@@ -273,18 +289,27 @@ export function CalendarPage(): React.JSX.Element {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold text-text">Agenda</h1>
-          <div className="flex items-center gap-1">
-            <IconNavButton aria-label="Anterior" onClick={() => api()?.prev()}>
-              <ChevronLeft className="size-4" />
-            </IconNavButton>
-            <IconNavButton aria-label="Próximo" onClick={() => api()?.next()}>
-              <ChevronRight className="size-4" />
-            </IconNavButton>
-            <Button variant="ghost" size="sm" onClick={() => api()?.today()}>
-              Hoje
-            </Button>
-          </div>
-          {title ? <span className="text-sm font-medium capitalize text-text-mid">{title}</span> : null}
+          {/* Navegação de período só faz sentido na grade (a Lista tem janela própria). */}
+          {!isList ? (
+            <>
+              <div className="flex items-center gap-1">
+                <IconNavButton aria-label="Anterior" onClick={() => api()?.prev()}>
+                  <ChevronLeft className="size-4" />
+                </IconNavButton>
+                <IconNavButton aria-label="Próximo" onClick={() => api()?.next()}>
+                  <ChevronRight className="size-4" />
+                </IconNavButton>
+                <Button variant="ghost" size="sm" onClick={() => api()?.today()}>
+                  Hoje
+                </Button>
+              </div>
+              {title ? (
+                <span className="text-sm font-medium capitalize text-text-mid">{title}</span>
+              ) : null}
+            </>
+          ) : (
+            <span className="text-sm font-medium text-text-mid">Follow-ups por dia</span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -336,7 +361,15 @@ export function CalendarPage(): React.JSX.Element {
               </div>
             ) : null}
 
-            {selection.selectedIds.length === 0 ? (
+            {isList ? (
+              <AgendaListView
+                calendarIds={selection.selectedIds}
+                selectionHydrated={selection.isHydrated}
+                canEdit={canEdit}
+                colorByCalendar={colorByCalendar}
+                onEdit={onEditFromDetail}
+              />
+            ) : selection.selectedIds.length === 0 ? (
               <div className="flex flex-1 items-center justify-center rounded-lg border border-border bg-surface">
                 <EmptyState
                   icon={CalendarDays}
@@ -352,7 +385,7 @@ export function CalendarPage(): React.JSX.Element {
                 <FullCalendar
                   ref={calendarRef}
                   plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                  initialView="timeGridWeek"
+                  initialView={gridView}
                   headerToolbar={false}
                   locale="pt-br"
                   firstDay={0}
@@ -364,6 +397,7 @@ export function CalendarPage(): React.JSX.Element {
                   dayMaxEvents
                   select={onSelect}
                   events={fcEvents}
+                  eventContent={renderEventContent}
                   eventClick={onEventClick}
                   eventDrop={onEventMutate}
                   eventResize={onEventMutate}
@@ -392,6 +426,25 @@ export function CalendarPage(): React.JSX.Element {
         onEdit={onEditFromDetail}
         myMemberId={myMemberId}
       />
+    </div>
+  );
+}
+
+/**
+ * Render do chip de evento na grade (F54-S03): mostra o CLIENTE (foto + nome) além
+ * do horário, transformando a grade em leitura de "quem atender". Cai no título do
+ * evento quando não há contato vinculado. Zero hex — herda a cor do calendário.
+ */
+function renderEventContent(arg: EventContentArg): React.JSX.Element {
+  const contact = arg.event.extendedProps['contact'] as EventContactSummary | null | undefined;
+  const label = contact?.name?.trim() || arg.event.title;
+  return (
+    <div className="flex w-full items-center gap-1 overflow-hidden px-0.5">
+      {contact ? <Avatar src={contact.avatarUrl} name={label} size="sm" className="size-4" /> : null}
+      <span className="min-w-0 truncate text-[0.6875rem] font-medium leading-tight">
+        {arg.timeText ? <span className="mr-1 opacity-80">{arg.timeText}</span> : null}
+        {label}
+      </span>
     </div>
   );
 }
@@ -452,6 +505,7 @@ function ViewSwitcher({
     { value: 'dayGridMonth', label: 'Mês', hint: '1' },
     { value: 'timeGridWeek', label: 'Semana', hint: '2' },
     { value: 'timeGridDay', label: 'Dia', hint: '3' },
+    { value: 'list', label: 'Lista', hint: '4' },
   ];
   return (
     <div className="flex items-center rounded-md border border-border bg-surface-2 p-0.5">

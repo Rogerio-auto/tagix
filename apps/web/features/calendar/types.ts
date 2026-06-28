@@ -6,6 +6,20 @@ export type EventType = 'meeting' | 'demo' | 'follow_up' | 'task' | 'reminder' |
 
 export type EventStatus = 'scheduled' | 'confirmed' | 'cancelled' | 'completed';
 
+/** Prioridade comercial do compromisso (F53). Discreta em `medium`/`low`. */
+export type EventPriority = 'low' | 'medium' | 'high';
+
+/**
+ * Resumo do contato anexado a cada evento na leitura (F54-S01): quem atender.
+ * Espelha o shape devolvido por `GET /api/events` e `GET /api/events/:id`.
+ */
+export interface EventContactSummary {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  phone: string | null;
+}
+
 export interface CalendarRow {
   id: string;
   workspaceId: string;
@@ -48,6 +62,16 @@ export interface EventRow {
    * e em eventos simples. A API entrega ocorrências com id sintético `evt:<id>:<startISO>`.
    */
   recurrenceParentId: string | null;
+  /**
+   * Prioridade comercial (F53). A API já persiste e devolve; o tipo web a torna
+   * explícita (F54-S03) — opcional p/ não quebrar leituras antigas/sintéticas.
+   */
+  priority?: EventPriority | null;
+  /**
+   * Resumo do contato vinculado (F54-S01): foto/nome/telefone — quem atender.
+   * `null` quando não há vínculo; ausente em respostas anteriores ao enriquecimento.
+   */
+  contact?: EventContactSummary | null;
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string | null;
