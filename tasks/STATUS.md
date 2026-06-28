@@ -45,6 +45,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F51   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F52   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F53   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
+| F54   | 5     | 1   | 4   | 0   | 0   | 0   | 0   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -564,6 +565,16 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F53-S06 | Central de notificações persistente + som                                             | ✅ done | high       | F53-S05          |
 | F53-S07 | Fechar port create_event da automação                                                 | ✅ done | medium     | F53-S01, F53-S08 |
 | F53-S08 | Extrair criação de evento para @hm/db (eventRepo.create) + event-service vira wrapper | ✅ done | high       | F53-S02          |
+
+## Fase 54
+
+| ID      | Titulo                                                                   | Status      | Prioridade | Depende de                |
+| ------- | ------------------------------------------------------------------------ | ----------- | ---------- | ------------------------- |
+| F54-S01 | Tempo real de compromissos (event:*) + resumo do contato na listagem     | 🟢 available | high       | —                         |
+| F54-S02 | Ouvinte de tempo real de compromissos (useEventsRealtime + mount global) | ⏸️ blocked  | high       | F54-S01                   |
+| F54-S03 | Agenda Central — visão lista por dia + grade/mobile/detalhe enriquecidos | ⏸️ blocked  | high       | F54-S01                   |
+| F54-S04 | Automação create_event emite event:created em tempo real                 | ⏸️ blocked  | medium     | F54-S01                   |
+| F54-S05 | QA + adversarial da sincronização bidirecional Cockpit ↔ Agenda          | ⏸️ blocked  | medium     | F54-S02, F54-S03, F54-S04 |
 
 ## Fase 6 — Pipeline
 
