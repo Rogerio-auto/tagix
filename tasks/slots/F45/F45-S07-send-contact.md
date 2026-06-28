@@ -2,7 +2,7 @@
 id: F45-S07
 title: Enviar contato do workspace
 phase: F45
-status: blocked
+status: available
 priority: low
 estimated_size: M
 depends_on: [F45-S02, F45-S03, F45-S05]

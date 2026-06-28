@@ -2,7 +2,7 @@
 id: F45-S05
 title: Menu de anexo rico — enviar sticker + localização
 phase: F45
-status: available
+status: done
 priority: medium
 estimated_size: L
 depends_on: [F45-S01, F45-S02, F45-S03, F45-S04]
@@ -12,6 +12,8 @@ security_review: none
 source_docs:
   - docs/features/RICH_COMPOSER.md
   - docs/UX_PRINCIPLES.md
+completed_at: 2026-06-28T22:46:59Z
+
 ---
 # F45-S05 — Menu de anexo: sticker + localização
 
