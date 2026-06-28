@@ -2,7 +2,7 @@
 id: F53-S04
 title: Card Agenda + Histórico no Cockpit
 phase: F53
-status: blocked
+status: available
 priority: high
 estimated_size: M
 depends_on: [F53-S03]

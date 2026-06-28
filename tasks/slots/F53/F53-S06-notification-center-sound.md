@@ -38,7 +38,11 @@ trata seus eventos). Este slot cria a central reusável e as preferências de so
 
 - `apps/web/features/notifications/**`
 - `apps/web/features/settings/sections/personal/NotificationsSection.tsx`
+- `apps/web/features/settings/sections/personal/queries.ts` (estender tipo `notificationPrefs` com prefs de som)
 - `apps/web/shared/realtime/useAppointmentDue.ts`
+- `apps/web/shared/components/layout/TopBar.tsx` (sino + badge de não-lidas)
+- `apps/web/shared/components/layout/AppLayout.tsx` (montar a central uma vez, ao lado do CommandPalette)
+- `apps/api/src/routes/members/me.ts` (estender Zod de `notificationPrefs` p/ aceitar prefs de som — fonte da verdade no servidor)
 
 ### files_forbidden
 

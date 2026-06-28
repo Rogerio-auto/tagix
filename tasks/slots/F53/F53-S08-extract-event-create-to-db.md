@@ -39,6 +39,7 @@ lacuna sem violar a fronteira de pacotes (ambos dependem de `@hm/db`, o que é l
 - `packages/db/src/index.ts` (apenas se precisar exportar o novo símbolo no barrel)
 - `apps/api/src/services/event-service.ts` (refatorar para wrapper fino sobre o repo)
 - `packages/db/src/repos/__tests__/**` (teste do repo, se aplicável)
+- `apps/api/src/routes/calendar/__tests__/**` (atualizar o mock de `@hm/db` para acompanhar a nova arquitetura — o mock precisa expor `calendarRepo.createEvent` + `CalendarNotFoundError`)
 
 ### files_forbidden
 
