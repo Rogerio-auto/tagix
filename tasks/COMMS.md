@@ -467,3 +467,27 @@ Lote paralelo de 2 (files_allowed disjuntos, sem overlap):
 Disjunção: packages/db vs apps/web/shared/components/layout → zero overlap, paralelizáveis.
 Workers instruídos a SÓ escrever+typecheck/lint no próprio escopo (sem git, sem pnpm install). Integração 1-por-vez pelo orchestrator (stash disjunto → claim → pop → add -A → validate → finish → merge --no-ff → done).
 Próxima onda (B): S02/S03/S04 dependem de S01.
+
+## F54-S05 — QA adversarial da sincronização Cockpit ↔ Agenda (2026-06-28, qa-engineer)
+Veredito geral: CONFIÁVEL para merge. Sync bidirecional sólida (cache TanStack global + invalidação por `event:*`); emit best-effort não derruba mutação; payload compacto não vaza conteúdo; visibilidade não regride. Zero bug de produção novo encontrado.
+
+Testes adicionados (só arquivos de teste — fronteira respeitada):
+- apps/api/src/routes/calendar/__tests__/events-realtime.test.ts (estendido 8→15): contato deletado→contact:null (lista+detalhe), visibilidade 404 em calendário inacessível (sem vazar dados/nome), payload do emit SÓ {eventId,workspaceId,contactId,conversationId,kind} (anti-vazamento), corrida criar→cancelar (created→updated em ordem), rajada 3 PUTs→3 emits, mutação não-efetiva (422) não emite.
+- apps/web/features/calendar/__tests__/agendaList.edge.test.ts (14): fronteira start===now (não vencido), 1ms antes (vencido), meia-noite/virada de dia, virada de mês/semana, in_progress/postponed no passado=vencido, contato presente/nulo no item, rajada 100 itens/dia ordenação estável, lista 100% cancelada→vazia, startAt inválido descartado.
+- apps/web/features/calendar/__tests__/eventsRealtime.invalidation.test.ts (4): rajada mista (5 ev→8 invalidações), rajada 50 created→50 list/0 detalhe, duplicata idempotente, detalhe escopado por id.
+- apps/workers/src/automations/__tests__/create-event-port.adversarial.test.ts (6): rajada N criações→N emits ids distintos, rajada concorrente Promise.all, duplicata sem dedup (2x), createEvent lança→sem emit (invariante "emit só após commit"), runScoped rejeita→sem emit, offsetDays negativo (vencido) ainda emite.
+
+Edge cases — veredito:
+- Rajada de eventos: COBERTO (api/web/workers). Sem coalescing no servidor (1 emit/mutação); cliente invalida cada um, TanStack deduplica refetch in-flight. OK.
+- Evento sem contato (contact:null): COBERTO. Também coberto contato vinculado-mas-deletado (join miss → null, sem 500).
+- Corrida criar+cancelar: COBERTO. Ordem created→updated preservada; cancel viaja como updated (status cancelled, não some).
+- Duplicata de emit: COBERTO/ACEITO. Não há dedup; invalidação/refetch é idempotente por construção. Aceito.
+- Fuso/virada de dia/semana/mês: COBERTO. Lógica usa Date local + startOfDayMs; limites de meia-noite corretos. NOTA: Brasil sem DST desde 2019 → não testado DST real (ACEITO, fora de contexto do produto).
+- Visibilidade não regride: COBERTO no detalhe (GET /:id → 404 p/ calendário inacessível, sem vazar). LISTA: o filtro de visibilidade é em SQL (inArray scopedIds via accessibleCalendarIds); o mock in-memory ignora WHERE, então o filtro de lista NÃO é exercitável por unit aqui (GAP de cobertura, severidade BAIXA — lógica é sound e idêntica ao padrão de deals; o caminho JS de /:id prova o gate). Recomendação: cobrir via teste de integração com DB real (RLS) num follow-up se desejado.
+- Emit não vaza p/ quem não vê: ACEITO por design. Broadcast é workspace-wide (ws:{id}), MAS o payload é content-free (só ids+kind, blindado por teste) e a visibilidade é aplicada no refetch (GET, que retorna 404/filtra). Sem vazamento de conteúdo.
+
+GAP de confiabilidade registrado (NÃO regressão da F54):
+- [BAIXA-MÉDIA] Sem resync no reconnect de socket: useEventsRealtime (e o padrão estabelecido — useDealSocket, useAppointmentDue) NÃO invalida queries ao reconectar. Eventos emitidos durante uma desconexão (sleep/blip de rede) são PERDIDOS até o próximo evento ou refetch (refetchOnWindowFocus/Reconnect do TanStack é a rede de segurança). Consistente com todo o app → ACEITO para a F54. Se o founder quer robustez máxima contra janela de desconexão, abrir sub-slot transversal: ao 'connect'/'reconnect' do socket, invalidar ['events'] (e ['deals']) — fora da fronteira deste slot (código de produção).
+
+Validação: typecheck OK, lint OK (0). web 131 passed (15 files), workers 322 passed (31 files), api 757 passed + 1 falha PRÉ-EXISTENTE/alheia (rate-limit > clientIp, não-regressão). slot.py validate exit 0.
+Nota de ambiente: worktree não tinha .env (gitignored) → copiado da raiz p/ os testes que exigem DATABASE_URL (Docker dev no ar). Não é código.

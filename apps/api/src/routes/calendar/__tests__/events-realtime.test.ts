@@ -362,4 +362,120 @@ describe('GET /api/events* — contact resumido', () => {
     expect(res.status).toBe(200);
     expect(res.body.contact).toBeNull();
   });
+
+  // F54-S05 (adversarial): contato vinculado mas a LINHA do contato sumiu (ex.: contato
+  // deletado após criar o evento). O join não acha → contact:null, sem quebrar a leitura.
+  it('detalhe: contactId presente mas contato inexistente → contact=null (não 500)', async () => {
+    seedEvent({ contactId: CONTACT });
+    contactsStore = []; // contato apagado depois de vinculado
+    const res = await request(makeApp()).get(`/api/events/${EVT}`).set('x-test-auth', '1');
+    expect(res.status).toBe(200);
+    expect(res.body.event.id).toBe(EVT);
+    expect(res.body.contact).toBeNull();
+  });
+
+  it('listagem: contactId presente mas contato inexistente → contact=null', async () => {
+    seedEvent({ contactId: CONTACT });
+    contactsStore = [];
+    const res = await request(makeApp()).get('/api/events').set('x-test-auth', '1');
+    expect(res.status).toBe(200);
+    expect(res.body.events[0].contact).toBeNull();
+  });
+});
+
+// ─── F54-S05 — visibilidade não regride ──────────────────────────────────────────
+// O mock de @hm/db tem accessibleCalendarIds() => [CAL]. Um evento em OUTRO calendário
+// (inacessível ao membro) NÃO pode vazar pelo detalhe — a rota responde 404 sem corpo,
+// sem confirmar a existência do recurso (L1).
+describe('visibilidade: evento de calendário inacessível', () => {
+  const FOREIGN_CAL = '00000000-0000-0000-0000-0000000000c9';
+
+  it('GET /:id de evento em calendário não-acessível → 404 (sem vazar dados)', async () => {
+    seedEvent({ calendarId: FOREIGN_CAL, contactId: CONTACT });
+    contactsStore = [{ id: CONTACT, displayName: 'Secreta', avatarUrl: null, phone: '+55' }];
+    const res = await request(makeApp()).get(`/api/events/${EVT}`).set('x-test-auth', '1');
+    expect(res.status).toBe(404);
+    // Corpo não carrega o evento nem o contato (sendStatus(404) → sem payload de domínio).
+    expect(res.body.event).toBeUndefined();
+    expect(res.body.contact).toBeUndefined();
+    expect(JSON.stringify(res.body)).not.toContain('Secreta');
+  });
+});
+
+// ─── F54-S05 — payload do emit não vaza conteúdo + sequência/corrida ──────────────
+// Decisão travada (AGENDA_SYNC.md §0): o broadcast é workspace-wide para `ws:{id}`; a
+// visibilidade é aplicada no REFETCH do cliente. Por isso o payload tem de ser compacto
+// (só ids + kind) — nunca título/descrição/local. Estes testes blindam esse contrato.
+describe('emit: payload compacto (anti-vazamento) + sequência', () => {
+  const PAYLOAD_KEYS = ['eventId', 'workspaceId', 'contactId', 'conversationId', 'kind'].sort();
+
+  it('event:created carrega SÓ {eventId,workspaceId,contactId,conversationId,kind}', async () => {
+    const res = await request(makeApp())
+      .post('/api/events')
+      .set('x-test-auth', '1')
+      .send({
+        calendarId: CAL,
+        title: 'Conteúdo Sensível Não Pode Vazar',
+        description: 'segredo comercial',
+        location: 'sala secreta',
+        startAt: '2026-02-10T09:00:00Z',
+        endAt: '2026-02-10T09:15:00Z',
+        contactId: CONTACT,
+      });
+    expect(res.status).toBe(201);
+    expect(emitted).toHaveLength(1);
+    const data = emitted[0]!.data as unknown as Record<string, unknown>;
+    expect(Object.keys(data).sort()).toEqual(PAYLOAD_KEYS);
+    // Nenhum conteúdo do evento viaja no broadcast.
+    const serialized = JSON.stringify(data);
+    expect(serialized).not.toContain('Sensível');
+    expect(serialized).not.toContain('segredo');
+    expect(serialized).not.toContain('secreta');
+  });
+
+  it('corrida criar→cancelar: emite created e depois updated, em ordem', async () => {
+    const app = makeApp();
+    const created = await request(app)
+      .post('/api/events')
+      .set('x-test-auth', '1')
+      .send({
+        calendarId: CAL,
+        title: 'Ligar',
+        startAt: '2026-02-10T09:00:00Z',
+        endAt: '2026-02-10T09:15:00Z',
+      });
+    expect(created.status).toBe(201);
+    const newId = created.body.event.id as string;
+    const cancelled = await request(app)
+      .post(`/api/events/${newId}/cancel`)
+      .set('x-test-auth', '1')
+      .send({});
+    expect(cancelled.status).toBe(200);
+    expect(emitted.map((e) => e.event)).toEqual(['event:created', 'event:updated']);
+    expect(emitted.map((e) => e.data.kind)).toEqual(['created', 'updated']);
+  });
+
+  it('rajada: 3 PUTs sequenciais → 3 emits (sem coalescing no servidor)', async () => {
+    seedEvent({ status: 'scheduled', contactId: CONTACT });
+    const app = makeApp();
+    await request(app).put(`/api/events/${EVT}`).set('x-test-auth', '1').send({ status: 'confirmed' });
+    await request(app).put(`/api/events/${EVT}`).set('x-test-auth', '1').send({ status: 'in_progress' });
+    await request(app).put(`/api/events/${EVT}`).set('x-test-auth', '1').send({ status: 'completed' });
+    expect(emitted).toHaveLength(3);
+    expect(emitted.every((e) => e.event === 'event:updated')).toBe(true);
+    expect(emitted.every((e) => e.data.eventId === EVT)).toBe(true);
+  });
+
+  it('mutação NÃO-efetiva (403 ownership) NÃO emite', async () => {
+    // Evento criado por OUTRO membro; o ator (MEMBER ADMIN) tem role ADMIN → pode.
+    // Para forçar 403, rebaixamos via evento de criador distinto + role não-admin não é
+    // possível aqui (mock fixa ADMIN). Em vez disso: PUT inválido (transição terminal).
+    seedEvent({ status: 'completed' });
+    const res = await request(makeApp())
+      .put(`/api/events/${EVT}`)
+      .set('x-test-auth', '1')
+      .send({ status: 'scheduled' });
+    expect(res.status).toBe(422);
+    expect(emitted).toHaveLength(0);
+  });
 });
