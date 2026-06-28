@@ -8,6 +8,7 @@ import { BottomNav } from './BottomNav';
 import { SkipLink } from './SkipLink';
 import { TopBar } from './TopBar';
 import { CommandPalette } from '@/shared/components/command';
+import { NotificationCenter } from '@/features/notifications';
 import { useUIStore } from '@/shared/stores/ui.store';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
@@ -96,6 +97,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </div>
       {/* Paleta de comandos global (⌘/Ctrl+K) — montada uma vez aqui. */}
       <CommandPalette />
+      {/* Central de notificações (F53-S06) — montada uma vez; assina appointment:due. */}
+      <NotificationCenter />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useAuthStore } from '@/shared/stores/auth.store';
 import { cn } from '@/shared/lib/cn';
 import { activeNavItem, visibleNavItems } from './nav';
 import { UserMenu } from './UserMenu';
+import { NotificationBell } from '@/features/notifications';
 
 /**
  * Barra superior do app. No desktop é minimalista (só ações essenciais — a nav
@@ -42,6 +43,7 @@ export function TopBar({ compact = false }: { compact?: boolean }) {
         <div className="flex-1" />
       )}
       <div className="flex items-center gap-1">
+        <NotificationBell />
         <button
           type="button"
           onClick={toggle}
