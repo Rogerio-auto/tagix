@@ -2,7 +2,7 @@
 id: F53-S08
 title: Extrair criação de evento para @hm/db (eventRepo.create) + event-service vira wrapper
 phase: F53
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: [F53-S02]
@@ -11,8 +11,9 @@ agent_id: db-engineer
 source_docs:
   - docs/features/COCKPIT_AGENDA.md
   - docs/features/CALENDAR.md
----
+completed_at: 2026-06-28T16:41:11Z
 
+---
 # F53-S08 — Extrair criação de evento para @hm/db (eventRepo.create)
 
 ## Objetivo

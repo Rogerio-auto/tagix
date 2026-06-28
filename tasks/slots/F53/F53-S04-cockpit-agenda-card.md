@@ -2,7 +2,7 @@
 id: F53-S04
 title: Card Agenda + Histórico no Cockpit
 phase: F53
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: [F53-S03]
@@ -18,8 +18,9 @@ ux_considerations:
   - "Aplica 2.3 — detalhe do compromisso em drawer/sheet, não modal full-screen."
   - "Aplica 3.9 — histórico como timeline vertical com check + relativo a 'agora'."
   - "Aplica 2.1 — clique no corpo do item abre detalhe; ação primária óbvia (não ícone obscuro)."
----
+completed_at: 2026-06-28T16:41:11Z
 
+---
 # F53-S04 — Card Agenda + Histórico no Cockpit
 
 ## Objetivo
