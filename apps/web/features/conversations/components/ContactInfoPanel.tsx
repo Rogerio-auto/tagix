@@ -24,6 +24,7 @@ import { cn } from '@/shared/lib/cn';
 import { Skeleton } from '@/shared/components/feedback';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { ContactPanel } from '@/features/contacts/components/ContactPanel';
+import { AgendaSection } from '@/features/cockpit-agenda/AgendaSection';
 import { DealSection } from './DealSection';
 import { ConversionSection } from './ConversionSection';
 import { NotesPanel } from './Notes';
@@ -291,6 +292,15 @@ export function ContactInfoPanel({
             </div>
           )}
         </Section>
+
+        {/* ── 1.4 Agenda — próximos compromissos + histórico (F53-S04) ───── */}
+        {/* Topo do bloco de contexto comercial: a agenda enquadra Cliente/Card/
+            Conversão. Gating (calendar.view/event.edit) e estados vivem dentro da
+            própria section; aqui é só o mount. */}
+        <AgendaSection
+          contactId={detail?.contact?.id ?? null}
+          conversationId={conversationId}
+        />
 
         {/* ── 1.5 Cliente — cadastro vivo (F47-S06) ──────────────────────── */}
         {/* Espinha compartilhada com S07 (Card) e S08 (Conversão): mantemos a
