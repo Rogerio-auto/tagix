@@ -2,7 +2,7 @@
 id: F45-S05
 title: Menu de anexo rico — enviar sticker + localização
 phase: F45
-status: blocked
+status: available
 priority: medium
 estimated_size: L
 depends_on: [F45-S01, F45-S02, F45-S03, F45-S04]

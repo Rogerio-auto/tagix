@@ -2,7 +2,7 @@
 id: F45-S04
 title: Gravador de nota de voz no composer (MediaRecorder)
 phase: F45
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: [F45-S01, F45-S02, F45-S03]
@@ -12,6 +12,8 @@ security_review: none
 source_docs:
   - docs/features/RICH_COMPOSER.md
   - docs/UX_PRINCIPLES.md
+completed_at: 2026-06-28T22:33:12Z
+
 ---
 # F45-S04 — Gravador de voz
 
