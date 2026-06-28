@@ -108,9 +108,9 @@ describe('runMvRefreshTick', () => {
     expect(res.ran).toBe(false);
   });
 
-  it('dá REFRESH CONCURRENTLY nas 3 materialized views', async () => {
+  it('dá REFRESH CONCURRENTLY nas 4 materialized views', async () => {
     const res = await runMvRefreshTick({ redis: fakeRedis(), logger });
     expect(res.ran).toBe(true);
-    expect(res.refreshed).toBe(3);
+    expect(res.refreshed).toBe(4);
   });
 });
