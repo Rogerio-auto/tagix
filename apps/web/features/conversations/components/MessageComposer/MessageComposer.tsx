@@ -7,6 +7,8 @@ import { useToast } from '@hm/ui';
 import { cn } from '@/shared/lib/cn';
 import { ApiError } from '@/shared/lib/api-client';
 import { useSendMessage } from '../../queries';
+import { ComposerActionBar, ComposerActionButton, type ComposerActionItem } from './ComposerActionBar';
+import { EmojiPicker } from './EmojiPicker';
 import { mediaFromFile, useMediaUpload, type PendingMedia } from './useMediaUpload';
 import { useWindowState } from './useWindowState';
 import { WindowNotice } from './WindowNotice';
@@ -50,18 +52,30 @@ export function MessageComposer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaId = useId();
 
+  // Última seleção conhecida do textarea — preserva a posição do cursor mesmo
+  // quando o foco está no popover de emoji (insere no cursor, não no fim).
+  const selectionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+  // Caret a aplicar após o próximo render (depois de inserir um emoji).
+  const pendingCaretRef = useRef<number | null>(null);
+
   const busy = send.isPending || uploading;
   // `disabled` = override manual; `windowBlocked` = WhatsApp fora da janela 24h.
   const inputBlocked = disabled || windowBlocked;
   const blocked = inputBlocked || busy;
   const canSend = !blocked && (text.trim().length > 0 || media !== null);
 
-  // Textarea que cresce com o conteúdo (UX §2 — composer confortável).
+  // Textarea que cresce com o conteúdo (UX §2 — composer confortável). Aplica
+  // também o caret pendente de uma inserção de emoji, sem roubar o foco do popover.
   useLayoutEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+    const caret = pendingCaretRef.current;
+    if (caret !== null) {
+      pendingCaretRef.current = null;
+      el.setSelectionRange(caret, caret);
+    }
   }, [text]);
 
   // Limpa o object URL de preview ao trocar/remover o anexo.
@@ -85,6 +99,31 @@ export function MessageComposer({
   const removeMedia = () => {
     setMedia(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Mantém a última seleção do textarea para inserir emoji na posição do cursor.
+  const rememberSelection = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    selectionRef.current = { start: el.selectionStart, end: el.selectionEnd };
+  };
+
+  const focusTextarea = () => {
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+
+  // Insere o emoji no cursor (ou substitui a seleção), avança o caret e mantém o
+  // auto-grow. O caret é reaplicado no layout effect — não rouba foco do popover.
+  const insertEmoji = (emoji: string) => {
+    if (inputBlocked) return;
+    const { start, end } = selectionRef.current;
+    const safeStart = Math.min(start, text.length);
+    const safeEnd = Math.min(end, text.length);
+    const next = text.slice(0, safeStart) + emoji + text.slice(safeEnd);
+    const caret = safeStart + emoji.length;
+    selectionRef.current = { start: caret, end: caret };
+    pendingCaretRef.current = caret;
+    setText(next);
   };
 
   const submit = async () => {
@@ -124,12 +163,34 @@ export function MessageComposer({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    rememberSelection();
     // Enter envia; Shift+Enter quebra linha (UX §2.10 — atalhos).
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       void submit();
     }
   };
+
+  // Barra de ações declarativa. Ponto de extensão das modalidades de envio:
+  // S04 (voz), S05 (sticker/localização) e S07 (contato) só acrescentam itens
+  // aqui — sem reescrever o composer nem a barra (scaffold-then-fill, F45).
+  const actions: ComposerActionItem[] = [
+    {
+      id: 'attach',
+      node: (
+        <ComposerActionButton
+          icon={<Paperclip className="size-5" aria-hidden />}
+          label="Anexar mídia"
+          disabled={blocked}
+          onClick={() => fileInputRef.current?.click()}
+        />
+      ),
+    },
+    {
+      id: 'emoji',
+      node: <EmojiPicker onSelect={insertEmoji} disabled={blocked} onClosed={focusTextarea} />,
+    },
+  ];
 
   return (
     <form
@@ -181,15 +242,7 @@ export function MessageComposer({
           aria-hidden
           tabIndex={-1}
         />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={blocked}
-          aria-label="Anexar mídia"
-          className="mb-0.5 rounded-sm p-2 text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Paperclip className="size-5" aria-hidden />
-        </button>
+        <ComposerActionBar actions={actions} />
 
         <label htmlFor={textareaId} className="sr-only">
           Mensagem
@@ -198,8 +251,14 @@ export function MessageComposer({
           id={textareaId}
           ref={textareaRef}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            rememberSelection();
+          }}
           onKeyDown={onKeyDown}
+          onKeyUp={rememberSelection}
+          onClick={rememberSelection}
+          onSelect={rememberSelection}
           disabled={blocked}
           rows={1}
           placeholder={

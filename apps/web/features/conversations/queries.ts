@@ -74,6 +74,12 @@ export interface SendMessageInput {
   mediaUrl?: string | null;
   /** MIME da mídia (o backend exige junto da mediaUrl p/ o provider). */
   mediaMime?: string | null;
+  /**
+   * Campos extras de protocolo introduzidos pela expansão outbound do F45-S02
+   * (ex.: `location`/`contacts`/`voice`). Opcional e tipado como `unknown` por
+   * valor — preenchido por S05/S07 sem exigir nova mutation aqui (F45-S03).
+   */
+  payload?: Readonly<Record<string, unknown>> | null;
 }
 
 interface SendMutationContext {
@@ -94,12 +100,13 @@ export function useSendMessage() {
   const queryClient = useQueryClient();
 
   return useMutation<{ message: MessageItem }, Error, SendMessageInput, SendMutationContext>({
-    mutationFn: ({ conversationId, content, type, mediaUrl, mediaMime }) =>
+    mutationFn: ({ conversationId, content, type, mediaUrl, mediaMime, payload }) =>
       api.post<{ message: MessageItem }>(`/api/conversations/${conversationId}/messages`, {
         content,
         type,
         mediaUrl: mediaUrl ?? null,
         mediaMime: mediaMime ?? null,
+        ...(payload ?? {}),
       }),
 
     onMutate: async (input): Promise<SendMutationContext> => {
