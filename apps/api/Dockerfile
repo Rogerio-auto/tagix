@@ -11,6 +11,10 @@ ENV PATH="/pnpm:$PATH"
 ENV COREPACK_HOME=/usr/local/corepack
 RUN corepack enable && corepack prepare pnpm@11.5.2 --activate \
     && chmod -R a+rX /usr/local/corepack
+# ffmpeg: transcode de nota de voz → audio/ogg;codecs=opus no upload (F45-S01).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # --- deps: instala o workspace inteiro (frozen). `tsx` é devDep e roda em
