@@ -2,12 +2,15 @@
 
 import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Loader2, Mic, Paperclip, SendHorizontal, X } from 'lucide-react';
+import { Loader2, MapPin, Mic, Paperclip, SendHorizontal, Sticker, X } from 'lucide-react';
 import { useToast } from '@hm/ui';
 import { cn } from '@/shared/lib/cn';
 import { ApiError } from '@/shared/lib/api-client';
 import { useSendMessage } from '../../queries';
 import { ComposerActionBar, ComposerActionButton, type ComposerActionItem } from './ComposerActionBar';
+import { AttachmentMenu, type AttachmentOption } from './AttachmentMenu';
+import { StickerPicker } from './StickerPicker';
+import { LocationSender } from './LocationSender';
 import { EmojiPicker } from './EmojiPicker';
 import { mediaFromFile, useMediaUpload, type PendingMedia } from './useMediaUpload';
 import { useVoiceRecorder } from './useVoiceRecorder';
@@ -226,6 +229,25 @@ export function MessageComposer({
     }
   };
 
+  // Modalidades estruturadas do menu de anexo "+" (F45-S05). Lista extensível:
+  // o S07 acrescenta "Contato" aqui sem tocar no AttachmentMenu nem no composer.
+  const attachmentOptions: AttachmentOption[] = [
+    {
+      id: 'sticker',
+      icon: <Sticker className="size-5" aria-hidden />,
+      label: 'Sticker',
+      description: 'Imagem como figurinha',
+      render: (close) => <StickerPicker conversationId={conversationId} onSent={close} />,
+    },
+    {
+      id: 'location',
+      icon: <MapPin className="size-5" aria-hidden />,
+      label: 'Localização',
+      description: 'Compartilhar um ponto no mapa',
+      render: (close) => <LocationSender conversationId={conversationId} onSent={close} />,
+    },
+  ];
+
   // Barra de ações declarativa. Ponto de extensão das modalidades de envio:
   // S04 (voz), S05 (sticker/localização) e S07 (contato) só acrescentam itens
   // aqui — sem reescrever o composer nem a barra (scaffold-then-fill, F45).
@@ -238,6 +260,16 @@ export function MessageComposer({
           label="Anexar mídia"
           disabled={blocked}
           onClick={() => fileInputRef.current?.click()}
+        />
+      ),
+    },
+    {
+      id: 'attachment-menu',
+      node: (
+        <AttachmentMenu
+          options={attachmentOptions}
+          disabled={blocked}
+          onClosed={focusTextarea}
         />
       ),
     },
