@@ -30,7 +30,19 @@ import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { assertConversationVisible, schema } from '@hm/db';
 import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
-import type { AiMode, ConversationAiModeChangedPayload, Role } from '@hm/shared';
+import {
+  contactsPayloadSchema,
+  locationPayloadSchema,
+  reactionPayloadSchema,
+} from '@hm/shared';
+import type {
+  AiMode,
+  ContactsPayload,
+  ConversationAiModeChangedPayload,
+  LocationPayload,
+  ReactionPayload,
+  Role,
+} from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { publishOutboundJob } from '../../mq/outbound-publisher';
 
@@ -66,6 +78,10 @@ const TYPE_TO_MEDIA_KIND: Readonly<Record<string, MediaKind>> = {
  * Body do envio. Contrato com o frontend (`features/conversations/queries.ts`):
  * `{ content, type, mediaUrl }`. `mediaMime`/`messageTag` são extensões opcionais
  * (mídia precisa de mime válido p/ o provider; messageTag p/ janela IG 24h).
+ *
+ * F45 — modalidades ricas: `type` pode ser `location`/`contact`/`reaction`, caso
+ * em que o corpo carrega um `payload` validado pelos schemas de `@hm/shared`
+ * (`messaging-payloads`). `payload` chega como `unknown` e é narrowed por kind.
  */
 const sendSchema = z
   .object({
@@ -74,10 +90,41 @@ const sendSchema = z
     mediaUrl: z.string().url().nullable().optional(),
     mediaMime: z.string().trim().min(1).nullable().optional(),
     messageTag: z.enum(IG_MESSAGE_TAGS).optional(),
+    payload: z.unknown().optional(),
   })
   .strip();
 
 type SendBody = z.infer<typeof sendSchema>;
+
+/** Modalidades ricas (F45) que carregam `payload` validado em vez de `content`/mídia. */
+type RichKind = 'location' | 'contacts' | 'reaction';
+
+/**
+ * Payload rico já validado, pronto para persistir + montar o job. `reaction`
+ * carrega o `targetExternalId` resolvido sob RLS (não o `targetMessageId` cru).
+ */
+type RichPayload =
+  | { readonly kind: 'location'; readonly location: LocationPayload }
+  | { readonly kind: 'contacts'; readonly contacts: ContactsPayload }
+  | {
+      readonly kind: 'reaction';
+      readonly reaction: ReactionPayload;
+      readonly targetExternalId: string;
+    };
+
+/** Resolve `type` do client → modalidade rica, ou `null` (texto/mídia). */
+function richKindFor(type: string): RichKind | null {
+  if (type === 'location') return 'location';
+  if (type === 'contact' || type === 'contacts') return 'contacts';
+  if (type === 'reaction') return 'reaction';
+  return null;
+}
+
+/** `type` persistido em `messages.type` (check constraint usa `contact` singular). */
+function storedType(type: string, richKind: RichKind | null): string {
+  if (richKind === 'contacts') return 'contact';
+  return type;
+}
 
 /** Narrowing do `req.params['id']` (Express 5 tipa como `string | string[]`). */
 function paramId(req: Request, name: string): string {
@@ -127,7 +174,20 @@ type SendScopedResult =
       readonly conversation: ResolvedConversation;
       readonly message: MessageRow;
       readonly aiPausedByHandoff: boolean;
+      /** Payload rico resolvido (com `targetExternalId` da reação) ou `null`. */
+      readonly rich: RichPayload | null;
     }
+  | null;
+
+/**
+ * Classificação rica pré-transação: location/contacts já têm o payload validado;
+ * reaction tem o payload validado mas o `targetExternalId` só é resolvido sob RLS
+ * dentro da transação. `null` = não é modalidade rica (texto/mídia).
+ */
+type PreRich =
+  | { readonly kind: 'location'; readonly location: LocationPayload }
+  | { readonly kind: 'contacts'; readonly contacts: ContactsPayload }
+  | { readonly kind: 'reaction'; readonly reaction: ReactionPayload }
   | null;
 
 /**
@@ -141,14 +201,44 @@ function buildOutboundJob(args: {
   readonly messageId: string;
   readonly body: SendBody;
   readonly mediaKind: MediaKind | null;
+  readonly rich: RichPayload | null;
 }): Record<string, unknown> {
-  const { conv, conversationId, messageId, body, mediaKind } = args;
+  const { conv, conversationId, messageId, body, mediaKind, rich } = args;
   const base = {
     channelId: conv.channelId,
     conversationId,
     messageId,
     chatId: conv.remoteId,
   };
+
+  if (rich) {
+    switch (rich.kind) {
+      case 'location':
+        return {
+          kind: 'location',
+          ...base,
+          latitude: rich.location.latitude,
+          longitude: rich.location.longitude,
+          ...(rich.location.name !== undefined ? { name: rich.location.name } : {}),
+          ...(rich.location.address !== undefined ? { address: rich.location.address } : {}),
+          ...(body.messageTag ? { messageTag: body.messageTag } : {}),
+        };
+      case 'contacts':
+        return {
+          kind: 'contacts',
+          ...base,
+          contacts: rich.contacts.contacts,
+          ...(body.messageTag ? { messageTag: body.messageTag } : {}),
+        };
+      case 'reaction':
+        return {
+          kind: 'reaction',
+          ...base,
+          targetExternalId: rich.targetExternalId,
+          emoji: rich.reaction.emoji,
+        };
+    }
+  }
 
   if (mediaKind) {
     return {
@@ -241,13 +331,43 @@ export function createMessagesRouter(): Router {
       }
       const body = parsed.data;
       const mediaKind = mediaKindFor(body.type);
+      const richKind = mediaKind ? null : richKindFor(body.type);
 
-      // Coerência do payload por kind: mídia exige url+mime; texto exige content.
+      // Validação do `payload` das modalidades ricas (Zod, toda input externa).
+      // `targetExternalId` da reação é resolvido depois, sob RLS, na transação.
+      let preRich: PreRich = null;
+      if (richKind === 'location') {
+        const r = locationPayloadSchema.safeParse(body.payload);
+        if (!r.success) {
+          res.status(400).json({ message: 'Localização inválida (latitude/longitude).' });
+          return;
+        }
+        preRich = { kind: 'location', location: r.data };
+      } else if (richKind === 'contacts') {
+        const r = contactsPayloadSchema.safeParse(body.payload);
+        if (!r.success) {
+          res.status(400).json({ message: 'Contato inválido.' });
+          return;
+        }
+        preRich = { kind: 'contacts', contacts: r.data };
+      } else if (richKind === 'reaction') {
+        const r = reactionPayloadSchema.safeParse(body.payload);
+        if (!r.success) {
+          res.status(400).json({ message: 'Reação inválida (targetMessageId/emoji).' });
+          return;
+        }
+        preRich = { kind: 'reaction', reaction: r.data };
+      }
+
+      // Coerência por kind: mídia exige url+mime; rico exige payload (já validado);
+      // texto exige content.
       if (mediaKind) {
         if (!body.mediaUrl || !body.mediaMime) {
           res.status(400).json({ message: 'Mídia exige mediaUrl e mediaMime.' });
           return;
         }
+      } else if (richKind) {
+        // payload já validado acima; nada mais a exigir aqui.
       } else if (!body.content) {
         res.status(400).json({ message: 'Texto exige content.' });
         return;
@@ -304,6 +424,46 @@ export function createMessagesRouter(): Router {
           if (existing) return { kind: 'replay', message: existing };
         }
 
+        // Resolve a modalidade rica. Para `reaction`, resolve o `external_id` da
+        // mensagem-alvo SOB RLS, exigindo que ela seja da MESMA conversa visível —
+        // o cliente nunca informa o `external_id` direto (evita vazamento
+        // cross-tenant). Sem alvo válido (invisível / sem external_id) → 404.
+        let rich: RichPayload | null = null;
+        if (preRich?.kind === 'reaction') {
+          const [target] = await tx
+            .select({ externalId: schema.messages.externalId })
+            .from(schema.messages)
+            .where(
+              and(
+                eq(schema.messages.workspaceId, workspaceId),
+                eq(schema.messages.conversationId, conversationId),
+                eq(schema.messages.id, preRich.reaction.targetMessageId),
+              ),
+            )
+            .limit(1);
+          if (!target || !target.externalId) return null;
+          rich = {
+            kind: 'reaction',
+            reaction: preRich.reaction,
+            targetExternalId: target.externalId,
+          };
+        } else if (preRich?.kind === 'location') {
+          rich = { kind: 'location', location: preRich.location };
+        } else if (preRich?.kind === 'contacts') {
+          rich = { kind: 'contacts', contacts: preRich.contacts };
+        }
+
+        // `content` legível por kind (preview na timeline). Mídia mantém o comportamento
+        // legado (caption); ricos guardam o dado estruturado em colunas dedicadas.
+        const richContent =
+          rich?.kind === 'location'
+            ? (rich.location.name ?? null)
+            : rich?.kind === 'reaction'
+              ? rich.reaction.emoji || null
+              : rich?.kind === 'contacts'
+                ? (rich.contacts.contacts[0]?.name ?? null)
+                : null;
+
         const [message] = await tx
           .insert(schema.messages)
           .values({
@@ -312,14 +472,24 @@ export function createMessagesRouter(): Router {
             direction: 'outbound',
             senderType: 'member',
             senderMemberId,
-            type: body.type,
-            content: body.content ?? null,
+            type: storedType(body.type, richKind),
+            content: richKind ? richContent : (body.content ?? null),
             viewStatus: 'pending',
             externalId: null,
             outboundIdempotencyKey: idempotencyKey,
             mediaUrl: body.mediaUrl ?? null,
             mediaMime: body.mediaMime ?? null,
             mediaCaption: mediaKind && body.content ? body.content : null,
+            ...(rich?.kind === 'reaction'
+              ? {
+                  reactionEmoji: rich.reaction.emoji,
+                  replyToMessageId: rich.reaction.targetMessageId,
+                }
+              : {}),
+            ...(rich?.kind === 'location' ? { metadata: { location: rich.location } } : {}),
+            ...(rich?.kind === 'contacts'
+              ? { metadata: { contacts: rich.contacts.contacts } }
+              : {}),
           })
           .returning();
         if (!message) return null;
@@ -370,7 +540,7 @@ export function createMessagesRouter(): Router {
             .where(eq(schema.conversations.id, conversationId));
         }
 
-        return { kind: 'created', conversation, message, aiPausedByHandoff };
+        return { kind: 'created', conversation, message, aiPausedByHandoff, rich };
       });
 
       if (!result) {
@@ -384,7 +554,7 @@ export function createMessagesRouter(): Router {
         return;
       }
 
-      const { conversation, message, aiPausedByHandoff } = result;
+      const { conversation, message, aiPausedByHandoff, rich } = result;
 
       // Enfileira o envio real. Shape EXATO de `parseOutboundJob` (worker valida).
       // Best-effort em falha de broker: a mensagem já está `pending` e a UI já
@@ -396,6 +566,7 @@ export function createMessagesRouter(): Router {
         messageId: message.id,
         body,
         mediaKind,
+        rich,
       });
       await publishOutboundJob(workspaceId, job);
 

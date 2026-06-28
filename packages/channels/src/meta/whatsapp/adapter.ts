@@ -15,8 +15,11 @@ import type {
   Channel,
   IChannelAdapter,
   InboundEvent,
+  SendContactsInput,
   SendInteractiveInput,
+  SendLocationInput,
   SendMediaInput,
+  SendReactionInput,
   SendResult,
   SendTemplateInput,
   SendTextInput,
@@ -24,8 +27,11 @@ import type {
 import { parseWhatsAppWebhook } from './webhook.parser';
 import {
   InteractiveSerializeError,
+  serializeContacts,
   serializeInteractive,
+  serializeLocation,
   serializeMedia,
+  serializeReaction,
   serializeTemplate,
   serializeText,
 } from './serializer';
@@ -87,6 +93,20 @@ export class MetaWhatsAppAdapter implements IChannelAdapter {
       }
       throw err;
     }
+  }
+
+  // --- Modalidades ricas (F45) ---
+
+  async sendLocation(input: SendLocationInput, channel: Channel): Promise<SendResult> {
+    return this.send(serializeLocation(input), channel);
+  }
+
+  async sendContacts(input: SendContactsInput, channel: Channel): Promise<SendResult> {
+    return this.send(serializeContacts(input), channel);
+  }
+
+  async sendReaction(input: SendReactionInput, channel: Channel): Promise<SendResult> {
+    return this.send(serializeReaction(input), channel);
   }
 
   // --- Mídia / presença ---

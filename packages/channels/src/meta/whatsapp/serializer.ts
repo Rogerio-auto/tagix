@@ -9,12 +9,20 @@
  */
 
 import type {
+  SendContactsInput,
+  SendLocationInput,
   SendMediaInput,
+  SendReactionInput,
   SendTemplateInput,
   SendTextInput,
   TemplateComponent,
 } from '../../types';
 import type { JsonBody } from '../../shared/graphClient';
+
+/** `audio/ogg`/`audio/opus` (com ou sem `; codecs=opus`) → nota de voz nativa. */
+function isOggOpus(mime: string): boolean {
+  return /\bogg\b|\bopus\b/i.test(mime);
+}
 
 /** Envelope-base de toda mensagem WA. */
 function base(to: string): JsonBody {
@@ -42,10 +50,10 @@ export function serializeText(input: SendTextInput): JsonBody {
  *
  * `voice` mapeia para o objeto `audio` da Graph COM `voice: true` — é o que faz o
  * WhatsApp renderizar como nota de voz (PTT, com a onda, "gravada agora") em vez de um
- * arquivo de áudio comum. O flag só é honrado para `audio/ogg; codecs=opus` (garantido no
- * Content-Type da URL assinada); para outros formatos a Graph o ignora. O modo
- * `audio` (audio_file) NÃO leva o flag — vai como áudio comum (arquivo/encaminhado).
- * `sticker`/`audio` não aceitam caption.
+ * arquivo de áudio comum. O flag só é emitido quando o mime é `audio/ogg`/`opus`
+ * (a Graph rejeita `voice:true` em outros formatos — erro 131053; a normalização
+ * ogg/opus é feita no upload, S01). `voice` com outro mime degrada para áudio comum.
+ * O modo `audio` (audio_file) NUNCA leva o flag. `sticker`/`audio` não aceitam caption.
  */
 export function serializeMedia(input: SendMediaInput): JsonBody {
   const isVoice = input.mediaKind === 'voice';
@@ -57,7 +65,7 @@ export function serializeMedia(input: SendMediaInput): JsonBody {
   if (supportsCaption && input.caption !== undefined) {
     mediaObj['caption'] = input.caption;
   }
-  if (isVoice) {
+  if (isVoice && isOggOpus(input.mime)) {
     mediaObj['voice'] = true;
   }
 
@@ -67,6 +75,65 @@ export function serializeMedia(input: SendMediaInput): JsonBody {
     [waKind]: mediaObj,
   };
   return withContext(body, input.replyToExternalId);
+}
+
+/**
+ * location → `{ type:'location', location:{ longitude, latitude, name?, address? } }`.
+ * A ordem `longitude` antes de `latitude` espelha o exemplo da Graph (irrelevante
+ * para o JSON, mantida por fidelidade ao doc).
+ */
+export function serializeLocation(input: SendLocationInput): JsonBody {
+  const location: JsonBody = {
+    longitude: input.longitude,
+    latitude: input.latitude,
+  };
+  if (input.name !== undefined) location['name'] = input.name;
+  if (input.address !== undefined) location['address'] = input.address;
+
+  const body: JsonBody = {
+    ...base(input.contactRemoteId),
+    type: 'location',
+    location,
+  };
+  return withContext(body, input.replyToExternalId);
+}
+
+/**
+ * contacts → `{ type:'contacts', contacts:[{ name:{ formatted_name, first_name }, phones, emails? }] }`.
+ * A Graph exige `name.formatted_name` + ao menos um de first/last name → usamos o
+ * nome do cartão para ambos. `phones`/`emails` são strings simples no input.
+ */
+export function serializeContacts(input: SendContactsInput): JsonBody {
+  const contacts = input.contacts.map((card) => {
+    const entry: JsonBody = {
+      name: { formatted_name: card.name, first_name: card.name },
+      phones: card.phones.map((phone) => ({ phone })),
+    };
+    if (card.emails !== undefined && card.emails.length > 0) {
+      entry['emails'] = card.emails.map((email) => ({ email }));
+    }
+    return entry;
+  });
+
+  const body: JsonBody = {
+    ...base(input.contactRemoteId),
+    type: 'contacts',
+    contacts,
+  };
+  return withContext(body, input.replyToExternalId);
+}
+
+/**
+ * reaction → `{ type:'reaction', reaction:{ message_id, emoji } }`. `emoji:''`
+ * remove a reação (semântica da Graph). Não leva `context` (a referência é o
+ * próprio `message_id`).
+ */
+export function serializeReaction(input: SendReactionInput): JsonBody {
+  return {
+    ...base(input.contactRemoteId),
+    type: 'reaction',
+    reaction: { message_id: input.targetExternalId, emoji: input.emoji },
+  };
 }
 
 /** template (HSM) → `{ type:'template', template:{ name, language, components } }`. */

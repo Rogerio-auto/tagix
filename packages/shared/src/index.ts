@@ -26,6 +26,24 @@ export * from './auth';
 // --- Tipos de mensagem interativa (LiveChat) ---
 export * from './types/interactive';
 
+// --- Payloads de mensagens ricas: location/contact/reaction (F45 — RICH_COMPOSER) ---
+export {
+  latitudeSchema,
+  longitudeSchema,
+  locationPayloadSchema,
+  contactPhoneSchema,
+  contactCardSchema,
+  contactsPayloadSchema,
+  reactionEmojiSchema,
+  reactionPayloadSchema,
+} from './messaging-payloads';
+export type {
+  LocationPayload,
+  ContactCard,
+  ContactsPayload,
+  ReactionPayload,
+} from './messaging-payloads';
+
 // --- Contratos de Inbox/visibilidade + handoff de IA (F30 / LIVECHAT_OPS) ---
 export * from './types/inbox';
 

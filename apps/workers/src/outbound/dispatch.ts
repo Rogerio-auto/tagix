@@ -59,11 +59,30 @@ const SUPPORTED: Record<OutboundJobKind, readonly ChannelProvider[]> = {
   media: ['meta_whatsapp', 'meta_instagram', 'waha'],
   template: ['meta_whatsapp'],
   interactive: ['meta_whatsapp', 'meta_instagram'],
+  location: ['meta_whatsapp', 'waha'],
+  contacts: ['meta_whatsapp', 'waha'],
+  reaction: ['meta_whatsapp', 'meta_instagram'],
   ig_private_reply: ['meta_instagram'],
   ig_public_reply: ['meta_instagram'],
   ig_hide_comment: ['meta_instagram'],
   typing_indicator: ['meta_whatsapp', 'meta_instagram', 'waha'],
 };
+
+/**
+ * Adapter não implementa a modalidade rica (método opcional ausente). Acontece
+ * quando o provider está no `SUPPORTED` (contrato) mas o envio real ainda é
+ * follow-up (ex.: WAHA location/contacts). Falha tipada, sem chamar a borda.
+ */
+function unsupported(kind: OutboundJobKind, provider: ChannelProvider): DispatchResult {
+  return {
+    dispatched: false,
+    result: {
+      ok: false,
+      errorCode: 'UNSUPPORTED',
+      errorMessage: "Provider '" + provider + "' nao implementa o envio de '" + kind + "'.",
+    },
+  };
+}
 
 function isSupported(kind: OutboundJobKind, provider: ChannelProvider): boolean {
   const providers = SUPPORTED[kind];
@@ -155,6 +174,49 @@ export async function dispatchOutbound(
         channel,
       );
       return { dispatched: true, result, ...(win.tag !== undefined ? { messageTagUsed: win.tag } : {}) };
+    }
+    case 'location': {
+      if (adapter.sendLocation === undefined) return unsupported(job.kind, channel.provider);
+      const result = await adapter.sendLocation(
+        {
+          contactRemoteId: job.chatId,
+          latitude: job.latitude,
+          longitude: job.longitude,
+          ...(job.name !== undefined ? { name: job.name } : {}),
+          ...(job.address !== undefined ? { address: job.address } : {}),
+          ...(job.replyToExternalId !== undefined
+            ? { replyToExternalId: job.replyToExternalId }
+            : {}),
+        },
+        channel,
+      );
+      return { dispatched: true, result };
+    }
+    case 'contacts': {
+      if (adapter.sendContacts === undefined) return unsupported(job.kind, channel.provider);
+      const result = await adapter.sendContacts(
+        {
+          contactRemoteId: job.chatId,
+          contacts: job.contacts,
+          ...(job.replyToExternalId !== undefined
+            ? { replyToExternalId: job.replyToExternalId }
+            : {}),
+        },
+        channel,
+      );
+      return { dispatched: true, result };
+    }
+    case 'reaction': {
+      if (adapter.sendReaction === undefined) return unsupported(job.kind, channel.provider);
+      const result = await adapter.sendReaction(
+        {
+          contactRemoteId: job.chatId,
+          targetExternalId: job.targetExternalId,
+          emoji: job.emoji,
+        },
+        channel,
+      );
+      return { dispatched: true, result };
     }
     case 'ig_private_reply': {
       const result = await asInstagram(adapter).sendPrivateReplyToComment(

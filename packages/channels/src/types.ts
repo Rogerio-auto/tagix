@@ -103,6 +103,43 @@ export interface SendInteractiveInput {
   readonly messageTag?: IgMessageTag;
 }
 
+/** Localização (F45 — RICH_COMPOSER.md §1). `name`/`address` decorativos. */
+export interface SendLocationInput {
+  readonly contactRemoteId: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly name?: string;
+  readonly address?: string;
+  readonly replyToExternalId?: string;
+  readonly messageTag?: IgMessageTag;
+}
+
+/** Um cartão de contato (`{ name, phones[], emails? }`) — F45 RICH_COMPOSER.md §1. */
+export interface SendContactCard {
+  readonly name: string;
+  readonly phones: readonly string[];
+  readonly emails?: readonly string[];
+}
+
+/** Envio de contato(s) (F45). Pode mandar múltiplos cartões num único payload. */
+export interface SendContactsInput {
+  readonly contactRemoteId: string;
+  readonly contacts: readonly SendContactCard[];
+  readonly replyToExternalId?: string;
+  readonly messageTag?: IgMessageTag;
+}
+
+/**
+ * Reação a uma mensagem (F45). `targetExternalId` é o `external_id` (id do
+ * provider) da mensagem-alvo, já resolvido sob RLS na borda HTTP. `emoji:''`
+ * remove a reação.
+ */
+export interface SendReactionInput {
+  readonly contactRemoteId: string;
+  readonly targetExternalId: string;
+  readonly emoji: string;
+}
+
 // --- Eventos inbound (LIVECHAT.md §2.1) ---
 
 export type InboundEvent =
@@ -257,6 +294,16 @@ export interface IChannelAdapter {
   /** WA only; IG retorna `{ ok:false, errorCode:'IG_NO_HSM' }`. */
   sendTemplate(input: SendTemplateInput, channel: Channel): Promise<SendResult>;
   sendInteractive(input: SendInteractiveInput, channel: Channel): Promise<SendResult>;
+
+  /**
+   * Modalidades ricas (F45 — RICH_COMPOSER.md). OPCIONAIS no contrato: adapters
+   * que não suportam simplesmente não as implementam e o `dispatch` devolve
+   * `{ ok:false, errorCode:'UNSUPPORTED' }`. Hoje apenas o `MetaWhatsAppAdapter`
+   * implementa as três.
+   */
+  sendLocation?(input: SendLocationInput, channel: Channel): Promise<SendResult>;
+  sendContacts?(input: SendContactsInput, channel: Channel): Promise<SendResult>;
+  sendReaction?(input: SendReactionInput, channel: Channel): Promise<SendResult>;
 
   downloadMedia(refOrUrl: string, channel: Channel): Promise<Buffer>;
   markAsRead(externalId: string, channel: Channel): Promise<void>;

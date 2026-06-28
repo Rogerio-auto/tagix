@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest';
 
 import {
   InteractiveSerializeError,
+  serializeContacts,
   serializeInteractive,
+  serializeLocation,
   serializeMedia,
+  serializeReaction,
   serializeTemplate,
   serializeText,
 } from './serializer';
@@ -61,6 +64,107 @@ describe('serializeMedia', () => {
     });
     expect(body['type']).toBe('audio');
     expect(body['audio']).toEqual({ link: 'https://cdn/x.ogg' });
+  });
+
+  it('voice com mime NÃO ogg/opus degrada para áudio comum (sem voice:true)', () => {
+    const body = serializeMedia({
+      contactRemoteId: TO,
+      mediaKind: 'voice',
+      publicMediaUrl: 'https://cdn/x.m4a',
+      mime: 'audio/mp4',
+    });
+    expect(body['type']).toBe('audio');
+    expect(body['audio']).toEqual({ link: 'https://cdn/x.m4a' });
+  });
+
+  it('voice com codec opus explícito (audio/ogg; codecs=opus) leva voice:true', () => {
+    const body = serializeMedia({
+      contactRemoteId: TO,
+      mediaKind: 'voice',
+      publicMediaUrl: 'https://cdn/x.ogg',
+      mime: 'audio/ogg; codecs=opus',
+    });
+    expect(body['audio']).toEqual({ link: 'https://cdn/x.ogg', voice: true });
+  });
+});
+
+describe('serializeLocation', () => {
+  it('monta location com longitude/latitude e name/address opcionais', () => {
+    const body = serializeLocation({
+      contactRemoteId: TO,
+      latitude: -23.5,
+      longitude: -46.6,
+      name: 'Escritório',
+      address: 'Av. Paulista, 1000',
+    });
+    expect(body['type']).toBe('location');
+    expect(body['location']).toEqual({
+      longitude: -46.6,
+      latitude: -23.5,
+      name: 'Escritório',
+      address: 'Av. Paulista, 1000',
+    });
+  });
+
+  it('omite name/address quando ausentes e anexa context no reply', () => {
+    const body = serializeLocation({
+      contactRemoteId: TO,
+      latitude: 0,
+      longitude: 0,
+      replyToExternalId: 'wamid.L',
+    });
+    expect(body['location']).toEqual({ longitude: 0, latitude: 0 });
+    expect(body['context']).toEqual({ message_id: 'wamid.L' });
+  });
+});
+
+describe('serializeContacts', () => {
+  it('mapeia cartões para name.formatted_name + phones/emails', () => {
+    const body = serializeContacts({
+      contactRemoteId: TO,
+      contacts: [
+        { name: 'Maria', phones: ['+5511988887777'], emails: ['maria@ex.com'] },
+        { name: 'João', phones: ['+5511911112222'] },
+      ],
+    });
+    expect(body['type']).toBe('contacts');
+    expect(body['contacts']).toEqual([
+      {
+        name: { formatted_name: 'Maria', first_name: 'Maria' },
+        phones: [{ phone: '+5511988887777' }],
+        emails: [{ email: 'maria@ex.com' }],
+      },
+      {
+        name: { formatted_name: 'João', first_name: 'João' },
+        phones: [{ phone: '+5511911112222' }],
+      },
+    ]);
+  });
+});
+
+describe('serializeReaction', () => {
+  it('monta reaction com message_id + emoji', () => {
+    const body = serializeReaction({
+      contactRemoteId: TO,
+      targetExternalId: 'wamid.R',
+      emoji: '👍',
+    });
+    expect(body).toEqual({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: TO,
+      type: 'reaction',
+      reaction: { message_id: 'wamid.R', emoji: '👍' },
+    });
+  });
+
+  it('emoji vazio remove a reação', () => {
+    const body = serializeReaction({
+      contactRemoteId: TO,
+      targetExternalId: 'wamid.R',
+      emoji: '',
+    });
+    expect(body['reaction']).toEqual({ message_id: 'wamid.R', emoji: '' });
   });
 
   it('sticker não aceita caption', () => {

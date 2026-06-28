@@ -9,7 +9,13 @@
  * aplicá-lo é de F1-S17; este worker só o repassa ao adapter.
  */
 import { z } from 'zod';
-import { InteractivePayloadSchema } from '@hm/shared';
+import {
+  InteractivePayloadSchema,
+  contactCardSchema,
+  latitudeSchema,
+  longitudeSchema,
+  reactionEmojiSchema,
+} from '@hm/shared';
 
 /** Tag de mensagem IG fora da janela 24h (INSTAGRAM.md §6). */
 export const igMessageTagSchema = z.enum([
@@ -86,6 +92,36 @@ export const outboundJobSchema = z.discriminatedUnion('kind', [
     payload: InteractivePayloadSchema,
     messageTag: igMessageTagSchema.optional(),
     lastInboundFromContactAt: z.number().int().nonnegative().optional(),
+  }),
+  z.object({
+    kind: z.literal('location'),
+    ...base,
+    chatId: z.string().min(1),
+    latitude: latitudeSchema,
+    longitude: longitudeSchema,
+    name: z.string().min(1).optional(),
+    address: z.string().min(1).optional(),
+    replyToExternalId: z.string().optional(),
+    messageTag: igMessageTagSchema.optional(),
+    lastInboundFromContactAt: z.number().int().nonnegative().optional(),
+  }),
+  z.object({
+    kind: z.literal('contacts'),
+    ...base,
+    chatId: z.string().min(1),
+    contacts: z.array(contactCardSchema).min(1),
+    replyToExternalId: z.string().optional(),
+    messageTag: igMessageTagSchema.optional(),
+    lastInboundFromContactAt: z.number().int().nonnegative().optional(),
+  }),
+  z.object({
+    kind: z.literal('reaction'),
+    ...base,
+    chatId: z.string().min(1),
+    /** `external_id` (id do provider) da mensagem-alvo, resolvido na borda HTTP. */
+    targetExternalId: z.string().min(1),
+    /** `''` remove a reação. */
+    emoji: reactionEmojiSchema,
   }),
   z.object({
     kind: z.literal('ig_private_reply'),
