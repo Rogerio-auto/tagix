@@ -44,7 +44,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F50   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F51   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F52   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
-| F53   | 7     | 1   | 6   | 0   | 0   | 0   | 0   |
+| F53   | 7     | 0   | 6   | 0   | 1   | 0   | 0   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -554,15 +554,15 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 53
 
-| ID      | Titulo                                                       | Status      | Prioridade | Depende de |
-| ------- | ------------------------------------------------------------ | ----------- | ---------- | ---------- |
-| F53-S01 | Estender events com priority + novos type/status             | 🟢 available | high       | —          |
-| F53-S02 | API/tool aceitam priority, novos type e transições de status | ⏸️ blocked  | high       | F53-S01    |
-| F53-S03 | Modal de agendamento rápido + atalhos de data                | ⏸️ blocked  | high       | F53-S02    |
-| F53-S04 | Card Agenda + Histórico no Cockpit                           | ⏸️ blocked  | high       | F53-S03    |
-| F53-S05 | Lembrete "na hora" + evento socket + due→ação                | ⏸️ blocked  | high       | F53-S01    |
-| F53-S06 | Central de notificações persistente + som                    | ⏸️ blocked  | high       | F53-S05    |
-| F53-S07 | Fechar port create_event da automação                        | ⏸️ blocked  | medium     | F53-S01    |
+| ID      | Titulo                                                       | Status        | Prioridade | Depende de |
+| ------- | ------------------------------------------------------------ | ------------- | ---------- | ---------- |
+| F53-S01 | Estender events com priority + novos type/status             | 🔵 in-progress | high       | —          |
+| F53-S02 | API/tool aceitam priority, novos type e transições de status | ⏸️ blocked    | high       | F53-S01    |
+| F53-S03 | Modal de agendamento rápido + atalhos de data                | ⏸️ blocked    | high       | F53-S02    |
+| F53-S04 | Card Agenda + Histórico no Cockpit                           | ⏸️ blocked    | high       | F53-S03    |
+| F53-S05 | Lembrete "na hora" + evento socket + due→ação                | ⏸️ blocked    | high       | F53-S01    |
+| F53-S06 | Central de notificações persistente + som                    | ⏸️ blocked    | high       | F53-S05    |
+| F53-S07 | Fechar port create_event da automação                        | ⏸️ blocked    | medium     | F53-S01    |
 
 ## Fase 6 — Pipeline
 

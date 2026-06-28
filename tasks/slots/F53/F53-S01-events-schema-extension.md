@@ -2,7 +2,7 @@
 id: F53-S01
 title: Estender events com priority + novos type/status
 phase: F53
-status: available
+status: in-progress
 priority: high
 estimated_size: S
 depends_on: []
@@ -11,8 +11,9 @@ agent_id: db-engineer
 source_docs:
   - docs/features/COCKPIT_AGENDA.md
   - docs/features/CALENDAR.md
----
+claimed_at: 2026-06-28T14:53:06Z
 
+---
 # F53-S01 — Estender events com priority + novos type/status
 
 ## Objetivo
