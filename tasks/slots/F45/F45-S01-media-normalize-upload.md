@@ -2,7 +2,7 @@
 id: F45-S01
 title: Normalização de mídia no upload (voz→ogg/opus, sticker→webp 512²)
 phase: F45
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: []
@@ -11,6 +11,8 @@ agent_id: backend-engineer
 security_review: required
 source_docs:
   - docs/features/RICH_COMPOSER.md
+completed_at: 2026-06-28T22:19:00Z
+
 ---
 # F45-S01 [SEC] — Normalização de mídia no upload
 

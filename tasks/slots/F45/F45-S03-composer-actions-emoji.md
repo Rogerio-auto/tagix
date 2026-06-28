@@ -2,7 +2,7 @@
 id: F45-S03
 title: Refactor da barra de ações do composer + emoji picker
 phase: F45
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: []
@@ -12,6 +12,8 @@ security_review: none
 source_docs:
   - docs/features/RICH_COMPOSER.md
   - docs/UX_PRINCIPLES.md
+completed_at: 2026-06-28T22:19:01Z
+
 ---
 # F45-S03 — Barra de ações do composer + emoji
 

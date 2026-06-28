@@ -2,7 +2,7 @@
 id: F45-S02
 title: Expansão do protocolo outbound (voice:true + location + contacts + reaction)
 phase: F45
-status: available
+status: done
 priority: high
 estimated_size: L
 depends_on: []
@@ -12,6 +12,8 @@ security_review: required
 source_docs:
   - docs/features/RICH_COMPOSER.md
   - docs/features/LIVECHAT.md
+completed_at: 2026-06-28T22:19:01Z
+
 ---
 # F45-S02 [SEC] — Expansão do protocolo outbound
 

@@ -2,7 +2,7 @@
 id: F45-S04
 title: Gravador de nota de voz no composer (MediaRecorder)
 phase: F45
-status: blocked
+status: available
 priority: high
 estimated_size: M
 depends_on: [F45-S01, F45-S02, F45-S03]

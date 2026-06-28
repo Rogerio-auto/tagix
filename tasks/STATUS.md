@@ -35,7 +35,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F42   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F43   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F44   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
-| F45   | 7     | 3   | 4   | 0   | 0   | 0   | 0   |
+| F45   | 7     | 2   | 2   | 0   | 0   | 0   | 3   |
 | F46   | 1     | 0   | 0   | 0   | 0   | 0   | 1   |
 | F47   | 15     | 0   | 0   | 0   | 0   | 0   | 15   |
 | F48   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
@@ -439,12 +439,12 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID      | Titulo                                                                       | Status      | Prioridade | Depende de                         |
 | ------- | ---------------------------------------------------------------------------- | ----------- | ---------- | ---------------------------------- |
-| F45-S01 | Normalização de mídia no upload (voz→ogg/opus, sticker→webp 512²)            | 🟢 available | high       | —                                  |
-| F45-S02 | Expansão do protocolo outbound (voice:true + location + contacts + reaction) | 🟢 available | high       | —                                  |
-| F45-S03 | Refactor da barra de ações do composer + emoji picker                        | 🟢 available | high       | —                                  |
-| F45-S04 | Gravador de nota de voz no composer (MediaRecorder)                          | ⏸️ blocked  | high       | F45-S01, F45-S02, F45-S03          |
+| F45-S01 | Normalização de mídia no upload (voz→ogg/opus, sticker→webp 512²)            | ✅ done      | high       | —                                  |
+| F45-S02 | Expansão do protocolo outbound (voice:true + location + contacts + reaction) | ✅ done      | high       | —                                  |
+| F45-S03 | Refactor da barra de ações do composer + emoji picker                        | ✅ done      | high       | —                                  |
+| F45-S04 | Gravador de nota de voz no composer (MediaRecorder)                          | 🟢 available | high       | F45-S01, F45-S02, F45-S03          |
 | F45-S05 | Menu de anexo rico — enviar sticker + localização                            | ⏸️ blocked  | medium     | F45-S01, F45-S02, F45-S03, F45-S04 |
-| F45-S06 | Reações de emoji nas bolhas de mensagem                                      | ⏸️ blocked  | medium     | F45-S02                            |
+| F45-S06 | Reações de emoji nas bolhas de mensagem                                      | 🟢 available | medium     | F45-S02                            |
 | F45-S07 | Enviar contato do workspace                                                  | ⏸️ blocked  | low        | F45-S02, F45-S03, F45-S05          |
 
 ## Fase 46

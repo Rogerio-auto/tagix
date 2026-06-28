@@ -2,7 +2,7 @@
 id: F45-S06
 title: Reações de emoji nas bolhas de mensagem
 phase: F45
-status: blocked
+status: available
 priority: medium
 estimated_size: M
 depends_on: [F45-S02]
