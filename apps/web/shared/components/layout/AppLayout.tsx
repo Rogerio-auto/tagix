@@ -9,6 +9,7 @@ import { SkipLink } from './SkipLink';
 import { TopBar } from './TopBar';
 import { CommandPalette } from '@/shared/components/command';
 import { NotificationCenter } from '@/features/notifications';
+import { useEventsRealtime } from '@/shared/realtime/useEventsRealtime';
 import { useUIStore } from '@/shared/stores/ui.store';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
@@ -32,6 +33,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { isMobile } = useBreakpoint();
   const pathname = usePathname();
   const fullBleed = isFullBleed(pathname ?? '');
+
+  // Ouvinte global de compromissos em tempo real (F54-S02): mantém Cockpit e Agenda
+  // sincronizados em qualquer rota, invalidando o cache de eventos no socket.
+  useEventsRealtime();
 
   // Restaura a preferência de density persistida.
   useEffect(() => {
