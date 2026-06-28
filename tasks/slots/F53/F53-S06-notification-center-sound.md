@@ -2,7 +2,7 @@
 id: F53-S06
 title: Central de notificações persistente + som
 phase: F53
-status: blocked
+status: done
 priority: high
 estimated_size: M
 depends_on: [F53-S05]
@@ -17,8 +17,9 @@ ux_considerations:
   - "Aplica 2.7 — botão 'Abrir conversa' com feedback; ação clara."
   - "Aplica 3.10 — destaque visual e som curtos/intencionais; respeita prefers-reduced-motion."
   - "Aplica 2.4 — entrada óbvia (sino de notificações, ícone universal aceito)."
----
+completed_at: 2026-06-28T16:41:11Z
 
+---
 # F53-S06 — Central de notificações persistente + som
 
 ## Objetivo
@@ -38,7 +39,11 @@ trata seus eventos). Este slot cria a central reusável e as preferências de so
 
 - `apps/web/features/notifications/**`
 - `apps/web/features/settings/sections/personal/NotificationsSection.tsx`
+- `apps/web/features/settings/sections/personal/queries.ts` (estender tipo `notificationPrefs` com prefs de som)
 - `apps/web/shared/realtime/useAppointmentDue.ts`
+- `apps/web/shared/components/layout/TopBar.tsx` (sino + badge de não-lidas)
+- `apps/web/shared/components/layout/AppLayout.tsx` (montar a central uma vez, ao lado do CommandPalette)
+- `apps/api/src/routes/members/me.ts` (estender Zod de `notificationPrefs` p/ aceitar prefs de som — fonte da verdade no servidor)
 
 ### files_forbidden
 

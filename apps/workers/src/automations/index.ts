@@ -35,6 +35,15 @@ export {
   MissingPortError,
   type ActionPorts,
 } from './executors';
+export {
+  createCalendarEventPort,
+  liveCreateEventPortDeps,
+  type CreateEventConfig,
+  type CreateEventPort,
+  type CreateEventPortCtx,
+  type CreateEventPortDeps,
+  type DealEventRef,
+} from './create-event-port';
 export type {
   ActionExecutor,
   AutomationContext,

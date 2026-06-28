@@ -37,11 +37,16 @@ export {
   type DepartmentLink,
   type AgentLink,
 } from './repos/agent_departments';
-// Calendar 2.0: provisionamento + acesso (F37-S01).
+// Calendar 2.0: provisionamento + acesso (F37-S01) + criação de evento (F53-S08:
+// núcleo único de persistência reusado por API e worker).
 export {
   calendarRepo,
+  CalendarNotFoundError,
   type Calendar,
   type CalendarAccessContext,
+  type CreateEventInput,
+  type Event,
+  type EventPriority,
 } from './repos/calendar';
 // Central de Ajuda (F38-S01).
 export {

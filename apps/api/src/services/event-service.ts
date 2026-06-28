@@ -10,9 +10,9 @@
  * commit, e o seam dispara DEPOIS (best-effort, não derruba a operação).
  */
 import { and, eq } from 'drizzle-orm';
-import { calendarRepo, schema, type DbTx } from '@hm/db';
+import { CalendarNotFoundError, calendarRepo, schema, type DbTx } from '@hm/db';
 
-const { events, eventParticipants, calendars } = schema;
+const { events, eventParticipants } = schema;
 
 export type EventRow = typeof events.$inferSelect;
 
@@ -170,6 +170,15 @@ export class EventServiceError extends Error {
  * contact; + memberIds extras). Dispara onEventChanged('created'). NÃO valida
  * disponibilidade — é responsabilidade do caller (a UI/o agente chamam
  * get_available_slots antes; race de conflito é aceitável, §11).
+ *
+ * WRAPPER FINO (F53-S08): a persistência vive em `@hm/db` (`calendarRepo.createEvent`),
+ * fonte única reusada por API e worker. A API mantém aqui apenas o que é seu:
+ *  - validação de range (422);
+ *  - resolução do calendar PESSOAL do criador quando `calendarId` é ausente + ator
+ *    member (o repo só sabe cair no "Empresa"; o pessoal é conceito da API);
+ *  - derivação de `createdBy`/`createdByAgentId` a partir do `actor`;
+ *  - mapeamento `CalendarNotFoundError` → `EventServiceError` 404;
+ *  - o SEAM `onEventChanged('created')`.
  */
 export async function createEvent(
   tx: DbTx,
@@ -196,58 +205,34 @@ export async function createEvent(
     }
   }
 
-  // O calendar precisa existir no workspace (sob RLS já está isolado).
-  const [calendar] = await tx
-    .select({ id: calendars.id, ownerId: calendars.ownerId })
-    .from(calendars)
-    .where(eq(calendars.id, calendarId));
-  if (!calendar) {
-    throw new EventServiceError('calendar_not_found', 'Calendar inexistente no workspace.', 404);
-  }
-
-  const [event] = await tx
-    .insert(events)
-    .values({
+  let event: EventRow;
+  try {
+    event = await calendarRepo.createEvent(tx, {
       workspaceId: input.workspaceId,
-      calendarId: calendar.id,
+      calendarId,
       title: input.title,
-      type: input.type ?? 'meeting',
       startAt: input.startAt,
       endAt: input.endAt,
-      status: 'scheduled',
-      priority: input.priority ?? 'medium',
-      description: input.description ?? null,
-      location: input.location ?? null,
-      meetingUrl: input.meetingUrl ?? null,
-      contactId: input.contactId ?? null,
-      dealId: input.dealId ?? null,
-      conversationId: input.conversationId ?? null,
+      type: input.type,
+      priority: input.priority,
+      description: input.description,
+      location: input.location,
+      meetingUrl: input.meetingUrl,
+      contactId: input.contactId,
+      dealId: input.dealId,
+      conversationId: input.conversationId,
+      metadata: input.metadata,
+      memberIds: input.memberIds,
+      recurrenceRule: input.recurrenceRule,
+      recurrenceUntil: input.recurrenceUntil,
       createdBy: actor.type === 'member' ? (actor.memberId ?? null) : null,
       createdByAgentId: actor.type === 'agent' ? (actor.agentId ?? null) : null,
-      recurrenceRule: input.recurrenceRule ?? null,
-      recurrenceUntil: input.recurrenceUntil ?? null,
-      metadata: input.metadata ?? {},
-    })
-    .returning();
-  if (!event) throw new EventServiceError('insert_failed', 'Falha ao criar evento.', 500);
-
-  // Participantes: organizer (dono do calendar) + extras + contact attendee.
-  const organizerIds = new Set<string>();
-  if (calendar.ownerId) organizerIds.add(calendar.ownerId);
-  const extraMembers = (input.memberIds ?? []).filter((m) => !organizerIds.has(m));
-
-  const participantValues: (typeof eventParticipants.$inferInsert)[] = [];
-  for (const memberId of organizerIds) {
-    participantValues.push({ eventId: event.id, memberId, role: 'organizer' });
-  }
-  for (const memberId of extraMembers) {
-    participantValues.push({ eventId: event.id, memberId, role: 'attendee' });
-  }
-  if (input.contactId) {
-    participantValues.push({ eventId: event.id, contactId: input.contactId, role: 'attendee' });
-  }
-  if (participantValues.length > 0) {
-    await tx.insert(eventParticipants).values(participantValues);
+    });
+  } catch (err) {
+    if (err instanceof CalendarNotFoundError) {
+      throw new EventServiceError('calendar_not_found', err.message, 404);
+    }
+    throw err;
   }
 
   await emitEventChanged({ kind: 'created', workspaceId: input.workspaceId, event, actor });

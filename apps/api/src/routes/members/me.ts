@@ -37,11 +37,27 @@ const updateMeSchema = z
     themePreference: z.enum(['dark', 'light', 'system']).optional(),
     densityPreference: z.enum(['comfortable', 'compact']).optional(),
     localeOverride: z.string().trim().max(16).nullish(),
+    // Preferências de notificação. `sound` (F53-S06) é a FONTE DA VERDADE no
+    // servidor para a central de notificações in-app (lembretes `appointment:due`).
+    // Mantém os campos existentes (in_app/email/push) e adiciona o bloco de som —
+    // tudo opcional para não exigir reenvio de campos não tocados pelo cliente.
     notificationPrefs: z
       .object({
         in_app: z.boolean(),
         email: z.boolean(),
         push: z.boolean(),
+        sound: z
+          .object({
+            /** Liga/desliga o som dos alertas. */
+            enabled: z.boolean(),
+            /** Volume normalizado 0–1. */
+            volume: z.number().min(0).max(1),
+            /** Repete o alerta em intervalo até o operador descartar/concluir. */
+            repeatUntilConfirmed: z.boolean(),
+            /** Apenas visual: mostra a notificação sem tocar áudio. */
+            visualOnly: z.boolean(),
+          })
+          .optional(),
       })
       .optional(),
   })

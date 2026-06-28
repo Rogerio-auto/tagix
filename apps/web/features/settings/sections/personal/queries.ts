@@ -18,6 +18,28 @@ export interface MeResponse {
   workspace: { id: string };
 }
 
+/**
+ * Preferências de som da central de notificações (F53-S06). Fonte da verdade no
+ * servidor (persistidas em `notificationPrefs.sound` via `PATCH /api/members/me`).
+ */
+export interface NotificationSoundPrefs {
+  /** Liga/desliga o som dos alertas. */
+  enabled: boolean;
+  /** Volume normalizado 0–1. */
+  volume: number;
+  /** Repete o alerta em intervalo até o operador descartar/concluir. */
+  repeatUntilConfirmed: boolean;
+  /** Apenas visual: mostra a notificação sem tocar áudio. */
+  visualOnly: boolean;
+}
+
+export interface NotificationPrefs {
+  in_app: boolean;
+  email: boolean;
+  push: boolean;
+  sound?: NotificationSoundPrefs;
+}
+
 export interface UpdateMeInput {
   name?: string | null;
   phone?: string | null;
@@ -25,7 +47,7 @@ export interface UpdateMeInput {
   themePreference?: 'dark' | 'light' | 'system';
   densityPreference?: 'comfortable' | 'compact';
   localeOverride?: string | null;
-  notificationPrefs?: { in_app: boolean; email: boolean; push: boolean };
+  notificationPrefs?: NotificationPrefs;
 }
 
 export interface SessionRow {

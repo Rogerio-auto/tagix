@@ -2,7 +2,7 @@
 id: F53-S03
 title: Modal de agendamento rápido + atalhos de data
 phase: F53
-status: blocked
+status: done
 priority: high
 estimated_size: M
 depends_on: [F53-S02]
@@ -17,8 +17,9 @@ ux_considerations:
   - "Aplica 2.7 — feedback imediato no submit (botão loading/disabled) + toast de sucesso/erro."
   - "Aplica 2.11 — erro em 3 partes (o quê/porquê/o que fazer) vindo do 422 da API."
   - "Aplica 3.5 — atalhos de data com hover/cursor claros; ação primária óbvia."
----
+completed_at: 2026-06-28T16:17:10Z
 
+---
 # F53-S03 — Modal de agendamento rápido + atalhos de data
 
 ## Objetivo

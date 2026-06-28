@@ -70,6 +70,8 @@ import {
 } from '../campaigns/followups';
 import {
   createActionExecutor,
+  createCalendarEventPort,
+  liveCreateEventPortDeps,
   startAutomationWorker,
   startStaleScheduler,
   type ActionPorts,
@@ -237,12 +239,14 @@ export async function startWorkers(
   // Motor de automacoes de stage (F5-S06): drainer de pending_automations + cron
   // on_stale. As portas de action (add_tag/register_conversion/trigger_flow) sao
   // preenchidas conforme F5-S14/S16/flow-engine; actions sem porta vao a retry/failed.
-  // Portas de automacao com backing real (F5-S06 + S14/S16). Acoes puras de DB
-  // (add_tag/remove_tag/register_conversion) sao implementadas aqui sob RLS; as
-  // demais (trigger_flow/send_message/notify_members/create_event) ainda nao tem
-  // backing e vao a retry/failed (honesto — integracoes de canal/calendario sao
-  // fase futura). dealContact resolve o contato do deal p/ tag/conversao.
+  // Portas de automacao com backing real (F5-S06 + S14/S16 + F53-S07). Acoes puras
+  // de DB (add_tag/remove_tag/register_conversion) sao implementadas aqui sob RLS;
+  // create_event reusa o nucleo unico @hm/db.calendarRepo.createEvent (F53-S08) via
+  // port injetado. As demais (trigger_flow/send_message/notify_members) ainda nao
+  // tem backing e vao a retry/failed (honesto — integracoes de canal sao fase
+  // futura). dealContact resolve o contato do deal p/ tag/conversao.
   const automationPorts: ActionPorts = {
+    createEvent: createCalendarEventPort(liveCreateEventPortDeps()),
     async addTag({ workspaceId, dealId, tagId }) {
       await withWorkspace(workspaceId, async (tx) => {
         const [deal] = await tx

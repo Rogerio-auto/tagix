@@ -16,14 +16,70 @@
 import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
 import type { Role } from '@hm/shared';
 import type { DbTx } from '../client';
-import { calendars, teamMembers } from '../schema';
+import { calendars, eventParticipants, events, teamMembers } from '../schema';
 
 export type Calendar = typeof calendars.$inferSelect;
+
+/** Linha completa de um evento (igual ao $inferSelect do schema). */
+export type Event = typeof events.$inferSelect;
+
+/** Prioridade do compromisso (F53). Espelha `events_priority_chk`. */
+export type EventPriority = 'low' | 'medium' | 'high';
 
 /** Contexto do membro p/ resolver visibilidade de calendarios. */
 export interface CalendarAccessContext {
   memberId: string;
   role: Role;
+}
+
+/**
+ * Calendar de destino inexistente no workspace. Erro de DOMINIO do repo — o caller
+ * (API/worker) decide como mapear (a API → EventServiceError 404). Mantemos o repo
+ * agnostico de HTTP: ele so sinaliza a condicao.
+ */
+export class CalendarNotFoundError extends Error {
+  constructor(message = 'Calendar inexistente no workspace.') {
+    super(message);
+    this.name = 'CalendarNotFoundError';
+  }
+}
+
+/**
+ * Entrada de criacao de evento — FONTE UNICA de persistencia (API e worker).
+ *
+ * `createdBy`/`createdByAgentId` ja vem RESOLVIDOS pelo caller (a API deriva do
+ * `actor`; o worker passa o agente/automacao). O repo NAO conhece o conceito de
+ * "actor" e NAO valida range (responsabilidade do caller). Resolucao de calendar:
+ *  - `calendarId` presente → precisa existir no workspace (RLS ja isola), senao
+ *    `CalendarNotFoundError`.
+ *  - `calendarId` ausente → default = calendario "Empresa" (workspace), provisionado
+ *    on-demand via `ensureWorkspaceCalendar`.
+ */
+export interface CreateEventInput {
+  readonly workspaceId: string;
+  readonly calendarId?: string | null;
+  readonly title: string;
+  readonly startAt: Date;
+  readonly endAt: Date;
+  readonly type?: Event['type'];
+  /** Prioridade do compromisso (F53). Ausente → default 'medium' (igual à coluna). */
+  readonly priority?: EventPriority;
+  readonly description?: string | null;
+  readonly location?: string | null;
+  readonly meetingUrl?: string | null;
+  readonly contactId?: string | null;
+  readonly dealId?: string | null;
+  readonly conversationId?: string | null;
+  readonly metadata?: Record<string, unknown>;
+  /** Members extras a participar (além do organizer = dono do calendar). */
+  readonly memberIds?: readonly string[];
+  /** Recorrência (RRULE simplificado) — persistida; expansão é na query da API. */
+  readonly recurrenceRule?: string | null;
+  readonly recurrenceUntil?: Date | null;
+  /** Resolvido pelo caller (member criador). */
+  readonly createdBy?: string | null;
+  /** Resolvido pelo caller (agente criador). */
+  readonly createdByAgentId?: string | null;
 }
 
 const ADMIN_ROLES: ReadonlySet<Role> = new Set<Role>(['OWNER', 'ADMIN']);
@@ -147,5 +203,79 @@ export const calendarRepo = {
       .where(or(eq(calendars.type, 'workspace'), personalPredicate, teamPredicate));
 
     return Array.from(new Set(rows.map((r) => r.id)));
+  },
+
+  /**
+   * Cria um evento + seus participantes — NUCLEO UNICO de persistencia, reusado
+   * pela API (event-service) e pelo worker (automacao F53-S07). NAO valida range
+   * nem dispara seam (isso fica client-side da API). Roda sob a transacao RLS-escopada.
+   *
+   * Participantes: organizer = dono do calendar (`owner_id`); attendees = `memberIds`
+   * extras (deduplicados do organizer) + o `contactId` (se houver). Espelha 1:1 o
+   * comportamento que vivia no `event-service.createEvent`.
+   */
+  async createEvent(tx: DbTx, input: CreateEventInput): Promise<Event> {
+    // Resolve o calendar de destino. Ausente → default = "Empresa" (workspace),
+    // provisionado on-demand (idempotente). Presente → precisa existir (RLS isola).
+    let calendarId = input.calendarId ?? null;
+    if (!calendarId) {
+      const wsCalendar = await this.ensureWorkspaceCalendar(tx, input.workspaceId);
+      calendarId = wsCalendar.id;
+    }
+
+    const [calendar] = await tx
+      .select({ id: calendars.id, ownerId: calendars.ownerId })
+      .from(calendars)
+      .where(eq(calendars.id, calendarId));
+    if (!calendar) {
+      throw new CalendarNotFoundError();
+    }
+
+    const [event] = await tx
+      .insert(events)
+      .values({
+        workspaceId: input.workspaceId,
+        calendarId: calendar.id,
+        title: input.title,
+        type: input.type ?? 'meeting',
+        startAt: input.startAt,
+        endAt: input.endAt,
+        status: 'scheduled',
+        priority: input.priority ?? 'medium',
+        description: input.description ?? null,
+        location: input.location ?? null,
+        meetingUrl: input.meetingUrl ?? null,
+        contactId: input.contactId ?? null,
+        dealId: input.dealId ?? null,
+        conversationId: input.conversationId ?? null,
+        createdBy: input.createdBy ?? null,
+        createdByAgentId: input.createdByAgentId ?? null,
+        recurrenceRule: input.recurrenceRule ?? null,
+        recurrenceUntil: input.recurrenceUntil ?? null,
+        metadata: input.metadata ?? {},
+      })
+      .returning();
+    if (!event) throw new Error('Falha ao criar evento.');
+
+    // Participantes: organizer (dono do calendar) + extras + contact attendee.
+    const organizerIds = new Set<string>();
+    if (calendar.ownerId) organizerIds.add(calendar.ownerId);
+    const extraMembers = (input.memberIds ?? []).filter((m) => !organizerIds.has(m));
+
+    const participantValues: (typeof eventParticipants.$inferInsert)[] = [];
+    for (const memberId of organizerIds) {
+      participantValues.push({ eventId: event.id, memberId, role: 'organizer' });
+    }
+    for (const memberId of extraMembers) {
+      participantValues.push({ eventId: event.id, memberId, role: 'attendee' });
+    }
+    if (input.contactId) {
+      participantValues.push({ eventId: event.id, contactId: input.contactId, role: 'attendee' });
+    }
+    if (participantValues.length > 0) {
+      await tx.insert(eventParticipants).values(participantValues);
+    }
+
+    return event;
   },
 };

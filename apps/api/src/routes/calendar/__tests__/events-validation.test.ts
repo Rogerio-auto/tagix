@@ -119,16 +119,83 @@ function makeTx() {
 type TestTx = ReturnType<typeof makeTx>;
 
 // ─── Mock de @hm/db ────────────────────────────────────────────────────────────
+// F53-S08: a persistência da criação saiu do event-service para `calendarRepo.createEvent`
+// (fonte única em @hm/db). O mock replica esse núcleo contra a tx in-memory: resolve o
+// calendar (presente → tem de existir, senão CalendarNotFoundError; ausente → o [0] do
+// store), insere events + event_participants e devolve a row criada — espelhando 1:1 o
+// repo real, de modo que o event-service (real, sob teste) volte a ficar verde.
 vi.mock('@hm/db', () => {
   const calendars = { __name: 'calendars', id: 'id', ownerId: 'ownerId', isDefault: 'isDefault' };
   const events = { __name: 'events', id: 'id' };
   const eventParticipants = { __name: 'eventParticipants' };
+
+  class CalendarNotFoundError extends Error {
+    constructor(message = 'Calendar inexistente no workspace.') {
+      super(message);
+      this.name = 'CalendarNotFoundError';
+    }
+  }
+
+  const createEvent = async (tx: TestTx, input: Row): Promise<Row> => {
+    const calendarId = (input['calendarId'] as string | null | undefined) ?? calendarsStore[0]?.['id'];
+    const calendar = calendarsStore.find((c) => c['id'] === calendarId);
+    if (!calendar) throw new CalendarNotFoundError();
+
+    const [event] = await tx
+      .insert(events)
+      .values({
+        workspaceId: input['workspaceId'],
+        calendarId: calendar['id'],
+        title: input['title'],
+        type: input['type'] ?? 'meeting',
+        startAt: input['startAt'],
+        endAt: input['endAt'],
+        status: 'scheduled',
+        priority: input['priority'] ?? 'medium',
+        description: input['description'] ?? null,
+        location: input['location'] ?? null,
+        meetingUrl: input['meetingUrl'] ?? null,
+        contactId: input['contactId'] ?? null,
+        dealId: input['dealId'] ?? null,
+        conversationId: input['conversationId'] ?? null,
+        createdBy: input['createdBy'] ?? null,
+        createdByAgentId: input['createdByAgentId'] ?? null,
+        recurrenceRule: input['recurrenceRule'] ?? null,
+        recurrenceUntil: input['recurrenceUntil'] ?? null,
+        metadata: input['metadata'] ?? {},
+      })
+      .returning();
+    if (!event) throw new Error('Falha ao criar evento.');
+
+    const organizerIds = new Set<string>();
+    if (calendar['ownerId']) organizerIds.add(calendar['ownerId'] as string);
+    const memberIds = (input['memberIds'] as string[] | undefined) ?? [];
+    const extraMembers = memberIds.filter((m) => !organizerIds.has(m));
+
+    const participantValues: Row[] = [];
+    for (const memberId of organizerIds) {
+      participantValues.push({ eventId: event['id'], memberId, role: 'organizer' });
+    }
+    for (const memberId of extraMembers) {
+      participantValues.push({ eventId: event['id'], memberId, role: 'attendee' });
+    }
+    if (input['contactId']) {
+      participantValues.push({ eventId: event['id'], contactId: input['contactId'], role: 'attendee' });
+    }
+    if (participantValues.length > 0) {
+      await tx.insert(eventParticipants).values(participantValues);
+    }
+    return event;
+  };
+
   return {
     schema: { calendars, events, eventParticipants },
+    CalendarNotFoundError,
     calendarRepo: {
       ensurePersonalCalendar: async () => calendarsStore[0],
       ensureWorkspaceCalendar: async () => calendarsStore[0],
       accessibleCalendarIds: async () => [CAL],
+      createEvent,
     },
   };
 });
