@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DbTx, CreateEventInput, Event } from '@hm/db';
+import type { EventChangedPayload } from '@hm/shared';
 import { createCalendarEventPort, type CreateEventPortDeps, type DealEventRef } from './create-event-port';
 
 /** tx fake — o port nunca toca nela direto (so a repassa as deps injetadas). */
@@ -19,6 +20,7 @@ function buildDeps(
         created.push(input);
         return { id: 'ev1' } as Event;
       }),
+    ...(over.emitCreated ? { emitCreated: over.emitCreated } : {}),
     now: over.now ?? ((): Date => new Date('2026-06-28T00:00:00.000Z')),
   };
   return { deps, created };
@@ -88,5 +90,50 @@ describe('createCalendarEventPort', () => {
       { calendarId: 'cal1', title: 'X', durationMinutes: 30, offsetDays: 1 },
     );
     expect(createEvent).not.toHaveBeenCalled();
+  });
+
+  it('emite event:created no relay com o payload correto apos criar', async () => {
+    const emitCreated = vi.fn<(p: EventChangedPayload) => void>();
+    const { deps } = buildDeps({ deal: { contactId: 'c9', conversationId: 'cv9' }, emitCreated });
+    const port = createCalendarEventPort(deps);
+    await port(
+      { workspaceId: 'ws-7', dealId: 'd1' },
+      { calendarId: 'cal1', title: 'X', durationMinutes: 30, offsetDays: 1 },
+    );
+    expect(emitCreated).toHaveBeenCalledTimes(1);
+    expect(emitCreated).toHaveBeenCalledWith({
+      eventId: 'ev1',
+      workspaceId: 'ws-7',
+      contactId: 'c9',
+      conversationId: 'cv9',
+      kind: 'created',
+    } satisfies EventChangedPayload);
+  });
+
+  it('NAO emite quando o deal sumiu (sem evento criado, nada a anunciar)', async () => {
+    const emitCreated = vi.fn<(p: EventChangedPayload) => void>();
+    const { deps } = buildDeps({ deal: null, emitCreated });
+    const port = createCalendarEventPort(deps);
+    await port(
+      { workspaceId: 'w1', dealId: 'gone' },
+      { calendarId: 'cal1', title: 'X', durationMinutes: 30, offsetDays: 1 },
+    );
+    expect(emitCreated).not.toHaveBeenCalled();
+  });
+
+  it('best-effort: emitter que lança NAO derruba a automacao (evento ja criado)', async () => {
+    const emitCreated = vi.fn<(p: EventChangedPayload) => void>(() => {
+      throw new Error('broker down');
+    });
+    const { deps, created } = buildDeps({ emitCreated });
+    const port = createCalendarEventPort(deps);
+    await expect(
+      port(
+        { workspaceId: 'w1', dealId: 'd1' },
+        { calendarId: 'cal1', title: 'X', durationMinutes: 30, offsetDays: 1 },
+      ),
+    ).resolves.toBeUndefined();
+    expect(created).toHaveLength(1);
+    expect(emitCreated).toHaveBeenCalledTimes(1);
   });
 });

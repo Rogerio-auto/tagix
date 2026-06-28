@@ -43,6 +43,7 @@ export {
   type CreateEventPortCtx,
   type CreateEventPortDeps,
   type DealEventRef,
+  type LiveCreateEventPortOptions,
 } from './create-event-port';
 export type {
   ActionExecutor,
