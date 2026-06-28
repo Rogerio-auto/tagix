@@ -3,9 +3,11 @@
 /**
  * Menu de anexo do composer (F45-S05). Popover "+" ancorado (NÃO modal
  * full-screen — UX §3) que agrupa as modalidades estruturadas de envio:
- * sticker e localização hoje; contato entra no S07 só ACRESCENTANDO um item à
- * lista `options` — sem reescrever este componente nem o `MessageComposer`
- * (scaffold-then-fill, RICH_COMPOSER §4).
+ * sticker e localização vêm via prop `options` (montadas no `MessageComposer`);
+ * "Contato" (S07) é embutido AQUI (`CONTACT_OPTION`) porque o ponto de montagem
+ * das opções fica fora da fronteira do slot — o `ContactPicker` é autossuficiente
+ * (deriva o `conversationId` da rota), então a opção entra sem novos props nem
+ * tocar o `MessageComposer` (scaffold-then-fill, RICH_COMPOSER §4).
  *
  * O menu tem duas "vistas" na mesma superfície ancorada: a lista de opções e o
  * painel da opção escolhida (`option.render`). `Esc` recua do painel para a
@@ -15,10 +17,11 @@
  * DS v2: zero hex, só tokens; foco `focus-visible:shadow-glow-md`; alvo ≥44px.
  */
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { ChevronLeft, Plus } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ChevronLeft, Plus, User } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { ComposerActionButton } from './ComposerActionBar';
+import { ContactPicker } from './ContactPicker';
 
 /**
  * Modalidade declarativa do menu. `render(close)` desenha o painel da opção; o
@@ -45,6 +48,20 @@ export interface AttachmentMenuProps {
   readonly onClosed?: () => void;
 }
 
+/**
+ * Modalidade "Contato" (F45-S07) embutida AQUI — e não no `MessageComposer` (fora
+ * da fronteira deste slot). O `ContactPicker` é autossuficiente (deriva o
+ * `conversationId` da rota), então a opção entra sem precisar de novos props nem
+ * tocar o ponto de montagem das demais modalidades.
+ */
+const CONTACT_OPTION: AttachmentOption = {
+  id: 'contact',
+  icon: <User className="size-5" aria-hidden />,
+  label: 'Contato',
+  description: 'Compartilhar um contato do workspace',
+  render: (close) => <ContactPicker onSent={close} />,
+};
+
 export function AttachmentMenu({ options, disabled = false, onClosed }: AttachmentMenuProps) {
   const [open, setOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -52,6 +69,13 @@ export function AttachmentMenu({ options, disabled = false, onClosed }: Attachme
   const triggerRef = useRef<HTMLButtonElement>(null);
   const firstItemRef = useRef<HTMLButtonElement>(null);
   const popoverId = useId();
+
+  // Modalidades efetivas: as recebidas (sticker/localização) + "Contato" (S07).
+  // Memo p/ identidade estável (evita recomputar a cada render do popover).
+  const effectiveOptions = useMemo<readonly AttachmentOption[]>(
+    () => [...options, CONTACT_OPTION],
+    [options],
+  );
 
   const close = (returnFocus: boolean) => {
     setOpen(false);
@@ -76,7 +100,8 @@ export function AttachmentMenu({ options, disabled = false, onClosed }: Attachme
     }
   }, [open, activeId]);
 
-  const active = activeId === null ? null : (options.find((o) => o.id === activeId) ?? null);
+  const active =
+    activeId === null ? null : (effectiveOptions.find((o) => o.id === activeId) ?? null);
 
   return (
     <div ref={containerRef} className="relative">
@@ -130,7 +155,7 @@ export function AttachmentMenu({ options, disabled = false, onClosed }: Attachme
             </div>
           ) : (
             <ul role="menu" aria-label="Modalidades de anexo" className="flex flex-col gap-0.5">
-              {options.map((option, index) => (
+              {effectiveOptions.map((option, index) => (
                 <li key={option.id} role="none">
                   <button
                     ref={index === 0 ? firstItemRef : undefined}
