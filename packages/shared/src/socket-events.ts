@@ -133,6 +133,24 @@ export interface NoteMentionedPayload {
   preview: string;
 }
 
+/**
+ * Compromisso vencido / lembrete "na hora" (F53-S05 / COCKPIT_AGENDA.md §4). Emitido
+ * pelo worker `calendar-reminders` ao vencer um offset de lembrete (1d / 1h / 0=na hora)
+ * e roteado pelo relay para `member:<organizerId>` + `ws:<workspaceId>`. A central de
+ * notificações (F53-S06) consome este evento. `priority` é fechado (`events_priority_chk`);
+ * `type` fica aberto (string) para não acoplar o contrato a cada novo tipo de evento.
+ */
+export interface AppointmentDuePayload {
+  eventId: string;
+  contactId: string | null;
+  conversationId: string | null;
+  title: string;
+  /** Início do compromisso, ISO 8601. */
+  startAt: string;
+  type: string;
+  priority: 'low' | 'medium' | 'high';
+}
+
 /** Pipeline/Deals real-time (F5-S07 / PIPELINE.md §6.1). */
 export interface DealCreatedPayload {
   workspaceId: string;
@@ -194,6 +212,7 @@ export interface ServerToClient {
   'conversation:agent_changed': (p: ConversationAgentChangedPayload) => void;
   'typing:from_contact': (p: TypingFromContactPayload) => void;
   'note:mentioned': (p: NoteMentionedPayload) => void;
+  'appointment:due': (p: AppointmentDuePayload) => void;
   'agent_execution:started': (p: AgentExecutionPayload) => void;
   'agent_execution:completed': (p: AgentExecutionPayload) => void;
   'flow_execution:started': (p: FlowExecutionPayload) => void;
@@ -227,6 +246,7 @@ export const SERVER_TO_CLIENT_EVENTS = [
   'conversation:agent_changed',
   'typing:from_contact',
   'note:mentioned',
+  'appointment:due',
   'agent_execution:started',
   'agent_execution:completed',
   'flow_execution:started',
