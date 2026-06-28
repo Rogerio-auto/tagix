@@ -2,7 +2,7 @@
 id: F53-S01
 title: Estender events com priority + novos type/status
 phase: F53
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: []

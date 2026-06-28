@@ -2,7 +2,7 @@
 id: F53-S02
 title: API/tool aceitam priority, novos type e transições de status
 phase: F53
-status: blocked
+status: available
 priority: high
 estimated_size: S
 depends_on: [F53-S01]
