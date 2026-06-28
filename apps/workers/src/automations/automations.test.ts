@@ -83,6 +83,57 @@ describe('createActionExecutor', () => {
     await expect(exec(row())).rejects.toBeInstanceOf(MissingPortError);
   });
 
+  it('roteia create_event p/ a porta com ctx + config', async () => {
+    const createEvent = vi.fn(async () => {});
+    const exec = createActionExecutor({ createEvent });
+    await exec(
+      row({
+        rule: {
+          id: 'r3',
+          trigger: 'on_enter',
+          action: 'create_event',
+          config: {
+            kind: 'create_event',
+            calendarId: 'cal1',
+            title: 'Follow-up',
+            durationMinutes: 30,
+            offsetDays: 2,
+          },
+          delaySeconds: 0,
+          enabled: true,
+        },
+      }),
+    );
+    expect(createEvent).toHaveBeenCalledWith(
+      { workspaceId: 'w1', dealId: 'd1' },
+      { kind: 'create_event', calendarId: 'cal1', title: 'Follow-up', durationMinutes: 30, offsetDays: 2 },
+    );
+  });
+
+  it('lanca MissingPortError p/ create_event sem porta injetada', async () => {
+    const exec = createActionExecutor({});
+    await expect(
+      exec(
+        row({
+          rule: {
+            id: 'r3',
+            trigger: 'on_enter',
+            action: 'create_event',
+            config: {
+              kind: 'create_event',
+              calendarId: 'cal1',
+              title: 'Follow-up',
+              durationMinutes: 30,
+              offsetDays: 2,
+            },
+            delaySeconds: 0,
+            enabled: true,
+          },
+        }),
+      ),
+    ).rejects.toBeInstanceOf(MissingPortError);
+  });
+
   it('roteia register_conversion com config', async () => {
     const registerConversion = vi.fn(async () => {});
     const exec = createActionExecutor({ registerConversion });

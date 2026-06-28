@@ -10,6 +10,7 @@
  * Portas ausentes lancam (vai p/ retry/failed) — explicitamente NAO silenciam,
  * p/ nao "engolir" verde falso. O bootstrap injeta as portas disponiveis.
  */
+import type { CreateEventPort } from './create-event-port';
 import type { ActionExecutor, PendingAutomationRow } from './types';
 
 export interface ActionPorts {
@@ -22,10 +23,8 @@ export interface ActionPorts {
     ctx: { workspaceId: string; dealId: string },
     config: { memberIds: string[]; title: string; body: string },
   ) => Promise<void>;
-  createEvent?: (
-    ctx: { workspaceId: string; dealId: string },
-    config: { calendarId: string; title: string; durationMinutes: number; offsetDays: number },
-  ) => Promise<void>;
+  /** Port `create_event` (F53-S07): cria compromisso reusando `@hm/db.calendarRepo`. */
+  createEvent?: CreateEventPort;
   addTag?: (ctx: { workspaceId: string; dealId: string; tagId: string }) => Promise<void>;
   removeTag?: (ctx: { workspaceId: string; dealId: string; tagId: string }) => Promise<void>;
   registerConversion?: (
