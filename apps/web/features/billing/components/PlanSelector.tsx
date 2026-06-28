@@ -12,7 +12,7 @@
  * DS v2: Button de @hm/ui, tokens semânticos, verde-neon `--brand` só no plano
  * selecionado (1 destaque/tela).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, useToast } from '@hm/ui';
 import { Check, CreditCard, PackageSearch, QrCode } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
@@ -25,6 +25,11 @@ interface PlanSelectorProps {
   plans: readonly BillingPlan[];
   currentPlanId: string | null;
   currentCycle: BillingCycle | null;
+  /**
+   * Plano a pré-selecionar quando ficar resolvível (ex.: intenção de plano vinda do
+   * signup via ?plan=). Aplicado uma única vez — não sobrescreve escolha do usuário.
+   */
+  initialPlanId?: string | null;
 }
 
 function yearlyPrice(plan: BillingPlan): number {
@@ -39,7 +44,12 @@ function yearlySavingsPct(plan: BillingPlan): number {
   return saved > 0 ? Math.round((saved / full) * 100) : 0;
 }
 
-export function PlanSelector({ plans, currentPlanId, currentCycle }: PlanSelectorProps) {
+export function PlanSelector({
+  plans,
+  currentPlanId,
+  currentCycle,
+  initialPlanId,
+}: PlanSelectorProps) {
   const { toast } = useToast();
   const checkout = useStartCheckout();
 
@@ -48,12 +58,24 @@ export function PlanSelector({ plans, currentPlanId, currentCycle }: PlanSelecto
   const [cycle, setCycle] = useState<BillingCycle>(currentCycle ?? 'monthly');
   const [method, setMethod] = useState<PaymentMethod>('card');
   const [selectedId, setSelectedId] = useState<string | null>(
-    currentPlanId ?? billablePlans[0]?.id ?? null,
+    initialPlanId ?? currentPlanId ?? billablePlans[0]?.id ?? null,
   );
 
   useEffect(() => {
     if (!selectedId && billablePlans[0]) setSelectedId(billablePlans[0].id);
   }, [billablePlans, selectedId]);
+
+  // Pré-seleção do plano vindo do signup (?plan=): aplica assim que o catálogo
+  // carrega (o id pode não existir no primeiro render). Uma única vez — depois o
+  // usuário manda na seleção.
+  const appliedInitial = useRef(false);
+  useEffect(() => {
+    if (appliedInitial.current) return;
+    if (initialPlanId && billablePlans.some((p) => p.id === initialPlanId)) {
+      setSelectedId(initialPlanId);
+      appliedInitial.current = true;
+    }
+  }, [initialPlanId, billablePlans]);
 
   if (billablePlans.length === 0) {
     return (

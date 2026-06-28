@@ -195,6 +195,10 @@ export const subscriptions = pgTable(
     externalProductId: text('external_product_id'),
     paymentMethod: text('payment_method'),
     customLimits: jsonb('custom_limits').$type<Record<string, number>>(),
+    // Signup self-serve: KEY do plano pago escolhido na página de venda. O tenant
+    // nasce free/trial; o app redireciona ao checkout pós-login e limpa este campo
+    // ao consumir. null = sem intenção de upgrade (escolheu free ou já assinou).
+    pendingPlanKey: text('pending_plan_key'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at'),
   },

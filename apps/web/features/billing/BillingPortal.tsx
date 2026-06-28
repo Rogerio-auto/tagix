@@ -12,7 +12,7 @@
  * (feedback imediato/loading), §2.9 (cancelar confirma), §2.5/§2.4 (HelpPanel `?`
  * sempre visível). DS v2 dark-first, tokens semânticos, zero hex. Responsivo.
  */
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { HelpHint } from '@hm/ui';
 import { ErrorState, Skeleton } from '@/shared/components/feedback';
 import { PageHeader } from '@/shared/components/layout';
@@ -36,6 +36,25 @@ export function BillingPortal() {
   const scrollToPlans = useCallback(() => {
     planSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
+
+  // Intenção de plano vinda do signup (?plan=<key>): redireciona o usuário pago
+  // direto ao seletor com o plano pré-selecionado. Client-only, sem Suspense.
+  const [intentPlanKey] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    return (new URLSearchParams(window.location.search).get('plan') ?? '').trim().toLowerCase();
+  });
+  const intentPlanId = intentPlanKey
+    ? (plansQuery.data?.find((p) => p.key === intentPlanKey)?.id ?? null)
+    : null;
+
+  // Quando o plano da intenção fica resolvível, rola até a seção de planos (uma vez).
+  const scrolledToIntent = useRef(false);
+  useEffect(() => {
+    if (intentPlanId && !scrolledToIntent.current) {
+      scrolledToIntent.current = true;
+      planSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [intentPlanId]);
 
   const subscription = data?.subscription ?? null;
   const currentCycle =
@@ -93,6 +112,7 @@ export function BillingPortal() {
               plans={plansQuery.data ?? []}
               currentPlanId={subscription?.plan?.id ?? null}
               currentCycle={currentCycle}
+              initialPlanId={intentPlanId}
             />
           </section>
 

@@ -138,4 +138,56 @@ describe('provisionWorkspaceWithOwner', () => {
     const seenFromA = await withWorkspace(a.workspaceId, (tx) => tx.select().from(agents));
     expect(seenFromA.some((ag) => ag.id === agentA?.id)).toBe(true);
   });
+
+  it('plano pago da venda (pendingPlanKey) grava subscriptions.pending_plan_key, mas nasce trial', async () => {
+    const sfx = randomUUID().slice(0, 8);
+    const res = await provisionWorkspaceWithOwner({
+      ownerEmail: `paid-${sfx}@signup.test`,
+      ownerName: 'Paid',
+      authUserId: randomUUID(),
+      workspaceName: `Paid ${sfx}`,
+      pendingPlanKey: 'pro',
+    });
+    created.push(res.workspaceId);
+
+    const db = getDb();
+    const [sub] = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.workspaceId, res.workspaceId));
+    // Intenção registrada — mas o tenant SEMPRE nasce free/trial (sem liberar pago).
+    expect(sub?.status).toBe('trial');
+    expect(sub?.pendingPlanKey).toBe('pro');
+  });
+
+  it('plano free ou inexistente → pending_plan_key null (sem checkout)', async () => {
+    const sfx = randomUUID().slice(0, 8);
+    const free = await provisionWorkspaceWithOwner({
+      ownerEmail: `free-${sfx}@signup.test`,
+      ownerName: 'Free',
+      authUserId: randomUUID(),
+      workspaceName: `Free ${sfx}`,
+      pendingPlanKey: 'free',
+    });
+    const bogus = await provisionWorkspaceWithOwner({
+      ownerEmail: `bogus-${sfx}@signup.test`,
+      ownerName: 'Bogus',
+      authUserId: randomUUID(),
+      workspaceName: `Bogus ${sfx}`,
+      pendingPlanKey: 'nao-existe',
+    });
+    created.push(free.workspaceId, bogus.workspaceId);
+
+    const db = getDb();
+    const [freeSub] = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.workspaceId, free.workspaceId));
+    const [bogusSub] = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.workspaceId, bogus.workspaceId));
+    expect(freeSub?.pendingPlanKey).toBeNull();
+    expect(bogusSub?.pendingPlanKey).toBeNull();
+  });
 });

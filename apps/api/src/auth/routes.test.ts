@@ -1,9 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import request from 'supertest';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { eq } from 'drizzle-orm';
 import type { IAuthProvider, SignUpResult } from '@hm/shared';
 import { AuthError } from '@hm/shared';
-import { closeDb } from '@hm/db';
+import { closeDb, getDb, schema } from '@hm/db';
 import { closeRateLimit } from '../middlewares/rate-limit';
 import type * as RateLimitModule from '../middlewares/rate-limit';
 import type * as DbModule from '@hm/db';
@@ -14,12 +16,14 @@ const providerState: {
   signUpThrows: boolean;
   verifyIdentity: { authUserId: string; email: string } | null;
   signInThrows: boolean;
+  signInEmail: string | null;
   confirmReset: boolean;
 } = {
   signUpResult: { authUserId: 'auth-user-1', created: true },
   signUpThrows: false,
   verifyIdentity: null,
   signInThrows: true,
+  signInEmail: null,
   confirmReset: true,
 };
 
@@ -27,7 +31,8 @@ const fakeProvider: IAuthProvider = {
   kind: 'mock',
   async signIn() {
     if (providerState.signInThrows) throw new AuthError('bad', 'invalid_credentials');
-    return { accessToken: 't', identity: { authUserId: 'u', email: 'x@y.z' }, expiresAt: null };
+    const email = providerState.signInEmail ?? 'x@y.z';
+    return { accessToken: 't', identity: { authUserId: 'u', email }, expiresAt: null };
   },
   async verifyToken() {
     return null;
@@ -76,7 +81,14 @@ const app = express();
 app.use(express.json());
 app.use(createAuthRouter());
 
+// Workspaces criados direto no DB pelos testes de login (cascade limpa member+sub).
+const createdWorkspaces: string[] = [];
+
 afterAll(async () => {
+  const db = getDb();
+  for (const id of createdWorkspaces) {
+    await db.delete(schema.workspaces).where(eq(schema.workspaces.id, id));
+  }
   await closeRateLimit();
   await closeDb();
 });
@@ -85,6 +97,8 @@ beforeEach(() => {
   providerState.signUpResult = { authUserId: 'auth-user-1', created: true };
   providerState.signUpThrows = false;
   providerState.verifyIdentity = null;
+  providerState.signInThrows = true;
+  providerState.signInEmail = null;
   providerState.confirmReset = true;
   provisionMock.mockReset();
   provisionMock.mockResolvedValue({ workspaceId: 'ws-1', memberId: 'm-1', slug: 'acme', created: true });
@@ -229,5 +243,51 @@ describe('POST /auth/login (audit de falha)', () => {
     providerState.signInThrows = true;
     const res = await request(app).post('/auth/login').send({ email: 'a@b.com', password: 'x' });
     expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /auth/login (intenção de plano da venda)', () => {
+  it('consome pending_plan_key uma vez: 1º login devolve a key, 2º devolve null', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const email = `login-plan-${sfx}@empresa.com`;
+
+    const [freePlan] = await db
+      .select({ id: schema.plans.id })
+      .from(schema.plans)
+      .where(eq(schema.plans.key, 'free'));
+    const [ws] = await db
+      .insert(schema.workspaces)
+      .values({ name: `LP ${sfx}`, slug: `lp-${sfx}`, planId: freePlan!.id, subscriptionStatus: 'trial' })
+      .returning({ id: schema.workspaces.id });
+    createdWorkspaces.push(ws!.id);
+    await db.insert(schema.members).values({
+      workspaceId: ws!.id,
+      authUserId: randomUUID(),
+      email,
+      name: 'LP',
+      role: 'OWNER',
+      status: 'active',
+      isPlatformAdmin: false,
+    });
+    await db.insert(schema.subscriptions).values({
+      workspaceId: ws!.id,
+      planId: freePlan!.id,
+      status: 'trial',
+      billingCycle: 'monthly',
+      pendingPlanKey: 'pro',
+    });
+
+    providerState.signInThrows = false;
+    providerState.signInEmail = email;
+
+    const res1 = await request(app).post('/auth/login').send({ email, password: 'x' });
+    expect(res1.status).toBe(200);
+    expect(res1.body.pendingPlanKey).toBe('pro');
+
+    // One-shot: a intenção foi consumida no 1º login.
+    const res2 = await request(app).post('/auth/login').send({ email, password: 'x' });
+    expect(res2.status).toBe(200);
+    expect(res2.body.pendingPlanKey).toBeNull();
   });
 });

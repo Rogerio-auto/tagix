@@ -9,6 +9,11 @@ import type { LoginInput, ResetInput, SignupInput } from './schema';
 interface LoginResponse {
   member: { id: string; workspaceId: string; name: string; role: Role };
   workspace: { id: string };
+  /**
+   * KEY do plano escolhido na página de venda (signup), consumida 1x pela API.
+   * Quando presente, o login redireciona ao checkout do plano em vez do dashboard.
+   */
+  pendingPlanKey?: string | null;
 }
 
 /**
@@ -31,9 +36,11 @@ export function useRequestReset() {
   });
 }
 
-/** Payload do signup self-serve: form + token do Turnstile. */
+/** Payload do signup self-serve: form + token do Turnstile + plano da venda. */
 export interface SignupPayload extends SignupInput {
   turnstileToken: string;
+  /** KEY do plano escolhido na página de venda (?plan=). Intenção — a API valida. */
+  plan?: string;
 }
 
 /**

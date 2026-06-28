@@ -407,6 +407,13 @@
       "when": 1781452818000,
       "tag": "0057_f53_events_priority_type_status",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1781452819000,
+      "tag": "0058_signup_pending_plan",
+      "breakpoints": true
     }
   ]
 }

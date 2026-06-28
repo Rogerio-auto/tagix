@@ -32,7 +32,14 @@ export function LoginForm() {
   const onSubmit = handleSubmit(async (data) => {
     setSubmitError(null);
     try {
-      await login.mutateAsync(data);
+      const res = await login.mutateAsync(data);
+      // Intenção de plano da venda: se o cadastro escolheu um plano pago, o login o
+      // entrega ao checkout (plano pré-selecionado). Tem prioridade sobre o ?next=.
+      if (res.pendingPlanKey) {
+        router.push(`/settings/billing?plan=${encodeURIComponent(res.pendingPlanKey)}`);
+        router.refresh();
+        return;
+      }
       // Open-redirect guard (T11): lê ?next= do location (client-only, sem Suspense)
       // e só permite caminho interno same-origin.
       const rawNext =
@@ -111,6 +118,15 @@ export function LoginForm() {
       >
         Esqueci minha senha
       </Link>
+      <p className="text-center font-body text-sm text-text-low">
+        Não tem conta?{' '}
+        <Link
+          href="/signup"
+          className="font-medium text-text outline-none hover:text-brand focus-visible:underline"
+        >
+          Criar conta
+        </Link>
+      </p>
     </form>
   );
 }

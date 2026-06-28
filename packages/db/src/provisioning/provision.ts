@@ -35,6 +35,13 @@ export interface ProvisionWorkspaceInput {
   workspaceName: string;
   /** Slug explícito (opcional). Ausente → derivado do nome com dedupe. */
   workspaceSlug?: string;
+  /**
+   * KEY do plano escolhido na página de venda (intenção de upgrade). O tenant
+   * SEMPRE nasce free/trial; este campo só é gravado em `subscriptions.pending_plan_key`
+   * quando aponta para um plano PAGO existente no catálogo — o app redireciona ao
+   * checkout pós-login e limpa o campo. Nunca libera plano pago sem pagamento.
+   */
+  pendingPlanKey?: string;
 }
 
 export interface ProvisionWorkspaceResult {
@@ -61,6 +68,11 @@ export async function provisionWorkspaceWithOwner(
   if (!freePlan) {
     throw new Error('Plano free ausente no catálogo. Rode os seeds de planos antes do signup.');
   }
+
+  // Intenção de plano (página de venda): só vira pending quando aponta para um plano
+  // PAGO e ativo no catálogo. 'free'/inexistente/inativo → null (sem checkout). A
+  // decisão é data-driven (não hardcode de keys) — admin pode criar novos planos.
+  const pendingPlanKey = await resolvePendingPlanKey(db, input.pendingPlanKey);
 
   // ─── Idempotência: member já existe por email? → tenant já provisionado.
   const [existingMember] = await db.select().from(members).where(eq(members.email, ownerEmail));
@@ -144,8 +156,30 @@ export async function provisionWorkspaceWithOwner(
       planId: freePlan.id,
       status: 'trial',
       billingCycle: 'monthly',
+      pendingPlanKey,
     });
 
     return { workspaceId: workspace.id, memberId, slug: workspace.slug, created: true };
   });
+}
+
+/**
+ * Resolve a intenção de plano da venda para uma KEY de plano PAGO existente, ou null.
+ * Validação data-driven contra o catálogo (não hardcode): a key precisa existir, estar
+ * ativa e ter preço mensal > 0. Qualquer outra coisa (free, inexistente, inativo,
+ * undefined) → null (sem intenção de checkout).
+ */
+async function resolvePendingPlanKey(
+  db: ReturnType<typeof getDb>,
+  rawKey: string | undefined,
+): Promise<string | null> {
+  const key = rawKey?.trim().toLowerCase();
+  if (!key || key === 'free') return null;
+  const [plan] = await db
+    .select({ key: plans.key, price: plans.priceMonthlyCents, active: plans.isActive })
+    .from(plans)
+    .where(eq(plans.key, key))
+    .limit(1);
+  if (!plan || !plan.active || plan.price <= 0) return null;
+  return plan.key;
 }

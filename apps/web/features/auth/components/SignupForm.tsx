@@ -16,11 +16,26 @@ interface SubmitError {
   description: string;
 }
 
+/** Rótulos amigáveis das keys de plano da página de venda (?plan=). */
+const PLAN_LABELS: Record<string, string> = {
+  free: 'Free',
+  starter: 'Starter',
+  pro: 'Pro',
+  business: 'Business',
+};
+
 export function SignupForm() {
   const signup = useSignup();
   const [submitError, setSubmitError] = useState<SubmitError | null>(null);
   const [sent, setSent] = useState(false);
   const [token, setToken] = useState('');
+  // Plano vindo da página de venda (?plan=). Client-only, sem Suspense (mesmo
+  // padrão do ?next= no login). A API revalida — aqui é só intenção/exibição.
+  const [plan] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    return (new URLSearchParams(window.location.search).get('plan') ?? '').trim().toLowerCase();
+  });
+  const planLabel = PLAN_LABELS[plan];
   const {
     register,
     handleSubmit,
@@ -41,7 +56,7 @@ export function SignupForm() {
       return;
     }
     try {
-      await signup.mutateAsync({ ...data, turnstileToken: token });
+      await signup.mutateAsync({ ...data, turnstileToken: token, plan: plan || undefined });
       // Resposta uniforme — sucesso = "verifique seu email" (sem auto-login).
       setSent(true);
     } catch {
@@ -77,6 +92,15 @@ export function SignupForm() {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+      {planLabel && plan !== 'free' && (
+        <div className="flex items-center gap-2 rounded-md border border-brand/40 bg-brand/5 p-3">
+          <p className="font-body text-sm text-text-mid">
+            Plano escolhido:{' '}
+            <span className="font-head font-semibold text-text">{planLabel}</span>. Crie sua conta —
+            você vai para o pagamento depois de confirmar o email.
+          </p>
+        </div>
+      )}
       {submitError && (
         <div role="alert" className="flex gap-3 rounded-md border border-danger/40 bg-danger/10 p-3">
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-danger" aria-hidden />

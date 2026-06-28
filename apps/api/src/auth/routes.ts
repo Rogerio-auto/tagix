@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { membersRepo, workspacesRepo } from '@hm/db';
+import { eq } from 'drizzle-orm';
+import { getDb, membersRepo, schema, workspacesRepo } from '@hm/db';
 import { AuthError } from '@hm/shared';
 import { getAuthProvider } from './provider';
 import {
@@ -55,7 +56,11 @@ export function createAuthRouter(): Router {
         res.status(403).json({ message: 'Usuário sem workspace ativo.' });
         return;
       }
-      res.json({ member: publicMember(member), workspace });
+      // Intenção de plano da página de venda (signup): consome 1x e devolve ao web,
+      // que redireciona ao checkout. One-shot (não força redirect a cada login) —
+      // o usuário pode assinar depois pelo billing. Nunca libera plano pago aqui.
+      const pendingPlanKey = await consumePendingPlanKey(workspace.id);
+      res.json({ member: publicMember(member), workspace, pendingPlanKey });
     } catch (err) {
       if (err instanceof AuthError) {
         // T10: trilha de login falho (sem senha). Email no metadata p/ correlação.
@@ -103,6 +108,29 @@ export function createAuthRouter(): Router {
   });
 
   return router;
+}
+
+/**
+ * Lê e LIMPA a intenção de plano (pending_plan_key) da assinatura do workspace.
+ * Caminho privilegiado (login, antes do escopo RLS) — keyed pelo workspaceId já
+ * resolvido, consistente com a leitura do catálogo de planos no billing. Retorna a
+ * key consumida (ou null) e zera o campo no mesmo passo (one-shot).
+ */
+async function consumePendingPlanKey(workspaceId: string): Promise<string | null> {
+  const db = getDb();
+  const [sub] = await db
+    .select({ key: schema.subscriptions.pendingPlanKey })
+    .from(schema.subscriptions)
+    .where(eq(schema.subscriptions.workspaceId, workspaceId))
+    .limit(1);
+  const key = sub?.key ?? null;
+  if (key) {
+    await db
+      .update(schema.subscriptions)
+      .set({ pendingPlanKey: null, updatedAt: new Date() })
+      .where(eq(schema.subscriptions.workspaceId, workspaceId));
+  }
+  return key;
 }
 
 /** Extrai o turnstileToken do body sem assumir forma (zero `any`). */

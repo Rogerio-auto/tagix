@@ -33,6 +33,10 @@ export const signupSchema = z
     password: strongPassword,
     workspaceName: z.string().trim().min(1, 'Informe o nome do workspace.').max(120),
     turnstileToken: z.string().min(1).max(4096),
+    // Plano escolhido na página de venda (opcional). Apenas INTENÇÃO de upgrade —
+    // o provisioner valida contra o catálogo e só grava se for plano pago existente.
+    // Nunca libera plano pago aqui; o checkout acontece pós-login (com pagamento).
+    plan: z.string().trim().toLowerCase().max(40).optional(),
   })
   .strict();
 
@@ -91,6 +95,7 @@ export async function performSignup(input: SignupInput, req: Request): Promise<v
       ownerName: input.name,
       authUserId: signUp.authUserId,
       workspaceName: input.workspaceName,
+      pendingPlanKey: input.plan,
     });
     await auditAuthEvent('auth.signup', req, {
       email: input.email,
