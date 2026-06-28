@@ -21,8 +21,10 @@ import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import {
   EventServiceError,
   cancelEvent,
+  checkStatusTransition,
   createEvent,
   setRsvp,
+  type EventStatus,
 } from '../../services/event-service';
 import { expandOccurrences } from '../../services/calendar-recurrence';
 
@@ -35,7 +37,47 @@ function param(req: Request, key: string): string {
   return typeof raw === 'string' ? raw : '';
 }
 
-const eventTypeEnum = z.enum(['meeting', 'demo', 'follow_up', 'task', 'reminder', 'other']);
+// Tipos de compromisso (F53 amplia Calendar 2.0): os 6 originais + os comerciais.
+const eventTypeEnum = z.enum([
+  'meeting',
+  'demo',
+  'follow_up',
+  'task',
+  'reminder',
+  'other',
+  'call',
+  'whatsapp',
+  'billing',
+  'proposal',
+  'custom',
+]);
+
+const priorityEnum = z.enum(['low', 'medium', 'high']);
+
+// Status alvo aceito via PUT. `cancelled` fica fora (canal dedicado: POST /:id/cancel).
+// A legitimidade da TRANSIÇÃO (origem→destino) é decidida server-side por
+// checkStatusTransition; este enum só valida o vocabulário do destino.
+const updatableStatusEnum = z.enum([
+  'scheduled',
+  'confirmed',
+  'in_progress',
+  'postponed',
+  'completed',
+]);
+
+// metadata.dueAction (F53): convenção jsonb (sem coluna nova). Aqui SÓ valida/persiste —
+// o disparo ao vencer é de S05/S07. `kind` é o contrato fixo; o payload de cada ação é
+// preservado como está (catchall unknown) para não acoplar a forma ainda em construção.
+const dueActionSchema = z
+  .object({
+    kind: z.enum(['trigger_flow', 'send_message', 'move_stage', 'add_tag', 'notify_members']),
+  })
+  .catchall(z.unknown());
+
+// metadata aceita dueAction tipado + quaisquer outras chaves (ex.: remindersSent) intactas.
+const metadataSchema = z
+  .object({ dueAction: dueActionSchema.optional() })
+  .catchall(z.unknown());
 
 // RRULE simplificado aceito pela API (espelha calendar-recurrence.ts):
 //   FREQ=DAILY|WEEKLY[;INTERVAL=n][;BYDAY=MO,WE,...][;UNTIL=ISO]
@@ -55,6 +97,7 @@ const createSchema = z
     startAt: z.string().datetime({ offset: true }),
     endAt: z.string().datetime({ offset: true }),
     type: eventTypeEnum.optional(),
+    priority: priorityEnum.optional(),
     description: z.string().trim().max(5000).nullish(),
     location: z.string().trim().max(500).nullish(),
     meetingUrl: z.string().url().max(1000).nullish(),
@@ -62,7 +105,7 @@ const createSchema = z
     dealId: z.string().uuid().nullish(),
     conversationId: z.string().uuid().nullish(),
     memberIds: z.array(z.string().uuid()).max(50).optional(),
-    metadata: z.record(z.string(), z.unknown()).optional(),
+    metadata: metadataSchema.optional(),
     recurrenceRule: recurrenceRuleSchema.nullish(),
     recurrenceUntil: z.string().datetime({ offset: true }).nullish(),
   })
@@ -76,10 +119,12 @@ const updateSchema = z.object({
   startAt: z.string().datetime({ offset: true }).optional(),
   endAt: z.string().datetime({ offset: true }).optional(),
   type: eventTypeEnum.optional(),
-  status: z.enum(['scheduled', 'confirmed', 'completed']).optional(),
+  priority: priorityEnum.optional(),
+  status: updatableStatusEnum.optional(),
   description: z.string().trim().max(5000).nullish(),
   location: z.string().trim().max(500).nullish(),
   meetingUrl: z.string().url().max(1000).nullish(),
+  metadata: metadataSchema.optional(),
   recurrenceRule: recurrenceRuleSchema.nullish(),
   recurrenceUntil: z.string().datetime({ offset: true }).nullish(),
 });
@@ -211,6 +256,7 @@ export function createEventsRouter(): Router {
             startAt: new Date(d.startAt),
             endAt: new Date(d.endAt),
             type: d.type,
+            priority: d.priority,
             description: d.description ?? null,
             location: d.location ?? null,
             meetingUrl: d.meetingUrl ?? null,
@@ -277,10 +323,16 @@ export function createEventsRouter(): Router {
       if (d.startAt !== undefined) patch['startAt'] = new Date(d.startAt);
       if (d.endAt !== undefined) patch['endAt'] = new Date(d.endAt);
       if (d.type !== undefined) patch['type'] = d.type;
+      if (d.priority !== undefined) patch['priority'] = d.priority;
       if (d.status !== undefined) patch['status'] = d.status;
       if (d.description !== undefined) patch['description'] = d.description;
       if (d.location !== undefined) patch['location'] = d.location;
       if (d.meetingUrl !== undefined) patch['meetingUrl'] = d.meetingUrl;
+      // metadata: merge raso sobre o existente (preserva remindersSent etc.; permite
+      // (re)definir dueAction). Só sobrescreve as chaves enviadas.
+      if (d.metadata !== undefined) {
+        patch['metadata'] = { ...event.metadata, ...d.metadata };
+      }
       // Recorrência: edição da SÉRIE (v1 aplica à série inteira — documentado).
       if (d.recurrenceRule !== undefined) patch['recurrenceRule'] = d.recurrenceRule;
       if (d.recurrenceUntil !== undefined) {
@@ -290,6 +342,23 @@ export function createEventsRouter(): Router {
       const nextStart = d.startAt ? new Date(d.startAt) : event.startAt;
       const nextEnd = d.endAt ? new Date(d.endAt) : event.endAt;
       if (nextEnd <= nextStart) return { code: 'invalid_range' as const };
+
+      // Máquina de transição de status (F53): origem terminal bloqueia; postponed
+      // exige startAt futuro. Transição inválida → 422 com mensagem PT-BR (3 partes).
+      if (d.status !== undefined) {
+        const transitionError = checkStatusTransition(
+          event.status as EventStatus,
+          d.status,
+          { nextStartAt: nextStart },
+        );
+        if (transitionError) {
+          return {
+            code: 'invalid_transition' as const,
+            errorCode: transitionError.code,
+            message: transitionError.message,
+          };
+        }
+      }
 
       const [updated] = await tx.update(events).set(patch).where(eq(events.id, id)).returning();
       return { code: 'ok' as const, event: updated };
@@ -304,6 +373,10 @@ export function createEventsRouter(): Router {
     }
     if (outcome.code === 'invalid_range') {
       res.status(422).json({ error: 'invalid_range', message: 'endAt deve ser depois de startAt.' });
+      return;
+    }
+    if (outcome.code === 'invalid_transition') {
+      res.status(422).json({ error: outcome.errorCode, message: outcome.message });
       return;
     }
     res.json({ event: outcome.event });

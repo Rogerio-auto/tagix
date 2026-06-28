@@ -16,6 +16,69 @@ const { events, eventParticipants, calendars } = schema;
 
 export type EventRow = typeof events.$inferSelect;
 
+/** Prioridade do compromisso (F53). Espelha `events_priority_chk`. */
+export type EventPriority = 'low' | 'medium' | 'high';
+
+/** Estados do ciclo de vida de um evento (F53). Espelha `events_status_chk`. */
+export type EventStatus =
+  | 'scheduled'
+  | 'confirmed'
+  | 'in_progress'
+  | 'postponed'
+  | 'completed'
+  | 'cancelled';
+
+/** Estados terminais: uma vez aqui, o status não muda mais (só via novo evento). */
+const TERMINAL_STATUSES: ReadonlySet<EventStatus> = new Set(['completed', 'cancelled']);
+
+/** Resultado de uma transição rejeitada — mapeado a 422 pela rota (mensagem 3 partes). */
+export interface StatusTransitionError {
+  readonly code: string;
+  readonly message: string;
+}
+
+/**
+ * Máquina de transição de status (F53, server-side). Pura e testável — não toca DB.
+ * Regras (UX §2.11, mensagens PT-BR em 3 partes: o quê / porquê / o que fazer):
+ *  - Sair de um estado terminal (`completed`/`cancelled`) é proibido.
+ *  - Ir para `postponed` exige um `startAt` no futuro (o novo horário do adiamento).
+ *  - Repetir o mesmo status é no-op permitido (idempotência).
+ * Retorna `null` quando a transição é válida.
+ */
+export function checkStatusTransition(
+  current: EventStatus,
+  next: EventStatus,
+  ctx: { readonly nextStartAt: Date; readonly now?: Date },
+): StatusTransitionError | null {
+  if (current === next) return null;
+
+  if (TERMINAL_STATUSES.has(current)) {
+    const estado = current === 'cancelled' ? 'cancelado' : 'concluído';
+    return {
+      code: 'invalid_transition',
+      message:
+        `Não foi possível alterar o status deste compromisso. ` +
+        `Ele já está ${estado}, que é um estado final e não pode ser reaberto. ` +
+        `Para retomar o acompanhamento, crie um novo compromisso para o contato.`,
+    };
+  }
+
+  if (next === 'postponed') {
+    const now = ctx.now ?? new Date();
+    if (ctx.nextStartAt.getTime() <= now.getTime()) {
+      return {
+        code: 'invalid_postpone',
+        message:
+          `Não foi possível adiar o compromisso. ` +
+          `Adiar exige uma nova data e hora no futuro, e o horário informado já passou (ou não foi informado). ` +
+          `Envie um campo "startAt" com data/hora posterior ao momento atual.`,
+      };
+    }
+  }
+
+  return null;
+}
+
 export type EventChangeKind = 'created' | 'cancelled';
 
 export type EventActorType = 'member' | 'agent' | 'system' | 'api';
@@ -74,6 +137,8 @@ export interface CreateEventInput {
   readonly startAt: Date;
   readonly endAt: Date;
   readonly type?: EventRow['type'];
+  /** Prioridade do compromisso (F53). Ausente → default 'medium' (igual à coluna). */
+  readonly priority?: EventPriority;
   readonly description?: string | null;
   readonly location?: string | null;
   readonly meetingUrl?: string | null;
@@ -150,6 +215,7 @@ export async function createEvent(
       startAt: input.startAt,
       endAt: input.endAt,
       status: 'scheduled',
+      priority: input.priority ?? 'medium',
       description: input.description ?? null,
       location: input.location ?? null,
       meetingUrl: input.meetingUrl ?? null,
