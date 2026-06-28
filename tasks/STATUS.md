@@ -44,7 +44,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F50   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F51   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F52   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
-| F53   | 8     | 1   | 0   | 0   | 0   | 0   | 7   |
+| F53   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -554,16 +554,16 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 53
 
-| ID      | Titulo                                                                                | Status      | Prioridade | Depende de       |
-| ------- | ------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------- |
-| F53-S01 | Estender events com priority + novos type/status                                      | ✅ done      | high       | —                |
-| F53-S02 | API/tool aceitam priority, novos type e transições de status                          | ✅ done      | high       | F53-S01          |
-| F53-S03 | Modal de agendamento rápido + atalhos de data                                         | ✅ done      | high       | F53-S02          |
-| F53-S04 | Card Agenda + Histórico no Cockpit                                                    | ✅ done      | high       | F53-S03          |
-| F53-S05 | Lembrete "na hora" + evento socket + due→ação                                         | ✅ done      | high       | F53-S01          |
-| F53-S06 | Central de notificações persistente + som                                             | ✅ done      | high       | F53-S05          |
-| F53-S07 | Fechar port create_event da automação                                                 | 🟢 available | medium     | F53-S01, F53-S08 |
-| F53-S08 | Extrair criação de evento para @hm/db (eventRepo.create) + event-service vira wrapper | ✅ done      | high       | F53-S02          |
+| ID      | Titulo                                                                                | Status | Prioridade | Depende de       |
+| ------- | ------------------------------------------------------------------------------------- | ------ | ---------- | ---------------- |
+| F53-S01 | Estender events com priority + novos type/status                                      | ✅ done | high       | —                |
+| F53-S02 | API/tool aceitam priority, novos type e transições de status                          | ✅ done | high       | F53-S01          |
+| F53-S03 | Modal de agendamento rápido + atalhos de data                                         | ✅ done | high       | F53-S02          |
+| F53-S04 | Card Agenda + Histórico no Cockpit                                                    | ✅ done | high       | F53-S03          |
+| F53-S05 | Lembrete "na hora" + evento socket + due→ação                                         | ✅ done | high       | F53-S01          |
+| F53-S06 | Central de notificações persistente + som                                             | ✅ done | high       | F53-S05          |
+| F53-S07 | Fechar port create_event da automação                                                 | ✅ done | medium     | F53-S01, F53-S08 |
+| F53-S08 | Extrair criação de evento para @hm/db (eventRepo.create) + event-service vira wrapper | ✅ done | high       | F53-S02          |
 
 ## Fase 6 — Pipeline
 
