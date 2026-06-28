@@ -2,7 +2,7 @@
 id: F45-S07
 title: Enviar contato do workspace
 phase: F45
-status: available
+status: done
 priority: low
 estimated_size: M
 depends_on: [F45-S02, F45-S03, F45-S05]
@@ -12,6 +12,8 @@ security_review: none
 source_docs:
   - docs/features/RICH_COMPOSER.md
   - docs/UX_PRINCIPLES.md
+completed_at: 2026-06-28T22:57:23Z
+
 ---
 # F45-S07 — Enviar contato
 
