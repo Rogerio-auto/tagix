@@ -2,7 +2,7 @@
 id: F54-S05
 title: QA + adversarial da sincronização bidirecional Cockpit ↔ Agenda
 phase: F54
-status: blocked
+status: available
 priority: medium
 estimated_size: M
 depends_on: [F54-S02, F54-S03, F54-S04]

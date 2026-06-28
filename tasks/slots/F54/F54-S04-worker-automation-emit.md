@@ -2,7 +2,7 @@
 id: F54-S04
 title: Automação create_event emite event:created em tempo real
 phase: F54
-status: available
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F54-S01]
@@ -10,8 +10,9 @@ blocks: [F54-S05]
 agent_id: backend-engineer
 source_docs:
   - docs/features/AGENDA_SYNC.md
----
+completed_at: 2026-06-28T20:11:35Z
 
+---
 # F54-S04 — Automação emite event:created em tempo real
 
 ## Objetivo

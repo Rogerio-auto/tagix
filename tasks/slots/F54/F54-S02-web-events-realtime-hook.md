@@ -2,7 +2,7 @@
 id: F54-S02
 title: Ouvinte de tempo real de compromissos (useEventsRealtime + mount global)
 phase: F54
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: [F54-S01]
@@ -10,8 +10,9 @@ blocks: [F54-S05]
 agent_id: frontend-engineer
 source_docs:
   - docs/features/AGENDA_SYNC.md
----
+completed_at: 2026-06-28T20:11:35Z
 
+---
 # F54-S02 — Ouvinte de tempo real de compromissos
 
 ## Objetivo

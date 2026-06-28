@@ -2,7 +2,7 @@
 id: F54-S03
 title: Agenda Central — visão lista por dia + grade/mobile/detalhe enriquecidos
 phase: F54
-status: available
+status: done
 priority: high
 estimated_size: L
 depends_on: [F54-S01]
@@ -18,8 +18,9 @@ ux_considerations:
   - "Aplica 2.1 — clique no corpo do item abre detalhe; ações rápidas óbvias (não ícones obscuros)."
   - "Aplica 2.3 — detalhe/ações em drawer/sheet; reagendar em modal leve."
   - "Cartão do cliente: foto (Avatar @hm/ui), nome, telefone, tipo (ícone), prioridade+status (badges)."
----
+completed_at: 2026-06-28T20:11:35Z
 
+---
 # F54-S03 — Agenda Central: visão lista por dia + enriquecimento
 
 ## Objetivo
