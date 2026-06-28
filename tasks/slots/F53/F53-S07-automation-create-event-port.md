@@ -2,10 +2,10 @@
 id: F53-S07
 title: Fechar port create_event da automação
 phase: F53
-status: available
+status: blocked
 priority: medium
 estimated_size: S
-depends_on: [F53-S01]
+depends_on: [F53-S01, F53-S08]
 blocks: []
 agent_id: backend-engineer
 source_docs:

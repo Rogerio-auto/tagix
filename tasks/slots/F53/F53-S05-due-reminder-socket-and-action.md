@@ -2,7 +2,7 @@
 id: F53-S05
 title: Lembrete "na hora" + evento socket + due→ação
 phase: F53
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: [F53-S01]
@@ -11,8 +11,9 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/COCKPIT_AGENDA.md
   - docs/features/CALENDAR.md
----
+completed_at: 2026-06-28T15:33:51Z
 
+---
 # F53-S05 — Lembrete "na hora" + evento socket + due→ação
 
 ## Objetivo

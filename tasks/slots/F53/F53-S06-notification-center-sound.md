@@ -2,7 +2,7 @@
 id: F53-S06
 title: Central de notificações persistente + som
 phase: F53
-status: blocked
+status: available
 priority: high
 estimated_size: M
 depends_on: [F53-S05]
