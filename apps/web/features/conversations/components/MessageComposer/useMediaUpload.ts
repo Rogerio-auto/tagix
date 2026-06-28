@@ -24,10 +24,30 @@ export function mediaFromFile(file: File): PendingMedia {
 }
 
 /**
+ * Intenção de normalização declarada ao backend via `?as=` (F45-S01):
+ * `voice` (áudio → ogg/opus, nota de voz nativa), `sticker` (imagem → webp 512²)
+ * ou `auto` (passthrough). Sem o parâmetro o backend assume `auto`.
+ */
+export type UploadAs = 'voice' | 'sticker' | 'auto';
+
+export interface UploadOptions {
+  readonly as?: UploadAs;
+}
+
+/** Resultado do upload: URL assinada + MIME APÓS a normalização server-side. */
+export interface UploadResult {
+  /** URL assinada (7d) que vira a `mediaUrl` da mensagem. */
+  readonly url: string;
+  /** MIME final (ex.: `audio/ogg` após transcode de voz) — exigido pelo /messages. */
+  readonly mime: string;
+}
+
+/**
  * Upload de mídia em UM passo (server-side): `POST /api/uploads?filename=<nome>`
- * com o arquivo cru no body → `{ fileUrl }`. A API sobe no R2 e devolve a URL
- * assinada (7d), que vira a `mediaUrl` da mensagem (o WhatsApp busca via link).
- * Same-origin → o cookie de sessão vai junto. Sem presign de PUT nem CORS de R2.
+ * (`&as=<voice|sticker|auto>`) com o arquivo cru no body → `{ fileUrl, mime }`. A
+ * API normaliza quando pedido, sobe no R2 e devolve a URL assinada (7d) + o MIME
+ * resultante — ambos viram `mediaUrl`/`mediaMime` da mensagem (o WhatsApp busca via
+ * link). Same-origin → o cookie de sessão vai junto. Sem presign de PUT nem CORS.
  *
  * `NEXT_PUBLIC_UPLOAD_MOCK=true` (apenas fora de produção) devolve o object URL
  * local como `mediaUrl` para manter o fluxo navegável sem backend.
@@ -42,27 +62,34 @@ export function useMediaUpload() {
     process.env['NEXT_PUBLIC_UPLOAD_MOCK'] === 'true';
 
   const upload = useCallback(
-    async (media: PendingMedia): Promise<string> => {
+    async (media: PendingMedia, options?: UploadOptions): Promise<UploadResult> => {
       setUploading(true);
       try {
+        const contentType = media.file.type || 'application/octet-stream';
         if (uploadMock) {
-          // Stub dev: sem backend de upload, devolve o preview local.
-          return media.previewUrl;
+          // Stub dev: sem backend de upload, devolve o preview local + MIME de origem.
+          return { url: media.previewUrl, mime: contentType };
         }
 
         // Upload em UM passo: arquivo cru → API (same-origin, cookie de sessão) →
         // R2 → URL assinada. `api` envia JSON, então aqui usamos fetch direto.
-        const res = await fetch(`/api/uploads?filename=${encodeURIComponent(media.file.name)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': media.file.type || 'application/octet-stream' },
-          body: media.file,
-          credentials: 'include',
-        });
+        const as = options?.as;
+        const asParam = as && as !== 'auto' ? `&as=${as}` : '';
+        const res = await fetch(
+          `/api/uploads?filename=${encodeURIComponent(media.file.name)}${asParam}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': contentType },
+            body: media.file,
+            credentials: 'include',
+          },
+        );
         if (!res.ok) {
           throw new ApiError(res.status, 'Falha ao enviar a mídia.');
         }
-        const { fileUrl } = (await res.json()) as { fileUrl: string };
-        return fileUrl;
+        // `mime` reflete o formato após a normalização (ex.: audio/ogg pós-transcode).
+        const { fileUrl, mime } = (await res.json()) as { fileUrl: string; mime?: string };
+        return { url: fileUrl, mime: mime ?? contentType };
       } finally {
         setUploading(false);
       }
