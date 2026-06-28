@@ -151,6 +151,22 @@ export interface AppointmentDuePayload {
   priority: 'low' | 'medium' | 'high';
 }
 
+/**
+ * Compromisso criado/editado/cancelado em tempo real (F54-S01 / AGENDA_SYNC.md §1).
+ * Espelha o padrão de `deal:*`: payload compacto que só roteia a invalidação no cliente
+ * (a persistência é a fonte da verdade; o cliente refaz o fetch das queries de eventos).
+ * `kind` distingue a natureza da mudança; cancelamento viaja como `updated` (status
+ * `cancelled` continua sendo um evento — não some). `contactId`/`conversationId` são
+ * `null` quando o evento não está vinculado.
+ */
+export interface EventChangedPayload {
+  eventId: string;
+  workspaceId: string;
+  contactId: string | null;
+  conversationId: string | null;
+  kind: 'created' | 'updated' | 'deleted';
+}
+
 /** Pipeline/Deals real-time (F5-S07 / PIPELINE.md §6.1). */
 export interface DealCreatedPayload {
   workspaceId: string;
@@ -213,6 +229,9 @@ export interface ServerToClient {
   'typing:from_contact': (p: TypingFromContactPayload) => void;
   'note:mentioned': (p: NoteMentionedPayload) => void;
   'appointment:due': (p: AppointmentDuePayload) => void;
+  'event:created': (p: EventChangedPayload) => void;
+  'event:updated': (p: EventChangedPayload) => void;
+  'event:deleted': (p: EventChangedPayload) => void;
   'agent_execution:started': (p: AgentExecutionPayload) => void;
   'agent_execution:completed': (p: AgentExecutionPayload) => void;
   'flow_execution:started': (p: FlowExecutionPayload) => void;
@@ -247,6 +266,9 @@ export const SERVER_TO_CLIENT_EVENTS = [
   'typing:from_contact',
   'note:mentioned',
   'appointment:due',
+  'event:created',
+  'event:updated',
+  'event:deleted',
   'agent_execution:started',
   'agent_execution:completed',
   'flow_execution:started',

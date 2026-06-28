@@ -27,8 +27,61 @@ import {
   type EventStatus,
 } from '../../services/event-service';
 import { expandOccurrences } from '../../services/calendar-recurrence';
+import { emitEventCreated, emitEventUpdated } from '../../services/event-realtime';
 
-const { events, eventParticipants } = schema;
+const { events, eventParticipants, contacts } = schema;
+
+/** Resumo do contato anexado a cada evento na leitura (F54-S01) — quem atender. */
+interface ContactSummary {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  phone: string | null;
+}
+
+type ScopedRunner = NonNullable<Request['scoped']>;
+
+/**
+ * Carrega os contatos vinculados a um conjunto de eventos em uma única query escopada
+ * (RLS via `req.scoped`) e devolve um mapa id→resumo. Sem ids → mapa vazio (sem query).
+ */
+async function loadContactSummaries(
+  scoped: ScopedRunner,
+  contactIds: readonly string[],
+): Promise<Map<string, ContactSummary>> {
+  const unique = Array.from(new Set(contactIds));
+  if (unique.length === 0) return new Map();
+  const rows = await scoped(async (tx) =>
+    tx
+      .select({
+        id: contacts.id,
+        displayName: contacts.displayName,
+        avatarUrl: contacts.avatarUrl,
+        phone: contacts.phone,
+      })
+      .from(contacts)
+      .where(inArray(contacts.id, unique)),
+  );
+  const map = new Map<string, ContactSummary>();
+  for (const r of rows) {
+    map.set(r.id, {
+      id: r.id,
+      name: r.displayName ?? '',
+      avatarUrl: r.avatarUrl ?? null,
+      phone: r.phone ?? null,
+    });
+  }
+  return map;
+}
+
+/** Resolve o resumo do contato de um evento (ou `null` se não vinculado). */
+function contactFor(
+  contactId: string | null,
+  map: Map<string, ContactSummary>,
+): ContactSummary | null {
+  if (!contactId) return null;
+  return map.get(contactId) ?? null;
+}
 
 const ADMIN_ROLES: ReadonlySet<Role> = new Set(['OWNER', 'ADMIN']);
 
@@ -233,7 +286,15 @@ export function createEventsRouter(): Router {
       }
     }
     out.sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
-    res.json({ events: out });
+
+    // Enriquecimento (F54-S01): anexa o resumo do contato por evento (quem atender).
+    // Aditivo — uma única query escopada para todos os contactIds da janela.
+    const contactMap = await loadContactSummaries(
+      req.scoped!,
+      out.map((e) => e.contactId).filter((id): id is string => id !== null),
+    );
+    const enriched = out.map((e) => ({ ...e, contact: contactFor(e.contactId, contactMap) }));
+    res.json({ events: enriched });
   });
 
   router.post('/api/events', ...editGuard, async (req: Request, res: Response) => {
@@ -271,6 +332,14 @@ export function createEventsRouter(): Router {
           { type: 'member', memberId: req.auth!.member.id },
         ),
       );
+      // Best-effort: notifica o workspace em tempo real (não bloqueia a resposta).
+      void emitEventCreated({
+        eventId: event.id,
+        workspaceId,
+        contactId: event.contactId,
+        conversationId: event.conversationId,
+        kind: 'created',
+      });
       res.status(201).json({ event });
     } catch (err) {
       if (err instanceof EventServiceError) {
@@ -301,7 +370,12 @@ export function createEventsRouter(): Router {
       res.sendStatus(404);
       return;
     }
-    res.json(result);
+    // Enriquecimento (F54-S01): resumo do contato vinculado (ou null). Aditivo.
+    const contactMap = await loadContactSummaries(
+      req.scoped!,
+      result.event.contactId ? [result.event.contactId] : [],
+    );
+    res.json({ ...result, contact: contactFor(result.event.contactId, contactMap) });
   });
 
   router.put('/api/events/:id', ...editGuard, async (req: Request, res: Response) => {
@@ -379,6 +453,16 @@ export function createEventsRouter(): Router {
       res.status(422).json({ error: outcome.errorCode, message: outcome.message });
       return;
     }
+    // Best-effort: transições de status e edições também viajam como `updated`.
+    if (outcome.event) {
+      void emitEventUpdated({
+        eventId: outcome.event.id,
+        workspaceId: req.auth!.workspace.id,
+        contactId: outcome.event.contactId,
+        conversationId: outcome.event.conversationId,
+        kind: 'updated',
+      });
+    }
     res.json({ event: outcome.event });
   });
 
@@ -402,6 +486,17 @@ export function createEventsRouter(): Router {
     if (outcome.code === 'forbidden') {
       res.status(403).json({ message: 'Apenas o criador ou um admin pode cancelar este evento.' });
       return;
+    }
+    // Cancelar continua sendo um `updated` (status=cancelled): o evento não some da
+    // agenda; o cliente refaz o fetch e reflete o novo status. Best-effort.
+    if (outcome.event) {
+      void emitEventUpdated({
+        eventId: outcome.event.id,
+        workspaceId: req.auth!.workspace.id,
+        contactId: outcome.event.contactId,
+        conversationId: outcome.event.conversationId,
+        kind: 'updated',
+      });
     }
     res.json({ event: outcome.event });
   });
