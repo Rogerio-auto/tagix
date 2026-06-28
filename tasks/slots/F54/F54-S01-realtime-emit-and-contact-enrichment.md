@@ -2,7 +2,7 @@
 id: F54-S01
 title: Tempo real de compromissos (event:*) + resumo do contato na listagem
 phase: F54
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: []
@@ -11,8 +11,9 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/AGENDA_SYNC.md
   - docs/features/CALENDAR.md
----
+completed_at: 2026-06-28T19:50:12Z
 
+---
 # F54-S01 — Tempo real de compromissos + resumo do contato
 
 ## Objetivo

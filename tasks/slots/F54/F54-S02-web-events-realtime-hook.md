@@ -2,7 +2,7 @@
 id: F54-S02
 title: Ouvinte de tempo real de compromissos (useEventsRealtime + mount global)
 phase: F54
-status: blocked
+status: available
 priority: high
 estimated_size: S
 depends_on: [F54-S01]

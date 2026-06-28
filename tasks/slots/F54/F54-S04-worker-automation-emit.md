@@ -2,7 +2,7 @@
 id: F54-S04
 title: Automação create_event emite event:created em tempo real
 phase: F54
-status: blocked
+status: available
 priority: medium
 estimated_size: S
 depends_on: [F54-S01]

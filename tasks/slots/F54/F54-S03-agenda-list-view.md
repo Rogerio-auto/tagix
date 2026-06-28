@@ -2,7 +2,7 @@
 id: F54-S03
 title: Agenda Central — visão lista por dia + grade/mobile/detalhe enriquecidos
 phase: F54
-status: blocked
+status: available
 priority: high
 estimated_size: L
 depends_on: [F54-S01]
