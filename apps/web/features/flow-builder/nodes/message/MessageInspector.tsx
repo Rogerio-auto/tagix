@@ -7,6 +7,7 @@ import { useFlowEditor } from '../../hooks/useFlowEditor';
 import { VariablesPicker } from '../../inspector/VariablesPicker';
 import { NumberField, SelectField } from '../inspector-fields';
 import { MediaUploadField, type UploadedMedia } from './MediaUploadField';
+import type { FlowMediaIntent } from './upload';
 import { MessageBubblePreview } from './MessageBubblePreview';
 import { mediaKindForType, type AudioMessageKind, type MessageType } from './types';
 
@@ -129,6 +130,12 @@ export function MessageInspector({ nodeId }: { nodeId: string }) {
   const storageKey = (d['mediaStorageKey'] as string) ?? (d['mediaUrl'] as string) ?? '';
   const filename = (d['mediaFilename'] as string) ?? '';
   const audioMessageKind = ((d['audioMessageKind'] as string) ?? 'voice') as AudioMessageKind;
+  // "Nota de voz" exige ogg/opus de verdade — o WhatsApp rejeita áudio não-opus (Meta
+  // 131053). Declaramos `voice` no upload p/ a rota transcodificar (ffmpeg); "Arquivo de
+  // áudio" e demais mídias seguem `auto` (passthrough). O `mediaType` do node recebe o
+  // MIME REAL devolvido pelo servidor.
+  const uploadIntent: FlowMediaIntent =
+    messageType === 'audio' && audioMessageKind === 'voice' ? 'voice' : 'auto';
   const preAction = (d['preAction'] as string) ?? '';
   const preActionDurationMs = d['preActionDurationMs'] as number | undefined;
   const delayMs = d['delayMs'] as number | undefined;
@@ -220,6 +227,7 @@ export function MessageInspector({ nodeId }: { nodeId: string }) {
             acceptPrefixes={MEDIA_ACCEPT[messageType].prefixes}
             storageKey={storageKey}
             filename={filename}
+            intent={uploadIntent}
             onUploaded={onUploaded}
             onKeyChange={onKeyChange}
           />

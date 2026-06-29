@@ -15,11 +15,28 @@ export interface FlowMediaUploaded {
   key: string;
   /** URL assinada de leitura (preview imediato). */
   fileUrl: string;
+  /**
+   * MIME REAL pós-normalização do servidor (ex.: `audio/ogg` quando `intent='voice'`).
+   * Vira o `mediaType` do node — não confie no `file.type` do browser.
+   */
+  mime: string;
 }
 
-/** Sobe um arquivo de mídia de flow e devolve a storage key + URL de leitura. */
-export async function uploadFlowMedia(file: File): Promise<FlowMediaUploaded> {
-  const res = await fetch(`/api/uploads?filename=${encodeURIComponent(file.name)}`, {
+/**
+ * Intenção de normalização do upload (espelha `as` da rota `POST /api/uploads`):
+ *   - `voice` → transcode ffmpeg p/ `audio/ogg;codecs=opus` (nota de voz nativa, Meta 131053);
+ *   - `auto`  → passthrough (comportamento legado).
+ */
+export type FlowMediaIntent = 'voice' | 'auto';
+
+/** Sobe um arquivo de mídia de flow e devolve a storage key + URL de leitura + MIME do servidor. */
+export async function uploadFlowMedia(
+  file: File,
+  intent: FlowMediaIntent = 'auto',
+): Promise<FlowMediaUploaded> {
+  const params = new URLSearchParams({ filename: file.name });
+  if (intent !== 'auto') params.set('as', intent);
+  const res = await fetch(`/api/uploads?${params.toString()}`, {
     method: 'POST',
     headers: { 'Content-Type': file.type || 'application/octet-stream' },
     body: file,
