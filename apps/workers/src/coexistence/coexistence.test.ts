@@ -26,6 +26,7 @@ import type {
   CoexistencePersistencePort,
   CoexistenceSocketPort,
 } from './ports';
+import type { InboundMediaJob, MediaEnqueuePort } from '../inbound/ports';
 
 const logger = {
   debug: vi.fn(),
@@ -517,6 +518,110 @@ describe('DbCoexistencePersistence — history import idempotente', () => {
     expect(result.resolved).toBe(false);
     expect(store.messages).toHaveLength(0);
     expect(store.contacts).toHaveLength(0);
+  });
+});
+
+// ─── 4. Download de mídia (echo + history) ────────────────────────────────────
+
+/** Spy de enqueue de mídia: captura os jobs publicados (sem RabbitMQ). */
+function makeMediaSpy(): MediaEnqueuePort & { jobs: InboundMediaJob[] } {
+  const jobs: InboundMediaJob[] = [];
+  return {
+    jobs,
+    async enqueue(job) {
+      jobs.push(job);
+    },
+  };
+}
+
+describe('DbCoexistencePersistence — download de mídia', () => {
+  beforeEach(() => db.reset());
+
+  const audioEcho: CoexistenceEchoPayload = {
+    phoneNumberId: 'PN123',
+    externalId: 'wamid.audio.1',
+    to: '5511999',
+    type: 'audio',
+    timestamp: 1700000000,
+    raw: { type: 'audio', audio: { id: 'MEDIA-OGG-1', mime_type: 'audio/ogg', sha256: 'abc' } },
+  };
+
+  it('echo de mídia → persiste media_status=pending e enfileira o job de download', async () => {
+    const media = makeMediaSpy();
+    const p = new DbCoexistencePersistence(logger, undefined, undefined, media);
+
+    const r = await p.persistEcho(audioEcho);
+    expect(r.inserted).toBe(true);
+
+    const [msg] = store.messages.filter((m) => m['direction'] === 'outbound');
+    expect(msg).toMatchObject({ type: 'audio', mediaStatus: 'pending' });
+
+    expect(media.jobs).toHaveLength(1);
+    expect(media.jobs[0]).toMatchObject({
+      provider: 'meta_whatsapp',
+      externalId: 'wamid.audio.1',
+      mediaRef: { refOrUrl: 'MEDIA-OGG-1', mimeType: 'audio/ogg', sha256: 'abc' },
+      routing: { phoneNumberId: 'PN123' },
+    });
+  });
+
+  it('echo de texto → não marca pending nem enfileira', async () => {
+    const media = makeMediaSpy();
+    const p = new DbCoexistencePersistence(logger, undefined, undefined, media);
+    await p.persistEcho(echoPayload); // type 'text'
+    expect(media.jobs).toHaveLength(0);
+    const [msg] = store.messages.filter((m) => m['direction'] === 'outbound');
+    expect(msg?.['mediaStatus']).toBeUndefined();
+  });
+
+  it('reentrega de echo de mídia → dedup, NÃO reenfileira', async () => {
+    const media = makeMediaSpy();
+    const p = new DbCoexistencePersistence(logger, undefined, undefined, media);
+    await p.persistEcho(audioEcho);
+    await p.persistEcho(audioEcho);
+    expect(media.jobs).toHaveLength(1);
+  });
+
+  it('echo de mídia sem id no raw → persiste sem pending e não enfileira', async () => {
+    const media = makeMediaSpy();
+    const p = new DbCoexistencePersistence(logger, undefined, undefined, media);
+    await p.persistEcho({
+      ...audioEcho,
+      externalId: 'wamid.audio.noid',
+      raw: { type: 'audio', audio: { mime_type: 'audio/ogg' } },
+    });
+    expect(media.jobs).toHaveLength(0);
+    const [msg] = store.messages.filter((m) => m['direction'] === 'outbound');
+    expect(msg?.['mediaStatus']).toBeUndefined();
+  });
+
+  it('history com mídia → marca pending e enfileira só as mensagens inseridas', async () => {
+    const media = makeMediaSpy();
+    const p = new DbCoexistencePersistence(logger, undefined, undefined, media);
+    const batch: CoexistenceHistoryBatchPayload = {
+      phoneNumberId: 'PN123',
+      contacts: [{ waId: '5511999', raw: {} }],
+      messages: [
+        {
+          externalId: 'h.img.1',
+          from: '5511999',
+          type: 'image',
+          fromMe: false,
+          raw: { type: 'image', image: { id: 'IMG-1', mime_type: 'image/jpeg' } },
+        },
+        { externalId: 'h.txt.1', from: '5511999', type: 'text', text: 'oi', fromMe: false, raw: {} },
+      ],
+      raw: {},
+    };
+
+    await p.importHistory(batch);
+    expect(media.jobs).toHaveLength(1);
+    expect(media.jobs[0]).toMatchObject({ externalId: 'h.img.1', mediaRef: { refOrUrl: 'IMG-1' } });
+
+    // Reprocesso: tudo dedup → nada reenfileirado.
+    media.jobs.length = 0;
+    await p.importHistory(batch);
+    expect(media.jobs).toHaveLength(0);
   });
 });
 

@@ -41,6 +41,7 @@ import type {
   CoexistenceHistoryMessagePayload,
 } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
+import type { MediaRef } from '@hm/channels';
 import type {
   CoexistenceAppStateResult,
   CoexistenceEchoResult,
@@ -49,6 +50,7 @@ import type {
   CoexistencePersistencePort,
   CoexistenceSocketPort,
 } from './ports';
+import type { InboundMediaJob, MediaEnqueuePort } from '../inbound/ports';
 
 /** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
 type MqChannel = MqHandle['channel'];
@@ -62,6 +64,38 @@ const COEXISTENCE_PROVIDER = 'meta_whatsapp' as const;
 /** Origem gravada em `messages.metadata.origin` para distinguir o app de fora. */
 const ECHO_ORIGIN = 'coexistence_echo' as const;
 const HISTORY_ORIGIN = 'coexistence_history' as const;
+
+/** Tipos de mensagem que carregam mídia baixável (`raw[type].id`). */
+const MEDIA_ECHO_TYPES = new Set(['image', 'video', 'audio', 'voice', 'document', 'sticker']);
+
+/**
+ * Extrai a `MediaRef` do objeto cru da mensagem ecoada — MESMO shape do inbound
+ * (`webhook.parser.extractMediaRef`): `raw[type] = { id, mime_type, sha256, filename }`.
+ *
+ * Por que isto existe (F39 gap): o echo da coexistência gravava só `type`+`text`,
+ * sem `media_url`/`media_status` → a mídia que o operador envia pelo app WhatsApp
+ * aparecia como "Não foi possível carregar" no chat. Com a ref, o echo persiste
+ * `media_status='pending'` e enfileira o MESMO job do inbound (`hm.q.media`); o
+ * media-worker baixa do Meta → R2 → seta `media_url`/`ready`. Retorna `undefined`
+ * quando não há mídia/id (caller não marca pending nem enfileira).
+ */
+function extractEchoMediaRef(raw: Record<string, unknown>, type: string): MediaRef | undefined {
+  if (!MEDIA_ECHO_TYPES.has(type)) return undefined;
+  const obj = raw[type];
+  if (obj === null || typeof obj !== 'object') return undefined;
+  const o = obj as Record<string, unknown>;
+  const id = typeof o['id'] === 'string' ? o['id'] : undefined;
+  if (id === undefined || id.length === 0) return undefined;
+  const mimeType = typeof o['mime_type'] === 'string' ? o['mime_type'] : undefined;
+  const sha256 = typeof o['sha256'] === 'string' ? o['sha256'] : undefined;
+  const fileName = typeof o['filename'] === 'string' ? o['filename'] : undefined;
+  return {
+    refOrUrl: id,
+    ...(mimeType !== undefined ? { mimeType } : {}),
+    ...(sha256 !== undefined ? { sha256 } : {}),
+    ...(fileName !== undefined ? { fileName } : {}),
+  };
+}
 
 /** Canal resolvido a partir do `phoneNumberId`. */
 export interface ResolvedCoexistenceChannel {
@@ -191,6 +225,12 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
      * root injeta `MqCoexistenceSocketEmit(channel)` para empurrar ao vivo.
      */
     private readonly socket: CoexistenceSocketPort = new NoopCoexistenceSocketEmit(),
+    /**
+     * Enfileiramento de mídia (reusa `hm.q.media` do inbound). Default `undefined`
+     * (testes/sem broker) → não enfileira; o composition root injeta `MqMediaEnqueue`
+     * quando há canal AMQP. A persistência da mensagem nunca depende disto.
+     */
+    private readonly media?: MediaEnqueuePort,
   ) {}
 
   async persistEcho(payload: CoexistenceEchoPayload): Promise<CoexistenceEchoResult> {
@@ -202,6 +242,10 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
       return { resolved: false, inserted: false };
     }
     const { channelId, workspaceId } = channel;
+
+    // Mídia ecoada: extrai a ref do raw p/ baixar igual ao inbound (senão a bolha
+    // fica sem media_url e o chat mostra "Não foi possível carregar").
+    const mediaRef = extractEchoMediaRef(payload.raw, payload.type);
 
     const result = await withWorkspace(workspaceId, async (tx) => {
       const contactId = await ensureContact(tx, workspaceId, payload.to);
@@ -220,6 +264,9 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
           viewStatus: 'sent',
           createdAt: toDate(payload.timestamp),
           metadata: { origin: ECHO_ORIGIN },
+          // Mídia nasce 'pending' (espelha o inbound); o media-worker baixa e seta
+          // media_url + 'ready'. Sem ref, fica null (mensagem de texto/sem mídia).
+          ...(mediaRef !== undefined ? { mediaStatus: 'pending' as const } : {}),
         })
         .onConflictDoNothing({
           target: [schema.messages.conversationId, schema.messages.externalId],
@@ -256,6 +303,17 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
       });
     }
 
+    // Enfileira o download DEPOIS de persistir (a linha precisa existir antes — o
+    // media-worker casa por externalId). Só quando inseriu de fato + há mídia.
+    if (result.messageId !== undefined && mediaRef !== undefined) {
+      await this.media?.enqueue({
+        provider: COEXISTENCE_PROVIDER,
+        externalId: payload.externalId,
+        mediaRef,
+        routing: { phoneNumberId: payload.phoneNumberId },
+      });
+    }
+
     return { resolved: true, inserted: result.messageId !== undefined };
   }
 
@@ -273,6 +331,8 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
       // Conversas que receberam pelo menos uma mensagem nova (para sinalizar a
       // ChatList uma vez por conversa, fora da transação — sem floodar threads).
       const touchedConversations = new Set<string>();
+      // Jobs de download de mídia das mensagens inseridas (publicados após o commit).
+      const mediaJobs: InboundMediaJob[] = [];
       // 1) Upsert idempotente de contatos por (workspace, phone=waId). Insert em
       //    lote com onConflictDoNothing → reprocesso não duplica nem N+1.
       const contactRows = payload.contacts.map((c) => ({
@@ -315,18 +375,24 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
           contactId,
         );
 
-        const rows = msgs.map((m) => ({
-          workspaceId,
-          conversationId,
-          externalId: m.externalId,
-          direction: (m.fromMe === true ? 'outbound' : 'inbound') as 'inbound' | 'outbound',
-          senderType: (m.fromMe === true ? 'system' : 'contact') as 'system' | 'contact',
-          type: m.type ?? 'text',
-          content: m.text ?? null,
-          viewStatus: (m.fromMe === true ? 'sent' : 'delivered') as 'sent' | 'delivered',
-          createdAt: toDate(m.timestamp),
-          metadata: { origin: HISTORY_ORIGIN },
-        }));
+        const mediaByExternal = new Map<string, MediaRef>();
+        const rows = msgs.map((m) => {
+          const mediaRef = extractEchoMediaRef(m.raw, m.type ?? 'text');
+          if (mediaRef !== undefined) mediaByExternal.set(m.externalId, mediaRef);
+          return {
+            workspaceId,
+            conversationId,
+            externalId: m.externalId,
+            direction: (m.fromMe === true ? 'outbound' : 'inbound') as 'inbound' | 'outbound',
+            senderType: (m.fromMe === true ? 'system' : 'contact') as 'system' | 'contact',
+            type: m.type ?? 'text',
+            content: m.text ?? null,
+            viewStatus: (m.fromMe === true ? 'sent' : 'delivered') as 'sent' | 'delivered',
+            createdAt: toDate(m.timestamp),
+            metadata: { origin: HISTORY_ORIGIN },
+            ...(mediaRef !== undefined ? { mediaStatus: 'pending' as const } : {}),
+          };
+        });
         messagesTotal += rows.length;
 
         const inserted = await tx
@@ -338,8 +404,23 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
             // o ON CONFLICT precisa repetir o predicado, senão a Graph nega o match.
             where: sql`${schema.messages.externalId} is not null`,
           })
-          .returning({ id: schema.messages.id });
+          .returning({ id: schema.messages.id, externalId: schema.messages.externalId });
         messagesInserted += inserted.length;
+
+        // Mídia: enfileira download só p/ as mensagens efetivamente inseridas (dedup
+        // não reenfileira). Coletado aqui; publicado após o commit (igual ao echo).
+        for (const ins of inserted) {
+          if (ins.externalId === null) continue;
+          const mediaRef = mediaByExternal.get(ins.externalId);
+          if (mediaRef !== undefined) {
+            mediaJobs.push({
+              provider: COEXISTENCE_PROVIDER,
+              externalId: ins.externalId,
+              mediaRef,
+              routing: { phoneNumberId: payload.phoneNumberId },
+            });
+          }
+        }
 
         if (inserted.length > 0) {
           touchedConversations.add(conversationId);
@@ -364,6 +445,7 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
         messagesInserted,
         messagesDeduped: messagesTotal - messagesInserted,
         touchedConversations: [...touchedConversations],
+        mediaJobs,
       };
     });
 
@@ -371,6 +453,12 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
     // (last message/contadores) sem reordenar/floodar a thread com timestamps antigos.
     for (const conversationId of outcome.touchedConversations) {
       await this.socket.emitConversationUpdated(workspaceId, conversationId);
+    }
+
+    // Download das mídias históricas (best-effort). Media ids antigos do Meta podem
+    // já ter expirado → o media-worker marca 'failed' graciosamente (sem derrubar).
+    for (const job of outcome.mediaJobs) {
+      await this.media?.enqueue(job);
     }
 
     return {

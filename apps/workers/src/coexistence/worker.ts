@@ -32,6 +32,7 @@ import {
   MqCoexistenceSocketEmit,
   NoopCoexistenceSocketEmit,
 } from './db-ports';
+import { MqMediaEnqueue } from '../inbound/mq-ports';
 import type { CoexistenceDeps } from './ports';
 
 /** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
@@ -58,7 +59,10 @@ export interface CoexistenceWorkerHandle {
  */
 export function createCoexistenceDeps(logger: Logger, channel?: MqChannel): CoexistenceDeps {
   const socket = channel ? new MqCoexistenceSocketEmit(channel) : new NoopCoexistenceSocketEmit();
-  return { persistence: new DbCoexistencePersistence(logger, undefined, socket) };
+  // Enfileiramento de mídia: reusa o MESMO publisher/fila (`hm.q.media`) do inbound.
+  // Sem canal (testes/sem broker) fica undefined → echo persiste sem enfileirar.
+  const media = channel ? new MqMediaEnqueue(channel) : undefined;
+  return { persistence: new DbCoexistencePersistence(logger, undefined, socket, media) };
 }
 
 /**
