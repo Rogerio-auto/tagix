@@ -2,7 +2,7 @@
 id: F55-S01
 title: Timestamps de ciclo em conversations (first_response_at/resolved_at/closed_at) + backfill
 phase: F55
-status: available
+status: done
 priority: critical
 estimated_size: S
 depends_on: []
@@ -10,6 +10,8 @@ blocks: [F55-S02, F55-S03, F55-S04]
 agent_id: db-engineer
 source_docs:
   - docs/features/DASHBOARD.md
+completed_at: 2026-06-29T22:21:57Z
+
 ---
 # F55-S01 — Timestamps de ciclo em conversations + backfill
 

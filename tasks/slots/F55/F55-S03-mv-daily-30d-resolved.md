@@ -2,7 +2,7 @@
 id: F55-S03
 title: Recriar mv_dashboard_daily_30d sobre resolved_at (não updated_at)
 phase: F55
-status: blocked
+status: available
 priority: high
 estimated_size: S
 depends_on: [F55-S01]

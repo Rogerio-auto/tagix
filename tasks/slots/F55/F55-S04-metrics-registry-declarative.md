@@ -2,7 +2,7 @@
 id: F55-S04
 title: Registry declarativo de métricas (mata o switch de resolveValue) + queries SLA/TTR exatas
 phase: F55
-status: blocked
+status: available
 priority: critical
 estimated_size: L
 depends_on: [F55-S01]

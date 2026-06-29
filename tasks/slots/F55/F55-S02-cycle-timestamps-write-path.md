@@ -2,7 +2,7 @@
 id: F55-S02
 title: Popular first_response_at/resolved_at/closed_at nas transições reais (write path)
 phase: F55
-status: blocked
+status: available
 priority: high
 estimated_size: M
 depends_on: [F55-S01]
