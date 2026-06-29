@@ -2,7 +2,7 @@
 id: F55-S07
 title: Frontend — cards novos Placar IA×Humano, ROI da IA, Funil de pipeline
 phase: F55
-status: blocked
+status: available
 priority: medium
 estimated_size: M
 depends_on: [F55-S06, F55-S05]

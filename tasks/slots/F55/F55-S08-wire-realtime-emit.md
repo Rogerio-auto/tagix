@@ -2,7 +2,7 @@
 id: F55-S08
 title: Ligar o emit órfão — dashboard:metric_changed nas mutações reais
 phase: F55
-status: blocked
+status: available
 priority: medium
 estimated_size: S
 depends_on: [F55-S04, F55-S02]

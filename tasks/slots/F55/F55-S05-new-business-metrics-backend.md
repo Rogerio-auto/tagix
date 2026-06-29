@@ -2,7 +2,7 @@
 id: F55-S05
 title: 3 métricas novas de Negócio — Placar IA×Humano, ROI da IA, Funil de pipeline (backend)
 phase: F55
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: [F55-S04]
@@ -11,6 +11,8 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/DASHBOARD.md
   - docs/features/PERMISSIONS.md
+completed_at: 2026-06-29T23:16:55Z
+
 ---
 # F55-S05 — Métricas novas de Negócio (backend)
 

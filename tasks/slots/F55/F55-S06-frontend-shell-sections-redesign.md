@@ -2,7 +2,7 @@
 id: F55-S06
 title: Frontend — shell novo por seções + cards redesenhados (clareza Stripe/Datacrazy)
 phase: F55
-status: available
+status: done
 priority: high
 estimated_size: L
 depends_on: [F55-S04]
@@ -18,6 +18,8 @@ ux_considerations:
   - "Aplica §2.7/§3.6 — skeleton por card no load (sem tela branca, sem spinner solto)."
   - "Aplica §2.4 — cada KPI tem label explícito + unidade; nada de número solto sem contexto."
   - "Aplica §8 — mobile: grid colapsa para 1 coluna, drawer vira bottom-sheet (useBreakpoint)."
+completed_at: 2026-06-29T23:16:55Z
+
 ---
 # F55-S06 — Frontend: shell por seções + redesign (clareza)
 
