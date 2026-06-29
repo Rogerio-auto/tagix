@@ -68,6 +68,14 @@ pelo registry; nunca vazar para AGENT.
 - [ ] Testes: atribuição IA vs humano correta; ROI; funil por estágio. Cada um respeitando role.
 - [ ] `pnpm typecheck`, `pnpm lint`, `pnpm --filter @hm/api test` verdes.
 
+## Validação
+```bash
+pnpm install
+pnpm typecheck
+pnpm lint
+pnpm --filter @hm/api test
+```
+
 ## Notas
 Reusar padrões de query existentes (`conversoesPorAtendenteHumano`/`conversoesPorAgenteIa` já fazem o split
 IA/humano — o Placar agrega ambos lado a lado). Se introduzir `cardType` novo (`scoreboard`), declará-lo no

@@ -214,6 +214,8 @@ describe('dashboard: contrato de card-set por role (F55-S04 — registry declara
       'leaderboard_produtividade',
       'leads_recentes',
       'desempenho_30d',
+      'placar_ia_humano',
+      'funil_pipeline',
     ],
     ADMIN: [
       'aguardando_atribuicao',
@@ -251,6 +253,9 @@ describe('dashboard: contrato de card-set por role (F55-S04 — registry declara
       'leaderboard_produtividade',
       'leads_recentes',
       'desempenho_30d',
+      'placar_ia_humano',
+      'roi_ia',
+      'funil_pipeline',
     ],
     OWNER: [
       'aguardando_atribuicao',
@@ -289,6 +294,9 @@ describe('dashboard: contrato de card-set por role (F55-S04 — registry declara
       'leaderboard_produtividade',
       'leads_recentes',
       'desempenho_30d',
+      'placar_ia_humano',
+      'roi_ia',
+      'funil_pipeline',
     ],
     READONLY: [
       'aguardando_atribuicao',
@@ -315,6 +323,8 @@ describe('dashboard: contrato de card-set por role (F55-S04 — registry declara
       'leaderboard_produtividade',
       'leads_recentes',
       'desempenho_30d',
+      'roi_ia',
+      'funil_pipeline',
     ],
   };
 

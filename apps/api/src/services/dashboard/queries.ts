@@ -12,7 +12,7 @@
  * O valor de cada métrica é um objeto jsonb-like (`{ count }`, `{ valueCents }`,
  * série, breakdown). A forma por metric_key é validada no load (não aqui).
  */
-import { and, avg, count, desc, eq, gte, inArray, isNull, isNotNull, sql, sum } from 'drizzle-orm';
+import { and, asc, avg, count, desc, eq, gte, inArray, isNull, isNotNull, sql, sum } from 'drizzle-orm';
 import { schema, type DbTx } from '@hm/db';
 
 const {
@@ -21,6 +21,7 @@ const {
   conversionTypes,
   contacts,
   deals,
+  stages,
   members,
   channels,
   agents,
@@ -967,4 +968,119 @@ export async function serieDesempenho30d(tx: DbTx, workspaceId: string): Promise
     novos_contatos: Number(r.novos_contatos ?? 0),
   }));
   return { series };
+}
+
+// ─── F55-S05 — métricas novas de Negócio (Placar IA×Humano, ROI da IA, Funil) ──
+// Tudo sob a tx com RLS (conversion_events / deals / stages isolam por workspace).
+// `llm_usage_logs` é lida com filtro explícito de `workspace_id` (defesa em
+// profundidade, igual ao custo do dia/mês) e sempre `is_test = false`. Conversões
+// contam líquido de cancelamento (`cancelled_at IS NULL`).
+
+/**
+ * Placar IA × Humano (mês corrente): conversões e receita atribuídas à **IA**
+ * (`triggered_by_agent_id` preenchido) versus ao **humano** (`triggered_by_member_id`
+ * preenchido), líquido de cancelamento. As duas colunas são contadas por filtros
+ * independentes — um evento atribuído à IA entra só do lado IA e vice-versa.
+ * Shape: `{ ia: { count, valueCents }, humano: { count, valueCents } }`.
+ */
+export async function placarIaHumano(tx: DbTx): Promise<MetricValue> {
+  const since = startOfMonth();
+  const [row] = await tx
+    .select({
+      iaCount: sql<number>`count(*) filter (where ${conversionEvents.triggeredByAgentId} is not null)::int`,
+      iaValue: sql<string>`coalesce(sum(${conversionEvents.valueCents}) filter (where ${conversionEvents.triggeredByAgentId} is not null), 0)`,
+      humanCount: sql<number>`count(*) filter (where ${conversionEvents.triggeredByMemberId} is not null)::int`,
+      humanValue: sql<string>`coalesce(sum(${conversionEvents.valueCents}) filter (where ${conversionEvents.triggeredByMemberId} is not null), 0)`,
+    })
+    .from(conversionEvents)
+    .where(and(gte(conversionEvents.occurredAt, since), isNull(conversionEvents.cancelledAt)));
+  return {
+    ia: { count: Number(row?.iaCount ?? 0), valueCents: Number(row?.iaValue ?? 0) },
+    humano: { count: Number(row?.humanCount ?? 0), valueCents: Number(row?.humanValue ?? 0) },
+  };
+}
+
+/**
+ * ROI da IA (mês corrente): receita atribuída à IA ÷ custo de IA do mês.
+ *  - `receitaCents`: Σ `value_cents` das conversões IA (líquido de cancelamento).
+ *  - `custoUsd`: Σ `cost_usd` de `llm_usage_logs` (`is_test=false`) no mês.
+ *  - `roi`: razão (receita em unidades monetárias ÷ custo USD), 2 casas. `null` quando
+ *    o custo é 0 — evita divisão por zero; o front omite o indicador de razão.
+ */
+export async function roiIa(tx: DbTx, workspaceId: string): Promise<MetricValue> {
+  const since = startOfMonth();
+  const [rev] = await tx
+    .select({ total: sum(conversionEvents.valueCents) })
+    .from(conversionEvents)
+    .where(
+      and(
+        isNotNull(conversionEvents.triggeredByAgentId),
+        gte(conversionEvents.occurredAt, since),
+        isNull(conversionEvents.cancelledAt),
+      ),
+    );
+  const receitaCents = Number(rev?.total ?? 0);
+  const costRows = await tx.execute<{ cost_usd: string }>(sql`
+    SELECT coalesce(sum(cost_usd), 0)::numeric(18,8) AS cost_usd
+    FROM llm_usage_logs
+    WHERE workspace_id = ${workspaceId}
+      AND is_test = false
+      AND created_at >= ${since.toISOString()}::timestamptz
+  `);
+  const custoUsd = Number(Array.from(costRows)[0]?.cost_usd ?? 0);
+  const roi = custoUsd <= 0 ? null : Number((receitaCents / 100 / custoUsd).toFixed(2));
+  return { receitaCents, custoUsd, roi };
+}
+
+/**
+ * Funil de pipeline: por estágio (ordenado por `position`) o valor aberto
+ * (`Σ value_cents` de deals não fechados) e a contagem de deals abertos; mais o
+ * win rate do mês (`closed_won = true` ÷ deals fechados no mês) e o ciclo médio dos
+ * ganhos (`avg(closed_at − created_at)` em segundos). `winRatePct`/`cicloMedioSegundos`
+ * são `null` quando não há base no mês (sem inventar zero enganoso).
+ */
+export async function funilPipeline(tx: DbTx): Promise<TableMetricValue> {
+  const stageRows = await tx
+    .select({
+      stageId: stages.id,
+      stage: stages.name,
+      valorAberto: sql<string>`coalesce(sum(${deals.valueCents}) filter (where ${deals.closedAt} is null), 0)`,
+      abertos: sql<number>`count(${deals.id}) filter (where ${deals.closedAt} is null)::int`,
+    })
+    .from(stages)
+    .leftJoin(deals, eq(deals.stageId, stages.id))
+    .groupBy(stages.id, stages.name, stages.position)
+    .orderBy(asc(stages.position), asc(stages.name));
+
+  const since = startOfMonth();
+  const [agg] = await tx
+    .select({
+      fechados: sql<number>`count(*) filter (where ${deals.closedAt} is not null)::int`,
+      ganhos: sql<number>`count(*) filter (where ${deals.closedWon} = true)::int`,
+      cicloSeg: sql<
+        number | null
+      >`avg(extract(epoch from (${deals.closedAt} - ${deals.createdAt}))) filter (where ${deals.closedWon} = true)`,
+    })
+    .from(deals)
+    .where(gte(deals.closedAt, since));
+
+  const fechadosMes = Number(agg?.fechados ?? 0);
+  const ganhosMes = Number(agg?.ganhos ?? 0);
+  return {
+    columns: [
+      { key: 'stage', label: 'Estágio' },
+      { key: 'abertos', label: 'Abertos', align: 'right' },
+      { key: 'valor_aberto_cents', label: 'Valor aberto', align: 'right' },
+    ],
+    rows: stageRows.map((r) => ({
+      stageId: r.stageId,
+      stage: r.stage,
+      abertos: Number(r.abertos ?? 0),
+      valor_aberto_cents: Number(r.valorAberto ?? 0),
+    })),
+    winRatePct: fechadosMes === 0 ? null : Math.round((ganhosMes / fechadosMes) * 100),
+    cicloMedioSegundos: agg?.cicloSeg == null ? null : Math.round(Number(agg.cicloSeg)),
+    fechadosMes,
+    ganhosMes,
+  };
 }

@@ -25,7 +25,8 @@ export type CardType =
   | 'list'
   | 'leaderboard'
   | 'feed'
-  | 'timeseries';
+  | 'timeseries'
+  | 'scoreboard';
 export type MetricCategory =
   | 'atendimento'
   | 'pipeline'

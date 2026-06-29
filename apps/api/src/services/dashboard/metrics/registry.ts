@@ -54,6 +54,9 @@ import { novosContatosMesMetric } from './negocio/novos-contatos-mes';
 import { contatosTotalWorkspaceMetric } from './negocio/contatos-total-workspace';
 import { objecoesRankeadasMetric } from './negocio/objecoes-rankeadas';
 import { desempenho30dMetric } from './negocio/desempenho-30d';
+import { placarIaHumanoMetric } from './negocio/placar-ia-humano';
+import { roiIaMetric } from './negocio/roi-ia';
+import { funilPipelineMetric } from './negocio/funil-pipeline';
 
 /**
  * Ordem canônica de implementação/exibição (§2) — idêntica ao catálogo anterior.
@@ -110,6 +113,10 @@ const MODULES: readonly MetricModule[] = [
   leaderboardProdutividadeMetric,
   leadsRecentesMetric,
   desempenho30dMetric,
+  // §F55-S05 Negócio — Placar IA×Humano / ROI da IA / Funil de pipeline
+  placarIaHumanoMetric,
+  roiIaMetric,
+  funilPipelineMetric,
 ];
 
 /** Registry por key (lookup O(1) p/ load e drill). Falha no boot se houver key duplicada. */
