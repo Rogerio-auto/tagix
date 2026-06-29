@@ -52,6 +52,12 @@ export const conversations = pgTable(
     unreadCount: integer('unread_count').notNull().default(0),
     pinned: boolean('pinned').notNull().default(false),
     snoozedUntil: ts('snoozed_until'),
+    // F55-S01 — Marcos do ciclo de atendimento (base de métricas de SLA).
+    // Nullable sem default: NULL = o marco ainda não ocorreu. A app/worker grava o
+    // instante exato nas transições de status; o histórico recebe backfill aproximado.
+    firstResponseAt: ts('first_response_at'), // 1ª resposta humana (outbound de member).
+    resolvedAt: ts('resolved_at'), // quando a conversa foi marcada resolvida.
+    closedAt: ts('closed_at'), // quando a conversa foi fechada.
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at'),
   },
@@ -69,6 +75,14 @@ export const conversations = pgTable(
     // por dept/time (F30 / LIVECHAT_OPS §1). Não recriados aqui.
     // Varredura do cron de reengajamento de IA (F30 / LIVECHAT_OPS §2).
     index('idx_conversations_ai_resume').on(t.aiResumeAt).where(sql`${t.aiResumeAt} is not null`),
+    // F55-S01 — Métricas de ciclo: parciais (só linhas com o marco) e escopados por
+    // workspace (toda consulta de SLA filtra workspace_id), DESC p/ recência primeiro.
+    index('idx_conversations_ws_resolved_at')
+      .on(t.workspaceId, t.resolvedAt.desc())
+      .where(sql`${t.resolvedAt} is not null`),
+    index('idx_conversations_ws_first_response_at')
+      .on(t.workspaceId, t.firstResponseAt.desc())
+      .where(sql`${t.firstResponseAt} is not null`),
     check('conversations_kind_chk', sql`${t.kind} in ('direct','group','story_thread','comment_thread')`),
     check('conversations_status_chk', sql`${t.status} in ('open','pending','closed','resolved','snoozed')`),
     check('conversations_ai_mode_chk', sql`${t.aiMode} in ('off','on','paused')`),
