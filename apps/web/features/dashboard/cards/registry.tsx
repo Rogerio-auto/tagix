@@ -14,6 +14,9 @@ import { StatCard } from './StatCard';
 import { TableCard } from './TableCard';
 import { LeaderboardCard } from './LeaderboardCard';
 import { RecentLeadsCard } from './RecentLeadsCard';
+import { PlacarIaHumanoCard } from './PlacarIaHumanoCard';
+import { RoiIaCard } from './RoiIaCard';
+import { FunilPipelineCard } from './FunilPipelineCard';
 
 /**
  * recharts é pesado e só aparece em cards `chart`. Carregamos o `ChartCard` (e a lib
@@ -45,8 +48,13 @@ export interface CardRenderProps {
 // boundary lazy de `next/dynamic` (F10-S10), cujo tipo de retorno cobre função e classe.
 type CardComponent = ComponentType<CardRenderProps>;
 
-/** Tipo → componente. `list` cai no Stat (lista compacta tratada no drawer). */
-const REGISTRY: Record<CardType, CardComponent> = {
+/**
+ * Tipo → componente. `list` cai no Stat (lista compacta tratada no drawer). O
+ * `scoreboard` (F55-S05) é o cardType dedicado do Placar IA×Humano. Demais cardTypes
+ * desconhecidos em runtime caem no `StatCard` (defesa em profundidade — nunca quebra a
+ * tela se o servidor introduzir um tipo novo antes do front).
+ */
+const REGISTRY: Record<CardType | 'scoreboard', CardComponent> = {
   stat: StatCard,
   chart: ChartCard,
   table: TableCard,
@@ -54,9 +62,20 @@ const REGISTRY: Record<CardType, CardComponent> = {
   leaderboard: LeaderboardCard,
   feed: RecentLeadsCard,
   timeseries: TimeSeriesCard,
+  scoreboard: PlacarIaHumanoCard,
+};
+
+/**
+ * Override por `metric_key` para cards de Negócio (F55-S07) que reusam um `cardType`
+ * genérico mas têm render dedicado: ROI da IA (`stat`) e Funil de pipeline (`table`).
+ * O Placar usa `cardType: 'scoreboard'` e é mapeado pelo tipo acima, sem precisar de key.
+ */
+const BY_KEY: Record<string, CardComponent> = {
+  roi_ia: RoiIaCard,
+  funil_pipeline: FunilPipelineCard,
 };
 
 export function renderCard(card: DashboardCard, onDrill?: (card: DashboardCard) => void): React.JSX.Element {
-  const Component = REGISTRY[card.cardType];
+  const Component = BY_KEY[card.key] ?? REGISTRY[card.cardType] ?? StatCard;
   return <Component card={card} onDrill={onDrill} />;
 }
