@@ -21,6 +21,7 @@ import {
 } from 'recharts';
 import { cn } from '@/shared/lib/cn';
 import type { DashboardCard } from '../types';
+import { metricContext } from '../format';
 
 interface SeriesPoint {
   label: string;
@@ -65,6 +66,7 @@ interface ChartCardProps {
 
 export function ChartCard({ card, onDrill }: ChartCardProps) {
   const points = useMemo(() => toPoints(card), [card]);
+  const caption = metricContext(card.key);
 
   return (
     <button
@@ -75,7 +77,9 @@ export function ChartCard({ card, onDrill }: ChartCardProps) {
         onDrill && 'hover:border-border-brand',
       )}
     >
+      {/* Nome + legenda de contexto (clareza §2.4 — o que o gráfico mostra). */}
       <span className="font-head text-sm font-medium text-text">{card.label}</span>
+      {caption && <span className="mt-0.5 font-body text-xs text-text-low">{caption}</span>}
       {/* Altura por breakpoint; largura 100% via ResponsiveContainer — nunca
           estoura a viewport no mobile (F36-S06 / MOBILE_UX §1.7). */}
       <div className="mt-4 h-56 w-full sm:h-52">
@@ -98,7 +102,9 @@ export function ChartCard({ card, onDrill }: ChartCardProps) {
                   color: 'var(--text)',
                 }}
               />
-              <Bar dataKey="value" fill="var(--brand)" radius={[3, 3, 0, 0]} />
+              {/* Dado em verde MUTED (var(--brand-strong)): o neon pleno fica reservado
+                  ao único KPI primário do topo (regra DS "1 verde por tela"). */}
+              <Bar dataKey="value" fill="var(--brand-strong)" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         )}

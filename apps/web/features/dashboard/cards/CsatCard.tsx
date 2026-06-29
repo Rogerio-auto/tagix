@@ -31,7 +31,7 @@ export function CsatCard({ card }: CsatCardProps): React.JSX.Element {
   if (!dist) {
     return (
       <div className="flex h-full flex-col justify-between rounded-lg border border-border bg-surface p-5">
-        <span className="font-body text-xs uppercase tracking-wide text-text-low">{card.label}</span>
+        <span className="font-head text-sm font-medium text-text">{card.label}</span>
         <span className="mt-3 font-price text-2xl text-text">—</span>
       </div>
     );
@@ -66,7 +66,7 @@ export function CsatCard({ card }: CsatCardProps): React.JSX.Element {
   return (
     <div className="flex h-full flex-col justify-between rounded-lg border border-border bg-surface p-5">
       <div className="flex items-start justify-between">
-        <span className="font-body text-xs uppercase tracking-wide text-text-low">{card.label}</span>
+        <span className="font-head text-sm font-medium text-text">{card.label}</span>
         <span className="font-body text-xs text-text-low">{formatInt(dist.sample)} avaliações</span>
       </div>
 
