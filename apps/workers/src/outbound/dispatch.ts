@@ -10,9 +10,15 @@
  */
 import type { Channel, IChannelAdapter, IInstagramAdapter, SendResult } from '@hm/channels';
 import type { ChannelProvider } from '@hm/shared';
+import { createLogger, type Logger } from '@hm/logger';
 import type { IgMessageTag, OutboundJob, OutboundJobKind } from './job';
 import { evaluateInstagramWindow, type WindowEvaluation } from './instagram-window';
 import { defaultOutboundSendGuard, type OutboundSendGuard } from './db-ports';
+import {
+  resolveVoiceMediaKind,
+  VOICE_MAGIC_TIMEOUT_MS,
+  type VoiceMagicFetcher,
+} from './voice-format';
 
 export type DispatchResult =
   | { readonly dispatched: true; readonly result: SendResult; readonly messageTagUsed?: IgMessageTag }
@@ -93,11 +99,37 @@ function asInstagram(adapter: IChannelAdapter): IInstagramAdapter {
   return adapter as IInstagramAdapter;
 }
 
+/** Logger module-level p/ o safeguard de voz (não há logger nos call-sites). */
+const dispatchLogger: Logger = createLogger('info', { mod: 'outbound-dispatch' });
+
+/**
+ * Fetcher real da magic OGG: GET com `Range: bytes=0-3` sobre a URL assinada do
+ * R2 (GET público). Só os primeiros bytes interessam — `resolveVoiceMediaKind`
+ * trata erro/timeout como "manter voz" (fail-safe).
+ */
+const realVoiceFetcher: VoiceMagicFetcher = async (url, signal) => {
+  const res = await fetch(url, { headers: { Range: 'bytes=0-3' }, signal });
+  const buf = await res.arrayBuffer();
+  return new Uint8Array(buf);
+};
+
+/**
+ * Pontos de injeção do safeguard de voz (default = produção). `fetcher` lê a
+ * magic do binário; `logger` registra o rebaixamento; `timeoutMs` limita a
+ * leitura. Tests injetam um `fetcher` fake (sem rede).
+ */
+export interface VoiceSafeguardOptions {
+  readonly fetcher?: VoiceMagicFetcher;
+  readonly logger?: Logger;
+  readonly timeoutMs?: number;
+}
+
 export async function dispatchOutbound(
   job: OutboundJob,
   channel: Channel,
   adapter: IChannelAdapter,
   guard: OutboundSendGuard = defaultOutboundSendGuard,
+  voice: VoiceSafeguardOptions = {},
 ): Promise<DispatchResult> {
   if (!isSupported(job.kind, channel.provider)) {
     return mismatch(job.kind, channel.provider);
@@ -134,10 +166,33 @@ export async function dispatchOutbound(
     case 'media': {
       const win = enforceWindow(job, channel);
       if (win.blocked) return win.result;
+      // Safeguard de voz (evita Meta 131053): se o job se declara `voice` mas o
+      // binário real NÃO é ogg/opus (mime mentiu — comum em legados/composer),
+      // rebaixa para áudio comum. Assim ENTREGA como áudio em vez de falhar.
+      // Fail-safe: qualquer incerteza mantém `voice` (ver voice-format.ts).
+      let mediaKind = job.mediaKind;
+      if (job.mediaKind === 'voice') {
+        mediaKind = await resolveVoiceMediaKind(
+          job.publicMediaUrl,
+          voice.fetcher ?? realVoiceFetcher,
+          voice.timeoutMs ?? VOICE_MAGIC_TIMEOUT_MS,
+        );
+        if (mediaKind !== 'voice') {
+          (voice.logger ?? dispatchLogger).warn(
+            'outbound: nota de voz rebaixada para áudio (binário não é ogg/opus)',
+            {
+              messageId: job.messageId,
+              conversationId: job.conversationId,
+              provider: channel.provider,
+              mime: job.mime,
+            },
+          );
+        }
+      }
       const result = await adapter.sendMedia(
         {
           contactRemoteId: job.chatId,
-          mediaKind: job.mediaKind,
+          mediaKind,
           publicMediaUrl: job.publicMediaUrl,
           mime: job.mime,
           ...(job.caption !== undefined ? { caption: job.caption } : {}),
