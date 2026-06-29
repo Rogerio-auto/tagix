@@ -421,6 +421,13 @@
       "when": 1781452820000,
       "tag": "0059_f55_conversation_cycle_timestamps",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1781452821000,
+      "tag": "0060_f55_mv_daily_30d_resolved",
+      "breakpoints": true
     }
   ]
 }
