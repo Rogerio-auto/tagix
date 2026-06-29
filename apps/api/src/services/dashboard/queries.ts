@@ -31,6 +31,7 @@ const {
   workspaceAgentPolicies,
   conversationEvaluations,
   objections,
+  slaRules,
 } = schema;
 
 export type MetricValue = Record<string, unknown>;
@@ -292,6 +293,12 @@ export async function performancePorAtendente(
   };
 }
 
+/**
+ * Tempo médio de 1ª resposta (24h) — lê o marco de ciclo `first_response_at` (F55-S01)
+ * em vez de varrer `messages` por LATERAL. A janela considera conversas com a 1ª
+ * resposta registrada nas últimas 24h; `secs = first_response_at − created_at`. Com
+ * `memberId` (scope pessoal) restringe ao atendente atribuído.
+ */
 export async function tempoMedioPrimeiraResposta24h(
   tx: DbTx,
   workspaceId: string,
@@ -300,20 +307,15 @@ export async function tempoMedioPrimeiraResposta24h(
   const since = sinceHoursIso(24);
   const memberFilter = memberId ? sql`AND c.assigned_to = ${memberId}` : sql``;
   const rows = await tx.execute<{ media_seg: number | null; amostra: number }>(sql`
-    SELECT avg(frt.secs) AS media_seg, count(frt.secs) AS amostra
+    SELECT
+      avg(EXTRACT(EPOCH FROM (c.first_response_at - c.created_at))) AS media_seg,
+      count(*) AS amostra
     FROM conversations c
-    CROSS JOIN LATERAL (
-      SELECT EXTRACT(EPOCH FROM (
-        (SELECT min(om.created_at) FROM messages om
-          WHERE om.conversation_id = c.id AND om.direction = 'outbound')
-        - (SELECT min(im.created_at) FROM messages im
-            WHERE im.conversation_id = c.id AND im.direction = 'inbound')
-      )) AS secs
-    ) frt
     WHERE c.workspace_id = ${workspaceId}
-      AND c.created_at >= ${since}::timestamptz
+      AND c.first_response_at IS NOT NULL
+      AND c.first_response_at >= ${since}::timestamptz
+      AND c.first_response_at >= c.created_at
       ${memberFilter}
-      AND frt.secs IS NOT NULL AND frt.secs >= 0
   `);
   const row = Array.from(rows)[0];
   return {
@@ -323,17 +325,24 @@ export async function tempoMedioPrimeiraResposta24h(
   };
 }
 
+/**
+ * Tempo médio de resolução (24h) — lê os marcos `resolved_at`/`closed_at` (F55-S01).
+ * `secs = coalesce(closed_at, resolved_at) − created_at`. A janela considera conversas
+ * resolvidas/fechadas nas últimas 24h (pelo marco, não mais por `updated_at`, que era
+ * tocado por qualquer mutação e poluía a métrica).
+ */
 export async function tempoMedioResolucao24h(tx: DbTx, workspaceId: string): Promise<MetricValue> {
   const since = sinceHoursIso(24);
   const rows = await tx.execute<{ media_seg: number | null; amostra: number }>(sql`
     SELECT
-      avg(EXTRACT(EPOCH FROM (updated_at - created_at))) AS media_seg,
+      avg(EXTRACT(EPOCH FROM (coalesce(closed_at, resolved_at) - created_at))) AS media_seg,
       count(*) AS amostra
     FROM conversations
     WHERE workspace_id = ${workspaceId}
       AND status IN ('resolved', 'closed')
-      AND updated_at IS NOT NULL
-      AND updated_at >= ${since}::timestamptz
+      AND coalesce(closed_at, resolved_at) IS NOT NULL
+      AND coalesce(closed_at, resolved_at) >= ${since}::timestamptz
+      AND coalesce(closed_at, resolved_at) >= created_at
   `);
   const row = Array.from(rows)[0];
   return {
@@ -341,6 +350,59 @@ export async function tempoMedioResolucao24h(tx: DbTx, workspaceId: string): Pro
     unit: 's',
     sample: Number(row?.amostra ?? 0),
   };
+}
+
+/**
+ * SLA violado hoje (live) — conta conversas abertas hoje que estouraram a regra de SLA
+ * default do workspace (`sla_rules`, scope_type='workspace', ativa), comparando os
+ * marcos de ciclo (F55-S01) em vez de varrer `messages`:
+ *  - 1ª resposta: `first_response_secs` violado se ainda sem resposta e já passou do
+ *    limite desde `created_at`, OU se respondeu além do limite.
+ *  - resolução: `resolution_secs` violado se ainda sem `resolved_at`/`closed_at` e já
+ *    passou do limite, OU se resolveu além do limite.
+ * Sem regra de SLA (ou ambos os limites nulos) → `null` (não inventa limite — mesma
+ * filosofia do job de snapshot). Mantém o shape `{ count }` do contrato.
+ */
+export async function slaVioladoHoje(tx: DbTx): Promise<MetricValue | null> {
+  const [rule] = await tx
+    .select({
+      firstResponseSecs: slaRules.firstResponseSecs,
+      resolutionSecs: slaRules.resolutionSecs,
+    })
+    .from(slaRules)
+    .where(and(eq(slaRules.scopeType, 'workspace'), eq(slaRules.isActive, 'active')))
+    .limit(1);
+  if (!rule || (rule.firstResponseSecs == null && rule.resolutionSecs == null)) return null;
+
+  const frtSecs = rule.firstResponseSecs;
+  const resSecs = rule.resolutionSecs;
+  const rows = await tx.execute<{ violated: number }>(sql`
+    SELECT count(*)::int AS violated
+    FROM conversations c
+    WHERE c.created_at >= date_trunc('day', now())
+      AND (
+        (
+          ${frtSecs}::int IS NOT NULL
+          AND (
+            (c.first_response_at IS NULL
+              AND EXTRACT(EPOCH FROM (now() - c.created_at)) > ${frtSecs}::int)
+            OR (c.first_response_at IS NOT NULL
+              AND EXTRACT(EPOCH FROM (c.first_response_at - c.created_at)) > ${frtSecs}::int)
+          )
+        )
+        OR (
+          ${resSecs}::int IS NOT NULL
+          AND (
+            (coalesce(c.closed_at, c.resolved_at) IS NULL
+              AND c.status NOT IN ('resolved', 'closed')
+              AND EXTRACT(EPOCH FROM (now() - c.created_at)) > ${resSecs}::int)
+            OR (coalesce(c.closed_at, c.resolved_at) IS NOT NULL
+              AND EXTRACT(EPOCH FROM (coalesce(c.closed_at, c.resolved_at) - c.created_at)) > ${resSecs}::int)
+          )
+        )
+      )
+  `);
+  return { count: Number(Array.from(rows)[0]?.violated ?? 0) };
 }
 
 export async function inboxPorCanal(tx: DbTx): Promise<TableMetricValue> {

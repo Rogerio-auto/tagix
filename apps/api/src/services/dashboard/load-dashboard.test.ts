@@ -13,7 +13,7 @@ import { closeDb, getDb, schema, withWorkspace } from '@hm/db';
 import type { Role } from '@hm/shared';
 import { loadDashboard, visibleMetricKeys } from './load-dashboard';
 import { drillDown } from './drill-down';
-import { metricsForRole } from './definitions';
+import { metricsForRole } from './metrics/registry';
 
 const { workspaces, members, contacts, conversations, channels, conversionTypes, plans } = schema;
 
@@ -167,6 +167,172 @@ describe('dashboard: gate de conversão (§13/§2.5)', () => {
       loadDashboard(tx, { workspaceId: ws, memberId, role: 'AGENT' }),
     );
     expect(after.cards.some((c) => c.key === 'conversoes_minhas_mes')).toBe(true);
+  });
+});
+
+describe('dashboard: contrato de card-set por role (F55-S04 — registry declarativo)', () => {
+  // Conjunto EXATO de keys por role, na ordem do registry (= ordem de exibição §2).
+  // Trava o contrato server-driven: qualquer mudança acidental de visibilidade/ordem
+  // quebra aqui. Refactor do switch→registry tem que preservar isto byte a byte.
+  const EXPECTED: Record<Role, string[]> = {
+    AGENT: [
+      'minhas_conversas_abertas',
+      'minha_fila_pendente',
+      'em_atendimento_ia',
+      'resolvidas_hoje_por_mim',
+      'conversoes_minhas_mes',
+      'tempo_medio_primeira_resposta_24h',
+    ],
+    SUPERVISOR: [
+      'aguardando_atribuicao',
+      'em_atendimento_ia',
+      'sla_violado_hoje',
+      'resolvidas_hoje_por_mim',
+      'volume_inbound_24h',
+      'volume_outbound_24h',
+      'inbox_por_departamento',
+      'valor_total_pipeline',
+      'deals_fechados_ganho_mes',
+      'conversoes_minhas_mes',
+      'conversoes_workspace_mes',
+      'valor_convertido_workspace_mes',
+      'conversoes_por_tipo',
+      'performance_por_atendente',
+      'tempo_medio_primeira_resposta_24h',
+      'tempo_medio_resolucao_24h',
+      'inbox_por_canal',
+      'transferencias_24h',
+      'agente_handoffs_24h',
+      'agente_resolucoes_24h',
+      'conversoes_por_atendente_humano',
+      'conversoes_por_agente_ia',
+      'qualidade_resposta_media',
+      'qualidade_por_agente',
+      'qualidade_por_atendente',
+      'satisfacao_media',
+      'objecoes_rankeadas',
+      'leaderboard_produtividade',
+      'leads_recentes',
+      'desempenho_30d',
+    ],
+    ADMIN: [
+      'aguardando_atribuicao',
+      'em_atendimento_ia',
+      'sla_violado_hoje',
+      'resolvidas_hoje_por_mim',
+      'volume_inbound_24h',
+      'volume_outbound_24h',
+      'inbox_por_departamento',
+      'valor_total_pipeline',
+      'deals_fechados_ganho_mes',
+      'custo_llm_hoje_usd',
+      'custo_llm_mes_usd',
+      'conversoes_minhas_mes',
+      'conversoes_workspace_mes',
+      'valor_convertido_workspace_mes',
+      'conversoes_por_tipo',
+      'performance_por_atendente',
+      'tempo_medio_primeira_resposta_24h',
+      'tempo_medio_resolucao_24h',
+      'inbox_por_canal',
+      'transferencias_24h',
+      'agente_handoffs_24h',
+      'agente_resolucoes_24h',
+      'latencia_agente_p95_24h',
+      'tokens_por_modelo_24h',
+      'cap_mensal_consumido_pct',
+      'conversoes_por_atendente_humano',
+      'conversoes_por_agente_ia',
+      'qualidade_resposta_media',
+      'qualidade_por_agente',
+      'qualidade_por_atendente',
+      'satisfacao_media',
+      'objecoes_rankeadas',
+      'leaderboard_produtividade',
+      'leads_recentes',
+      'desempenho_30d',
+    ],
+    OWNER: [
+      'aguardando_atribuicao',
+      'em_atendimento_ia',
+      'sla_violado_hoje',
+      'volume_inbound_24h',
+      'volume_outbound_24h',
+      'inbox_por_departamento',
+      'valor_total_pipeline',
+      'deals_fechados_ganho_mes',
+      'custo_llm_hoje_usd',
+      'custo_llm_mes_usd',
+      'conversoes_minhas_mes',
+      'conversoes_workspace_mes',
+      'valor_convertido_workspace_mes',
+      'conversoes_por_tipo',
+      'novos_contatos_mes',
+      'contatos_total_workspace',
+      'performance_por_atendente',
+      'tempo_medio_primeira_resposta_24h',
+      'tempo_medio_resolucao_24h',
+      'inbox_por_canal',
+      'transferencias_24h',
+      'agente_handoffs_24h',
+      'agente_resolucoes_24h',
+      'latencia_agente_p95_24h',
+      'tokens_por_modelo_24h',
+      'cap_mensal_consumido_pct',
+      'conversoes_por_atendente_humano',
+      'conversoes_por_agente_ia',
+      'qualidade_resposta_media',
+      'qualidade_por_agente',
+      'qualidade_por_atendente',
+      'satisfacao_media',
+      'objecoes_rankeadas',
+      'leaderboard_produtividade',
+      'leads_recentes',
+      'desempenho_30d',
+    ],
+    READONLY: [
+      'aguardando_atribuicao',
+      'em_atendimento_ia',
+      'sla_violado_hoje',
+      'volume_inbound_24h',
+      'volume_outbound_24h',
+      'inbox_por_departamento',
+      'valor_total_pipeline',
+      'deals_fechados_ganho_mes',
+      'custo_llm_hoje_usd',
+      'custo_llm_mes_usd',
+      'performance_por_atendente',
+      'tempo_medio_primeira_resposta_24h',
+      'tempo_medio_resolucao_24h',
+      'inbox_por_canal',
+      'latencia_agente_p95_24h',
+      'tokens_por_modelo_24h',
+      'cap_mensal_consumido_pct',
+      'qualidade_resposta_media',
+      'qualidade_por_agente',
+      'qualidade_por_atendente',
+      'satisfacao_media',
+      'leaderboard_produtividade',
+      'leads_recentes',
+      'desempenho_30d',
+    ],
+  };
+
+  it('visibleMetricKeys retorna o conjunto exato (ordem e composição) por role', () => {
+    for (const role of ROLES) {
+      expect(visibleMetricKeys(role)).toEqual(EXPECTED[role]);
+    }
+  });
+
+  it('loadDashboard (com gate de conversão) entrega exatamente o card-set do role', async () => {
+    // hasConversionType=true neste ws (criado num teste anterior) → os cards gated
+    // entram, batendo com visibleMetricKeys (que ignora o gate).
+    for (const role of ROLES) {
+      const payload = await withWorkspace(ws, (tx) =>
+        loadDashboard(tx, { workspaceId: ws, memberId, role }),
+      );
+      expect(payload.cards.map((c) => c.key)).toEqual(EXPECTED[role]);
+    }
   });
 });
 

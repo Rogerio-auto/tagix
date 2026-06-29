@@ -6,17 +6,26 @@
 export {
   METRIC_DEFINITIONS,
   METRIC_BY_KEY,
+  METRIC_MODULES,
+  getMetricModule,
   metricsForRole,
   metricVisibleTo,
-  type MetricDefinition,
-  type MetricCadence,
-  type MetricCategory,
-  type MetricScope,
-  type CardType,
-} from './definitions';
+  visibleMetricKeys,
+} from './metrics/registry';
+export type {
+  MetricDefinition,
+  MetricModule,
+  MetricCtx,
+  MetricDrillParams,
+  MetricDrillOutcome,
+  MetricCadence,
+  MetricCategory,
+  MetricScope,
+  CardType,
+  DrillContext,
+} from './metrics/types';
 export {
   loadDashboard,
-  visibleMetricKeys,
   type DashboardPayload,
   type DashboardCard,
   type DashboardLayoutPreferences,
