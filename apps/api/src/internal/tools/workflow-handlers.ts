@@ -14,7 +14,7 @@
  *    serviço de conversões (F5-S12). Fecha o stub-até-F5 de F2-S20.
  */
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { schema } from '@hm/db';
 import {
   createDefaultRegistry,
@@ -33,6 +33,23 @@ function fail(error: string): ToolHandlerResult {
   return { ok: false, error };
 }
 
+/**
+ * F55-S02 — patch dos marcos de ciclo para uma transição de status. Grava
+ * `resolved_at`/`closed_at` no instante da transição, mas só na PRIMEIRA vez
+ * (`coalesce(col, now())` no mesmo UPDATE — nunca sobrescreve; reabrir não limpa).
+ */
+function cycleTimestampPatch(
+  status: string | null | undefined,
+): Record<string, ReturnType<typeof sql>> {
+  if (status === 'resolved') {
+    return { resolvedAt: sql`coalesce(${schema.conversations.resolvedAt}, now())` };
+  }
+  if (status === 'closed') {
+    return { closedAt: sql`coalesce(${schema.conversations.closedAt}, now())` };
+  }
+  return {};
+}
+
 /** Aplica um `patch` em `conversations` pelo id do envelope (RLS já no `tx`). */
 async function patchConversation(
   tx: DbTx,
@@ -42,7 +59,7 @@ async function patchConversation(
   if (!env.conversationId) return false;
   const rows = await tx
     .update(schema.conversations)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...patch, ...cycleTimestampPatch(patch.status), updatedAt: new Date() })
     .where(eq(schema.conversations.id, env.conversationId))
     .returning({ id: schema.conversations.id });
   return rows.length > 0;

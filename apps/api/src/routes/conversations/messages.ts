@@ -27,7 +27,7 @@
 import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { assertConversationVisible, schema } from '@hm/db';
 import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import {
@@ -524,6 +524,10 @@ export function createMessagesRouter(): Router {
               aiPausedAt: now,
               aiPausedBy: senderMemberId,
               aiLastHumanAt: now,
+              // F55-S02 — marca a 1ª resposta de member. Guard `coalesce`: só grava se
+              // ainda NULL (nunca sobrescreve — senão viraria "última resposta"). Usa
+              // `now()` do servidor (mesma estratégia de resolved_at/closed_at).
+              firstResponseAt: sql`coalesce(${schema.conversations.firstResponseAt}, now())`,
               updatedAt: now,
             })
             .where(eq(schema.conversations.id, conversationId));
@@ -535,6 +539,8 @@ export function createMessagesRouter(): Router {
             .update(schema.conversations)
             .set({
               aiLastHumanAt: now,
+              // F55-S02 — idem ao ramo acima: 1ª resposta de member, só se NULL.
+              firstResponseAt: sql`coalesce(${schema.conversations.firstResponseAt}, now())`,
               updatedAt: now,
             })
             .where(eq(schema.conversations.id, conversationId));
