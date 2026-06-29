@@ -2,7 +2,7 @@
 id: F55-S09
 title: QA ponta a ponta da F55 — role-awareness, dados, realtime, design
 phase: F55
-status: blocked
+status: available
 priority: high
 estimated_size: S
 depends_on: [F55-S06, F55-S07, F55-S08]

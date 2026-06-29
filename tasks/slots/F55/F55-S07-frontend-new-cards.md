@@ -2,7 +2,7 @@
 id: F55-S07
 title: Frontend — cards novos Placar IA×Humano, ROI da IA, Funil de pipeline
 phase: F55
-status: available
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F55-S06, F55-S05]
@@ -15,6 +15,8 @@ ux_considerations:
   - "Aplica §2.4 — Placar IA×Humano comunica o vencedor de relance (lado a lado, rótulos claros)."
   - "Aplica §3.10 — animação curta/proposital na barra do funil e na transição de valores."
   - "Aplica §2.6/§3.6 — empty/loading dedicados (sem conversão configurada / sem deals)."
+completed_at: 2026-06-29T23:39:23Z
+
 ---
 # F55-S07 — Frontend: cards novos de Negócio
 

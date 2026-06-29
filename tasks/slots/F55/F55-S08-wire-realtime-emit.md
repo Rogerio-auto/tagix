@@ -2,7 +2,7 @@
 id: F55-S08
 title: Ligar o emit órfão — dashboard:metric_changed nas mutações reais
 phase: F55
-status: available
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F55-S04, F55-S02]
@@ -10,6 +10,8 @@ blocks: [F55-S09]
 agent_id: backend-engineer
 source_docs:
   - docs/features/DASHBOARD.md
+completed_at: 2026-06-29T23:39:23Z
+
 ---
 # F55-S08 — Ligar o realtime órfão do dashboard
 
