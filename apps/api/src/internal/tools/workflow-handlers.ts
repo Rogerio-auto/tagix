@@ -25,6 +25,7 @@ import {
 } from './registry';
 import type { DbTx } from '@hm/db';
 import { registerConversion as registerConversionEvent } from '../../routes/conversions';
+import { emitConversationResolvedMetrics } from '../../services/dashboard/emit';
 import { moveDealToStage, TransitionError } from '../../routes/deals';
 import { and, desc, isNull } from 'drizzle-orm';
 import { transferToAgent } from './agent-transfer-handlers';
@@ -115,6 +116,9 @@ const markResolved: ToolHandler = async (env, tx) => {
   if (!env.conversationId) return fail('Conversa ausente no contexto.');
   const ok = await patchConversation(tx, env, { status: 'resolved', aiMode: 'off' });
   if (!ok) return fail('Conversa não encontrada.');
+  // F55-S08 — a IA resolveu: dashboard muda (SLA/resolvidas/TTR). Sem `memberId`
+  // (autor é agente). Best-effort, nunca derruba a tool.
+  void emitConversationResolvedMetrics({ workspaceId: env.workspaceId, memberId: null });
   return {
     ok: true,
     content: 'Conversa marcada como resolvida.',
@@ -135,6 +139,10 @@ const changeConversationStatus: ToolHandler = async (env, tx) => {
   if (!env.conversationId) return fail('Conversa ausente no contexto.');
   const ok = await patchConversation(tx, env, { status: parsed.data.target_status });
   if (!ok) return fail('Conversa não encontrada.');
+  // F55-S08 — só estados terminais movem métricas de SLA/resolvidas/TTR.
+  if (parsed.data.target_status === 'resolved' || parsed.data.target_status === 'closed') {
+    void emitConversationResolvedMetrics({ workspaceId: env.workspaceId, memberId: null });
+  }
   return {
     ok: true,
     content: `Status da conversa alterado para '${parsed.data.target_status}'.`,

@@ -40,6 +40,7 @@ import {
   type Role,
 } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
+import { emitConversationResolvedMetrics } from '../../services/dashboard/emit';
 
 /** Fila de relay do socket (mesma constante de `apps/api/src/socket/relay.ts`). */
 const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
@@ -217,6 +218,12 @@ export function createConversationStateRouter(): Router {
           data: payload,
         }),
       ]);
+
+      // F55-S08 — resolver muda métricas de SLA/resolvidas/TTR do dashboard.
+      // Best-effort (fire-and-forget, nunca rejeita): a transição já está commitada.
+      if (status === 'resolved') {
+        void emitConversationResolvedMetrics({ workspaceId, memberId });
+      }
 
       res.json({ conversationId, status, snoozedUntil: status === 'snoozed' ? snoozedUntil : null });
     },
