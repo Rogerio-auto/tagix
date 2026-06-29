@@ -2,7 +2,7 @@
 id: F55-S05
 title: 3 métricas novas de Negócio — Placar IA×Humano, ROI da IA, Funil de pipeline (backend)
 phase: F55
-status: blocked
+status: available
 priority: high
 estimated_size: M
 depends_on: [F55-S04]

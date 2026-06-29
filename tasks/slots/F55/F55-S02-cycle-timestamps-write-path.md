@@ -2,7 +2,7 @@
 id: F55-S02
 title: Popular first_response_at/resolved_at/closed_at nas transições reais (write path)
 phase: F55
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: [F55-S01]
@@ -10,6 +10,8 @@ blocks: [F55-S08]
 agent_id: backend-engineer
 source_docs:
   - docs/features/DASHBOARD.md
+completed_at: 2026-06-29T22:51:18Z
+
 ---
 # F55-S02 — Popular timestamps de ciclo no write path
 

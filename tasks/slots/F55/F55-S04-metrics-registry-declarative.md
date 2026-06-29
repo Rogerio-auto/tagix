@@ -2,7 +2,7 @@
 id: F55-S04
 title: Registry declarativo de métricas (mata o switch de resolveValue) + queries SLA/TTR exatas
 phase: F55
-status: available
+status: done
 priority: critical
 estimated_size: L
 depends_on: [F55-S01]
@@ -11,6 +11,8 @@ agent_id: backend-engineer
 source_docs:
   - docs/features/DASHBOARD.md
   - docs/features/PERMISSIONS.md
+completed_at: 2026-06-29T22:51:19Z
+
 ---
 # F55-S04 — Registry declarativo de métricas
 

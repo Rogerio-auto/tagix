@@ -2,7 +2,7 @@
 id: F55-S06
 title: Frontend — shell novo por seções + cards redesenhados (clareza Stripe/Datacrazy)
 phase: F55
-status: blocked
+status: available
 priority: high
 estimated_size: L
 depends_on: [F55-S04]

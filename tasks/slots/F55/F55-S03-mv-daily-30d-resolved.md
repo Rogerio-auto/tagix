@@ -2,7 +2,7 @@
 id: F55-S03
 title: Recriar mv_dashboard_daily_30d sobre resolved_at (não updated_at)
 phase: F55
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: [F55-S01]
@@ -10,6 +10,8 @@ blocks: []
 agent_id: db-engineer
 source_docs:
   - docs/features/DASHBOARD.md
+completed_at: 2026-06-29T22:51:19Z
+
 ---
 # F55-S03 — MV de 30 dias sobre resolved_at real
 

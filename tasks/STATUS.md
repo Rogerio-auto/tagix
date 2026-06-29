@@ -46,7 +46,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F52   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F53   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F54   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
-| F55   | 9     | 3   | 5   | 0   | 0   | 0   | 1   |
+| F55   | 9     | 2   | 3   | 0   | 0   | 0   | 4   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -582,11 +582,11 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ID      | Titulo                                                                                    | Status      | Prioridade | Depende de                |
 | ------- | ----------------------------------------------------------------------------------------- | ----------- | ---------- | ------------------------- |
 | F55-S01 | Timestamps de ciclo em conversations (first_response_at/resolved_at/closed_at) + backfill | ✅ done      | critical   | —                         |
-| F55-S02 | Popular first_response_at/resolved_at/closed_at nas transições reais (write path)         | 🟢 available | high       | F55-S01                   |
-| F55-S03 | Recriar mv_dashboard_daily_30d sobre resolved_at (não updated_at)                         | 🟢 available | high       | F55-S01                   |
-| F55-S04 | Registry declarativo de métricas (mata o switch de resolveValue) + queries SLA/TTR exatas | 🟢 available | critical   | F55-S01                   |
-| F55-S05 | 3 métricas novas de Negócio — Placar IA×Humano, ROI da IA, Funil de pipeline (backend)    | ⏸️ blocked  | high       | F55-S04                   |
-| F55-S06 | Frontend — shell novo por seções + cards redesenhados (clareza Stripe/Datacrazy)          | ⏸️ blocked  | high       | F55-S04                   |
+| F55-S02 | Popular first_response_at/resolved_at/closed_at nas transições reais (write path)         | ✅ done      | high       | F55-S01                   |
+| F55-S03 | Recriar mv_dashboard_daily_30d sobre resolved_at (não updated_at)                         | ✅ done      | high       | F55-S01                   |
+| F55-S04 | Registry declarativo de métricas (mata o switch de resolveValue) + queries SLA/TTR exatas | ✅ done      | critical   | F55-S01                   |
+| F55-S05 | 3 métricas novas de Negócio — Placar IA×Humano, ROI da IA, Funil de pipeline (backend)    | 🟢 available | high       | F55-S04                   |
+| F55-S06 | Frontend — shell novo por seções + cards redesenhados (clareza Stripe/Datacrazy)          | 🟢 available | high       | F55-S04                   |
 | F55-S07 | Frontend — cards novos Placar IA×Humano, ROI da IA, Funil de pipeline                     | ⏸️ blocked  | medium     | F55-S06, F55-S05          |
 | F55-S08 | Ligar o emit órfão — dashboard:metric_changed nas mutações reais                          | ⏸️ blocked  | medium     | F55-S04, F55-S02          |
 | F55-S09 | QA ponta a ponta da F55 — role-awareness, dados, realtime, design                         | ⏸️ blocked  | high       | F55-S06, F55-S07, F55-S08 |
