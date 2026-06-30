@@ -182,11 +182,32 @@ function parseMessage(msg: JsonRecord): InboundEvent | undefined {
     };
   }
 
-  const messageType = mapMessageType(waType, msg);
-  const content = extractContent(waType, msg);
+  let messageType = mapMessageType(waType, msg);
+  let content = extractContent(waType, msg);
+
+  // Defensivo: alguns inbounds chegam com `type` inesperado/ausente (variações da
+  // Cloud API e da coexistência) MAS carregam `text.body`. Sem isto o texto virava
+  // uma bolha `system` vazia — a mensagem do contato era PERDIDA. Se há corpo de
+  // texto, tratamos como texto em vez de descartar.
+  if (messageType === 'system') {
+    const text = msg['text'];
+    const body = isRecord(text) ? asString(text['body']) : undefined;
+    if (body !== undefined && body.length > 0) {
+      messageType = 'text';
+      content = body;
+    }
+  }
+
   const mediaRef =
     waType !== undefined ? extractMediaRef(msg[waType]) : undefined;
-  const metadata = extractMetadata(waType, msg);
+  const baseMeta = extractMetadata(waType, msg);
+  // Diagnóstico: se o tipo continua desconhecido (cai em `system`), preserva o
+  // `type` cru da Meta em metadata — permite investigar sem depender do raw
+  // webhook (que não é persistido).
+  const metadata =
+    messageType === 'system'
+      ? { ...(baseMeta ?? {}), unknownWaType: waType ?? '<missing>' }
+      : baseMeta;
 
   return {
     type: 'message',

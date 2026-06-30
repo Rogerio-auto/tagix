@@ -44,12 +44,42 @@ function initials(remoteId: string): string {
   return (remoteId || '?').slice(0, 2).toUpperCase();
 }
 
-/** Hora curta (HH:MM) da última atividade, ou vazio. */
-function shortTime(iso: string | null): string {
+/**
+ * Carimbo da última atividade, estilo WhatsApp: HOJE → hora (HH:MM); ONTEM →
+ * "ontem"; últimos 7 dias → dia da semana (seg/ter…); mais antigo → DD/MM.
+ * Sem o dia, hoje 11:43 parecia "fora de ordem" acima de ontem 15:19 (a
+ * ordenação por last_message_at está correta — era só o display de hora-pura).
+ */
+function relativeTime(iso: string | null): string {
   if (!iso) return '';
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return '';
-  return new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const d = new Date(t);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfThatDay = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfToday - startOfThatDay) / 86_400_000);
+
+  if (diffDays <= 0) {
+    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+  if (diffDays === 1) return 'ontem';
+  if (diffDays < 7) return d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
+/** Data + hora completas (tooltip do carimbo). */
+function fullTimestamp(iso: string | null): string | undefined {
+  if (!iso) return undefined;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return undefined;
+  return new Date(t).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 /** Badge de estado da IA — on (verde) ou paused (âmbar). */
@@ -80,7 +110,8 @@ export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(fun
   ref,
 ) {
   const hasUnread = conversation.unreadCount > 0;
-  const time = shortTime(conversation.lastMessageAt);
+  const time = relativeTime(conversation.lastMessageAt);
+  const timeFull = fullTimestamp(conversation.lastMessageAt);
 
   return (
     <li role="option" aria-selected={active}>
@@ -134,7 +165,11 @@ export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(fun
             </p>
             <div className="flex shrink-0 items-center gap-1.5">
               <ConversationKindBadge kind={conversation.kind} />
-              {time && <time className="font-body text-xs text-text-low">{time}</time>}
+              {time && (
+                <time className="font-body text-xs text-text-low" title={timeFull}>
+                  {time}
+                </time>
+              )}
             </div>
           </div>
           <div className="flex items-center justify-between gap-2">

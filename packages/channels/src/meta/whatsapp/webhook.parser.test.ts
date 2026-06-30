@@ -47,6 +47,53 @@ describe('parseWhatsAppWebhook', () => {
     }
   });
 
+  it('tipo inesperado COM text.body → trata como texto (não perde a mensagem)', () => {
+    const events = parseWhatsAppWebhook(
+      envelope({
+        messages: [
+          {
+            from: '5511999999999',
+            id: 'wamid.WEIRD',
+            timestamp: '1700000000',
+            // type que o parser não conhece, mas a mensagem carrega text.body
+            type: 'unsupported',
+            text: { body: 'Teste' },
+          },
+        ],
+      }),
+    );
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: 'message',
+      messageType: 'text',
+      content: 'Teste',
+    });
+  });
+
+  it('tipo desconhecido SEM texto → system + grava unknownWaType p/ diagnóstico', () => {
+    const events = parseWhatsAppWebhook(
+      envelope({
+        messages: [
+          {
+            from: '5511999999999',
+            id: 'wamid.SYS',
+            timestamp: '1700000000',
+            type: 'system',
+            system: { body: 'usuário mudou de número' },
+          },
+        ],
+      }),
+    );
+
+    expect(events).toHaveLength(1);
+    const ev = events[0];
+    expect(ev).toMatchObject({ type: 'message', messageType: 'system' });
+    if (ev?.type === 'message') {
+      expect(ev.metadata?.['unknownWaType']).toBe('system');
+    }
+  });
+
   it('parseia imagem com media_ref e caption', () => {
     const events = parseWhatsAppWebhook(
       envelope({
