@@ -89,12 +89,16 @@ export function LeaderboardCard({ card, onDrill }: LeaderboardCardProps): React.
         onDrill && 'hover:border-border-brand',
       )}
     >
-      <div className="flex items-center justify-between">
-        <span className="font-body text-xs uppercase tracking-wide text-text-low">{card.label}</span>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-head text-sm font-medium text-text">{card.label}</span>
+          {/* Legenda dos números à direita — clareza §2.4 (sem coluna sem rótulo). */}
+          <span className="font-body text-xs text-text-low">Resolvidas · fila atual · tempo médio</span>
+        </div>
         {onDrill && (
           <ArrowUpRight
             size={14}
-            className="text-text-low opacity-0 transition-opacity group-hover:opacity-100"
+            className="mt-0.5 text-text-low opacity-0 transition-opacity group-hover:opacity-100"
           />
         )}
       </div>
@@ -110,14 +114,16 @@ export function LeaderboardCard({ card, onDrill }: LeaderboardCardProps): React.
                 key={row.memberId}
                 className={cn(
                   'flex min-h-11 items-center gap-3 rounded-md px-2 py-1.5',
-                  top && 'bg-brand-faint/40',
+                  // Realce do 1º lugar por PESO/fundo neutro (não por verde — o neon é
+                  // exclusivo do KPI primário; regra DS "1 verde por tela").
+                  top && 'bg-surface-2',
                 )}
               >
                 {/* Posição */}
                 <span
                   className={cn(
                     'w-4 shrink-0 text-center font-price text-sm tabular-nums',
-                    top ? 'text-brand' : 'text-text-low',
+                    top ? 'text-text' : 'text-text-low',
                   )}
                 >
                   {i + 1}

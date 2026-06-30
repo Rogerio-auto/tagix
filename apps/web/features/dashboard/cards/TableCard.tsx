@@ -69,7 +69,7 @@ export function TableCard({ card, onDrill }: TableCardProps): React.JSX.Element 
         onDrill && 'hover:border-border-brand',
       )}
     >
-      <span className="font-body text-xs uppercase tracking-wide text-text-low">{card.label}</span>
+      <span className="font-head text-sm font-medium text-text">{card.label}</span>
       {rows.length === 0 || columns.length === 0 ? (
         <p className="mt-4 font-body text-sm text-text-low">Sem dados.</p>
       ) : (
@@ -99,7 +99,8 @@ export function TableCard({ card, onDrill }: TableCardProps): React.JSX.Element 
                 key={i}
                 className={cn(
                   'border-b border-border last:border-0',
-                  isRanking && i === 0 && 'bg-brand-faint/40',
+                  // Top performer destacado por fundo neutro (não verde — neon é só do KPI).
+                  isRanking && i === 0 && 'bg-surface-2',
                 )}
               >
                 {columns.map((col) => (

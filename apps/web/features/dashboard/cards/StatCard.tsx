@@ -1,13 +1,14 @@
 'use client';
 
 /**
- * Card de estatística (DASHBOARD §3 — os blocos numéricos do topo). Clicável quando
- * tem drill-down: navega para a página filtrada (§4) OU, se o caller passar
- * `onDrill`, abre o drawer lateral. Modal full-screen é proibido (§4 / UX §2.3).
+ * Card de estatística secundária (Dashboard v3 / F55-S06 — os blocos numéricos fora do
+ * strip de KPIs). Mesmo princípio de clareza do HeroCard, em escala menor: **número +
+ * nome + legenda de contexto** (UX §2.4 — nunca número órfão). Formatação via
+ * `formatMetricDisplay` (fonte única) e legenda via `metricContext`.
  *
- * O valor é derivado do jsonb `value` por metric_key — formatação numérica/monetária
- * conforme a chave presente (count | valueCents | costUsd). Sem dado → "—" (o card
- * existe porque o server o enviou, mas o número ainda não foi computado).
+ * Clicável quando tem drill: navega para a página filtrada (§4) OU, se o caller passar
+ * `onDrill`, abre o drawer/sheet lateral. Modal full-screen é proibido (UX §2.3).
+ * Sem dado → "—" (o card existe porque o server o enviou; o número ainda não computou).
  */
 import Link from 'next/link';
 import {
@@ -27,6 +28,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import type { DashboardCard } from '../types';
+import { formatMetricDisplay, metricContext, readNumber } from '../format';
+import { CsatCard } from './CsatCard';
 
 function metricIcon(key: string): LucideIcon {
   if (/volume|inbound|outbound|mensagem/.test(key)) return MessageSquare;
@@ -41,48 +44,10 @@ function metricIcon(key: string): LucideIcon {
   if (/atendente|membro|equipe/.test(key)) return Users;
   return BarChart3;
 }
-import {
-  formatBRLFromCents,
-  formatDuration,
-  formatInt,
-  formatPercent,
-  formatScore100,
-  formatUSD,
-  readNumber,
-} from '../format';
-import { CsatCard } from './CsatCard';
-
-function displayValue(card: DashboardCard): string {
-  const v = card.value;
-  if (!v) return '—';
-  // §F29: qualidade média é um score 0-100 → "90 / 100".
-  if (card.key === 'qualidade_resposta_media') {
-    return formatScore100(readNumber(v, 'value'));
-  }
-  // Contrato Onda A (F28-S01): { value, unit } — duração (s), latência (ms) ou % .
-  const value = readNumber(v, 'value');
-  if (value !== null) {
-    const unit = typeof v['unit'] === 'string' ? (v['unit'] as string) : '';
-    if (unit === 's') return formatDuration(value);
-    if (unit === '%') return formatPercent(value);
-    if (unit === 'ms') return `${formatInt(value)} ms`;
-    return formatInt(value);
-  }
-  const cents = readNumber(v, 'valueCents');
-  const usd = readNumber(v, 'costUsd');
-  const count = readNumber(v, 'count');
-  if (count !== null && cents !== null) {
-    return `${formatInt(count)} · ${formatBRLFromCents(cents)}`;
-  }
-  if (cents !== null) return formatBRLFromCents(cents);
-  if (usd !== null) return formatUSD(usd);
-  if (count !== null) return formatInt(count);
-  return '—';
-}
 
 /**
- * Estado de alerta de um card stat (Onda A). Hoje só `cap_mensal_consumido_pct`:
- * ≥100% danger, ≥80% warn, abaixo neutro. Mapeia para tokens DS (sem hex).
+ * Estado de alerta de um card stat. Hoje só `cap_mensal_consumido_pct`: ≥100% danger,
+ * ≥80% warn, abaixo neutro. Mapeia para tokens DS (sem hex).
  */
 type StatTone = 'neutral' | 'warn' | 'danger';
 
@@ -116,10 +81,10 @@ export function StatCard({ card, onDrill }: StatCardProps) {
   if (card.key === 'satisfacao_media') {
     return <CsatCard card={card} />;
   }
-  const value = displayValue(card);
+  const { primary, secondary } = formatMetricDisplay(card.key, card.value);
+  const caption = metricContext(card.key);
   const interactive = Boolean(card.drillHref) || Boolean(onDrill);
   const tone = statTone(card);
-
   const Icon = metricIcon(card.key);
 
   const inner = (
@@ -142,10 +107,16 @@ export function StatCard({ card, onDrill }: StatCardProps) {
           />
         )}
       </div>
-      {/* Valor + label */}
-      <div className="flex flex-col gap-0.5">
-        <span className={cn('font-price text-2xl leading-none', TONE_VALUE[tone])}>{value}</span>
-        <span className="font-body text-xs text-text-low">{card.label}</span>
+      {/* Número + secundário + nome + legenda (clareza §2.4 — sem número órfão). */}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-baseline gap-1.5">
+          <span className={cn('font-price text-2xl leading-none', TONE_VALUE[tone])}>{primary}</span>
+          {secondary && (
+            <span className="font-price text-xs leading-none text-text-low">{secondary}</span>
+          )}
+        </div>
+        <span className="font-body text-xs font-medium text-text-mid">{card.label}</span>
+        {caption && <span className="font-body text-[0.6875rem] text-text-low">{caption}</span>}
       </div>
     </div>
   );

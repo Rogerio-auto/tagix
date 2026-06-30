@@ -1,28 +1,40 @@
 'use client';
 
 /**
- * Shell client do Dashboard — Command Center v2 (F48-S08 / DASHBOARD §9). Carrega
- * `/dashboard/me`, escuta o socket e renderiza os cards em TIERS de hierarquia:
+ * Shell client do Dashboard v3 (F55-S06 / DASHBOARD §9). Carrega `/dashboard/me`,
+ * escuta o socket e renderiza os cards numa **coluna editorial estilo Stripe**
+ * (decisão travada do founder — clareza > densidade):
  *
- *   Hero (KPIs grandes) → Tendências (gráficos + série) → Rankings & equipe →
- *   Leads recentes + métricas secundárias
+ *   (1) KPIs grandes no topo  →  (2) Desempenho (gráfico largo full-width)  →
+ *   (3) Tendências  →  (4) Rankings e equipe  →  (5) Leads e métricas
  *
  * **Server-driven** (DASHBOARD §10): a lista de cards/alerts vem filtrada por role do
- * servidor — não há `if (role)` aqui. O hero apenas REORDENA/destaca o que o servidor
- * já autorizou (`buildTiers`), nunca revela card de role não autorizado.
+ * servidor — não há `if (role)` aqui. `buildSections` apenas REORDENA/agrupa o que o
+ * servidor já autorizou (nunca revela card de role não autorizado). Respeita o layout
+ * pessoal (esconder/reordenar) via `applyLayout` antes de montar as seções; seções
+ * vazias não renderizam (UX §2.6).
  *
- * Respeita o layout pessoal (esconder/reordenar) via `applyLayout` (S04 escreve; aqui
- * só aplica) ANTES de montar os tiers. Tiers vazios não renderizam (UX §2.6).
+ * Estados (UX §2.7/§2.11/§2.6): loading = skeleton com a forma do shell; erro = 3 partes
+ * (o quê / por quê / o que fazer) com ação de tentar de novo; vazio = convite com CTA.
  *
  * Drill-down: stat cards com `drillHref` navegam (Link). Cards com detalhe próprio
- * (chart/table/leaderboard e métricas pessoais) abrem o drawer lateral — nunca modal
- * (UX §2.3 / §4).
+ * abrem o drawer lateral (desktop) / bottom-sheet (mobile) — nunca modal (UX §2.3).
  */
 import { useMemo, useState } from 'react';
-import { BarChart3, LineChart, Trophy, Users, type LucideIcon } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import {
+  LayoutDashboard,
+  LineChart,
+  RefreshCw,
+  TrendingUp,
+  Trophy,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
+import { Button } from '@hm/ui';
 import { PageHeader } from '@/shared/components/layout/PageHeader';
 import { HelpHint } from '@/shared/components/help';
-import { SkeletonList } from '@/shared/components/feedback';
+import { EmptyState, ErrorState, Skeleton, ChartSkeleton } from '@/shared/components/feedback';
 import { useDashboard } from './queries';
 import { useDashboardSocket } from './useDashboardSocket';
 import { AlertsBanner } from './AlertsBanner';
@@ -30,7 +42,7 @@ import { DrillDownDrawer } from './DrillDownDrawer';
 import { CustomizeDashboardButton } from './customization';
 import { renderCard } from './cards/registry';
 import { HeroCard } from './cards/HeroCard';
-import { buildTiers } from './presentation';
+import { buildSections, type DashboardSection, type SectionId } from './sections';
 import { SetupChecklist } from '@/features/onboarding/checklist';
 import type { DashboardCard } from './types';
 
@@ -51,9 +63,18 @@ const DRAWER_METRICS = new Set([
   'qualidade_por_agente',
   'qualidade_por_atendente',
   'objecoes_rankeadas',
-  // §F48 Command Center v2: leaderboard de produtividade tem pódio detalhado.
+  // §F48 Command Center: leaderboard de produtividade tem pódio detalhado.
   'leaderboard_produtividade',
 ]);
+
+/** Ícone discreto por seção (apoia o título — UX §2.4 path de entrada óbvio). */
+const SECTION_ICON: Partial<Record<SectionId, LucideIcon>> = {
+  negocio: TrendingUp,
+  performance: LineChart,
+  trends: LineChart,
+  rankings: Trophy,
+  feed: Users,
+};
 
 function applyLayout(
   cards: readonly DashboardCard[],
@@ -70,52 +91,118 @@ function applyLayout(
   );
 }
 
-/** Cabeçalho discreto de tier (uppercase, sóbrio — sem acento neon; o verde é do hero). */
-function TierLabel({ icon: Icon, children }: { icon: LucideIcon; children: string }) {
+/** Cabeçalho sóbrio de seção (uppercase calmo — sem acento neon; o verde é do KPI #1). */
+function SectionHeader({ section }: { section: DashboardSection }) {
+  if (!section.title) return null;
+  const Icon = SECTION_ICON[section.id];
   return (
-    <div className="flex items-center gap-2 border-l-2 border-border pl-3">
-      <Icon size={14} className="text-text-low" />
-      <h2 className="font-head text-xs font-semibold uppercase tracking-widest text-text-low">
-        {children}
+    <div className="flex items-center gap-2">
+      {Icon && <Icon size={15} className="text-text-low" aria-hidden />}
+      <h2 className="font-head text-sm font-semibold tracking-tight text-text-mid">
+        {section.title}
       </h2>
+      {section.helpKey && <HelpHint k={section.helpKey} />}
+    </div>
+  );
+}
+
+/** Grade interna de uma seção, conforme o `layout` (clareza editorial, muito respiro). */
+function SectionCards({
+  section,
+  drawerHandler,
+}: {
+  section: DashboardSection;
+  drawerHandler: (card: DashboardCard) => ((card: DashboardCard) => void) | undefined;
+}) {
+  // Strip de KPIs: HeroCard grande; o 1º card da PÁGINA recebe o único acento neon.
+  if (section.layout === 'kpis') {
+    return (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {section.cards.map((card, i) => (
+          <HeroCard key={card.key} card={card} accent={i === 0} onDrill={drawerHandler(card)} />
+        ))}
+      </div>
+    );
+  }
+  // Gráfico de destaque: full-width, largo (founder: "gráfico largo").
+  if (section.layout === 'feature') {
+    return (
+      <div className="grid grid-cols-1 gap-4">
+        {section.cards.map((card) => (
+          <div key={card.key}>{renderCard(card, drawerHandler(card))}</div>
+        ))}
+      </div>
+    );
+  }
+  // Pilha (leads + métricas): coluna única calma, cada card com seu próprio respiro.
+  if (section.layout === 'stack') {
+    return (
+      <div className="grid grid-cols-1 gap-4">
+        {section.cards.map((card) => (
+          <div key={card.key}>{renderCard(card, drawerHandler(card))}</div>
+        ))}
+      </div>
+    );
+  }
+  // Grade média (tendências / rankings): 1 → 2 colunas.
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {section.cards.map((card) => (
+        <div key={card.key}>{renderCard(card, drawerHandler(card))}</div>
+      ))}
+    </div>
+  );
+}
+
+/** Skeleton com a forma do shell (UX §2.7/§3.6 — sem tela branca, sem CLS). */
+function DashboardSkeleton() {
+  return (
+    <div className="flex flex-col gap-12" aria-busy aria-label="Carregando dashboard">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex flex-col gap-6 rounded-xl border border-border bg-surface-2 p-6">
+            <Skeleton className="size-9 rounded-lg" />
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-8 w-2/3" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-lg border border-border bg-surface p-5">
+        <Skeleton className="mb-4 h-4 w-40" />
+        <ChartSkeleton />
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="rounded-lg border border-border bg-surface p-5">
+            <Skeleton className="mb-4 h-4 w-32" />
+            <ChartSkeleton />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
 export function DashboardClient() {
-  const { data, isLoading, isError } = useDashboard();
+  const router = useRouter();
+  const { data, isLoading, isError, isFetching, refetch } = useDashboard();
   const [drillCard, setDrillCard] = useState<DashboardCard | null>(null);
 
-  const visibleKeys = useMemo(
-    () => new Set((data?.cards ?? []).map((c) => c.key)),
-    [data?.cards],
-  );
+  const visibleKeys = useMemo(() => new Set((data?.cards ?? []).map((c) => c.key)), [data?.cards]);
   useDashboardSocket(visibleKeys);
 
-  const tiers = useMemo(() => {
+  const sections = useMemo(() => {
     if (!data) return null;
     const withData = data.cards.filter((c) => c.value !== null);
-    const ordered = applyLayout(
-      withData,
-      data.layoutPreferences.hidden,
-      data.layoutPreferences.order,
-    );
-    return buildTiers(ordered);
+    const ordered = applyLayout(withData, data.layoutPreferences.hidden, data.layoutPreferences.order);
+    return buildSections(ordered);
   }, [data]);
 
   const onDrill = (card: DashboardCard): void => setDrillCard(card);
   /** onDrill só quando o card tem detalhe por drawer; senão deixa a navegação nativa. */
-  const drawerHandler = (card: DashboardCard) =>
-    DRAWER_METRICS.has(card.key) ? onDrill : undefined;
-
-  const isEmpty =
-    tiers !== null &&
-    tiers.hero.length === 0 &&
-    tiers.charts.length === 0 &&
-    tiers.timeseries.length === 0 &&
-    tiers.leaderboards.length === 0 &&
-    tiers.feeds.length === 0 &&
-    tiers.secondary.length === 0;
+  const drawerHandler = (card: DashboardCard) => (DRAWER_METRICS.has(card.key) ? onDrill : undefined);
 
   return (
     <>
@@ -127,88 +214,60 @@ export function DashboardClient() {
           </span>
         )}
       </div>
-      {isLoading && <SkeletonList rows={6} />}
+
+      {isLoading && <DashboardSkeleton />}
+
       {isError && (
-        <div className="rounded-lg border border-border bg-surface p-8">
-          <p className="font-body text-text-mid">Não foi possível carregar o dashboard.</p>
+        <div className="rounded-lg border border-border bg-surface">
+          <ErrorState
+            title="Não foi possível carregar o dashboard"
+            reason="A conexão com o servidor falhou ou expirou."
+            whatToDo="Verifique sua conexão e tente novamente."
+            action={
+              <Button
+                variant="secondary"
+                loading={isFetching}
+                leftIcon={<RefreshCw className="size-4" />}
+                onClick={() => void refetch()}
+              >
+                Tentar de novo
+              </Button>
+            }
+          />
         </div>
       )}
-      {data && tiers && (
-        <div className="flex flex-col gap-10" data-tour-id="dashboard-grid">
+
+      {data && sections && (
+        <div className="flex flex-col gap-12" data-tour-id="dashboard-grid">
           {/* Onboarding: checklist "Primeiros passos" — só ADMIN/OWNER, some quando
               tudo concluído ou dispensado (F43-S06). Auto-gated internamente. */}
           <SetupChecklist />
           <AlertsBanner alerts={data.alerts} />
 
-          {isEmpty && (
-            <div className="rounded-lg border border-border bg-surface p-8">
-              <p className="font-body text-text-mid">Nenhuma métrica disponível ainda.</p>
+          {sections.length === 0 ? (
+            <div className="rounded-lg border border-border bg-surface">
+              <EmptyState
+                icon={LayoutDashboard}
+                title="Seu dashboard está pronto, faltam dados"
+                description="As métricas aparecem aqui assim que houver atividade — conversas, conversões e negócios. Comece atendendo para ver os números ganharem vida."
+                action={
+                  <Button variant="primary" onClick={() => router.push('/conversations')}>
+                    Ir para conversas
+                  </Button>
+                }
+              />
             </div>
-          )}
-
-          {/* Tier 1 — Hero strip: KPIs de destaque. O 1º card recebe o único acento
-              neon da tela (regra DS "1 verde por tela"). */}
-          {tiers.hero.length > 0 && (
-            <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              {tiers.hero.map((card, i) => (
-                <HeroCard
-                  key={card.key}
-                  card={card}
-                  accent={i === 0}
-                  onDrill={drawerHandler(card)}
-                />
-              ))}
-            </section>
-          )}
-
-          {/* Tier 2 — Tendências: gráficos + série temporal (cards largos). */}
-          {(tiers.charts.length > 0 || tiers.timeseries.length > 0) && (
-            <section className="flex flex-col gap-4">
-              <TierLabel icon={LineChart}>Tendências</TierLabel>
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                {[...tiers.charts, ...tiers.timeseries].map((card) => (
-                  <div key={card.key}>{renderCard(card, drawerHandler(card))}</div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Tier 3 — Rankings & equipe: leaderboard + tabelas de ranking. */}
-          {tiers.leaderboards.length > 0 && (
-            <section className="flex flex-col gap-4">
-              <TierLabel icon={Trophy}>Rankings & equipe</TierLabel>
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                {tiers.leaderboards.map((card) => (
-                  <div key={card.key}>{renderCard(card, drawerHandler(card))}</div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Tier 4 — Leads recentes + métricas secundárias (grade compacta). O feed
-              ocupa uma coluna mais alta no desktop; os stats fluem ao lado. */}
-          {(tiers.feeds.length > 0 || tiers.secondary.length > 0) && (
-            <section className="flex flex-col gap-4">
-              <TierLabel icon={tiers.feeds.length > 0 ? Users : BarChart3}>
-                {tiers.feeds.length > 0 ? 'Leads & métricas' : 'Métricas'}
-              </TierLabel>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                {tiers.feeds.map((card) => (
-                  <div
-                    key={card.key}
-                    className="col-span-2 sm:col-span-3 lg:col-span-1 lg:row-span-2"
-                  >
-                    {renderCard(card, drawerHandler(card))}
-                  </div>
-                ))}
-                {tiers.secondary.map((card) => (
-                  <div key={card.key}>{renderCard(card, drawerHandler(card))}</div>
-                ))}
-              </div>
-            </section>
+          ) : (
+            sections.map((section) => (
+              <section key={section.id} className="flex flex-col gap-4">
+                <SectionHeader section={section} />
+                <SectionCards section={section} drawerHandler={drawerHandler} />
+              </section>
+            ))
           )}
         </div>
       )}
+
       <DrillDownDrawer card={drillCard} onClose={() => setDrillCard(null)} />
     </>
   );

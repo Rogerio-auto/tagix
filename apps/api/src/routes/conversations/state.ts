@@ -25,7 +25,7 @@
 import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { assertConversationVisible, schema } from '@hm/db';
 import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import {
@@ -40,6 +40,7 @@ import {
   type Role,
 } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
+import { emitConversationResolvedMetrics } from '../../services/dashboard/emit';
 
 /** Fila de relay do socket (mesma constante de `apps/api/src/socket/relay.ts`). */
 const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
@@ -48,6 +49,22 @@ const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
 function paramId(req: Request, name: string): string {
   const raw = req.params[name];
   return typeof raw === 'string' ? raw : '';
+}
+
+/**
+ * F55-S02 — patch dos marcos de ciclo para uma transição de status. Grava
+ * `resolved_at`/`closed_at` no instante exato, mas só na PRIMEIRA vez (guard
+ * `coalesce(col, now())` dentro do mesmo UPDATE — nunca sobrescreve, e reabrir a
+ * conversa não limpa o marco). Demais status retornam `{}` (no-op).
+ */
+function cycleTimestampPatch(status: string): Record<string, ReturnType<typeof sql>> {
+  if (status === 'resolved') {
+    return { resolvedAt: sql`coalesce(${schema.conversations.resolvedAt}, now())` };
+  }
+  if (status === 'closed') {
+    return { closedAt: sql`coalesce(${schema.conversations.closedAt}, now())` };
+  }
+  return {};
 }
 
 // ── Schemas de input ──────────────────────────────────────────────────────────
@@ -175,6 +192,8 @@ export function createConversationStateRouter(): Router {
             status,
             // snooze grava a data; qualquer outra transição limpa o snooze pendente.
             snoozedUntil: status === 'snoozed' ? snoozedUntil! : null,
+            // F55-S02 — marca resolved_at/closed_at no momento da transição (só 1ª vez).
+            ...cycleTimestampPatch(status),
             updatedAt: new Date(),
           })
           .where(eq(schema.conversations.id, conversationId));
@@ -199,6 +218,12 @@ export function createConversationStateRouter(): Router {
           data: payload,
         }),
       ]);
+
+      // F55-S08 — resolver muda métricas de SLA/resolvidas/TTR do dashboard.
+      // Best-effort (fire-and-forget, nunca rejeita): a transição já está commitada.
+      if (status === 'resolved') {
+        void emitConversationResolvedMetrics({ workspaceId, memberId });
+      }
 
       res.json({ conversationId, status, snoozedUntil: status === 'snoozed' ? snoozedUntil : null });
     },

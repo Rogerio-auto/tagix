@@ -2,70 +2,35 @@
  * Monta o payload do `GET /dashboard/me` (DASHBOARD.md §8, §9.1) — **server-driven**.
  *
  * Dado o member (role + id) e o workspace, retorna SÓ os cards/alerts que o role
- * pode ver. O frontend (S03) renderiza por `cardType` via registry — nunca decide
+ * pode ver. O frontend renderiza por `cardType` via registry — nunca decide
  * visibilidade por role (anti-padrão v1 §10). A filtragem fina (linhas que o member
  * vê) já vem da RLS + dos parâmetros de escopo das queries.
  *
- * Resolução de valor por cadência:
- *  - socket / live: query direta (estado operacional sempre fresco no load).
- *  - snapshot_5min: lê `dashboard_snapshots`; se ainda não populado, faz fallback
- *     para a query live (primeira pintura completa mesmo antes do 1º tick do job).
- *  - mv_1h / mv_1d: lê a materialized view correspondente.
+ * Resolução de valor: **100% via registry declarativo** (`metrics/`). Cada métrica é
+ * um módulo auto-contido que sabe resolver o próprio valor conforme sua cadência
+ * (query live, snapshot 5min com fallback, ou materialized view). Não há mais `switch`
+ * por key aqui — adicionar um card não toca este arquivo.
  *
  * `layoutPreferences` vem de `members.dashboard_layout` (jsonb já existente) e diz
- * ao front quais cards o member escondeu/reordenou (S04 escreve; aqui só repassa,
- * sem nunca devolver card de role não autorizado).
+ * ao front quais cards o member escondeu/reordenou (sem nunca devolver card de role
+ * não autorizado).
  */
 import type { Role } from '@hm/shared';
 import { schema, type DbTx } from '@hm/db';
 import { eq } from 'drizzle-orm';
 import {
-  METRIC_DEFINITIONS,
+  getMetricModule,
   metricsForRole,
-  type CardType,
-  type MetricCadence,
-  type MetricCategory,
-  type MetricDefinition,
-} from './definitions';
-import {
-  aguardandoAtribuicao,
-  conversoesMinhasMes,
-  conversoesWorkspaceMes,
-  contatosTotalWorkspace,
-  custoLlmHojeUsd,
-  emAtendimentoIa,
-  hasConversionType,
-  inboxPorDepartamento,
-  minhaFilaPendente,
-  minhasConversasAbertas,
-  novosContatosMes,
-  readConversionsMonth,
-  readLlmCostMonth,
-  readSnapshot,
-  readVolume24h,
-  valorTotalPipeline,
-  performancePorAtendente,
-  tempoMedioPrimeiraResposta24h,
-  tempoMedioResolucao24h,
-  inboxPorCanal,
-  transferencias24h,
-  agenteHandoffs24h,
-  agenteResolucoes24h,
-  latenciaAgenteP9524h,
-  tokensPorModelo24h,
-  capMensalConsumidoPct,
-  conversoesPorAtendenteHumano,
-  conversoesPorAgenteIa,
-  qualidadeRespostaMedia,
-  qualidadePorAgente,
-  qualidadePorAtendente,
-  satisfacaoMedia,
-  objecoesRankeadas,
-  leaderboardProdutividade,
-  leadsRecentes,
-  serieDesempenho30d,
-  type MetricValue,
-} from './queries';
+  visibleMetricKeys,
+} from './metrics/registry';
+import type {
+  CardType,
+  MetricCadence,
+  MetricCategory,
+  MetricCtx,
+  MetricDefinition,
+} from './metrics/types';
+import { hasConversionType, type MetricValue } from './queries';
 import { buildAlerts, type DashboardAlert } from './alerts';
 
 const { members } = schema;
@@ -100,113 +65,25 @@ export interface LoadDashboardArgs {
 }
 
 /**
- * Resolve o valor de uma métrica conforme sua fonte. `null` = sem dado disponível
- * (ex.: MV ainda não populada em dev, ou métrica estratégica não calculada nesta
- * fase) — o front omite o card vazio em vez de mostrar zero enganoso.
+ * Resolve o valor de uma métrica via seu módulo no registry. `null` = sem dado
+ * disponível (ex.: MV ainda não populada em dev, ou métrica estratégica não calculada
+ * nesta fase) — o front omite o card vazio em vez de mostrar zero enganoso.
  */
 async function resolveValue(
   tx: DbTx,
   m: MetricDefinition,
   args: LoadDashboardArgs,
 ): Promise<MetricValue | null> {
-  const { workspaceId, memberId } = args;
-  switch (m.key) {
-    // Atendimento (live)
-    case 'minhas_conversas_abertas':
-      return minhasConversasAbertas(tx, memberId);
-    case 'minha_fila_pendente':
-      return minhaFilaPendente(tx, memberId);
-    case 'aguardando_atribuicao':
-      return aguardandoAtribuicao(tx);
-    case 'em_atendimento_ia':
-      return emAtendimentoIa(tx);
-    case 'inbox_por_departamento':
-      return inboxPorDepartamento(tx);
-    // SLA / resolvidas: dependem do job 5min (snapshot). Sem fallback live barato → snapshot.
-    case 'sla_violado_hoje':
-      return readSnapshot(tx, m.key, {});
-    case 'resolvidas_hoje_por_mim':
-      return readSnapshot(tx, m.key, { memberId });
-    // Volumes 24h: MVs.
-    case 'volume_inbound_24h':
-    case 'volume_outbound_24h':
-      return readVolume24h(tx, workspaceId);
-    // Pipeline
-    case 'valor_total_pipeline':
-      return valorTotalPipeline(tx);
-    case 'deals_fechados_ganho_mes':
-      return readSnapshot(tx, m.key, {});
-    // Agentes IA
-    case 'custo_llm_hoje_usd':
-      return custoLlmHojeUsd(tx, workspaceId);
-    case 'custo_llm_mes_usd':
-      return readLlmCostMonth(tx, workspaceId);
-    // Conversões
-    case 'conversoes_minhas_mes':
-      return conversoesMinhasMes(tx, memberId);
-    case 'conversoes_workspace_mes':
-    case 'valor_convertido_workspace_mes':
-      return conversoesWorkspaceMes(tx);
-    case 'conversoes_por_tipo':
-      return readConversionsMonth(tx, workspaceId);
-    // Negócio
-    case 'novos_contatos_mes':
-      return novosContatosMes(tx);
-    case 'contatos_total_workspace':
-      return contatosTotalWorkspace(tx);
-    // ── Atendimento / performance (Onda A) ──
-    case 'performance_por_atendente':
-      return performancePorAtendente(tx, workspaceId);
-    case 'tempo_medio_primeira_resposta_24h':
-      // AGENT vê só a própria média; SUP+ vê o workspace/team.
-      return tempoMedioPrimeiraResposta24h(
-        tx,
-        workspaceId,
-        m.scope === 'personal' ? memberId : undefined,
-      );
-    case 'tempo_medio_resolucao_24h':
-      return tempoMedioResolucao24h(tx, workspaceId);
-    case 'inbox_por_canal':
-      return inboxPorCanal(tx);
-    case 'transferencias_24h':
-      return transferencias24h(tx);
-    // ── Agentes IA — operacional (Onda A) ──
-    case 'agente_handoffs_24h':
-      return agenteHandoffs24h(tx);
-    case 'agente_resolucoes_24h':
-      return agenteResolucoes24h(tx);
-    case 'latencia_agente_p95_24h':
-      return latenciaAgenteP9524h(tx, workspaceId);
-    case 'tokens_por_modelo_24h':
-      return tokensPorModelo24h(tx, workspaceId);
-    case 'cap_mensal_consumido_pct':
-      return capMensalConsumidoPct(tx, workspaceId);
-    // ── Conversões — ranking (Onda A) ──
-    case 'conversoes_por_atendente_humano':
-      return conversoesPorAtendenteHumano(tx);
-    case 'conversoes_por_agente_ia':
-      return conversoesPorAgenteIa(tx);
-    // ── §F29 Onda B — qualidade / CSAT / objeções ──
-    case 'qualidade_resposta_media':
-      return qualidadeRespostaMedia(tx);
-    case 'qualidade_por_agente':
-      return qualidadePorAgente(tx);
-    case 'qualidade_por_atendente':
-      return qualidadePorAtendente(tx);
-    case 'satisfacao_media':
-      return satisfacaoMedia(tx);
-    case 'objecoes_rankeadas':
-      return objecoesRankeadas(tx);
-    // ── §F48 Command Center v2 — leaderboard / feed de leads / série 30d ──
-    case 'leaderboard_produtividade':
-      return leaderboardProdutividade(tx, workspaceId);
-    case 'leads_recentes':
-      return leadsRecentes(tx);
-    case 'desempenho_30d':
-      return serieDesempenho30d(tx, workspaceId);
-    default:
-      return null;
-  }
+  const mod = getMetricModule(m.key);
+  if (!mod) return null;
+  const ctx: MetricCtx = {
+    tx,
+    workspaceId: args.workspaceId,
+    memberId: args.memberId,
+    role: args.role,
+    scope: m.scope,
+  };
+  return mod.resolve(ctx);
 }
 
 function readLayout(raw: Record<string, unknown>): DashboardLayoutPreferences {
@@ -252,6 +129,4 @@ export async function loadDashboard(tx: DbTx, args: LoadDashboardArgs): Promise<
 }
 
 /** Conjunto de keys que um role pode ver (sem gate de conversão) — usado em testes/§8. */
-export function visibleMetricKeys(role: Role): string[] {
-  return METRIC_DEFINITIONS.filter((m) => m.roles.includes(role)).map((m) => m.key);
-}
+export { visibleMetricKeys };

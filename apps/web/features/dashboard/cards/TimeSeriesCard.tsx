@@ -21,6 +21,7 @@ import {
 } from 'recharts';
 import { cn } from '@/shared/lib/cn';
 import type { DashboardCard, MetricValue } from '../types';
+import { formatInt } from '../format';
 
 interface SeriesRow {
   readonly day: string;
@@ -82,6 +83,8 @@ export function TimeSeriesCard({ card, onDrill }: TimeSeriesCardProps): React.JS
 
   const activeLabel = SERIES_OPTIONS.find((o) => o.key === active)?.label ?? '';
   const interactive = Boolean(onDrill);
+  // Total da série ativa nos 30d — contexto real do número (clareza §2.4), não decoração.
+  const total = useMemo(() => series.reduce((sum, row) => sum + row[active], 0), [series, active]);
 
   return (
     <div
@@ -90,9 +93,14 @@ export function TimeSeriesCard({ card, onDrill }: TimeSeriesCardProps): React.JS
         interactive && 'hover:border-border-brand',
       )}
     >
-      {/* Cabeçalho: rótulo + toggle de série (UX §3.5 — estados de seleção claros). */}
+      {/* Cabeçalho: rótulo + total da série ativa + toggle (UX §3.5 — seleção clara). */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="font-head text-sm font-medium text-text">{card.label}</span>
+        <div className="flex flex-col gap-1">
+          <span className="font-head text-sm font-medium text-text">{card.label}</span>
+          <span className="font-body text-xs text-text-low">
+            <span className="font-price text-text-mid">{formatInt(total)}</span> {activeLabel.toLowerCase()} nos últimos 30 dias
+          </span>
+        </div>
         <div role="group" aria-label="Série exibida" className="flex items-center gap-1">
           {SERIES_OPTIONS.map((option) => {
             const selected = option.key === active;
@@ -155,14 +163,16 @@ export function TimeSeriesCard({ card, onDrill }: TimeSeriesCardProps): React.JS
                   color: 'var(--text)',
                 }}
               />
+              {/* Linha em verde MUTED (var(--brand-strong)): o neon pleno fica reservado
+                  ao único KPI primário do topo (regra DS "1 verde por tela"). */}
               <Line
                 type="monotone"
                 dataKey={active}
                 name={activeLabel}
-                stroke="var(--brand)"
+                stroke="var(--brand-strong)"
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, fill: 'var(--brand)' }}
+                activeDot={{ r: 4, fill: 'var(--brand-strong)' }}
                 isAnimationActive={false}
               />
             </LineChart>

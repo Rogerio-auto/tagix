@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, Upload } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
-import { uploadFlowMedia } from './upload';
+import { uploadFlowMedia, type FlowMediaIntent } from './upload';
 
 export interface UploadedMedia {
   key: string;
@@ -22,6 +22,12 @@ export interface MediaUploadFieldProps {
   storageKey: string;
   filename?: string;
   hint?: string;
+  /**
+   * Intenção de normalização server-side (default `auto` = passthrough). `voice`
+   * transcodifica áudio p/ ogg/opus (nota de voz nativa). O `mime` em `onUploaded`
+   * reflete sempre a resposta do servidor — não o `file.type` do browser.
+   */
+  intent?: FlowMediaIntent;
   onUploaded: (media: UploadedMedia) => void;
   onKeyChange: (key: string) => void;
 }
@@ -39,6 +45,7 @@ export function MediaUploadField({
   storageKey,
   filename,
   hint,
+  intent = 'auto',
   onUploaded,
   onKeyChange,
 }: MediaUploadFieldProps) {
@@ -60,11 +67,18 @@ export function MediaUploadField({
     }
     setBusy(true);
     try {
-      const uploaded = await uploadFlowMedia(file);
+      const uploaded = await uploadFlowMedia(file, intent);
       if (lastUrlRef.current) URL.revokeObjectURL(lastUrlRef.current);
       const objectUrl = URL.createObjectURL(file);
       lastUrlRef.current = objectUrl;
-      onUploaded({ key: uploaded.key, mime: file.type, filename: file.name, objectUrl });
+      // `mime` é o do SERVIDOR (pós-normalização) — ex.: `audio/ogg` quando voz —
+      // não o `file.type` do browser; é ele que vira o `mediaType` do node.
+      onUploaded({
+        key: uploaded.key,
+        mime: uploaded.mime || file.type,
+        filename: file.name,
+        objectUrl,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha no upload da midia.');
     } finally {

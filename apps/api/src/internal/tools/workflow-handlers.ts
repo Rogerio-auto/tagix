@@ -14,7 +14,7 @@
  *    serviço de conversões (F5-S12). Fecha o stub-até-F5 de F2-S20.
  */
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { schema } from '@hm/db';
 import {
   createDefaultRegistry,
@@ -25,12 +25,30 @@ import {
 } from './registry';
 import type { DbTx } from '@hm/db';
 import { registerConversion as registerConversionEvent } from '../../routes/conversions';
+import { emitConversationResolvedMetrics } from '../../services/dashboard/emit';
 import { moveDealToStage, TransitionError } from '../../routes/deals';
 import { and, desc, isNull } from 'drizzle-orm';
 import { transferToAgent } from './agent-transfer-handlers';
 
 function fail(error: string): ToolHandlerResult {
   return { ok: false, error };
+}
+
+/**
+ * F55-S02 — patch dos marcos de ciclo para uma transição de status. Grava
+ * `resolved_at`/`closed_at` no instante da transição, mas só na PRIMEIRA vez
+ * (`coalesce(col, now())` no mesmo UPDATE — nunca sobrescreve; reabrir não limpa).
+ */
+function cycleTimestampPatch(
+  status: string | null | undefined,
+): Record<string, ReturnType<typeof sql>> {
+  if (status === 'resolved') {
+    return { resolvedAt: sql`coalesce(${schema.conversations.resolvedAt}, now())` };
+  }
+  if (status === 'closed') {
+    return { closedAt: sql`coalesce(${schema.conversations.closedAt}, now())` };
+  }
+  return {};
 }
 
 /** Aplica um `patch` em `conversations` pelo id do envelope (RLS já no `tx`). */
@@ -42,7 +60,7 @@ async function patchConversation(
   if (!env.conversationId) return false;
   const rows = await tx
     .update(schema.conversations)
-    .set({ ...patch, updatedAt: new Date() })
+    .set({ ...patch, ...cycleTimestampPatch(patch.status), updatedAt: new Date() })
     .where(eq(schema.conversations.id, env.conversationId))
     .returning({ id: schema.conversations.id });
   return rows.length > 0;
@@ -98,6 +116,9 @@ const markResolved: ToolHandler = async (env, tx) => {
   if (!env.conversationId) return fail('Conversa ausente no contexto.');
   const ok = await patchConversation(tx, env, { status: 'resolved', aiMode: 'off' });
   if (!ok) return fail('Conversa não encontrada.');
+  // F55-S08 — a IA resolveu: dashboard muda (SLA/resolvidas/TTR). Sem `memberId`
+  // (autor é agente). Best-effort, nunca derruba a tool.
+  void emitConversationResolvedMetrics({ workspaceId: env.workspaceId, memberId: null });
   return {
     ok: true,
     content: 'Conversa marcada como resolvida.',
@@ -118,6 +139,10 @@ const changeConversationStatus: ToolHandler = async (env, tx) => {
   if (!env.conversationId) return fail('Conversa ausente no contexto.');
   const ok = await patchConversation(tx, env, { status: parsed.data.target_status });
   if (!ok) return fail('Conversa não encontrada.');
+  // F55-S08 — só estados terminais movem métricas de SLA/resolvidas/TTR.
+  if (parsed.data.target_status === 'resolved' || parsed.data.target_status === 'closed') {
+    void emitConversationResolvedMetrics({ workspaceId: env.workspaceId, memberId: null });
+  }
   return {
     ok: true,
     content: `Status da conversa alterado para '${parsed.data.target_status}'.`,

@@ -14,6 +14,7 @@
  */
 import { and, eq } from 'drizzle-orm';
 import { schema, type DbTx } from '@hm/db';
+import { emitConversionRegisteredMetrics } from '../../services/dashboard/emit';
 
 const { conversionTypes, conversionEvents } = schema;
 
@@ -133,6 +134,14 @@ export async function registerConversion(
       .onConflictDoNothing()
       .returning();
     if (!event) return { kind: 'deduped' };
+    // F55-S08 — conversão NOVA muda métricas de conversões/receita/placar do
+    // dashboard. Best-effort (fire-and-forget, nunca rejeita): o socket é
+    // side-effect; mesmo se a tx reverter depois, o front só refaz o fetch da
+    // verdade já commitada. Só em `created` (dedup não move o agregado).
+    void emitConversionRegisteredMetrics({
+      workspaceId: input.workspaceId,
+      memberId: input.triggeredByMemberId ?? null,
+    });
     return { kind: 'created', event };
   } catch (err: unknown) {
     // Defense-in-depth: o ON CONFLICT acima cobre o caso normal; este catch
