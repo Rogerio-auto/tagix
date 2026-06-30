@@ -2,7 +2,7 @@
 id: F55-S09
 title: QA ponta a ponta da F55 — role-awareness, dados, realtime, design
 phase: F55
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: [F55-S06, F55-S07, F55-S08]
@@ -11,6 +11,8 @@ source_docs:
   - docs/features/DASHBOARD.md
   - docs/UX_PRINCIPLES.md
   - docs/features/PERMISSIONS.md
+completed_at: 2026-06-30T00:04:02Z
+
 ---
 # F55-S09 — QA ponta a ponta do Dashboard v3
 
