@@ -24,6 +24,24 @@ export function statusFromResult(result: SendResult): ViewStatus {
 }
 
 /**
+ * Conteúdo legível best-effort do job p/ o payload de `message:new` (texto/caption).
+ * O front não depende disto (rebusca a thread); é só um preview no evento. `null`
+ * para mídia sem caption e modalidades sem texto.
+ */
+function outboundJobContent(job: OutboundJob): string | null {
+  switch (job.kind) {
+    case 'text':
+    case 'ig_private_reply':
+    case 'ig_public_reply':
+      return job.text;
+    case 'media':
+      return job.caption ?? null;
+    default:
+      return null;
+  }
+}
+
+/**
  * Persiste o estado da mensagem e emite o socket de mudança de status.
  * Best-effort no socket: uma falha de emissão não derruba o ack do job (o
  * status já foi persistido e a UI reidrata via REST).
@@ -55,6 +73,20 @@ export async function finalizeOutbound(
     messageId: job.messageId,
     status,
   });
+
+  // Realtime da ChatList + thread (paridade com o inbound): só no ENVIO inicial
+  // ('sent'), emite `message:new` (workspace:true) → a ChatList de todos reordena/
+  // atualiza o preview e a thread aberta mostra a mensagem outbound (operador/IA/
+  // sistema/flow) ao vivo. delivered/read seguem por `message:status_changed`.
+  if (status === 'sent') {
+    await deps.socket.emitMessageNew({
+      workspaceId,
+      conversationId: job.conversationId,
+      messageId: job.messageId,
+      type: job.kind,
+      content: outboundJobContent(job),
+    });
+  }
 
   // F52-S04 — reconciliação de callback tardio: agora que o external_id está
   // persistido, drena qualquer status que tenha chegado ANTES (órfão). Tira a

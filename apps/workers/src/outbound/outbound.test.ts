@@ -58,6 +58,18 @@ function okAdapter(provider: Channel['provider']): IChannelAdapter {
   };
 }
 
+/** Adapter cujo envio FALHA (SendResult.ok=false) — exercita o caminho 'failed'. */
+function failAdapter(provider: Channel['provider']): IChannelAdapter {
+  const fail: SendResult = { ok: false, errorCode: 'send_failed', errorMessage: 'boom' };
+  return {
+    ...okAdapter(provider),
+    sendText: vi.fn(async () => fail),
+    sendMedia: vi.fn(async () => fail),
+    sendTemplate: vi.fn(async () => fail),
+    sendInteractive: vi.fn(async () => fail),
+  };
+}
+
 describe('parseOutboundJob', () => {
   it('aceita um job text válido', () => {
     const job = parseOutboundJob({
@@ -276,16 +288,19 @@ describe('handleOutboundEnvelope — finalize', () => {
     deps: OutboundDeps;
     persist: ReturnType<typeof vi.fn>;
     emit: ReturnType<typeof vi.fn>;
+    emitNew: ReturnType<typeof vi.fn>;
   } {
     const persist = vi.fn(async () => undefined);
     const emit = vi.fn(async () => undefined);
+    const emitNew = vi.fn(async () => undefined);
     return {
       persist,
       emit,
+      emitNew,
       deps: {
         channels: { resolve: vi.fn(async () => ({ channel: makeChannel(provider), adapter: okAdapter(provider) })) },
         persistence: { persist },
-        socket: { emitStatusChanged: emit },
+        socket: { emitStatusChanged: emit, emitMessageNew: emitNew },
       },
     };
   }
@@ -320,6 +335,46 @@ describe('handleOutboundEnvelope — finalize', () => {
     expect(d.persist).toHaveBeenCalledOnce();
     expect(d.emit).toHaveBeenCalledOnce();
     expect(d.persist.mock.calls[0]?.[0]).toMatchObject({ status: 'sent', externalId: 'wamid.X' });
+    // Realtime do outbound: ao enviar, emite message:new (workspace:true) p/ a
+    // ChatList reordenar + a thread aberta mostrar a mensagem ao vivo.
+    expect(d.emitNew).toHaveBeenCalledOnce();
+    expect(d.emitNew.mock.calls[0]?.[0]).toMatchObject({
+      conversationId: 'cv1',
+      messageId: 'm1',
+      type: 'text',
+      content: 'hi',
+    });
+  });
+
+  it('falha no envio: persiste failed e NÃO emite message:new (não reordena a lista)', async () => {
+    const d = deps('waha');
+    // adapter que falha → SendResult.ok=false → status 'failed'.
+    d.deps = {
+      ...d.deps,
+      channels: {
+        resolve: vi.fn(async () => ({
+          channel: makeChannel('waha'),
+          adapter: failAdapter('waha'),
+        })),
+      },
+    };
+    const envelope: Envelope = {
+      id: '00000000-0000-0000-0000-000000000002',
+      type: 'outbound.text',
+      workspaceId: '00000000-0000-0000-0000-0000000000ff',
+      ts: Date.now(),
+      payload: {
+        kind: 'text',
+        channelId: 'ch1',
+        conversationId: 'cv1',
+        messageId: 'm1',
+        chatId: 'c',
+        text: 'hi',
+      },
+    };
+    await handleOutboundEnvelope(envelope, { deps: d.deps, logger });
+    expect(d.persist.mock.calls[0]?.[0]).toMatchObject({ status: 'failed' });
+    expect(d.emitNew).not.toHaveBeenCalled();
   });
 });
 
@@ -380,7 +435,7 @@ describe('finalizeOutbound — reconciliação de órfão (F52-S04)', () => {
       deps: {
         channels: { resolve: vi.fn() },
         persistence: { persist },
-        socket: { emitStatusChanged: emit },
+        socket: { emitStatusChanged: emit, emitMessageNew: vi.fn(async () => undefined) },
       },
     };
   }

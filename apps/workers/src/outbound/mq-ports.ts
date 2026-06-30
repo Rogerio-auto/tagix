@@ -17,6 +17,7 @@
 import { Buffer } from 'node:buffer';
 import { makeEnvelope, EXCHANGES, type MqHandle } from '@hm/shared/mq';
 import type {
+  MessageNewEmitInput,
   OutboundPersistencePort,
   PersistOutboundInput,
   SocketEmitPort,
@@ -77,6 +78,32 @@ export class MqSocketEmit implements SocketEmitPort {
         conversationId: input.conversationId,
         messageId: input.messageId,
         status: input.status,
+      },
+    });
+    this.channel.sendToQueue(SOCKET_RELAY_QUEUE, Buffer.from(JSON.stringify(envelope)), {
+      persistent: true,
+      contentType: 'application/json',
+    });
+    await Promise.resolve();
+  }
+
+  async emitMessageNew(input: MessageNewEmitInput): Promise<void> {
+    const envelope = makeEnvelope('socket.relay', input.workspaceId, {
+      event: 'message:new',
+      // `workspace: true` → entrega na room `conversation:{id}` (thread aberta de
+      // qualquer operador) E em `ws:{workspaceId}` (ChatList de todos reordena/
+      // atualiza o preview). Espelha o inbound, que sem isto era o único a emitir.
+      target: { conversationId: input.conversationId, workspace: true },
+      data: {
+        workspaceId: input.workspaceId,
+        conversationId: input.conversationId,
+        message: {
+          id: input.messageId,
+          conversationId: input.conversationId,
+          type: input.type,
+          content: input.content,
+          direction: 'outbound',
+        },
       },
     });
     this.channel.sendToQueue(SOCKET_RELAY_QUEUE, Buffer.from(JSON.stringify(envelope)), {

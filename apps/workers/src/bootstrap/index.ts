@@ -103,6 +103,7 @@ import {
   startMetricsServer,
   stopMetricsServer,
   flushSentry,
+  captureException,
 } from '../observability/index';
 import { startPrivacyExportProcessor } from '../privacy/index';
 import {
@@ -444,6 +445,30 @@ export async function startWorkers(
  */
 export async function main(): Promise<void> {
   const logger = createLogger('info', { svc: '@hm/workers' });
+
+  // Resiliência + diagnóstico (Bug B). Sem estes handlers, UMA promise rejeitada em
+  // QUALQUER um dos 21 workers/schedulers derrubava TODO o processo (exit 1) sem
+  // stack — matando inbound/outbound/coexistence juntos e quebrando o tempo-real de
+  // forma intermitente e invisível (o que se via era só `[ELIFECYCLE]` do pnpm).
+  //   • unhandledRejection: loga o stack COMPLETO (+ Sentry) e SOBREVIVE — uma
+  //     rejeição transitória (blip de AMQP/Redis/DB num tick) não deve derrubar a
+  //     frota inteira. A causa fica registrada para correção dirigida.
+  //   • uncaughtException: estado possivelmente inconsistente → loga, flush e sai 1
+  //     (Swarm reinicia), mas agora COM diagnóstico em vez de silêncio.
+  process.on('unhandledRejection', (reason: unknown) => {
+    logger.error('unhandledRejection (não-fatal — investigar)', {
+      error: reason instanceof Error ? (reason.stack ?? reason.message) : String(reason),
+    });
+    captureException(reason);
+  });
+  process.on('uncaughtException', (err: Error) => {
+    logger.error('uncaughtException — encerrando para reinício', {
+      error: err.stack ?? err.message,
+    });
+    captureException(err);
+    void flushSentry().finally(() => process.exit(1));
+  });
+
   const handle = await startWorkers({ logger });
 
   let shuttingDown = false;

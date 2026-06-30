@@ -11,7 +11,7 @@
  * adapter via a `AdapterFactory` injetada (composição) — igual ao resolver de
  * mídia. Tudo atrás de portas injetáveis (testável sem DB/HTTP).
  */
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, lte, or } from 'drizzle-orm';
 import type { Channel, IChannelAdapter } from '@hm/channels';
 import { decryptSecret, schema, withWorkspace } from '@hm/db';
 import type { ChannelProvider } from '@hm/shared';
@@ -83,6 +83,16 @@ function failedReason(input: PersistOutboundInput): string | null {
   return input.errorCode ?? 'outbound_send_failed';
 }
 
+/**
+ * Preview curto da última mensagem outbound (texto truncado ou rótulo do tipo).
+ * Espelha exatamente a convenção do inbound (`previewOf`): `[audio]`, `[image]`…
+ */
+function outboundPreview(content: string | null, type: string): string {
+  const trimmed = content?.trim();
+  if (trimmed) return trimmed.slice(0, 280);
+  return `[${type}]`;
+}
+
 // ─── Idempotency guard (F52-S04) ──────────────────────────────────────────────
 
 /** True quando há `DATABASE_URL` — fora disso (testes unit puros) o guard no-opa. */
@@ -131,12 +141,19 @@ export const defaultOutboundSendGuard: OutboundSendGuard = new DbOutboundSendGua
  */
 export class DbOutboundPersistence implements OutboundPersistencePort {
   async persist(input: PersistOutboundInput): Promise<void> {
-    const { messages } = schema;
+    const { messages, conversations } = schema;
     const reason = failedReason(input);
 
     await withWorkspace(input.workspaceId, async (tx) => {
       const [current] = await tx
-        .select({ id: messages.id, viewStatus: messages.viewStatus })
+        .select({
+          id: messages.id,
+          viewStatus: messages.viewStatus,
+          content: messages.content,
+          type: messages.type,
+          senderType: messages.senderType,
+          createdAt: messages.createdAt,
+        })
         .from(messages)
         .where(eq(messages.id, input.messageId))
         .limit(1);
@@ -160,6 +177,34 @@ export class DbOutboundPersistence implements OutboundPersistencePort {
           updatedAt: new Date(),
         })
         .where(eq(messages.id, current.id));
+
+      // Realtime da ChatList (paridade com o inbound `bumpConversation`): ao ENVIAR
+      // (status 'sent'), bumpa `conversation.last_message_*` para a lista reordenar
+      // e atualizar o preview ao vivo. Antes, NENHUM caminho outbound (operador/IA/
+      // sistema/flow) bumpava → a conversa não subia e o preview ficava no último
+      // inbound. Outbound NÃO mexe em `unread_count`. Monotônico: o `or(isNull, lte)`
+      // evita regredir a ordenação se uma mensagem mais nova já bumpou a conversa
+      // (redelivery / corrida de finalize). `senderType` ∈ domínio de `last_message_from`.
+      if (input.status === 'sent') {
+        await tx
+          .update(conversations)
+          .set({
+            lastMessageId: current.id,
+            lastMessagePreview: outboundPreview(current.content, current.type),
+            lastMessageAt: current.createdAt,
+            lastMessageFrom: current.senderType,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(conversations.id, input.conversationId),
+              or(
+                isNull(conversations.lastMessageAt),
+                lte(conversations.lastMessageAt, current.createdAt),
+              ),
+            ),
+          );
+      }
     });
   }
 }

@@ -56,12 +56,31 @@ export interface StatusEmitInput {
 }
 
 /**
+ * Payload de emissão de `message:new` para uma mensagem outbound recém-enviada.
+ * Mapeia o contrato `MessageNewPayload` (`{ workspaceId, conversationId, message }`).
+ */
+export interface MessageNewEmitInput {
+  readonly workspaceId: string;
+  readonly conversationId: string;
+  readonly messageId: string;
+  readonly type: string;
+  readonly content: string | null;
+}
+
+/**
  * Porta de emissão de socket. A implementação publica no `hm.q.socket.relay`
  * (vide `apps/api/src/socket/relay.ts`), que reemite via Socket.io para a room
- * `conversation:{id}`.
+ * `conversation:{id}` (e `ws:{workspaceId}` quando `workspace: true`).
  */
 export interface SocketEmitPort {
   emitStatusChanged(input: StatusEmitInput): Promise<void>;
+  /**
+   * Emite `message:new` (com `workspace: true`) quando uma mensagem outbound é
+   * enviada. Fecha o gap de tempo-real do outbound: sem isto, a ChatList não
+   * reordenava/atualizava o preview e a thread aberta não mostrava a mensagem do
+   * operador/IA/sistema/flow ao vivo (só o inbound emitia). Paridade com o inbound.
+   */
+  emitMessageNew(input: MessageNewEmitInput): Promise<void>;
 }
 
 /** Dependências completas do worker outbound. */
