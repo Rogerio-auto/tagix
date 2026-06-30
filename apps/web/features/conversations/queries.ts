@@ -24,6 +24,12 @@ export function useConversations(filters: ConversationFilters = {}) {
     queryKey: ['conversations', filters],
     queryFn: () =>
       api.get<{ conversations: ConversationSummary[] }>(`/api/conversations${toQuery(filters)}`),
+    // Realtime resiliente: o socket é o caminho primário, mas pode cair (reconexão,
+    // deploy, rede). Revalidar ao focar a janela + tratar sempre como stale faz a
+    // ChatList se curar sozinha — sem depender de hard refresh — se algum
+    // `message:new` for perdido durante uma queda do socket.
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }
 
@@ -55,6 +61,10 @@ export function useMessages(conversationId: string | undefined) {
     queryFn: () =>
       api.get<{ messages: MessageItem[] }>(`/api/conversations/${conversationId}/messages`),
     enabled: Boolean(conversationId),
+    // Mesma resiliência da lista: revalida a thread aberta ao focar a janela
+    // (caminho de cura independente do socket).
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }
 
