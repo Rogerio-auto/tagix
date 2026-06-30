@@ -87,45 +87,21 @@ export function SocketProvider({ children }: SocketProviderProps) {
     // global (colidiria — TS2717).
     window.__hmSocket = instance as unknown as NonNullable<typeof window.__hmSocket>;
 
-    // Diagnóstico de tempo real (temporário p/ validar a estabilidade do socket):
-    // loga ciclo de vida no console do browser com prefixo `[hm-socket]`.
-    const transportName = (): string => {
-      try {
-        return instance.io.engine?.transport?.name ?? '?';
-      } catch {
-        return '?';
-      }
-    };
-    const onConnect = (): void => {
-      setConnected(true);
-      console.info(`[hm-socket] connected id=${instance.id ?? '?'} transport=${transportName()}`);
-    };
-    const onDisconnect = (reason: string): void => {
-      setConnected(false);
-      console.warn(`[hm-socket] disconnected reason=${reason} transport=${transportName()}`);
-    };
+    const onConnect = (): void => setConnected(true);
+    const onDisconnect = (): void => setConnected(false);
     // Falha de conexão NUNCA lança: apenas logamos; o socket.io tenta reconectar.
     const onConnectError = (err: Error): void => {
-      console.warn('[hm-socket] connect_error — tentando reconectar:', err.message);
-    };
-    const onReconnect = (n: number): void => {
-      console.info(`[hm-socket] reconnected after ${n} attempt(s) transport=${transportName()}`);
-    };
-    const onUpgrade = (): void => {
-      console.info(`[hm-socket] transport upgraded → ${transportName()}`);
+      console.warn('[socket] connect_error — tentando reconectar:', err.message);
     };
 
     instance.on('connect', onConnect);
     instance.on('disconnect', onDisconnect);
     instance.on('connect_error', onConnectError);
-    instance.io.on('reconnect', onReconnect);
-    instance.io.engine?.on('upgrade', onUpgrade);
 
     return () => {
       instance.off('connect', onConnect);
       instance.off('disconnect', onDisconnect);
       instance.off('connect_error', onConnectError);
-      instance.io.off('reconnect', onReconnect);
       instance.disconnect();
       if (window.__hmSocket === (instance as unknown as typeof window.__hmSocket)) {
         delete window.__hmSocket;
