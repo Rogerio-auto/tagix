@@ -17,7 +17,18 @@
  * via `focus-visible:shadow-glow-md`. Verde-neon (`brand`) usado no máximo 1×.
  */
 
-import { Bot, Info, Receipt, RefreshCw, Target, User, X, Zap } from 'lucide-react';
+import {
+  ArrowRightLeft,
+  Bot,
+  Info,
+  Receipt,
+  RefreshCw,
+  StickyNote,
+  Target,
+  User,
+  X,
+  Zap,
+} from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
 import { can } from '@hm/shared';
 import { cn } from '@/shared/lib/cn';
@@ -32,6 +43,7 @@ import { RoutingMenu } from './RoutingMenu';
 import { AgentSelector } from './AgentSelector';
 import { ActiveExecutionsSection } from './ActiveExecutionsSection';
 import { SnoozeMenu } from './SnoozeMenu';
+import { CollapsibleSection } from './CollapsibleSection';
 import { useConversationDetail, useChangeStatus, useChangeAiMode } from '../queries';
 
 // ── Helpers de formatação ─────────────────────────────────────────────────────
@@ -72,35 +84,25 @@ const timeFmt = new Intl.DateTimeFormat('pt-BR', {
   minute: '2-digit',
 });
 
-// ── Sub-componente: seção genérica ────────────────────────────────────────────
+// ── Sub-componente: seção genérica (colapsável) ───────────────────────────────
 
-/**
- * Card elevado — superfície base de cada bloco do cockpit. Cantos arredondados +
- * borda sutil + sombra suave sobre a trilha recuada (`bg-surface-inset`) criam a
- * sensação de painel executivo (profundidade, organização). DS v2: só tokens.
- */
-function Card({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        'rounded-md border border-border-2 bg-surface-2 p-4 shadow-elev-1',
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
+/** Deriva uma chave estável de persistência (do collapse) a partir do título. */
+function sectionKeyFromTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
+/**
+ * Bloco do cockpit. Cada seção é colapsável (header clicável + chevron, estado
+ * persistido por seção) — o operador esconde o que não usa e o painel para de
+ * virar uma rolagem infinita. Wrapper fino sobre `CollapsibleSection`: os
+ * call-sites continuam passando só `title`+`icon` (a chave vem do título).
+ */
 function Section({
   title,
-  icon: Icon,
+  icon,
   children,
 }: {
   title: string;
@@ -108,13 +110,9 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <Card>
-      <header className="mb-3 flex items-center gap-2">
-        <Icon className="size-4 text-text-low" aria-hidden />
-        <h3 className="font-head text-sm font-semibold text-text">{title}</h3>
-      </header>
+    <CollapsibleSection title={title} icon={icon} sectionKey={sectionKeyFromTitle(title)}>
       {children}
-    </Card>
+    </CollapsibleSection>
   );
 }
 
@@ -465,7 +463,7 @@ export function ContactInfoPanel({
         </Section>
 
         {/* ── 3. Roteamento (Atribuição / Transferência) ─────────────────── */}
-        <Card>
+        <CollapsibleSection title="Roteamento" icon={ArrowRightLeft} sectionKey="roteamento">
           {isLoading ? (
             <div className="space-y-2">
               <Skeleton className="h-4 w-28" />
@@ -476,9 +474,10 @@ export function ContactInfoPanel({
               conversationId={conversationId}
               assignedTo={detail?.assignedTo ?? null}
               departmentId={detail?.departmentId ?? null}
+              hideHeader
             />
           )}
-        </Card>
+        </CollapsibleSection>
 
         {/* ── 4. Contexto (canal / dept / atendente / estágio) ───────────── */}
         <Section title="Contexto" icon={Info}>
@@ -512,9 +511,9 @@ export function ContactInfoPanel({
         </Section>
 
         {/* ── 5. Notas internas + @menções (F1-S22) ──────────────────────── */}
-        <Card>
-          <NotesPanel conversationId={conversationId} />
-        </Card>
+        <CollapsibleSection title="Notas internas" icon={StickyNote} sectionKey="notas">
+          <NotesPanel conversationId={conversationId} hideHeader />
+        </CollapsibleSection>
     </>
   );
 

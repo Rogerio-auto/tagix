@@ -43,6 +43,7 @@ import { useAuthStore } from '@/shared/stores/auth.store';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useCalendars, useEvents } from '@/features/calendar/queries';
 import type { EventRow } from '@/features/calendar/types';
+import { CollapsibleSection } from '@/features/conversations/components/CollapsibleSection';
 import { QuickScheduleModal } from './QuickScheduleModal';
 import { AppointmentDetail } from './AppointmentDetail';
 
@@ -310,17 +311,13 @@ export function formatWhen(startAtISO: string, now: Date): string {
   return `${formatRelativeDay(d, now)} • ${formatClock(d)}`;
 }
 
-// ── Wrapper visual (espelha o Card/Section do cockpit, sem importar privados) ──
+// ── Wrapper visual: seção colapsável do cockpit (header "Agenda" + chevron) ────
 
 function SectionShell({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
-    <div className="rounded-md border border-border-2 bg-surface-2 p-4 shadow-elev-1">
-      <header className="mb-3 flex items-center gap-2">
-        <CalendarClock className="size-4 text-text-low" aria-hidden />
-        <h3 className="font-head text-sm font-semibold text-text">Agenda</h3>
-      </header>
+    <CollapsibleSection title="Agenda" icon={CalendarClock} sectionKey="agenda">
       {children}
-    </div>
+    </CollapsibleSection>
   );
 }
 

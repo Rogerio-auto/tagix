@@ -23,9 +23,12 @@ import type { MentionableMember } from './types';
 export function NotesPanel({
   conversationId,
   members = [],
+  hideHeader = false,
 }: {
   conversationId: string;
   members?: readonly MentionableMember[];
+  /** Suprime o header interno quando a seção já tem header colapsável no cockpit. */
+  hideHeader?: boolean;
 }) {
   const { data, isLoading, isError, error, refetch } = useNotes(conversationId);
   const createNote = useCreateNote();
@@ -39,10 +42,12 @@ export function NotesPanel({
 
   return (
     <section aria-label="Notas internas" className="flex flex-col gap-3">
-      <header className="flex items-center gap-2">
-        <StickyNote className="size-4 text-text-low" aria-hidden />
-        <h3 className="font-head text-sm font-semibold text-text">Notas internas</h3>
-      </header>
+      {!hideHeader && (
+        <header className="flex items-center gap-2">
+          <StickyNote className="size-4 text-text-low" aria-hidden />
+          <h3 className="font-head text-sm font-semibold text-text">Notas internas</h3>
+        </header>
+      )}
 
       <NoteComposer
         members={members}

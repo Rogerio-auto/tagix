@@ -41,6 +41,7 @@ export function RoutingMenu({
   departmentId,
   members: propMembers,
   departments: propDepartments,
+  hideHeader = false,
 }: {
   conversationId: string;
   assignedTo: string | null;
@@ -48,6 +49,8 @@ export function RoutingMenu({
   /** Override (testes). Em produção o menu busca os alvos sozinho ao abrir. */
   members?: readonly AssignableMember[];
   departments?: readonly RoutingDepartment[];
+  /** Suprime o header interno quando a seção já tem header colapsável no cockpit. */
+  hideHeader?: boolean;
 }) {
   const auth = useAuthStore((s) => s.auth);
   const { toast } = useToast();
@@ -214,10 +217,12 @@ export function RoutingMenu({
 
   return (
     <section aria-label="Roteamento da conversa" className="flex flex-col gap-3">
-      <header className="flex items-center gap-2">
-        <ArrowRightLeft className="size-4 text-text-low" aria-hidden />
-        <h3 className="font-head text-sm font-semibold text-text">Roteamento</h3>
-      </header>
+      {!hideHeader && (
+        <header className="flex items-center gap-2">
+          <ArrowRightLeft className="size-4 text-text-low" aria-hidden />
+          <h3 className="font-head text-sm font-semibold text-text">Roteamento</h3>
+        </header>
+      )}
 
       {/* Estado atual */}
       <div className="rounded-md border border-border-2 bg-surface-2 p-3 font-body text-sm">
