@@ -41,8 +41,25 @@ const KPI_KEYS_ORDERED: readonly string[] = [
 /** Máximo de KPIs no strip do topo — "poucos números que importam" (founder). */
 const KPI_CAP = 4;
 
+/**
+ * Cards de NEGÓCIO promovidos a uma faixa própria logo abaixo dos KPIs (decisão do
+ * founder: o placar IA×humano, o ROI e o funil são o diferencial e ficam em destaque,
+ * não no rodapé). Roteados por `metric_key` (não por `cardType`) porque cada um tem
+ * componente dedicado (S07) e shape próprio — `renderCard` resolve via registry. Ordem
+ * = ordem de exibição. Só entram se o servidor os autorizou (key presente no payload).
+ */
+const NEGOCIO_KEYS_ORDERED: readonly string[] = ['placar_ia_humano', 'roi_ia', 'funil_pipeline'];
+const NEGOCIO_KEYS: ReadonlySet<string> = new Set(NEGOCIO_KEYS_ORDERED);
+
 /** Identidade de cada seção editorial (ordem = ordem de leitura vertical). */
-export type SectionId = 'kpis' | 'performance' | 'trends' | 'rankings' | 'feed' | 'secondary';
+export type SectionId =
+  | 'kpis'
+  | 'negocio'
+  | 'performance'
+  | 'trends'
+  | 'rankings'
+  | 'feed'
+  | 'secondary';
 
 /**
  * Como a seção se desenha:
@@ -91,6 +108,13 @@ export function buildSections(cards: readonly DashboardCard[]): DashboardSection
     }
   }
 
+  // Faixa de Negócio, na ordem curada (não na do payload) — só as keys presentes.
+  const negocio: DashboardCard[] = [];
+  for (const key of NEGOCIO_KEYS_ORDERED) {
+    const card = byKey.get(key);
+    if (card) negocio.push(card);
+  }
+
   const performance: DashboardCard[] = [];
   const trends: DashboardCard[] = [];
   const rankings: DashboardCard[] = [];
@@ -98,7 +122,10 @@ export function buildSections(cards: readonly DashboardCard[]): DashboardSection
   const secondary: DashboardCard[] = [];
 
   for (const card of cards) {
-    if (card.cardType === 'timeseries') {
+    if (NEGOCIO_KEYS.has(card.key)) {
+      // Já agrupado na faixa de Negócio acima — não cai em outra seção.
+      continue;
+    } else if (card.cardType === 'timeseries') {
       performance.push(card);
     } else if (TREND_TYPES.has(card.cardType)) {
       trends.push(card);
@@ -117,6 +144,7 @@ export function buildSections(cards: readonly DashboardCard[]): DashboardSection
 
   const all: DashboardSection[] = [
     { id: 'kpis', title: null, helpKey: null, layout: 'kpis', cards: kpis },
+    { id: 'negocio', title: 'Negócio', helpKey: null, layout: 'grid', cards: negocio },
     {
       id: 'performance',
       title: 'Desempenho',

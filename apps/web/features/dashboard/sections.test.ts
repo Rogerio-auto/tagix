@@ -127,9 +127,30 @@ describe('buildSections', () => {
   });
 
   it('um cardType futuro/desconhecido não some da tela (cai em secundário)', () => {
-    const cards = [card('placar_ia_humano', 'placar' as CardType)];
+    const cards = [card('metrica_nova_qualquer', 'placar' as CardType)];
     const sections = buildSections(cards);
-    expect(keys(section(sections, 'secondary')?.cards ?? [])).toEqual(['placar_ia_humano']);
+    expect(keys(section(sections, 'secondary')?.cards ?? [])).toEqual(['metrica_nova_qualquer']);
+  });
+
+  it('agrupa os cards de Negócio numa faixa própria logo após os KPIs, na ordem curada', () => {
+    const cards = [
+      card('valor_total_pipeline', 'stat'),
+      card('funil_pipeline', 'table'),
+      card('roi_ia', 'stat'),
+      card('placar_ia_humano', 'scoreboard' as CardType),
+    ];
+    const sections = buildSections(cards);
+    // Ordem curada (não a do payload) e roteamento por key, não por cardType.
+    expect(keys(section(sections, 'negocio')?.cards ?? [])).toEqual([
+      'placar_ia_humano',
+      'roi_ia',
+      'funil_pipeline',
+    ]);
+    // funil (table) NÃO vaza para rankings; roi (stat) NÃO vaza para secundário.
+    expect(section(sections, 'rankings')).toBeUndefined();
+    expect(section(sections, 'secondary')).toBeUndefined();
+    // Negócio fica logo após os KPIs na leitura vertical.
+    expect(sections.map((s) => s.id)).toEqual(['kpis', 'negocio']);
   });
 
   it('é pura — não muta a lista de entrada', () => {

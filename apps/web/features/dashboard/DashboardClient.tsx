@@ -22,7 +22,15 @@
  */
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LayoutDashboard, LineChart, RefreshCw, Trophy, Users, type LucideIcon } from 'lucide-react';
+import {
+  LayoutDashboard,
+  LineChart,
+  RefreshCw,
+  TrendingUp,
+  Trophy,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import { Button } from '@hm/ui';
 import { PageHeader } from '@/shared/components/layout/PageHeader';
 import { HelpHint } from '@/shared/components/help';
@@ -61,6 +69,7 @@ const DRAWER_METRICS = new Set([
 
 /** Ícone discreto por seção (apoia o título — UX §2.4 path de entrada óbvio). */
 const SECTION_ICON: Partial<Record<SectionId, LucideIcon>> = {
+  negocio: TrendingUp,
   performance: LineChart,
   trends: LineChart,
   rankings: Trophy,
