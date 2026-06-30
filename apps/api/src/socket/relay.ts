@@ -10,9 +10,30 @@ import { z } from 'zod';
 import { connectMq, consume } from '@hm/shared/mq';
 import { SERVER_TO_CLIENT_EVENTS, type ServerToClientEvent } from '@hm/shared';
 import { createLogger } from '@hm/logger';
+import { bumpVersion } from '../cache';
 import type { IoServer } from './index';
 
 const RELAY_QUEUE = 'hm.q.socket.relay';
+
+/**
+ * Eventos que mudam a PROJEÇÃO da ChatList (preview, ordem, contador de não-lidas,
+ * badges de status/atribuição/IA). Para estes, além de emitir no socket, bumpamos
+ * a versão do cache versionado da lista (`hm:ws:v:{workspaceId}`, TTL 120s) — senão
+ * o refetch do cliente (disparado pelo próprio evento) recebe a lista CACHEADA e
+ * VELHA (preview/ordem/unread defasados por até 120s). Antes, o único bump era a
+ * rota POST /:id/read → a lista só renovava ao marcar-lida; mensagem nova não
+ * atualizava preview/contador em tempo real. `message:status_changed`/media/typing
+ * NÃO entram aqui (não mudam a lista e são alta-frequência → manteria o cache vivo).
+ */
+const LIST_AFFECTING_EVENTS: ReadonlySet<ServerToClientEvent> = new Set([
+  'message:new',
+  'conversation:updated',
+  'conversation:state_changed',
+  'conversation:assigned',
+  'conversation:routing_changed',
+  'conversation:ai_mode_changed',
+  'conversation:agent_changed',
+]);
 
 // Diagnóstico: loga cada emit (evento + salas) e quantos sockets há nas salas.
 const relayLog = createLogger('info', { svc: 'socket-relay' });
@@ -64,6 +85,14 @@ export async function startSocketRelay(io: IoServer): Promise<void> {
     const payload = relayPayloadSchema.parse(envelope.payload);
     const event: ServerToClientEvent = payload.event;
     const rooms = resolveRooms(payload, envelope.workspaceId);
+
+    // Invalida o cache versionado da ChatList ANTES de notificar o cliente, para
+    // que o refetch disparado pelo evento já leia dados frescos (preview/ordem/
+    // não-lidas), não o cache de 120s. Só para eventos que mudam a lista.
+    if (LIST_AFFECTING_EVENTS.has(event)) {
+      await bumpVersion(`hm:ws:v:${envelope.workspaceId}`);
+    }
+
     // Quantos sockets há em cada sala destino (diagnóstico de entrega).
     const adapterRooms = io.of('/').adapter.rooms;
     const counts = rooms.map((r) => `${r}=${adapterRooms.get(r)?.size ?? 0}`);
