@@ -59,11 +59,24 @@ export function useConversationSocket(): void {
       void queryClient.invalidateQueries({ queryKey: ['conversations'] });
     };
 
-    const onConversationUpdated = (_p: ConversationUpdatedPayload): void => invalidate();
-    const onMessageNew = (_p: MessageNewPayload): void => invalidate();
+    // Diagnóstico (temporário): confirma no console do browser que o evento chegou
+    // ao cliente E disparou a revalidação da ChatList.
+    const onConversationUpdated = (p: ConversationUpdatedPayload): void => {
+      console.info('[hm-socket] conversation:updated → invalidando ChatList', p);
+      invalidate();
+    };
+    const onMessageNew = (p: MessageNewPayload): void => {
+      console.info('[hm-socket] message:new → invalidando ChatList', {
+        conversationId: p.conversationId,
+      });
+      invalidate();
+    };
     // Resync ao (re)conectar: eventos perdidos enquanto offline (nova conversa,
     // mudança de ordenação/contadores) somem; rebuscar a lista fecha o gap.
-    const onConnect = (): void => resyncConversationData(queryClient, undefined);
+    const onConnect = (): void => {
+      console.info('[hm-socket] connect → resync ChatList');
+      resyncConversationData(queryClient, undefined);
+    };
 
     socket.on('conversation:updated', onConversationUpdated);
     socket.on('message:new', onMessageNew);

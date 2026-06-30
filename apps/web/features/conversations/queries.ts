@@ -30,6 +30,12 @@ export function useConversations(filters: ConversationFilters = {}) {
     // `message:new` for perdido durante uma queda do socket.
     refetchOnWindowFocus: true,
     staleTime: 0,
+    // Backstop: mesmo com a janela em foco e o socket instável, revalida a lista a
+    // cada 15s. Garante que a ChatList NUNCA fique parada (pior caso 15s) enquanto
+    // estabilizamos o socket. `refetchIntervalInBackground:false` → não gasta rede
+    // com a aba em segundo plano (o focus-refetch cobre a volta).
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
   });
 }
 
