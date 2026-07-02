@@ -40,6 +40,12 @@ export interface UploadResult {
   readonly url: string;
   /** MIME final (ex.: `audio/ogg` após transcode de voz) — exigido pelo /messages. */
   readonly mime: string;
+  /**
+   * Key estável do objeto no storage (R2). Vira `metadata.mediaKey` da mensagem para
+   * `refresh-media-url` reidratar a signed URL quando expirar — sem isto a mídia some
+   * ao reabrir o chat. `undefined` no mock de dev (sem backend real). Ver [[tagix-coexistence-media-fix]].
+   */
+  readonly key?: string;
 }
 
 /**
@@ -88,8 +94,13 @@ export function useMediaUpload() {
           throw new ApiError(res.status, 'Falha ao enviar a mídia.');
         }
         // `mime` reflete o formato após a normalização (ex.: audio/ogg pós-transcode).
-        const { fileUrl, mime } = (await res.json()) as { fileUrl: string; mime?: string };
-        return { url: fileUrl, mime: mime ?? contentType };
+        // `key` é a storage key estável → reidratação da signed URL ao reabrir o chat.
+        const { fileUrl, mime, key } = (await res.json()) as {
+          fileUrl: string;
+          mime?: string;
+          key?: string;
+        };
+        return { url: fileUrl, mime: mime ?? contentType, key };
       } finally {
         setUploading(false);
       }

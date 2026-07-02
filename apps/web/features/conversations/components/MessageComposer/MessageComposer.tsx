@@ -143,6 +143,7 @@ export function MessageComposer({
     try {
       let mediaUrl: string | null = null;
       let mediaMime: string | null = null;
+      let mediaKey: string | null = null;
       let type = 'text';
       if (current) {
         const uploaded = await upload(current);
@@ -151,8 +152,10 @@ export function MessageComposer({
         // O backend exige mediaMime junto da mediaUrl para mídia (o provider precisa
         // do content-type). Usa o MIME pós-normalização que o upload devolve.
         mediaMime = uploaded.mime;
+        // Key estável → o backend grava em metadata.mediaKey p/ reidratar a signed URL.
+        mediaKey = uploaded.key ?? null;
       }
-      await send.mutateAsync({ conversationId, content, type, mediaUrl, mediaMime });
+      await send.mutateAsync({ conversationId, content, type, mediaUrl, mediaMime, mediaKey });
       resetComposer();
     } catch (err) {
       const ref = err instanceof ApiError ? err.ref : undefined;
@@ -211,6 +214,7 @@ export function MessageComposer({
         type: 'voice',
         mediaUrl: uploaded.url,
         mediaMime: uploaded.mime,
+        mediaKey: uploaded.key ?? null,
       });
       requestAnimationFrame(() => textareaRef.current?.focus());
     } catch (err) {

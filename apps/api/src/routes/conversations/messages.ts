@@ -89,6 +89,9 @@ const sendSchema = z
     type: z.string().trim().min(1).default('text'),
     mediaUrl: z.string().url().nullable().optional(),
     mediaMime: z.string().trim().min(1).nullable().optional(),
+    // Key estável do objeto no storage (R2). Gravada em `metadata.mediaKey` para
+    // reidratar a signed URL via `refresh-media-url` quando o `mediaUrl` (7d) expirar.
+    mediaKey: z.string().trim().min(1).nullable().optional(),
     messageTag: z.enum(IG_MESSAGE_TAGS).optional(),
     payload: z.unknown().optional(),
   })
@@ -489,6 +492,13 @@ export function createMessagesRouter(): Router {
             ...(rich?.kind === 'location' ? { metadata: { location: rich.location } } : {}),
             ...(rich?.kind === 'contacts'
               ? { metadata: { contacts: rich.contacts.contacts } }
+              : {}),
+            // Mídia já vive no storage (R2) sob `mediaKey`. Grava a key estável em
+            // `metadata.mediaKey` (mesma chave que `refresh-media-url` reidrata) e marca
+            // `ready` — sem isto a signed URL de 7d expira e a UI cai em 404 no retry.
+            // Ricos (location/contacts) e mídia são mutuamente exclusivos → sem colisão.
+            ...(mediaKind && body.mediaKey
+              ? { metadata: { mediaKey: body.mediaKey }, mediaStatus: 'ready' as const }
               : {}),
           })
           .returning();

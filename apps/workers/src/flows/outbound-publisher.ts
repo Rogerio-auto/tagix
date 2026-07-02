@@ -131,6 +131,13 @@ export interface PersistOutboundMessageInput {
   readonly mediaUrl: string | null;
   readonly mediaMime: string | null;
   readonly mediaCaption: string | null;
+  /**
+   * Key estável do objeto no storage (R2). Presente para mídia outbound de flow.
+   * Gravada em `messages.metadata.mediaKey` para que `refresh-media-url` reidrate a
+   * signed URL quando o `mediaUrl` (efêmero) expirar. Sem isto a mídia some ao reabrir
+   * o chat: a UI cai em "Não foi possível carregar" + retry que refaz o mesmo 404.
+   */
+  readonly mediaKey?: string | null;
 }
 
 /** Canal+remoteId resolvidos da conversa + id da message persistida. */
@@ -218,6 +225,13 @@ export function createDbOutboundPersistence(): OutboundPersistencePort {
             mediaUrl: input.mediaUrl,
             mediaMime: input.mediaMime,
             mediaCaption: input.mediaCaption,
+            // A mídia de flow já vive no storage (R2) sob `mediaKey`. Grava a key
+            // estável em `metadata.mediaKey` (mesma chave que o media-worker inbound e
+            // que `refresh-media-url` esperam) e marca `ready` — sem isto a signed URL
+            // efêmera do `mediaUrl` expira e a UI não consegue reidratar (404 no retry).
+            ...(input.mediaKey
+              ? { metadata: { mediaKey: input.mediaKey }, mediaStatus: 'ready' as const }
+              : {}),
           })
           .returning({ id: schema.messages.id });
         if (!row) return null;
@@ -519,6 +533,8 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
         mediaUrl: publicMediaUrl,
         mediaMime: mime,
         mediaCaption: caption ?? null,
+        // Key estável do R2 → reidratação da signed URL ao reabrir o chat.
+        mediaKey: message.mediaStorageKey,
       });
       if (!target) {
         logger.warn('flow-outbound: conversa inexistente/invisivel — no-op', {
