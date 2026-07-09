@@ -20,6 +20,7 @@ O node é fábrica: recebe o `provider` e o `tool_registry` por injeção.
 
 from __future__ import annotations
 
+from time import monotonic
 from typing import Any
 
 from langgraph.types import StreamWriter
@@ -102,10 +103,18 @@ def make_call_model_node(*, provider: Any, tool_registry: ToolRegistry):
         messages = [m.to_openai() for m in state.get("messages", [])]
         tools = _tool_specs(state, tool_registry)
         model_params = dict(agent.get("model_params") or {})
-        model_params.setdefault("max_tokens", policy.max_tokens_per_call)
+        # Clamp — NÃO setdefault: `max_tokens_per_call` da policy é teto DURO do
+        # workspace; um agente com `maxTokens` alto em model_params não pode burlá-lo.
+        requested_max = model_params.get("max_tokens")
+        model_params["max_tokens"] = (
+            min(int(requested_max), policy.max_tokens_per_call)
+            if isinstance(requested_max, (int, float)) and not isinstance(requested_max, bool)
+            else policy.max_tokens_per_call
+        )
 
         use_stream = policy.allow_streaming
 
+        started_at = monotonic()
         try:
             if use_stream:
                 result = await _run_streaming(
@@ -141,12 +150,18 @@ def make_call_model_node(*, provider: Any, tool_registry: ToolRegistry):
                 "errors": [*state.get("errors", []), f"provider_error:{type(exc).__name__}"],
             }
 
+        latency_ms = round((monotonic() - started_at) * 1000)
+
         assistant = _assistant_message(result.content, list(result.tool_calls))
         usage = _accumulate(state.get("usage") or UsageAccumulator(), result.usage)
 
         patch: dict[str, Any] = {
             "messages": [assistant],
             "usage": usage,
+            # Latência acumulada das chamadas ao modelo (wall-time, clock monotônico),
+            # carregada no canal `agent` (mesmo padrão de handoff_peers — sem mudar o
+            # schema do state). `finalize` grava em `llm_usage_logs.latency_ms`.
+            "agent": {**agent, "latency_ms": int(agent.get("latency_ms") or 0) + latency_ms},
         }
         if result.generation_id:
             patch["generation_id"] = result.generation_id

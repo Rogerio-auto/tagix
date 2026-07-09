@@ -144,6 +144,11 @@ async def _persist(pool: asyncpg.Pool, state: AgentState, *, reply: str) -> None
             # Só registra uso de LLM se houve de fato uma chamada (tokens > 0 ou
             # generation_id presente) — evita linha vazia em bloqueios pré-chamada.
             if usage.total_tokens > 0 or state.get("generation_id"):
+                agent_ctx = state.get("agent") or {}
+                # Wall-time acumulado das chamadas ao modelo, medido em `call_model`
+                # (clock monotônico) e propagado no canal `agent` (F56-S01 / AG-07).
+                raw_latency = agent_ctx.get("latency_ms")
+                latency_ms = int(raw_latency) if raw_latency is not None else None
                 metadata: dict[str, Any] = {"reply_chars": len(reply)}
                 if sandbox:
                     metadata["playground"] = True
@@ -161,12 +166,14 @@ async def _persist(pool: asyncpg.Pool, state: AgentState, *, reply: str) -> None
                         (workspace_id, agent_id, conversation_id, execution_id,
                          request_type, router, openrouter_generation_id, model,
                          prompt_tokens, completion_tokens, reasoning_tokens,
-                         total_tokens, cost_usd, finish_reason, is_test, metadata)
+                         total_tokens, cost_usd, latency_ms, finish_reason, is_test,
+                         metadata)
                     VALUES
                         ($1::uuid, $2::uuid, $3::uuid, $4::uuid,
                          'chat', 'openrouter', $5, $6,
                          $7, $8, $9,
-                         $10, $11, $12, $13, $14::jsonb)
+                         $10, $11, $12, $13, $14,
+                         $15::jsonb)
                     """,
                     workspace_id,
                     state["agent_id"],
@@ -174,12 +181,13 @@ async def _persist(pool: asyncpg.Pool, state: AgentState, *, reply: str) -> None
                     None if sandbox else state.get("conversation_id"),
                     execution_id,
                     state.get("generation_id"),
-                    (state.get("agent") or {}).get("model", ""),
+                    agent_ctx.get("model", ""),
                     usage.prompt_tokens,
                     usage.completion_tokens,
                     usage.reasoning_tokens,
                     usage.total_tokens,
                     usage.total_cost_usd,
+                    latency_ms,
                     "stop" if status == "completed" else status,
                     sandbox,
                     json.dumps(metadata),

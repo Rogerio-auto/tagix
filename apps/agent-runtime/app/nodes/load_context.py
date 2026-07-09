@@ -65,10 +65,12 @@ def _author_role(sender_type: str | None, *, is_current_agent: bool = True) -> s
 
 
 async def _load_agent(conn: asyncpg.Connection, agent_id: str) -> dict[str, Any]:
+    # `agents` NÃO tem coluna `model_supports_vision` — a capacidade de visão
+    # deriva de `vision_model text` estar configurado (F56-S01 / AG-01).
     row = await conn.fetchrow(
         """
         SELECT id::text, name, model, model_params, system_prompt,
-               COALESCE(model_supports_vision, false) AS model_supports_vision,
+               COALESCE((vision_model IS NOT NULL), false) AS model_supports_vision,
                COALESCE(allow_handoff, false) AS allow_handoff
         FROM agents
         WHERE id = $1::uuid
