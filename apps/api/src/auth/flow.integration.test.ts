@@ -13,8 +13,9 @@
  */
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
+import Redis from 'ioredis';
 import { closeDb, getDb, schema } from '@hm/db';
 
 // Garante mock provider + sem captcha (dev bypass) antes de carregar a app.
@@ -28,6 +29,24 @@ const { closeLoginCaptcha } = await import('./login-captcha');
 const { closeRateLimit } = await import('../middlewares/rate-limit');
 
 const app = createApp();
+
+// Higiene do fixture: este arquivo exercita os limiters de borda REAIS (Redis dev),
+// keyed pelo IP do host — as janelas (reset 5/h, verify 20/h) acumulam entre runs e
+// flakavam a suíte (429 espúrio). Zera SÓ os buckets de auth antes de começar
+// (prefixos fixos; não toca os buckets randômicos do rate-limit.test).
+beforeAll(async () => {
+  const { loadConfig } = await import('../config');
+  const redis = new Redis(loadConfig().redisUrl, { lazyConnect: true, maxRetriesPerRequest: 1 });
+  try {
+    const buckets = ['login', 'login_ip', 'signup', 'reset', 'reset_confirm', 'verify'];
+    for (const bucket of buckets) {
+      const keys = await redis.keys(`rl:${bucket}:*`);
+      if (keys.length > 0) await redis.del(...keys);
+    }
+  } finally {
+    await redis.quit();
+  }
+});
 
 afterAll(async () => {
   await closeLoginCaptcha();
