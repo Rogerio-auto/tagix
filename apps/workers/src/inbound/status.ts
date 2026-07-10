@@ -31,8 +31,8 @@
  * `pipeline.ts`/`worker.ts` (fora dos `files_allowed`).
  */
 import { Buffer } from 'node:buffer';
-import { and, eq, isNull, sql } from 'drizzle-orm';
-import { getDb, schema, withWorkspace } from '@hm/db';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { getDb, schema, withWorkspace, type DbTx } from '@hm/db';
 import { makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import type { ChannelProvider, ViewStatus } from '@hm/shared';
 import type { InboundEvent } from '@hm/channels';
@@ -241,6 +241,125 @@ export function nextViewStatus(currentRaw: string, incoming: ViewStatus): ViewSt
   return STATUS_RANK[incoming] > cur ? incoming : null;
 }
 
+// ─── Propagação p/ campaign_deliveries (F56-S02, CAMP-02) ─────────────────────
+
+/**
+ * Status possíveis de `campaign_deliveries.status` (CHECK da tabela). `blocked`
+ * é terminal e nunca é sobrescrito por receipt de canal.
+ */
+export type CampaignDeliveryStatus = 'queued' | 'sent' | 'delivered' | 'read' | 'failed' | 'blocked';
+
+/** Colunas de carimbo temporal da delivery afetadas pela progressão. */
+export type DeliveryStampColumn = 'sentAt' | 'deliveredAt' | 'readAt' | 'failedAt';
+
+/**
+ * Plano de avanço da delivery para um receipt: de quais status ela pode sair
+ * (guarda monotônica no WHERE — reprocessar/reordenar é no-op), qual coluna
+ * recebe o carimbo do evento e quais colunas anteriores são backfilladas via
+ * `coalesce` (acks pulados: `read` sem `delivered` implica entrega).
+ */
+export interface CampaignDeliveryAdvance {
+  readonly allowedFrom: readonly CampaignDeliveryStatus[];
+  readonly stamp: DeliveryStampColumn;
+  readonly backfill: readonly ('sentAt' | 'deliveredAt')[];
+  readonly errorMessage?: string;
+}
+
+/**
+ * Deriva o plano de avanço da delivery a partir do receipt (pura, testável).
+ * Espelha `STATUS_RANK`: `queued < sent < delivered < read`; `failed` vence
+ * qualquer não-terminal; `blocked`/`failed` atuais nunca são sobrescritos.
+ */
+export function campaignDeliveryAdvance(status: DeliveryStatus): CampaignDeliveryAdvance {
+  switch (status) {
+    case 'sent':
+      return { allowedFrom: ['queued'], stamp: 'sentAt', backfill: [] };
+    case 'delivered':
+      return { allowedFrom: ['queued', 'sent'], stamp: 'deliveredAt', backfill: ['sentAt'] };
+    case 'read':
+      return {
+        allowedFrom: ['queued', 'sent', 'delivered'],
+        stamp: 'readAt',
+        backfill: ['sentAt', 'deliveredAt'],
+      };
+    case 'failed':
+      return {
+        allowedFrom: ['queued', 'sent', 'delivered', 'read'],
+        stamp: 'failedAt',
+        backfill: [],
+        errorMessage: 'channel_status_failed',
+      };
+    default:
+      return assertNever(status);
+  }
+}
+
+/** Input da propagação de receipt para a delivery de campanha. */
+export interface PropagateDeliveryInput {
+  /** `messages.id` da mensagem cujo status avançou. */
+  readonly messageId: string;
+  /** `messages.metadata` — carrega `{ campaignId, deliveryId }` quando é campanha. */
+  readonly metadata: Record<string, unknown>;
+  /** Status já avançado (nunca `pending` — vem do UPDATE monotônico da mensagem). */
+  readonly status: ViewStatus;
+  readonly at: Date;
+  /** wamid/mid do receipt — backfillado em `campaign_deliveries.external_id`. */
+  readonly externalId?: string;
+}
+
+/**
+ * CAMP-02: propaga o receipt da mensagem para a `campaign_delivery` ligada.
+ *
+ * Fast-path: mensagens de campanha carregam `metadata.deliveryId` (gravado por
+ * `campaigns/db-ports.ts` no enqueue) → UPDATE por PK; mensagens comuns (sem o
+ * marcador) retornam sem tocar em `campaign_deliveries` (zero custo no caminho
+ * quente do chat). O UPDATE é guardado por `status IN allowedFrom` (monotônico,
+ * nunca regride nem ressuscita `failed`/`blocked`) e por `message_id` (defesa em
+ * profundidade contra metadata inconsistente). Deve rodar no MESMO `tx` do
+ * UPDATE de `messages` (atômico). Exportada para reuso pelo caminho outbound
+ * (reconciliação de órfão) em slot futuro.
+ */
+export async function propagateStatusToCampaignDelivery(
+  tx: DbTx,
+  input: PropagateDeliveryInput,
+): Promise<void> {
+  if (input.status === 'pending') return;
+  const deliveryId = input.metadata['deliveryId'];
+  if (typeof deliveryId !== 'string' || deliveryId.length === 0) return;
+
+  const { campaignDeliveries } = schema;
+  const plan = campaignDeliveryAdvance(input.status);
+
+  await tx
+    .update(campaignDeliveries)
+    .set({
+      status: input.status,
+      ...(plan.stamp === 'sentAt' ? { sentAt: input.at } : {}),
+      ...(plan.stamp === 'deliveredAt' ? { deliveredAt: input.at } : {}),
+      ...(plan.stamp === 'readAt' ? { readAt: input.at } : {}),
+      ...(plan.stamp === 'failedAt' ? { failedAt: input.at } : {}),
+      // Backfill de acks pulados (ex.: `read` chegou sem `delivered`): nunca
+      // sobrescreve um carimbo já gravado (coalesce preserva o primeiro).
+      ...(plan.backfill.includes('sentAt')
+        ? { sentAt: sql`coalesce(${campaignDeliveries.sentAt}, ${input.at})` }
+        : {}),
+      ...(plan.backfill.includes('deliveredAt')
+        ? { deliveredAt: sql`coalesce(${campaignDeliveries.deliveredAt}, ${input.at})` }
+        : {}),
+      ...(plan.errorMessage !== undefined ? { errorMessage: plan.errorMessage } : {}),
+      ...(input.externalId !== undefined && input.externalId.length > 0
+        ? { externalId: sql`coalesce(${campaignDeliveries.externalId}, ${input.externalId})` }
+        : {}),
+    })
+    .where(
+      and(
+        eq(campaignDeliveries.id, deliveryId),
+        eq(campaignDeliveries.messageId, input.messageId),
+        inArray(campaignDeliveries.status, [...plan.allowedFrom]),
+      ),
+    );
+}
+
 /** Persistência default via `@hm/db` + RLS. */
 export class DbStatusPersistence implements StatusPersistencePort {
   async applyStatus(input: {
@@ -257,6 +376,7 @@ export class DbStatusPersistence implements StatusPersistencePort {
           id: messages.id,
           conversationId: messages.conversationId,
           viewStatus: messages.viewStatus,
+          metadata: messages.metadata,
         })
         .from(messages)
         .where(and(eq(messages.externalId, input.externalId), isNull(messages.deletedAt)))
@@ -282,6 +402,18 @@ export class DbStatusPersistence implements StatusPersistencePort {
           updatedAt: input.at,
         })
         .where(eq(messages.id, current.id));
+
+      // CAMP-02 (F56-S02): mensagem de campanha → espelha o receipt na
+      // campaign_delivery ligada (status + sent_at/delivered_at/read_at), no
+      // MESMO tx. Sem isso as deliveries nunca saem de `queued` e o painel de
+      // métricas mostra zero para sempre.
+      await propagateStatusToCampaignDelivery(tx, {
+        messageId: current.id,
+        metadata: current.metadata,
+        status: advanced,
+        at: input.at,
+        externalId: input.externalId,
+      });
 
       return {
         outcome: 'applied',
