@@ -24,10 +24,14 @@ vi.stubEnv('TURNSTILE_SECRET_KEY', '');
 const { createApp } = await import('../app');
 const { mockVerifyToken } = await import('./mock-provider');
 const { closeHealth } = await import('../health');
+const { closeLoginCaptcha } = await import('./login-captcha');
+const { closeRateLimit } = await import('../middlewares/rate-limit');
 
 const app = createApp();
 
 afterAll(async () => {
+  await closeLoginCaptcha();
+  await closeRateLimit();
   await closeHealth();
   await closeDb();
 });

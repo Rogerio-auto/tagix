@@ -53,16 +53,17 @@ export interface SessionContext {
  * forma INTERMITENTE ("handshake unauthorized" com cookie válido), matando o tempo
  * real (cliente não entra nos rooms → relay emite pra sala vazia). Esta camada:
  *   - serve do cache por FRESH_MS sem tocar a rede (absorve a rajada de reconexões);
- *   - em falha TRANSITÓRIA do provider, serve o último valor bom por até STALE_MS
- *     (stale-on-error) em vez de rejeitar uma sessão recém-válida.
+ *   - em falha de INFRA do provider (LANÇOU — rede/5xx), serve o último valor bom
+ *     por até STALE_MS (stale-on-error) em vez de rejeitar uma sessão recém-válida.
  * Identidade é função pura do token (é um JWT), então cachear por token é consistente.
  *
- * Tradeoff de segurança (bounded e aceito): um token que EXPIROU (getUser passa a
- * falhar) segue honrado por no máx. STALE_MS além da última verificação boa. Não
- * valida tokens nunca-vistos (sem entrada no cache → rejeita). Logout é client-side
- * (cookie limpo) e tokens Supabase já são stateless até o `exp` (~1h), então a folga
- * é menor que a janela natural do token. Single-replica → cache em memória; se
- * escalar, mover para Redis.
+ * SEC-08: stale é EXCLUSIVO para throw (indisponibilidade). Se o provider retorna
+ * `null`, o token é genuinamente inválido (expirado/revogado) — a entrada do cache
+ * é descartada e a sessão rejeitada na hora; token revogado NUNCA é honrado por
+ * stale. Não valida tokens nunca-vistos (sem entrada no cache → rejeita). Janela
+ * residual: um token revogado ainda passa por até FRESH_MS após a última
+ * verificação boa (tradeoff aceito do cache fresh). Single-replica → cache em
+ * memória; se escalar, mover para Redis.
  */
 interface CachedIdentity {
   readonly identity: AuthIdentity;
@@ -101,11 +102,14 @@ export async function verifyTokenResilient(token: string): Promise<AuthIdentity 
   const cached = identityCache.get(key);
   if (cached && cached.freshUntil > now) return cached.identity;
 
-  let identity: AuthIdentity | null = null;
+  let identity: AuthIdentity | null;
   try {
     identity = await getAuthProvider().verifyToken(token);
   } catch {
-    identity = null;
+    // Provider LANÇOU = indisponibilidade de infra (rede/5xx): serve o último bom
+    // recente (stale-on-error, bounded por STALE_MS) em vez de rejeitar.
+    if (cached && cached.staleUntil > now) return cached.identity;
+    return null;
   }
 
   if (identity) {
@@ -114,8 +118,8 @@ export async function verifyTokenResilient(token: string): Promise<AuthIdentity 
     return identity;
   }
 
-  // Provider falhou (rede/transitório): serve o último bom recente em vez de rejeitar.
-  if (cached && cached.staleUntil > now) return cached.identity;
+  // `null` = token genuinamente inválido (expirado/revogado/malformado). Decisão
+  // definitiva do provider — NUNCA cai no stale (SEC-08). Purga o cache.
   identityCache.delete(key);
   return null;
 }

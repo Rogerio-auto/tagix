@@ -54,15 +54,53 @@ const fakeProvider: IAuthProvider = {
 
 vi.mock('./provider', () => ({ getAuthProvider: () => fakeProvider }));
 
-// Turnstile sempre válido nos testes de rota (verificação coberta no rate-limit.test).
+// Gate de captcha progressivo (SEC-05): estado controlável por teste, sem Redis.
+const { captchaState, recordFailureMock } = vi.hoisted(() => ({
+  captchaState: { required: false },
+  recordFailureMock: vi.fn(async () => {}),
+}));
+vi.mock('./login-captcha', () => ({
+  LOGIN_CAPTCHA_THRESHOLD: 10,
+  LOGIN_CAPTCHA_WINDOW_SEC: 900,
+  loginCaptchaRequired: async () => captchaState.required,
+  recordLoginFailure: recordFailureMock,
+  closeLoginCaptcha: async () => {},
+}));
+
+// Turnstile: válido sse o body traz um token não-vazio (permite exercitar o gate
+// do login sem rede; a verificação real é coberta no rate-limit.test).
 vi.mock('../middlewares/rate-limit', async (importOriginal) => {
   const actual = await importOriginal<typeof RateLimitModule>();
   return {
     ...actual,
-    verifyTurnstile: vi.fn(async () => true),
+    verifyTurnstile: vi.fn(async (token: string) => token.length > 0),
     auditAuthEvent: vi.fn(async () => {}),
-    // rate-limit pass-through (cada teste usa emails únicos; não exercitamos o 429 aqui).
-    rateLimit: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+    // Simulação fiel do fixed-window em memória (honra bucket/max/byEmail) para
+    // exercitar a COMPOSIÇÃO dos limiters da rota (o algoritmo real, com Redis, é
+    // coberto no rate-limit.test). `x-test-ip` permite isolar o IP por teste.
+    rateLimit: (opts: RateLimitModule.RateLimitOptions) => {
+      const counts = new Map<string, number>();
+      return (req: express.Request, res: express.Response, next: express.NextFunction): void => {
+        const testIp = req.headers['x-test-ip'];
+        const ip = typeof testIp === 'string' ? testIp : (req.ip ?? 'ip');
+        const parts = [opts.bucket, ip];
+        if (opts.byEmail ?? true) {
+          const body: unknown = req.body;
+          if (body && typeof body === 'object' && 'email' in body) {
+            const email = (body as { email: unknown }).email;
+            if (typeof email === 'string' && email.length > 0) parts.push(email);
+          }
+        }
+        const key = parts.join(':');
+        const count = (counts.get(key) ?? 0) + 1;
+        counts.set(key, count);
+        if (count > opts.max) {
+          res.status(429).json({ message: 'Muitas tentativas.', reason: 'rate_limited' });
+          return;
+        }
+        next();
+      };
+    },
   };
 });
 
@@ -100,6 +138,8 @@ beforeEach(() => {
   providerState.signInThrows = true;
   providerState.signInEmail = null;
   providerState.confirmReset = true;
+  captchaState.required = false;
+  recordFailureMock.mockClear();
   provisionMock.mockReset();
   provisionMock.mockResolvedValue({ workspaceId: 'ws-1', memberId: 'm-1', slug: 'acme', created: true });
 });
@@ -239,9 +279,70 @@ describe('POST /auth/verify', () => {
 });
 
 describe('POST /auth/login (audit de falha)', () => {
-  it('credenciais inválidas → 401', async () => {
+  it('credenciais inválidas → 401 e alimenta o contador de falhas do IP', async () => {
     providerState.signInThrows = true;
     const res = await request(app).post('/auth/login').send({ email: 'a@b.com', password: 'x' });
+    expect(res.status).toBe(401);
+    expect(recordFailureMock).toHaveBeenCalledOnce(); // SEC-05: arma o captcha progressivo
+  });
+});
+
+describe('POST /auth/login (SEC-05 — teto por IP independente do email)', () => {
+  it('spraying com emails únicos: o 61º login do MESMO IP → 429', async () => {
+    providerState.signInThrows = true;
+    const ip = `spray-ip-${randomUUID().slice(0, 8)}`;
+    for (let i = 0; i < 60; i += 1) {
+      const res = await request(app)
+        .post('/auth/login')
+        .set('x-test-ip', ip)
+        .send({ email: `spray-${i}@x.com`, password: 'x' });
+      // Passa nos limiters (email sempre novo zera o IP+email) mas falha a credencial.
+      expect(res.status).toBe(401);
+    }
+    const blocked = await request(app)
+      .post('/auth/login')
+      .set('x-test-ip', ip)
+      .send({ email: 'spray-final@x.com', password: 'x' });
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.reason).toBe('rate_limited');
+  });
+
+  it('IPs distintos não compartilham o teto', async () => {
+    providerState.signInThrows = true;
+    const res = await request(app)
+      .post('/auth/login')
+      .set('x-test-ip', `outro-ip-${randomUUID().slice(0, 8)}`)
+      .send({ email: 'outro@x.com', password: 'x' });
+    expect(res.status).toBe(401); // não herdou o 429 do IP saturado
+  });
+});
+
+describe('POST /auth/login (SEC-05 — captcha progressivo)', () => {
+  it('captcha armado + sem token → 403 captcha_required, signIn não roda', async () => {
+    captchaState.required = true;
+    providerState.signInThrows = false; // se o signIn rodasse, seria 200/403-workspace
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ email: 'captcha@x.com', password: 'x' });
+    expect(res.status).toBe(403);
+    expect(res.body.reason).toBe('captcha_required');
+  });
+
+  it('captcha armado + token válido → prossegue para a autenticação (401 credencial ruim)', async () => {
+    captchaState.required = true;
+    providerState.signInThrows = true;
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ email: 'captcha2@x.com', password: 'x', turnstileToken: 'tok' });
+    expect(res.status).toBe(401); // passou do gate; falhou na credencial
+  });
+
+  it('captcha desarmado → login não exige token (fluxo normal intocado)', async () => {
+    captchaState.required = false;
+    providerState.signInThrows = true;
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ email: 'normal@x.com', password: 'x' });
     expect(res.status).toBe(401);
   });
 });

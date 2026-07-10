@@ -1,4 +1,6 @@
 export { getAuthProvider } from './provider';
+export { AuthProviderUnavailableError } from './supabase-provider';
+export { closeLoginCaptcha } from './login-captcha';
 export { createAuthRouter } from './routes';
 export {
   SESSION_COOKIE,

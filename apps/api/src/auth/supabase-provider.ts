@@ -1,4 +1,9 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import {
+  createClient,
+  isAuthRetryableFetchError,
+  type SupabaseClient,
+  type UserResponse,
+} from '@supabase/supabase-js';
 import {
   AuthError,
   type AuthCredentials,
@@ -7,6 +12,19 @@ import {
   type IAuthProvider,
   type SignUpResult,
 } from '@hm/shared';
+
+/**
+ * Falha de INFRA na verificação de token (rede/timeout/5xx do Supabase) — distinta
+ * de token inválido. O contrato do `verifyToken` (SEC-08):
+ *  - retorna `null`  → token genuinamente inválido/expirado/revogado (NUNCA honrar);
+ *  - LANÇA este erro → provider indisponível (o cache resiliente pode servir stale).
+ */
+export class AuthProviderUnavailableError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'AuthProviderUnavailableError';
+  }
+}
 
 /**
  * Adapter Supabase Auth: login por senha, verificação de token, e os verbos do
@@ -58,9 +76,31 @@ export class SupabaseAuthProvider implements IAuthProvider {
     };
   }
 
+  /**
+   * SEC-08: `null` SÓ quando o token é genuinamente inválido (expirado/revogado/
+   * malformado). Erro de rede/5xx (retryable) LANÇA `AuthProviderUnavailableError`
+   * — assim a camada de cache resiliente distingue "invalide já" de "blip de infra".
+   */
   async verifyToken(token: string): Promise<AuthIdentity | null> {
-    const { data, error } = await this.client.auth.getUser(token);
-    if (error || !data.user) return null;
+    let result: UserResponse;
+    try {
+      result = await this.client.auth.getUser(token);
+    } catch (err) {
+      // auth-js normalmente devolve erros em `error` (não lança); se lançou, é infra.
+      throw new AuthProviderUnavailableError(
+        err instanceof Error ? err.message : 'auth provider fetch failed',
+        { cause: err },
+      );
+    }
+    const { data, error } = result;
+    if (error) {
+      if (isAuthRetryableFetchError(error)) {
+        // Fetch rejeitou ou 502/503/504 — indisponibilidade, não invalidação.
+        throw new AuthProviderUnavailableError(error.message, { cause: error });
+      }
+      return null; // token inválido/expirado/revogado — decisão do provider
+    }
+    if (!data.user) return null;
     return { authUserId: data.user.id, email: data.user.email ?? '' };
   }
 

@@ -13,6 +13,7 @@ import {
 } from './session';
 import { signupHandler } from './signup';
 import { resetHandler, verifyHandler, confirmResetHandler } from './reset';
+import { loginCaptchaRequired, recordLoginFailure } from './login-captcha';
 import { auditAuthEvent, rateLimit, verifyTurnstile, clientIp } from '../middlewares/rate-limit';
 
 const loginSchema = z.object({
@@ -22,6 +23,9 @@ const loginSchema = z.object({
 
 // Limites de borda (T4). Defaults sãos, ajustáveis por env nos middlewares.
 const loginLimiter = rateLimit({ bucket: 'login', max: 10, windowSec: 15 * 60 });
+// SEC-05: teto ABSOLUTO por IP, independente do email. O limiter IP+email não barra
+// spraying (1 IP × N emails = N chaves novas); este fecha o volume bruto por origem.
+const loginIpLimiter = rateLimit({ bucket: 'login_ip', max: 60, windowSec: 60, byEmail: false });
 const signupLimiter = rateLimit({ bucket: 'signup', max: 5, windowSec: 60 * 60 });
 const resetLimiter = rateLimit({ bucket: 'reset', max: 5, windowSec: 60 * 60 });
 // confirm: por IP (o body não tem email, só token+senha). Tolera retentativas de
@@ -39,13 +43,35 @@ const verifyLimiter = rateLimit({ bucket: 'verify', max: 20, windowSec: 60 * 60,
  * erros de handlers async para o error handler central automaticamente.
  */
 export function createAuthRouter(): Router {
+  // SEC-02: resolve o provider na montagem do app (boot), não no 1º request —
+  // AUTH_PROVIDER=mock (ou fallback para mock) em produção aborta aqui, fail-fast.
+  getAuthProvider();
+
   const router = Router();
 
-  router.post('/auth/login', loginLimiter, async (req: Request, res: Response) => {
+  router.post('/auth/login', loginIpLimiter, loginLimiter, async (req: Request, res: Response) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ message: 'Email e senha são obrigatórios.' });
       return;
+    }
+    // SEC-05: captcha progressivo — após N falhas de login do IP na janela, exige
+    // Turnstile (mesma verificação server-side do signup). `reason` é machine-readable
+    // p/ o web renderizar o widget. Fail-closed em prod sem secret (verifyTurnstile).
+    const ip = clientIp(req);
+    if (await loginCaptchaRequired(ip)) {
+      const captchaOk = await verifyTurnstile(extractTurnstileToken(req), ip);
+      if (!captchaOk) {
+        await auditAuthEvent('auth.login_failed', req, {
+          email: parsed.data.email,
+          reason: 'captcha_required',
+        });
+        res.status(403).json({
+          message: 'Verificação anti-robô necessária. Complete o desafio e tente de novo.',
+          reason: 'captcha_required',
+        });
+        return;
+      }
     }
     try {
       const session = await getAuthProvider().signIn(parsed.data);
@@ -64,6 +90,8 @@ export function createAuthRouter(): Router {
     } catch (err) {
       if (err instanceof AuthError) {
         // T10: trilha de login falho (sem senha). Email no metadata p/ correlação.
+        // SEC-05: alimenta o contador que arma o captcha progressivo do IP.
+        await recordLoginFailure(ip);
         await auditAuthEvent('auth.login_failed', req, { email: parsed.data.email });
         res.status(401).json({ message: 'Email ou senha incorretos.' });
         return;
