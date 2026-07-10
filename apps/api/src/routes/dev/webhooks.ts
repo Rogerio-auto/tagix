@@ -15,6 +15,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { desc, eq } from 'drizzle-orm';
 import { decryptSecret, encryptSecret, schema } from '@hm/db';
+import { assertSafeWebhookUrl, checkWebhookUrlSyntax, ssrfSafeFetch } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
 const { outboundWebhooks, outboundWebhookDeliveries } = schema;
@@ -38,9 +39,29 @@ export const WEBHOOK_EVENTS = [
 
 const eventEnum = z.enum(WEBHOOK_EVENTS);
 
+/**
+ * URL de webhook (F56-S07, anti-SSRF): além do formato, a camada sintática do guarda
+ * rejeita esquema ≠ https (http só via allowlist do operador), credenciais embutidas,
+ * `localhost` e IP literal privado/loopback/metadata. A checagem com DNS acontece no
+ * handler (`assertSafeWebhookUrl`) e a garantia final é o connect guardado do dispatch.
+ */
+const urlSchema = z
+  .string()
+  .url()
+  .max(2000)
+  .superRefine((value, ctx) => {
+    const res = checkWebhookUrlSyntax(value);
+    if (!res.ok) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'URL de webhook não permitida (use https e um destino público).',
+      });
+    }
+  });
+
 const createSchema = z.object({
   name: z.string().trim().min(1).max(120),
-  url: z.string().url().max(2000),
+  url: urlSchema,
   events: z.array(eventEnum).min(1),
   // Opcional: o cliente pode trazer o próprio segredo; senão geramos um forte.
   secret: z.string().trim().min(16).max(200).optional(),
@@ -49,11 +70,28 @@ const createSchema = z.object({
 
 const updateSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
-  url: z.string().url().max(2000).optional(),
+  url: urlSchema.optional(),
   events: z.array(eventEnum).min(1).optional(),
   secret: z.string().trim().min(16).max(200).optional(),
   isActive: z.boolean().optional(),
 });
+
+/**
+ * Checagem assíncrona (DNS) da URL no boundary. Retorna `true` se seguiu; caso a URL
+ * seja rejeitada, responde 400 GENÉRICO (sem eco do motivo — não vira oráculo de rede).
+ */
+async function rejectUnsafeUrl(url: string, res: Response): Promise<boolean> {
+  try {
+    await assertSafeWebhookUrl(url);
+    return false;
+  } catch {
+    res.status(400).json({
+      error: 'invalid_url',
+      message: 'URL de webhook não permitida (use https e um destino público).',
+    });
+    return true;
+  }
+}
 
 function paramId(req: Request, name: string): string {
   const raw = req.params[name];
@@ -97,6 +135,7 @@ export function createDevWebhooksRouter(): Router {
       return;
     }
     const { name, url, events, isActive } = parsed.data;
+    if (await rejectUnsafeUrl(url, res)) return;
     const secret = parsed.data.secret ?? randomBytes(24).toString('base64url');
     const workspaceId = req.auth!.workspace.id;
 
@@ -127,6 +166,7 @@ export function createDevWebhooksRouter(): Router {
       return;
     }
     const body = parsed.data;
+    if (body.url !== undefined && (await rejectUnsafeUrl(body.url, res))) return;
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     if (body.name !== undefined) patch['name'] = body.name;
     if (body.url !== undefined) patch['url'] = body.url;
@@ -196,21 +236,27 @@ export function createDevWebhooksRouter(): Router {
     const payload = JSON.stringify(payloadObj);
     const signature = signPayload(decryptSecret(webhook.secretEnc), payload);
 
-    // POST síncrono com timeout curto — só validar URL/conectividade. Erro de rede
-    // não é 5xx do nosso lado: reportamos o outcome (delivered:false + motivo).
+    // POST síncrono com timeout curto — só validar URL/conectividade. F56-S07:
+    // o fetch é o guardado (anti-SSRF: lookup validado no connect, sem redirects) e a
+    // falha volta GENÉRICA — nada de err.message/detalhe de rede, que viraria oráculo
+    // para sondar a infra interna (ECONNREFUSED vs timeout etc.).
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 8000);
-      const resp = await fetch(webhook.url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-hm-signature-256': signature },
-        body: payload,
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-      res.json({ delivered: resp.ok, status: resp.status });
-    } catch (err) {
-      res.json({ delivered: false, error: err instanceof Error ? err.message : 'unknown' });
+      try {
+        const resp = await ssrfSafeFetch(webhook.url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-hm-signature-256': signature },
+          body: payload,
+          signal: controller.signal,
+        });
+        // Status aqui é sempre de destino permitido pelo guarda (nunca de host interno).
+        res.json({ delivered: resp.ok, status: resp.status });
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch {
+      res.json({ delivered: false, error: 'delivery_failed' });
     }
   });
 

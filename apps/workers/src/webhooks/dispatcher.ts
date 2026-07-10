@@ -16,6 +16,7 @@
 import { createHmac } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { decryptSecret, getDb } from '@hm/db';
+import { checkWebhookUrlSyntax, SsrfBlockedError, ssrfSafeFetch } from '@hm/shared';
 import type { Logger } from '@hm/logger';
 
 /** Máximo de tentativas antes de `failed` (1 inicial + retries). */
@@ -52,10 +53,16 @@ export function backoffSeconds(attempt: number): number {
 
 export interface DispatchDeps {
   readonly logger: Logger;
-  /** Injetável p/ teste (default: fetch global). */
+  /**
+   * Injetável p/ teste. Default: `ssrfSafeFetch` (F56-S07) — valida o IP resolvido no
+   * MOMENTO do connect (anti-DNS-rebinding) e nunca segue redirects.
+   */
   readonly fetchImpl?: typeof fetch;
   readonly now?: () => Date;
 }
+
+/** Superfície de fetch que o dispatch usa (subconjunto do `fetch` global). */
+type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
 export interface DispatchTickResult {
   readonly processed: number;
@@ -70,7 +77,7 @@ export interface DispatchTickResult {
  */
 export async function dispatchPending(deps: DispatchDeps): Promise<DispatchTickResult> {
   const db = getDb();
-  const fetchImpl = deps.fetchImpl ?? fetch;
+  const fetchImpl: FetchLike = deps.fetchImpl ?? ssrfSafeFetch;
   const now = deps.now ?? (() => new Date());
 
   // Pega as vencidas + dados do webhook (url/secret) num só round-trip, travando as
@@ -104,6 +111,20 @@ export async function dispatchPending(deps: DispatchDeps): Promise<DispatchTickR
         WHERE id = ${row.id}::uuid
       `);
       sent += 1;
+      continue;
+    }
+
+    // URL bloqueada pelo guarda anti-SSRF (F56-S07) — terminal na hora: retry nunca
+    // vai tornar um destino interno seguro, e insistir seria continuar sondando.
+    if (outcome.blocked) {
+      await db.execute(sql`
+        UPDATE outbound_webhook_deliveries
+        SET status = 'failed', attempt = ${attemptNo}, response_status = NULL,
+            response_body = 'blocked_url'
+        WHERE id = ${row.id}::uuid
+      `);
+      failed += 1;
+      deps.logger.warn('webhook delivery bloqueada (anti-SSRF)', { deliveryId: row.id });
       continue;
     }
 
@@ -141,14 +162,23 @@ interface AttemptOutcome {
   readonly status?: number;
   readonly responseBody?: string;
   readonly error?: string;
+  /** Destino rejeitado pelo guarda anti-SSRF — falha TERMINAL (sem retry). */
+  readonly blocked?: boolean;
 }
 
 /** Faz o POST assinado; classifica 2xx como sucesso, o resto como falha. */
 async function attemptDelivery(
-  fetchImpl: typeof fetch,
+  fetchImpl: FetchLike,
   row: DueDelivery,
   body: string,
 ): Promise<AttemptOutcome> {
+  // Pré-checagem sintática barata (F56-S07): esquema/host/IP literal. Cobre também o
+  // caminho com `fetchImpl` injetado; a validação do IP RESOLVIDO acontece dentro do
+  // `ssrfSafeFetch` default, no lookup do connect (anti-rebinding).
+  if (!checkWebhookUrlSyntax(row.url).ok) {
+    return { ok: false, blocked: true, error: 'blocked_url' };
+  }
+
   let signature: string;
   try {
     signature = signWebhook(decryptSecret(row.secretEnc), body);
@@ -174,6 +204,10 @@ async function attemptDelivery(
     const text = await safeText(resp);
     return { ok: resp.ok, status: resp.status, responseBody: text };
   } catch (err) {
+    if (err instanceof SsrfBlockedError) {
+      // Rebinding pego no connect: o hostname passou no boundary mas resolveu interno.
+      return { ok: false, blocked: true, error: 'blocked_url' };
+    }
     return { ok: false, error: err instanceof Error ? err.message : 'network_error' };
   } finally {
     clearTimeout(timer);

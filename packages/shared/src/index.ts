@@ -98,4 +98,23 @@ export type {
   SupportMessageDTO,
 } from './support';
 
+// --- Rede: guarda anti-SSRF p/ destinos outbound de tenant (F56-S07). Node-only em
+//     runtime (imports dinâmicos de node:dns/http); browser-safe para bundling. ---
+export {
+  SsrfBlockedError,
+  isBlockedIpAddress,
+  checkWebhookUrlSyntax,
+  assertSafeWebhookUrl,
+  createGuardedLookup,
+  ssrfSafeFetch,
+  httpAllowlistFromEnv,
+} from './net';
+export type {
+  SsrfBlockedReason,
+  WebhookUrlCheck,
+  WebhookUrlOptions,
+  DnsLookupAll,
+  SsrfSafeFetchOptions,
+} from './net';
+
 export const SHARED_PKG = '@hm/shared' as const;
