@@ -13,7 +13,7 @@ import {
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { conversations, members, workspaces } from './index';
+import { agents, conversations, members, workspaces } from './index';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 
@@ -47,7 +47,9 @@ export const messages = pgTable(
     direction: text('direction').notNull(),
     senderType: text('sender_type').notNull(),
     senderMemberId: uuid('sender_member_id').references(() => members.id, { onDelete: 'set null' }),
-    senderAgentId: uuid('sender_agent_id'), // FK quando agents existir (F2)
+    // F56-S24 (DB-06): agents existe desde a F2 — FK resolvida (SET NULL: apagar o
+    // agente não apaga a mensagem, só desliga a autoria).
+    senderAgentId: uuid('sender_agent_id').references(() => agents.id, { onDelete: 'set null' }),
     type: text('type').notNull().default('text'),
     content: text('content'),
     viewStatus: text('view_status').notNull().default('pending'),
@@ -95,6 +97,11 @@ export const messages = pgTable(
       sql`coalesce(${t.providerTimestamp}, ${t.createdAt}) desc`,
     ),
     index('idx_messages_workspace_created').on(t.workspaceId, t.createdAt.desc()),
+    // F56-S24 (DB-06): suporte à FK sender_agent_id — sem isso o ON DELETE SET NULL
+    // de um agente faria seq scan em messages (a maior tabela do sistema).
+    index('idx_messages_sender_agent')
+      .on(t.senderAgentId)
+      .where(sql`${t.senderAgentId} is not null`),
     check('messages_direction_chk', sql`${t.direction} in ('inbound','outbound')`),
     check('messages_sender_type_chk', sql`${t.senderType} in ('contact','member','agent','system')`),
     check('messages_view_status_chk', sql`${t.viewStatus} in ('pending','sending','sent','delivered','read','failed','deleted')`),

@@ -164,6 +164,9 @@ export const events = pgTable(
   (t) => [
     index('idx_events_calendar_start').on(t.calendarId, t.startAt),
     index('idx_events_workspace_start').on(t.workspaceId, t.startAt),
+    // F56-S24 (DB-03): calendar-reminders varre CROSS-TENANT por janela de start_at
+    // a cada tick — índice global (sem workspace_id) parcial em eventos vivos.
+    index('idx_events_start_active').on(t.startAt).where(sql`${t.status} <> 'cancelled'`),
     index('idx_events_contact').on(t.contactId).where(sql`${t.contactId} is not null`),
     // Indice parcial p/ a expansao de series: so eventos com regra de recorrencia.
     index('idx_events_recurrence').on(t.workspaceId).where(sql`${t.recurrenceRule} is not null`),

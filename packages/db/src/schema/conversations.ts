@@ -11,7 +11,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { channels, contacts, members, workspaces } from './index';
+import { agents, channels, contacts, departments, members, teams, workspaces } from './index';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 
@@ -39,10 +39,15 @@ export const conversations = pgTable(
     // Reengajamento agendado (cron idempotente) — null quando não há retomada pendente.
     aiResumeAt: ts('ai_resume_at'),
     assignedTo: uuid('assigned_to').references(() => members.id, { onDelete: 'set null' }),
-    // FK adicionada quando departments/teams/agents existirem (F1+/F2).
-    departmentId: uuid('department_id'),
-    teamId: uuid('team_id'),
-    agentId: uuid('agent_id'),
+    // F56-S24 (DB-06): FKs antes pendentes, agora resolvidas. department_id/team_id
+    // já tinham a constraint no banco desde a 0033 (backfill F8) — aqui o schema TS
+    // passa a refletir; agent_id ganha a FK de fato na 0064. ON DELETE SET NULL:
+    // apagar department/team/agent não apaga a conversa.
+    departmentId: uuid('department_id').references(() => departments.id, {
+      onDelete: 'set null',
+    }),
+    teamId: uuid('team_id').references(() => teams.id, { onDelete: 'set null' }),
+    agentId: uuid('agent_id').references(() => agents.id, { onDelete: 'set null' }),
     groupName: text('group_name'),
     groupAvatarUrl: text('group_avatar_url'),
     lastMessageId: uuid('last_message_id'),
@@ -75,6 +80,14 @@ export const conversations = pgTable(
     // por dept/time (F30 / LIVECHAT_OPS §1). Não recriados aqui.
     // Varredura do cron de reengajamento de IA (F30 / LIVECHAT_OPS §2).
     index('idx_conversations_ai_resume').on(t.aiResumeAt).where(sql`${t.aiResumeAt} is not null`),
+    // F56-S24 (ESC-04): reengagement scheduler varre conversas com IA pausada —
+    // parcial em ai_mode='paused' (fração pequena da tabela) elimina o seq scan.
+    index('idx_conversations_ws_ai_paused')
+      .on(t.workspaceId)
+      .where(sql`${t.aiMode} = 'paused'`),
+    // F56-S24 (DB-06): suporte à FK agent_id (ON DELETE SET NULL varre por igualdade;
+    // parcial NOT NULL espelha idx_conversations_department/team da 0033).
+    index('idx_conversations_agent').on(t.agentId).where(sql`${t.agentId} is not null`),
     // F55-S01 — Métricas de ciclo: parciais (só linhas com o marco) e escopados por
     // workspace (toda consulta de SLA filtra workspace_id), DESC p/ recência primeiro.
     index('idx_conversations_ws_resolved_at')

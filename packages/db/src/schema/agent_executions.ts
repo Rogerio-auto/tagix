@@ -58,6 +58,14 @@ export const agentExecutions = pgTable(
       .on(t.conversationId)
       .where(sql`${t.conversationId} is not null`),
     index('idx_agent_executions_agent_started').on(t.agentId, t.startedAt.desc()),
+    // F56-S24 (DB-05): listagem/telemetria por tenant (workspace_id + recência) —
+    // antes só existia o eixo por agente, e a query de workspace fazia seq scan.
+    index('idx_agent_executions_ws_started').on(t.workspaceId, t.startedAt.desc()),
+    // F56-S24 (DB-05): sweeper de execuções vivas — parcial só nos estados ativos
+    // (running/interrupted), fração mínima da tabela.
+    index('idx_agent_executions_status_active')
+      .on(t.status)
+      .where(sql`${t.status} in ('running','interrupted')`),
     check(
       'agent_executions_status_chk',
       sql`${t.status} in ('running','interrupted','completed','failed')`,
