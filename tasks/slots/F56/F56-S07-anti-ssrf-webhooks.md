@@ -2,7 +2,7 @@
 id: F56-S07
 title: Anti-SSRF em webhooks outbound (allowlist de host/esquema)
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-10T04:20:28Z
 
+---
 # F56-S07 — Anti-SSRF em webhooks outbound (SEC-01)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.1. A URL de webhook é validada só por `z.string().url()` — aceita `169.254.169.254`, `localhost`, RFC1918; o `/test` retorna status HTTP síncrono → SSRF semi-cega acionável por qualquer tenant com `webhook.edit`.
