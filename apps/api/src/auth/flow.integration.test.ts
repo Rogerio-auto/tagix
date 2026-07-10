@@ -135,7 +135,11 @@ describe('Fluxo signup → verify → login', () => {
   });
 
   it('reset e verify inválido respondem uniformemente (T3)', async () => {
-    const reset = await request(app).post('/auth/reset').send({ email: 'qualquer@x.com' });
+    // Email único por run: o rate-limit REAL do reset (5/h por IP+email) acumulava
+    // entre execuções com email fixo e flakava este teste (429 em vez de 200).
+    const reset = await request(app)
+      .post('/auth/reset')
+      .send({ email: `qualquer-${randomUUID().slice(0, 8)}@x.com` });
     expect(reset.status).toBe(200);
     expect(reset.body).toEqual({ ok: true });
 
