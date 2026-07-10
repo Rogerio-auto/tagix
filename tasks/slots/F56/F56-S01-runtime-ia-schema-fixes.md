@@ -2,7 +2,7 @@
 id: F56-S01
 title: Runtime IA — coluna fantasma vision + clamp de tokens + latency_ms
 phase: F56
-status: available
+status: done
 priority: critical
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: python-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-09T23:10:34Z
 
+---
 # F56-S01 — Runtime IA: destravar execução real (AG-01/AG-02/AG-07)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.3. O runtime Python não responde contra o schema real: `load_context` faz `SELECT model_supports_vision` de uma coluna inexistente (a real é `vision_model`). É o P0 mais crítico do produto.

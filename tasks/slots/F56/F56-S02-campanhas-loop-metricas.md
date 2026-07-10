@@ -2,7 +2,7 @@
 id: F56-S02
 title: Campanhas — fechar o loop de métricas (delivery status → metrics)
 phase: F56
-status: available
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-10T03:31:02Z
 
+---
 # F56-S02 — Campanhas: loop de métricas real (CAMP-01/CAMP-02)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.4. `campaign_metrics` só é semeado; o painel mostra zero para sempre. `campaign_deliveries` nunca sai de `queued` porque o read-receipt atualiza só `messages`, não a delivery.

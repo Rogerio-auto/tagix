@@ -2,7 +2,7 @@
 id: F56-S12
 title: MQ resilience — reconnect AMQP + reliableQueues + backpressure
 phase: F56
-status: available
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-10T03:36:19Z
 
+---
 # F56-S12 — Confiabilidade da malha AMQP (INF-01/INF-03/INF-12, DB-07)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.2. Sem reconnect AMQP (um blip reinicia a frota ou trava um consumer sem alarme); só inbound/outbound/media têm retry+DLQ (flows/campaigns/coexistence fazem nack-drop silencioso); enqueues internos ignoram backpressure.
