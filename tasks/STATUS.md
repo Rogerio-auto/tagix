@@ -47,7 +47,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F53   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F54   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F56   | 31     | 24   | 3   | 0   | 0   | 0   | 4   |
+| F56   | 31     | 23   | 3   | 0   | 0   | 0   | 5   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -608,7 +608,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F56-S10 | AbacatePay — HMAC obrigatória em produção (secret fora da query)                | 🟢 available | medium     | —          |
 | F56-S11 | Agente IA — anti-prompt-injection + moderação de entrada/saída                  | 🟢 available | high       | —          |
 | F56-S12 | MQ resilience — reconnect AMQP + reliableQueues + backpressure                  | ✅ done      | critical   | —          |
-| F56-S13 | Flow-engine — claim atômico + anti-loop (step_count)                            | 🟢 available | high       | —          |
+| F56-S13 | Flow-engine — claim atômico + anti-loop (step_count)                            | ✅ done      | high       | —          |
 | F56-S14 | Outbound — retry durável para falha transitória do provider                     | 🟢 available | high       | —          |
 | F56-S15 | Agent buffer — wakeup durável do flush de agregação                             | 🟢 available | high       | —          |
 | F56-S16 | Socket relay — emitir antes de bumpar + prefetch + patch incremental            | 🟢 available | high       | —          |

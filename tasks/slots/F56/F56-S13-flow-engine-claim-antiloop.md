@@ -2,7 +2,7 @@
 id: F56-S13
 title: Flow-engine — claim atômico + anti-loop (step_count)
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-10T04:13:32Z
 
+---
 # F56-S13 — Flow-engine: concorrência e anti-loop (INF-04/INF-05)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.2. Sem claim atômico, dois envelopes do mesmo `executionId` executam em paralelo → mensagem duplicada. Sem contador de steps, flow cíclico floda a fila infinitamente (DoS auto-infligido).
