@@ -33,7 +33,9 @@ export interface SyncResult {
 }
 
 /** Lê a key OpenRouter cifrada de `platform_secrets` e decifra. */
-export async function readOpenRouterKey(db = getDb()): Promise<string | null> {
+export async function readOpenRouterKey(
+  db: ReturnType<typeof getDb> = getDb(),
+): Promise<string | null> {
   const [row] = await db
     .select({ valueEnc: platformSecrets.valueEnc, keyVersion: platformSecrets.keyVersion })
     .from(platformSecrets)

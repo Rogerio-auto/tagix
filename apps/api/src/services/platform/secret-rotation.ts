@@ -40,7 +40,7 @@ export interface SecretMeta {
  * Lista metadados de todas as keys conhecidas — SEM valor em claro. Keys ainda não
  * configuradas aparecem como `isSet: false` (key_version 0) para guiar o painel.
  */
-export async function listSecretMeta(db = getDb()): Promise<SecretMeta[]> {
+export async function listSecretMeta(db: ReturnType<typeof getDb> = getDb()): Promise<SecretMeta[]> {
   const rows = await db
     .select({
       key: platformSecrets.key,
@@ -64,7 +64,7 @@ export async function listSecretMeta(db = getDb()): Promise<SecretMeta[]> {
 export async function rotateSecret(
   key: KnownSecretKey,
   value: string,
-  db = getDb(),
+  db: ReturnType<typeof getDb> = getDb(),
 ): Promise<SecretMeta> {
   const valueEnc = encryptSecret(value);
   const now = new Date();
