@@ -2,7 +2,7 @@
 id: F56-S06
 title: Auth hardening — fail-fast mock, rate-limit por IP, stale token
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-10T04:40:58Z
 
+---
 # F56-S06 — Auth hardening (SEC-02/SEC-05/SEC-08)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.1. `AUTH_PROVIDER=mock` é honrado sem checar `NODE_ENV` (bypass total); rate-limit de login por IP+email não barra spraying distribuído; cache de identidade serve token expirado por até 15 min.

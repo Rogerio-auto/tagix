@@ -47,7 +47,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F53   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F54   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F56   | 31     | 22   | 3   | 0   | 0   | 0   | 6   |
+| F56   | 31     | 21   | 3   | 0   | 0   | 0   | 7   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -601,7 +601,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F56-S03 | Campanhas — máquina de estados do recipient (drip + completed + teto diário)    | 🟢 available | high       | —          |
 | F56-S04 | Campanhas — hidratar o wizard no modo edição                                    | 🟢 available | high       | —          |
 | F56-S05 | Ativação de canal recuperável (Embedded Signup + badge + fallback)              | 🟢 available | high       | —          |
-| F56-S06 | Auth hardening — fail-fast mock, rate-limit por IP, stale token                 | 🟢 available | high       | —          |
+| F56-S06 | Auth hardening — fail-fast mock, rate-limit por IP, stale token                 | ✅ done      | high       | —          |
 | F56-S07 | Anti-SSRF em webhooks outbound (allowlist de host/esquema)                      | ✅ done      | high       | —          |
 | F56-S08 | RLS como backstop real — FORCE RLS + role não-superuser + agent_templates       | 🟢 available | high       | —          |
 | F56-S09 | Uploads — bloquear SVG + validar magic bytes                                    | 🟢 available | medium     | —          |
