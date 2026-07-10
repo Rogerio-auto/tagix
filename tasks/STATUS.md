@@ -47,7 +47,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F53   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F54   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F56   | 31     | 25   | 3   | 0   | 0   | 0   | 3   |
+| F56   | 31     | 24   | 3   | 0   | 0   | 0   | 4   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -619,7 +619,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F56-S21 | /health checa RabbitMQ (backbone de mensageria)                                 | 🟢 available | medium     | —          |
 | F56-S22 | CI — corrigir deploy errado + Python + RabbitMQ + e2e                           | 🟢 available | high       | —          |
 | F56-S23 | Runbooks — fila estourada, worker crash-loop, rollback                          | 🟢 available | medium     | —          |
-| F56-S24 | DB — índices dos schedulers + FKs pendentes                                     | 🟢 available | high       | —          |
+| F56-S24 | DB — índices dos schedulers + FKs pendentes                                     | ✅ done      | high       | —          |
 | F56-S25 | Retenção — sweep de webhook_events + base de retenção                           | 🟢 available | medium     | —          |
 | F56-S26 | DS — promover EmptyState/Skeleton/ErrorState para @hm/ui                        | 🟢 available | medium     | —          |
 | F56-S27 | DS — Drawer canônico + IconButton (foco de teclado)                             | ⏸️ blocked  | medium     | F56-S26    |

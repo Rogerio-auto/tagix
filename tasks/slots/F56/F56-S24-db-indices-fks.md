@@ -2,7 +2,7 @@
 id: F56-S24
 title: DB — índices dos schedulers + FKs pendentes
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: db-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-10T04:02:17Z
 
+---
 # F56-S24 — Índices dos schedulers + FKs pendentes (DB-03/04/05/06, ESC-04)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.8. Schedulers cross-tenant fazem seq scan por falta de índice; FKs de `conversations`/`messages` estão pendentes apesar das tabelas já existirem.
