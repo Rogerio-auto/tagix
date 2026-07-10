@@ -2,15 +2,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
   cancelFlowExecution,
+  FLOW_MAX_STEPS,
+  FlowStepInFlightError,
   processFlowStepScoped,
   resumeFlowWithResponse,
   triggerFlow,
 } from './dispatcher';
 import type {
   ExecutionPatch,
+  FlowClaimResult,
   FlowDbPort,
   FlowEngineDeps,
   FlowExecutionEvent,
+  FlowExecutionStatus,
   FlowLogEntry,
   LoadedExecution,
 } from './deps';
@@ -18,6 +22,7 @@ import type { FlowHandlerResult, RegisteredFlowHandler } from './types';
 
 const WS = '11111111-1111-1111-1111-111111111111';
 const EX = '22222222-2222-2222-2222-222222222222';
+const NOW = new Date('2026-06-10T00:00:00.000Z');
 
 function makeExec(over: Partial<LoadedExecution> = {}): LoadedExecution {
   return {
@@ -29,6 +34,7 @@ function makeExec(over: Partial<LoadedExecution> = {}): LoadedExecution {
     contactId: 'ct1',
     status: 'running',
     currentNodeId: 'n_trigger',
+    stepCount: 0,
     variables: {},
     nodes: [
       { id: 'n_trigger', type: 'trigger', data: {} },
@@ -39,20 +45,71 @@ function makeExec(over: Partial<LoadedExecution> = {}): LoadedExecution {
   };
 }
 
-function makeDeps(exec: LoadedExecution, opts: { result?: FlowHandlerResult } = {}) {
+/** Estado da "linha" no fake — espelha a semantica do claim SQL real (db.port). */
+interface FakeRow {
+  status: FlowExecutionStatus;
+  nextStepAt: Date | null;
+  stepCount: number;
+  /** simula lease de `processing` expirado (takeover permitido). */
+  staleLease: boolean;
+}
+
+interface MakeDepsOpts {
+  result?: FlowHandlerResult;
+  /** execute custom (permite mutar a linha no meio do step, ex.: cancel concorrente). */
+  execute?: () => Promise<FlowHandlerResult> | FlowHandlerResult;
+  /** next_step_at inicial da linha (waiting vencida vs prematura). */
+  nextStepAt?: Date | null;
+}
+
+function makeDeps(exec: LoadedExecution, opts: MakeDepsOpts = {}) {
   const patches: { id: string; patch: ExecutionPatch }[] = [];
   const logs: FlowLogEntry[] = [];
   const enqueued: { workspaceId: string; executionId: string }[] = [];
   const events: FlowExecutionEvent[] = [];
   let current = exec;
+  const row: FakeRow = {
+    status: exec.status,
+    nextStepAt: opts.nextStepAt ?? null,
+    stepCount: exec.stepCount,
+    staleLease: false,
+  };
+
+  // Espelha o UPDATE condicional atomico do db.port real (INF-04).
+  const doClaim = async (): Promise<FlowClaimResult> => {
+    const claimable =
+      row.status === 'running' ||
+      (row.status === 'waiting' &&
+        (row.nextStepAt === null || row.nextStepAt.getTime() <= NOW.getTime())) ||
+      (row.status === 'processing' && row.staleLease);
+    if (!claimable) {
+      if (row.status === 'processing') return { claimed: false, reason: 'in_flight' };
+      if (row.status === 'waiting') return { claimed: false, reason: 'not_due' };
+      return { claimed: false, reason: 'terminal' };
+    }
+    row.status = 'processing';
+    row.staleLease = false;
+    row.stepCount += 1;
+    current = { ...current, status: 'processing', stepCount: row.stepCount };
+    return { claimed: true, execution: current };
+  };
 
   const db: FlowDbPort = {
     createExecution: vi.fn(async () => ({ executionId: EX })),
     loadExecution: vi.fn(async () => current),
     loadExecutionByIdOnly: vi.fn(async () => current),
-    patchExecution: vi.fn(async (_ws, id, patch) => {
+    claimExecution: vi.fn(doClaim),
+    claimExecutionByIdOnly: vi.fn(doClaim),
+    patchExecution: vi.fn(async (_ws, id, patch, options) => {
+      // Fencing: compare-and-set contra o status ATUAL da linha (como no UPDATE real).
+      if (options?.expectStatus !== undefined && !options.expectStatus.includes(row.status)) {
+        return false;
+      }
       patches.push({ id, patch });
+      if (patch.status !== undefined) row.status = patch.status;
+      if (patch.nextStepAt !== undefined) row.nextStepAt = patch.nextStepAt;
       current = { ...current, ...patch } as LoadedExecution;
+      return true;
     }),
     insertLog: vi.fn(async (entry) => {
       logs.push(entry);
@@ -72,17 +129,18 @@ function makeDeps(exec: LoadedExecution, opts: { result?: FlowHandlerResult } = 
     http: { request: vi.fn(async () => ({ status: 200, ok: true, body: null, headers: {} })) },
     logger: { log: vi.fn() },
     events: { executionChanged: vi.fn((e: FlowExecutionEvent) => void events.push(e)) },
-    now: () => new Date('2026-06-10T00:00:00.000Z'),
+    now: () => NOW,
   };
 
   const result = opts.result ?? { status: 'SUCCESS' as const };
+  const customExecute = opts.execute;
   const handler: RegisteredFlowHandler = {
     schema: z.record(z.unknown()),
-    execute: vi.fn(async () => result),
+    execute: vi.fn(async () => (customExecute ? customExecute() : result)),
   };
   deps.resolveHandler = () => handler;
 
-  return { deps, patches, logs, enqueued, events, handler };
+  return { deps, patches, logs, enqueued, events, handler, row };
 }
 
 describe('processFlowStep (algoritmo secao 3.2)', () => {
@@ -293,5 +351,143 @@ describe('go_to_flow enqueue (F33-S01)', () => {
     // Apenas o step do flow pai e enfileirado (avanco normal).
     expect(enqueued).toHaveLength(1);
     expect(enqueued[0]).toEqual({ workspaceId: WS, executionId: EX });
+  });
+});
+
+describe('claim atomico (F56-S13 / INF-04)', () => {
+  it('dois envelopes concorrentes do mesmo executionId produzem UMA execucao', async () => {
+    const { deps, handler, enqueued } = makeDeps(makeExec());
+    const [a, b] = await Promise.allSettled([
+      processFlowStepScoped(deps, WS, EX),
+      processFlowStepScoped(deps, WS, EX),
+    ]);
+
+    // Exatamente um processa; o outro perde o claim e lanca (retry ladder decide depois).
+    const outcomes = [a, b].map((r) => r.status).sort();
+    expect(outcomes).toEqual(['fulfilled', 'rejected']);
+    const rejected = [a, b].find((r) => r.status === 'rejected');
+    expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(FlowStepInFlightError);
+
+    // O handler executou UMA vez e so UM proximo step foi enfileirado (sem mensagem dupla).
+    expect(handler.execute).toHaveBeenCalledTimes(1);
+    expect(enqueued).toEqual([{ workspaceId: WS, executionId: EX }]);
+  });
+
+  it('envelope sobre execucao em voo (processing, lease vivo) lanca FlowStepInFlightError', async () => {
+    const { deps, handler } = makeDeps(makeExec({ status: 'processing' }));
+    await expect(processFlowStepScoped(deps, WS, EX)).rejects.toBeInstanceOf(
+      FlowStepInFlightError,
+    );
+    expect(handler.execute).not.toHaveBeenCalled();
+  });
+
+  it('takeover: processing com lease expirado e reivindicavel (recuperacao pos-crash)', async () => {
+    const { deps, handler, row, patches } = makeDeps(makeExec({ status: 'processing' }));
+    row.staleLease = true;
+    await processFlowStepScoped(deps, WS, EX);
+    expect(handler.execute).toHaveBeenCalledTimes(1);
+    expect(patches.at(-1)?.patch.status).toBe('running');
+  });
+
+  it('waiting ANTES do prazo nao e reivindicavel (wakeup prematuro absorvido, sem timeout antecipado)', async () => {
+    const future = new Date(NOW.getTime() + 60_000);
+    const { deps, handler, patches, enqueued } = makeDeps(makeExec({ status: 'waiting' }), {
+      nextStepAt: future,
+    });
+    await processFlowStepScoped(deps, WS, EX);
+    expect(handler.execute).not.toHaveBeenCalled();
+    expect(patches).toHaveLength(0);
+    expect(enqueued).toHaveLength(0);
+  });
+
+  it('waiting com prazo vencido e reivindicada (wakeup legitimo do scheduler)', async () => {
+    const past = new Date(NOW.getTime() - 1_000);
+    const { deps, handler } = makeDeps(makeExec({ status: 'waiting' }), { nextStepAt: past });
+    await processFlowStepScoped(deps, WS, EX);
+    expect(handler.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancel durante o step vence: patch final fenced e recusado e NADA e re-enfileirado', async () => {
+    // O handler simula um cancelFlowExecution concorrente aterrissando no meio do step.
+    const made = makeDeps(makeExec(), {
+      execute: () => {
+        made.row.status = 'cancelled';
+        return { status: 'SUCCESS' as const };
+      },
+    });
+    await processFlowStepScoped(made.deps, WS, EX);
+    // A transicao final do step foi descartada (linha ja nao era `processing`)…
+    expect(made.patches).toHaveLength(0);
+    expect(made.row.status).toBe('cancelled');
+    // …e a execucao cancelada NAO foi ressuscitada na fila.
+    expect(made.enqueued).toHaveLength(0);
+  });
+
+  it('resume e fenced em waiting: nao sobrescreve um step em voo (processing)', async () => {
+    const exec = makeExec({ status: 'waiting', variables: { waiting_for_response: true } });
+    const made = makeDeps(exec);
+    made.row.status = 'processing'; // timeout do wait em voo neste exato momento
+    await resumeFlowWithResponse(made.deps, {
+      conversationId: 'c1',
+      responseType: 'response',
+      responseContent: 'oi',
+    });
+    expect(made.patches).toHaveLength(0);
+    expect(made.enqueued).toHaveLength(0);
+  });
+
+  it('envelope duplicado tardio sobre execucao terminal e absorvido (drop, sem throw)', async () => {
+    const { deps, handler, patches } = makeDeps(makeExec({ status: 'completed' }));
+    await expect(processFlowStepScoped(deps, WS, EX)).resolves.toBeUndefined();
+    expect(handler.execute).not.toHaveBeenCalled();
+    expect(patches).toHaveLength(0);
+  });
+});
+
+describe('anti-loop step_count (F56-S13 / INF-05)', () => {
+  it('execucao acima do teto falha como "loop suspeito" sem executar o node', async () => {
+    const made = makeDeps(makeExec());
+    made.row.stepCount = FLOW_MAX_STEPS; // o claim incrementa para FLOW_MAX_STEPS + 1
+    await processFlowStepScoped(made.deps, WS, EX);
+
+    expect(made.handler.execute).not.toHaveBeenCalled();
+    const last = made.patches.at(-1);
+    expect(last?.patch.status).toBe('failed');
+    expect(last?.patch.lastError).toContain('loop suspeito');
+    expect(made.logs.at(-1)?.level).toBe('error');
+    expect(made.enqueued).toHaveLength(0);
+    expect(made.events).toEqual([expect.objectContaining({ status: 'failed' })]);
+  });
+
+  it('flow ciclico (a→b→a) drena a fila e falha em <= teto de steps (sem flood)', async () => {
+    const exec = makeExec({
+      currentNodeId: 'n_a',
+      nodes: [
+        { id: 'n_a', type: 'message', data: {} },
+        { id: 'n_b', type: 'message', data: {} },
+      ],
+      edges: [
+        { id: 'e_ab', source: 'n_a', target: 'n_b' },
+        { id: 'e_ba', source: 'n_b', target: 'n_a' },
+      ],
+    });
+    const { deps, enqueued, row, handler } = makeDeps(exec);
+
+    // Drena a fila em FIFO como o worker faria; o teto tem que parar o ciclo sozinho.
+    await processFlowStepScoped(deps, WS, EX);
+    let cursor = 0;
+    let processed = 1;
+    const hardStop = FLOW_MAX_STEPS * 2; // paraquedas do teste — nunca deve ser atingido
+    while (cursor < enqueued.length && processed < hardStop) {
+      cursor += 1;
+      processed += 1;
+      await processFlowStepScoped(deps, WS, EX);
+    }
+
+    expect(row.status).toBe('failed');
+    // Cada step enfileira no maximo 1 proximo: falhar no teto drena a fila (sem flood).
+    expect(processed).toBeLessThanOrEqual(FLOW_MAX_STEPS + 1);
+    expect(handler.execute).toHaveBeenCalledTimes(FLOW_MAX_STEPS);
+    expect(cursor).toBe(enqueued.length); // fila totalmente drenada
   });
 });

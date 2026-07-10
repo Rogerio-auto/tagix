@@ -95,5 +95,9 @@ export { createOutboundPort, type OutboundPublisher } from './ports/outbound.por
 export { MESSAGE_PRE_ACTION_MAX_MS, MESSAGE_DELAY_MAX_MS } from './handlers/message.handler';
 export * from './backup';
 export type { TriggerFlowInput } from './dispatcher';
+// F56-S13: claim atomico + anti-loop. O worker deve deixar FlowStepInFlightError
+// propagar para o retry ladder do MQ (recuperacao pos-crash via takeover de lease).
+export { FlowStepInFlightError, FLOW_MAX_STEPS } from './dispatcher';
+export { FLOW_CLAIM_LEASE_MS } from './ports/db.port';
 
 export const FLOW_ENGINE_PKG = '@hm/flow-engine' as const;

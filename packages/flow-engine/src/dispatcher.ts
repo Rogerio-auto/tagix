@@ -4,8 +4,30 @@
  *
  * Puro em relacao a infra: recebe FlowEngineDeps (ports). O index.ts wireia a impl real;
  * os testes injetam fakes.
+ *
+ * ## Concorrencia (F56-S13 / INF-04)
+ * Todo step comeca com um CLAIM atomico (`FlowDbPort.claimExecution`): dois envelopes
+ * concorrentes do mesmo executionId nunca executam em paralelo — exatamente um reivindica.
+ * Envelope que perde o claim:
+ *  - `terminal`/`not_due`/`not_found` → duplicado absorvido (drop silencioso; ack);
+ *  - `in_flight` → lanca {@link FlowStepInFlightError}: o retry ladder do MQ (F56-S12)
+ *    re-tenta com backoff; se o detentor morreu no meio do step, o lease expira e um
+ *    retry posterior faz takeover — recuperacao pos-crash sem duplicar side effects.
+ * Os patches de fim de step sao FENCED (`expectStatus: ['processing']`): um step que
+ * perdeu o claim (cancel concorrente / takeover) tem a transicao recusada e NAO re-enfileira.
+ *
+ * ## Anti-loop (F56-S13 / INF-05)
+ * O claim incrementa `step_count`; acima de {@link FLOW_MAX_STEPS} a execucao falha com
+ * "loop suspeito" — um flow ciclico deixa de flodar a fila indefinidamente.
  */
-import type { ExecutionPatch, FlowEngineDeps, FlowExecutionEvent, LoadedExecution } from './deps';
+import type {
+  ExecutionPatch,
+  FlowClaimResult,
+  FlowEngineDeps,
+  FlowExecutionEvent,
+  FlowExecutionPublicStatus,
+  LoadedExecution,
+} from './deps';
 import { getHandler } from './registry';
 import type {
   FlowEdge,
@@ -16,6 +38,25 @@ import type {
   FlowOutboundMessage,
   FlowPresenceAction,
 } from './types';
+
+/**
+ * Teto de steps por execucao (INF-05). Generoso para flows legitimos (um flow de 50 nodes
+ * com dezenas de ciclos de espera/menu fica ordens de magnitude abaixo); um ciclo sem
+ * espera estoura em segundos e a execucao falha em vez de flodar a fila para sempre.
+ */
+export const FLOW_MAX_STEPS = 1000;
+
+/**
+ * Outro consumer detem o claim do step (status `processing` dentro do lease). Transitorio
+ * por contrato: o consumer do worker deixa o retry ladder (F56-S12) re-tentar com backoff —
+ * e assim que um crash no meio do step e recuperado (takeover apos o lease expirar).
+ */
+export class FlowStepInFlightError extends Error {
+  override readonly name = 'FlowStepInFlightError';
+  constructor(readonly executionId: string) {
+    super(`flow step em voo por outro consumer (executionId=${executionId})`);
+  }
+}
 
 export interface TriggerFlowInput {
   workspaceId: string;
@@ -43,7 +84,7 @@ async function emitEvent(deps: FlowEngineDeps, event: FlowExecutionEvent): Promi
 /** Monta o evento a partir de uma execução carregada. */
 function execEvent(
   exec: LoadedExecution,
-  status: LoadedExecution['status'],
+  status: FlowExecutionPublicStatus,
   nextStepAt: Date | null,
 ): FlowExecutionEvent {
   return {
@@ -155,12 +196,8 @@ function buildContext(
 }
 
 export async function processFlowStep(deps: FlowEngineDeps, executionId: string): Promise<void> {
-  const exec = await deps.db.loadExecutionByIdOnly(executionId);
-  if (!exec) {
-    deps.logger.log('warn', 'flow execution nao encontrada', { executionId });
-    return;
-  }
-  await runStep(deps, exec);
+  const claim = await deps.db.claimExecutionByIdOnly(executionId);
+  await runClaimed(deps, claim, executionId);
 }
 
 export async function processFlowStepScoped(
@@ -168,24 +205,71 @@ export async function processFlowStepScoped(
   workspaceId: string,
   executionId: string,
 ): Promise<void> {
-  const exec = await deps.db.loadExecution(workspaceId, executionId);
-  if (!exec) {
-    deps.logger.log('warn', 'flow execution nao encontrada', { workspaceId, executionId });
+  const claim = await deps.db.claimExecution(workspaceId, executionId);
+  await runClaimed(deps, claim, executionId);
+}
+
+/**
+ * Decide o destino do envelope a partir do resultado do claim (ver doc do modulo):
+ * reivindicou → teto anti-loop e step; nao reivindicou → drop (duplicado absorvido) ou
+ * throw transitorio (`in_flight` → retry ladder cobre crash do detentor).
+ */
+async function runClaimed(
+  deps: FlowEngineDeps,
+  claim: FlowClaimResult,
+  executionId: string,
+): Promise<void> {
+  if (!claim.claimed) {
+    switch (claim.reason) {
+      case 'not_found':
+        deps.logger.log('warn', 'flow execution nao encontrada', { executionId });
+        return;
+      case 'terminal':
+      case 'not_due':
+        // Envelope duplicado/prematuro: a execucao ja terminou ou o scheduler a acordara
+        // no prazo. Absorvido sem side effects (era ISTO que duplicava mensagem).
+        deps.logger.log('debug', 'flow step: envelope absorvido (sem claim)', {
+          executionId,
+          reason: claim.reason,
+        });
+        return;
+      case 'in_flight':
+        throw new FlowStepInFlightError(executionId);
+    }
+    return;
+  }
+
+  const exec = claim.execution;
+  if (exec.stepCount > FLOW_MAX_STEPS) {
+    await failLoopSuspect(deps, exec);
     return;
   }
   await runStep(deps, exec);
 }
 
-async function runStep(deps: FlowEngineDeps, exec: LoadedExecution): Promise<void> {
-  if (exec.status !== 'running' && exec.status !== 'waiting') return;
+/** Teto anti-loop excedido (INF-05): falha a execucao em vez de flodar a fila. */
+async function failLoopSuspect(deps: FlowEngineDeps, exec: LoadedExecution): Promise<void> {
+  const node = findNode(exec.nodes, exec.currentNodeId);
+  const error = `loop suspeito: execucao excedeu o teto de ${FLOW_MAX_STEPS} steps (step_count=${exec.stepCount})`;
+  deps.logger.log('error', 'flow step: teto anti-loop excedido — execucao falhada', {
+    executionId: exec.executionId,
+    flowId: exec.flowId,
+    stepCount: exec.stepCount,
+    currentNodeId: exec.currentNodeId,
+  });
+  await persistFailure(deps, exec, node ?? { id: 'loop_guard', type: 'loop_guard', data: {} }, error);
+}
 
+async function runStep(deps: FlowEngineDeps, exec: LoadedExecution): Promise<void> {
   const node = findNode(exec.nodes, exec.currentNodeId) ?? entryNode(exec.nodes);
   if (!node) {
-    await deps.db.patchExecution(exec.workspaceId, exec.executionId, {
-      status: 'completed',
-      completedAt: deps.now(),
-    });
-    await emitEvent(deps, execEvent(exec, 'completed', null));
+    const applied = await deps.db.patchExecution(
+      exec.workspaceId,
+      exec.executionId,
+      { status: 'completed', completedAt: deps.now() },
+      { expectStatus: ['processing'] },
+    );
+    if (applied) await emitEvent(deps, execEvent(exec, 'completed', null));
     return;
   }
 
@@ -239,13 +323,14 @@ async function runStep(deps: FlowEngineDeps, exec: LoadedExecution): Promise<voi
 
   if (result.status === 'WAITING') {
     const nextStepAt = new Date(result.nextStepAt);
-    await deps.db.patchExecution(exec.workspaceId, exec.executionId, {
-      status: 'waiting',
-      currentNodeId: node.id,
-      variables: mergedVars,
-      nextStepAt,
-    });
-    await emitEvent(deps, execEvent(exec, 'waiting', nextStepAt));
+    const applied = await deps.db.patchExecution(
+      exec.workspaceId,
+      exec.executionId,
+      { status: 'waiting', currentNodeId: node.id, variables: mergedVars, nextStepAt },
+      { expectStatus: ['processing'] },
+    );
+    if (applied) await emitEvent(deps, execEvent(exec, 'waiting', nextStepAt));
+    else logLostClaim(deps, exec, 'waiting');
     return;
   }
 
@@ -284,6 +369,14 @@ function readFallbackHandle(node: FlowNode): string | undefined {
   return undefined;
 }
 
+/** Perdeu o claim entre o handler e o patch final (cancel concorrente / takeover de lease). */
+function logLostClaim(deps: FlowEngineDeps, exec: LoadedExecution, transition: string): void {
+  deps.logger.log('warn', 'flow step: claim perdido — transicao descartada', {
+    executionId: exec.executionId,
+    transition,
+  });
+}
+
 async function advance(
   deps: FlowEngineDeps,
   exec: LoadedExecution,
@@ -291,21 +384,28 @@ async function advance(
   variables: Record<string, unknown>,
 ): Promise<void> {
   if (!target) {
-    await deps.db.patchExecution(exec.workspaceId, exec.executionId, {
-      status: 'completed',
-      currentNodeId: null,
-      variables,
-      completedAt: deps.now(),
-    });
-    await emitEvent(deps, execEvent(exec, 'completed', null));
+    const applied = await deps.db.patchExecution(
+      exec.workspaceId,
+      exec.executionId,
+      { status: 'completed', currentNodeId: null, variables, completedAt: deps.now() },
+      { expectStatus: ['processing'] },
+    );
+    if (applied) await emitEvent(deps, execEvent(exec, 'completed', null));
+    else logLostClaim(deps, exec, 'completed');
     return;
   }
   // running→running (avança para o próximo node): NÃO emite (anti-ruído).
-  await deps.db.patchExecution(exec.workspaceId, exec.executionId, {
-    status: 'running',
-    currentNodeId: target,
-    variables,
-  });
+  const applied = await deps.db.patchExecution(
+    exec.workspaceId,
+    exec.executionId,
+    { status: 'running', currentNodeId: target, variables },
+    { expectStatus: ['processing'] },
+  );
+  if (!applied) {
+    // Sem o claim, re-enfileirar duplicaria/ressuscitaria a execucao (ex.: cancelada em voo).
+    logLostClaim(deps, exec, 'running');
+    return;
+  }
   await deps.queue.enqueueStep({ workspaceId: exec.workspaceId, executionId: exec.executionId });
 }
 
@@ -324,13 +424,19 @@ async function persistFailure(
     level: 'error',
     message: error,
   });
-  await deps.db.patchExecution(exec.workspaceId, exec.executionId, {
-    status: 'failed',
-    lastError: error,
-    ...(variables ? { variables } : {}),
-    completedAt: deps.now(),
-  });
-  await emitEvent(deps, execEvent(exec, 'failed', null));
+  const applied = await deps.db.patchExecution(
+    exec.workspaceId,
+    exec.executionId,
+    {
+      status: 'failed',
+      lastError: error,
+      ...(variables ? { variables } : {}),
+      completedAt: deps.now(),
+    },
+    { expectStatus: ['processing'] },
+  );
+  if (applied) await emitEvent(deps, execEvent(exec, 'failed', null));
+  else logLostClaim(deps, exec, 'failed');
 }
 
 export async function resumeFlowWithResponse(
@@ -348,10 +454,15 @@ export async function resumeFlowWithResponse(
       last_response_type: input.responseType,
       response_edge: input.responseType,
     };
-    await deps.db.patchExecution(exec.workspaceId, exec.executionId, {
-      status: 'running',
-      variables,
-    });
+    // Fenced em `waiting`: se um step reivindicou a execucao neste meio-tempo (timeout em
+    // voo), o resume nao sobrescreve o estado — evita fork execução dupla (INF-04).
+    const applied = await deps.db.patchExecution(
+      exec.workspaceId,
+      exec.executionId,
+      { status: 'running', variables },
+      { expectStatus: ['waiting'] },
+    );
+    if (!applied) continue;
     await emitEvent(deps, execEvent(exec, 'running', null));
     await deps.queue.enqueueStep({ workspaceId: exec.workspaceId, executionId: exec.executionId });
   }
@@ -367,12 +478,15 @@ export async function cancelFlowExecution(
   if (!exec) return;
   if (exec.status === 'completed' || exec.status === 'failed' || exec.status === 'cancelled')
     return;
-  await deps.db.patchExecution(workspaceId, executionId, {
-    status: 'cancelled',
-    lastError: reason ?? null,
-    completedAt: deps.now(),
-  });
-  await emitEvent(deps, execEvent(exec, 'cancelled', null));
+  // Fenced em nao-terminal: cancelar vence um step em voo (`processing`) — o patch final
+  // do step, fenced em `processing`, sera recusado e nao ressuscita a execucao.
+  const applied = await deps.db.patchExecution(
+    workspaceId,
+    executionId,
+    { status: 'cancelled', lastError: reason ?? null, completedAt: deps.now() },
+    { expectStatus: ['running', 'waiting', 'processing'] },
+  );
+  if (applied) await emitEvent(deps, execEvent(exec, 'cancelled', null));
 }
 
 export async function cancelAllForConversation(
@@ -382,10 +496,13 @@ export async function cancelAllForConversation(
   const active = await deps.db.findActiveByConversation(conversationId);
   let count = 0;
   for (const exec of active) {
-    await deps.db.patchExecution(exec.workspaceId, exec.executionId, {
-      status: 'cancelled',
-      completedAt: deps.now(),
-    });
+    const applied = await deps.db.patchExecution(
+      exec.workspaceId,
+      exec.executionId,
+      { status: 'cancelled', completedAt: deps.now() },
+      { expectStatus: ['running', 'waiting', 'processing'] },
+    );
+    if (!applied) continue;
     await emitEvent(deps, execEvent(exec, 'cancelled', null));
     count += 1;
   }

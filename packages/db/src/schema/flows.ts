@@ -8,7 +8,9 @@
  *   ao publicar. Execucoes em curso referenciam o flow_version_id ativo quando dispararam.
  * - flow_executions (workspace-scoped -> RLS): flow_version_id e ON DELETE RESTRICT (referencia
  *   a VERSION, nao o flow). idx_flow_executions_status_next (parcial waiting+timer) e o
- *   hot-path do scheduler (F4-S03).
+ *   hot-path do scheduler (F4-S03). F56-S13: status `processing` = step reivindicado (claim
+ *   atomico do dispatcher, INF-04) e `step_count` = total de steps executados (teto anti-loop,
+ *   INF-05) — ambos escritos SO pelo claim/patch do @hm/flow-engine.
  * - flow_logs (workspace-scoped -> RLS): trilha por no.
  * - flow_submissions (workspace-scoped -> RLS): respostas de Meta Flows (F4-S14).
  *
@@ -122,6 +124,8 @@ export const flowExecutions = pgTable(
     }),
     status: text('status').notNull().default('running'),
     currentNodeId: text('current_node_id'),
+    /** Steps ja executados (incrementado atomicamente pelo claim; teto anti-loop na engine). */
+    stepCount: integer('step_count').notNull().default(0),
     variables: jsonb('variables').$type<Record<string, unknown>>().notNull().default({}),
     nextStepAt: ts('next_step_at'),
     lastError: text('last_error'),
@@ -140,7 +144,7 @@ export const flowExecutions = pgTable(
     check('flow_executions_triggered_by_chk', sql`${t.triggeredBy} in ('manual','automatic','api')`),
     check(
       'flow_executions_status_chk',
-      sql`${t.status} in ('running','waiting','completed','failed','cancelled')`,
+      sql`${t.status} in ('running','waiting','processing','completed','failed','cancelled')`,
     ),
   ],
 );
