@@ -81,13 +81,30 @@ export interface RetryPolicy {
 }
 
 /**
- * Filas cliente-facing que recebem a política resiliente **automaticamente** —
- * mesmo que o consumer chame `consume` sem opções. Os workers inbound/outbound/
- * media não podem ser editados aqui (outros slots), então a proteção é aplicada
- * por nome de fila. As demais filas mantêm o comportamento legado (nack-drop).
+ * Filas de trabalho que recebem a política resiliente **automaticamente** —
+ * mesmo que o consumer chame `consume` sem opções. A proteção é aplicada por
+ * nome de fila; `assertTopology` itera esta lista para declarar a ladder de
+ * retry + DLX de cada uma (idempotente), então incluir uma fila aqui basta para
+ * ativar retry/DLQ end-to-end.
+ *
+ * F56-S12 (INF-03/DB-07): estendida para além de inbound/outbound/media. Antes,
+ * `flows`/`flow.execution`/`campaigns`/`coexistence`/`kb_ingest` caíam no ramo
+ * `nack(msg,false,false)` = **descarte silencioso** em qualquer throw (um blip
+ * de DB perdia execução de flow/campanha/agente sem rastro). Agora todas as
+ * filas de trabalho são at-least-once. Filas de infraestrutura efêmera (relay de
+ * socket, wait-queues) permanecem fora — perda tolerável, sem trabalho durável.
  */
 export function reliableQueues(): readonly string[] {
-  return [QUEUES.inbound, QUEUES.outbound, QUEUES.media];
+  return [
+    QUEUES.inbound,
+    QUEUES.outbound,
+    QUEUES.media,
+    QUEUES.flows,
+    QUEUES.flowExecution,
+    QUEUES.campaigns,
+    QUEUES.coexistence,
+    QUEUES.kbIngest,
+  ];
 }
 
 export function isReliableQueue(queue: string): boolean {

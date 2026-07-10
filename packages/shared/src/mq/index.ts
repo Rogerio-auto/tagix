@@ -19,8 +19,17 @@ export * from './retry';
 export * from './dlq';
 export * from './kb';
 export * from './flows';
-export { connectMq } from './connection';
-export type { MqHandle } from './connection';
+export { connectMq, getMqHealth, isMqConnected, MqNotConnectedError } from './connection';
+export type {
+  MqHandle,
+  ResilientMqHandle,
+  MqHealth,
+  MqConnectionState,
+  ConnectMqOptions,
+  MqReconnectOptions,
+} from './connection';
+export * from './publish';
+export { mqStats, resetMqStats, type MqStats } from './stats';
 
 /** Publica um envelope no exchange de eventos. */
 export function publish(channel: Channel, routingKey: string, envelope: Envelope): boolean {
@@ -34,9 +43,11 @@ export function publish(channel: Channel, routingKey: string, envelope: Envelope
 export interface ConsumeOptions {
   /**
    * Política de retry/DLX. `undefined` (default) aplica a política padrão da fila
-   * — filas cliente-facing (inbound/outbound/media) ganham retry + DLQ
-   * automaticamente; as demais mantêm o nack-sem-requeue legado. Passe `null`
-   * para FORÇAR o comportamento legado, ou um objeto para customizar.
+   * — filas de trabalho (`reliableQueues()`: inbound/outbound/media/flows/
+   * flow.execution/campaigns/coexistence/kb_ingest) ganham retry + DLQ
+   * automaticamente; filas de infraestrutura efêmera mantêm o nack-sem-requeue
+   * legado. Passe `null` para FORÇAR o comportamento legado, ou um objeto para
+   * customizar.
    */
   readonly retry?: RetryPolicy | null;
   /** Logger estruturado opcional para os eventos de retry/DLQ. */

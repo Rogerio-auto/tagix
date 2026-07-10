@@ -301,20 +301,42 @@ describe('consume — política de retry/DLQ', () => {
     expect(fake.dlqMessages()[0]?.properties.headers[DLQ_REASON_HEADER]).toBe('invalid_envelope');
   });
 
-  it('fila NÃO confiável mantém o comportamento legado (nack sem requeue, sem DLQ)', async () => {
+  it('fila efêmera NÃO confiável mantém o comportamento legado (nack sem requeue, sem DLQ)', async () => {
+    // F56-S12: todas as filas de TRABALHO (QUEUES.*) agora são confiáveis
+    // (reliableQueues estendida). O ramo legado de nack-drop só vale para filas
+    // de infraestrutura efêmera fora do enum de trabalho — ex. o relay de socket,
+    // cuja perda em erro é tolerável (nada durável). Usamos uma fila literal que
+    // NÃO está em reliableQueues() para exercitar o caminho legado.
+    const ephemeralQueue = 'hm.q.socket.relay';
     const fake = new FakeChannel();
     await assertTopology(fake.asChannel());
 
-    await consume(fake.asChannel(), QUEUES.flows, async () => {
-      throw new Error('falha numa fila legada');
+    await consume(fake.asChannel(), ephemeralQueue, async () => {
+      throw new Error('falha numa fila efêmera');
     });
 
-    fake.deliver(QUEUES.flows, makeEnvelope('flow.run', WORKSPACE, {}));
+    fake.deliver(ephemeralQueue, makeEnvelope('socket.relay', WORKSPACE, {}));
     await flush(() => fake.nacks.length > 0);
 
     expect(fake.nacks).toHaveLength(1);
     expect(fake.nacks[0]?.requeue).toBe(false);
     expect(fake.dlqMessages()).toHaveLength(0);
+  });
+
+  it('fila de trabalho antes legada (flows) agora entra na ladder de retry (F56-S12)', async () => {
+    const fake = new FakeChannel();
+    await assertTopology(fake.asChannel());
+
+    await consume(fake.asChannel(), QUEUES.flows, async () => {
+      throw new Error('blip transitório de DB');
+    });
+
+    fake.deliver(QUEUES.flows, makeEnvelope('flow.run', WORKSPACE, {}));
+    // Confiável agora: erro transitório vai para a wait-queue de retry, não é
+    // descartado (nack-drop). O ack ocorre só após reagendar para retry.
+    await flush(() => fake.acks.length > 0);
+
+    expect(fake.nacks).toHaveLength(0);
   });
 
   it('sucesso → ack, sem retry nem DLQ', async () => {
