@@ -39,13 +39,28 @@ function run(mw: ReturnType<typeof rateLimit>, req: Request, res: Response): Pro
 }
 
 describe('clientIp', () => {
-  it('prefere o primeiro IP de x-forwarded-for', () => {
+  // `req.ip` e derivado pelo Express a partir do trust proxy configurado (431563cd).
+  // Ler x-forwarded-for na mao aqui reintroduziria o bypass: o header e do cliente.
+  it('usa req.ip e NAO confia no x-forwarded-for cru', () => {
     const req = {
       headers: { 'x-forwarded-for': '203.0.113.7, 10.0.0.1' },
       ip: '10.0.0.1',
       socket: {},
     } as unknown as Request;
-    expect(clientIp(req)).toBe('203.0.113.7');
+    expect(clientIp(req)).toBe('10.0.0.1');
+  });
+
+  it('cai para o remoteAddress do socket quando nao ha req.ip', () => {
+    const req = {
+      headers: {},
+      socket: { remoteAddress: '198.51.100.9' },
+    } as unknown as Request;
+    expect(clientIp(req)).toBe('198.51.100.9');
+  });
+
+  it('devolve "unknown" quando nao ha origem confiavel', () => {
+    const req = { headers: {}, socket: {} } as unknown as Request;
+    expect(clientIp(req)).toBe('unknown');
   });
 });
 
