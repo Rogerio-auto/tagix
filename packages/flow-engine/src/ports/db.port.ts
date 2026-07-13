@@ -11,7 +11,7 @@
  * ganha fencing opcional (`expectStatus`) para o patch final do step so aplicar se o
  * claim ainda for nosso.
  */
-import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { getDb, schema, withWorkspace } from '@hm/db';
 import type {
   ExecutionPatch,
@@ -32,7 +32,11 @@ import type { FlowEdge, FlowNode } from '../types';
  */
 export const FLOW_CLAIM_LEASE_MS = 120_000;
 
-const CLAIM_LEASE_SQL = sql.raw(`interval '${FLOW_CLAIM_LEASE_MS / 1000} seconds'`);
+/**
+ * Lazy de proposito: `sql.raw()` em escopo de modulo executa no import e quebra todo
+ * consumidor que mocke `drizzle-orm` sem expor `.raw` (derrubou a suite de @hm/workers).
+ */
+const claimLeaseSql = (): SQL => sql.raw(`interval '${FLOW_CLAIM_LEASE_MS / 1000} seconds'`);
 
 const { flows, flowVersions, flowExecutions, flowLogs } = schema;
 
@@ -163,7 +167,7 @@ async function claimExecution(workspaceId: string, executionId: string): Promise
             ),
             and(
               eq(flowExecutions.status, 'processing'),
-              sql`${flowExecutions.updatedAt} < now() - ${CLAIM_LEASE_SQL}`,
+              sql`${flowExecutions.updatedAt} < now() - ${claimLeaseSql()}`,
             ),
           ),
         ),
