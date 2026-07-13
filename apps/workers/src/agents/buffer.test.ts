@@ -13,6 +13,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
+  AGG_PENDING_KEY,
+  conversationIdFromDeadlineKey,
   createAggregationBuffer,
   type AggregatedBatch,
   type BufferTimers,
@@ -27,6 +29,7 @@ const CONV = '00000000-0000-0000-0000-0000000000c1';
 class FakeRedis implements RedisLike {
   private readonly lists = new Map<string, string[]>();
   private readonly strings = new Map<string, string>();
+  private readonly zsets = new Map<string, Map<string, number>>();
 
   async rpush(key: string, ...values: string[]): Promise<number> {
     const list = this.lists.get(key) ?? [];
@@ -63,6 +66,24 @@ class FakeRedis implements RedisLike {
     this.lists.set(destination, list);
     this.lists.delete(source);
     return 'OK';
+  }
+  // Índice durável de deadlines (F56-S15): ZSET member=conversationId, score=deadline.
+  async zadd(key: string, score: number, member: string): Promise<unknown> {
+    const zset = this.zsets.get(key) ?? new Map<string, number>();
+    zset.set(member, score);
+    this.zsets.set(key, zset);
+    return 1;
+  }
+  async zrem(key: string, ...members: string[]): Promise<number> {
+    const zset = this.zsets.get(key);
+    if (zset === undefined) return 0;
+    let n = 0;
+    for (const m of members) if (zset.delete(m)) n++;
+    return n;
+  }
+  /** Inspeção do índice durável nos testes (não faz parte de `RedisLike`). */
+  zscore(key: string, member: string): number | undefined {
+    return this.zsets.get(key)?.get(member);
   }
 }
 
@@ -219,5 +240,69 @@ describe('createAggregationBuffer — stop()', () => {
     buffer.stop();
     await timers.tick(10_000);
     expect(onFlush).not.toHaveBeenCalled();
+  });
+});
+
+// ─── F56-S15: índice durável + contexto do turno ─────────────────────────────
+
+describe('createAggregationBuffer — índice durável de deadlines (F56-S15)', () => {
+  it('indexa a conversa no ZSET com o score do deadline e re-pontua ao estender', async () => {
+    const { redis, timers, buffer } = setup();
+
+    await buffer.enqueueOrExtend(CONV, { text: 'oi' }, 10);
+    expect(redis.zscore(AGG_PENDING_KEY, CONV)).toBe(timers.now() + 10_000);
+
+    await timers.tick(3_000); // 3s depois, o cliente manda outra → estende
+    await buffer.enqueueOrExtend(CONV, { text: 'e mais' }, 10);
+    expect(redis.zscore(AGG_PENDING_KEY, CONV)).toBe(timers.now() + 10_000);
+  });
+
+  it('remove a conversa do índice após o flush (e mantém o TTL de guarda limpo)', async () => {
+    const { redis, timers, onFlush, buffer } = setup();
+
+    await buffer.enqueueOrExtend(CONV, { text: 'oi' }, 5);
+    await timers.tick(5_000);
+
+    expect(onFlush).toHaveBeenCalledOnce();
+    expect(redis.zscore(AGG_PENDING_KEY, CONV)).toBeUndefined();
+  });
+
+  it('flush de conversa sem itens (membro órfão) é no-op e limpa o índice', async () => {
+    const { redis, onFlush, buffer } = setup();
+
+    // Simula o crash entre o ZADD e o RPUSH: membro no índice, nada a drenar.
+    await redis.zadd(AGG_PENDING_KEY, 1, CONV);
+    await buffer.flush(CONV);
+
+    expect(onFlush).not.toHaveBeenCalled();
+    expect(redis.zscore(AGG_PENDING_KEY, CONV)).toBeUndefined();
+  });
+
+  it('devolve o contexto durável do turno no lote', async () => {
+    const { timers, onFlush, buffer } = setup();
+
+    await buffer.enqueueOrExtend(CONV, { text: 'oi' }, 5, {
+      workspaceId: 'ws-1',
+      trigger: { conversationId: CONV },
+    });
+    await timers.tick(5_000);
+
+    const batch = onFlush.mock.calls[0]![0];
+    expect(batch.context).toEqual({ workspaceId: 'ws-1', trigger: { conversationId: CONV } });
+  });
+
+  it('lote sem contexto não inventa um (undefined)', async () => {
+    const { timers, onFlush, buffer } = setup();
+    await buffer.enqueueOrExtend(CONV, { text: 'oi' }, 5);
+    await timers.tick(5_000);
+    expect(onFlush.mock.calls[0]![0].context).toBeUndefined();
+  });
+});
+
+describe('conversationIdFromDeadlineKey', () => {
+  it('extrai o id da chave de deadline e rejeita o que não casa', () => {
+    expect(conversationIdFromDeadlineKey(`hm:agg:deadline:${CONV}`)).toBe(CONV);
+    expect(conversationIdFromDeadlineKey('hm:agg:deadline:')).toBeNull();
+    expect(conversationIdFromDeadlineKey(`hm:agg:items:${CONV}`)).toBeNull();
   });
 });

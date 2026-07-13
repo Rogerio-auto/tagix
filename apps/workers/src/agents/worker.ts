@@ -47,6 +47,22 @@ import {
   type AgentRunSocketPort,
   type AgentExecutionEmit,
 } from './run';
+import {
+  createAggregationBuffer,
+  type AggregatedBatch,
+  type AggregationBuffer,
+  type OnFlush,
+  type RedisLike as AggregationBufferRedis,
+} from './buffer';
+import {
+  startAggregationFlushScheduler,
+  type AggregationFlushSchedulerHandle,
+  type AggregationSchedulerRedis,
+} from './buffer-scheduler';
+import { CompositeLockStore, InMemoryFifoLockStore } from '../lock';
+import { RedisLockStore } from '../redis/lock-store';
+import { createRedisClient } from '../redis/client';
+import type { Redis } from 'ioredis';
 import type { ServerToClientEvent } from '@hm/shared';
 
 /** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
@@ -165,11 +181,117 @@ export class MqAgentOutboundEnqueue implements AgentOutboundEnqueuePort {
   }
 }
 
+// ─── Buffer de agregação: wakeup durável (F56-S15 / INF-06) ───────────────────
+
+/**
+ * Contexto durável do turno agregado, gravado junto ao lote (`hm:agg:ctx:{conv}`).
+ * É o que torna um flush pós-restart ACIONÁVEL: sem workspace + gatilho, o lote
+ * recuperado seria inútil (o `runAgent` precisa deles para resolver a conversa,
+ * o agente ativo e o histórico sob RLS).
+ */
+export const agentAggregationContextSchema = z.object({
+  workspaceId: z.string().min(1),
+  trigger: agentRunTriggerSchema,
+});
+
+export type AgentAggregationContext = z.infer<typeof agentAggregationContextSchema>;
+
+/**
+ * Redis exigido pelo caminho de agregação: o subconjunto do buffer (itens/deadline/
+ * contexto/índice) + o do scheduler (lock/varredura/reconciliação). Uma instância
+ * de `ioredis` satisfaz ambos.
+ */
+export type AgentAggregationRedis = AggregationBufferRedis & AggregationSchedulerRedis;
+
+/**
+ * `onFlush` default: entrega o lote agregado ao `runAgent`, reconstruindo o gatilho
+ * a partir do contexto durável do batch. Sem contexto válido (produtor legado, TTL
+ * expirado, JSON corrompido) não há como resolver a conversa — loga-warn e descarta
+ * em vez de lançar (relançar só faria o scheduler reflushar um lote já drenado).
+ */
+export function createAggregationFlushHandler(deps: AgentRunDeps, logger: Logger): OnFlush {
+  return async (batch: AggregatedBatch): Promise<void> => {
+    const parsed = agentAggregationContextSchema.safeParse(batch.context);
+    if (!parsed.success) {
+      logger.warn('agg-buffer: lote sem contexto durável válido — descartado', {
+        conversationId: batch.conversationId,
+        messages: batch.messages.length,
+      });
+      return;
+    }
+    await runAgent(parsed.data.workspaceId, parsed.data.trigger, deps);
+  };
+}
+
+/** Composição do caminho de agregação (buffer + scheduler durável + recursos). */
+interface AggregationWiring {
+  readonly buffer: AggregationBuffer;
+  readonly scheduler: AggregationFlushSchedulerHandle;
+  /** Encerra o cliente Redis criado aqui (no-op quando ele foi injetado). */
+  close(): Promise<void>;
+}
+
+/**
+ * Monta o buffer de agregação sobre o Redis real e sobe o scheduler durável que o
+ * acorda. O flush passa a ter DUAS fontes de wakeup: o timer in-process (rápido) e
+ * o índice durável varrido pelo scheduler (sobrevive a restart) — o segundo é a
+ * fonte de verdade. O lock de flush é composto (FIFO local + Redis) para que duas
+ * instâncias do worker nunca drenem a mesma janela em paralelo.
+ */
+function startAggregation(options: AgentWorkerOptions): AggregationWiring {
+  const { deps, logger } = options;
+
+  // Cliente próprio só quando não injetado — e só o que nós criamos, nós fechamos.
+  const created: Redis | null = options.redis === undefined ? createRedisClient() : null;
+  const redis: AgentAggregationRedis = options.redis ?? (created as Redis);
+
+  const buffer = createAggregationBuffer({
+    redis,
+    logger,
+    onFlush: options.onAggregatedFlush ?? createAggregationFlushHandler(deps, logger),
+    lockStore: new CompositeLockStore(
+      new InMemoryFifoLockStore(),
+      new RedisLockStore(redis, { logger }),
+    ),
+  });
+
+  const scheduler = startAggregationFlushScheduler({ redis, buffer, logger });
+
+  return {
+    buffer,
+    scheduler,
+    async close(): Promise<void> {
+      if (created === null) return; // Recurso do caller — não é nosso para fechar.
+      try {
+        await created.quit();
+      } catch {
+        created.disconnect();
+      }
+    },
+  };
+}
+
 // ─── Worker ───────────────────────────────────────────────────────────────────
 
 export interface AgentWorkerOptions {
   readonly deps: AgentRunDeps;
   readonly logger: Logger;
+  /**
+   * Redis do caminho de agregação (default: cliente próprio via `REDIS_URL`).
+   * Injetável em teste/bootstrap; quando injetado, o worker NÃO o fecha no `stop`.
+   */
+  readonly redis?: AgentAggregationRedis;
+  /**
+   * Substitui o `onFlush` default do buffer (que roda o agente com o lote).
+   * Uso: teste e wiring alternativo. Não afeta a durabilidade do wakeup.
+   */
+  readonly onAggregatedFlush?: OnFlush;
+  /**
+   * Desliga o buffer + scheduler durável (`false`). Só para ambientes sem Redis
+   * (testes de unidade do consumer). Em produção o wakeup durável é obrigatório —
+   * sem ele, um restart no meio da janela faz a IA perder o turno (INF-06).
+   */
+  readonly aggregation?: false;
 }
 
 /** Config do runtime Python (base URL + token interno compartilhado). */
@@ -247,11 +369,20 @@ export async function handleAgentEnvelope(
 
 export interface AgentWorkerHandle {
   stop(): Promise<void>;
+  /**
+   * Buffer de agregação servido pelo wakeup durável (`undefined` quando
+   * `aggregation: false`). Exposto para quem produz turnos agregados.
+   */
+  readonly buffer?: AggregationBuffer;
 }
 
 /**
  * Inicia o consumer de `hm.q.flows` (gatilhos de agente). Conecta ao RabbitMQ,
- * garante a fila e registra o handler. Retorna um handle para parada limpa.
+ * garante a fila, registra o handler e sobe o **wakeup durável** do buffer de
+ * agregação (F56-S15): o scheduler singleton que varre o índice de deadlines no
+ * Redis e flusha as janelas vencidas — inclusive as deixadas órfãs pelo processo
+ * anterior (restart/deploy/crash no meio da janela). Retorna handle para parada
+ * limpa (consumer + scheduler + buffer + Redis próprio).
  */
 export async function startAgentWorker(
   options: AgentWorkerOptions,
@@ -265,10 +396,21 @@ export async function startAgentWorker(
     await handleAgentEnvelope(envelope, options);
   });
 
-  logger.info('agent worker iniciado', { queue: AGENT_QUEUE });
+  const aggregation = options.aggregation === false ? null : startAggregation(options);
+
+  logger.info('agent worker iniciado', {
+    queue: AGENT_QUEUE,
+    durableAggregationFlush: aggregation !== null,
+  });
 
   return {
+    ...(aggregation !== null ? { buffer: aggregation.buffer } : {}),
     async stop(): Promise<void> {
+      if (aggregation !== null) {
+        await aggregation.scheduler.stop();
+        aggregation.buffer.stop();
+        await aggregation.close();
+      }
       await channel.close();
       await connection.close();
       logger.info('agent worker parado', { queue: AGENT_QUEUE });
