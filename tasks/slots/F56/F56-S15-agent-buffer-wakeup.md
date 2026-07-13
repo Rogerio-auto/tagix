@@ -2,7 +2,7 @@
 id: F56-S15
 title: Agent buffer — wakeup durável do flush de agregação
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-13T14:26:51Z
 
+---
 # F56-S15 — Buffer de IA: wakeup durável (INF-06)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.2. O flush do lote de mensagens da IA é armado por `setTimeout` in-process; um restart do worker durante a janela de agregação perde o timer e a IA nunca responde àquele turno.

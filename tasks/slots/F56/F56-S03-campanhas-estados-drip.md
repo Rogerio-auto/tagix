@@ -2,7 +2,7 @@
 id: F56-S03
 title: Campanhas — máquina de estados do recipient (drip + completed + teto diário)
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-13T14:26:48Z
 
+---
 # F56-S03 — Campanhas: drip multi-passo + estado terminal + teto diário (CAMP-03/04/06)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.4. Drip só envia o 1º passo (`delaySeconds` nunca é lido; recipient trava em `sending`); campanha nunca vira `completed` (loop infinito de tick 60s); `dailyLimit` nunca é aplicado.

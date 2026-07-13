@@ -2,7 +2,7 @@
 id: F56-S14
 title: Outbound — retry durável para falha transitória do provider
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-13T14:26:51Z
 
+---
 # F56-S14 — Outbound: retry durável de transitório (INF-02)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.2. O adapter WhatsApp captura todo erro (inclusive `MetaError{retryable:true}`) e retorna `{ok:false}`; `finalize` persiste `failed` e ack'a — a ladder durável nunca dispara para 429/5xx/timeout.

@@ -2,7 +2,7 @@
 id: F56-S05
 title: Ativação de canal recuperável (Embedded Signup + badge + fallback)
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: frontend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-13T14:26:51Z
 
+---
 # F56-S05 — Ativação de canal recuperável (UX-01/UX-06/UX-12)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.5. Conectar canal é o passo que liga o produto e hoje degrada para um formulário impossível; o badge "Canais" mostra "0 ativos" mesmo com canal ativo; o fallback manual não aparece.

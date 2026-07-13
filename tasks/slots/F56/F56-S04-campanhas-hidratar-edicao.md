@@ -2,7 +2,7 @@
 id: F56-S04
 title: Campanhas — hidratar o wizard no modo edição
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: frontend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-13T14:26:50Z
 
+---
 # F56-S04 — Campanhas: hidratar edição (CAMP-05 / UX-02)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.4/§3.5. `/campaigns/[id]/edit` abre o wizard com defaults vazios e nenhum GET; editar mostra formulário em branco e `PUT /steps` (delete+insert) zera os steps existentes.
