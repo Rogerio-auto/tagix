@@ -18,9 +18,23 @@ export {
 export {
   DbChannelResolver,
   DbOutboundPersistence,
+  DbSendAttemptStore,
+  defaultSendAttemptStore,
   toChannelSnapshot,
   type ChannelAdapterFactory,
 } from './db-ports';
+
+export {
+  MAX_SEND_ATTEMPTS,
+  TransientSendError,
+  exhaustedResult,
+  handleTransientSendFailure,
+  transientFailureFromError,
+  transientFailureFromResult,
+  type SendAttemptStore,
+  type SendFailure,
+  type RecordAttemptInput,
+} from './retry-policy';
 
 export {
   runPresencePreAction,

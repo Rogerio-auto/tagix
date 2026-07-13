@@ -6,10 +6,29 @@
  * interactive), download de mídia, markAsRead e typing indicator. Usa o
  * `GraphClient` compartilhado para HTTP (retry/timeout) e os serializers /
  * parser deste diretório. Sem `any` (LIVECHAT.md §2.2, §4).
+ *
+ * ## Contrato de falha de envio (F56-S14 / INF-02)
+ *
+ * Os `send*` distinguem DOIS tipos de falha — a distinção é o que impede uma
+ * mensagem de cliente de ser queimada por um soluço da Meta:
+ *
+ * - **Permanente** (conteúdo/config: número sem WhatsApp, template inválido,
+ *   token revogado, fora da janela 24h…): resolve `SendResult { ok: false }`.
+ *   Reprocessar não muda o desfecho → o worker persiste `failed` (visível ao
+ *   usuário) e ack'a o job.
+ * - **Transitória** (429/rate-limit, 5xx, timeout/rede): **lança** `MetaError`
+ *   com `retryable: true`. Não é um resultado de envio — é um "ainda não". O
+ *   worker outbound propaga a exceção e a ladder durável de `@hm/shared/mq`
+ *   (5s → 30s → 2m → 10m → 30m) reprocessa o job, sobrevivendo a restart do
+ *   worker. Antes desta mudança o `retryable` era descartado aqui e TODA falha
+ *   virava `failed` imediato — cliente nunca recebia a mensagem.
+ *
+ * Idempotência do reenvio é garantida no worker (guard `findSentExternalId`):
+ * se o POST chegou a criar um `wamid`, o job reentregue não reenvia.
  */
 
 import type { GraphClient } from '../../shared/graphClient';
-import { MetaError } from '../../shared/errors';
+import { MetaError, isRetryableStatus } from '../../shared/errors';
 import type {
   AdapterCapabilities,
   Channel,
@@ -35,7 +54,7 @@ import {
   serializeTemplate,
   serializeText,
 } from './serializer';
-import { mapWaError } from './errors';
+import { mapWaError, WA_ERROR_CODES } from './errors';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -195,9 +214,43 @@ export class MetaWhatsAppAdapter implements IChannelAdapter {
       }
       return { ok: true, externalId, raw: res };
     } catch (err: unknown) {
+      // Transitório → exceção (ladder durável). Permanente → SendResult falho.
+      throwIfTransient(err);
       return toSendResult(err);
     }
   }
+}
+
+/**
+ * Falha transitória do provider? `MetaError.retryable` já cobre 429/5xx/rede
+ * (httpStatus 0) e os códigos Graph genéricos de rate limit; o mapa WA
+ * (`WA_ERROR_CODES`) acrescenta os códigos específicos do WhatsApp que a Meta
+ * devolve com HTTP 200/400 mas são temporários (130429 rate limit da WABA,
+ * 131000 erro genérico, 131016 serviço indisponível, 368 bloqueio temporário).
+ */
+export function isTransientWaError(err: MetaError): boolean {
+  return err.retryable || isRetryableStatus(err.httpStatus) || mapWaError(err.code).retryable;
+}
+
+/**
+ * Relança falha transitória como `MetaError { retryable: true }` — normalizando
+ * o flag (o mapa WA sabe de códigos que o `MetaError` cru não classifica) e
+ * preservando `httpStatus`/`code`/`raw` para o worker montar o `errorCode`
+ * (`WA_<code>`) quando a ladder esgotar. No-op para erro permanente.
+ */
+function throwIfTransient(err: unknown): void {
+  if (!(err instanceof MetaError) || !isTransientWaError(err)) return;
+
+  const known = err.code !== undefined && err.code in WA_ERROR_CODES;
+  const message = known ? mapWaError(err.code).message : err.message;
+
+  throw new MetaError(message, {
+    httpStatus: err.httpStatus,
+    ...(err.code !== undefined ? { code: err.code } : {}),
+    ...(err.subcode !== undefined ? { subcode: err.subcode } : {}),
+    retryable: true,
+    raw: err.raw,
+  });
 }
 
 /** Extrai `messages[0].id` da resposta da Cloud API. */

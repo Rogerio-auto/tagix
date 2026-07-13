@@ -11,11 +11,12 @@
  * adapter via a `AdapterFactory` injetada (composição) — igual ao resolver de
  * mídia. Tudo atrás de portas injetáveis (testável sem DB/HTTP).
  */
-import { and, eq, isNull, lte, or } from 'drizzle-orm';
+import { and, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import type { Channel, IChannelAdapter } from '@hm/channels';
 import { decryptSecret, schema, withWorkspace } from '@hm/db';
 import type { ChannelProvider } from '@hm/shared';
 import { nextViewStatus } from '../inbound/status';
+import type { RecordAttemptInput, SendAttemptStore } from './retry-policy';
 import type {
   ChannelResolver,
   OutboundPersistencePort,
@@ -132,6 +133,67 @@ export class DbOutboundSendGuard implements OutboundSendGuard {
 
 /** Instância default compartilhada (injetada por padrão em `dispatchOutbound`). */
 export const defaultOutboundSendGuard: OutboundSendGuard = new DbOutboundSendGuard();
+
+// ─── Contador durável de tentativas de envio (F56-S14) ────────────────────────
+
+/** Teto de caracteres do erro guardado em `metadata.lastSendError.message`. */
+const LAST_ERROR_MAX_LEN = 500;
+
+/**
+ * Contador de tentativas de envio persistido em `messages.metadata` (F56-S14).
+ *
+ * **Por que no Postgres.** O retry é durável (ladder do broker sobrevive a
+ * restart do worker); o contador precisa ser igualmente durável, senão um
+ * restart no meio do backoff zeraria a contagem e a mensagem retentaria para
+ * sempre. Um contador em memória (ou em Redis, que é cache) não dá essa
+ * garantia. Bônus: o suporte VÊ, na própria mensagem, quantas tentativas houve e
+ * qual foi o último erro do provider.
+ *
+ * O incremento é feito no banco (`metadata || jsonb_build_object(...)` com o
+ * valor lido da própria linha) e retorna o total já gravado — sem read-modify-
+ * write na aplicação. O lock por conversa serializa os envios da mesma conversa;
+ * o `RETURNING` mantém a contagem correta de qualquer forma.
+ *
+ * Sem `DATABASE_URL` (unit tests puros) no-opa devolvendo `1` (= "primeira
+ * tentativa") — nunca dispara o terminal `failed` por acidente.
+ */
+export class DbSendAttemptStore implements SendAttemptStore {
+  async record(input: RecordAttemptInput): Promise<number> {
+    if (!dbConfigured()) return 1;
+    const { messages } = schema;
+
+    const lastError = JSON.stringify({
+      code: input.failure.errorCode,
+      message: input.failure.errorMessage.slice(0, LAST_ERROR_MAX_LEN),
+      at: new Date().toISOString(),
+    });
+
+    const rows = await withWorkspace(input.workspaceId, async (tx) =>
+      tx
+        .update(messages)
+        .set({
+          metadata: sql`coalesce(${messages.metadata}, '{}'::jsonb) || jsonb_build_object(
+            'sendAttempts', coalesce((${messages.metadata} ->> 'sendAttempts')::int, 0) + 1,
+            'lastSendError', ${lastError}::jsonb
+          )`,
+          updatedAt: new Date(),
+        })
+        .where(eq(messages.id, input.messageId))
+        .returning({ metadata: messages.metadata }),
+    );
+
+    return readSendAttempts(rows[0]?.metadata);
+  }
+}
+
+/** Lê `metadata.sendAttempts` com narrowing (default 1 = primeira tentativa). */
+function readSendAttempts(metadata: Record<string, unknown> | undefined): number {
+  const raw = metadata?.['sendAttempts'];
+  return typeof raw === 'number' && Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 1;
+}
+
+/** Instância default compartilhada (injetada por padrão no worker outbound). */
+export const defaultSendAttemptStore: SendAttemptStore = new DbSendAttemptStore();
 
 /**
  * Persistência default do outbound via `@hm/db`. Sob `withWorkspace` (RLS):

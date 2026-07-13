@@ -10,25 +10,43 @@
  * ```
  *
  * `consume` de `@hm/shared/mq` já valida o `Envelope`, faz `ack` em sucesso e
- * `nack(requeue=false)` se o handler lançar. Erros de *negócio* (mismatch,
- * falha do provider) NÃO lançam: viram `view_status: failed` persistido e o job
- * é ack'd (não há ganho em reprocessar um payload imutável). Só erros de
- * *infra* (lock/DB/MQ) propagam para nack → DLX.
+ * roteia a exceção do handler pela ladder durável (retry por dead-letter + TTL)
+ * → DLQ (F56-S12).
+ *
+ * ## Contrato de erro (F56-S14)
+ *
+ * - **Permanente** (mismatch kind↔provider, janela IG fechada, número inválido,
+ *   template reprovado): NÃO lança — vira `view_status: failed` persistido e o
+ *   job é ack'd. Reprocessar um payload imutável não muda o desfecho.
+ * - **Transitório do provider** (429/5xx/timeout/rate limit): lança
+ *   `TransientSendError` → a ladder durável (5s→30s→2m→10m→30m) reprocessa o
+ *   job. Sobrevive a restart do worker. Esgotadas as tentativas, a mensagem vira
+ *   `failed` (visível) em vez de morrer `pending` na DLQ. Ver `retry-policy.ts`.
+ * - **Infra** (lock/DB/MQ): propaga como está → ladder genérica → DLQ.
  */
 import { connectMq, consume, type Envelope, type MqHandle } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
 import { runWithDistributedLock, type LockStore } from '../lock';
 import { resolveOutboundLockStore } from '../redis';
 import { parseOutboundJob, type OutboundJob } from './job';
-import { dispatchOutbound } from './dispatch';
+import { dispatchOutbound, type DispatchResult } from './dispatch';
 import { recordIgMessageTagUsed, recordIgWindowBlocked } from './ig-metrics';
 import { finalizeOutbound } from './finalize';
 import { runPresencePreAction } from './presence';
 import {
   DbChannelResolver,
   DbOutboundPersistence,
+  defaultOutboundSendGuard,
+  defaultSendAttemptStore,
   type ChannelAdapterFactory,
+  type OutboundSendGuard,
 } from './db-ports';
+import {
+  handleTransientSendFailure,
+  transientFailureFromError,
+  transientFailureFromResult,
+  type SendAttemptStore,
+} from './retry-policy';
 import { MqSocketEmit } from './mq-ports';
 import type { ChannelResolver, OutboundDeps, ResolvedChannel } from './ports';
 
@@ -123,6 +141,17 @@ export interface OutboundWorkerOptions {
   readonly logger: Logger;
   /** Backend de lock (default: FIFO em memória — ver `lock.ts`). */
   readonly lockStore?: LockStore;
+  /**
+   * Contador durável de tentativas de envio (F56-S14). Default:
+   * `DbSendAttemptStore` (`messages.metadata.sendAttempts`).
+   */
+  readonly attempts?: SendAttemptStore;
+  /**
+   * Guard de idempotência (F52-S04). Default: `DbOutboundSendGuard`. Injetável
+   * porque é ele que impede o REENVIO (F56-S14) de duplicar uma mensagem que o
+   * provider chegou a aceitar antes de a conexão cair.
+   */
+  readonly sendGuard?: OutboundSendGuard;
 }
 
 /**
@@ -148,14 +177,20 @@ export function createOutboundDeps(
 }
 
 /**
- * Processa um único envelope (testável sem RabbitMQ). Lança apenas em falha de
- * infra (lock/persistência) — o caller (`consume`) converte em nack.
+ * Processa um único envelope (testável sem RabbitMQ).
+ *
+ * Lança em (a) falha de infra (lock/DB/resolve de canal) e (b) falha TRANSITÓRIA
+ * do provider ainda com orçamento de tentativas (`TransientSendError`) — nos dois
+ * casos o `consume` roteia pela ladder durável. Falha permanente e transitória
+ * esgotada NÃO lançam: viram `failed` persistido (visível) + ack.
  */
 export async function handleOutboundEnvelope(
   envelope: Envelope,
   options: OutboundWorkerOptions,
 ): Promise<void> {
   const { deps, logger, lockStore } = options;
+  const attempts = options.attempts ?? defaultSendAttemptStore;
+  const sendGuard = options.sendGuard ?? defaultOutboundSendGuard;
   const job: OutboundJob = parseOutboundJob(envelope.payload);
   const workspaceId = envelope.workspaceId;
 
@@ -169,7 +204,26 @@ export async function handleOutboundEnvelope(
       // Best-effort — falha aqui não bloqueia o envio.
       await runPresencePreAction(job, channel, adapter, logger);
 
-      const dispatch = await dispatchOutbound(job, channel, adapter);
+      let dispatch: DispatchResult;
+      try {
+        dispatch = await dispatchOutbound(job, channel, adapter, sendGuard);
+      } catch (err: unknown) {
+        // F56-S14: o adapter lança em falha transitória do provider (429/5xx/
+        // timeout). Não é resultado de envio — é "ainda não": reprocessa pela
+        // ladder durável em vez de queimar a mensagem em `failed`.
+        const failure = transientFailureFromError(err, channel.provider);
+        if (failure === null) throw err; // infra/bug → ladder genérica + DLQ.
+        await handleTransientSendFailure({
+          job,
+          workspaceId,
+          provider: channel.provider,
+          failure,
+          deps,
+          logger,
+          attempts,
+        });
+        return;
+      }
 
       // F15-S04: metricas IG (tag usada / janela bloqueada).
       if (dispatch.dispatched && dispatch.messageTagUsed !== undefined) {
@@ -180,7 +234,23 @@ export async function handleOutboundEnvelope(
       }
 
       if (!dispatch.result.ok) {
-        logger.warn('outbound: envio não concluído', {
+        // Adapters que ainda reportam falha transitória por RESULTADO (IG/WAHA):
+        // mesma política, sem duplicar a taxonomia.
+        const failure = transientFailureFromResult(dispatch.result);
+        if (failure !== null) {
+          await handleTransientSendFailure({
+            job,
+            workspaceId,
+            provider: channel.provider,
+            failure,
+            deps,
+            logger,
+            attempts,
+          });
+          return;
+        }
+
+        logger.warn('outbound: envio não concluído (falha permanente)', {
           kind: job.kind,
           conversationId: job.conversationId,
           messageId: job.messageId,
@@ -223,9 +293,17 @@ export async function startOutboundWorker(
   const prefetch = outboundPrefetchFromEnv();
   await channel.prefetch(prefetch);
 
-  await consume(channel, OUTBOUND_QUEUE, async (envelope) => {
-    await handleOutboundEnvelope(envelope, workerOptions);
-  });
+  // `retry` fica no default da fila: `hm.q.outbound` é `reliableQueue` (F56-S12)
+  // → ladder durável + DLQ. O logger torna cada agendamento de retry / dead-letter
+  // observável (F56-S14: um envio que fica 40 min em retry não pode ser silencioso).
+  await consume(
+    channel,
+    OUTBOUND_QUEUE,
+    async (envelope) => {
+      await handleOutboundEnvelope(envelope, workerOptions);
+    },
+    { logger },
+  );
 
   logger.info('outbound worker iniciado', { queue: OUTBOUND_QUEUE, prefetch });
 
