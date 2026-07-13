@@ -7,9 +7,15 @@ export function ChannelsHelp() {
       </p>
       <p>
         Para conectar o WhatsApp ou Instagram oficiais, use o login da Meta no assistente — ele
-        autoriza o acesso e traz os identificadores da conta automaticamente. Quando o login da
-        Meta não estiver disponível, cole as credenciais manualmente (token e ids obtidos no
-        painel da Meta).
+        autoriza o acesso e traz os identificadores da conta automaticamente. Se a janela da Meta
+        não abrir, for cancelada ou não devolver os dados, o assistente abre os campos manuais na
+        mesma tela e explica o que fazer — você não precisa recomeçar.
+      </p>
+      <p>
+        Quando o login da Meta não estiver habilitado neste ambiente, o assistente avisa e oferece
+        as saídas possíveis: falar com o suporte, conectar pelo WAHA ou usar um{' '}
+        <span className="text-text">token permanente</span> da Meta (System User). O código do
+        Embedded Signup não é pedido nesse caso — ele só existe dentro da janela da Meta.
       </p>
       <p>
         No WhatsApp você escolhe entre <span className="text-text">número novo (Cloud API)</span> —

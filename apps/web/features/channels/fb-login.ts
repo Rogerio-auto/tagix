@@ -21,11 +21,35 @@
  * Configuração via env build-time (NEXT_PUBLIC_*):
  *   - `NEXT_PUBLIC_META_APP_ID`     → `FB.init({ appId })`
  *   - `NEXT_PUBLIC_META_CONFIG_ID`  → `FB.login({ config_id })` (Embedded Signup)
- * Sem essas envs, `isFbSdkAvailable()` → false e o wizard mantém a entrada manual.
+ * Sem essas envs o popup não abre: `getMetaSignupConfig().configured` é `false` e o
+ * wizard mostra o estado "indisponível" com saída real (F56-S05) — nunca um form
+ * pedindo um `code` que só o popup sabe emitir.
+ *
+ * Toda falha sai daqui como `MetaSignupError` com `reason` tipada, para a UI abrir
+ * o fallback certo em vez de um toast genérico.
  */
+
+import {
+  getMetaSignupConfig,
+  MetaSignupError,
+  type MetaSignupConfig,
+  type SignupFailureReason,
+} from './signup-status';
 
 const FB_SDK_SRC = 'https://connect.facebook.net/pt_BR/sdk.js';
 const FB_GRAPH_VERSION = 'v24.0';
+
+/**
+ * Janela de silêncio absoluto (nenhum `postMessage` da Meta, nenhum callback do
+ * `FB.login`) após a qual desistimos: o popup foi bloqueado, ficou órfão em outra
+ * aba ou o SDK morreu. Sem isso o usuário fica preso num botão girando para sempre
+ * — o sintoma que a auditoria pegou (UX-12). O relógio **reinicia a cada sinal de
+ * vida** da Meta, então um cadastro lento (OTP, verificação) não é abortado.
+ */
+const SIGNUP_SILENCE_TIMEOUT_MS = 240_000;
+
+/** Espera curta pelos ids (`FINISH`) depois que o `code` já chegou pelo callback. */
+const SIGNUP_SETTLE_MS = 5_000;
 
 /**
  * Confia em `https://*.facebook.com` (e `facebook.com`). O Embedded Signup emite o
@@ -45,6 +69,11 @@ function isTrustedFacebookOrigin(origin: string): boolean {
 
 const META_APP_ID = process.env['NEXT_PUBLIC_META_APP_ID'];
 const META_CONFIG_ID = process.env['NEXT_PUBLIC_META_CONFIG_ID'];
+
+/** Reexporta a configuração deste build (fonte única: `signup-status`). */
+export function metaSignupConfig(): MetaSignupConfig {
+  return getMetaSignupConfig();
+}
 
 // ---------------------------------------------------------------------------
 // Tipos mínimos do SDK do Facebook (declarados localmente — zero `any`).
@@ -97,21 +126,21 @@ declare global {
 
 let sdkPromise: Promise<FbSdk> | null = null;
 
-/** Indica se o Embedded Signup está configurado (envs presentes) e no browser. */
+/**
+ * Indica se o Embedded Signup pode ser aberto AGORA (envs presentes + browser).
+ * Para decidir o que renderizar, prefira `metaSignupConfig().configured`, que não
+ * olha `window` e por isso é estável entre SSR e hidratação.
+ */
 export function isFbSdkAvailable(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof META_APP_ID === 'string' &&
-    META_APP_ID.length > 0 &&
-    typeof META_CONFIG_ID === 'string' &&
-    META_CONFIG_ID.length > 0
-  );
+  return typeof window !== 'undefined' && getMetaSignupConfig().configured;
 }
 
 /** Carrega o `<script>` do SDK uma única vez e resolve com `window.FB` já inicializado. */
 function loadFbSdk(): Promise<FbSdk> {
   if (!isFbSdkAvailable() || typeof META_APP_ID !== 'string') {
-    return Promise.reject(new Error('Meta App ID/Config ID não configurados.'));
+    return Promise.reject(
+      new MetaSignupError('not_configured', 'Meta App ID/Config ID não configurados neste build.'),
+    );
   }
   if (sdkPromise) return sdkPromise;
 
@@ -119,7 +148,8 @@ function loadFbSdk(): Promise<FbSdk> {
     const init = (): void => {
       const fb = window.FB;
       if (!fb) {
-        reject(new Error('SDK do Facebook não carregou.'));
+        sdkPromise = null;
+        reject(new MetaSignupError('sdk_load_failed', 'O SDK da Meta não inicializou.'));
         return;
       }
       fb.init({ appId: META_APP_ID, autoLogAppEvents: true, xfbml: false, version: FB_GRAPH_VERSION });
@@ -148,7 +178,7 @@ function loadFbSdk(): Promise<FbSdk> {
     script.crossOrigin = 'anonymous';
     script.onerror = () => {
       sdkPromise = null;
-      reject(new Error('Não foi possível carregar o SDK da Meta.'));
+      reject(new MetaSignupError('sdk_load_failed', 'Não foi possível carregar o SDK da Meta.'));
     };
     document.body.appendChild(script);
   });
@@ -180,7 +210,9 @@ export interface FbLoginResult {
 /**
  * Dispara o FB Login clássico (token) para o Instagram Messaging. Resolve com o
  * `accessToken` do usuário; o caller usa-o para listar Páginas/contas IG.
- * Rejeita com mensagem clara em cancelamento → o caller cai no modo manual.
+ *
+ * Rejeita com `MetaSignupError` tipada (cancelamento, popup bloqueado/silencioso)
+ * → o caller mostra a recuperação certa em vez de girar para sempre.
  */
 export async function startFbLogin(
   provider: 'meta_whatsapp' | 'meta_instagram',
@@ -188,11 +220,29 @@ export async function startFbLogin(
   const fb = await loadFbSdk();
 
   return new Promise<FbLoginResult>((resolve, reject) => {
+    let settled = false;
+
+    // Popup bloqueado pelo navegador: o callback do FB.login nunca chega. Sem esse
+    // relógio, o botão fica em "loading" indefinidamente (UX-12).
+    const watchdog = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(
+        new MetaSignupError('timeout', 'A janela da Meta não respondeu (popup bloqueado?).'),
+      );
+    }, SIGNUP_SILENCE_TIMEOUT_MS);
+
     fb.login(
       (response) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(watchdog);
+
         const token = response.authResponse?.accessToken;
         if (response.status !== 'connected' || !token) {
-          reject(new Error('Login da Meta cancelado ou não autorizado.'));
+          reject(
+            new MetaSignupError('cancelled', 'Login da Meta cancelado ou não autorizado.'),
+          );
           return;
         }
         resolve({ accessToken: token });
@@ -293,8 +343,11 @@ function parseEmbeddedSignupMessage(raw: unknown): EmbeddedSignupMessage | null 
  * — o caller cai no fallback manual.
  */
 export async function startWhatsAppSignup(mode: WaConnectMode): Promise<WaSignupResult> {
-  if (typeof META_CONFIG_ID !== 'string') {
-    throw new Error('Embedded Signup não configurado (Config ID ausente).');
+  if (typeof META_CONFIG_ID !== 'string' || META_CONFIG_ID.length === 0) {
+    throw new MetaSignupError(
+      'not_configured',
+      'Embedded Signup não configurado (Config ID ausente).',
+    );
   }
 
   const fb = await loadFbSdk();
@@ -304,12 +357,17 @@ export async function startWhatsAppSignup(mode: WaConnectMode): Promise<WaSignup
     let authCode = '';
     let settled = false;
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    let silenceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const cleanup = (): void => {
       window.removeEventListener('message', onMessage);
       if (settleTimer) {
         clearTimeout(settleTimer);
         settleTimer = null;
+      }
+      if (silenceTimer) {
+        clearTimeout(silenceTimer);
+        silenceTimer = null;
       }
     };
 
@@ -320,11 +378,27 @@ export async function startWhatsAppSignup(mode: WaConnectMode): Promise<WaSignup
       resolve(result);
     };
 
-    const fail = (message: string): void => {
+    const fail = (reason: SignupFailureReason, message: string): void => {
       if (settled) return;
       settled = true;
       cleanup();
-      reject(new Error(message));
+      reject(new MetaSignupError(reason, message));
+    };
+
+    /**
+     * Relógio de silêncio: só dispara se a Meta parar de dar sinal de vida. Cada
+     * `postMessage` (inclusive progresso) e o callback do login o reiniciam — um
+     * cadastro demorado NÃO é abortado; um popup bloqueado/órfão, sim.
+     */
+    const keepAlive = (): void => {
+      if (settled) return;
+      if (silenceTimer) clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        fail(
+          'timeout',
+          'A janela da Meta não respondeu. O popup pode ter sido bloqueado ou fechado.',
+        );
+      }, SIGNUP_SILENCE_TIMEOUT_MS);
     };
 
     // Só resolve com AMBOS: o `code` (callback do FB.login) e os ids (postMessage
@@ -345,12 +419,18 @@ export async function startWhatsAppSignup(mode: WaConnectMode): Promise<WaSignup
       const msg = parseEmbeddedSignupMessage(event.data);
       if (!msg) return;
 
+      // Sinal de vida da Meta: o usuário está mexendo no popup.
+      keepAlive();
+
       if (msg.event === 'cancel') {
-        fail(`Cadastro cancelado na Meta${msg.currentStep ? ` (passo: ${msg.currentStep})` : ''}.`);
+        fail(
+          'cancelled',
+          `Cadastro cancelado na Meta${msg.currentStep ? ` (passo: ${msg.currentStep})` : ''}.`,
+        );
         return;
       }
       if (msg.event === 'error') {
-        fail(msg.errorMessage ?? 'Erro no Embedded Signup da Meta.');
+        fail('meta_error', msg.errorMessage ?? 'Erro no Embedded Signup da Meta.');
         return;
       }
       // finish | progress: acumula o que vier (os ids chegam no FINISH).
@@ -363,14 +443,16 @@ export async function startWhatsAppSignup(mode: WaConnectMode): Promise<WaSignup
     };
 
     window.addEventListener('message', onMessage);
+    keepAlive();
 
     fb.login(
       (response) => {
         if (settled) return;
+        keepAlive();
 
         const code = response.authResponse?.code;
         if (response.status !== 'connected' || !code) {
-          fail('Login da Meta cancelado ou não autorizado.');
+          fail('cancelled', 'Login da Meta cancelado ou não autorizado.');
           return;
         }
         authCode = code;
@@ -385,10 +467,11 @@ export async function startWhatsAppSignup(mode: WaConnectMode): Promise<WaSignup
               resolveIfReady();
             } else {
               fail(
-                'O Embedded Signup não retornou o número e a conta. Tente novamente ou informe os dados manualmente.',
+                'incomplete',
+                'O Embedded Signup não retornou o número e a conta (phone_number_id / waba_id).',
               );
             }
-          }, 5000);
+          }, SIGNUP_SETTLE_MS);
         }
       },
       {

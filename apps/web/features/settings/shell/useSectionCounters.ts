@@ -7,34 +7,22 @@
  * shell). Sub-slots podem estender este mapa quando seus endpoints existirem.
  */
 import { useQuery } from '@tanstack/react-query';
+import { summarizeChannels } from '@/features/channels/counters';
+import type { Channel } from '@/features/channels/types';
 import { api } from '@/shared/lib/api-client';
 import type { CounterState } from './registry';
-
-interface ChannelRow {
-  status?: string;
-  tokenExpiresAt?: string | null;
-}
-
-function channelsCounter(rows: ChannelRow[]): CounterState | null {
-  if (rows.length === 0) return null;
-  const active = rows.filter((c) => c.status === 'active' || c.status === 'connected').length;
-  const expiring = rows.filter((c) => {
-    if (!c.tokenExpiresAt) return false;
-    const days = (new Date(c.tokenExpiresAt).getTime() - Date.now()) / 86_400_000;
-    return days >= 0 && days <= 14;
-  }).length;
-  const label = expiring > 0 ? `${active} ativos · ${expiring} expirando` : `${active} ativos`;
-  return { label, alert: expiring > 0 };
-}
 
 /**
  * Mapa sectionId → contador. Apenas seções com endpoint de lista pronto entram aqui;
  * o resto fica sem badge (omissão honesta).
  */
 export function useSectionCounters(): Record<string, CounterState | null> {
+  // F56-S05 (UX-06): tipado com o `Channel` real da feature — o contador lia um
+  // `status` que o payload público nunca teve e mostrava "0 ativos" com o canal no
+  // ar. Agora um drift do contrato quebra no typecheck, não em produção.
   const channels = useQuery({
     queryKey: ['settings-counter', 'channels'],
-    queryFn: () => api.get<{ channels: ChannelRow[] }>('/api/channels'),
+    queryFn: () => api.get<{ channels: Channel[] }>('/api/channels'),
     retry: false,
     staleTime: 60_000,
   });
@@ -62,7 +50,7 @@ export function useSectionCounters(): Record<string, CounterState | null> {
   });
 
   return {
-    canais: channels.data ? channelsCounter(channels.data.channels) : null,
+    canais: channels.data ? summarizeChannels(channels.data.channels) : null,
     conversoes: conversionTypes.data
       ? { label: `${conversionTypes.data.conversionTypes.length} tipos` }
       : null,
