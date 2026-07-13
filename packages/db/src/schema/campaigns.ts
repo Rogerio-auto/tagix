@@ -68,6 +68,11 @@ export const campaigns = pgTable(
   },
   (t) => [
     index('idx_campaigns_workspace_status').on(t.workspaceId, t.status),
+    // O tick do worker varre CROSS-TENANT por next_tick_at vencido (F56-S03/DB-04):
+    // indice parcial so nas RUNNING — as demais nao sao tickadas.
+    index('idx_campaigns_next_tick_running')
+      .on(t.nextTickAt)
+      .where(sql`${t.status} = 'running'`),
     check('campaigns_type_chk', sql`${t.type} in ('broadcast','drip','triggered')`),
     check('campaigns_status_chk', sql`${t.status} in ('draft','scheduled','running','paused','completed','cancelled')`),
   ],
@@ -109,6 +114,12 @@ export const campaignRecipients = pgTable(
     status: text('status').notNull().default('pending'),
     lastStepIndex: integer('last_step_index').default(-1),
     lastStepAt: ts('last_step_at'),
+    /** Drip (F56-S03): quando o PROXIMO step fica devido (= last_step_at + delay_seconds). */
+    nextStepAt: ts('next_step_at'),
+    /** Terminal: todos os steps consumidos (F56-S03 / CAMP-04). */
+    completedAt: ts('completed_at'),
+    /** Tentativas de despacho do step corrente (claim atomico + backoff). */
+    attempts: integer('attempts').notNull().default(0),
     responded: boolean('responded').notNull().default(false),
     respondedAt: ts('responded_at'),
     failedReason: text('failed_reason'),
@@ -116,6 +127,8 @@ export const campaignRecipients = pgTable(
   },
   (t) => [
     index('idx_campaign_recipients_status').on(t.campaignId, t.status),
+    // Eixo do tick: recipients devidos agora (pending + next_step_at vencido).
+    index('idx_campaign_recipients_due').on(t.campaignId, t.status, t.nextStepAt),
     unique('campaign_recipients_campaign_contact_uq').on(t.campaignId, t.contactId),
     check('campaign_recipients_status_chk', sql`${t.status} in ('pending','sending','completed','responded','failed','opted_out')`),
   ],

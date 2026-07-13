@@ -442,6 +442,13 @@
       "when": 1781452823000,
       "tag": "0064_f56_scheduler_indexes_fks",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1781452824000,
+      "tag": "0061_f56_campaign_steps_state",
+      "breakpoints": true
     }
   ]
 }

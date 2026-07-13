@@ -31,12 +31,24 @@ function green(): ChannelHealth {
   return { qualityRating: 'GREEN', tierLimit: 1000 };
 }
 
+/**
+ * Ports default do tick. As capacidades da maquina de estados (F56-S03) entram
+ * aqui como no-ops seguros — o comportamento delas e coberto em steps/drip.test.ts
+ * (drip/terminal/teto diario com DB em memoria) e em steps/state.test.ts (puro).
+ */
 function makePorts(over: Partial<CampaignTickPorts> = {}): CampaignTickPorts {
   return {
     listDueCampaigns: vi.fn(async () => [CAMP]),
     fetchQuality: vi.fn(async () => green()),
+    reapRecipients: vi.fn(async () => ({ recovered: 0, finalized: 0 })),
+    ensureDailyQuota: vi.fn(async (_c: RunningCampaign, now: Date) => ({
+      remaining: null,
+      resetsAt: new Date(now.getTime() + 86400000),
+    })),
     pendingRecipients: vi.fn(async () => []),
     enqueueDelivery: vi.fn(async (): Promise<DispatchOutcome> => ({ kind: 'enqueued' })),
+    recordDailyUsage: vi.fn(async () => undefined),
+    settleCampaign: vi.fn(async () => false),
     pauseCampaign: vi.fn(async () => undefined),
     scheduleNextTick: vi.fn(async () => undefined),
     applyErrorAction: vi.fn(async () => undefined),

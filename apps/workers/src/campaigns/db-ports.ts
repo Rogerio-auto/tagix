@@ -1,12 +1,26 @@
 /**
  * Implementacao das CampaignTickPorts contra @hm/db + RLS (CAMPAIGNS.md 8).
- * enqueueDelivery e o coracao da idempotencia: insere campaign_deliveries com
- * idempotencyKey UNIQUE; conflito -> duplicate (NUNCA reenvia). Em sucesso resolve
- * a conversa, persiste a mensagem pending e publica o OutboundJob template em
- * hm.q.outbound (reusa o pipeline de envio F1-S07).
+ *
+ * enqueueDelivery e o coracao da maquina de estados do recipient — TUDO numa
+ * unica transacao RLS-escopada (withWorkspace = BEGIN + set local role):
+ *
+ *   1. CLAIM ATOMICO: UPDATE ... SET status='sending' WHERE status='pending'
+ *      AND next_step_at devido. Zero linhas => outro tick levou o recipient
+ *      (outcome `skipped`). Espelha o claim de scheduled_followups (followups.ts).
+ *   2. IDEMPOTENCIA: insere campaign_deliveries com idempotencyKey UNIQUE;
+ *      conflito => o step JA foi despachado antes -> NAO reenvia, mas AVANCA o
+ *      recipient (cura a linha que ficaria presa se um crash matasse o processo
+ *      entre o envio e a transicao).
+ *   3. DRIP (CAMP-03): apos publicar em hm.q.outbound, `advanceAfterDispatch`
+ *      devolve o recipient a `pending` com next_step_at = now + delaySeconds do
+ *      PROXIMO step — ou o marca `completed` quando os steps acabam (CAMP-04).
+ *
+ * O que era o bug: o recipient virava `sending` e ninguem o tirava de la;
+ * `delaySeconds` nunca era lido; a campanha nunca chegava a `completed`; e o
+ * teto diario (`daily_limit`/`messages_sent_today`) existia so no schema.
  */
 import { Buffer } from 'node:buffer';
-import { and, eq, lte, or, isNull } from 'drizzle-orm';
+import { and, asc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
 import { decryptSecret, getDb, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import { GraphClient, fetchChannelQuality, type ChannelHealth } from '@hm/channels';
@@ -15,12 +29,24 @@ import type { MqHandle } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
 import type { CampaignErrorAction } from '@hm/channels';
 import type {
+  CampaignQuota,
   CampaignTickPorts,
   DispatchOutcome,
   PendingDispatch,
+  ReapResult,
   RunningCampaign,
 } from './tick';
 import type { SendWindows } from './windows';
+import {
+  advanceAfterDispatch,
+  afterDispatchFailure,
+  campaignIsExhausted,
+  evaluateDailyQuota,
+  MAX_DISPATCH_ATTEMPTS,
+  STALE_CLAIM_MS,
+  type CampaignStepRef,
+  type RecipientTransition,
+} from './steps/state';
 
 type MqChannel = MqHandle['channel'];
 
@@ -57,6 +83,56 @@ async function loadChannelToken(
     .where(eq(channelSecrets.channelId, channelId));
   const accessToken = secret ? decryptSecret(secret.accessTokenEnc, secret.keyVersion) : '';
   return { accessToken, phoneNumberId: channel.phoneNumberId ?? '' };
+}
+
+/** Steps da campanha na ordem de posicao (o indice do array = indice do passo). */
+async function loadSteps(tx: DbTx, campaignId: string): Promise<CampaignStepRef[]> {
+  const rows = await tx
+    .select({
+      id: campaignSteps.id,
+      position: campaignSteps.position,
+      delaySeconds: campaignSteps.delaySeconds,
+    })
+    .from(campaignSteps)
+    .where(eq(campaignSteps.campaignId, campaignId))
+    .orderBy(asc(campaignSteps.position));
+  return rows.map((r) => ({
+    id: r.id,
+    position: r.position,
+    delaySeconds: r.delaySeconds,
+  }));
+}
+
+/** Aplica a transicao pos-dispatch (drip ou terminal) no recipient. */
+async function applyTransition(
+  tx: DbTx,
+  recipientId: string,
+  t: RecipientTransition,
+): Promise<void> {
+  await tx
+    .update(campaignRecipients)
+    .set({
+      status: t.status,
+      lastStepIndex: t.lastStepIndex,
+      lastStepAt: t.lastStepAt,
+      nextStepAt: t.nextStepAt,
+      completedAt: t.completedAt,
+      attempts: t.attempts,
+    })
+    .where(eq(campaignRecipients.id, recipientId));
+}
+
+/** Recipient com dado inviavel (sem telefone, step sumido): terminal `failed`. */
+async function failRecipient(tx: DbTx, recipientId: string, reason: string): Promise<void> {
+  await tx
+    .update(campaignRecipients)
+    .set({ status: 'failed', failedReason: reason, nextStepAt: null })
+    .where(eq(campaignRecipients.id, recipientId));
+}
+
+/** SQL do "recipient esta devido agora" (next_step_at nulo = devido). */
+function isDue(now: Date) {
+  return or(isNull(campaignRecipients.nextStepAt), lte(campaignRecipients.nextStepAt, now));
 }
 
 export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts {
@@ -114,10 +190,113 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
       });
     },
 
+    async reapRecipients(campaign: RunningCampaign, now: Date): Promise<ReapResult> {
+      return withWorkspace(campaign.workspaceId, async (tx) => {
+        const cutoff = new Date(now.getTime() - STALE_CLAIM_MS);
+        const staleClaim = and(
+          eq(campaignRecipients.campaignId, campaign.id),
+          eq(campaignRecipients.status, 'sending'),
+          // Date dentro de fragmento `sql` cru nao tem type-mapper no postgres.js
+          // (ERR_INVALID_ARG_TYPE): manda ISO + cast explicito.
+          sql`coalesce(${campaignRecipients.lastStepAt}, ${campaignRecipients.createdAt}) < ${cutoff.toISOString()}::timestamptz`,
+        );
+
+        // (a) claim estagnado que ja esgotou as tentativas -> falha honesta.
+        const exhausted = await tx
+          .update(campaignRecipients)
+          .set({
+            status: 'failed',
+            failedReason: 'max_dispatch_attempts',
+            nextStepAt: null,
+          })
+          .where(and(staleClaim, gte(campaignRecipients.attempts, MAX_DISPATCH_ATTEMPTS)))
+          .returning({ id: campaignRecipients.id });
+
+        // (b) demais claims estagnados voltam a fila (devidos agora).
+        const recovered = await tx
+          .update(campaignRecipients)
+          .set({ status: 'pending', nextStepAt: now })
+          .where(staleClaim)
+          .returning({ id: campaignRecipients.id });
+
+        // (c) CAMP-04: pendente que ja consumiu todos os steps -> terminal.
+        const steps = await loadSteps(tx, campaign.id);
+        const finalized = await tx
+          .update(campaignRecipients)
+          .set({ status: 'completed', completedAt: now, nextStepAt: null })
+          .where(
+            and(
+              eq(campaignRecipients.campaignId, campaign.id),
+              eq(campaignRecipients.status, 'pending'),
+              sql`coalesce(${campaignRecipients.lastStepIndex}, -1) + 1 >= ${steps.length}`,
+            ),
+          )
+          .returning({ id: campaignRecipients.id });
+
+        return {
+          recovered: exhausted.length + recovered.length,
+          finalized: finalized.length,
+        };
+      });
+    },
+
+    async ensureDailyQuota(campaign: RunningCampaign, now: Date): Promise<CampaignQuota> {
+      return withWorkspace(campaign.workspaceId, async (tx) => {
+        const rows = await tx
+          .select({
+            dailyLimit: campaigns.dailyLimit,
+            messagesSentToday: campaigns.messagesSentToday,
+            lastDailyResetAt: campaigns.lastDailyResetAt,
+            timezone: campaigns.timezone,
+          })
+          .from(campaigns)
+          .where(eq(campaigns.id, campaign.id));
+        const row = rows[0];
+        if (!row) {
+          // Campanha sumiu no meio do tick: nada a enviar.
+          return { remaining: 0, resetsAt: new Date(now.getTime() + 60 * 60 * 1000) };
+        }
+
+        const quota = evaluateDailyQuota(
+          {
+            dailyLimit: row.dailyLimit,
+            messagesSentToday: row.messagesSentToday,
+            lastDailyResetAt: row.lastDailyResetAt,
+            timezone: row.timezone,
+          },
+          now,
+        );
+
+        if (quota.needsReset) {
+          await tx
+            .update(campaigns)
+            .set({ messagesSentToday: 0, lastDailyResetAt: now })
+            .where(eq(campaigns.id, campaign.id));
+        }
+
+        return { remaining: quota.remaining, resetsAt: quota.resetsAt };
+      });
+    },
+
+    async recordDailyUsage(campaign: RunningCampaign, sent: number, now: Date): Promise<void> {
+      if (sent <= 0) return;
+      await withWorkspace(campaign.workspaceId, (tx) =>
+        tx
+          .update(campaigns)
+          .set({
+            messagesSentToday: sql`${campaigns.messagesSentToday} + ${sent}`,
+            lastDailyResetAt: sql`coalesce(${campaigns.lastDailyResetAt}, ${now.toISOString()}::timestamptz)`,
+          })
+          .where(eq(campaigns.id, campaign.id)),
+      );
+    },
+
     async pendingRecipients(
       campaign: RunningCampaign,
       limit: number,
+      now: Date,
     ): Promise<PendingDispatch[]> {
+      if (limit <= 0) return [];
       return withWorkspace(campaign.workspaceId, async (tx) => {
         const recipients = await tx
           .select({
@@ -130,20 +309,23 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
             and(
               eq(campaignRecipients.campaignId, campaign.id),
               eq(campaignRecipients.status, 'pending'),
+              isDue(now),
+            ),
+          )
+          .orderBy(
+            asc(
+              sql`coalesce(${campaignRecipients.nextStepAt}, ${campaignRecipients.createdAt})`,
             ),
           )
           .limit(limit);
 
-        const steps = await tx
-          .select({ id: campaignSteps.id, position: campaignSteps.position })
-          .from(campaignSteps)
-          .where(eq(campaignSteps.campaignId, campaign.id))
-          .orderBy(campaignSteps.position);
+        const steps = await loadSteps(tx, campaign.id);
 
         const out: PendingDispatch[] = [];
         for (const r of recipients) {
           const nextIdx = (r.lastStepIndex ?? -1) + 1;
           const step = steps[nextIdx];
+          // Sem proximo step: o reaper (c) fecha esse recipient no proprio tick.
           if (!step) continue;
           out.push({
             recipientId: r.recipientId,
@@ -160,8 +342,50 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
       campaign: RunningCampaign,
       dispatch: PendingDispatch,
       idempotencyKey: string,
+      now: Date,
     ): Promise<DispatchOutcome> {
       return withWorkspace(campaign.workspaceId, async (tx) => {
+        // (1) Claim atomico: so avanca quem ainda esta pending E devido.
+        const claimed = await tx
+          .update(campaignRecipients)
+          .set({
+            status: 'sending',
+            attempts: sql`${campaignRecipients.attempts} + 1`,
+          })
+          .where(
+            and(
+              eq(campaignRecipients.id, dispatch.recipientId),
+              eq(campaignRecipients.status, 'pending'),
+              isDue(now),
+            ),
+          )
+          .returning({ attempts: campaignRecipients.attempts });
+        const claim = claimed[0];
+        if (!claim) return { kind: 'skipped' };
+        const attempts = claim.attempts;
+
+        const steps = await loadSteps(tx, campaign.id);
+
+        const [step] = await tx
+          .select()
+          .from(campaignSteps)
+          .where(eq(campaignSteps.id, dispatch.stepId));
+        if (!step) {
+          await failRecipient(tx, dispatch.recipientId, 'step_missing');
+          return { kind: 'invalid', reason: 'step_missing' };
+        }
+
+        const [contact] = await tx
+          .select({ phone: contacts.phone })
+          .from(contacts)
+          .where(eq(contacts.id, dispatch.contactId));
+        if (!contact || !contact.phone) {
+          await failRecipient(tx, dispatch.recipientId, 'missing_phone');
+          return { kind: 'invalid', reason: 'missing_phone' };
+        }
+        const phone = contact.phone;
+
+        // (2) Idempotencia: a UNIQUE decide se este step ja saiu alguma vez.
         const inserted = await tx
           .insert(campaignDeliveries)
           .values({
@@ -176,22 +400,16 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           .returning({ id: campaignDeliveries.id });
         const insertedRow = inserted[0];
         if (!insertedRow) {
+          // Step ja despachado: NAO reenvia, mas destrava o recipient (avanca o
+          // drip) — senao ele voltaria eternamente ao mesmo passo.
+          await applyTransition(
+            tx,
+            dispatch.recipientId,
+            advanceAfterDispatch(steps, dispatch.stepIndex, now),
+          );
           return { kind: 'duplicate' };
         }
         const deliveryId = insertedRow.id;
-
-        const [step] = await tx
-          .select()
-          .from(campaignSteps)
-          .where(eq(campaignSteps.id, dispatch.stepId));
-        const [contact] = await tx
-          .select({ phone: contacts.phone })
-          .from(contacts)
-          .where(eq(contacts.id, dispatch.contactId));
-        if (!step || !contact || !contact.phone) {
-          return { kind: 'error', errorCode: '131008' };
-        }
-        const phone = contact.phone;
 
         const [existingConv] = await tx
           .select({ id: conversations.id })
@@ -217,7 +435,10 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
             })
             .returning({ id: conversations.id });
           const conv = convRows[0];
-          if (!conv) return { kind: 'error', errorCode: '131008' };
+          if (!conv) {
+            await applyFailure(tx, dispatch.recipientId, attempts, now, 'conversation_failed');
+            return { kind: 'error', errorCode: '131008' };
+          }
           conversationId = conv.id;
         }
 
@@ -235,7 +456,10 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           })
           .returning({ id: messages.id });
         const message = messageRows[0];
-        if (!message) return { kind: 'error', errorCode: '131008' };
+        if (!message) {
+          await applyFailure(tx, dispatch.recipientId, attempts, now, 'message_failed');
+          return { kind: 'error', errorCode: '131008' };
+        }
         const messageId = message.id;
 
         await tx
@@ -243,14 +467,12 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           .set({ messageId })
           .where(eq(campaignDeliveries.id, deliveryId));
 
-        await tx
-          .update(campaignRecipients)
-          .set({
-            status: 'sending',
-            lastStepIndex: dispatch.stepIndex,
-            lastStepAt: new Date(),
-          })
-          .where(eq(campaignRecipients.id, dispatch.recipientId));
+        // (3) Drip: proximo step agendado em now + delaySeconds (ou terminal).
+        await applyTransition(
+          tx,
+          dispatch.recipientId,
+          advanceAfterDispatch(steps, dispatch.stepIndex, now),
+        );
 
         const job = {
           kind: 'template',
@@ -269,6 +491,30 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
         });
 
         return { kind: 'enqueued' };
+      });
+    },
+
+    async settleCampaign(campaign: RunningCampaign, now: Date): Promise<boolean> {
+      return withWorkspace(campaign.workspaceId, async (tx) => {
+        const rows = await tx
+          .select({
+            total: sql<number>`count(*)`.mapWith(Number),
+            active: sql<number>`count(*) filter (where ${campaignRecipients.status} in ('pending','sending'))`.mapWith(
+              Number,
+            ),
+          })
+          .from(campaignRecipients)
+          .where(eq(campaignRecipients.campaignId, campaign.id));
+        const row = rows[0];
+        if (!row) return false;
+        if (!campaignIsExhausted({ total: row.total, active: row.active })) return false;
+
+        const updated = await tx
+          .update(campaigns)
+          .set({ status: 'completed', nextTickAt: null, updatedAt: now })
+          .where(and(eq(campaigns.id, campaign.id), eq(campaigns.status, 'running')))
+          .returning({ id: campaigns.id });
+        return updated.length > 0;
       });
     },
 
@@ -312,7 +558,7 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           case 'count_block':
             await tx
               .update(campaignRecipients)
-              .set({ status: 'failed', failedReason: action.reason })
+              .set({ status: 'failed', failedReason: action.reason, nextStepAt: null })
               .where(eq(campaignRecipients.id, dispatch.recipientId));
             break;
           case 'fail_delivery':
@@ -333,4 +579,27 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
       });
     },
   };
+}
+
+/**
+ * Falha transitoria no despacho: reagenda o MESMO step com backoff exponencial
+ * (ou marca failed ao esgotar as tentativas). Nunca deixa o recipient preso em
+ * `sending` — que era exatamente o estado morto do CAMP-03.
+ */
+async function applyFailure(
+  tx: DbTx,
+  recipientId: string,
+  attempts: number,
+  now: Date,
+  reason: string,
+): Promise<void> {
+  const t = afterDispatchFailure(attempts, now, reason);
+  await tx
+    .update(campaignRecipients)
+    .set({
+      status: t.status,
+      nextStepAt: t.nextStepAt,
+      failedReason: t.failedReason,
+    })
+    .where(eq(campaignRecipients.id, recipientId));
 }

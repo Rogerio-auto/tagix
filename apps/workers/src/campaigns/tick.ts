@@ -6,9 +6,15 @@
  *   - por campanha, runWithDistributedLock(hm:lock:campaign:{id}) (reusa lock.ts):
  *       le quality -> rate adaptativo; RED => auto-pause (return);
  *       fora da send window => reagenda p/ proxima janela (sem enviar);
- *       pega batch de recipients pending (~rate/4) e despacha cada um;
+ *       reaper: devolve claims `sending` estagnados e finaliza recipients sem step;
+ *       teto diario (CAMP-06): reset por virada de dia + clamp do batch no saldo;
+ *       pega batch de recipients DEVIDOS (next_step_at <= now) e despacha cada um;
  *       dispatch e IDEMPOTENTE: campaign_deliveries.idempotency_key UNIQUE =
- *         sha256(campaignId:recipientId:stepId) -> re-tick NUNCA duplica envio.
+ *         sha256(campaignId:recipientId:stepId) -> re-tick NUNCA duplica envio;
+ *       drip (CAMP-03): cada dispatch reagenda o recipient p/ o proximo step em
+ *         now + delaySeconds (a port faz a transicao na MESMA tx do envio);
+ *       terminal (CAMP-04): sem recipients ativos => campanha `completed` e
+ *         nextTickAt=null (para o loop infinito de tick a cada 60s).
  *
  * Tudo via PORTS injetadas (DB/Graph/MQ) — testavel sem WABA nem broker reais.
  * O envio real do template reusa o pipeline outbound F1-S07 (a port enqueueDelivery
@@ -24,6 +30,9 @@ import { isInSendWindow, nextWindowStart, type SendWindows } from './windows';
 
 /** TTL do lock por campanha (cobre um tick com folga). */
 export const CAMPAIGN_LOCK_TTL_MS = 50000;
+
+/** Intervalo padrao entre ticks de uma campanha viva. */
+export const CAMPAIGN_TICK_INTERVAL_MS = 60000;
 
 /** Idempotency key canonica de uma delivery (UNIQUE no schema). */
 export function deliveryIdempotencyKey(
@@ -59,18 +68,59 @@ export type DispatchOutcome =
   | { readonly kind: 'enqueued' }
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'no_step' }
+  /** Outro tick/instancia levou o recipient antes (claim atomico perdido). */
+  | { readonly kind: 'skipped' }
+  /** Dado do recipient inviabiliza o envio (sem telefone, step sumiu): ja marcado failed. */
+  | { readonly kind: 'invalid'; readonly reason: string }
   | { readonly kind: 'error'; readonly errorCode?: string };
+
+/** Saldo do teto diario da campanha (CAMP-06). */
+export interface CampaignQuota {
+  /** Envios ainda permitidos hoje. `null` = sem teto. */
+  readonly remaining: number | null;
+  /** Proxima virada de dia no fuso da campanha (nextTickAt quando a cota estoura). */
+  readonly resetsAt: Date;
+}
+
+/** Contadores do reaper de recipients. */
+export interface ReapResult {
+  /** Claims `sending` estagnados devolvidos a `pending` (ou marcados failed). */
+  readonly recovered: number;
+  /** Recipients sem proximo step marcados `completed`. */
+  readonly finalized: number;
+}
 
 /** Ports do tick — injetadas pelo bootstrap, mockadas em teste. */
 export interface CampaignTickPorts {
   listDueCampaigns(now: Date): Promise<RunningCampaign[]>;
   fetchQuality(campaign: RunningCampaign): Promise<ChannelHealth>;
-  pendingRecipients(campaign: RunningCampaign, limit: number): Promise<PendingDispatch[]>;
+  /**
+   * Reaper (roda antes do batch): devolve a `pending` os claims `sending` mais
+   * velhos que STALE_CLAIM_MS e marca `completed` quem ja consumiu todos os steps.
+   * E o que destrava o dado legado do CAMP-03 (recipients presos em `sending`).
+   */
+  reapRecipients(campaign: RunningCampaign, now: Date): Promise<ReapResult>;
+  /** CAMP-06: aplica o reset diario (se virou o dia) e devolve o saldo de envios. */
+  ensureDailyQuota(campaign: RunningCampaign, now: Date): Promise<CampaignQuota>;
+  /** Recipients DEVIDOS agora (`pending` com next_step_at nulo ou vencido). */
+  pendingRecipients(
+    campaign: RunningCampaign,
+    limit: number,
+    now: Date,
+  ): Promise<PendingDispatch[]>;
   enqueueDelivery(
     campaign: RunningCampaign,
     dispatch: PendingDispatch,
     idempotencyKey: string,
+    now: Date,
   ): Promise<DispatchOutcome>;
+  /** CAMP-06: contabiliza o que saiu neste tick em `messages_sent_today`. */
+  recordDailyUsage(campaign: RunningCampaign, sent: number, now: Date): Promise<void>;
+  /**
+   * CAMP-04: se a campanha nao tem mais recipients ativos (`pending|sending`),
+   * marca `completed` + nextTickAt=null e devolve true.
+   */
+  settleCampaign(campaign: RunningCampaign, now: Date): Promise<boolean>;
   pauseCampaign(campaignId: string, reason: string): Promise<void>;
   scheduleNextTick(campaignId: string, at: Date): Promise<void>;
   applyErrorAction(
@@ -95,6 +145,34 @@ export interface CampaignTickResult {
   duplicates: number;
   paused: number;
   rescheduled: number;
+  /** Campanhas que atingiram o estado terminal neste tick (CAMP-04). */
+  completed: number;
+  /** Campanhas que bateram o teto diario e dormiram ate o reset (CAMP-06). */
+  quotaExhausted: number;
+  /** Recipients marcados failed por dado inviavel. */
+  invalid: number;
+}
+
+export interface ProcessCampaignResult {
+  dispatched: number;
+  duplicates: number;
+  invalid: number;
+  paused: boolean;
+  rescheduled: boolean;
+  completed: boolean;
+  quotaExhausted: boolean;
+}
+
+function emptyResult(): ProcessCampaignResult {
+  return {
+    dispatched: 0,
+    duplicates: 0,
+    invalid: 0,
+    paused: false,
+    rescheduled: false,
+    completed: false,
+    quotaExhausted: false,
+  };
 }
 
 /** Processa uma campanha sob o lock dela. Retorna contadores parciais. */
@@ -102,10 +180,9 @@ export async function processCampaign(
   campaign: RunningCampaign,
   deps: CampaignTickDeps,
   now: Date,
-): Promise<{ dispatched: number; duplicates: number; paused: boolean; rescheduled: boolean }> {
+): Promise<ProcessCampaignResult> {
   const { ports, logger } = deps;
-  let dispatched = 0;
-  let duplicates = 0;
+  const result = emptyResult();
 
   const health = await ports.fetchQuality(campaign);
   const rate = effectiveRatePerMinute({
@@ -117,25 +194,63 @@ export async function processCampaign(
   if (rate === 0) {
     await ports.pauseCampaign(campaign.id, 'quality_red');
     logger.warn('campaigns: auto-pause por quality RED', { campaignId: campaign.id });
-    return { dispatched, duplicates, paused: true, rescheduled: false };
+    result.paused = true;
+    return result;
   }
 
   if (!isInSendWindow(campaign.sendWindows, now)) {
     const next = nextWindowStart(campaign.sendWindows, now);
     await ports.scheduleNextTick(campaign.id, next);
-    return { dispatched, duplicates, paused: false, rescheduled: true };
+    result.rescheduled = true;
+    return result;
   }
 
-  const batch = await ports.pendingRecipients(campaign, batchSizeForTick(rate));
+  // Reaper antes do batch: recupera claims estagnados e finaliza quem ja esgotou
+  // os steps (inclui o dado legado que o bug CAMP-03 deixou preso em `sending`).
+  const reaped = await ports.reapRecipients(campaign, now);
+  if (reaped.recovered > 0 || reaped.finalized > 0) {
+    logger.info('campaigns: reaper', {
+      campaignId: campaign.id,
+      recovered: reaped.recovered,
+      finalized: reaped.finalized,
+    });
+  }
+
+  // CAMP-06: teto diario. remaining === 0 => nao envia nada ate a virada do dia.
+  const quota = await ports.ensureDailyQuota(campaign, now);
+  if (quota.remaining !== null && quota.remaining <= 0) {
+    if (await settle(campaign, deps, now, result)) return result;
+    await ports.scheduleNextTick(campaign.id, quota.resetsAt);
+    result.rescheduled = true;
+    result.quotaExhausted = true;
+    logger.info('campaigns: teto diario atingido — dormindo ate o reset', {
+      campaignId: campaign.id,
+      resetsAt: quota.resetsAt.toISOString(),
+    });
+    return result;
+  }
+
+  const rateBatch = batchSizeForTick(rate);
+  const limit = quota.remaining === null ? rateBatch : Math.min(rateBatch, quota.remaining);
+
+  const batch = await ports.pendingRecipients(campaign, limit, now);
   for (const d of batch) {
     const key = deliveryIdempotencyKey(campaign.id, d.recipientId, d.stepId);
-    const outcome = await ports.enqueueDelivery(campaign, d, key);
+    const outcome = await ports.enqueueDelivery(campaign, d, key, now);
     switch (outcome.kind) {
       case 'enqueued':
-        dispatched += 1;
+        result.dispatched += 1;
         break;
       case 'duplicate':
-        duplicates += 1;
+        result.duplicates += 1;
+        break;
+      case 'invalid':
+        result.invalid += 1;
+        logger.warn('campaigns: recipient inviavel', {
+          campaignId: campaign.id,
+          recipientId: d.recipientId,
+          reason: outcome.reason,
+        });
         break;
       case 'error': {
         const info = mapCampaignError(outcome.errorCode);
@@ -146,18 +261,41 @@ export async function processCampaign(
             campaignId: campaign.id,
             errorCode: outcome.errorCode,
           });
-          return { dispatched, duplicates, paused: true, rescheduled: false };
+          result.paused = true;
+          return result;
         }
         break;
       }
+      case 'skipped':
       case 'no_step':
         break;
     }
   }
 
-  const nextTick = new Date(now.getTime() + 60000);
-  await ports.scheduleNextTick(campaign.id, nextTick);
-  return { dispatched, duplicates, paused: false, rescheduled: true };
+  if (result.dispatched > 0) {
+    await ports.recordDailyUsage(campaign, result.dispatched, now);
+  }
+
+  // CAMP-04: fim de linha? entao a campanha nao volta a ser agendada.
+  if (await settle(campaign, deps, now, result)) return result;
+
+  await ports.scheduleNextTick(campaign.id, new Date(now.getTime() + CAMPAIGN_TICK_INTERVAL_MS));
+  result.rescheduled = true;
+  return result;
+}
+
+/** Tenta fechar a campanha (estado terminal). true = fechou. */
+async function settle(
+  campaign: RunningCampaign,
+  deps: CampaignTickDeps,
+  now: Date,
+  result: ProcessCampaignResult,
+): Promise<boolean> {
+  const done = await deps.ports.settleCampaign(campaign, now);
+  if (!done) return false;
+  result.completed = true;
+  deps.logger.info('campaigns: campanha concluida', { campaignId: campaign.id });
+  return true;
 }
 
 /**
@@ -177,6 +315,9 @@ export async function runCampaignTick(
     duplicates: 0,
     paused: 0,
     rescheduled: 0,
+    completed: 0,
+    quotaExhausted: 0,
+    invalid: 0,
   };
 
   for (const campaign of due) {
@@ -188,8 +329,11 @@ export async function runCampaignTick(
           const r = await processCampaign(campaign, deps, now);
           result.dispatched += r.dispatched;
           result.duplicates += r.duplicates;
+          result.invalid += r.invalid;
           if (r.paused) result.paused += 1;
           if (r.rescheduled) result.rescheduled += 1;
+          if (r.completed) result.completed += 1;
+          if (r.quotaExhausted) result.quotaExhausted += 1;
         },
       );
     } catch (err: unknown) {
