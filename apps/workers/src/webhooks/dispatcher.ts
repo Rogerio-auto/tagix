@@ -16,7 +16,7 @@
 import { createHmac } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { decryptSecret, getDb } from '@hm/db';
-import { checkWebhookUrlSyntax, SsrfBlockedError, ssrfSafeFetch } from '@hm/shared';
+import { checkWebhookUrlSyntax, SsrfBlockedError, ssrfSafeFetch } from '@hm/shared/net';
 import type { Logger } from '@hm/logger';
 
 /** Máximo de tentativas antes de `failed` (1 inicial + retries). */

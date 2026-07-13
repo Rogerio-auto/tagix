@@ -98,23 +98,9 @@ export type {
   SupportMessageDTO,
 } from './support';
 
-// --- Rede: guarda anti-SSRF p/ destinos outbound de tenant (F56-S07). Node-only em
-//     runtime (imports dinâmicos de node:dns/http); browser-safe para bundling. ---
-export {
-  SsrfBlockedError,
-  isBlockedIpAddress,
-  checkWebhookUrlSyntax,
-  assertSafeWebhookUrl,
-  createGuardedLookup,
-  ssrfSafeFetch,
-  httpAllowlistFromEnv,
-} from './net';
-export type {
-  SsrfBlockedReason,
-  WebhookUrlCheck,
-  WebhookUrlOptions,
-  DnsLookupAll,
-  SsrfSafeFetchOptions,
-} from './net';
+// --- Rede: guarda anti-SSRF p/ destinos outbound de tenant (F56-S07). ---
+//     NÃO re-exportado aqui: `ssrf-guard` importa `node:dns`/`node:http(s)` e o
+//     bundler do browser resolve o import dinâmico em build-time, quebrando todo
+//     client component que toque este barrel. Consuma pelo leaf: `@hm/shared/net`.
 
 export const SHARED_PKG = '@hm/shared' as const;

@@ -15,7 +15,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { desc, eq } from 'drizzle-orm';
 import { decryptSecret, encryptSecret, schema } from '@hm/db';
-import { assertSafeWebhookUrl, checkWebhookUrlSyntax, ssrfSafeFetch } from '@hm/shared';
+import { assertSafeWebhookUrl, checkWebhookUrlSyntax, ssrfSafeFetch } from '@hm/shared/net';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
 const { outboundWebhooks, outboundWebhookDeliveries } = schema;
