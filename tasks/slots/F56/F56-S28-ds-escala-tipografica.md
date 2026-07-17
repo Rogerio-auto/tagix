@@ -2,7 +2,7 @@
 id: F56-S28
 title: DS — tokenizar e aplicar a escala tipográfica editorial
 phase: F56
-status: available
+status: done
 priority: medium
 estimated_size: M
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: frontend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T23:51:12Z
 
+---
 # F56-S28 — Escala tipográfica editorial (DS-06)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.9. `typography.ts` declara a escala editorial (h1 60px, body 17px…) mas tem 0 consumo; o produto renderiza na escala genérica do Tailwind (`text-sm` 719×), aquém do padrão editorial de referência.

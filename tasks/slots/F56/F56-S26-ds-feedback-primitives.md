@@ -2,7 +2,7 @@
 id: F56-S26
 title: DS — promover EmptyState/Skeleton/ErrorState para @hm/ui
 phase: F56
-status: available
+status: done
 priority: medium
 estimated_size: M
 depends_on: []
@@ -10,8 +10,9 @@ blocks: [F56-S27]
 agent_id: frontend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T23:51:12Z
 
+---
 # F56-S26 — Primitivos de feedback no DS versionado (DS-01/03/04)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.9. O DS é bifurcado: `@hm/ui` expõe 8 primitivos; EmptyState/Skeleton/ErrorState vivem soltos em `apps/web/shared` sem governança → ~70 empties inline e 42 `animate-pulse` à mão.

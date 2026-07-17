@@ -2,7 +2,7 @@
 id: F56-S17
 title: Workers ops — healthcheck + graceful drain + DLQ alert + lock watchdog
 phase: F56
-status: blocked
+status: done
 priority: high
 estimated_size: M
 depends_on: [F56-S25]
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T23:51:12Z
 
+---
 # F56-S17 — Robustez operacional dos workers (INF-07/08/10)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.2. Workers sem healthcheck (consumer travado indetectável); DLQ sem consumidor/alerta; shutdown não drena in-flight; locks de scheduler sem renovação (dois ticks concorrentes).

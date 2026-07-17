@@ -2,7 +2,7 @@
 id: F56-S27
 title: DS — Drawer canônico + IconButton (foco de teclado)
 phase: F56
-status: blocked
+status: done
 priority: medium
 estimated_size: M
 depends_on: [F56-S26]
@@ -10,8 +10,9 @@ blocks: []
 agent_id: frontend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T23:51:12Z
 
+---
 # F56-S27 — Drawer canônico + IconButton (DS-02/DS-05)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.9. Sem Drawer canônico há 3 padrões + 2 `Sheet.tsx` homônimos; 34 arquivos têm `<button>` cru sem foco de teclado.

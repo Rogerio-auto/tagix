@@ -2,7 +2,7 @@
 id: F56-S31
 title: Agente — versionamento de prompt (draft→live, diff, rollback)
 phase: F56
-status: blocked
+status: done
 priority: medium
 estimated_size: L
 depends_on: [F56-S30]
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T23:51:13Z
 
+---
 # F56-S31 — Prompt como código (AG-04)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.3. `system_prompt` é coluna mutável; PATCH sobrescreve in-place — sem histórico, diff, rollback ou auditoria. Edita-se o cérebro de um agente ao vivo sem staging. Gap #1 vs. Fin/Sierra/Decagon.

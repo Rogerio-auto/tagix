@@ -47,7 +47,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F53   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F54   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F56   | 31     | 3   | 3   | 0   | 0   | 0   | 25   |
+| F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -594,39 +594,39 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 56
 
-| ID      | Titulo                                                                          | Status      | Prioridade | Depende de |
-| ------- | ------------------------------------------------------------------------------- | ----------- | ---------- | ---------- |
-| F56-S01 | Runtime IA — coluna fantasma vision + clamp de tokens + latency_ms              | ✅ done      | critical   | —          |
-| F56-S02 | Campanhas — fechar o loop de métricas (delivery status → metrics)               | ✅ done      | critical   | —          |
-| F56-S03 | Campanhas — máquina de estados do recipient (drip + completed + teto diário)    | ✅ done      | high       | —          |
-| F56-S04 | Campanhas — hidratar o wizard no modo edição                                    | ✅ done      | high       | —          |
-| F56-S05 | Ativação de canal recuperável (Embedded Signup + badge + fallback)              | ✅ done      | high       | —          |
-| F56-S06 | Auth hardening — fail-fast mock, rate-limit por IP, stale token                 | ✅ done      | high       | —          |
-| F56-S07 | Anti-SSRF em webhooks outbound (allowlist de host/esquema)                      | ✅ done      | high       | —          |
-| F56-S08 | RLS como backstop real — FORCE RLS + role não-superuser + agent_templates       | ✅ done      | high       | —          |
-| F56-S09 | Uploads — bloquear SVG + validar magic bytes                                    | ✅ done      | medium     | —          |
-| F56-S10 | AbacatePay — HMAC obrigatória em produção (secret fora da query)                | ✅ done      | medium     | —          |
-| F56-S11 | Agente IA — anti-prompt-injection + moderação de entrada/saída                  | ✅ done      | high       | —          |
-| F56-S12 | MQ resilience — reconnect AMQP + reliableQueues + backpressure                  | ✅ done      | critical   | —          |
-| F56-S13 | Flow-engine — claim atômico + anti-loop (step_count)                            | ✅ done      | high       | —          |
-| F56-S14 | Outbound — retry durável para falha transitória do provider                     | ✅ done      | high       | —          |
-| F56-S15 | Agent buffer — wakeup durável do flush de agregação                             | ✅ done      | high       | —          |
-| F56-S16 | Socket relay — emitir antes de bumpar + prefetch + patch incremental            | ✅ done      | high       | —          |
-| F56-S17 | Workers ops — healthcheck + graceful drain + DLQ alert + lock watchdog          | ⏸️ blocked  | high       | F56-S25    |
-| F56-S18 | Deploy hardening + stack de observabilidade (healthcheck, rollback, Prometheus) | ✅ done      | high       | —          |
-| F56-S19 | Error tracking — ligar Sentry + captureException no error handler               | ✅ done      | high       | —          |
-| F56-S20 | Observabilidade — correlação de log por workspace/request + redação PII         | ✅ done      | high       | —          |
-| F56-S21 | /health checa RabbitMQ (backbone de mensageria)                                 | ✅ done      | medium     | —          |
-| F56-S22 | CI — corrigir deploy errado + Python + RabbitMQ + e2e                           | ✅ done      | high       | —          |
-| F56-S23 | Runbooks — fila estourada, worker crash-loop, rollback                          | ✅ done      | medium     | —          |
-| F56-S24 | DB — índices dos schedulers + FKs pendentes                                     | ✅ done      | high       | —          |
-| F56-S25 | Retenção — sweep de webhook_events + base de retenção                           | ✅ done      | medium     | —          |
-| F56-S26 | DS — promover EmptyState/Skeleton/ErrorState para @hm/ui                        | 🟢 available | medium     | —          |
-| F56-S27 | DS — Drawer canônico + IconButton (foco de teclado)                             | ⏸️ blocked  | medium     | F56-S26    |
-| F56-S28 | DS — tokenizar e aplicar a escala tipográfica editorial                         | 🟢 available | medium     | —          |
-| F56-S29 | UX — helper único de erro derivado de ApiError (status + ref)                   | 🟢 available | medium     | —          |
-| F56-S30 | Agente — wizard interpola respostas no prompt do template                       | ✅ done      | high       | —          |
-| F56-S31 | Agente — versionamento de prompt (draft→live, diff, rollback)                   | ⏸️ blocked  | medium     | F56-S30    |
+| ID      | Titulo                                                                          | Status | Prioridade | Depende de |
+| ------- | ------------------------------------------------------------------------------- | ------ | ---------- | ---------- |
+| F56-S01 | Runtime IA — coluna fantasma vision + clamp de tokens + latency_ms              | ✅ done | critical   | —          |
+| F56-S02 | Campanhas — fechar o loop de métricas (delivery status → metrics)               | ✅ done | critical   | —          |
+| F56-S03 | Campanhas — máquina de estados do recipient (drip + completed + teto diário)    | ✅ done | high       | —          |
+| F56-S04 | Campanhas — hidratar o wizard no modo edição                                    | ✅ done | high       | —          |
+| F56-S05 | Ativação de canal recuperável (Embedded Signup + badge + fallback)              | ✅ done | high       | —          |
+| F56-S06 | Auth hardening — fail-fast mock, rate-limit por IP, stale token                 | ✅ done | high       | —          |
+| F56-S07 | Anti-SSRF em webhooks outbound (allowlist de host/esquema)                      | ✅ done | high       | —          |
+| F56-S08 | RLS como backstop real — FORCE RLS + role não-superuser + agent_templates       | ✅ done | high       | —          |
+| F56-S09 | Uploads — bloquear SVG + validar magic bytes                                    | ✅ done | medium     | —          |
+| F56-S10 | AbacatePay — HMAC obrigatória em produção (secret fora da query)                | ✅ done | medium     | —          |
+| F56-S11 | Agente IA — anti-prompt-injection + moderação de entrada/saída                  | ✅ done | high       | —          |
+| F56-S12 | MQ resilience — reconnect AMQP + reliableQueues + backpressure                  | ✅ done | critical   | —          |
+| F56-S13 | Flow-engine — claim atômico + anti-loop (step_count)                            | ✅ done | high       | —          |
+| F56-S14 | Outbound — retry durável para falha transitória do provider                     | ✅ done | high       | —          |
+| F56-S15 | Agent buffer — wakeup durável do flush de agregação                             | ✅ done | high       | —          |
+| F56-S16 | Socket relay — emitir antes de bumpar + prefetch + patch incremental            | ✅ done | high       | —          |
+| F56-S17 | Workers ops — healthcheck + graceful drain + DLQ alert + lock watchdog          | ✅ done | high       | F56-S25    |
+| F56-S18 | Deploy hardening + stack de observabilidade (healthcheck, rollback, Prometheus) | ✅ done | high       | —          |
+| F56-S19 | Error tracking — ligar Sentry + captureException no error handler               | ✅ done | high       | —          |
+| F56-S20 | Observabilidade — correlação de log por workspace/request + redação PII         | ✅ done | high       | —          |
+| F56-S21 | /health checa RabbitMQ (backbone de mensageria)                                 | ✅ done | medium     | —          |
+| F56-S22 | CI — corrigir deploy errado + Python + RabbitMQ + e2e                           | ✅ done | high       | —          |
+| F56-S23 | Runbooks — fila estourada, worker crash-loop, rollback                          | ✅ done | medium     | —          |
+| F56-S24 | DB — índices dos schedulers + FKs pendentes                                     | ✅ done | high       | —          |
+| F56-S25 | Retenção — sweep de webhook_events + base de retenção                           | ✅ done | medium     | —          |
+| F56-S26 | DS — promover EmptyState/Skeleton/ErrorState para @hm/ui                        | ✅ done | medium     | —          |
+| F56-S27 | DS — Drawer canônico + IconButton (foco de teclado)                             | ✅ done | medium     | F56-S26    |
+| F56-S28 | DS — tokenizar e aplicar a escala tipográfica editorial                         | ✅ done | medium     | —          |
+| F56-S29 | UX — helper único de erro derivado de ApiError (status + ref)                   | ✅ done | medium     | —          |
+| F56-S30 | Agente — wizard interpola respostas no prompt do template                       | ✅ done | high       | —          |
+| F56-S31 | Agente — versionamento de prompt (draft→live, diff, rollback)                   | ✅ done | medium     | F56-S30    |
 
 ## Fase 6 — Pipeline
 

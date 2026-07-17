@@ -2,7 +2,7 @@
 id: F56-S29
 title: UX — helper único de erro derivado de ApiError (status + ref)
 phase: F56
-status: available
+status: done
 priority: medium
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: frontend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T23:51:13Z
 
+---
 # F56-S29 — Erro acionável e consistente (UX-17/UX-04)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.5. Dezenas de telas mostram "conexão falhou" para 401/403/500/rede; `ApiError.status/ref` só é usado no composer. Sessão expirada (o caso mais comum) vira "problema de conexão".
