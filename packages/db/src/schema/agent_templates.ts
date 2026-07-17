@@ -4,9 +4,14 @@
  * `is_global = true`) são lidos por todos os workspaces; templates por workspace
  * (`workspace_id` setado) pertencem ao tenant.
  *
- * Tabela NÃO recebe RLS de tenant (linhas globais precisam ser legíveis por todos;
- * o filtro por workspace, quando aplicável, é feito no app). Ver index.ts → fora de
- * RLS_TABLES.
+ * RLS (F56-S08, migration 0062): a tabela recebe políticas por comando —
+ *   * read  (FOR SELECT): `workspace_id IS NULL` (global) OU do próprio workspace;
+ *   * write (FOR ALL): apenas o próprio workspace → templates globais são read-only
+ *     para o app (semeados pelo owner/bypass), sem risco de um tenant deletá-los.
+ * Fica FORA de `RLS_TABLES` (index.ts) porque aquela lista assume isolamento estrito
+ * `workspace_id = app_current_workspace()`; aqui a leitura global exige política
+ * dedicada. `agent_template_questions` (sem workspace_id) isola via subquery no
+ * template dono, espelhando flow_versions / event_participants.
  *
  * `agent_template_questions` modela o wizard de criação (AgentCreationWizard):
  * cada pergunta vira input do formulário que preenche o prompt do template.

@@ -19,6 +19,8 @@ import { dealItemsRepo } from './repos/deal_items';
 import {
   agentDepartments,
   agents,
+  agentTemplates,
+  agentTemplateQuestions,
   availabilityExceptions,
   availabilityRules,
   calendars,
@@ -2257,5 +2259,192 @@ describe('RLS Products + Deal items (F47-S01)', () => {
         }),
       ),
     ).rejects.toThrow();
+  });
+});
+
+describe('RLS backstop — FORCE + agent_templates (F56-S08)', () => {
+  it('FORCE ROW LEVEL SECURITY: nenhuma tabela com RLS habilitada fica sem FORCE', async () => {
+    const db = getDb();
+    // Toda tabela tenant precisa de relforcerowsecurity=true: sem isso, o DONO das
+    // tabelas (e, em prod, um role de app que também seja dono) bypassaria a RLS.
+    const rows = await db.execute<{ relname: string }>(sql`
+      SELECT c.relname
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relkind = 'r'
+        AND c.relrowsecurity = true
+        AND c.relforcerowsecurity = false
+    `);
+    expect(Array.from(rows).map((r) => r.relname)).toEqual([]);
+
+    // Amostra representativa (workspace-scoped + subquery-isolated) sob FORCE.
+    const sample = await db.execute<{ relname: string; forced: boolean }>(sql`
+      SELECT c.relname, c.relforcerowsecurity AS forced
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND c.relname IN (
+          'members', 'conversations', 'messages', 'campaigns', 'flows',
+          'flow_versions', 'event_participants', 'agent_templates',
+          'agent_template_questions'
+        )
+    `);
+    const forced = Array.from(sample);
+    expect(forced.length).toBe(9);
+    expect(forced.every((r) => r.forced === true)).toBe(true);
+  });
+
+  it('hm_app_login existe sem superuser/BYPASSRLS e herda hm_app', async () => {
+    const db = getDb();
+    const [role] = Array.from(
+      await db.execute<{ rolsuper: boolean; rolbypassrls: boolean }>(sql`
+        SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = 'hm_app_login'
+      `),
+    );
+    expect(role).toBeTruthy();
+    expect(role?.rolsuper).toBe(false);
+    expect(role?.rolbypassrls).toBe(false);
+    // Membro de hm_app → pode assumir o papel de RLS em withWorkspace.
+    const membership = Array.from(
+      await db.execute<{ ok: boolean }>(sql`
+        SELECT pg_has_role('hm_app_login', 'hm_app', 'MEMBER') AS ok
+      `),
+    );
+    expect(membership[0]?.ok).toBe(true);
+  });
+
+  it('agent_templates: global legível por todos; tenant só enxerga o próprio', async () => {
+    const db = getDb(); // owner bypassa RLS → semeia global + por-workspace.
+    const sfx = randomUUID().slice(0, 8);
+
+    const [globalTpl] = await db
+      .insert(agentTemplates)
+      .values({
+        workspaceId: null,
+        key: `global-${sfx}`,
+        name: 'Global SDR',
+        promptTemplate: 'você é...',
+        defaultModel: 'openai/gpt-4o-mini',
+        isGlobal: true,
+      })
+      .returning();
+    const [tplA] = await db
+      .insert(agentTemplates)
+      .values({
+        workspaceId: wsA,
+        key: `tenant-a-${sfx}`,
+        name: 'Custom A',
+        promptTemplate: 'A...',
+        defaultModel: 'openai/gpt-4o-mini',
+      })
+      .returning();
+    const [tplB] = await db
+      .insert(agentTemplates)
+      .values({
+        workspaceId: wsB,
+        key: `tenant-b-${sfx}`,
+        name: 'Custom B',
+        promptTemplate: 'B...',
+        defaultModel: 'openai/gpt-4o-mini',
+      })
+      .returning();
+    if (!globalTpl || !tplA || !tplB) throw new Error('setup agent_templates');
+
+    // Perguntas: uma no template global (visível a todos), uma no template de B.
+    await db.insert(agentTemplateQuestions).values({
+      templateId: globalTpl.id,
+      key: 'nome_empresa',
+      label: 'Nome da empresa',
+      type: 'text',
+    });
+    const [qB] = await db
+      .insert(agentTemplateQuestions)
+      .values({ templateId: tplB.id, key: 'tom', label: 'Tom', type: 'text' })
+      .returning();
+    if (!qB) throw new Error('setup question B');
+
+    // Workspace A: vê global + o próprio; NÃO vê o template de B.
+    const seenByA = await withWorkspace(wsA, (tx) => tx.select().from(agentTemplates));
+    const idsA = seenByA.map((t) => t.id);
+    expect(idsA).toContain(globalTpl.id);
+    expect(idsA).toContain(tplA.id);
+    expect(idsA).not.toContain(tplB.id);
+
+    // Workspace B: vê global + o próprio; NÃO vê o template de A.
+    const seenByB = await withWorkspace(wsB, (tx) => tx.select().from(agentTemplates));
+    const idsB = seenByB.map((t) => t.id);
+    expect(idsB).toContain(globalTpl.id);
+    expect(idsB).toContain(tplB.id);
+    expect(idsB).not.toContain(tplA.id);
+
+    // Perguntas: A vê as do template global; NÃO vê as do template de B.
+    const questionsA = await withWorkspace(wsA, (tx) =>
+      tx.select().from(agentTemplateQuestions),
+    );
+    const qIdsA = questionsA.map((q) => q.templateId);
+    expect(qIdsA).toContain(globalTpl.id);
+    expect(questionsA.some((q) => q.id === qB.id)).toBe(false);
+  });
+
+  it('agent_templates: WITH CHECK barra insert cross-tenant e insert de template global via app', async () => {
+    const sfx = randomUUID().slice(0, 8);
+
+    // Cross-tenant: A tentando inserir template de B → WITH CHECK do write policy nega.
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.insert(agentTemplates).values({
+          workspaceId: wsB,
+          key: `cross-${sfx}`,
+          name: 'cross',
+          promptTemplate: 'x',
+          defaultModel: 'm',
+        }),
+      ),
+    ).rejects.toThrow();
+
+    // Template GLOBAL (workspace_id NULL) só é semeado pelo owner/bypass; o app não
+    // pode criar → WITH CHECK exige workspace_id = app_current_workspace().
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.insert(agentTemplates).values({
+          workspaceId: null,
+          key: `fake-global-${sfx}`,
+          name: 'fake global',
+          promptTemplate: 'x',
+          defaultModel: 'm',
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('agent_templates: tenant NÃO consegue apagar template global (read-only)', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const [globalTpl] = await db
+      .insert(agentTemplates)
+      .values({
+        workspaceId: null,
+        key: `ro-global-${sfx}`,
+        name: 'RO Global',
+        promptTemplate: 'x',
+        defaultModel: 'm',
+        isGlobal: true,
+      })
+      .returning();
+    if (!globalTpl) throw new Error('setup global read-only');
+
+    // DELETE sob o write policy (USING = próprio workspace) não casa a linha global
+    // → 0 linhas afetadas, sem erro; a linha permanece.
+    await withWorkspace(wsA, (tx) =>
+      tx.delete(agentTemplates).where(eq(agentTemplates.id, globalTpl.id)),
+    );
+    const [still] = await db
+      .select()
+      .from(agentTemplates)
+      .where(eq(agentTemplates.id, globalTpl.id));
+    expect(still?.id).toBe(globalTpl.id);
+
+    await db.delete(agentTemplates).where(eq(agentTemplates.id, globalTpl.id));
   });
 });
