@@ -207,6 +207,63 @@ describe('POST /api/uploads', () => {
     expect(res.body.ref).toMatch(/^hm_err_/);
   });
 
+  // --- SEC-06: SVG bloqueado + magic bytes -----------------------------------
+  const svgPayload = Buffer.from(
+    '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="8" height="8">' +
+      '<script>alert(document.cookie)</script></svg>',
+  );
+
+  it('SVG por Content-Type declarado → 415 (vetor XSS)', async () => {
+    const res = await request(app)
+      .post('/api/uploads?filename=payload.svg')
+      .set('Content-Type', 'image/svg+xml')
+      .send(svgPayload);
+    expect(res.status).toBe(415);
+    expect(res.body.ref).toMatch(/^hm_err_/);
+    expect(stored).toHaveLength(0);
+  });
+
+  it('SVG rotulado image/png (spoof de Content-Type) → 415', async () => {
+    const res = await request(app)
+      .post('/api/uploads?filename=fake.png')
+      .set('Content-Type', 'image/png')
+      .send(svgPayload);
+    expect(res.status).toBe(415);
+    expect(res.body.ref).toMatch(/^hm_err_/);
+    expect(stored).toHaveLength(0);
+  });
+
+  it('bytes arbitrários rotulados image/png → 415 (magic bytes)', async () => {
+    const res = await request(app)
+      .post('/api/uploads?filename=bogus.png')
+      .set('Content-Type', 'image/png')
+      .send(Buffer.from('these are definitely not png bytes, just filler filler filler'));
+    expect(res.status).toBe(415);
+    expect(res.body.ref).toMatch(/^hm_err_/);
+    expect(stored).toHaveLength(0);
+  });
+
+  it('PDF rotulado image/png (família incompatível) → 415', async () => {
+    const pdf = Buffer.from('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n1 0 obj<<>>endobj\n', 'latin1');
+    const res = await request(app)
+      .post('/api/uploads?filename=doc.png')
+      .set('Content-Type', 'image/png')
+      .send(pdf);
+    expect(res.status).toBe(415);
+    expect(stored).toHaveLength(0);
+  });
+
+  it('PDF real rotulado application/pdf → 200 (magic bytes casam)', async () => {
+    const pdf = Buffer.from('%PDF-1.7\n%\xE2\xE3\xCF\xD3\n1 0 obj<<>>endobj\n', 'latin1');
+    const res = await request(app)
+      .post('/api/uploads?filename=fatura.pdf')
+      .set('Content-Type', 'application/pdf')
+      .send(pdf);
+    expect(res.status).toBe(200);
+    expect(res.body.mime).toBe('application/pdf');
+    expect(stored).toHaveLength(1);
+  });
+
   it('tipo não permitido → 415', async () => {
     const res = await request(app)
       .post('/api/uploads?filename=x')
