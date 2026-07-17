@@ -31,6 +31,7 @@ import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { agentDepartmentsRepo, schema, type DbTx } from '@hm/db';
 import type { AgentDepartmentItem, DepartmentLink } from '@hm/db';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
+import { createAgentVersionsRouter, recordLivePromptVersion } from './versions';
 
 const AGENT_STATUSES = ['active', 'inactive', 'archived'] as const;
 
@@ -274,6 +275,11 @@ export function createAgentsCrudRouter(): Router {
   const viewGuard = [requireAuth, withRLS, requireRole('agent.list')] as const;
   const editGuard = [requireAuth, withRLS, requireRole('agent.edit')] as const;
 
+  // F56-S31: versionamento de prompt (draft→live, diff, rollback). Montado ANTES do
+  // CRUD; suas rotas (`/api/agents/:id/versions...`) têm profundidade própria e não
+  // colidem com `/api/agents/:id`.
+  router.use(createAgentVersionsRouter());
+
   // GET /api/agents — lista agentes do workspace (RLS-escopada).
   router.get('/api/agents', ...viewGuard, async (req: Request, res: Response) => {
     const rows = await req.scoped!((tx) =>
@@ -401,6 +407,25 @@ export function createAgentsCrudRouter(): Router {
 
         if (!agent) throw new Error('Falha ao criar agente.');
 
+        // F56-S31: baseline do histórico — a v1 nasce LIVE, espelhando o estado
+        // recém-inserido do agente (o agente já foi persistido → applyToAgent=false).
+        // Torna diff/rollback significativos desde a criação.
+        await recordLivePromptVersion(
+          tx,
+          {
+            systemPrompt: agent.systemPrompt,
+            model: agent.model,
+            modelParams: agent.modelParams,
+          },
+          {
+            workspaceId,
+            agentId: agent.id,
+            authorMemberId: req.auth!.member.id,
+            label: 'Versão inicial',
+          },
+          { applyToAgent: false },
+        );
+
         // Materializa agent_tools default a partir das tool keys do template.
         // Resolve keys → ids no catálogo (globais OU do workspace); ignora keys
         // sem match (template pode referenciar tools ainda não provisionadas).
@@ -495,6 +520,31 @@ export function createAgentsCrudRouter(): Router {
           .where(eq(schema.agents.id, id))
           .returning(PUBLIC_AGENT_COLUMNS);
         if (!updated) return null;
+
+        // F56-S31: toda edição que muda o "cérebro" (prompt/modelo/params) grava uma
+        // nova versão LIVE espelhando o estado já aplicado ao agente (applyToAgent=false),
+        // arquivando a live anterior. Mudanças que não tocam o cérebro (nome, handoff,
+        // canais…) não geram versão. Histórico append-only para diff/rollback.
+        const promptChanged =
+          input.systemPrompt !== undefined ||
+          input.model !== undefined ||
+          input.modelParams !== undefined;
+        if (promptChanged) {
+          await recordLivePromptVersion(
+            tx,
+            {
+              systemPrompt: updated.systemPrompt,
+              model: updated.model,
+              modelParams: updated.modelParams,
+            },
+            {
+              workspaceId,
+              agentId: updated.id,
+              authorMemberId: req.auth!.member.id,
+            },
+            { applyToAgent: false },
+          );
+        }
 
         // `departments` ausente = não mexe nos vínculos; presente (incl. `[]`) =
         // substitui o conjunto inteiro.

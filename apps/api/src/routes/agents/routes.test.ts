@@ -21,6 +21,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 const WORKSPACE_ID = 'ws-test';
+const MEMBER_ID = '00000000-0000-0000-0000-0000000000c1';
 const AGENT_ID = '00000000-0000-0000-0000-0000000000a1';
 const DEPT_A = '00000000-0000-0000-0000-0000000000d1';
 const DEPT_B = '00000000-0000-0000-0000-0000000000d2';
@@ -58,6 +59,7 @@ vi.mock('@hm/db', () => {
       agents: passthroughTable,
       agentTemplates: passthroughTable,
       agentTools: passthroughTable,
+      agentPromptVersions: passthroughTable,
       tools: passthroughTable,
       departments: passthroughTable,
     },
@@ -79,7 +81,10 @@ vi.mock('../../middlewares/auth', () => ({
       res.status(401).json({ message: 'Não autenticado.' });
       return;
     }
-    (req as { auth?: unknown }).auth = { workspace: { id: WORKSPACE_ID } };
+    (req as { auth?: unknown }).auth = {
+      workspace: { id: WORKSPACE_ID },
+      member: { id: MEMBER_ID },
+    };
     next();
   },
   withRLS: (req: express.Request, _res: express.Response, next: express.NextFunction) => {
@@ -124,6 +129,8 @@ function makeTx() {
       // assertDepartmentsValid faz `select({ id })` (1 coluna). O select do agente
       // usa PUBLIC_AGENT_COLUMNS (muitas colunas). Distinguimos pela cardinalidade.
       const isDeptProbe = Boolean(cols) && Object.keys(cols ?? {}).length === 1 && 'id' in cols!;
+      // F56-S31: nextVersionNumber() faz select({ max: coalesce(...) }) → array direto.
+      const isMaxProbe = Boolean(cols) && 'max' in (cols ?? {});
       const agentRow = {
         id: AGENT_ID,
         workspaceId: WORKSPACE_ID,
@@ -134,9 +141,11 @@ function makeTx() {
       return {
         from: () => ({
           where: () =>
-            isDeptProbe
-              ? [...activeDepartmentIds].map((id) => ({ id }))
-              : { limit: (_n: number) => [agentRow] },
+            isMaxProbe
+              ? [{ max: 0 }]
+              : isDeptProbe
+                ? [...activeDepartmentIds].map((id) => ({ id }))
+                : { limit: (_n: number) => [agentRow] },
           orderBy: () => [agentRow],
           limit: (_n: number) => [agentRow],
         }),

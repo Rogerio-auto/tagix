@@ -351,6 +351,12 @@ export * from './evaluations';
 // (índice parcial único). Importado DEPOIS de agents e org (referencia ambos).
 export * from './agent_departments';
 
+// --- Agent prompt versioning (F56-S31: AUDITORIA_TECNICA §3.3 / AG-04) ---
+// agent_prompt_versions: histórico append-only + staging (draft/live/archived) do
+// prompt/modelo do agente. workspace_id próprio (denormalizado) → RLS direto.
+// Importado DEPOIS de agents e members (referencia ambos).
+export * from './agent_prompt_versions';
+
 // --- Central de Ajuda / Support chat (F38-S01: SUPPORT.md §1/§2) ---
 // help_categories/help_articles: GLOBAIS (sem workspace_id → FORA do RLS de
 // tenant, como platform_secrets; escrita gated por requirePlatformAdmin).
@@ -462,6 +468,8 @@ export const RLS_TABLES = [
   'objections',
   // Agent ↔ Department routing (F34). Join N:N com workspace_id denormalizado → RLS direto.
   'agent_departments',
+  // Agent prompt versioning (F56-S31). workspace_id próprio (denormalizado) → RLS direto.
+  'agent_prompt_versions',
   // Central de Ajuda / Support (F38). help_article_feedback + support_threads têm
   // workspace_id próprio → RLS direto. support_messages é isolada via subquery em
   // support_threads (espelha flow_versions) → NÃO entra nesta lista.

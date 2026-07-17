@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 const WORKSPACE_ID = 'ws-test';
+const MEMBER_ID = '00000000-0000-0000-0000-0000000000c1';
 const AGENT_ID = '00000000-0000-0000-0000-0000000000a1';
 const TEMPLATE_ID = '00000000-0000-0000-0000-0000000000b1';
 
@@ -44,6 +45,7 @@ vi.mock('@hm/db', () => {
       agentTemplates: table('agentTemplates'),
       agentTemplateQuestions: table('agentTemplateQuestions'),
       agentTools: table('agentTools'),
+      agentPromptVersions: table('agentPromptVersions'),
       tools: table('tools'),
       departments: table('departments'),
     },
@@ -59,7 +61,10 @@ vi.mock('@hm/db', () => {
 
 vi.mock('../../middlewares/auth', () => ({
   requireAuth: (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    (req as { auth?: unknown }).auth = { workspace: { id: WORKSPACE_ID } };
+    (req as { auth?: unknown }).auth = {
+      workspace: { id: WORKSPACE_ID },
+      member: { id: MEMBER_ID },
+    };
     next();
   },
   withRLS: (req: express.Request, _res: express.Response, next: express.NextFunction) => {
@@ -94,6 +99,8 @@ function makeTx() {
             if (t === 'agentTemplateQuestions') return state.questions;
             if (t === 'tools') return [];
             if (t === 'departments') return [];
+            // F56-S31: nextVersionNumber() faz coalesce(max(version)) → array direto.
+            if (t === 'agentPromptVersions') return [{ max: 0 }];
             return { limit: () => [agentRow()] };
           },
           orderBy: () => [agentRow()],
