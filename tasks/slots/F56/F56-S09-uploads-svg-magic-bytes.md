@@ -2,7 +2,7 @@
 id: F56-S09
 title: Uploads — bloquear SVG + validar magic bytes
 phase: F56
-status: available
+status: done
 priority: medium
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T22:28:43Z
 
+---
 # F56-S09 — Uploads: SVG e magic bytes (SEC-06)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.1. O upload libera qualquer `image/*` (inclui `image/svg+xml`) e confia no `Content-Type` do cliente sem sniff — XSS armazenado via SVG e spoof de tipo.

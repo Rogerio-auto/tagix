@@ -2,7 +2,7 @@
 id: F56-S30
 title: Agente — wizard interpola respostas no prompt do template
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: [F56-S31]
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T22:28:44Z
 
+---
 # F56-S30 — Wizard de agente personaliza o prompt (AG-03)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.3. O wizard coleta `answers` mas o `createSchema` não declara o campo (Zod strip descarta) e o handler usa o `promptTemplate` cru — o agente criado sai genérico. A etapa "Perguntas" é decorativa.

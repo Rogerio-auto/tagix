@@ -47,7 +47,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F53   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F54   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F56   | 31     | 15   | 3   | 0   | 0   | 0   | 13   |
+| F56   | 31     | 10   | 3   | 0   | 0   | 0   | 18   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -603,10 +603,10 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F56-S05 | Ativação de canal recuperável (Embedded Signup + badge + fallback)              | ✅ done      | high       | —          |
 | F56-S06 | Auth hardening — fail-fast mock, rate-limit por IP, stale token                 | ✅ done      | high       | —          |
 | F56-S07 | Anti-SSRF em webhooks outbound (allowlist de host/esquema)                      | ✅ done      | high       | —          |
-| F56-S08 | RLS como backstop real — FORCE RLS + role não-superuser + agent_templates       | 🟢 available | high       | —          |
-| F56-S09 | Uploads — bloquear SVG + validar magic bytes                                    | 🟢 available | medium     | —          |
-| F56-S10 | AbacatePay — HMAC obrigatória em produção (secret fora da query)                | 🟢 available | medium     | —          |
-| F56-S11 | Agente IA — anti-prompt-injection + moderação de entrada/saída                  | 🟢 available | high       | —          |
+| F56-S08 | RLS como backstop real — FORCE RLS + role não-superuser + agent_templates       | ✅ done      | high       | —          |
+| F56-S09 | Uploads — bloquear SVG + validar magic bytes                                    | ✅ done      | medium     | —          |
+| F56-S10 | AbacatePay — HMAC obrigatória em produção (secret fora da query)                | ✅ done      | medium     | —          |
+| F56-S11 | Agente IA — anti-prompt-injection + moderação de entrada/saída                  | ✅ done      | high       | —          |
 | F56-S12 | MQ resilience — reconnect AMQP + reliableQueues + backpressure                  | ✅ done      | critical   | —          |
 | F56-S13 | Flow-engine — claim atômico + anti-loop (step_count)                            | ✅ done      | high       | —          |
 | F56-S14 | Outbound — retry durável para falha transitória do provider                     | ✅ done      | high       | —          |
@@ -625,7 +625,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F56-S27 | DS — Drawer canônico + IconButton (foco de teclado)                             | ⏸️ blocked  | medium     | F56-S26    |
 | F56-S28 | DS — tokenizar e aplicar a escala tipográfica editorial                         | 🟢 available | medium     | —          |
 | F56-S29 | UX — helper único de erro derivado de ApiError (status + ref)                   | 🟢 available | medium     | —          |
-| F56-S30 | Agente — wizard interpola respostas no prompt do template                       | 🟢 available | high       | —          |
+| F56-S30 | Agente — wizard interpola respostas no prompt do template                       | ✅ done      | high       | —          |
 | F56-S31 | Agente — versionamento de prompt (draft→live, diff, rollback)                   | ⏸️ blocked  | medium     | F56-S30    |
 
 ## Fase 6 — Pipeline

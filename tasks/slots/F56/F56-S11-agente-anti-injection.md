@@ -2,7 +2,7 @@
 id: F56-S11
 title: Agente IA — anti-prompt-injection + moderação de entrada/saída
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: python-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T22:28:44Z
 
+---
 # F56-S11 — Guardrails conversacionais da IA (AG-05)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.3. Histórico e `custom_fields` do contato entram dentro do system prompt como texto livre, sem delimitação — prompt injection ("ignore as instruções…") em contexto de alta autoridade; sem moderação.

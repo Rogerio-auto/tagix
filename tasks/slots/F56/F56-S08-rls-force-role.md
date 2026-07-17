@@ -2,7 +2,7 @@
 id: F56-S08
 title: RLS como backstop real — FORCE RLS + role não-superuser + agent_templates
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: db-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T22:28:40Z
 
+---
 # F56-S08 — RLS defense-in-depth (SEC-03/SEC-04/DB-08)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.1/§3.8. O role de app em prod é superuser+BYPASSRLS e não há `FORCE ROW LEVEL SECURITY` — caminhos `getDb()` direto bypassam RLS. `agent_templates` tem `workspace_id` mas RLS nunca foi habilitada.

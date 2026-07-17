@@ -2,7 +2,7 @@
 id: F56-S10
 title: AbacatePay — HMAC obrigatória em produção (secret fora da query)
 phase: F56
-status: available
+status: done
 priority: medium
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T22:28:44Z
 
+---
 # F56-S10 — AbacatePay: HMAC obrigatória (SEC-07)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.1. A auth do webhook de pagamento compara `?webhookSecret=` na query string (vaza em logs/Sentry/Traefik); a camada HMAC é opcional.
