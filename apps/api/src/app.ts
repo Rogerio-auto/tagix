@@ -4,6 +4,7 @@ import { createAuthRouter } from './auth';
 import { loadConfig } from './config';
 import { healthHandler } from './health';
 import { errorHandler } from './middlewares/error';
+import { requestContext } from './middlewares/request-context';
 import { securityMiddlewares } from './middlewares/security';
 import { uuidParamGuard } from './middlewares/uuid-params';
 import { createInternalToolsRouter } from './internal/tools';
@@ -95,6 +96,11 @@ export function createApp(): Express {
   registerEventHooks();
 
   app.disable('x-powered-by');
+  // Correlação de log (F56-S20): registra requestId + workspaceId no contexto
+  // AsyncLocalStorage do @hm/logger ANTES de qualquer outro middleware, para que
+  // TODO log downstream (segurança, webhooks, rotas, erros) seja filtrável por
+  // tenant/request. Não reordena os demais — apenas os envolve.
+  app.use(requestContext);
   // Security hardening (F10-S07): helmet+CSP+HSTS+CORS allowlist endurecidos.
   for (const mw of securityMiddlewares()) app.use(mw);
   app.use(compression());

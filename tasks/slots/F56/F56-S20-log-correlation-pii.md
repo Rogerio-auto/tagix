@@ -50,6 +50,14 @@ Tornar todo log correlacionável por `workspace_id`/`request_id` e cobrir os cam
 - [ ] `msisdn/wa_id/document/cpf/address` são redigidos.
 - [ ] `pnpm typecheck` + `pnpm lint` + `pnpm --filter @hm/api test` verdes.
 
+## Validação
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm --filter @hm/api test
+```
+
 ## Notas
 
 - Este é o **único** slot que edita `apps/api/src/app.ts` nesta fase — registre o middleware cedo, sem reordenar os demais.
