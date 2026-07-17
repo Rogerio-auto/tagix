@@ -31,6 +31,12 @@ export type { SkeletonTextProps, SkeletonCardProps } from './Skeleton/Skeleton';
 export { ErrorState } from './ErrorState/ErrorState';
 export type { ErrorStateProps } from './ErrorState/ErrorState';
 
+export { Drawer } from './Drawer/Drawer';
+export type { DrawerProps, DrawerSide } from './Drawer/Drawer';
+
+export { IconButton } from './IconButton/IconButton';
+export type { IconButtonProps, IconButtonVariant, IconButtonSize } from './IconButton/IconButton';
+
 export { HelpHint, HelpPanel } from './HelpHint/HelpHint';
 export { AnchoredHelpHint } from './help-hint/AnchoredHelpHint';
 export type { AnchoredHelpHintProps } from './help-hint/AnchoredHelpHint';
