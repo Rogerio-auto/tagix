@@ -138,15 +138,37 @@ async function assertDepartmentsValid(
 }
 
 /**
+ * Valor de uma resposta às `agent_template_questions` do wizard (F56-S30).
+ * Espelha `TemplateAnswerValue` do frontend (apps/web/features/agents/types.ts).
+ */
+const answerValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.array(z.string()),
+]);
+type TemplateAnswerValue = z.infer<typeof answerValueSchema>;
+
+/**
+ * Respostas do wizard, indexadas por `question.key`. Chaves desconhecidas são
+ * ignoradas na renderização (só interpolamos placeholders que casam com uma
+ * `agent_template_question` do template).
+ */
+const answersSchema = z.record(z.string().min(1).max(120), answerValueSchema);
+
+/**
  * Criação. Dois modos:
  *  - a partir de template (`templateId`): `systemPrompt`/`model` herdam do template
  *    se omitidos; cria `agent_tools` default das `default_tools` do template.
+ *    Quando não há `systemPrompt` explícito, o `promptTemplate` é RENDERIZADO com
+ *    as `answers` do wizard (F56-S30) — placeholders `{{key}}` viram as respostas.
  *  - do zero: `systemPrompt` é obrigatório.
  * A validação cruzada (prompt obrigatório quando sem template) é feita no handler.
  */
 const createSchema = agentBehaviorSchema.extend({
   name: z.string().trim().min(1).max(120),
   templateId: z.string().uuid().optional(),
+  answers: answersSchema.optional(),
   departments: departmentsSchema.optional(),
 });
 
@@ -185,6 +207,66 @@ async function findTemplate(tx: DbTx, templateId: string, workspaceId: string) {
     )
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Carrega as `agent_template_questions` de um template (chave, label, obrigatória).
+ * Tabela é global (fora de RLS_TABLES) — roda dentro da `tx`, sem filtro de tenant.
+ */
+async function findTemplateQuestions(
+  tx: DbTx,
+  templateId: string,
+): Promise<Array<{ key: string; label: string; required: boolean }>> {
+  return tx
+    .select({
+      key: schema.agentTemplateQuestions.key,
+      label: schema.agentTemplateQuestions.label,
+      required: schema.agentTemplateQuestions.required,
+    })
+    .from(schema.agentTemplateQuestions)
+    .where(eq(schema.agentTemplateQuestions.templateId, templateId));
+}
+
+/** Uma resposta está "vazia" (para validar `required`). Espelha o wizard. */
+function isEmptyAnswerValue(value: TemplateAnswerValue | undefined): boolean {
+  if (value === undefined) return true;
+  if (typeof value === 'string') return value.trim() === '';
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'number') return Number.isNaN(value);
+  return false; // boolean `false` é uma resposta válida
+}
+
+/** Converte o valor de uma resposta do wizard em texto para interpolar no prompt. */
+function formatAnswerValue(value: TemplateAnswerValue): string {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
+  if (typeof value === 'boolean') return value ? 'sim' : 'não';
+  return value.map((v) => v.trim()).filter((v) => v !== '').join(', ');
+}
+
+/**
+ * Renderiza o `promptTemplate` do template interpolando placeholders `{{key}}`
+ * com as `answers` do wizard (F56-S30).
+ *
+ * - Só substitui placeholders cuja `key` casa com uma `agent_template_question`
+ *   (`knownKeys`). Placeholders desconhecidos são preservados intactos — o runtime
+ *   do agente (Python) pode ter suas próprias variáveis e não devem ser apagadas.
+ * - Placeholder de uma pergunta conhecida SEM resposta (opcional não respondida) é
+ *   removido (vira string vazia) para não vazar sintaxe de template ao LLM.
+ * - Usa replacer em função → `$`/`$1` nas respostas do usuário não são
+ *   reinterpretados como padrões de substituição.
+ */
+export function renderPromptTemplate(
+  template: string,
+  answers: Record<string, TemplateAnswerValue>,
+  knownKeys: ReadonlySet<string>,
+): string {
+  return template.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (match, rawKey: string) => {
+    if (!knownKeys.has(rawKey)) return match;
+    const value = answers[rawKey];
+    if (value === undefined) return '';
+    return formatAnswerValue(value);
+  });
 }
 
 export function createAgentsCrudRouter(): Router {
@@ -254,7 +336,25 @@ export function createAgentsCrudRouter(): Router {
           defaultToolKeys = tpl.defaultTools;
         }
 
-        const systemPrompt = input.systemPrompt ?? tpl?.promptTemplate;
+        // Prompt final. Prioridade: `systemPrompt` explícito > template renderizado.
+        // A partir de template SEM prompt explícito (fluxo do wizard, F56-S30):
+        // valida as perguntas obrigatórias e interpola as `answers` no template.
+        let systemPrompt = input.systemPrompt;
+        if (!systemPrompt && tpl) {
+          const answers = input.answers ?? {};
+          const questions = await findTemplateQuestions(tx, tpl.id);
+          const missing = questions
+            .filter((q) => q.required && isEmptyAnswerValue(answers[q.key]))
+            .map((q) => q.label);
+          if (missing.length > 0) {
+            throw new HttpError(
+              400,
+              `Responda os campos obrigatórios do template: ${missing.join(', ')}.`,
+            );
+          }
+          const knownKeys = new Set(questions.map((q) => q.key));
+          systemPrompt = renderPromptTemplate(tpl.promptTemplate, answers, knownKeys);
+        }
         if (!systemPrompt) {
           // Sem template e sem prompt explícito → inválido.
           throw new HttpError(400, 'systemPrompt é obrigatório quando não há template.');
