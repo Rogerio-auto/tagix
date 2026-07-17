@@ -10,6 +10,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Node: lint + typecheck + build + testes + smoke da malha de mensageria.
+  # ---------------------------------------------------------------------------
   ci:
     runs-on: ubuntu-latest
     services:
@@ -29,9 +32,19 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s --health-timeout 5s --health-retries 5
+      rabbitmq:
+        image: rabbitmq:3.13-management-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: hm
+          RABBITMQ_DEFAULT_PASS: hm
+        ports: ['5672:5672']
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 15s --health-timeout 10s --health-retries 5
     env:
       DATABASE_URL: postgres://hm:hm@localhost:5432/highermind
       REDIS_URL: redis://localhost:6379
+      AMQP_URL: amqp://hm:hm@localhost:5672
       NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
@@ -62,15 +75,94 @@ jobs:
       - name: Test
         run: pnpm -r --if-present test
 
-  # Deploy via SSH para a VPS. PRONTO porém INERTE: só roda em main e no-op
-  # enquanto os secrets (VPS_HOST/VPS_USER/VPS_SSH_KEY) não existirem.
+      # Smoke da mensageria contra um RabbitMQ real: publish/consume + retry com
+      # TTL + dead-letter na DLQ. Gated por MQ_IT=1 dentro da suíte de dlx.
+      - name: MQ smoke (RabbitMQ real)
+        env:
+          MQ_IT: '1'
+        run: pnpm --filter @hm/shared exec vitest run src/mq/dlx.test.ts
+
+  # ---------------------------------------------------------------------------
+  # Python: agent-runtime (FastAPI + LangGraph). Lint (ruff) + testes (pytest).
+  # Roda em paralelo ao job Node — sem serviços (as fixtures mockam DB/LLM).
+  # ---------------------------------------------------------------------------
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/agent-runtime
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/agent-runtime/uv.lock
+
+      - name: Install (uv sync)
+        run: uv sync --frozen
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Test (pytest)
+        run: uv run pytest
+
+  # ---------------------------------------------------------------------------
+  # e2e: Playwright do @hm/web. Determinístico — toda a rede que sai do browser
+  # é interceptada nas fixtures (nenhum serviço real precisa estar de pé). O
+  # webServer do Playwright sobe o `next dev` na porta de teste.
+  # ---------------------------------------------------------------------------
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Builda os pacotes de workspace (@hm/ui, @hm/shared, …) que o `next dev`
+      # consome; gera next-env.d.ts.
+      - name: Build workspace libs
+        run: pnpm -r --if-present build
+
+      - name: Install Playwright browser
+        run: pnpm --filter @hm/web exec playwright install --with-deps chromium
+
+      - name: Run e2e (mocked)
+        run: pnpm --filter @hm/web exec playwright test
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/e2e/.artifacts/report
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Deploy para a VPS (Leadium — Docker Swarm em /opt/leadium). PRONTO porém
+  # INERTE: só roda em `main` e vira no-op enquanto os secrets não existirem.
+  # Não sobe containers num caminho fantasma (o alvo antigo era um landmine);
+  # delega ao deploy.sh, fonte-da-verdade do orquestrador (Swarm stack deploy).
+  # ---------------------------------------------------------------------------
   deploy:
-    needs: ci
+    needs: [ci, python, e2e]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
-      - name: Deploy (rsync over SSH)
+      - name: Deploy (SSH → deploy.sh na VPS)
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
@@ -84,5 +176,6 @@ jobs:
           echo "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
-          # TODO(deploy): rsync do build + restart dos containers na VPS.
-          ssh -i ~/.ssh/id_ed25519 "$VPS_USER@$VPS_HOST" 'cd /opt/tagix && git pull && docker compose up -d --build'
+          # A VPS de produção roda Docker Swarm em /opt/leadium; o deploy.sh é o
+          # único ponto que sabe buildar imagens, versionar tags e `stack deploy`.
+          ssh -i ~/.ssh/id_ed25519 "$VPS_USER@$VPS_HOST" 'bash /opt/leadium/scripts/deploy.sh main'
