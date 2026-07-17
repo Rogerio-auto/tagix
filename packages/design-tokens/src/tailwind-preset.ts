@@ -1,19 +1,26 @@
 /**
- * Preset Tailwind 4 do DS v2 (DESIGN_SYSTEM §2.3).
+ * Preset Tailwind 4 do DS v2 (DESIGN_SYSTEM §2.3, §3).
  *
  * Mapeia utilitários Tailwind (bg-*, text-*, border-*, font-*, rounded-*,
  * shadow-*) para as CSS variables de `tokens.css`. Consumido por
  * `apps/web/tailwind.config.ts` via `presets: [tailwindPreset]`.
  *
+ * A escala tipográfica (`fontSize`) é derivada de `typography.ts` — fonte única
+ * da escala editorial. Cada chave gera `text-<token>` (`text-h1…text-display`).
+ *
  * Tipado estruturalmente (sem depender do pacote `tailwindcss` aqui) — o objeto
  * é compatível com `Partial<Config>` quando o app o consome.
  */
+
+import { fontSizeScale } from './typography';
+import type { FontSizeUtility } from './typography';
 
 export interface TailwindPreset {
   readonly theme: {
     readonly extend: {
       readonly colors: Record<string, string | Record<string, string>>;
       readonly fontFamily: Record<string, string>;
+      readonly fontSize: Record<string, FontSizeUtility>;
       readonly borderRadius: Record<string, string>;
       readonly boxShadow: Record<string, string>;
       readonly maxWidth: Record<string, string>;
@@ -56,6 +63,11 @@ export const tailwindPreset: TailwindPreset = {
         head: 'var(--font-head)',
         body: 'var(--font-body)',
       },
+      // Escala tipográfica editorial (DESIGN_SYSTEM §3) — derivada de typography.ts.
+      // Gera text-h1, text-h2, text-h3, text-h4, text-body, text-small,
+      // text-price, text-display (cada uma seta size + line-height + tracking +
+      // weight). Coexiste com text-sm/text-xs genéricos (migração gradual).
+      fontSize: fontSizeScale,
       borderRadius: {
         xs: 'var(--r-xs)',
         sm: 'var(--r-sm)',

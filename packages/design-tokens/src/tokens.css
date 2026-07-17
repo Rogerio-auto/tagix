@@ -52,6 +52,62 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+ * Escala tipográfica editorial (DESIGN_SYSTEM §3) — namespace Tailwind 4
+ * `--text-*`. Gera os utilitários `text-h1 … text-display`, cada um aplicando
+ * size + line-height + tracking + weight numa única classe. Espelha
+ * `src/typography.ts` (fonte única): manter os dois em sincronia.
+ *
+ * Escala editorial (Linear/Stripe/Vercel), não a genérica do Tailwind: heads
+ * apertadas (rítmo cinematográfico), corpo arejado (17px/1.6) para leitura
+ * longa, preço/kicker travados. Coexiste com `text-sm`/`text-xs` — a adoção
+ * nas telas é gradual (follow-up).
+ *
+ * Inerte fora do pipeline Tailwind (at-rule desconhecida é ignorada pelo
+ * browser); os valores só viram utilitários quando compilados com `tailwindcss`.
+ * ───────────────────────────────────────────────────────────────────────── */
+@theme {
+  --text-h1: 60px;
+  --text-h1--line-height: 1.04;
+  --text-h1--letter-spacing: -0.5px;
+  --text-h1--font-weight: 600;
+
+  --text-h2: 40px;
+  --text-h2--line-height: 1.08;
+  --text-h2--letter-spacing: -0.3px;
+  --text-h2--font-weight: 600;
+
+  --text-h3: 28px;
+  --text-h3--line-height: 1.15;
+  --text-h3--letter-spacing: -0.2px;
+  --text-h3--font-weight: 600;
+
+  --text-h4: 21px;
+  --text-h4--line-height: 1.25;
+  --text-h4--letter-spacing: -0.1px;
+  --text-h4--font-weight: 600;
+
+  --text-body: 17px;
+  --text-body--line-height: 1.6;
+  --text-body--letter-spacing: 0;
+  --text-body--font-weight: 400;
+
+  --text-small: 13px;
+  --text-small--line-height: 1.5;
+  --text-small--letter-spacing: 0.1px;
+  --text-small--font-weight: 400;
+
+  --text-price: 40px;
+  --text-price--line-height: 1;
+  --text-price--letter-spacing: 0;
+  --text-price--font-weight: 600;
+
+  --text-display: 16px;
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: 1.5px;
+  --text-display--font-weight: 700;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
  * Semânticos — DARK (default) (DESIGN_SYSTEM §2.2)
  * ───────────────────────────────────────────────────────────────────────── */
 :root,
