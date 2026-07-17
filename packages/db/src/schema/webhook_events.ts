@@ -8,7 +8,9 @@
  * (wamid no WhatsApp, mid no Instagram, message id no WAHA).
  *
  * `raw_payload` é mantido por 30 dias (retenção) para hotfix de parser
- * (LIVECHAT.md §risco "Meta muda webhook payload").
+ * (LIVECHAT.md §risco "Meta muda webhook payload"). O sweep que efetiva essa
+ * retenção é o worker `apps/workers/src/retention` (F56-S25, DB-02): varre em
+ * lotes as linhas com `received_at` abaixo do horizonte e as purga.
  */
 import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
@@ -25,7 +27,10 @@ export const webhookEvents = pgTable(
   },
   (t) => [
     uniqueIndex('uq_webhook_events_provider_event').on(t.provider, t.externalEventId),
-    // Retenção 30d (limpeza por job): índice por received_at desc para o sweep.
-    index('idx_webhook_events_received').on(t.receivedAt.desc()),
+    // Retenção (F56-S25): btree ascendente por received_at. Casa exatamente com o
+    // padrão de acesso do sweep — varrer do MAIS ANTIGO abaixo do horizonte
+    // (`WHERE received_at < cutoff ORDER BY received_at ASC LIMIT n`) — evitando
+    // seq scan na tabela mais quente de escrita.
+    index('idx_webhook_events_received').on(t.receivedAt.asc()),
   ],
 );
