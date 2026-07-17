@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
+import { captureException } from '../observability/sentry';
 
 /**
  * Error handler central (4 args) — sanitização OWASP A05 (Security
@@ -37,12 +38,20 @@ function sanitize(err: unknown): SanitizedError {
   return { status: 500, message: String(err), stack: undefined };
 }
 
-export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction): void {
+export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
   const ref = `hm_err_${randomUUID().slice(0, 8)}`;
   const { status, message, stack } = sanitize(err);
 
   // Log estruturado server-side: detalhe completo fica só nos logs, sob o ref.
   console.error(JSON.stringify({ level: 'error', ref, status, message, stack }));
+
+  // Erros de servidor (5xx) vão para o agregador (Sentry) — no-op seguro sem DSN.
+  // Falhas de cliente (4xx: validação/autz) são ruído esperado, não reportamos.
+  // Tags = só identificadores de correlação (ref/workspaceId), nunca PII.
+  if (status >= 500) {
+    const workspaceId = req.auth?.workspace.id;
+    captureException(err, { tags: { ref, workspaceId } });
+  }
 
   if (res.headersSent) return;
 

@@ -41,13 +41,33 @@ export function isSentryEnabled(): boolean {
   return initialized;
 }
 
+/** Contexto opcional anexado ao evento (tags de correlação, ex.: `ref`, `workspaceId`). */
+export interface CaptureContext {
+  /** Tags indexáveis/pesquisáveis no Sentry. Valores não-string são ignorados. */
+  readonly tags?: Readonly<Record<string, string | undefined>>;
+}
+
 /**
  * Captura uma exceção manualmente (no-op se desabilitado). Útil em catch-blocks
- * que tratam o erro mas ainda querem reportá-lo.
+ * que tratam o erro mas ainda querem reportá-lo. As `tags` viram dimensões
+ * pesquisáveis no Sentry sem contaminar o escopo global (usa `withScope`).
+ *
+ * Cuidado com PII: passe apenas identificadores de correlação (ref, workspaceId),
+ * nunca telefone/e-mail/conteúdo de mensagem.
  */
-export function captureException(error: unknown): void {
+export function captureException(error: unknown, context?: CaptureContext): void {
   if (!initialized) return;
-  Sentry.captureException(error);
+  const tags = context?.tags;
+  if (!tags) {
+    Sentry.captureException(error);
+    return;
+  }
+  Sentry.withScope((scope) => {
+    for (const [key, value] of Object.entries(tags)) {
+      if (typeof value === 'string' && value.length > 0) scope.setTag(key, value);
+    }
+    Sentry.captureException(error);
+  });
 }
 
 /**
