@@ -2,7 +2,7 @@
 id: F56-S21
 title: /health checa RabbitMQ (backbone de mensageria)
 phase: F56
-status: available
+status: done
 priority: medium
 estimated_size: XS
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T22:53:27Z
 
+---
 # F56-S21 — Health check inclui RabbitMQ (QA-10)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.10. `/health` valida DB e Redis mas não RabbitMQ; RMQ morto retorna 200 "ok" enquanto mensagens somem.

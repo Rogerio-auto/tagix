@@ -2,7 +2,7 @@
 id: F56-S25
 title: Retenção — sweep de webhook_events + base de retenção
 phase: F56
-status: available
+status: done
 priority: medium
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: [F56-S17]
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T22:53:27Z
 
+---
 # F56-S25 — Worker de retenção (DB-02)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.8. `webhook_events` promete retenção de 30d que não existe (comentário + índice "para o sweep", sem sweep) — a tabela mais quente de escrita cresce sem limite.

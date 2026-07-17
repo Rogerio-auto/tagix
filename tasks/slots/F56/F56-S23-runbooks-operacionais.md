@@ -2,7 +2,7 @@
 id: F56-S23
 title: Runbooks — fila estourada, worker crash-loop, rollback
 phase: F56
-status: available
+status: done
 priority: medium
 estimated_size: XS
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T22:53:27Z
 
+---
 # F56-S23 — Runbooks dos incidentes mais prováveis (QA-16)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.10. Há runbooks bons, mas faltam os cenários mais frequentes do dia-a-dia pago: RabbitMQ down/backlog, worker crash-loop, rollback de deploy.

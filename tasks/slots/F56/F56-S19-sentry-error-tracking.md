@@ -2,7 +2,7 @@
 id: F56-S19
 title: Error tracking — ligar Sentry + captureException no error handler
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T22:53:26Z
 
+---
 # F56-S19 — Sentry ligado em produção (QA-06/QA-15)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.10. Sentry é opt-in por DSN ausente em prod (`initSentry` no-op); `errorHandler` só faz `console.error` — exceções 500 vivem só no stdout.

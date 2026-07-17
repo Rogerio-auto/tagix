@@ -2,7 +2,7 @@
 id: F56-S18
 title: Deploy hardening + stack de observabilidade (healthcheck, rollback, Prometheus)
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T22:53:26Z
 
+---
 # F56-S18 — Deploy sem downtime + observabilidade coletada (QA-03/04/07)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.10. Containers de app sem healthcheck; deploy stop-first sem rollback (downtime a cada deploy); métricas Prometheus emitidas mas nunca coletadas (sem scrape/alerta).

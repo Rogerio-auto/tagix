@@ -2,7 +2,7 @@
 id: F56-S22
 title: CI — corrigir deploy errado + Python + RabbitMQ + e2e
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: S
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T22:53:27Z
 
+---
 # F56-S22 — Pipeline de CI correto (QA-08/QA-13/QA-14/QA-02)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.10. O job `deploy` do CI aponta para `/opt/tagix` com `docker compose up` (prod real é `/opt/leadium`/Swarm) — landmine. Python (agent-runtime) e RabbitMQ estão fora do CI; e2e (16 specs) nunca roda.

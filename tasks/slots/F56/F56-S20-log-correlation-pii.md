@@ -2,7 +2,7 @@
 id: F56-S20
 title: Observabilidade — correlação de log por workspace/request + redação PII
 phase: F56
-status: available
+status: done
 priority: high
 estimated_size: M
 depends_on: []
@@ -10,8 +10,9 @@ blocks: []
 agent_id: backend-engineer
 source_docs:
   - AUDITORIA_TECNICA.md
----
+completed_at: 2026-07-17T22:53:26Z
 
+---
 # F56-S20 — Log correlacionado por tenant + PII (QA-05/QA-12)
 
 > **Origem:** AUDITORIA_TECNICA.md §3.10. `@hm/logger` não tem contexto request-scoped (0 `.child()` com ids) — impossível filtrar logs por `workspace_id`/request. Redação de PII é allowlist frágil (não cobre `msisdn/wa_id/document/cpf`).

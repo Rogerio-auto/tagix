@@ -47,7 +47,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F53   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F54   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F56   | 31     | 10   | 3   | 0   | 0   | 0   | 18   |
+| F56   | 31     | 3   | 3   | 0   | 0   | 0   | 25   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -613,14 +613,14 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F56-S15 | Agent buffer — wakeup durável do flush de agregação                             | ✅ done      | high       | —          |
 | F56-S16 | Socket relay — emitir antes de bumpar + prefetch + patch incremental            | ✅ done      | high       | —          |
 | F56-S17 | Workers ops — healthcheck + graceful drain + DLQ alert + lock watchdog          | ⏸️ blocked  | high       | F56-S25    |
-| F56-S18 | Deploy hardening + stack de observabilidade (healthcheck, rollback, Prometheus) | 🟢 available | high       | —          |
-| F56-S19 | Error tracking — ligar Sentry + captureException no error handler               | 🟢 available | high       | —          |
-| F56-S20 | Observabilidade — correlação de log por workspace/request + redação PII         | 🟢 available | high       | —          |
-| F56-S21 | /health checa RabbitMQ (backbone de mensageria)                                 | 🟢 available | medium     | —          |
-| F56-S22 | CI — corrigir deploy errado + Python + RabbitMQ + e2e                           | 🟢 available | high       | —          |
-| F56-S23 | Runbooks — fila estourada, worker crash-loop, rollback                          | 🟢 available | medium     | —          |
+| F56-S18 | Deploy hardening + stack de observabilidade (healthcheck, rollback, Prometheus) | ✅ done      | high       | —          |
+| F56-S19 | Error tracking — ligar Sentry + captureException no error handler               | ✅ done      | high       | —          |
+| F56-S20 | Observabilidade — correlação de log por workspace/request + redação PII         | ✅ done      | high       | —          |
+| F56-S21 | /health checa RabbitMQ (backbone de mensageria)                                 | ✅ done      | medium     | —          |
+| F56-S22 | CI — corrigir deploy errado + Python + RabbitMQ + e2e                           | ✅ done      | high       | —          |
+| F56-S23 | Runbooks — fila estourada, worker crash-loop, rollback                          | ✅ done      | medium     | —          |
 | F56-S24 | DB — índices dos schedulers + FKs pendentes                                     | ✅ done      | high       | —          |
-| F56-S25 | Retenção — sweep de webhook_events + base de retenção                           | 🟢 available | medium     | —          |
+| F56-S25 | Retenção — sweep de webhook_events + base de retenção                           | ✅ done      | medium     | —          |
 | F56-S26 | DS — promover EmptyState/Skeleton/ErrorState para @hm/ui                        | 🟢 available | medium     | —          |
 | F56-S27 | DS — Drawer canônico + IconButton (foco de teclado)                             | ⏸️ blocked  | medium     | F56-S26    |
 | F56-S28 | DS — tokenizar e aplicar a escala tipográfica editorial                         | 🟢 available | medium     | —          |
