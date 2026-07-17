@@ -20,7 +20,15 @@
 import Redis from 'ioredis';
 import { and, eq } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
-import { assertTopology, connectMq, consume, QUEUES, type Envelope, type MqHandle } from '@hm/shared/mq';
+import {
+  assertTopology,
+  connectMq,
+  consume,
+  getMqHealth,
+  QUEUES,
+  type Envelope,
+  type MqHandle,
+} from '@hm/shared/mq';
 import { createLogger, type Logger } from '@hm/logger';
 import { createInboundDeps, startInboundWorker, type InboundWorkerHandle } from '../inbound/index';
 import {
@@ -104,13 +112,40 @@ import {
   stopMetricsServer,
   flushSentry,
   captureException,
+  registerHealthProbe,
+  recordSchedulerHeartbeat,
+  clearSchedulerHeartbeats,
+  schedulerFreshnessProbe,
 } from '../observability/index';
+import { startDlqMonitor, type DlqMonitorHandle } from '../dlq/index';
 import { startPrivacyExportProcessor } from '../privacy/index';
+import { startRetentionWorker, type RetentionWorkerHandle } from '../retention/index';
+import {
+  startCampaignRecompute,
+  type CampaignRecomputeHandle,
+} from '../campaigns/recompute/index';
+import { createDrainController, drainDeadlineFromEnv } from './drain';
 import {
   adapterFactoryByChannel,
   createAdapterFactory,
   type AdapterFactoryOptions,
 } from './adapter-factory';
+
+/** Idade máxima (ms) sem tick do flow-wakeup antes do /healthz reprovar (default 3min). */
+function schedulerMaxAgeFromEnv(): number {
+  const raw = process.env['WORKERS_SCHEDULER_MAX_AGE_MS'];
+  if (raw === undefined || raw.length === 0) return 180_000;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 180_000;
+}
+
+/** Deadline duro (ms) do shutdown antes de forçar a saída do processo (default 15s). */
+function shutdownDeadlineFromEnv(): number {
+  const raw = process.env['WORKERS_SHUTDOWN_TIMEOUT_MS'];
+  if (raw === undefined || raw.length === 0) return 15_000;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 15_000;
+}
 
 /** Canal AMQP derivado de `@hm/shared/mq`. */
 type MqChannel = MqHandle['channel'];
@@ -136,6 +171,9 @@ export interface WorkersBootstrapHandle {
   readonly followupProcessor: { handle: CampaignFollowupSchedulerHandle };
   readonly automationWorker: AutomationWorkerHandle;
   readonly billingRecurrence: RecurrenceSchedulerHandle;
+  readonly campaignRecompute: CampaignRecomputeHandle;
+  readonly retention: RetentionWorkerHandle;
+  readonly dlqMonitor: DlqMonitorHandle;
   stop(): Promise<void>;
 }
 
@@ -152,9 +190,37 @@ export async function startWorkers(
 ): Promise<WorkersBootstrapHandle> {
   const logger = options.logger ?? createLogger('info', { svc: '@hm/workers' });
 
-  // Observabilidade (F10-S01): Sentry opt-in + servidor /metrics (ambos no-op sem env).
+  // Observabilidade (F10-S01): Sentry opt-in + servidor /metrics + /healthz (F56-S17,
+  // ambos no-op sem env). O /healthz vive no MESMO servidor de WORKERS_METRICS_PORT.
   initSentry();
   startMetricsServer();
+
+  // Health probes (F56-S17 / contrato F56-S18): readiness reflete a conexão AMQP e
+  // o frescor do scheduler. Registradas antes de qualquer consumer para que o
+  // /healthz responda desde o boot. Semeamos o heartbeat para que um scheduler que
+  // NUNCA tique acabe reprovando após o max-age.
+  const schedulerMaxAgeMs = schedulerMaxAgeFromEnv();
+  recordSchedulerHeartbeat('flow-wakeup');
+  const unregisterProbes: Array<() => void> = [
+    registerHealthProbe('amqp', () => {
+      const health = getMqHealth();
+      return {
+        healthy: health.healthy,
+        detail: {
+          connections: health.connections.length,
+          reconnecting: health.connections.some((c) => c.reconnecting),
+        },
+      };
+    }),
+    registerHealthProbe(
+      'scheduler:flow-wakeup',
+      schedulerFreshnessProbe('flow-wakeup', schedulerMaxAgeMs),
+    ),
+  ];
+
+  // Coordenador de drain (F56-S17, INF-10): rastreia in-flight dos consumers que o
+  // bootstrap controla diretamente, para o shutdown aguardar antes de fechar.
+  const drain = createDrainController();
 
   // Conexão de boot: assertTopology + transporte das deps (socket/media/flow).
   const boot = await connectMq();
@@ -230,12 +296,17 @@ export async function startWorkers(
     if (envelope.type !== 'campaign.followup') return;
     const p = envelope.payload as Partial<FollowupEvent>;
     if (!p.campaignId || !p.recipientId || !p.event) return;
-    await followupProcessor.ports.scheduleFollowup({
-      workspaceId: envelope.workspaceId,
-      campaignId: p.campaignId,
-      recipientId: p.recipientId,
-      event: p.event,
-    });
+    const { campaignId, recipientId, event } = p;
+    // In-flight rastreado: o shutdown aguarda esta escrita concluir (e ackar)
+    // antes de fechar a conexão — sem reentrega desnecessária.
+    await drain.track(() =>
+      followupProcessor.ports.scheduleFollowup({
+        workspaceId: envelope.workspaceId,
+        campaignId,
+        recipientId,
+        event,
+      }),
+    );
   });
   // Motor de automacoes de stage (F5-S06): drainer de pending_automations + cron
   // on_stale. As portas de action (add_tag/register_conversion/trigger_flow) sao
@@ -353,6 +424,15 @@ export async function startWorkers(
     logger,
     judge: createJudgePort(evaluationRuntimeConfigFromEnv()),
   });
+  // Recompute de métricas de campanha (F56-S02): tick singleton (lock Redis) que
+  // reconcilia agregados de entrega/estado das campanhas. Wiring é deste slot.
+  const campaignRecompute = startCampaignRecompute({ redis, logger });
+  // Worker de retenção (F56-S25): sweep periódico de webhook_events além do
+  // horizonte. Singleton via lock Redis; wiring é deste slot (composition root).
+  const retention = startRetentionWorker({ redis, logger });
+  // Monitor de DLQ (F56-S17): publica hm_dlq_depth + alerta em novas mensagens
+  // mortas. Conexão dedicada, aberta preguiçosamente no 1º tick.
+  const dlqMonitor = startDlqMonitor({ logger });
   const metricsTimer = setInterval(() => {
     void runAgentMetricsRollup({}, logger).catch((err: unknown) => {
       logger.error('falha no rollup de métricas de agentes', {
@@ -385,6 +465,9 @@ export async function startWorkers(
       'privacy-export-processor',
       'evaluation-scheduler',
       'billing-recurrence-scheduler',
+      'campaign-recompute-scheduler',
+      'retention-worker',
+      'dlq-monitor',
     ],
   });
 
@@ -403,9 +486,23 @@ export async function startWorkers(
     followupProcessor,
     automationWorker,
     billingRecurrence,
+    campaignRecompute,
+    retention,
+    dlqMonitor,
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
       clearInterval(metricsTimer);
+      // Drena o trabalho in-flight dos consumers que o bootstrap controla antes de
+      // fechar conexões — sem reentrega desnecessária. Deadline evita travar.
+      const drained = await drain.drain(drainDeadlineFromEnv());
+      if (!drained) {
+        logger.warn('shutdown: deadline de drain estourado — in-flight restante', {
+          inFlight: drain.inFlight,
+        });
+      }
+      await dlqMonitor.stop();
+      await retention.stop();
+      await campaignRecompute.stop();
       await billingRecurrence.stop();
       await evaluationScheduler.stop();
       await privacyExport.stop();
@@ -430,7 +527,10 @@ export async function startWorkers(
       await inbound.stop();
       await redis.quit();
       await boot.connection.close();
-      // Observabilidade (F10-S01): para o /metrics e dá flush no Sentry por último.
+      // Observabilidade (F10-S01/F56-S17): desregistra probes/heartbeats, para o
+      // /metrics + /healthz e dá flush no Sentry por último.
+      for (const unregister of unregisterProbes) unregister();
+      clearSchedulerHeartbeats();
       await stopMetricsServer();
       await flushSentry();
       logger.info('workers parados');
@@ -476,10 +576,22 @@ export async function main(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info('sinal de parada recebido — encerrando', { signal });
+    // Deadline duro (F56-S17): se o drain/close travar, o supervisor não pode
+    // ficar refém — força a saída após o prazo (o Swarm/systemd reinicia).
+    const deadlineMs = shutdownDeadlineFromEnv();
+    const forced = setTimeout(() => {
+      logger.error('shutdown excedeu o deadline — forçando saída', { deadlineMs });
+      process.exit(1);
+    }, deadlineMs);
+    forced.unref?.();
     handle
       .stop()
-      .then(() => process.exit(0))
+      .then(() => {
+        clearTimeout(forced);
+        process.exit(0);
+      })
       .catch((err: unknown) => {
+        clearTimeout(forced);
         logger.error('falha no shutdown', {
           error: err instanceof Error ? err.message : String(err),
         });

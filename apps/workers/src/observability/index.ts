@@ -18,4 +18,18 @@ export {
   recordJobProcessed,
   recordJobRetry,
   setQueueDepth,
+  setDlqDepth,
 } from './metrics';
+
+export {
+  registerHealthProbe,
+  clearHealthProbes,
+  getHealthReport,
+  recordSchedulerHeartbeat,
+  getSchedulerHeartbeat,
+  clearSchedulerHeartbeats,
+  schedulerFreshnessProbe,
+  type HealthProbe,
+  type HealthCheckResult,
+  type HealthReport,
+} from './health';

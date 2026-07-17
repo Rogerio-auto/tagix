@@ -1,14 +1,15 @@
 import { createServer, type Server } from 'node:http';
 import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from 'prom-client';
 import { getMeter } from '@hm/logger';
+import { getHealthReport } from './health';
 
 /**
  * Métricas dos workers. Diferente da API, o processo de workers não tem servidor
  * HTTP — então este módulo:
  *   1. mantém um Registry prom-client com métricas de domínio (jobs, retries,
  *      profundidade de fila, latência de processamento);
- *   2. expõe um servidor HTTP MÍNIMO e **opt-in** em `/metrics`, ligado só
- *      quando `WORKERS_METRICS_PORT` está setado (no-op caso contrário);
+ *   2. expõe um servidor HTTP MÍNIMO e **opt-in** em `/metrics` + `/healthz`,
+ *      ligado só quando `WORKERS_METRICS_PORT` está setado (no-op caso contrário);
  *   3. espelha os mesmos sinais no `Meter` OTel (opt-in via `@hm/logger`).
  *
  * O orchestrator chama `startMetricsServer()` no bootstrap e `stopMetricsServer()`
@@ -51,6 +52,12 @@ const queueDepth = new Gauge({
   registers: [registry],
 });
 
+const dlqDepth = new Gauge({
+  name: 'hm_dlq_depth',
+  help: 'Mensagens atualmente paradas na Dead-Letter Queue (hm.q.dlq).',
+  registers: [registry],
+});
+
 // --- OTel (opt-in) ---
 
 const otelJobsProcessed = meter.createCounter('hm.worker.jobs_processed', {
@@ -81,6 +88,13 @@ export function recordJobRetry(worker: string): void {
 export function setQueueDepth(queue: string, depth: number): void {
   if (Number.isFinite(depth) && depth >= 0) {
     queueDepth.set({ queue }, depth);
+  }
+}
+
+/** Atualiza a profundidade observada da DLQ (alimenta o alerta do F56-S18). */
+export function setDlqDepth(depth: number): void {
+  if (Number.isFinite(depth) && depth >= 0) {
+    dlqDepth.set(depth);
   }
 }
 
@@ -115,6 +129,16 @@ export function startMetricsServer(): boolean {
           res.writeHead(500);
           res.end('metrics_error');
         });
+      return;
+    }
+    // Readiness/liveness (F56-S17): 200 quando todas as probes estão healthy,
+    // 503 quando alguma cai (ex.: conexão AMQP derrubada). O F56-S18 faz scrape.
+    if (req.method === 'GET' && (req.url === '/healthz' || req.url === '/readyz')) {
+      const report = getHealthReport();
+      res.writeHead(report.status === 'ok' ? 200 : 503, {
+        'Content-Type': 'application/json',
+      });
+      res.end(JSON.stringify(report));
       return;
     }
     res.writeHead(404);

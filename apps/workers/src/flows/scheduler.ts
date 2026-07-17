@@ -19,6 +19,7 @@ import {
   type MqHandle,
 } from '@hm/shared/mq';
 import { getMeter, type Logger } from '@hm/logger';
+import { recordSchedulerHeartbeat } from '../observability/health';
 
 type MqChannel = MqHandle['channel'];
 
@@ -59,20 +60,55 @@ export interface RedisLike {
 const UNLOCK_LUA =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
+/** Renova o TTL SOMENTE se ainda formos o dono (compare-and-pexpire, atômico). */
+const RENEW_LUA =
+  "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], ARGV[2]) else return 0 end";
+
 export type ReleaseLock = () => Promise<void>;
 
+export interface AcquireLockOptions {
+  /**
+   * Watchdog (INF-10): renova o TTL a cada `renewIntervalMs` enquanto o lock é
+   * detido, para que um tick MAIS LONGO que o TTL não deixe o lock expirar (e
+   * abra a porta a um segundo tick concorrente). Default = `ttlMs/3`.
+   */
+  readonly renewIntervalMs?: number;
+  /** Chamado se a renovação falhar (lock perdido/roubado) — para logging. */
+  readonly onRenewFailure?: (detail: { readonly key: string }) => void;
+}
+
+/**
+ * Adquire o lock singleton via `SET NX PX`. Enquanto detido, um watchdog renova o
+ * TTL periodicamente (compare-and-pexpire pelo token) — assim o lock não expira no
+ * meio de um tick longo. O `ReleaseLock` retornado para o watchdog e libera o lock
+ * (só se ainda formos o dono). Idempotente.
+ */
 export async function acquireSchedulerLock(
   redis: RedisLike,
   key: string,
   ttlMs: number,
+  options: AcquireLockOptions = {},
 ): Promise<ReleaseLock | null> {
   const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const ok = await redis.set(key, token, 'PX', ttlMs, 'NX');
   if (ok !== 'OK') return null;
+
   let released = false;
+  const renewIntervalMs = options.renewIntervalMs ?? Math.max(1, Math.floor(ttlMs / 3));
+  const watchdog = setInterval(() => {
+    if (released) return;
+    void (async () => {
+      const res = await redis.eval(RENEW_LUA, 1, key, token, String(ttlMs));
+      // 0/'0' = já não somos o dono (o lock expirou e foi retomado): avisa.
+      if (res === 0 || res === '0') options.onRenewFailure?.({ key });
+    })().catch(() => options.onRenewFailure?.({ key }));
+  }, renewIntervalMs);
+  watchdog.unref?.();
+
   return async () => {
     if (released) return;
     released = true;
+    clearInterval(watchdog);
     await redis.eval(UNLOCK_LUA, 1, key, token);
   };
 }
@@ -155,7 +191,15 @@ export async function runFlowWakeupTick(
     deps.redis,
     FLOW_SCHEDULER_LOCK_KEY,
     FLOW_SCHEDULER_LOCK_TTL_MS,
+    {
+      onRenewFailure: ({ key }) =>
+        deps.logger.warn('flow-wakeup: renovação do lock falhou (lock perdido)', { key }),
+    },
   );
+  // Heartbeat do scheduler (para o /healthz detectar tick travado — INF-07). O
+  // tick executou (mesmo pulado por lock alheio): o processo está vivo e no prazo.
+  // Usa wall-clock real (não o `now` lógico, que pode ser simulado em teste).
+  recordSchedulerHeartbeat('flow-wakeup');
   if (release === null) {
     deps.logger.debug('flow-wakeup: tick pulado — lock detido por outra instancia');
     return { ran: false, enqueued: 0 };
