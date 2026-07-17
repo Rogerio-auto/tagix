@@ -1,0 +1,62 @@
+# =============================================================================
+# Leadium — configuração do Prometheus (produção, Swarm).
+#
+# Coleta as métricas que a stack JÁ emite mas que ninguém consumia:
+#   - API (Express)      → api:3001/metrics       (RED HTTP + domínio)
+#   - Workers            → workers:9091/metrics    (jobs/retries/duração/fila)
+#   - RabbitMQ           → rabbitmq:15692/metrics   (plugin rabbitmq_prometheus)
+#
+# Descoberta via DNS interno do Swarm (`tasks.<service>` resolve TODAS as réplicas
+# como registros A), então o scrape acompanha o scale horizontal sem reconfigurar.
+# Prometheus/Alertmanager vivem só na rede interna (sem ingress) — acesso por
+# túnel SSH; nada de superfície pública.
+# =============================================================================
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    stack: leadium
+    env: production
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+scrape_configs:
+  # O próprio Prometheus (meta-monitoração).
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # API — RED HTTP (http_requests_total / http_request_duration_seconds) + domínio
+  # (hm_mq_published_total, hm_channel_messages_sent_total, hm_agent_runs_total).
+  - job_name: leadium-api
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: ['tasks.api']
+        type: A
+        port: 3001
+
+  # Workers — hm_worker_jobs_processed_total / _job_retries_total /
+  # _job_duration_seconds / _queue_depth. Servidor /metrics opt-in por
+  # WORKERS_METRICS_PORT (=9091 no compose de prod).
+  - job_name: leadium-workers
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: ['tasks.workers']
+        type: A
+        port: 9091
+
+  # RabbitMQ — backbone de mensageria. Plugin rabbitmq_prometheus (porta 15692)
+  # habilitado via config enabled_plugins. Fonte autoritativa de fila (ready).
+  - job_name: leadium-rabbitmq
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: ['tasks.rabbitmq']
+        type: A
+        port: 15692

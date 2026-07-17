@@ -1,0 +1,92 @@
+# =============================================================================
+# Leadium — regras de alerta do Prometheus.
+#
+# Todas as expressões usam métricas REAIS já emitidas pela stack (nada de
+# métrica fantasma). Severidade em `page` (acorda alguém) vs `ticket` (revisar).
+# Threshold conservador de propósito: um alerta que grita à toa é ignorado.
+# =============================================================================
+groups:
+  - name: leadium-availability
+    rules:
+      # API fora do ar (nenhuma réplica respondendo ao scrape).
+      - alert: LeadiumApiDown
+        expr: sum(up{job="leadium-api"}) == 0
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: 'API Leadium fora do ar'
+          description: 'Nenhuma réplica da API respondeu ao scrape do Prometheus por 2m.'
+
+      # Workers fora do ar → filas param de ser drenadas (mensagens acumulam).
+      - alert: LeadiumWorkersDown
+        expr: sum(up{job="leadium-workers"}) == 0
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: 'Workers Leadium fora do ar'
+          description: 'Nenhum worker respondeu ao scrape por 2m — filas não estão sendo consumidas.'
+
+      # RabbitMQ inacessível → backbone de mensageria comprometido.
+      - alert: LeadiumRabbitMqDown
+        expr: sum(up{job="leadium-rabbitmq"}) == 0
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: 'RabbitMQ Leadium fora do ar'
+          description: 'O exporter do RabbitMQ não respondeu por 2m — mensagens podem sumir silenciosamente.'
+
+  - name: leadium-api-red
+    rules:
+      # Taxa de erro 5xx acima de 5% da vazão total (janela 5m).
+      - alert: LeadiumApiHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="leadium-api",status=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(http_requests_total{job="leadium-api"}[5m])), 1e-9)
+            > 0.05
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: 'Taxa de erro 5xx da API acima de 5%'
+          description: 'Mais de 5% das requisições da API retornaram 5xx nos últimos 5m.'
+
+      # Latência p95 acima de 1.5s (janela 10m) — degradação perceptível.
+      - alert: LeadiumApiHighLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="leadium-api"}[5m])) by (le)
+          ) > 1.5
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: 'Latência p95 da API acima de 1.5s'
+          description: 'O p95 de latência HTTP da API passou de 1.5s por 10m.'
+
+  - name: leadium-messaging
+    rules:
+      # Backlog de fila: mensagens "ready" (não consumidas) acumulando.
+      # Fonte autoritativa = rabbitmq_prometheus; fallback observado = workers.
+      - alert: LeadiumRabbitQueueBacklog
+        expr: sum(rabbitmq_queue_messages_ready) > 1000
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: 'Backlog de fila no RabbitMQ'
+          description: 'Mais de 1000 mensagens "ready" aguardando consumo há 10m — consumers travados ou lentos.'
+
+      # DLQ com mensagens mortas (métrica emitida pelos workers em F56-S17).
+      - alert: LeadiumDlqNotEmpty
+        expr: sum(hm_dlq_depth) > 0
+        for: 5m
+        labels:
+          severity: ticket
+        annotations:
+          summary: 'Dead-letter queue com mensagens'
+          description: 'Há mensagens na DLQ há 5m — investigar falhas de processamento.'

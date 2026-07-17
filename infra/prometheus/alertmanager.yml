@@ -1,0 +1,47 @@
+# =============================================================================
+# Leadium — configuração do Alertmanager.
+#
+# Roteamento por severidade. A ENTREGA (Slack/webhook/email) exige um secret que
+# NÃO é commitado: o receiver `paging` referencia um webhook via arquivo montado
+# em runtime (`webhook_url_file`), abastecido pelo .env de deploy na VPS. Sem o
+# arquivo, o Alertmanager agrupa/deduplica normalmente e os alertas ficam
+# visíveis na UI (túnel SSH) — só a notificação externa fica muda.
+# =============================================================================
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  group_by: ['alertname', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # `page` = acorda o plantão: repetição mais agressiva.
+    - matchers:
+        - severity = "page"
+      receiver: paging
+      repeat_interval: 1h
+    # `ticket` = revisar em horário comercial.
+    - matchers:
+        - severity = "ticket"
+      receiver: default
+
+receivers:
+  # Sem integração externa: alertas visíveis na UI, sem notificação (silencioso).
+  - name: default
+
+  # Plantão: webhook cujo destino vem de arquivo montado em runtime (secret).
+  # Descomente/ajuste no deploy quando o webhook estiver provisionado.
+  - name: paging
+    webhook_configs:
+      - send_resolved: true
+        url_file: /etc/alertmanager/webhook_url
+
+inhibit_rules:
+  # Um serviço fora do ar (`*Down`) já explica erro/latência; suprime o ruído.
+  - source_matchers:
+      - alertname =~ "Leadium.*Down"
+    target_matchers:
+      - severity =~ "page|ticket"
+    equal: ['stack']

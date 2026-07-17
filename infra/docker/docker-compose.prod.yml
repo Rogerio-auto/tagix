@@ -55,6 +55,25 @@ x-app-env: &app-env
   BILLING_DUNNING_PASTDUE_DAYS: ${BILLING_DUNNING_PASTDUE_DAYS:-}
   BILLING_PIX_EXPIRES_SECONDS: ${BILLING_PIX_EXPIRES_SECONDS:-}
 
+# --- Política de deploy dos serviços de APP (não das infras stateful) ---
+# `start-first`: o Swarm sobe a task nova e só derruba a antiga quando a nova
+# passa no healthcheck → zero downtime. `failure_action: rollback` + `monitor`:
+# se a task nova não estabilizar em 30s, o Swarm reverte sozinho para a imagem
+# anterior. Aplicado só a api/workers/web/agent-runtime/landing — jamais a
+# postgres/redis/rabbitmq (volume único; duas instâncias = corrupção).
+x-update-policy: &update-policy
+  update_config:
+    order: start-first
+    parallelism: 1
+    failure_action: rollback
+    monitor: 30s
+    max_failure_ratio: 0
+  rollback_config:
+    order: start-first
+    parallelism: 1
+    monitor: 20s
+    failure_action: pause
+
 services:
   # ==========================================================================
   # INFRA PRÓPRIA (isolada — sem portas no host)
@@ -111,6 +130,12 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
       - leadium_rabbitdata:/var/lib/rabbitmq
+    # Habilita o plugin rabbitmq_prometheus (porta 15692) além do management, para
+    # o Prometheus scrapear fila/conexões direto do backbone. Sobrescreve o
+    # enabled_plugins do image (que só traz management) — por isso lista os dois.
+    configs:
+      - source: rabbitmq_enabled_plugins
+        target: /etc/rabbitmq/enabled_plugins
     networks:
       - leadium_internal
     healthcheck:
@@ -145,7 +170,20 @@ services:
     networks:
       - leadium_internal
       - network_public
+    # /health valida DB + Redis (+ RabbitMQ após F56-S21): 200 ok / 503 degraded.
+    # `node` já está no PATH da imagem; sem dependência de curl/wget.
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     deploy:
+      <<: *update-policy
       replicas: 1
       placement:
         constraints: [node.role == manager]
@@ -179,11 +217,27 @@ services:
       dockerfile: apps/workers/Dockerfile
     environment:
       <<: *app-env
+      # Liga o servidor HTTP mínimo de observabilidade (/metrics + /healthz).
+      # Opt-in por env; sem isto o processo de workers não sobe porta alguma.
+      WORKERS_METRICS_PORT: "9091"
     volumes:
       - leadium_storage:/data/storage
     networks:
       - leadium_internal
+    # /healthz (F56-S17) reflete conexão AMQP + último tick dos schedulers.
+    # Serve na mesma porta do /metrics (WORKERS_METRICS_PORT=9091).
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:9091/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     deploy:
+      <<: *update-policy
       replicas: 1
       placement:
         constraints: [node.role == manager]
@@ -209,7 +263,19 @@ services:
       AGENT_RUNTIME_TOKEN: ${AGENT_RUNTIME_TOKEN}
     networks:
       - leadium_internal
+    # /health faz ping real no Postgres (SELECT 1). `python` no PATH da imagem.
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=4).status==200 else 1)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     deploy:
+      <<: *update-policy
       replicas: 1
       placement:
         constraints: [node.role == manager]
@@ -243,7 +309,19 @@ services:
     networks:
       - leadium_internal
       - network_public
+    # `/` pode redirecionar (login) — qualquer resposta < 500 conta como vivo.
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
     deploy:
+      <<: *update-policy
       replicas: 1
       placement:
         constraints: [node.role == manager]
@@ -273,7 +351,10 @@ services:
         VITE_CADASTRO_URL: https://app.leadium.com.br
     networks:
       - network_public
+    # Healthcheck vem do Dockerfile (wget em / — nginx). start-first + rollback
+    # dão troca de imagem sem downtime também na landing.
     deploy:
+      <<: *update-policy
       replicas: 1
       placement:
         constraints: [node.role == manager]
@@ -289,6 +370,84 @@ services:
         - "traefik.http.routers.leadium_landing.tls.certresolver=letsencrypt"
         - "traefik.http.routers.leadium_landing.service=leadium_landing"
         - "traefik.http.routers.leadium_landing.priority=1"
+
+  # ==========================================================================
+  # PROMETHEUS — coleta e avalia (scrape api/workers/rabbitmq; regras de alerta).
+  # Só na rede interna: sem ingress. Acesso operacional por túnel SSH.
+  # ==========================================================================
+  prometheus:
+    image: prom/prometheus:v2.53.1
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
+      - source: prometheus_alerts
+        target: /etc/prometheus/alerts.yml
+    volumes:
+      - leadium_promdata:/prometheus
+    networks:
+      - leadium_internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9090/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy: { condition: on-failure, delay: 10s, max_attempts: 5 }
+      resources:
+        limits: { memory: 512M }
+        reservations: { memory: 128M }
+
+  # ==========================================================================
+  # ALERTMANAGER — roteia/dedup/silencia os alertas do Prometheus.
+  # ==========================================================================
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    configs:
+      - source: alertmanager_config
+        target: /etc/alertmanager/alertmanager.yml
+    volumes:
+      - leadium_alertmanagerdata:/alertmanager
+    networks:
+      - leadium_internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9093/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy: { condition: on-failure, delay: 10s, max_attempts: 5 }
+      resources:
+        limits: { memory: 128M }
+        reservations: { memory: 32M }
+
+# =============================================================================
+# Configs do Swarm (distribuídas via Raft; imutáveis — versionar com sufixo se
+# mudar o conteúdo, pois o Swarm não atualiza um config existente in-place).
+configs:
+  prometheus_config:
+    file: ../prometheus/prometheus.yml
+  prometheus_alerts:
+    file: ../prometheus/alerts.yml
+  alertmanager_config:
+    file: ../prometheus/alertmanager.yml
+  rabbitmq_enabled_plugins:
+    file: ./rabbitmq/enabled_plugins
 
 # =============================================================================
 networks:
@@ -308,3 +467,5 @@ volumes:
   leadium_redisdata:
   leadium_rabbitdata:
   leadium_storage:
+  leadium_promdata:
+  leadium_alertmanagerdata:
