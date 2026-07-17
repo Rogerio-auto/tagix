@@ -7,12 +7,16 @@
  * (raw body): a verificação opcional de HMAC precisa dos bytes EXATOS recebidos —
  * um JSON re-serializado divergiria. Espelha o raw-body do webhook Meta.
  *
- * Segurança (§9):
- *  - AUTH PRIMÁRIA: o query param `webhookSecret` é comparado (constant-time) com
- *    `ABACATEPAY_WEBHOOK_SECRET`. Ausente/errado → 401, sem efeito (fail-closed).
- *  - CAMADA EXTRA (opcional): quando `ABACATEPAY_PUBLIC_KEY` está configurada,
- *    exigimos também o header `x-webhook-signature` = HMAC-SHA256(base64) do raw
- *    body com a chave pública da AbacatePay; mismatch → 401.
+ * Segurança (§9 + SEC-07):
+ *  - AUTH PRIMÁRIA: o secret é comparado (constant-time) com
+ *    `ABACATEPAY_WEBHOOK_SECRET`. Preferimos o header `x-webhook-secret` (não
+ *    vaza na query) com fallback para o query param legado `?webhookSecret=…`.
+ *    Ausente/errado → 401, sem efeito (fail-closed).
+ *  - CAMADA HMAC: quando `ABACATEPAY_PUBLIC_KEY` está configurada exigimos o
+ *    header `x-webhook-signature` = HMAC-SHA256(base64) do raw body com a chave
+ *    pública; mismatch → 401. Em PRODUÇÃO essa camada é OBRIGATÓRIA: sem a chave
+ *    configurada respondemos 503 (misconfiguração → retry), sem assinatura
+ *    válida respondemos 401. A política vive em `authenticateAbacatePayWebhook`.
  *  - Idempotência dupla (borda em `webhook_events` + domínio em `payment_events`
  *    pelo `id` top-level do evento); preço/plano SEMPRE reconferidos server-side
  *    em `transitions.ts`; toda transição auditada. Nunca logamos secret/chave/payload.
@@ -46,6 +50,81 @@ import {
 
 const PROVIDER = 'abacatepay' as const;
 const webhookLogger = createLogger('info', { svc: 'abacatepay-webhook' });
+
+/**
+ * Header PREFERIDO para o secret do webhook. Evita que o segredo trafegue na
+ * query string (posição logável em access log / Sentry / Traefik). Quando
+ * presente, tem precedência sobre o query param legado `?webhookSecret=…`.
+ */
+const ABACATEPAY_WEBHOOK_SECRET_HEADER = 'x-webhook-secret' as const;
+
+/** Motivo estruturado de rejeição (para log/observabilidade, nunca ao cliente). */
+type WebhookAuthRejection = 'secret_mismatch' | 'hmac_key_missing_in_prod' | 'hmac_invalid';
+
+type WebhookAuthResult = { ok: true } | { ok: false; rejection: WebhookAuthRejection };
+
+interface WebhookAuthInput {
+  readonly rawBody: Buffer;
+  readonly providedSecret: string | undefined;
+  readonly signature: string | undefined;
+  readonly expectedSecret: string | undefined;
+  readonly publicKey: string | undefined;
+  readonly isProduction: boolean;
+}
+
+/**
+ * Decisão ÚNICA de autenticidade do webhook (SEC-07). Falha fechado:
+ *
+ *  1. Secret (header/query) tem de conferir com `ABACATEPAY_WEBHOOK_SECRET`.
+ *  2. Em PRODUÇÃO o HMAC (`ABACATEPAY_PUBLIC_KEY`) é OBRIGATÓRIO:
+ *     - sem chave configurada → `hmac_key_missing_in_prod` (misconfig → 503/retry);
+ *     - com chave, a assinatura tem de conferir → senão `hmac_invalid` (401).
+ *  3. Fora de produção o HMAC só é exigido quando a chave pública existe
+ *     (defense-in-depth opcional), preservando o comportamento anterior em dev.
+ *
+ * A política de env vive aqui (camada de app); a camada `@hm/payments` só provê
+ * os primitivos puros de comparação (`verifyWebhookSecret`/`verifyWebhookSignature`).
+ */
+function authenticateWebhook(input: WebhookAuthInput): WebhookAuthResult {
+  if (!verifyWebhookSecret(input.providedSecret, input.expectedSecret)) {
+    return { ok: false, rejection: 'secret_mismatch' };
+  }
+
+  const hasPublicKey = typeof input.publicKey === 'string' && input.publicKey.length > 0;
+
+  if (input.isProduction && !hasPublicKey) {
+    // Fail-closed: em produção o webhook de billing exige a camada HMAC.
+    return { ok: false, rejection: 'hmac_key_missing_in_prod' };
+  }
+
+  const hmacRequired = input.isProduction || hasPublicKey;
+  if (hmacRequired && !verifyWebhookSignature(input.rawBody, input.signature, input.publicKey)) {
+    return { ok: false, rejection: 'hmac_invalid' };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Redige o secret do webhook de uma URL/URL-com-query antes de logar. Substitui
+ * o valor do query param `webhookSecret` por `***`. Idempotente e à prova de URL
+ * relativa ou malformada (regex de fallback quando o parser falha).
+ */
+export function redactWebhookSecretFromUrl(url: string): string {
+  const REDACTED = '***';
+  try {
+    const parsed = new URL(url, 'http://redact.local');
+    if (!parsed.searchParams.has(ABACATEPAY_WEBHOOK_SECRET_PARAM)) return url;
+    parsed.searchParams.set(ABACATEPAY_WEBHOOK_SECRET_PARAM, REDACTED);
+    const isRelative = !/^[a-z][a-z0-9+.-]*:\/\//i.test(url);
+    return isRelative ? `${parsed.pathname}${parsed.search}${parsed.hash}` : parsed.toString();
+  } catch {
+    return url.replace(
+      new RegExp(`([?&]${ABACATEPAY_WEBHOOK_SECRET_PARAM}=)[^&#]*`, 'gi'),
+      `$1${REDACTED}`,
+    );
+  }
+}
 
 function getRawBody(req: Request): Buffer {
   return Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
@@ -248,28 +327,35 @@ export function createAbacatePayWebhookRouter(): Router {
     async (req: Request, res: Response) => {
       const rawBody = getRawBody(req);
 
-      // AUTH PRIMÁRIA (§9): a AbacatePay anexa o secret na query string do endpoint
-      // registrado (`?webhookSecret=…`). Comparação constant-time com o env.
-      // Ausente/errado → 401, sem efeito (fail-closed).
-      const providedSecretRaw = req.query[ABACATEPAY_WEBHOOK_SECRET_PARAM];
+      // AUTH (SEC-07): o secret é aceito no HEADER `x-webhook-secret` (preferido,
+      // não vaza na query string) com FALLBACK para o query param legado
+      // `?webhookSecret=…`. Em PRODUÇÃO o HMAC (`ABACATEPAY_PUBLIC_KEY`) é
+      // OBRIGATÓRIO — sem chave/assinatura válida, recusamos (fail-closed).
+      const headerSecret = req.get(ABACATEPAY_WEBHOOK_SECRET_HEADER);
+      const querySecretRaw = req.query[ABACATEPAY_WEBHOOK_SECRET_PARAM];
+      const querySecret =
+        typeof querySecretRaw === 'string' ? querySecretRaw : undefined;
       const providedSecret =
-        typeof providedSecretRaw === 'string' ? providedSecretRaw : undefined;
-      const expectedSecret = process.env['ABACATEPAY_WEBHOOK_SECRET'];
-      if (!verifyWebhookSecret(providedSecret, expectedSecret)) {
-        res.sendStatus(401);
-        return;
-      }
+        headerSecret && headerSecret.length > 0 ? headerSecret : querySecret;
 
-      // CAMADA EXTRA (opcional): só quando ABACATEPAY_PUBLIC_KEY está configurada,
-      // exigimos o HMAC-SHA256(base64) do raw body no header `x-webhook-signature`,
-      // com a chave pública da AbacatePay. Mismatch → 401.
-      const publicKey = process.env['ABACATEPAY_PUBLIC_KEY'];
-      if (publicKey && publicKey.length > 0) {
-        const signature = req.get(ABACATEPAY_SIGNATURE_HEADER);
-        if (!verifyWebhookSignature(rawBody, signature, publicKey)) {
-          res.sendStatus(401);
-          return;
-        }
+      const auth = authenticateWebhook({
+        rawBody,
+        providedSecret,
+        signature: req.get(ABACATEPAY_SIGNATURE_HEADER),
+        expectedSecret: process.env['ABACATEPAY_WEBHOOK_SECRET'],
+        publicKey: process.env['ABACATEPAY_PUBLIC_KEY'],
+        isProduction: process.env['NODE_ENV'] === 'production',
+      });
+      if (!auth.ok) {
+        // Nunca logamos secret/assinatura/URL crua — a query é sempre redigida.
+        webhookLogger.warn('webhook.abacatepay.auth_rejected', {
+          reason: auth.rejection,
+          url: redactWebhookSecretFromUrl(req.originalUrl),
+        });
+        // Chave HMAC ausente em produção = misconfiguração nossa → 503 (retry);
+        // qualquer outra falha de autenticidade → 401 (fail-closed).
+        res.sendStatus(auth.rejection === 'hmac_key_missing_in_prod' ? 503 : 401);
+        return;
       }
 
       // Parse + validação Zod do corpo já autenticado.

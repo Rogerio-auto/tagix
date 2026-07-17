@@ -277,7 +277,7 @@ vi.mock('@hm/logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
 
-const { createAbacatePayWebhookRouter } = await import('./abacatepay');
+const { createAbacatePayWebhookRouter, redactWebhookSecretFromUrl } = await import('./abacatepay');
 
 function buildApp() {
   const app = express();
@@ -309,6 +309,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env['ABACATEPAY_PUBLIC_KEY'];
+  vi.unstubAllEnvs();
 });
 
 describe('POST /webhooks/abacatepay — auth primária (query secret)', () => {
@@ -377,6 +378,104 @@ describe('POST /webhooks/abacatepay — camada extra HMAC (opcional)', () => {
       .send(body);
     expect(res.status).toBe(200);
     expect(state.workspace.subscriptionStatus).toBe('active');
+  });
+});
+
+describe('POST /webhooks/abacatepay — secret via header (preferido)', () => {
+  it('aceita 200 com secret no header x-webhook-secret (sem query)', async () => {
+    const body = payload('checkout.completed');
+    const res = await request(buildApp())
+      .post('/webhooks/abacatepay')
+      .set('content-type', 'application/json')
+      .set('x-webhook-secret', SECRET)
+      .send(body);
+    expect(res.status).toBe(200);
+    expect(state.workspace.subscriptionStatus).toBe('active');
+  });
+
+  it('header secret errado → 401 mesmo com query correta ignorada', async () => {
+    const body = payload('checkout.completed');
+    const res = await request(buildApp())
+      .post('/webhooks/abacatepay')
+      .set('content-type', 'application/json')
+      .set('x-webhook-secret', 'wrong')
+      .send(body);
+    expect(res.status).toBe(401);
+    expect(state.workspace.subscriptionStatus).toBe('trial');
+  });
+});
+
+describe('POST /webhooks/abacatepay — HMAC obrigatória em produção (SEC-07)', () => {
+  it('produção SEM ABACATEPAY_PUBLIC_KEY → 503 (fail-closed, misconfig)', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    delete process.env['ABACATEPAY_PUBLIC_KEY'];
+    const body = payload('checkout.completed');
+    const res = await request(buildApp())
+      .post(WEBHOOK_PATH)
+      .set('content-type', 'application/json')
+      .send(body);
+    expect(res.status).toBe(503);
+    expect(state.workspace.subscriptionStatus).toBe('trial');
+    expect(state.paymentEvents.size).toBe(0);
+  });
+
+  it('produção COM chave mas SEM assinatura → 401 (fail-closed)', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    process.env['ABACATEPAY_PUBLIC_KEY'] = 'public_key_test';
+    const body = payload('checkout.completed');
+    const res = await request(buildApp())
+      .post(WEBHOOK_PATH)
+      .set('content-type', 'application/json')
+      .send(body);
+    expect(res.status).toBe(401);
+    expect(state.workspace.subscriptionStatus).toBe('trial');
+  });
+
+  it('produção COM chave e assinatura VÁLIDA → 200 (transiciona)', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    process.env['ABACATEPAY_PUBLIC_KEY'] = 'public_key_test';
+    const body = payload('checkout.completed');
+    const res = await request(buildApp())
+      .post(WEBHOOK_PATH)
+      .set('content-type', 'application/json')
+      .set('x-webhook-signature', signWithPublicKey(body, 'public_key_test'))
+      .send(body);
+    expect(res.status).toBe(200);
+    expect(state.workspace.subscriptionStatus).toBe('active');
+  });
+
+  it('produção: secret errado → 401 antes de qualquer efeito', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    process.env['ABACATEPAY_PUBLIC_KEY'] = 'public_key_test';
+    const body = payload('checkout.completed');
+    const res = await request(buildApp())
+      .post('/webhooks/abacatepay?webhookSecret=wrong')
+      .set('content-type', 'application/json')
+      .set('x-webhook-signature', signWithPublicKey(body, 'public_key_test'))
+      .send(body);
+    expect(res.status).toBe(401);
+    expect(state.paymentEvents.size).toBe(0);
+  });
+});
+
+describe('redactWebhookSecretFromUrl', () => {
+  it('redige o webhookSecret preservando o resto da query', () => {
+    expect(redactWebhookSecretFromUrl('/webhooks/abacatepay?webhookSecret=s3cr3t')).toBe(
+      '/webhooks/abacatepay?webhookSecret=***',
+    );
+    expect(
+      redactWebhookSecretFromUrl('/webhooks/abacatepay?a=1&webhookSecret=s3cr3t&b=2'),
+    ).toBe('/webhooks/abacatepay?a=1&webhookSecret=***&b=2');
+  });
+
+  it('URL absoluta também é redigida', () => {
+    expect(
+      redactWebhookSecretFromUrl('https://api.leadium.app/webhooks/abacatepay?webhookSecret=s3cr3t'),
+    ).toBe('https://api.leadium.app/webhooks/abacatepay?webhookSecret=***');
+  });
+
+  it('sem o param, retorna a URL inalterada', () => {
+    expect(redactWebhookSecretFromUrl('/webhooks/abacatepay')).toBe('/webhooks/abacatepay');
   });
 });
 
