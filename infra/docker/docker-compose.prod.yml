@@ -57,16 +57,24 @@ x-app-env: &app-env
 
 # --- Política de deploy dos serviços de APP (não das infras stateful) ---
 # `start-first`: o Swarm sobe a task nova e só derruba a antiga quando a nova
-# passa no healthcheck → zero downtime. `failure_action: rollback` + `monitor`:
-# se a task nova não estabilizar em 30s, o Swarm reverte sozinho para a imagem
-# anterior. Aplicado só a api/workers/web/agent-runtime/landing — jamais a
-# postgres/redis/rabbitmq (volume único; duas instâncias = corrupção).
+# passa no healthcheck → zero downtime. `failure_action: pause` + `monitor`:
+# se a task nova não estabilizar em 60s, o Swarm PAUSA o update (não reverte) e
+# deixa a task antiga rodando — estado inspecionável, não-destrutivo. Aplicado só a
+# api/workers/web/agent-runtime/landing — jamais a postgres/redis/rabbitmq (volume
+# único; duas instâncias = corrupção).
+#
+# Por que `pause` e não `rollback`: o rollback revertia o serviço para a imagem
+# ANTERIOR de forma silenciosa (o `deploy.sh` cravava "concluído" verde com um
+# serviço no sha velho — ver deploy 7637ccf, agent-runtime revertido). `pause` é
+# detectável (UpdateStatus=paused) e o `deploy.sh` agora cruza o sha de cada serviço
+# no fim e falha alto se algum divergir. `monitor` subiu p/ 60s para dar folga ao
+# `restart_policy` em boot-races transitórios (o init_pool do runtime já faz retry).
 x-update-policy: &update-policy
   update_config:
     order: start-first
     parallelism: 1
-    failure_action: rollback
-    monitor: 30s
+    failure_action: pause
+    monitor: 60s
     max_failure_ratio: 0
   rollback_config:
     order: start-first

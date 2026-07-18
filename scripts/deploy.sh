@@ -94,4 +94,36 @@ ok "Migrations aplicadas"
 step "Status dos serviços"
 docker stack services "$STACK"
 echo
+
+# --- 8. Verificação: cada serviço de app convergiu para o sha do deploy -------
+# Um "Deploy concluído" verde NÃO garante que todo serviço subiu: com start-first,
+# um serviço cujo healthcheck falha fica PAUSADO na imagem anterior (ex.: deploy
+# 7637ccf, agent-runtime revertido silenciosamente). Aqui cruzamos a imagem da task
+# RODANDO de cada serviço de app contra $APP_VERSION e falhamos ALTO se divergir —
+# nunca mais um deploy "verde" com serviço para trás. Dá ~90s de folga p/ convergir.
+step "Verificando sha deployado de cada serviço de app"
+APP_SERVICES="api workers web agent-runtime landing"
+verify_fail=1
+mismatch=""
+for _ in $(seq 1 18); do
+  verify_fail=0; mismatch=""
+  for s in $APP_SERVICES; do
+    running=$(docker service ps "${STACK}_${s}" --filter desired-state=running \
+      --format '{{.Image}}' 2>/dev/null | head -1)
+    tag="${running##*:}"
+    if [ "$tag" != "$APP_VERSION" ]; then
+      verify_fail=1; mismatch="$mismatch ${s}:${tag:-none}"
+    fi
+  done
+  [ "$verify_fail" -eq 0 ] && break
+  sleep 5
+done
+if [ "$verify_fail" -ne 0 ]; then
+  err "Serviços NÃO convergiram para :$APP_VERSION →$mismatch"
+  err "Update provavelmente pausado (healthcheck/boot). Diagnóstico: docker service ps ${STACK}_<svc>"
+  err "Correção manual: docker service update --image leadium-<svc>:$APP_VERSION --update-failure-action pause --force ${STACK}_<svc>"
+  exit 1
+fi
+ok "Todos os serviços de app convergiram para :$APP_VERSION"
+
 ok "Deploy concluído — https://app.leadium.com.br  ·  https://api.leadium.com.br"

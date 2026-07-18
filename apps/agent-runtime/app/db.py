@@ -10,8 +10,10 @@ sua própria conexão psycopg e NÃO compartilha este pool.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Final
 
 import asyncpg
 
@@ -22,22 +24,49 @@ logger = get_logger()
 
 _pool: asyncpg.Pool | None = None
 
+# Boot resiliente: no deploy (build + migrations concorrentes) o Postgres fica
+# transitoriamente indisponível ou "starting up" no exato instante do startup do
+# runtime → `create_pool` estourava e o container morria (exit 3), o que fazia o
+# Swarm reverter o serviço para a imagem anterior. Retry com backoff cobre a janela
+# de contenção sem mascarar uma indisponibilidade real (após o teto, propaga o erro).
+_POOL_INIT_MAX_ATTEMPTS: Final[int] = 20
+_POOL_INIT_RETRY_DELAY_S: Final[float] = 2.0
+
 
 async def init_pool() -> asyncpg.Pool:
-    """Cria o pool asyncpg (idempotente). Chamado no startup do FastAPI."""
+    """Cria o pool asyncpg (idempotente, com retry no boot). Chamado no startup do FastAPI."""
     global _pool
     if _pool is not None:
         return _pool
 
     settings = get_settings()
-    _pool = await asyncpg.create_pool(
-        dsn=settings.asyncpg_dsn,
-        min_size=settings.db_pool_min_size,
-        max_size=settings.db_pool_max_size,
-        command_timeout=30.0,
-    )
-    logger.info("asyncpg pool inicializado")
-    return _pool
+    for attempt in range(1, _POOL_INIT_MAX_ATTEMPTS + 1):
+        try:
+            _pool = await asyncpg.create_pool(
+                dsn=settings.asyncpg_dsn,
+                min_size=settings.db_pool_min_size,
+                max_size=settings.db_pool_max_size,
+                command_timeout=30.0,
+            )
+            if attempt > 1:
+                logger.info(f"asyncpg pool inicializado (tentativa {attempt})")
+            else:
+                logger.info("asyncpg pool inicializado")
+            return _pool
+        except (OSError, asyncpg.PostgresError) as exc:
+            if attempt == _POOL_INIT_MAX_ATTEMPTS:
+                logger.error(
+                    f"asyncpg pool indisponível após {_POOL_INIT_MAX_ATTEMPTS} tentativas: {exc}"
+                )
+                raise
+            logger.warning(
+                f"asyncpg pool indisponível (tentativa {attempt}/{_POOL_INIT_MAX_ATTEMPTS}), "
+                f"retry em {_POOL_INIT_RETRY_DELAY_S}s: {exc}"
+            )
+            await asyncio.sleep(_POOL_INIT_RETRY_DELAY_S)
+
+    # Inalcançável (o loop retorna ou levanta), mas satisfaz o type checker.
+    raise RuntimeError("init_pool: estado inalcançável")
 
 
 async def close_pool() -> None:
