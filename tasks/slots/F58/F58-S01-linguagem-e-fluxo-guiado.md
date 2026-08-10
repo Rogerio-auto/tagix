@@ -2,7 +2,7 @@
 id: F58-S01
 title: Definir nomes simples e o fluxo guiado de campanhas
 phase: F58
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: []
@@ -13,6 +13,7 @@ source_docs:
   - docs/UX_PRINCIPLES.md
   - docs/features/PERMISSIONS.md
 claimed_at: 2026-08-10T16:00:27Z
+completed_at: 2026-08-10T16:03:12Z
 
 ---
 # F58-S01 — Definir nomes simples e o fluxo guiado de campanhas
