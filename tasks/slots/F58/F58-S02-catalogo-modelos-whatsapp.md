@@ -30,13 +30,13 @@ um nome digitado manualmente.
 - `packages/db/src/schema/index.ts`
 - `packages/db/src/index.ts`
 - `packages/db/drizzle/0067_f58_channel_message_templates.sql`
+- `packages/db/drizzle/meta/_journal.json`
 - `packages/db/src/channel-message-templates*.test.ts`
 - `docs/DATA_MODEL.md`
 
 ### files_forbidden
 
 - `apps/**`
-- `packages/db/drizzle/meta/**`
 
 ## Definition of Done
 
