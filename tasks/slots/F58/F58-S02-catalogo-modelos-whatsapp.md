@@ -27,22 +27,27 @@ um nome digitado manualmente.
 ### files_allowed
 
 - `packages/db/src/schema/channel-message-templates.ts`
+- `packages/db/src/schema/channels.ts`
 - `packages/db/src/schema/index.ts`
 - `packages/db/src/index.ts`
 - `packages/db/drizzle/0067_f58_channel_message_templates.sql`
 - `packages/db/drizzle/meta/_journal.json`
 - `packages/db/src/channel-message-templates*.test.ts`
+- `tasks/slot.config.json`
 - `docs/DATA_MODEL.md`
 
 ### files_forbidden
 
 - `apps/**`
+- `packages/db/drizzle/meta/*_snapshot.json`
 
 ## Definition of Done
 
 - [ ] Tabela `channel_message_templates` guarda workspace, canal, id externo, nome, idioma, categoria, status, componentes, motivo de rejeição e `last_synced_at`.
 - [ ] Unicidade por canal + nome + idioma e índices para lista por status/categoria.
 - [ ] FK para canal/workspace e deleção coerente.
+- [ ] A integridade impede associar `workspace_id` de um tenant ao canal de outro tenant.
+- [ ] Estado de sincronização por canal preserva o último sucesso mesmo quando o catálogo está vazio ou uma tentativa falha.
 - [ ] RLS criada, forçada e testada para isolamento entre workspaces.
 - [ ] Componentes externos permanecem `unknown` validado; zero `any`.
 - [ ] Migration idempotente e registrada conforme o guard de migrations.

@@ -30,9 +30,9 @@
     "F41": "Portal do Desenvolvedor — Referência rica + Console Try-it"
   },
   "migrations": {
-    "enabled": false,
-    "path": null,
-    "journal_path": null
+    "enabled": true,
+    "path": "packages/db/drizzle",
+    "journal_path": "packages/db/drizzle/meta/_journal.json"
   },
   "review_checks": { "disabled": [] },
   "validation": { "auto_link_node_modules": true }
