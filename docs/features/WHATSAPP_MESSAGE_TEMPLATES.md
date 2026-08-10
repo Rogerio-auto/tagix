@@ -146,4 +146,3 @@ Ao criar ou editar uma campanha:
 - Tratar mensagens de Instagram ou WAHA como se fossem modelos aprovados.
 - Prometer ou forçar aprovação da Meta.
 - Expor payloads, IDs externos ou códigos de erro como conteúdo principal da interface.
-
