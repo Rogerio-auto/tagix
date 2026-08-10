@@ -2,18 +2,19 @@
 id: F58-S01
 title: Definir nomes simples e o fluxo guiado de campanhas
 phase: F58
-status: available
+status: in-progress
 priority: high
 estimated_size: S
 depends_on: []
 blocks: [F58-S02, F58-S06]
-agent_id: product-engineer
+agent_id: agent-f58-s01
 source_docs:
   - docs/features/CAMPAIGNS.md
   - docs/UX_PRINCIPLES.md
   - docs/features/PERMISSIONS.md
----
+claimed_at: 2026-08-10T16:00:27Z
 
+---
 # F58-S01 — Definir nomes simples e o fluxo guiado de campanhas
 
 ## Objetivo
