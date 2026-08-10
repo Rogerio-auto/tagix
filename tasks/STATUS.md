@@ -48,6 +48,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F54   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
+| F57   | 13     | 13   | 0   | 0   | 0   | 0   | 0   |
+| F58   | 14     | 14   | 0   | 0   | 0   | 0   | 0   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -627,6 +629,43 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F56-S29 | UX — helper único de erro derivado de ApiError (status + ref)                   | ✅ done | medium     | —          |
 | F56-S30 | Agente — wizard interpola respostas no prompt do template                       | ✅ done | high       | —          |
 | F56-S31 | Agente — versionamento de prompt (draft→live, diff, rollback)                   | ✅ done | medium     | F56-S30    |
+
+## Fase 57
+
+| ID      | Titulo                                                                           | Status      | Prioridade | Depende de       |
+| ------- | -------------------------------------------------------------------------------- | ----------- | ---------- | ---------------- |
+| F57-S01 | CI verde — ENCRYPTION_KEY no job + catálogo de planos self-contained nos testes  | 🟢 available | critical   | —                |
+| F57-S02 | e2e determinístico — fechar o proxy SSR do Next (ECONNREFUSED :3001)             | 🟢 available | critical   | —                |
+| F57-S03 | Supply chain — zerar HIGH do pnpm audit e travar o gate no CI                    | 🟢 available | critical   | F57-S01          |
+| F57-S04 | Hardening do workflow — permissions mínimas, actions por SHA, host key pinado    | 🟢 available | high       | —                |
+| F57-S05 | .dockerignore do contexto landing/ + nginx non-root nas imagens estáticas        | 🟢 available | high       | —                |
+| F57-S06 | Dev compose — bind em loopback, portas sem colisão e WAHA pinado/autenticado     | 🟢 available | high       | —                |
+| F57-S07 | Backup pré-migration no deploy.sh — dados são sagrados                           | 🟢 available | high       | —                |
+| F57-S08 | Secrets do Swarm em vez de env vars no service spec                              | 🟢 available | medium     | —                |
+| F57-S09 | Build em CI + registry — deploy por digest, não build no nó de produção          | 🟢 available | medium     | F57-S01, F57-S04 |
+| F57-S10 | Lint type-aware (no-floating-promises) + react-hooks no apps/web                 | 🟢 available | medium     | F57-S01          |
+| F57-S11 | Piso de cobertura no CI — nada de "testes acompanham o código" sem medição       | 🟢 available | medium     | F57-S01          |
+| F57-S12 | Harness de slots — guard de migrations ligado, fases nomeadas, skills instaladas | 🟢 available | medium     | —                |
+| F57-S13 | README e AUDITORIA_TECNICA refletem o estado real do repo                        | 🟢 available | low        | —                |
+
+## Fase 58
+
+| ID      | Titulo                                                    | Status      | Prioridade | Depende de                                  |
+| ------- | --------------------------------------------------------- | ----------- | ---------- | ------------------------------------------- |
+| F58-S01 | Definir nomes simples e o fluxo guiado de campanhas       | 🟢 available | high       | —                                           |
+| F58-S02 | Guardar o catálogo de modelos de mensagem do WhatsApp     | 🟢 available | critical   | F58-S01, F57-S01                            |
+| F58-S03 | Buscar e enviar modelos de mensagem para a Meta           | 🟢 available | critical   | F58-S02                                     |
+| F58-S04 | Sincronizar, criar e acompanhar modelos pela API          | 🟢 available | critical   | F58-S03                                     |
+| F58-S05 | Entregar a Central de Modelos do WhatsApp                 | 🟢 available | high       | F58-S04                                     |
+| F58-S06 | Preparar opções, prévias e teste do novo criador          | 🟢 available | critical   | F58-S01, F58-S04, F57-S01                   |
+| F58-S07 | Tornar o início da campanha fácil de entender             | 🟢 available | high       | F58-S06                                     |
+| F58-S08 | Facilitar a escolha dos destinatários                     | 🟢 available | high       | F58-S06                                     |
+| F58-S09 | Escolher a mensagem com prévia e variáveis                | 🟢 available | critical   | F58-S05, F58-S06                            |
+| F58-S10 | Configurar quando e como enviar sem termos técnicos       | 🟢 available | high       | F58-S06                                     |
+| F58-S11 | Fazer o agendamento começar e respeitar o ritmo escolhido | 🟢 available | critical   | F58-S06                                     |
+| F58-S12 | Garantir que nenhuma mensagem da campanha se perca        | 🟢 available | critical   | F58-S02, F58-S11                            |
+| F58-S13 | Integrar o novo criador e revisar antes de iniciar        | 🟢 available | critical   | F58-S07, F58-S08, F58-S09, F58-S10, F58-S12 |
+| F58-S14 | Validar o fluxo completo com 1.000 contatos               | 🟢 available | critical   | F58-S13, F57-S02                            |
 
 ## Fase 6 — Pipeline
 
