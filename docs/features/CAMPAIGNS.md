@@ -1,30 +1,50 @@
 # Feature — CAMPAIGNS
 
-> **Domínio:** Campanhas via canais Meta (broadcast, drip, triggered) com compliance LGPD + Meta
+> **Domínio:** Campanhas em canais de mensagem, com compliance LGPD e regras de cada provider
 > **Pacotes:** `apps/api/src/routes/campaigns`, `apps/workers/campaigns`, `apps/web/src/features/campaigns`
 > **Provider:** WhatsApp Cloud é o canal completo no MVP; Instagram entra na fase F1.5 com restrições próprias (sem HSM, uso de `MESSAGE_TAG`). WAHA cobre disparos não-oficiais.
 
 ---
 
-## 1. Conceito
+## 1. Conceito e linguagem do produto
 
-Campaign envia mensagens em massa ou em cadência para uma lista de contatos. Tem regras estritas de compliance:
+Uma campanha envia uma mensagem para um público uma única vez ou envia uma sequência de mensagens ao longo do tempo. A interface apresenta primeiro a decisão que a pessoa precisa tomar; identificadores de banco, limites do provider e termos de infraestrutura ficam restritos à API, aos logs e à documentação técnica.
 
-- **Templates Meta** devem estar APPROVED antes do envio.
-- **Categoria MARKETING** exige opt-in explícito por contato.
-- **Janela de envio** respeitada (timezone do workspace).
-- **Quality rating Meta** monitorado em tempo real; campanha pausa em RED.
-- **Rate limit** adaptativo + limite diário.
+O produto usa estes nomes em títulos, botões, ajuda e mensagens de validação:
+
+- **Envio único**: uma mensagem enviada uma vez para todo o público escolhido.
+- **Sequência de mensagens**: duas ou mais mensagens organizadas com intervalos entre elas.
+- **Público**: contatos que receberão a campanha.
+- **Mensagem**: conteúdo escolhido para o envio. No WhatsApp oficial, é um modelo aprovado.
+- **Quando enviar**: início, dias, horários e ritmo seguro do envio.
+- **Revisão**: resumo final, pendências e confirmação para iniciar ou agendar.
+
+O tipo técnico `triggered` permanece reservado para uma futura automação orientada a eventos. Enquanto não existir runtime específico, ele não é oferecido em seletores, filtros, textos de ajuda ou atalhos da interface.
+
+Regras de compliance continuam obrigatórias, mas aparecem em linguagem acionável:
+
+- **Modelo aprovado**: no WhatsApp oficial, a campanha só usa modelos com status `APPROVED`.
+- **Permissão para receber ofertas**: mensagens da categoria `MARKETING` exigem opt-in explícito por contato.
+- **Dias e horários de envio**: respeitam o fuso horário do workspace.
+- **Qualidade do canal**: qualidade `RED` pausa a campanha; `YELLOW` reduz o ritmo e mostra um alerta.
+- **Capacidade diária e ritmo de envio**: são calculados pelo sistema e exibidos como capacidade disponível, sem pedir que o usuário interprete `tier` ou `rate`.
 
 ---
 
-## 2. Tipos
+## 2. Glossário da interface para o domínio técnico
 
-| Tipo | Descrição | Exemplo |
-|---|---|---|
-| `broadcast` | Disparo único pra lista | Comunicado oferta Black Friday |
-| `drip` | Sequência de N steps com delays | Onboarding pós-cadastro: dia 0, dia 3, dia 7 |
-| `triggered` | Dispara individualmente quando evento ocorre | Carrinho abandonado, novo lead |
+| Nome para o usuário | Identificador técnico | Onde aparece para o usuário | Observação de implementação |
+|---|---|---|---|
+| Envio único | `broadcast` | Escolha do formato e resumos | Persiste uma campanha com uma mensagem |
+| Sequência de mensagens | `drip` | Escolha do formato e editor da sequência | Persiste duas ou mais etapas com intervalos |
+| Público | `recipients` | Etapa Público, revisão e métricas | Pode vir de seleção, lista salva ou CSV |
+| Mensagem | `campaign_steps` / `template` | Etapa Mensagem | “Etapa da sequência” só aparece dentro de uma sequência |
+| Quando enviar | `scheduled_at`, `send_windows`, `rate_limit_per_minute` | Etapa Quando enviar | A UI fala em início, horários e ritmo seguro |
+| Revisão | `validate` / `activate` | Última etapa | “Iniciar campanha” ou “Agendar campanha” são as ações finais |
+| Capacidade diária | `tier_limit` | Revisão e alertas | Nunca mostrar apenas o tier bruto sem explicar o impacto |
+| Ritmo de envio | `rate_limit_per_minute` | Quando enviar e revisão | Preferir opções recomendadas; unidade técnica fica em ajuda avançada |
+
+`triggered` é um valor técnico reservado e não tem nome de produto no MVP. Não usar “broadcast”, “drip”, “recipient”, “step”, “rate” ou “tier” como rótulos primários.
 
 ---
 
@@ -39,22 +59,47 @@ Campaign envia mensagens em massa ou em cadência para uma lista de contatos. Te
 
 ---
 
-## 4. Fluxo de criação
+## 4. Fluxo guiado de criação
 
-```
-1. User → CampaignEditor (multi-step wizard)
-   ├─ Step 1: Nome, tipo, canal, agendamento
-   ├─ Step 2: Recipients (upload CSV, segmentação, ou seleção manual)
-   ├─ Step 3: Steps (template Meta + delay)
-   ├─ Step 4: Send windows + rate limit
-   ├─ Step 5: Configurações IA (auto handoff on reply)
-   └─ Step 6: Review + ativar
+O criador tem cinco etapas fixas. O progresso mostra os nomes completos e permite voltar sem perder dados. “Continuar” é a ação primária nas quatro primeiras etapas; a última usa “Iniciar campanha” ou “Agendar campanha”. O rascunho é salvo automaticamente após cada mudança confirmada.
 
-2. POST /api/campaigns → status='draft'
-3. POST /api/campaigns/:id/validate → retorna { safe, critical_issues[], warnings[] }
-4. POST /api/campaigns/:id/activate → status='scheduled' ou 'running'
-   ↓
-   Worker-campaigns pega
+| Etapa | Objetivo do usuário | Estado necessário para continuar | Saída da etapa |
+|---|---|---|---|
+| 1. Campanha | Dar um nome, escolher **Envio único** ou **Sequência de mensagens** e selecionar o canal | Nome válido, formato escolhido e canal conectado compatível | `name`, `type` e `channel_id` no rascunho |
+| 2. Público | Escolher quem receberá a campanha e entender exclusões antes de avançar | Ao menos um contato elegível; inválidos, duplicados, sem opt-in e opt-outs identificados | Destinatários deduplicados e resumo de elegibilidade |
+| 3. Mensagem | Escolher a mensagem do envio único ou montar as mensagens da sequência | Cada mensagem válida para o canal; no WhatsApp oficial, modelo aprovado e variáveis mapeadas | Uma ou mais etapas ordenadas e prontas para validação |
+| 4. Quando enviar | Escolher início, dias, horários, fuso e ritmo seguro | Data futura quando agendada, ao menos uma janela válida e capacidade compatível com o público | Agendamento e política de distribuição do envio |
+| 5. Revisão | Conferir público, mensagem, estimativa e regras antes de confirmar | Validação sem pendências críticas e permissão para ativar | Campanha `scheduled` ou `running`; sem permissão, rascunho pronto para um administrador |
+
+### 4.1 Estados por etapa
+
+Cada etapa preserva o que já foi preenchido e apresenta um próximo passo explícito.
+
+| Estado | Comportamento obrigatório | Ação principal |
+|---|---|---|
+| Carregando | Skeleton no espaço do formulário ou da lista; navegação não salta de posição | Nenhuma até os dados essenciais chegarem |
+| Vazio | Explica o que falta e por que é necessário, sem tela em branco | Ação contextual, como “Adicionar contatos” ou “Criar modelo de mensagem” |
+| Erro recuperável | Mantém os dados locais, descreve o problema em linguagem simples e permite tentar novamente | “Tentar novamente” |
+| Sem permissão | Permite consultar o que a role pode ver e informa quem pode concluir a ação | “Voltar para campanhas”; na Revisão, “Deixar rascunho pronto” |
+| Canal desconectado | Bloqueia apenas as escolhas dependentes do canal e explica a conexão necessária | “Conectar canal”, visível somente para `OWNER`/`ADMIN` |
+| Pronto | Mostra um resumo curto da escolha e libera avanço | “Continuar” ou ação final da Revisão |
+
+Estados vazios específicos evitam becos sem saída:
+
+- sem contatos: “Seu público ainda está vazio” + “Adicionar contatos”;
+- nenhum contato elegível: mostra as quantidades excluídas e links para corrigir consentimento ou telefone;
+- sem modelo aprovado no WhatsApp oficial: “Você ainda não tem um modelo aprovado” + “Ir para Modelos de mensagem”;
+- sem canal compatível: “Conecte um canal para criar esta campanha” + “Conectar canal” para quem tem permissão;
+- validação indisponível: mantém o rascunho e oferece nova tentativa, sem habilitar o envio por exceção.
+
+### 4.2 Transição técnica
+
+```text
+1. O criador salva o rascunho com POST /api/campaigns e atualizações incrementais.
+2. A Revisão chama POST /api/campaigns/:id/validate.
+3. Pendências críticas bloqueiam a ação e apontam a etapa que deve ser corrigida.
+4. POST /api/campaigns/:id/activate define status='scheduled' ou status='running'.
+5. O worker de campanhas inicia ou agenda o processamento idempotente.
 ```
 
 ---
@@ -417,7 +462,7 @@ UI dashboard mostra real-time com refetch 30s.
 
 ### 12.2 CampaignEditor (wizard)
 
-5-6 steps com progresso visual. RHF + Zod com validation per step.
+Cinco etapas fixas — **Campanha**, **Público**, **Mensagem**, **Quando enviar** e **Revisão** — com progresso visual, salvamento de rascunho e validação por etapa. A escolha entre **Envio único** e **Sequência de mensagens** acontece em Campanha. Configurações de resposta e handoff ficam em opções adicionais da Mensagem ou da Revisão e não criam uma etapa isolada.
 
 ### 12.3 Recipients import
 
@@ -429,16 +474,18 @@ UI dashboard mostra real-time com refetch 30s.
 
 ### 12.4 Template picker
 
-- Lista templates aprovados Meta do canal.
-- Filtro por categoria.
-- Preview com componentes renderizados.
-- Variáveis `{{1}}`, `{{2}}` mapeadas pra fields do contact (name, custom_fields.X).
+- No WhatsApp oficial, lista **modelos de mensagem aprovados** do canal.
+- Filtro por categoria e idioma em linguagem simples.
+- Prévia com cabeçalho, corpo, rodapé e botões renderizados.
+- Variáveis `{{1}}`, `{{2}}` mapeadas para campos do contato (`name`, `custom_fields.X`).
+- Estado vazio direciona para a Central de **Modelos de mensagem do WhatsApp**.
 
 ### 12.5 Send windows editor
 
 - Visual grid 7 dias × 24h.
 - Click + drag para selecionar janela.
 - Quick options: "Horário comercial (Seg-Sex 9-18)", "Todo dia 9-21", "24/7".
+- O rótulo da etapa é **Quando enviar**; “janelas” e `rate` não são títulos primários.
 
 ### 12.6 Real-time monitoring
 
@@ -518,8 +565,8 @@ Painel em campaign details:
 ### 17.3 UX
 
 - Wizard mostra **tabs por provider** quando workspace tem ambos: "WhatsApp" e "Instagram".
-- Em Instagram, step 3 (templates) vira "Mensagem direta" com editor de texto + interactive picker.
-- Step 6 (review) inclui aviso destacado: *"Instagram não tem templates Meta. Mensagens são enviadas como DM padrão dentro da janela 24h, ou com Human Agent Tag se fora dela. Uso indevido pode reduzir reach orgânico ou bloquear permission."*
+- Em Instagram, a etapa **Mensagem** usa “Mensagem direta”, com editor de texto e seletor de conteúdo interativo.
+- A etapa **Revisão** inclui aviso destacado: *"Instagram não tem modelos de mensagem do WhatsApp. As mensagens são enviadas como conversa direta dentro da janela de 24 horas ou com a identificação Human Agent quando aplicável. O uso indevido pode reduzir o alcance ou bloquear a permissão."*
 
 ---
 
