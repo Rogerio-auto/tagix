@@ -2,7 +2,7 @@
 id: F58-S02
 title: Guardar o catálogo de modelos de mensagem do WhatsApp
 phase: F58
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F58-S01, F57-S01]
