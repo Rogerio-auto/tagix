@@ -1,13 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb } from '../client';
 import { withWorkspace } from '../rls';
 import { agents, members, subscriptions, workspaces } from '../schema';
+import { ensureTestPlanCatalog } from '../testing/plan-catalog';
 import { slugCandidate, slugifyWorkspaceName } from './slug';
 import { provisionWorkspaceWithOwner } from './provision';
 
 const created: string[] = [];
+
+beforeAll(async () => {
+  await ensureTestPlanCatalog();
+});
 
 afterAll(async () => {
   const db = getDb();

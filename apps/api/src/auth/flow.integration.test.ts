@@ -35,6 +35,12 @@ const app = createApp();
 // flakavam a suíte (429 espúrio). Zera SÓ os buckets de auth antes de começar
 // (prefixos fixos; não toca os buckets randômicos do rate-limit.test).
 beforeAll(async () => {
+  const db = getDb();
+  await db
+    .insert(schema.plans)
+    .values({ key: 'free', name: 'Free', position: 0, priceMonthlyCents: 0 })
+    .onConflictDoNothing({ target: schema.plans.key });
+
   const { loadConfig } = await import('../config');
   const redis = new Redis(loadConfig().redisUrl, { lazyConnect: true, maxRetriesPerRequest: 1 });
   try {

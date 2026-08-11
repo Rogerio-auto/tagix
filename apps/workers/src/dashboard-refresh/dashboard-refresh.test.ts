@@ -46,6 +46,14 @@ import type { RedisLike } from './scheduler';
 const logger = createLogger('error');
 const { workspaces, slaRules, dashboardSnapshots, plans } = schema;
 
+beforeAll(async () => {
+  const db = getDb();
+  await db
+    .insert(plans)
+    .values({ key: 'free', name: 'Free', position: 0, priceMonthlyCents: 0 })
+    .onConflictDoNothing({ target: plans.key });
+});
+
 function fakeRedis(setResult: 'OK' | null = 'OK'): RedisLike {
   return {
     set: vi.fn(async () => setResult),

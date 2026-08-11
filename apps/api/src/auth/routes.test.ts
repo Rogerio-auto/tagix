@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import request from 'supertest';
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { IAuthProvider, SignUpResult } from '@hm/shared';
 import { AuthError } from '@hm/shared';
@@ -121,6 +121,14 @@ app.use(createAuthRouter());
 
 // Workspaces criados direto no DB pelos testes de login (cascade limpa member+sub).
 const createdWorkspaces: string[] = [];
+
+beforeAll(async () => {
+  const db = getDb();
+  await db
+    .insert(schema.plans)
+    .values({ key: 'free', name: 'Free', position: 0, priceMonthlyCents: 0 })
+    .onConflictDoNothing({ target: schema.plans.key });
+});
 
 afterAll(async () => {
   const db = getDb();
