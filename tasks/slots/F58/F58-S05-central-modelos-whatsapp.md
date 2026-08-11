@@ -55,3 +55,5 @@ pnpm --filter @hm/web build
 ## Notas
 
 - O usuário não precisa conhecer o identificador interno da Meta para operar esta tela.
+- Neste slot, a criação oferece cabeçalho de texto; modelos de mídia sincronizados continuam visíveis na prévia. Upload de `header_handle` fica fora do MVP.
+- **Usar em campanha** abre `/campaigns/new?channelId=...&messageTemplateId=...`; o consumo desses parâmetros pertence ao F58-S13.
