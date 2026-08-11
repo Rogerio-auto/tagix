@@ -238,6 +238,8 @@ export const auditLogs = pgTable(
 
 // Canais de mensageria (F1).
 export * from './channels';
+// Catálogo de modelos oficiais por canal + estado durável de sincronização (F58).
+export * from './channel-message-templates';
 // Segredos de plataforma (sem workspace_id → fora do RLS de tenant).
 export * from './platform_secrets';
 // Dedup de webhooks inbound na borda (platform-level, fora do RLS de tenant).
@@ -389,6 +391,8 @@ export const RLS_TABLES = [
   'audit_logs',
   'channels',
   'channel_secrets',
+  'channel_message_templates',
+  'channel_message_template_sync_states',
   'contacts',
   'conversations',
   'messages',

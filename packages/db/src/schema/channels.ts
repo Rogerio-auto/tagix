@@ -57,6 +57,8 @@ export const channels = pgTable(
     uniqueIndex('uq_channels_ig_user_id')
       .on(t.igUserId)
       .where(sql`${t.igUserId} is not null`),
+    // Alvo de FKs compostas workspace+canal: impede referências cross-tenant.
+    uniqueIndex('uq_channels_workspace_id').on(t.workspaceId, t.id),
     index('idx_channels_workspace').on(t.workspaceId),
     index('idx_channels_provider')
       .on(t.workspaceId, t.provider)
