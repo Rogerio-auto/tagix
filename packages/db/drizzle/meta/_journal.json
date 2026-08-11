@@ -470,6 +470,13 @@
       "when": 1781452827000,
       "tag": "0066_f56_agent_prompt_versions",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1781452828000,
+      "tag": "0067_f58_channel_message_templates",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,12 @@ export { RLS_TABLES } from './schema';
 export { workspacesRepo, membersRepo } from './repos';
 export { paymentEventsRepo } from './repos/payment-events';
 export type { PaymentEvent, NewPaymentEvent } from './schema/billing';
+export type {
+  ChannelMessageTemplate,
+  NewChannelMessageTemplate,
+  ChannelMessageTemplateSyncState,
+  NewChannelMessageTemplateSyncState,
+} from './schema/channel-message-templates';
 export {
   contactsRepo,
   conversationsRepo,

@@ -342,6 +342,7 @@ CREATE TABLE channels (
 );
 CREATE UNIQUE INDEX uq_channels_phone_number_id ON channels(phone_number_id) WHERE phone_number_id IS NOT NULL;
 CREATE UNIQUE INDEX uq_channels_ig_user_id ON channels(ig_user_id) WHERE ig_user_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_channels_workspace_id ON channels(workspace_id, id); -- alvo de FKs tenant-safe
 CREATE INDEX idx_channels_workspace ON channels(workspace_id);
 CREATE INDEX idx_channels_provider ON channels(workspace_id, provider) WHERE is_active = true;
 
@@ -367,7 +368,63 @@ CREATE TABLE channel_secrets (
 );
 ```
 
-### 6.3 `conversations`
+### 6.3 `channel_message_templates` e estado de sincronização
+
+Cache operacional, por canal, dos modelos de mensagem do WhatsApp oficial. `status`
+e `category` permanecem `text`: a Meta pode adicionar valores, e o catálogo precisa
+preservá-los mesmo antes de a interface conhecer sua tradução. `components` cruza a
+fronteira externa como `unknown[]` e só pode ser interpretado depois de validação.
+
+```sql
+CREATE TABLE channel_message_templates (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id        uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  channel_id          uuid NOT NULL,
+  external_id         text NOT NULL,
+  name                text NOT NULL,
+  language            text NOT NULL,
+  category            text NOT NULL,
+  status              text NOT NULL,
+  components          jsonb NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(components) = 'array'),
+  rejection_reason    text,
+  is_available        boolean NOT NULL DEFAULT true,
+  last_synced_at      timestamptz NOT NULL DEFAULT now(),
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz,
+  FOREIGN KEY (workspace_id, channel_id)
+    REFERENCES channels(workspace_id, id) ON DELETE CASCADE,
+  UNIQUE (channel_id, name, language),
+  UNIQUE (channel_id, external_id)
+);
+CREATE INDEX idx_channel_message_templates_workspace_channel
+  ON channel_message_templates(workspace_id, channel_id);
+CREATE INDEX idx_channel_message_templates_channel_status
+  ON channel_message_templates(workspace_id, channel_id, status);
+CREATE INDEX idx_channel_message_templates_channel_category
+  ON channel_message_templates(workspace_id, channel_id, category);
+
+CREATE TABLE channel_message_template_sync_states (
+  workspace_id             uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  channel_id               uuid PRIMARY KEY,
+  sync_status              text NOT NULL DEFAULT 'idle',
+  last_attempt_at          timestamptz,
+  last_successful_sync_at  timestamptz,
+  last_failed_at           timestamptz,
+  last_error               text,
+  last_item_count          integer CHECK (last_item_count IS NULL OR last_item_count >= 0),
+  created_at               timestamptz NOT NULL DEFAULT now(),
+  updated_at               timestamptz,
+  FOREIGN KEY (workspace_id, channel_id)
+    REFERENCES channels(workspace_id, id) ON DELETE CASCADE
+);
+```
+
+Uma sincronização bem-sucedida com lista vazia grava `last_item_count = 0` e atualiza
+`last_successful_sync_at`. Uma falha posterior atualiza tentativa, falha e erro sem
+apagar esse último sucesso. As duas tabelas usam RLS habilitada e forçada por
+`app_current_workspace()`; a FK composta rejeita referências a canais de outro tenant.
+
+### 6.4 `conversations`
 
 ```sql
 CREATE TABLE conversations (
@@ -410,7 +467,7 @@ CREATE INDEX idx_conversations_agent ON conversations(agent_id) WHERE agent_id I
 CREATE INDEX idx_conversations_contact ON conversations(contact_id) WHERE contact_id IS NOT NULL;
 ```
 
-### 6.4 `messages`
+### 6.5 `messages`
 
 ```sql
 CREATE TABLE messages (
@@ -456,7 +513,7 @@ CREATE INDEX idx_messages_workspace_created ON messages(workspace_id, created_at
 
 **Sobre `interactive_payload`:** no v1 era `Record<string, any>` (FX-023d). No v2 ainda é JSONB no DB (necessário pela variedade), mas TIPADO no TypeScript via discriminated union em `packages/shared/src/types/interactive.ts`. Validar com Zod no insert/select boundary.
 
-### 6.5 `webhook_events` (dedup de inbound)
+### 6.6 `webhook_events` (dedup de inbound)
 
 ```sql
 CREATE TABLE webhook_events (
@@ -472,7 +529,7 @@ CREATE TABLE webhook_events (
 CREATE INDEX idx_webhook_events_created ON webhook_events(created_at DESC);
 ```
 
-### 6.6 `conversation_routing_history`
+### 6.7 `conversation_routing_history`
 
 ```sql
 CREATE TABLE conversation_routing_history (
@@ -493,7 +550,7 @@ CREATE TABLE conversation_routing_history (
 CREATE INDEX idx_routing_history_conv ON conversation_routing_history(conversation_id, routed_at DESC);
 ```
 
-### 6.7 `conversation_notes`
+### 6.8 `conversation_notes`
 
 ```sql
 CREATE TABLE conversation_notes (
@@ -509,7 +566,7 @@ CREATE TABLE conversation_notes (
 CREATE INDEX idx_conversation_notes_conv ON conversation_notes(conversation_id, created_at DESC);
 ```
 
-### 6.8 `ig_comments` (auxiliar para canais Instagram)
+### 6.9 `ig_comments` (auxiliar para canais Instagram)
 
 Comments em posts/reels do Instagram são entidades de primeira classe (precisam de ações de moderação: ocultar, deletar, private reply). Cada comment vira uma `messages` row (type=`comment` ou `comment_reply`) E uma `ig_comments` row com metadata específica.
 
