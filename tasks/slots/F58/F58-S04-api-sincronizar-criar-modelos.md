@@ -27,7 +27,7 @@ manual, criação para aprovação e atualização automática de status.
 - `apps/api/src/routes/channels/templates/**`
 - `apps/api/src/routes/channels/index.ts`
 - `apps/api/src/routes/channels/templates*.test.ts`
-- `apps/api/src/webhooks/**`
+- `apps/api/src/routes/webhooks/**`
 - `packages/shared/src/permissions.ts`
 - `docs/features/PERMISSIONS.md`
 
@@ -43,6 +43,7 @@ manual, criação para aprovação e atualização automática de status.
 - [ ] `POST .../message-templates` envia para aprovação e persiste o estado retornado.
 - [ ] Apenas canal ativo `meta_whatsapp` é aceito; demais retornam motivo claro e acionável.
 - [ ] Webhook de mudança de status atualiza o catálogo idempotentemente; reconciliação manual continua disponível.
+- [ ] Evento de status por `waba_id` atualiza todos os canais ativos associados, sem cruzar workspaces.
 - [ ] Permissões distinguem visualizar de gerenciar modelos e são testadas.
 - [ ] Todas as operações usam RLS e nunca devolvem credenciais do canal.
 
