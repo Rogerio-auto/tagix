@@ -49,6 +49,7 @@ começa, quanto tempo leva e o que ainda impede o envio.
 - [ ] Ativação exige preflight fresco e confirmação explícita com número de destinatários.
 - [ ] Depois de ativar, usuário vai para monitoramento e vê o primeiro tick/status sem ambiguidade.
 - [ ] Edição de rascunho hidrata tudo; campanha ativa permanece somente leitura com ações seguras.
+- [ ] Entrada pela Central consome `channelId` e `messageTemplateId` da URL, valida a combinação e abre a etapa **Mensagem** com a seleção aplicada.
 - [ ] Campo manual de nome de template e termos Broadcast/Drip/Triggered/Rate/Tier foram removidos da jornada principal.
 
 ## Validação

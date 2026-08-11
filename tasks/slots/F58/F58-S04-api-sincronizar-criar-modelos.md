@@ -30,6 +30,9 @@ manual, criação para aprovação e atualização automática de status.
 - `apps/api/src/routes/channels/index.ts`
 - `apps/api/src/routes/channels/templates*.test.ts`
 - `apps/api/src/routes/webhooks/**`
+- `packages/db/drizzle/0068_f58_meta_template_channel_resolver.sql`
+- `packages/db/drizzle/meta/_journal.json`
+- `packages/db/src/meta-template-channel-resolver*.test.ts`
 - `packages/shared/src/permissions.ts`
 - `docs/features/PERMISSIONS.md`
 
@@ -46,6 +49,7 @@ manual, criação para aprovação e atualização automática de status.
 - [ ] Apenas canal ativo `meta_whatsapp` é aceito; demais retornam motivo claro e acionável.
 - [ ] Webhook de mudança de status atualiza o catálogo idempotentemente; reconciliação manual continua disponível.
 - [ ] Evento de status por `waba_id` atualiza todos os canais ativos associados, sem cruzar workspaces.
+- [ ] Descoberta cross-tenant usa resolver `SECURITY DEFINER` mínimo, com `search_path` fixo, acesso público revogado e teste sob `hm_app_login`/FORCE RLS.
 - [ ] Permissões distinguem visualizar de gerenciar modelos e são testadas.
 - [ ] Toda mutação de tenant usa RLS e nunca devolve credenciais do canal; o webhook só usa lookup privilegiado para descobrir os workspaces pelo `waba_id`.
 

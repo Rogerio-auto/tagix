@@ -27,19 +27,23 @@ outbound precisa voltar para a delivery/campanha.
 ### files_allowed
 
 - `packages/db/src/schema/campaigns.ts`
-- `packages/db/drizzle/0068_f58_campaign_outbox.sql`
+- `packages/db/drizzle/0069_f58_campaign_outbox.sql`
+- `packages/db/drizzle/meta/_journal.json`
 - `apps/workers/src/campaigns/outbox/**`
 - `apps/workers/src/campaigns/db-ports.ts`
+- `apps/workers/src/campaigns/**/*test.ts`
 - `apps/workers/src/outbound/finalize.ts`
 - `apps/workers/src/outbound/db-ports.ts`
+- `apps/workers/src/outbound/job.ts`
 - `apps/workers/src/outbound/**/*test.ts`
+- `packages/channels/src/types.ts`
 - `packages/shared/src/mq/publish.ts`
 - `packages/shared/src/mq/reliability.test.ts`
 
 ### files_forbidden
 
 - `apps/web/**`
-- `packages/db/drizzle/meta/**`
+- `packages/db/drizzle/meta/*_snapshot.json`
 
 ## Definition of Done
 
@@ -48,6 +52,8 @@ outbound precisa voltar para a delivery/campanha.
 - [ ] Crash antes/depois do publish não perde mensagem nem envia duplicata lógica.
 - [ ] Sucesso/falha permanente do outbound atualiza `campaign_deliveries` diretamente, sem depender de webhook.
 - [ ] Erro de template pausado/rejeitado interrompe novos envios e aparece na campanha.
+- [ ] Bindings são renderizados por destinatário antes do outbound, com fallback obrigatório e sem compartilhar valores entre contatos.
+- [ ] Componentes de botão preservam `sub_type` e `index` até o adapter do canal.
 - [ ] Pausar/cancelar impede outbox ainda não publicada; jobs já entregues ao broker ficam quantificados na resposta.
 - [ ] Migration tem RLS/índices e testes de restart, concorrência e broker indisponível.
 

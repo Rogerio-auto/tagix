@@ -27,6 +27,7 @@ de negócio por conta própria.
 ### files_allowed
 
 - `apps/api/src/routes/campaigns/builder/**`
+- `apps/api/src/routes/campaigns/crud.ts`
 - `apps/api/src/routes/campaigns/index.ts`
 - `apps/api/src/routes/campaigns/validate.ts`
 - `apps/api/src/routes/campaigns/service.ts`
@@ -46,6 +47,7 @@ de negócio por conta própria.
 - [ ] Envio de teste usa o pipeline outbound real, destinatário explícito e idempotência; nunca entra nas métricas da campanha.
 - [ ] Preflight bloqueia canal inativo, template não aprovado, quality/tier desconhecido em disparo grande e variáveis sem valor.
 - [ ] Contratos Zod e testes de permissão/isolamento cobrem todos os endpoints.
+- [ ] Bindings de variáveis ficam persistidos num contrato tipado que o runtime consegue renderizar por destinatário.
 
 ## Validação
 
