@@ -48,7 +48,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F54   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
-| F57   | 13     | 12   | 0   | 0   | 1   | 0   | 0   |
+| F57   | 13     | 12   | 0   | 0   | 0   | 1   | 0   |
 | F58   | 14     | 14   | 0   | 0   | 0   | 0   | 0   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -632,21 +632,21 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 57
 
-| ID      | Titulo                                                                           | Status        | Prioridade | Depende de       |
-| ------- | -------------------------------------------------------------------------------- | ------------- | ---------- | ---------------- |
-| F57-S01 | CI verde — ENCRYPTION_KEY no job + catálogo de planos self-contained nos testes  | 🔵 in-progress | critical   | —                |
-| F57-S02 | e2e determinístico — fechar o proxy SSR do Next (ECONNREFUSED :3001)             | 🟢 available   | critical   | —                |
-| F57-S03 | Supply chain — zerar HIGH do pnpm audit e travar o gate no CI                    | 🟢 available   | critical   | F57-S01          |
-| F57-S04 | Hardening do workflow — permissions mínimas, actions por SHA, host key pinado    | 🟢 available   | high       | —                |
-| F57-S05 | .dockerignore do contexto landing/ + nginx non-root nas imagens estáticas        | 🟢 available   | high       | —                |
-| F57-S06 | Dev compose — bind em loopback, portas sem colisão e WAHA pinado/autenticado     | 🟢 available   | high       | —                |
-| F57-S07 | Backup pré-migration no deploy.sh — dados são sagrados                           | 🟢 available   | high       | —                |
-| F57-S08 | Secrets do Swarm em vez de env vars no service spec                              | 🟢 available   | medium     | —                |
-| F57-S09 | Build em CI + registry — deploy por digest, não build no nó de produção          | 🟢 available   | medium     | F57-S01, F57-S04 |
-| F57-S10 | Lint type-aware (no-floating-promises) + react-hooks no apps/web                 | 🟢 available   | medium     | F57-S01          |
-| F57-S11 | Piso de cobertura no CI — nada de "testes acompanham o código" sem medição       | 🟢 available   | medium     | F57-S01          |
-| F57-S12 | Harness de slots — guard de migrations ligado, fases nomeadas, skills instaladas | 🟢 available   | medium     | —                |
-| F57-S13 | README e AUDITORIA_TECNICA refletem o estado real do repo                        | 🟢 available   | low        | —                |
+| ID      | Titulo                                                                           | Status      | Prioridade | Depende de       |
+| ------- | -------------------------------------------------------------------------------- | ----------- | ---------- | ---------------- |
+| F57-S01 | CI verde — ENCRYPTION_KEY no job + catálogo de planos self-contained nos testes  | 🟣 review    | critical   | —                |
+| F57-S02 | e2e determinístico — fechar o proxy SSR do Next (ECONNREFUSED :3001)             | 🟢 available | critical   | —                |
+| F57-S03 | Supply chain — zerar HIGH do pnpm audit e travar o gate no CI                    | 🟢 available | critical   | F57-S01          |
+| F57-S04 | Hardening do workflow — permissions mínimas, actions por SHA, host key pinado    | 🟢 available | high       | —                |
+| F57-S05 | .dockerignore do contexto landing/ + nginx non-root nas imagens estáticas        | 🟢 available | high       | —                |
+| F57-S06 | Dev compose — bind em loopback, portas sem colisão e WAHA pinado/autenticado     | 🟢 available | high       | —                |
+| F57-S07 | Backup pré-migration no deploy.sh — dados são sagrados                           | 🟢 available | high       | —                |
+| F57-S08 | Secrets do Swarm em vez de env vars no service spec                              | 🟢 available | medium     | —                |
+| F57-S09 | Build em CI + registry — deploy por digest, não build no nó de produção          | 🟢 available | medium     | F57-S01, F57-S04 |
+| F57-S10 | Lint type-aware (no-floating-promises) + react-hooks no apps/web                 | 🟢 available | medium     | F57-S01          |
+| F57-S11 | Piso de cobertura no CI — nada de "testes acompanham o código" sem medição       | 🟢 available | medium     | F57-S01          |
+| F57-S12 | Harness de slots — guard de migrations ligado, fases nomeadas, skills instaladas | 🟢 available | medium     | —                |
+| F57-S13 | README e AUDITORIA_TECNICA refletem o estado real do repo                        | 🟢 available | low        | —                |
 
 ## Fase 58
 

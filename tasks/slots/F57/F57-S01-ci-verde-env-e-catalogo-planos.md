@@ -2,7 +2,7 @@
 id: F57-S01
 title: CI verde — ENCRYPTION_KEY no job + catálogo de planos self-contained nos testes
 phase: F57
-status: in-progress
+status: review
 priority: critical
 estimated_size: S
 depends_on: []
@@ -12,6 +12,7 @@ source_docs:
   - .github/workflows/ci.yml
   - docs/audits/2026-08-08-fundacao-hm-init.md
 claimed_at: 2026-08-10T16:00:31Z
+completed_at: 2026-08-11T14:18:49Z
 
 ---
 # F57-S01 — CI verde: env de teste completo + catálogo de planos self-contained
