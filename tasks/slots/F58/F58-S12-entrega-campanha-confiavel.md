@@ -27,7 +27,7 @@ outbound precisa voltar para a delivery/campanha.
 ### files_allowed
 
 - `packages/db/src/schema/campaigns.ts`
-- `packages/db/drizzle/0068_f58_campaign_outbox.sql`
+- `packages/db/drizzle/0069_f58_campaign_outbox.sql`
 - `packages/db/drizzle/meta/_journal.json`
 - `apps/workers/src/campaigns/outbox/**`
 - `apps/workers/src/campaigns/db-ports.ts`
