@@ -565,8 +565,8 @@ Painel em campaign details:
 ### 17.3 UX
 
 - Wizard mostra **tabs por provider** quando workspace tem ambos: "WhatsApp" e "Instagram".
-- Em Instagram, step 3 (templates) vira "Mensagem direta" com editor de texto + interactive picker.
-- Step 6 (review) inclui aviso destacado: *"Instagram não tem templates Meta. Mensagens são enviadas como DM padrão dentro da janela 24h, ou com Human Agent Tag se fora dela. Uso indevido pode reduzir reach orgânico ou bloquear permission."*
+- Em Instagram, a etapa **Mensagem** usa “Mensagem direta”, com editor de texto e seletor de conteúdo interativo.
+- A etapa **Revisão** inclui aviso destacado: *"Instagram não tem modelos de mensagem do WhatsApp. As mensagens são enviadas como conversa direta dentro da janela de 24 horas ou com a identificação Human Agent quando aplicável. O uso indevido pode reduzir o alcance ou bloquear a permissão."*
 
 ---
 
