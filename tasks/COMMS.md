@@ -555,3 +555,97 @@ Nota de ambiente: worktree sem .env (gitignored) → copiado da raiz p/ os teste
 **INCIDENTE (importante para o orquestrador): `git stash` é COMPARTILHADO entre worktrees do mesmo repo.** Rodei `git stash -u` + `git stash pop` neste worktree para checar uma falha pré-existente e o agente do F56-S05 empilhou um stash no meio → cada um popou o do outro. Ambos recuperados (ele restaurou o meu na pilha; eu restaurei por SHA via `git fsck --unreachable` e devolvi a pilha limpa). O trabalho dele (`apps/web/features/channels/**`, 4 modificados + 6 novos) FICOU no meu worktree, intacto e NÃO commitado (meu commit adiciona só os meus 8 paths); backup em `…/scratchpad/foreign-stash/` (patch + arquivos). **Regra: NUNCA usar `git stash` em worktree paralelo — use `git worktree`/cópia ou branch temporária.**
 
 **Falha pré-existente/alheia:** `apps/workers/src/coexistence/coexistence.test.ts` quebra na `main` (`TypeError: sql.raw is not a function` em `packages/flow-engine/src/ports/db.port.ts:35`, `sql.raw` em top-level module scope) — confirmado com meus arquivos stashados. Não é regressão minha; dono provável = F56-S13 (flow-engine claim/antiloop). `pnpm --filter @hm/workers test` = 379 passed / 1 arquivo falho (esse).
+
+## F58-S06 — API do criador guiado: opções, prévia, estimativa, preflight e teste (2026-08-11, backend-engineer)
+
+Endpoints novos em `apps/api/src/routes/campaigns/builder/**`, montados ANTES do CRUD
+(`/api/campaigns/builder/options` precisa casar antes de `/api/campaigns/:id`). Todos sob
+`campaign.edit` (OWNER/ADMIN/SUPERVISOR) e dentro de `req.scoped` (RLS).
+
+- `GET  /api/campaigns/builder/options` → `{ modes, channels[], templates[], page }`.
+  `channels` traz TODOS os canais ativos com `capabilities` por provider + `eligible`/
+  `ineligibleReason`/`ineligibleMessage` (`provider_unsupported` | `incomplete_setup` |
+  `missing_credentials`), `approvedTemplateCount` e `lastSyncedAt`. IG/WAHA aparecem
+  inelegíveis COM motivo — sumir com eles deixaria a pergunta "cadê meu Instagram?" sem
+  resposta. `templates` só vem de canal elegível; filtros `channelId/search/category/
+  language/cursor/limit` (cursor = id, keyset).
+- `POST /api/campaigns/:id/builder/preview` → `{ template, preview }`. Prévia de texto puro
+  (nada de markup) + `preview.outbound` no shape da Graph.
+- `POST /api/campaigns/:id/builder/estimate` e `.../preflight` → aceitam ajustes AINDA NÃO
+  SALVOS (`ratePerMinute`, `dailyLimit`, `sendWindows`, `timezone`, `startAt`), schema
+  `.strict()`. Preflight devolve `{ ok, issues[], estimate }` — a Revisão não precisa de
+  segunda chamada.
+- `POST /api/campaigns/:id/builder/test` → 202 `{ messageId, queued, replayed }`. EXIGE
+  header `Idempotency-Key`.
+
+**PARA F58-S12 (dono de `packages/channels/src/types.ts` + workers) — contrato de bindings.**
+`campaign_steps.template_components` passa a guardar, quando o criador novo grava, o envelope
+`[{ type:'binding_contract', version:1, bindings:[...] }]` (helpers `encodeBindings`/
+`decodeBindings` em `builder/contracts.ts`). Sem mudança de schema neste slot.
+- `binding = { component:'header'|'body'|'button', index:number, source }`.
+- `source = {kind:'fixed', value}` | `{kind:'contact', field:'displayName'|'phone'|'email', fallback}`
+  | `{kind:'customField', key, fallback}`. **`fallback` é obrigatório e não-vazio** para origem
+  dinâmica — contato sem o campo não pode virar frase com buraco.
+- Semântica de `index`: header/body = número do `{{n}}`; **button = POSIÇÃO 1-based do botão**
+  (a Graph recebe `index` 0-based, convertido na saída).
+- `renderTemplate` (`builder/render.ts`) é a função pura que resolve binding → parâmetro por
+  contato. **S12 deve repetir exatamente esse cálculo por destinatário** (mesma resolução de
+  fallback: valor em branco/ausente cai no fallback). Ela já emite botão como componente
+  próprio com `sub_type` + `index`.
+- `decodeBindings` devolve `null` para componentes Graph legados → rascunho antigo continua
+  sendo enviado como está. **Contrato: nunca publicar o envelope cru no outbound.**
+- **Bloqueio conhecido, dono S12:** `packages/channels/src/types.ts` (`TemplateComponent =
+  {type, parameters?}`) e o `templateComponentSchema` do `outbound/job.ts` DESCARTAM
+  `sub_type`/`index` → variável de botão não chega íntegra à Meta hoje. Por isso o **envio de
+  teste recusa binding de botão** com `422 CAMPAIGN_TEST_BUTTON_VARIABLE_UNSUPPORTED`
+  (`builder/index.ts`). Quando S12 preservar os campos, **remover esse guard e o teste
+  correspondente** em `builder/routes.test.ts`.
+
+**PARA F58-S07/S08/S09/S10 (frontend).**
+- Modo público: `POST/PUT /api/campaigns` aceitam `mode:'single'|'sequence'` (mapeados para
+  `broadcast`/`drip`). `type` técnico continua aceito por compatibilidade; `mode` vence.
+  `type:'triggered'` (ou `mode:'triggered'`) → **422 `CAMPAIGN_TRIGGERED_NOT_AVAILABLE`** com
+  texto pronto. **O `<option value="triggered">` do editor ANTIGO
+  (`apps/web/features/campaigns/editor/CampaignEditor.tsx:353`) agora recebe 422** — remoção
+  é do S07/S13, fora do meu files_allowed.
+- `PUT /api/campaigns/:id/steps` aceita `bindings` por step (validado por Zod) e persiste o
+  envelope. Continuar mandando `templateComponents` cru também funciona; se os dois vierem,
+  `bindings` vence.
+- Pendências do preflight têm `stage: 'basics'|'audience'|'message'|'schedule'|'channel'`,
+  `blocking`, `code` estável e, quando cabe, `step`/`component`/`index` — é o link "corrigir
+  nesta etapa" do §4.2 do CAMPAIGNS.md.
+- `estimate.duration` = `{ approximateMinutes, approximateDays, finishesAt, limitedBy:
+  'rate'|'daily_limit'|'send_windows'|'none', exceedsHorizon }`. `limitedBy` é o texto de
+  "por que vai demorar isso" da etapa Quando enviar (S10).
+
+**Decisões que valem revisão em fase futura (não são bugs):**
+1. **Preflight é deliberadamente tão duro quanto a ativação.** `/validate` (que roda no
+   `activate`) trata `recipients > tierLimit` e `sem opt-in em MARKETING` como CRÍTICOS; o
+   preflight repete os dois como bloqueantes (`CAMPAIGN_AUDIENCE_EXCEEDS_TIER`,
+   `CAMPAIGN_AUDIENCE_WITHOUT_CONSENT`). Um preflight mais permissivo que a ativação seria uma
+   promessa quebrada na tela seguinte. **Mas o tier da Meta é um teto DIÁRIO** — público maior
+   deveria poder ser dividido em dias (é o que `duration.approximateDays` já calcula). Quem
+   fizer S11/S13 e quiser liberar isso precisa mudar `/validate` junto (o teste
+   `campaigns/routes.test.ts` "recipients > tierLimit -> critical" trava o comportamento atual
+   e está FORA do meu files_allowed). Não toquei em `validate.ts`.
+2. **Fonte do estado do modelo:** preflight lê o CATÁLOGO LOCAL (S02/S04, sync + webhook) para
+   responder rápido a cada mudança do formulário; `/validate` continua confirmando ao vivo na
+   Meta na ativação. Split proposital.
+3. **Saúde do canal tem cache de 60s por canal** (`healthTtlMs`) — a etapa Quando enviar
+   recalcula a cada tecla e a Meta limita requisição. Meta fora do ar → `UNKNOWN`, e aí
+   disparo acima de 1.000 contatos é bloqueado (`LARGE_SEND_THRESHOLD`).
+4. **Duração assume dia local de 1440 min.** Nos dois dias de virada de horário de verão o fim
+   estimado desloca até 1h. É rótulo "aproximado"; o instante real é do worker (S11).
+5. **Consentimento só é exigido quando algum modelo é MARKETING** (categoria vem do catálogo).
+   Exigir opt-in em UTILITY zeraria o público de quem nunca pediu marketing.
+
+**Ambiente / não-regressão:** Docker Desktop parado e SEM `.env` na raiz → toda a suíte de
+integração da API falha por `DATABASE_URL` ausente, na main e no worktree igualmente (37
+arquivos). Os 91 testes novos deste slot NÃO dependem de banco. Cobertura DB-real de RLS dos
+endpoints do builder fica para o **F58-S14** (QA com 1.000 contatos), que já tem infra no
+escopo.
+
+**Harness (dono F57-S12):** `python scripts/slot.py claim <id> --force` documenta "Use --force
+to checkout existing" mas o `die()` de branch existente (`scripts/slot.py:644-645`) não olha
+`args.force` — com a branch já criada não há caminho de claim. Fiz `git checkout` da branch
+canônica já existente (criada por um claim anterior).
