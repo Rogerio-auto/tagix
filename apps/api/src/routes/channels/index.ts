@@ -25,6 +25,7 @@ import {
 } from '../../services/channels/instagram-connect';
 import { WaConnectError, runWhatsAppConnect } from '../../services/channels/whatsapp-connect';
 import { platformSecrets } from '../../secrets';
+import { createMessageTemplatesRouter } from './templates';
 
 // Logger do connect de canais. As falhas de connect Meta (exchange/register/
 // subscribe) eram invisíveis: a rota devolvia 502 genérico e descartava o motivo
@@ -143,6 +144,8 @@ function param(req: Request, key: string): string {
 
 export function createChannelsRouter(): Router {
   const router = Router();
+
+  router.use(createMessageTemplatesRouter());
 
   // GET /api/channels — lista canais do workspace (RLS-escopada). Sem segredos.
   router.get(
