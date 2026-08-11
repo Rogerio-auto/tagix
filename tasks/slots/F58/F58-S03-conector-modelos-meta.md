@@ -2,17 +2,18 @@
 id: F58-S03
 title: Buscar e enviar modelos de mensagem para a Meta
 phase: F58
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F58-S02]
 blocks: [F58-S04]
-agent_id: backend-engineer
+agent_id: agent-f58-s03
 source_docs:
   - docs/features/WHATSAPP_MESSAGE_TEMPLATES.md
   - docs/features/CAMPAIGNS.md
----
+claimed_at: 2026-08-11T14:33:59Z
 
+---
 # F58-S03 — Buscar e enviar modelos de mensagem para a Meta
 
 ## Objetivo

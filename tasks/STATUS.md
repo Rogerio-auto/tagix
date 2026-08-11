@@ -49,7 +49,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
 | F57   | 13     | 12   | 0   | 0   | 0   | 0   | 1   |
-| F58   | 14     | 12   | 0   | 0   | 0   | 0   | 2   |
+| F58   | 14     | 11   | 0   | 0   | 1   | 0   | 2   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -650,22 +650,22 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 58
 
-| ID      | Titulo                                                    | Status      | Prioridade | Depende de                                  |
-| ------- | --------------------------------------------------------- | ----------- | ---------- | ------------------------------------------- |
-| F58-S01 | Definir nomes simples e o fluxo guiado de campanhas       | ✅ done      | high       | —                                           |
-| F58-S02 | Guardar o catálogo de modelos de mensagem do WhatsApp     | ✅ done      | critical   | F58-S01, F57-S01                            |
-| F58-S03 | Buscar e enviar modelos de mensagem para a Meta           | 🟢 available | critical   | F58-S02                                     |
-| F58-S04 | Sincronizar, criar e acompanhar modelos pela API          | 🟢 available | critical   | F58-S03                                     |
-| F58-S05 | Entregar a Central de Modelos do WhatsApp                 | 🟢 available | high       | F58-S04                                     |
-| F58-S06 | Preparar opções, prévias e teste do novo criador          | 🟢 available | critical   | F58-S01, F58-S04, F57-S01                   |
-| F58-S07 | Tornar o início da campanha fácil de entender             | 🟢 available | high       | F58-S06                                     |
-| F58-S08 | Facilitar a escolha dos destinatários                     | 🟢 available | high       | F58-S06                                     |
-| F58-S09 | Escolher a mensagem com prévia e variáveis                | 🟢 available | critical   | F58-S05, F58-S06                            |
-| F58-S10 | Configurar quando e como enviar sem termos técnicos       | 🟢 available | high       | F58-S06                                     |
-| F58-S11 | Fazer o agendamento começar e respeitar o ritmo escolhido | 🟢 available | critical   | F58-S06                                     |
-| F58-S12 | Garantir que nenhuma mensagem da campanha se perca        | 🟢 available | critical   | F58-S02, F58-S11                            |
-| F58-S13 | Integrar o novo criador e revisar antes de iniciar        | 🟢 available | critical   | F58-S07, F58-S08, F58-S09, F58-S10, F58-S12 |
-| F58-S14 | Validar o fluxo completo com 1.000 contatos               | 🟢 available | critical   | F58-S13, F57-S02                            |
+| ID      | Titulo                                                    | Status        | Prioridade | Depende de                                  |
+| ------- | --------------------------------------------------------- | ------------- | ---------- | ------------------------------------------- |
+| F58-S01 | Definir nomes simples e o fluxo guiado de campanhas       | ✅ done        | high       | —                                           |
+| F58-S02 | Guardar o catálogo de modelos de mensagem do WhatsApp     | ✅ done        | critical   | F58-S01, F57-S01                            |
+| F58-S03 | Buscar e enviar modelos de mensagem para a Meta           | 🔵 in-progress | critical   | F58-S02                                     |
+| F58-S04 | Sincronizar, criar e acompanhar modelos pela API          | 🟢 available   | critical   | F58-S03                                     |
+| F58-S05 | Entregar a Central de Modelos do WhatsApp                 | 🟢 available   | high       | F58-S04                                     |
+| F58-S06 | Preparar opções, prévias e teste do novo criador          | 🟢 available   | critical   | F58-S01, F58-S04, F57-S01                   |
+| F58-S07 | Tornar o início da campanha fácil de entender             | 🟢 available   | high       | F58-S06                                     |
+| F58-S08 | Facilitar a escolha dos destinatários                     | 🟢 available   | high       | F58-S06                                     |
+| F58-S09 | Escolher a mensagem com prévia e variáveis                | 🟢 available   | critical   | F58-S05, F58-S06                            |
+| F58-S10 | Configurar quando e como enviar sem termos técnicos       | 🟢 available   | high       | F58-S06                                     |
+| F58-S11 | Fazer o agendamento começar e respeitar o ritmo escolhido | 🟢 available   | critical   | F58-S06                                     |
+| F58-S12 | Garantir que nenhuma mensagem da campanha se perca        | 🟢 available   | critical   | F58-S02, F58-S11                            |
+| F58-S13 | Integrar o novo criador e revisar antes de iniciar        | 🟢 available   | critical   | F58-S07, F58-S08, F58-S09, F58-S10, F58-S12 |
+| F58-S14 | Validar o fluxo completo com 1.000 contatos               | 🟢 available   | critical   | F58-S13, F57-S02                            |
 
 ## Fase 6 — Pipeline
 
