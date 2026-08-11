@@ -2,17 +2,18 @@
 id: F58-S04
 title: Sincronizar, criar e acompanhar modelos pela API
 phase: F58
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F58-S03]
 blocks: [F58-S05, F58-S06]
-agent_id: backend-engineer
+agent_id: agent-f58-s04
 source_docs:
   - docs/features/WHATSAPP_MESSAGE_TEMPLATES.md
   - docs/features/PERMISSIONS.md
----
+claimed_at: 2026-08-11T14:45:51Z
 
+---
 # F58-S04 — Sincronizar, criar e acompanhar modelos pela API
 
 ## Objetivo
