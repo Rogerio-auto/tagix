@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { getDb, schema, withWorkspace, type DbTx } from '@hm/db';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -77,16 +77,11 @@ export interface TemplateStatusDeps {
 export async function resolveTemplateWebhookChannels(
   wabaId: string,
 ): Promise<readonly TemplateWebhookChannel[]> {
-  return getDb()
-    .select({ id: schema.channels.id, workspaceId: schema.channels.workspaceId })
-    .from(schema.channels)
-    .where(
-      and(
-        eq(schema.channels.wabaId, wabaId),
-        eq(schema.channels.provider, 'meta_whatsapp'),
-        eq(schema.channels.isActive, true),
-      ),
-    );
+  const rows = await getDb().execute<Record<string, unknown> & TemplateWebhookChannel>(sql`
+    SELECT workspace_id AS "workspaceId", channel_id AS "id"
+    FROM public.resolve_meta_template_channels(${wabaId})
+  `);
+  return Array.from(rows);
 }
 
 const defaultDeps: TemplateStatusDeps = {
