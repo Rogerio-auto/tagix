@@ -2,7 +2,7 @@
 id: F58-S04
 title: Sincronizar, criar e acompanhar modelos pela API
 phase: F58
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F58-S03]
