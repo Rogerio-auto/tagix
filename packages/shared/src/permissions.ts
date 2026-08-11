@@ -93,6 +93,10 @@ export const ROLE_CAN = {
   'channel.connect': ADMINS,
   'channel.disable': ADMINS,
   'channel.delete': OWNER_ONLY,
+  // Catálogo de modelos do WhatsApp: leitura acompanha quem pode consultar
+  // campanhas; sincronizar/criar envia dados à Meta e fica restrito a admins.
+  'message_template.view': ['OWNER', 'ADMIN', 'SUPERVISOR', 'READONLY'],
+  'message_template.manage': ADMINS,
   'workspace.edit': ADMINS,
   'member.invite': ADMINS,
   'member.promote': ADMINS,

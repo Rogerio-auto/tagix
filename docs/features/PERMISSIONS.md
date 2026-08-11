@@ -107,6 +107,8 @@ Tabela autoritativa. Quando o código fizer `requireRole([...])`, consulta isso.
 | Conectar canal (FB Login Meta / WAHA) | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Desativar canal | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Excluir canal | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Consultar modelos de mensagem do WhatsApp | ✅ | ✅ | ✅ | ❌ | ✅ |
+| Sincronizar/criar modelo de mensagem do WhatsApp | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Editar workspace (nome, timezone, logo) | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Convidar member | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Promover member (mudar role) | ✅ | ✅ (não cria OWNER) | ❌ | ❌ | ❌ |

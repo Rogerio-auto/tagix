@@ -31,6 +31,10 @@ import {
   type MetaFlowSubmissionInput,
 } from '../flows/submissions';
 import { createLogger } from '@hm/logger';
+import {
+  parseMetaTemplateStatusUpdates,
+  processMetaTemplateStatusUpdates,
+} from './meta-template-status';
 
 const SIGNATURE_HEADER = 'x-hub-signature-256';
 
@@ -192,6 +196,24 @@ export function createMetaWebhookRouter(): Router {
         webhookLogger.info('webhook.meta.redelivery', { provider, eventId });
         res.sendStatus(200);
         return;
+      }
+
+      // Mudanças de status de modelo são persistidas ANTES de fechar o dedup.
+      // Falha de banco devolve 503 sem marcar o evento, permitindo reentrega.
+      if (provider === 'meta_whatsapp') {
+        const templateUpdates = parseMetaTemplateStatusUpdates(body);
+        if (templateUpdates.length > 0) {
+          try {
+            await processMetaTemplateStatusUpdates(templateUpdates);
+          } catch (err: unknown) {
+            webhookLogger.error('webhook.whatsapp.template_status.failed', {
+              eventId,
+              error: err instanceof Error ? err.message : 'unknown',
+            });
+            res.sendStatus(503);
+            return;
+          }
+        }
       }
 
       // Enqueue ANTES de marcar o dedup (F52-S02). Se o publish lançar OU retornar
