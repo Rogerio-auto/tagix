@@ -43,11 +43,7 @@ export {
   type JsonBody,
 } from './shared/graphClient';
 export { verifyMetaSignature } from './shared/hmac';
-export {
-  MetaError,
-  isRetryableStatus,
-  type MetaErrorBody,
-} from './shared/errors';
+export { MetaError, isRetryableStatus, type MetaErrorBody } from './shared/errors';
 
 // --- Parsers de webhook inbound (provider → InboundEvent[]) ---
 export { parseWhatsAppWebhook } from './meta/whatsapp/webhook.parser';
@@ -108,5 +104,32 @@ export {
   type TemplateCategory,
   type TemplateStatus,
 } from './meta/quality';
+
+// --- Catalogo de modelos de mensagem WhatsApp (F58-S03) ---
+export {
+  MetaTemplatesClient,
+  MetaTemplateError,
+  validateMetaTemplateCreateInput,
+  type MetaTemplatesClientOptions,
+  type MetaTemplateErrorKind,
+  type MetaTemplateErrorPermanence,
+  type MetaTemplateValidationIssue,
+  type CreateMetaTemplateArgs,
+  type ListMetaTemplatesArgs,
+  type MetaBodyComponent,
+  type MetaButtonsComponent,
+  type MetaFooterComponent,
+  type MetaMediaHeaderComponent,
+  type MetaMessageTemplate,
+  type MetaPhoneNumberButton,
+  type MetaQuickReplyButton,
+  type MetaTemplateButton,
+  type MetaTemplateCategory,
+  type MetaTemplateCreateComponent,
+  type MetaTemplateCreateInput,
+  type MetaTemplateStatus,
+  type MetaTextHeaderComponent,
+  type MetaUrlButton,
+} from './meta/templates';
 
 export const CHANNELS_PKG = '@hm/channels' as const;
