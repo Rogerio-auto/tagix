@@ -3,6 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb } from './client';
 import { withWorkspace } from './rls';
+import { ensureTestPlanCatalog } from './testing/plan-catalog';
 import {
   buildVisibilityPredicate,
   pickAutoAssignee,
@@ -74,6 +75,7 @@ let memberA = '';
 
 beforeAll(async () => {
   const db = getDb(); // conecta como owner → bypassa RLS (setup)
+  await ensureTestPlanCatalog();
   const [free] = await db.select().from(plans).where(eq(plans.key, 'free'));
   const planId = free?.id ?? null;
   const suffix = randomUUID().slice(0, 8);

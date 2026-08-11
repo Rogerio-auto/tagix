@@ -45,6 +45,8 @@ jobs:
       DATABASE_URL: postgres://hm:hm@localhost:5432/highermind
       REDIS_URL: redis://localhost:6379
       AMQP_URL: amqp://hm:hm@localhost:5672
+      # Chave fixa e não secreta, exclusiva do ambiente efêmero de testes.
+      ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
       NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
