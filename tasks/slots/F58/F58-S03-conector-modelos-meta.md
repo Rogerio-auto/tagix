@@ -2,7 +2,7 @@
 id: F58-S03
 title: Buscar e enviar modelos de mensagem para a Meta
 phase: F58
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F58-S02]
