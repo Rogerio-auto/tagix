@@ -48,8 +48,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F54   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
-| F57   | 13     | 12   | 0   | 0   | 0   | 1   | 0   |
-| F58   | 14     | 13   | 0   | 0   | 0   | 1   | 0   |
+| F57   | 13     | 12   | 0   | 0   | 0   | 0   | 1   |
+| F58   | 14     | 13   | 0   | 0   | 0   | 0   | 1   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -634,7 +634,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID      | Titulo                                                                           | Status      | Prioridade | Depende de       |
 | ------- | -------------------------------------------------------------------------------- | ----------- | ---------- | ---------------- |
-| F57-S01 | CI verde — ENCRYPTION_KEY no job + catálogo de planos self-contained nos testes  | 🟣 review    | critical   | —                |
+| F57-S01 | CI verde — ENCRYPTION_KEY no job + catálogo de planos self-contained nos testes  | ✅ done      | critical   | —                |
 | F57-S02 | e2e determinístico — fechar o proxy SSR do Next (ECONNREFUSED :3001)             | 🟢 available | critical   | —                |
 | F57-S03 | Supply chain — zerar HIGH do pnpm audit e travar o gate no CI                    | 🟢 available | critical   | F57-S01          |
 | F57-S04 | Hardening do workflow — permissions mínimas, actions por SHA, host key pinado    | 🟢 available | high       | —                |
@@ -652,7 +652,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID      | Titulo                                                    | Status      | Prioridade | Depende de                                  |
 | ------- | --------------------------------------------------------- | ----------- | ---------- | ------------------------------------------- |
-| F58-S01 | Definir nomes simples e o fluxo guiado de campanhas       | 🟣 review    | high       | —                                           |
+| F58-S01 | Definir nomes simples e o fluxo guiado de campanhas       | ✅ done      | high       | —                                           |
 | F58-S02 | Guardar o catálogo de modelos de mensagem do WhatsApp     | 🟢 available | critical   | F58-S01, F57-S01                            |
 | F58-S03 | Buscar e enviar modelos de mensagem para a Meta           | 🟢 available | critical   | F58-S02                                     |
 | F58-S04 | Sincronizar, criar e acompanhar modelos pela API          | 🟢 available | critical   | F58-S03                                     |

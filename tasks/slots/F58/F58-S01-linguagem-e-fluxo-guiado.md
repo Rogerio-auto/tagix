@@ -2,7 +2,7 @@
 id: F58-S01
 title: Definir nomes simples e o fluxo guiado de campanhas
 phase: F58
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: []
