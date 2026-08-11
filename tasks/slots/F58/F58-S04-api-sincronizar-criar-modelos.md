@@ -45,7 +45,7 @@ manual, criação para aprovação e atualização automática de status.
 - [ ] Webhook de mudança de status atualiza o catálogo idempotentemente; reconciliação manual continua disponível.
 - [ ] Evento de status por `waba_id` atualiza todos os canais ativos associados, sem cruzar workspaces.
 - [ ] Permissões distinguem visualizar de gerenciar modelos e são testadas.
-- [ ] Todas as operações usam RLS e nunca devolvem credenciais do canal.
+- [ ] Toda mutação de tenant usa RLS e nunca devolve credenciais do canal; o webhook só usa lookup privilegiado para descobrir os workspaces pelo `waba_id`.
 
 ## Validação
 
@@ -57,4 +57,4 @@ pnpm --filter @hm/shared test
 
 ## Notas
 
-- Se o payload de webhook da versão atual não oferecer todos os campos, marcar o catálogo como stale e agendar uma sincronização completa.
+- Se o payload de webhook não oferecer todos os campos, marcar o catálogo como `stale` e manter a sincronização manual disponível. Job durável de reconciliação fica fora deste slot.
