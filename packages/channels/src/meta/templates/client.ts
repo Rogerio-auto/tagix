@@ -271,13 +271,27 @@ export class MetaTemplatesClient {
   private async request(path: string, init: RequestInit): Promise<unknown> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    let response: Response;
     try {
-      response = await this.fetcher(`${this.baseUrl}${path}`, {
+      const response = await this.fetcher(`${this.baseUrl}${path}`, {
         ...init,
         signal: controller.signal,
       });
+
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        if (controller.signal.aborted) {
+          throw new MetaTemplateError('timeout', { permanence: 'transient' });
+        }
+        if (response.ok) {
+          throw new MetaTemplateError('invalid_response', { permanence: 'transient' });
+        }
+      }
+      if (!response.ok) throw errorFromResponse(response, body, this.now());
+      return body;
     } catch (error: unknown) {
+      if (error instanceof MetaTemplateError) throw error;
       if (controller.signal.aborted) {
         throw new MetaTemplateError('timeout', { permanence: 'transient' });
       }
@@ -285,14 +299,5 @@ export class MetaTemplatesClient {
     } finally {
       clearTimeout(timer);
     }
-
-    let body: unknown;
-    try {
-      body = await response.json();
-    } catch {
-      if (response.ok) throw new MetaTemplateError('invalid_response', { permanence: 'transient' });
-    }
-    if (!response.ok) throw errorFromResponse(response, body, this.now());
-    return body;
   }
 }

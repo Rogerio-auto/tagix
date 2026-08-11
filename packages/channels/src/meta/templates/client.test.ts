@@ -260,6 +260,35 @@ describe('MetaTemplatesClient errors', () => {
 
     await assertion;
   });
+
+  it('mantem o timeout ativo enquanto consome um body que nunca termina', async () => {
+    vi.useFakeTimers();
+    const mock = fetchMock(async (_input, init) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(stream) {
+          stream.enqueue(new TextEncoder().encode('{"data":'));
+          init?.signal?.addEventListener('abort', () =>
+            stream.error(new Error('body carried sensitive content')),
+          );
+        },
+      });
+      return new Response(body, { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    const client = new MetaTemplatesClient({
+      fetch: mock,
+      baseUrl: 'https://graph.test',
+      timeoutMs: 50,
+    });
+
+    const pending = client.listAll({ wabaId: 'waba', accessToken: TOKEN });
+    const assertion = expect(pending).rejects.toMatchObject({
+      kind: 'timeout',
+      permanence: 'transient',
+    });
+    await vi.advanceTimersByTimeAsync(50);
+
+    await assertion;
+  });
 });
 
 describe('MetaTemplatesClient.create', () => {
@@ -300,6 +329,44 @@ describe('MetaTemplatesClient.create', () => {
       ]),
     );
     expect(JSON.stringify(validation.issues)).not.toContain('Nao usar');
+  });
+
+  it('aceita somente URL HTTPS segura com variavel posicional no final', async () => {
+    const mock = fetchMock(async () => response({ id: 'should-not-happen' }));
+    const invalid = {
+      ...VALID_TEMPLATE,
+      components: [
+        { type: 'BODY', text: 'Mensagem sem variavel' },
+        {
+          type: 'BUTTONS',
+          buttons: [
+            { type: 'URL', text: 'Inseguro', url: 'http://example.test' },
+            { type: 'URL', text: 'Credencial', url: 'https://user:pass@example.test' },
+            {
+              type: 'URL',
+              text: 'Variavel no meio',
+              url: 'https://example.test/{{1}}/detail',
+              example: ['123'],
+            },
+          ],
+        },
+      ],
+    } as unknown as MetaTemplateCreateInput;
+    const client = new MetaTemplatesClient({ fetch: mock, baseUrl: 'https://graph.test' });
+
+    let caught: unknown;
+    try {
+      await client.create({ wabaId: 'waba', accessToken: TOKEN, template: invalid });
+    } catch (error: unknown) {
+      caught = error;
+    }
+
+    expect(mock).not.toHaveBeenCalled();
+    expect(caught).toBeInstanceOf(MetaTemplateError);
+    const validation = caught as MetaTemplateError;
+    expect(validation.issues?.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(['invalid_url', 'url_variable_must_be_final']),
+    );
   });
 
   it('envia payload validado e normaliza a resposta de criacao', async () => {

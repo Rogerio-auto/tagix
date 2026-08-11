@@ -162,8 +162,26 @@ function validateButtons(
       const url = requiredString(button, 'url', `${buttonPath}.url`, 2000, issues);
       if (url === undefined) continue;
       const variableCount = positionalVariables(url, `${buttonPath}.url`, issues);
-      if (variableCount > 1)
+      const variableMatches = [...url.matchAll(VARIABLE_PATTERN)];
+      if (variableMatches.length > 1 || variableCount > 1)
         issues.push({ path: `${buttonPath}.url`, code: 'too_many_url_variables' });
+      if (variableMatches.length === 1 && !url.endsWith('{{1}}')) {
+        issues.push({ path: `${buttonPath}.url`, code: 'url_variable_must_be_final' });
+      }
+      const parseableUrl = url.replace('{{1}}', 'example');
+      try {
+        const parsed = new URL(parseableUrl);
+        if (
+          parsed.protocol !== 'https:' ||
+          parsed.hostname.length === 0 ||
+          parsed.username.length > 0 ||
+          parsed.password.length > 0
+        ) {
+          issues.push({ path: `${buttonPath}.url`, code: 'invalid_url' });
+        }
+      } catch {
+        issues.push({ path: `${buttonPath}.url`, code: 'invalid_url' });
+      }
       if (variableCount > 0)
         validateStringArray(button['example'], `${buttonPath}.example`, variableCount, issues);
       continue;
