@@ -2,18 +2,19 @@
 id: F58-S05
 title: Entregar a Central de Modelos do WhatsApp
 phase: F58
-status: available
+status: in-progress
 priority: high
 estimated_size: L
 depends_on: [F58-S04]
 blocks: [F58-S08]
-agent_id: frontend-engineer
+agent_id: agent-f58-s05
 source_docs:
   - docs/features/WHATSAPP_MESSAGE_TEMPLATES.md
   - docs/DESIGN_SYSTEM.md
   - docs/UX_PRINCIPLES.md
----
+claimed_at: 2026-08-11T15:27:12Z
 
+---
 # F58-S05 — Entregar a Central de Modelos do WhatsApp
 
 ## Objetivo
