@@ -49,7 +49,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
 | F57   | 13     | 12   | 0   | 0   | 0   | 0   | 1   |
-| F58   | 14     | 9   | 0   | 0   | 0   | 1   | 4   |
+| F58   | 14     | 9   | 0   | 0   | 0   | 0   | 5   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -657,7 +657,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F58-S03 | Buscar e enviar modelos de mensagem para a Meta           | ✅ done      | critical   | F58-S02                                     |
 | F58-S04 | Sincronizar, criar e acompanhar modelos pela API          | ✅ done      | critical   | F58-S03                                     |
 | F58-S05 | Entregar a Central de Modelos do WhatsApp                 | 🟢 available | high       | F58-S04                                     |
-| F58-S06 | Preparar opções, prévias e teste do novo criador          | 🟣 review    | critical   | F58-S01, F58-S04, F57-S01                   |
+| F58-S06 | Preparar opções, prévias e teste do novo criador          | ✅ done      | critical   | F58-S01, F58-S04, F57-S01                   |
 | F58-S07 | Tornar o início da campanha fácil de entender             | 🟢 available | high       | F58-S06                                     |
 | F58-S08 | Facilitar a escolha dos destinatários                     | 🟢 available | high       | F58-S06                                     |
 | F58-S09 | Escolher a mensagem com prévia e variáveis                | 🟢 available | critical   | F58-S05, F58-S06                            |

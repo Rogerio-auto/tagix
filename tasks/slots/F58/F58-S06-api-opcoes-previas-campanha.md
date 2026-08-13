@@ -2,7 +2,7 @@
 id: F58-S06
 title: Preparar opções, prévias e teste do novo criador
 phase: F58
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F58-S01, F58-S04, F57-S01]
