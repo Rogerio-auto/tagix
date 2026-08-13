@@ -2,18 +2,20 @@
 id: F58-S06
 title: Preparar opções, prévias e teste do novo criador
 phase: F58
-status: available
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F58-S01, F58-S04, F57-S01]
 blocks: [F58-S07, F58-S08, F58-S09]
-agent_id: backend-engineer
+agent_id: agent-f58-s06
 source_docs:
   - docs/features/CAMPAIGNS.md
   - docs/features/WHATSAPP_MESSAGE_TEMPLATES.md
   - docs/features/PERMISSIONS.md
----
+claimed_at: 2026-08-11T15:27:12Z
+completed_at: 2026-08-11T21:21:20Z
 
+---
 # F58-S06 — Preparar opções, prévias e teste do novo criador
 
 ## Objetivo
