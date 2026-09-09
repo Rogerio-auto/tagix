@@ -2,7 +2,7 @@
 id: F61-S11
 title: Mídia honesta — recuperar o recuperável, admitir o perdido
 phase: F61
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
