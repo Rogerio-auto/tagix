@@ -53,7 +53,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F59   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F60   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
-| F61   | 4     | 0   | 0   | 0   | 1   | 0   | 3   |
+| F61   | 4     | 0   | 0   | 0   | 0   | 1   | 3   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
@@ -709,12 +709,12 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 61
 
-| ID      | Titulo                                                            | Status        | Prioridade | Depende de |
-| ------- | ----------------------------------------------------------------- | ------------- | ---------- | ---------- |
-| F61-S01 | Service worker — app shell, versionamento e a saída de emergência | 🔵 in-progress | critical   | —          |
-| F61-S02 | Tela Hoje — a visão de dono                                       | ✅ done        | critical   | —          |
-| F61-S11 | Mídia honesta — recuperar o recuperável, admitir o perdido        | ✅ done        | critical   | —          |
-| F61-S12 | Hoje enriquecida — identidade, linguagem, ação e distribuição     | ✅ done        | critical   | F61-S02    |
+| ID      | Titulo                                                            | Status   | Prioridade | Depende de |
+| ------- | ----------------------------------------------------------------- | -------- | ---------- | ---------- |
+| F61-S01 | Service worker — app shell, versionamento e a saída de emergência | 🟣 review | critical   | —          |
+| F61-S02 | Tela Hoje — a visão de dono                                       | ✅ done   | critical   | —          |
+| F61-S11 | Mídia honesta — recuperar o recuperável, admitir o perdido        | ✅ done   | critical   | —          |
+| F61-S12 | Hoje enriquecida — identidade, linguagem, ação e distribuição     | ✅ done   | critical   | F61-S02    |
 
 ## Fase 7 — Dashboard + Conversões
 
