@@ -2,15 +2,17 @@
 id: F60-S03
 title: E-mail como canal — envio, recebimento e encadeamento
 phase: F60
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: L
 depends_on: [F60-S01, F60-S02]
 blocks: [F60-S04, F60-S07]
 source_docs:
   - docs/features/CANAIS_PLAN.md
----
+agent_id: backend-engineer
+claimed_at: 2026-09-09T14:41:22Z
 
+---
 # F60-S03 — E-mail como canal: envio, recebimento e encadeamento
 
 ## Objetivo
