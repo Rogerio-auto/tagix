@@ -78,12 +78,12 @@ que abre um texto explicativo é pior que nenhum botão — promete uma ação e
 
 ## Definition of Done
 
-- [ ] Em modo standalone o convite NUNCA aparece.
-- [ ] No iOS aparecem instruções, não um botão que não instala.
-- [ ] No Chromium aparece botão real e ele instala.
-- [ ] Dispensa dura 14 dias e sobrevive a recarregar.
-- [ ] `localStorage` indisponível (aba privada) não quebra a tela.
-- [ ] Nenhum termo de navegador que o dono não usa ("PWA", "manifest", "service worker").
+- [x] Em modo standalone o convite NUNCA aparece.
+- [x] No iOS aparecem instruções, não um botão que não instala.
+- [x] No Chromium aparece botão real e ele instala.
+- [x] Dispensa dura 14 dias e sobrevive a recarregar.
+- [x] `localStorage` indisponível (aba privada) não quebra a tela.
+- [x] Nenhum termo de navegador que o dono não usa ("PWA", "manifest", "service worker").
 
 ## Validação
 
@@ -96,3 +96,51 @@ pnpm lint
 ## Notas
 
 - A régua: o cliente instala sozinho, sem ligar para o suporte.
+
+## Decisões tomadas na execução (2026-09-09)
+
+1. **No iOS o convite ENSINA; no Chromium ele INSTALA.** `beforeinstallprompt` não existe no
+   Safari, então lá não há botão — há três passos numerados com o ícone real de Compartilhar.
+   Um botão "Instalar" que abre um texto explicativo seria pior que nenhum botão: promete uma
+   ação e entrega uma aula.
+
+2. **Instalado vence tudo na ordem de decisão**, inclusive o prompt nativo. Um app instalado
+   pedindo para ser instalado é a forma mais rápida de o produto parecer quebrado.
+
+3. **`isStandalone` recebe os dois sinais já lidos, não `window`.** `navigator.standalone` é
+   extensão da Apple e não existe no `lib.dom`; forçá-la na assinatura obrigaria um
+   `as unknown as` no chamador. Quem lê do browser é o hook; quem decide é a função pura — e é
+   a parte que tem teste.
+
+4. **Duas fontes de "está instalado".** `display-mode: standalone` é o padrão e funciona no
+   iOS 16+; `navigator.standalone` é o legado da Apple e ainda é o mais confiável no iOS.
+
+5. **iPad é tratado como iOS mesmo se dizendo Macintosh.** O iPadOS 13+ manda user agent de Mac,
+   e a única pista que sobra é `maxTouchPoints > 1`. Sem esse corte, ou o iPad não recebe
+   instruções, ou todo Mac recebe instruções de iPhone. Há teste para os dois lados.
+
+6. **`beforeinstallprompt` é interceptado com `preventDefault`.** Segurar o evento é o que
+   permite oferecer o botão no nosso momento, em vez do banner do navegador aparecendo por cima
+   do conteúdo.
+
+7. **Ouvimos `change` do `display-mode`.** Instalar com a página aberta muda o modo sem
+   recarregar; sem isso o convite continuaria na tela de quem acabou de instalar.
+
+8. **Dispensa corrompida ou no futuro NÃO silencia.** Um `localStorage` sujo não pode enterrar
+   o convite que destrava o push. O pior caso aceitável é mostrar o convite uma vez a mais.
+
+9. **`localStorage` inacessível (aba privada) não quebra nada** — a dispensa passa a valer só
+   para a sessão.
+
+10. **O convite vive na tela Hoje, não no app inteiro.** Quem instala é o dono que abre o
+    celular entre uma tarefa e outra; pedir instalação numa tela de configuração no desktop é
+    pedir na hora errada, para a pessoa errada.
+
+11. **Nenhuma palavra de navegador no texto.** Nada de "PWA", "manifest", "service worker" ou
+    "adicionar aos favoritos". O texto diz o que o dono ganha: abrir direto e ser avisado
+    quando entrar lead.
+
+## Resultado
+
+- 17 testes novos em `shared/pwa/install.test.ts`; suíte web 218/218.
+- Typecheck limpo. Lint: 0 erros.
