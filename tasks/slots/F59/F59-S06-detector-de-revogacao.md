@@ -2,7 +2,7 @@
 id: F59-S06
 title: Detector de revogação em linguagem natural
 phase: F59
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F59-S03, F59-S04]
