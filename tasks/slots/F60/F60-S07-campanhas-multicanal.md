@@ -2,7 +2,7 @@
 id: F60-S07
 title: Campanhas para os outros canais
 phase: F60
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: [F60-S03]
