@@ -52,6 +52,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F58   | 14     | 9   | 0   | 0   | 0   | 0   | 5   |
 | F59   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
+| F60   | 4     | 1   | 3   | 0   | 0   | 0   | 0   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
@@ -694,6 +695,15 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F6-S07 | Inbound hooks — opt-out por keyword + reply handling (mark responded + AI handoff + followup)   | ✅ done | high       | F6-S01         |
 | F6-S08 | Frontend CampaignEditor wizard (6 steps) + template picker + CSV import + send windows editor   | ✅ done | high       | F6-S03, F6-S04 |
 | F6-S09 | Frontend CampaignsPage + monitoring real-time + health badge                                    | ✅ done | high       | F6-S03         |
+
+## Fase 60
+
+| ID      | Titulo                                                    | Status      | Prioridade | Depende de       |
+| ------- | --------------------------------------------------------- | ----------- | ---------- | ---------------- |
+| F60-S01 | Capacidades negociadas do adapter e identidade do contato | 🟢 available | critical   | —                |
+| F60-S02 | Restrição de envio genérica no composer                   | ⏸️ blocked  | high       | F60-S01          |
+| F60-S03 | E-mail como canal — envio, recebimento e encadeamento     | ⏸️ blocked  | critical   | F60-S01, F60-S02 |
+| F60-S07 | Campanhas para os outros canais                           | ⏸️ blocked  | critical   | F60-S03          |
 
 ## Fase 7 — Dashboard + Conversões
 
