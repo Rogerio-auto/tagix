@@ -64,6 +64,22 @@ export * from './types/inbox';
 // --- Eventos Socket.io Server→Client (LIVECHAT.md §6, tipos puros) ---
 export * from './socket-events';
 
+// --- Roteador de notificação ao MEMBRO (F61-S04). Decisão pura, sem IO. ---
+export {
+  routeNotification,
+  channelsFor,
+  inQuietHours,
+  NOTIFICATION_EVENTS,
+  NOTIFICATION_CHANNELS,
+  JANELA_JA_VIU_MIN,
+} from './notifications';
+export type {
+  NotificationEvent,
+  NotificationChannel,
+  NotificationPrefs,
+  RoutingDecision,
+} from './notifications';
+
 // --- Prévia da última mensagem (F61-S12). Fonte ÚNICA: havia 4 cópias, 3 erradas. ---
 export { previewFor, humanizePreview, labelForType } from './preview';
 

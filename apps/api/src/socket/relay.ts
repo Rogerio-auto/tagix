@@ -47,6 +47,7 @@ import { connectMq, consume, type Envelope } from '@hm/shared/mq';
 import { SERVER_TO_CLIENT_EVENTS, type ServerToClientEvent } from '@hm/shared';
 import { createLogger, type LogLevel, type Logger } from '@hm/logger';
 import { bumpVersion } from '../cache';
+import { notifyInboundMessage } from '../services/notifications/from-inbound';
 import type { IoServer } from './index';
 
 const RELAY_QUEUE = 'hm.q.socket.relay';
@@ -151,6 +152,16 @@ export interface RelayPorts {
   readonly bumpTimeoutMs?: number;
   /** Log por-emit (contagem de sockets). Default: só quando o nível é `debug`. */
   readonly logEmits?: boolean;
+  /**
+   * Aviso ao membro (F61-S04). Injetável para o teste do relay não depender de
+   * banco nem de push — e para o relay poder ser testado provando que NÃO espera
+   * por ele.
+   */
+  readonly notifyInbound?: (input: {
+    workspaceId: string;
+    conversationId: string;
+    messageId: string;
+  }) => Promise<void>;
 }
 
 /** Resolve `p` ou rejeita ao estourar `ms` — o trabalho pendente segue solto (best-effort). */
@@ -290,7 +301,58 @@ export function createRelayHandler(ports: RelayPorts): (envelope: Envelope) => P
     // io aceita evento arbitrário (DefaultEventsMap); o shape do `data` é o
     // contrato tipado de socket-events validado na publicação.
     ports.emit(rooms, event, payload.data);
+
+    // F61-S04 — o dono no celular. Sai DEPOIS do emit e sem `await`: o relay é o
+    // último trecho entre o banco e o navegador, e nada aqui pode atrasar ou
+    // derrubar o tempo real. Um aviso perdido é ruim; "o tempo real some às
+    // vezes" é um bug caro de diagnosticar.
+    if (event === 'message:new') {
+      const alvo = inboundParaNotificar(payload.data);
+      if (alvo !== null) {
+        // `.catch()` explícito, não só `void`: `void` descarta o VALOR, não a
+        // rejeição — uma promise rejeitada aqui viraria unhandled rejection e,
+        // dependendo da configuração do Node, derrubaria o processo da API
+        // inteira por causa de um aviso que não saiu.
+        (ports.notifyInbound ?? notifyInboundMessage)({
+          workspaceId: envelope.workspaceId,
+          conversationId: alvo.conversationId,
+          messageId: alvo.messageId,
+        }).catch((err: unknown) => {
+          log.warn('aviso de inbound falhou — o tempo real seguiu normalmente', {
+            erro: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
+    }
   };
+}
+
+/**
+ * Extrai do `message:new` o que a notificação precisa — e devolve `null` quando
+ * não há nada a notificar.
+ *
+ * Só mensagem **do contato** vira aviso: notificar o dono da própria resposta que
+ * ele acabou de mandar é a forma mais rápida de ele desligar as notificações.
+ *
+ * `data` é `unknown` no contrato do relay (o shape é validado na publicação), por
+ * isso o parse defensivo aqui: um payload de uma versão futura do worker não pode
+ * derrubar o relay.
+ */
+export function inboundParaNotificar(
+  data: unknown,
+): { conversationId: string; messageId: string } | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const raiz = data as Record<string, unknown>;
+  const conversationId = raiz['conversationId'];
+  const message = raiz['message'];
+  if (typeof conversationId !== 'string' || typeof message !== 'object' || message === null) {
+    return null;
+  }
+  const msg = message as Record<string, unknown>;
+  if (msg['senderType'] !== 'contact') return null;
+  const messageId = msg['id'];
+  if (typeof messageId !== 'string') return null;
+  return { conversationId, messageId };
 }
 
 /**
