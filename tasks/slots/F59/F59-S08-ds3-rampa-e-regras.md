@@ -2,7 +2,7 @@
 id: F59-S08
 title: DS 3.0 opção A — rampa de marca, motion e regras em lint
 phase: F59
-status: in-progress
+status: review
 priority: medium
 estimated_size: S
 depends_on: []
@@ -12,6 +12,7 @@ source_docs:
   - docs/DESIGN_SYSTEM.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T13:23:12Z
+completed_at: 2026-09-09T13:32:19Z
 
 ---
 # F59-S08 — DS 3.0 opção A — rampa de marca, motion e regras em lint
