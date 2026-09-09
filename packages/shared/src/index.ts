@@ -28,6 +28,9 @@ export * from './markets';
 // --- Portão de envio: decide se a mensagem pode sair (F59-S04) ---
 export * from './consent';
 
+// --- Detector de revogacao em linguagem natural (F59-S06) ---
+export * from './revocation';
+
 // --- Auth (IAuthProvider) ---
 export * from './auth';
 

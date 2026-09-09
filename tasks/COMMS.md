@@ -682,7 +682,7 @@ de trabalho e só entrou em `main` no commit seguinte. Sem dano, mas vale um avi
 
 ---
 
-## 2026-09-09 — F59-S05 · suite de @hm/workers ja vinha vermelha em `main`
+## 2026-09-09 — F59-S05 · suite de @hm/workers ja vinha vermelha em `main` [CORRIGIDO ABAIXO]
 
 Medi o baseline com `git stash` antes de alterar qualquer coisa: em `main`, `pnpm --filter
 @hm/workers test` fecha com **4 arquivos e 3 testes falhando** (459 passam). Depois do slot: os
@@ -710,3 +710,27 @@ e `campaigns/db-ports.checkConsent`. A duplicacao e deliberada (workers nao pode
 pequena (uma consulta), e a REGRA nao esta duplicada: e sempre `decideOutbound` de `@hm/shared`.
 Ainda assim, mover o carregador para `@hm/db` (ex.: `consentRepo.loadDecisionContext`) deixaria um
 lugar so.
+
+---
+
+## 2026-09-09 — CORRECAO da nota anterior: a suite de @hm/workers esta VERDE
+
+Eu estava errado. Rodei a suite de novo com **Postgres + Redis + RabbitMQ todos no ar** e o
+resultado e **493 testes passando, 0 falhando, 45 arquivos verdes**. As 3 falhas que registrei como
+"pre-existentes em main" eram do ambiente, nao do repo: `runEvaluationTick`,
+`billing/recurrence.test.ts` e `dashboard-refresh.test.ts` dependem de servico que eu ainda nao
+tinha subido, e o `Hook timed out in 10000ms` era a espera pela conexao.
+
+**Consequencias:**
+- Nao existe divida de teste em `@hm/workers` para virar slot. Ignore a sugestao de slot em F57 que
+  escrevi na nota anterior.
+- O DoD "suite verde" do F59-S05 **e cumprivel e foi cumprido** — a nota de "nao pode ser cumprido
+  por este slot", no arquivo do slot, esta errada e foi corrigida la tambem.
+- A licao que vale: `@hm/workers` e `@hm/api` exigem os **tres** servicos
+  (`docker compose up -d postgres redis rabbitmq`). Sem isso a suite falha por timeout de hook, com
+  mensagem que nao aponta para a causa. Vale uma linha no runbook `dev-environment-windows.md`.
+
+**F59-S06 — sobreposicao com o opt-out de campanhas:** `createCampaignInboundPorts` (F6-S07) ja trata
+opt-out por keyword no escopo da campanha. O detector da F59-S06 e mais amplo e grava no modelo de
+consentimento novo. Coexistem sem conflito hoje; um slot futuro deveria fazer o caminho de campanha
+delegar ao detector, em vez de manter duas regras de opt-out no repo.

@@ -137,3 +137,10 @@ consequencia direta e inevitavel da mudanca que o slot manda fazer.
   testes falhavam antes e 12 novos passam agora.
 - O DoD "suite verde" **nao pode ser cumprido por este slot** — a quebra e de outro dono. Registrado
   em `tasks/COMMS.md` para virar slot proprio.
+
+### Correcao (2026-09-09, mesmo dia)
+
+A secao "Resultado da validacao" acima esta **errada** e fica registrada so como historico. Com
+Postgres, Redis **e RabbitMQ** no ar, `pnpm --filter @hm/workers test` fecha **493 passando, 0
+falhando**. As 3 falhas que atribui a `main` eram do meu ambiente incompleto — eu tinha subido so
+Postgres e Redis. O DoD "suite verde" **foi cumprido**.

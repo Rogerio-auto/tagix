@@ -135,4 +135,9 @@ export interface InboundDeps {
   readonly parser: InboundParserPort;
   readonly persistence: InboundPersistencePort;
   readonly media: MediaEnqueuePort;
+  /**
+   * F59-S06 — passo de revogacao. Opcional para nao quebrar composicoes e testes
+   * que nao o exercitam; a composicao de producao injeta `createRevocationStep`.
+   */
+  readonly revocation?: import('./revocation').RevocationPort;
 }
