@@ -2,7 +2,7 @@
 id: F61-S11
 title: Mídia honesta — recuperar o recuperável, admitir o perdido
 phase: F61
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: []
@@ -10,6 +10,7 @@ blocks: []
 source_docs:
   - docs/features/APP_MOBILE_PLAN.md
 agent_id: backend-engineer
+claimed_at: 2026-09-09T19:42:10Z
 
 ---
 # F61-S11 — Mídia honesta
