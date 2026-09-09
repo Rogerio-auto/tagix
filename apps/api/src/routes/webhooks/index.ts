@@ -17,6 +17,7 @@ import { Router } from 'express';
 import { createMetaWebhookRouter } from './meta';
 import { createWahaWebhookRouter } from './waha';
 import { createAbacatePayWebhookRouter } from './abacatepay';
+import { createInertEmailWebhookRouter } from './email';
 
 /** Router agregado: `/webhooks/meta` (WA + IG), `/webhooks/waha` e `/webhooks/abacatepay`. */
 export function createWebhooksRouter(): Router {
@@ -26,10 +27,16 @@ export function createWebhooksRouter(): Router {
   // F41-S03: webhook de pagamento (HMAC + idempotência + transições). Raw body
   // pelo mesmo motivo do Meta — o express.raw é aplicado no nível da rota.
   router.use(createAbacatePayWebhookRouter());
+  // F60-S08: e-mail. Inerte por ora — o provedor sem segredo recusa toda
+  // assinatura, entao as rotas respondem 403 ate a F60-S04 injetar o real.
+  // Rota de webhook aberta seria pior que rota que nao funciona.
+  router.use(createInertEmailWebhookRouter());
   return router;
 }
 
 export { createMetaWebhookRouter } from './meta';
 export { createWahaWebhookRouter } from './waha';
 export { createAbacatePayWebhookRouter } from './abacatepay';
+export { createEmailWebhookRouter, normalizeInbound } from './email';
+export type { EmailWebhookDeps, NormalizedInboundEmail } from './email';
 export { closeWebhookPublisher } from './publisher';

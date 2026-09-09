@@ -165,5 +165,8 @@ export {
 } from './email/threading';
 export { EmailChannelAdapter, EMAIL_CAPABILITIES } from './email/adapter';
 export type { EmailAdapterOptions } from './email/adapter';
+export { htmlToText, sanitizeEmailHtml } from './email/sanitize';
+export { SOFT_BOUNCE_LIMIT, decideOnEmailEvent, resetsSoftBounces } from './email/bounce';
+export type { BounceAction, BounceDecision } from './email/bounce';
 export { FakeEmailProvider } from './email/fake-provider';
 export type { FakeEmailProviderOptions, SentEmail } from './email/fake-provider';
