@@ -20,6 +20,11 @@ import {
 } from '@hm/channels';
 import type { Envelope } from '@hm/shared/mq';
 import { handleOutboundEnvelope } from './worker';
+// O portão de consentimento (F59-S05) é parte do pipeline: seu default é o
+// portão REAL, que toca o banco. Estes testes exercitam roteamento/retry, não
+// conformidade — então injetam explicitamente o permissivo. A conformidade tem
+// suíte própria em `consent-gate.test.ts`.
+import { allowAllConsentGate } from './consent-gate';
 import {
   MAX_SEND_ATTEMPTS,
   TransientSendError,
@@ -307,6 +312,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
       handleOutboundEnvelope(envelope, {
         deps: d.deps,
         logger,
+        consentGate: allowAllConsentGate,
         attempts,
         sendGuard: guard(null),
       }),
@@ -333,6 +339,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
     await handleOutboundEnvelope(envelope, {
       deps: d.deps,
       logger,
+      consentGate: allowAllConsentGate,
       attempts,
       sendGuard: guard(null),
     });
@@ -361,6 +368,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
     await handleOutboundEnvelope(envelope, {
       deps: d.deps,
       logger,
+      consentGate: allowAllConsentGate,
       attempts,
       sendGuard: guard(null),
     });
@@ -380,6 +388,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
       handleOutboundEnvelope(envelope, {
         deps: d.deps,
         logger,
+        consentGate: allowAllConsentGate,
         attempts,
         sendGuard: guard(null),
       }),
@@ -400,7 +409,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
     const attempts = attemptStore(1);
 
     await expect(
-      handleOutboundEnvelope(envelope, { deps: d.deps, logger, attempts, sendGuard: guard(null) }),
+      handleOutboundEnvelope(envelope, { deps: d.deps, logger, consentGate: allowAllConsentGate, attempts, sendGuard: guard(null) }),
     ).rejects.toBe(boom);
 
     expect(attempts.record).not.toHaveBeenCalled();
@@ -421,6 +430,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
       handleOutboundEnvelope(envelope, {
         deps: d.deps,
         logger,
+        consentGate: allowAllConsentGate,
         attempts: attemptStore(1),
         sendGuard: guard(null),
       }),
@@ -431,6 +441,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
     await handleOutboundEnvelope(envelope, {
       deps: d.deps,
       logger,
+      consentGate: allowAllConsentGate,
       attempts: attemptStore(2),
       sendGuard: guard('wamid.PRIOR'),
     });
@@ -467,7 +478,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
           presence: 'typing',
         },
       },
-      { deps: d.deps, logger, attempts, sendGuard: guard(null) },
+      { deps: d.deps, logger, consentGate: allowAllConsentGate, attempts, sendGuard: guard(null) },
     );
 
     expect(attempts.record).not.toHaveBeenCalled();

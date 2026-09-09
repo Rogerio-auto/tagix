@@ -100,6 +100,13 @@ function makeDb(init: {
     r.status === 'pending' && (r.nextStepAt === null || r.nextStepAt <= now);
 
   const ports: CampaignTickPorts = {
+    // F59-S05: portao permissivo — este arquivo cobre drip/terminal/teto diario.
+    checkConsent: async () => ({
+      allowed: true as const,
+      usedFallbackTimezone: false,
+      timezone: 'America/Sao_Paulo',
+    }),
+    denyRecipient: async () => undefined,
     listDueCampaigns: async () => [],
     fetchQuality: async (): Promise<ChannelHealth> => ({
       qualityRating: 'GREEN',

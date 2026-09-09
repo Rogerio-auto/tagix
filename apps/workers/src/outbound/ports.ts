@@ -8,7 +8,7 @@
  * slot. Cada porta é injetável para teste.
  */
 import type { Channel, IChannelAdapter, SendResult } from '@hm/channels';
-import type { ViewStatus } from '@hm/shared';
+import type { MessagePurpose, OutboundDecision, ChannelProvider, ViewStatus } from '@hm/shared';
 import type { OutboundJob } from './job';
 
 /**
@@ -91,3 +91,22 @@ export interface OutboundDeps {
 }
 
 export type { SendResult };
+
+/**
+ * Porta do portão de consentimento (F59-S05 — AGENCIA_PLAN §4.4).
+ *
+ * O worker não decide conformidade: pergunta. A decisão vive em
+ * `decideOutbound` (`@hm/shared`), pura e testada sem banco; o carregamento do
+ * contexto vive em `consent-gate.ts`. Injetável para teste.
+ */
+export interface ConsentGatePort {
+  check(input: ConsentCheckInput): Promise<OutboundDecision>;
+}
+
+export interface ConsentCheckInput {
+  readonly workspaceId: string;
+  readonly conversationId: string;
+  readonly provider: ChannelProvider;
+  readonly purpose: MessagePurpose;
+  readonly now?: Date;
+}
