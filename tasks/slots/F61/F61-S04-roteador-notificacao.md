@@ -2,7 +2,7 @@
 id: F61-S04
 title: Roteador de notificação — dedupe, preferência por evento e fuso do membro
 phase: F61
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F61-S03]
