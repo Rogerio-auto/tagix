@@ -2,7 +2,7 @@
 id: F61-S02
 title: Tela Hoje — a visão de dono
 phase: F61
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
