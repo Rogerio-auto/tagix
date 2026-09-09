@@ -114,3 +114,9 @@ export { customValuesRepo, resolveCustomValues } from './repos/custom-values';
 export type { CustomValueView, UpsertCustomValueInput, ResolveResult } from './repos/custom-values';
 export type { CustomValueKind, WorkspaceCustomValue } from './schema/custom_values';
 export { CUSTOM_VALUE_KINDS, CUSTOM_VALUE_KEY_PATTERN } from './schema/custom_values';
+
+// Identidades do contato (F60-S01).
+export { contactIdentitiesRepo, normalizeIdentity } from './repos/contact-identities';
+export type { IdentityRef } from './repos/contact-identities';
+export { CONTACT_IDENTITY_KINDS } from './schema/contact_identities';
+export type { ContactIdentity, ContactIdentityKind } from './schema/contact_identities';
