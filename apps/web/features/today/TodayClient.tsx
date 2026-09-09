@@ -30,7 +30,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { api } from '@/shared/lib/api-client';
-import { InstallPrompt } from '@/shared/pwa';
+import { InstallPrompt, PushToggle } from '@/shared/pwa';
 
 type UrgencyBand = 'esfriando' | 'atencao' | 'agora';
 
@@ -315,6 +315,9 @@ export function TodayClient(): React.JSX.Element {
           que abre o celular entre uma tarefa e outra — e no iPhone a instalação é
           a condição para o aviso de lead novo existir. */}
       <InstallPrompt />
+      {/* F61-S03: a sequência natural é instalar → ligar aviso. O interruptor só
+          aparece quando faz sentido pedir (ver `decidePushState`). */}
+      <PushToggle />
 
       {/* ── Aguardando resposta ─────────────────────────────────────────────── */}
       <section aria-labelledby="hoje-esperando">

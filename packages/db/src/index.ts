@@ -97,6 +97,11 @@ export type { NicheBlueprint, InstantiateResult } from './seed/niches/types';
 
 export const DB_PKG = '@hm/db' as const;
 
+// Assinaturas de Web Push por dispositivo (F61-S03).
+export { pushRepo } from './repos/push';
+export type { PushSubscriptionInput } from './repos/push';
+export type { PushSubscriptionRow, NewPushSubscription } from './schema/push';
+
 // Consentimento e supressão por canal (F59-S03).
 export { consentRepo } from './repos/consent';
 export type { ConsentSnapshot, GrantConsentInput, RevokeConsentInput } from './repos/consent';

@@ -40,6 +40,13 @@ x-app-env: &app-env
   R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
   R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
   R2_BUCKET: ${R2_BUCKET:-}
+  # Web Push VAPID (F61-S03). Sem as chaves, o canal de aviso fica DESLIGADO e o
+  # resto do produto sobe normalmente — o interruptor de notificação some da tela
+  # em vez de aparecer e falhar. `mailto:` é exigido pela especificação VAPID: é
+  # como o serviço de push avisa o dono da aplicação quando algo está errado.
+  VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+  VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+  VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:suporte@leadium.com.br}
   BILLING_ENABLED: ${BILLING_ENABLED:-false}
   # Pagamentos AbacatePay (F42). VALORES vêm do .env de deploy na VPS — NUNCA
   # commitados. Sem ABACATEPAY_API_KEY, o provider cai no Mock (mock.pay.local).

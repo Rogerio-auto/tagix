@@ -175,6 +175,62 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// ─── Web Push (F61-S03) ──────────────────────────────────────────────────────
+//
+// A notificação NÃO carrega conteúdo de mensagem de cliente, por decisão de
+// privacidade (APP_MOBILE_PLAN §4.3): celular de obra se perde, e notificação de
+// tela bloqueada é lida por quem estiver com o aparelho na mão. O servidor manda
+// rótulo e origem ("Lead novo · WhatsApp"); o conteúdo aparece depois de abrir o
+// app.
+
+/** Texto de último caso: push sem payload legível ainda precisa avisar alguém. */
+const AVISO_PADRAO = { title: 'Leadium', origin: 'Novidade no seu atendimento', url: '/hoje' };
+
+self.addEventListener('push', (event) => {
+  event.waitUntil(
+    (async () => {
+      let dados = AVISO_PADRAO;
+      try {
+        if (event.data) dados = { ...AVISO_PADRAO, ...event.data.json() };
+      } catch {
+        // Payload ilegível (versão futura do servidor, corrupção): mostra o
+        // aviso genérico. Engolir o push em silêncio seria pior — o dono
+        // perderia o lead e nunca saberia por quê.
+      }
+      await self.registration.showNotification(dados.title, {
+        body: dados.origin,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        // `tag` agrupa: cinco avisos de "lead novo" viram um, em vez de uma
+        // pilha que o dono desliga no terceiro dia.
+        tag: dados.tag || 'leadium',
+        data: { url: dados.url || '/hoje' },
+      });
+    })(),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const destino = (event.notification.data && event.notification.data.url) || '/hoje';
+
+  event.waitUntil(
+    (async () => {
+      const clientes = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      // Focar a aba que já existe, em vez de abrir outra: o dono tocando na
+      // notificação três vezes não pode acabar com três instâncias do app.
+      for (const c of clientes) {
+        if ('focus' in c) {
+          await c.focus();
+          if ('navigate' in c) await c.navigate(destino).catch(() => undefined);
+          return;
+        }
+      }
+      await self.clients.openWindow(destino);
+    })(),
+  );
+});
+
 /**
  * Ativação sob demanda: a página pode pedir a troca de versão quando o usuário
  * aceitar. Nunca por conta própria.
