@@ -2,7 +2,7 @@
 id: F59-S03
 title: Consentimento e supressão por canal
 phase: F59
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F59-S02]
