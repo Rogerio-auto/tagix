@@ -2,7 +2,7 @@
 id: F61-S01
 title: Service worker — app shell, versionamento e a saída de emergência
 phase: F61
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
