@@ -34,6 +34,14 @@ export interface ValidationResult {
 
 /** Step minimo para validacao. */
 export interface ValidationStep {
+  /**
+   * Passo de WhatsApp com modelo aprovado.
+   *
+   * F60-S07: esta validação existe SÓ para `kind = 'wa_template'`. Passo de
+   * e-mail não tem modelo e nunca chega aqui — quem monta a lista filtra na
+   * origem. Manter o tipo não-nulo é o que impede alguém achar que "sem modelo"
+   * é um caso a tratar aqui dentro.
+   */
   readonly templateName: string;
   readonly languageCode: string;
 }

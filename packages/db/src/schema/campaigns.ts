@@ -86,16 +86,39 @@ export const campaignSteps = pgTable(
       .notNull()
       .references(() => campaigns.id, { onDelete: 'cascade' }),
     position: integer('position').notNull(),
-    templateName: text('template_name').notNull(),
+    /**
+     * Forma do passo (F60-S07). `wa_template` e o legado e continua sendo o
+     * default: modelo aprovado da Meta. `email` carrega assunto e corpo;
+     * `text` e mensagem livre (SMS, quando entrar).
+     */
+    kind: text('kind').notNull().default('wa_template').$type<'wa_template' | 'email' | 'text'>(),
+    /** Obrigatorio em `wa_template`; nulo nas outras formas (CHECK garante). */
+    templateName: text('template_name'),
     languageCode: text('language_code').notNull().default('pt_BR'),
     templateComponents: jsonb('template_components')
       .$type<TemplateComponents>()
       .notNull()
       .default([]),
+    /** E-mail: assunto. Obrigatorio quando `kind = 'email'`. */
+    emailSubject: text('email_subject'),
+    emailBodyText: text('email_body_text'),
+    emailBodyHtml: text('email_body_html'),
     delaySeconds: integer('delay_seconds').notNull().default(0),
     stopOnReply: boolean('stop_on_reply').notNull().default(true),
   },
-  (t) => [unique('campaign_steps_position_uq').on(t.campaignId, t.position)],
+  (t) => [
+    unique('campaign_steps_position_uq').on(t.campaignId, t.position),
+    check('campaign_steps_kind_chk', sql`${t.kind} in ('wa_template','email','text')`),
+    // Coerencia por forma: passo de e-mail sem assunto so falharia na hora do
+    // envio, com a campanha rodando e o cliente esperando.
+    check(
+      'campaign_steps_shape_chk',
+      sql`(${t.kind} = 'wa_template' and ${t.templateName} is not null)
+        or (${t.kind} = 'email' and ${t.emailSubject} is not null
+            and (${t.emailBodyText} is not null or ${t.emailBodyHtml} is not null))
+        or (${t.kind} = 'text' and ${t.emailBodyText} is not null)`,
+    ),
+  ],
 );
 
 export const campaignRecipients = pgTable(
