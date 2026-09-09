@@ -2,7 +2,7 @@
 id: F60-S08
 title: E-mail — recebimento, retorno e supressão por bounce
 phase: F60
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F60-S03]
