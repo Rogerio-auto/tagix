@@ -2,7 +2,7 @@
 id: F61-S05
 title: Instalação no iPhone — detecção de standalone e convite honesto
 phase: F61
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F61-S01]
