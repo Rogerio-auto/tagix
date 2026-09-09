@@ -753,3 +753,9 @@ workspace `market='US'` entrar.
 inline, que viola `@typescript-eslint/consistent-type-imports`. Entrou na F59-S06 porque a validacao
 daquele slot rodava typecheck e test, mas **nao lint**. Vale revisar os blocos `## Validacao` dos
 slots: quem toca TS deveria rodar `pnpm lint` tambem.
+
+**F60-S02 — defeito corrigido na F59-S04:** `decideOutbound` aplicava a janela horaria tambem a
+mensagem `transactional`, o que bloquearia um atendente de responder as 21h05 a quem escreveu as
+21h04. Passou despercebido porque o primeiro consumidor do portao (campanha) e sempre `marketing`.
+Corrigido: a janela vale so para marketing; supressao continua vencendo tudo. **Licao:** portao com
+um consumidor so nao esta validado — o segundo consumidor e que revela a assimetria.
