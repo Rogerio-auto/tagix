@@ -250,6 +250,7 @@ sabe qual anúncio gerou a ligação.
 | **F60-G** | Detector de revogação em NL (pt + en) + supressão + esclarecimento único |
 | **F60-H** | Painel de saúde de entrega por canal |
 | **F60-I** | Messenger |
+| **F60-J** | Campanhas multicanal: capacidade por adapter, conteúdo por canal, público e métrica por canal (§12) |
 | *(depois)* | Avaliações e insights do Google · voz |
 
 **Dependência dura:** F60-G depende do motor de consentimento da F59. E nenhum disparo frio
@@ -278,3 +279,43 @@ Verificadas em 2026-09-08:
 - [Google Business Profile Updates: Removal of Chat and Call History — GoSite](https://www.gosite.com/blog/google-business-profile-updates-removal-of-chat-and-call-history)
 - [A2P 10DLC Compliance: 2026 Registration & Approval Guide — JustCall](https://justcall.io/blog/10dlc-compliance-guide.html)
 - [The TCPA's New Opt-Out Rules Take Effect on April 11, 2025 — BCLP](https://www.bclplaw.com/en-US/events-insights-news/the-tcpas-new-opt-out-rules-take-effect-on-april-11-2025-what-does-this-mean-for-businesses.html)
+
+---
+
+## 12. Campanhas multicanal — requisito de 2026-09-09
+
+Decisão do Rogério: **tem que ser possível criar campanha para os outros canais**, não só WhatsApp.
+
+### 12.1 Onde o modelo atual amarra
+
+O criador de campanhas nasceu WhatsApp-cêntrico e a F58 reforçou isso: o fluxo guiado gira em torno
+de **modelo de mensagem HSM aprovado pela Meta**, que é um conceito que só existe no WhatsApp
+oficial. Em e-mail o equivalente é assunto + corpo HTML; em SMS é um texto com segmentação e limite
+de caracteres; em Instagram não existe HSM nenhum e a janela é outra.
+
+O sintoma concreto no código: `F58-S06` já devolve "canais elegíveis" e recusa `triggered`, mas a
+elegibilidade hoje se resume a "WhatsApp oficial com credencial válida permite modelos HSM". A
+generalização certa não é acrescentar `if` por canal — é o mesmo movimento do §3.1: **capacidade
+declarada pelo adapter**, e o criador perguntando em vez de saber.
+
+### 12.2 O desenho
+
+- **Conteúdo por canal, não conteúdo único traduzido.** Uma campanha tem um objetivo e um público;
+  o conteúdo é declarado por canal, porque as restrições são diferentes de verdade. Forçar um texto
+  só produz SMS truncado e e-mail sem assunto.
+- **Capacidade de campanha vem do adapter**: exige modelo aprovado? tem assunto? tem limite de
+  caracteres? aceita mídia? qual a janela? O wizard monta os passos a partir disso.
+- **O portão da F59-S05 já cobre todos os canais** — `checkConsent` roda por destinatário antes do
+  enqueue, e a política vem do market pack por canal. Campanha de e-mail nos EUA não vai exigir
+  opt-in; de SMS vai, e vai bloquear enquanto o 10DLC não estiver aprovado. Isso já funciona: não é
+  trabalho novo, é consequência do que ficou pronto.
+- **Público por canal.** Um contato com e-mail e sem telefone é elegível para campanha de e-mail e
+  não para SMS. A estimativa de público precisa refletir isso, senão o cliente vê "1.000 contatos" e
+  recebe 300 entregas.
+- **Métrica por canal.** Abertura e clique existem em e-mail e não em WhatsApp; entrega e leitura
+  existem em WhatsApp e não em e-mail. O relatório não pode fingir que é a mesma coisa.
+
+### 12.3 Sequência
+
+Isto **depende** dos adapters: não dá para criar campanha de e-mail antes de existir envio de
+e-mail. Entra depois de F60-C/D (e-mail) e F60-F (SMS), como slot próprio — ver §10.

@@ -19,7 +19,7 @@
 | 5 | Meta Business Manager | **BM da agência com acesso delegado aos ativos do cliente** (§6) |
 | 6 | Mercados | **Brasil E Estados Unidos**, no mesmo produto (§3) |
 | 7 | Canais | **Paridade com o GoHighLevel**: e-mail, SMS, webchat, Messenger, voz — ver [`CANAIS_PLAN.md`](./CANAIS_PLAN.md) |
-| 8 | Nicho | **Pendente** — recomendação fundamentada em §7 |
+| 8 | Nicho | **Decidido (2026-09-09):** EUA = reforma e construção, um só. Brasil = múltiplos nichos abertos (energia solar, clínicas, e outros). Ver §7.1 |
 | 9 | Publicação de conteúdo | Produz + agenda + publica (Instagram/Facebook, TikTok) |
 | 10 | Idioma do conteúdo | Bilíngue por padrão (pt-BR + en-US) |
 
@@ -394,7 +394,7 @@ regulado.
 | Clínicas médicas e odontológicas | HIPAA + promessa regulada. Ticket ótimo, complexidade alta demais para o primeiro |
 | Corretores de imóveis | Mercado de ferramenta saturadíssimo e comissão demorada |
 
-### Quantos: **um**
+### Quantos: **um nos EUA** — no Brasil, a resposta é outra
 
 Um nicho, um mercado, 3–5 clientes, um template. O segundo nicho só depois do primeiro template
 sobreviver a três clientes **sem virar customização**. Esse é o teste — se o cliente 3 exigiu tanto
@@ -498,3 +498,49 @@ Fatos regulatórios verificados em 2026-09-08:
 
 Nada aqui é aconselhamento jurídico. Antes do primeiro disparo americano, validar §4 com advogado
 de TCPA — o custo de uma consulta é ordens de grandeza menor que o de uma ação coletiva.
+
+---
+
+## 7.1 Nicho por mercado — decisão de 2026-09-09
+
+A decisão do Rogério é **assimétrica entre os mercados**, e isso é coerente com a realidade de cada
+um:
+
+| Mercado | Estratégia | Por quê |
+|---|---|---|
+| **EUA** | **Um nicho: reforma e construção**, começando pela Flórida | Praça nova, sem base instalada, e o custo de errar é alto. O template só fecha se for nichado (§7). Ticket alto faz a venda ser fácil |
+| **Brasil** | **Múltiplos nichos abertos** — energia solar, clínicas e outros | Você já opera aqui, já tem rede e referência, e o custo marginal de mais um nicho é menor quando o funil já é conhecido |
+
+**Isto não quebra a premissa do §7** — quebra o escopo dela. O que o template exige é ser nichado
+*por template*, não a agência ser monolítica: cada nicho tem o seu, e o teste dos três clientes vale
+por nicho. Uma agência com quatro nichos e quatro templates maduros escala; uma com quatro nichos e
+nenhum template não.
+
+### O sistema de blueprints já existe — e isso muda o §3.3
+
+Descoberta ao implementar a F59: `packages/db/src/seed/niches/` **já tem um sistema completo de
+blueprint por nicho** (F43, ONBOARDING.md §2.1), com sete prontos:
+
+`solar` · `health` · `real_estate` · `retail` · `law` · `education` · `agency`
+
+Cada blueprint é a fonte única do nicho: funil com estágios e campos customizados, agentes, etiquetas,
+tipos de conversão, departamentos, respostas rápidas e flows. `workspaces.onboarding.niche_key`
+registra qual foi aplicado, e `instantiate.ts` materializa tudo num workspace novo.
+
+Ou seja: **o "template de workspace" do §3.3 não é greenfield.** Já existe e funciona. O que falta é
+menor e mais preciso do que eu tinha planejado:
+
+1. **Dimensão de mercado no blueprint.** Os sete atuais são implicitamente BR — `solar` tem
+   `monthly_bill_brl` e `system_value_brl`, nomes de estágio em português. Um blueprint de
+   `remodeling` para os EUA precisa de moeda, idioma e campos próprios. A forma proposta continua
+   sendo `<nicho>/<mercado>`, mas agora como **extensão de um sistema existente**, não como sistema
+   novo.
+2. **Blueprint `remodeling` (US).** Campos que importam: tipo de obra (cozinha, banheiro, telhado,
+   piso, pintura), faixa de orçamento em USD, prazo desejado, imóvel próprio ou alugado, cidade.
+   Estágios: novo lead → contato feito → visita agendada → orçamento enviado → fechado / perdido.
+3. **Valores personalizados no blueprint.** Com a F59-S07 pronta, um blueprint pode declarar as
+   chaves que o nicho usa (`{{link_review}}`, `{{meta_dataset_id}}`) já vazias, para o onboarding
+   preencher — que é o mecanismo que o research chamava de "valores personalizados".
+
+**Para o Brasil, `solar` e `health` cobrem energia solar e clínicas hoje.** O trabalho lá não é criar
+blueprint, é maturá-los com o aprendizado dos primeiros clientes.
