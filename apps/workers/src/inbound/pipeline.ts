@@ -111,6 +111,31 @@ export async function runInboundPipeline(
 
   const routing = extractRoutingHints(provider, raw);
 
+  // 0) F59-S06 — revogacao ANTES de persistir. Roda em memoria e so toca o banco
+  //    quando detecta algo, entao a conversa normal nao paga nada. A supressao
+  //    entra antes de qualquer resposta sair: o portao do outbound (F59-S05)
+  //    recusa envio a contato suprimido, inclusive transacional.
+  //
+  //    Falha aqui NAO derruba o inbound: perder a mensagem do cliente e pior que
+  //    honrar a revogacao um ciclo depois. O erro fica visivel no log.
+  if (deps.revocation !== undefined) {
+    try {
+      const rev = await deps.revocation.handle(provider, routing, events, logger);
+      if (rev.suppressed > 0 || rev.flagged > 0) {
+        logger.warn('inbound: revogacao processada', {
+          provider,
+          suppressed: rev.suppressed,
+          flagged: rev.flagged,
+        });
+      }
+    } catch (err: unknown) {
+      logger.error('inbound: passo de revogacao falhou (mensagem segue sendo persistida)', {
+        provider,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   // 1) Persiste in-process PRIMEIRO (@hm/db+RLS): dedup→contact→conversation→message→
   //    last→cache→socket(message:new)→status(S20)→flow(ai_mode='on').
   //    ORDEM CRÍTICA: a mensagem precisa EXISTIR (commitada) antes da mídia ser
