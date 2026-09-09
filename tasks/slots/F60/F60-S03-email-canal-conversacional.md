@@ -2,7 +2,7 @@
 id: F60-S03
 title: E-mail como canal — fundação, envio e encadeamento
 phase: F60
-status: in-progress
+status: review
 priority: critical
 estimated_size: L
 depends_on: [F60-S01, F60-S02]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/CANAIS_PLAN.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T14:41:22Z
+completed_at: 2026-09-09T15:06:07Z
 
 ---
 # F60-S03 — E-mail como canal: fundação, envio e encadeamento
