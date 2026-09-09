@@ -2,7 +2,7 @@
 id: F57-S07
 title: Backup pré-migration no deploy.sh — dados são sagrados
 phase: F57
-status: available
+status: review
 priority: high
 estimated_size: S
 depends_on: []
@@ -12,8 +12,10 @@ source_docs:
   - scripts/deploy.sh
   - docs/runbooks/restore-from-backup.md
   - docs/audits/2026-08-08-fundacao-hm-init.md
----
+claimed_at: 2026-09-09T18:21:35Z
+completed_at: 2026-09-09T18:23:05Z
 
+---
 # F57-S07 — Deploy aplica 67 migrations em produção sem snapshot prévio
 
 > **Origem:** auditoria de fundação (/hm-init, 2026-08-08). Padrão Higher Mind:

@@ -48,7 +48,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F54   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
-| F57   | 13     | 12   | 0   | 0   | 0   | 0   | 1   |
+| F57   | 13     | 11   | 0   | 0   | 0   | 1   | 1   |
 | F58   | 14     | 9   | 0   | 0   | 0   | 0   | 5   |
 | F59   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -642,7 +642,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F57-S04 | Hardening do workflow — permissions mínimas, actions por SHA, host key pinado    | 🟢 available | high       | —                |
 | F57-S05 | .dockerignore do contexto landing/ + nginx non-root nas imagens estáticas        | 🟢 available | high       | —                |
 | F57-S06 | Dev compose — bind em loopback, portas sem colisão e WAHA pinado/autenticado     | 🟢 available | high       | —                |
-| F57-S07 | Backup pré-migration no deploy.sh — dados são sagrados                           | 🟢 available | high       | —                |
+| F57-S07 | Backup pré-migration no deploy.sh — dados são sagrados                           | 🟣 review    | high       | —                |
 | F57-S08 | Secrets do Swarm em vez de env vars no service spec                              | 🟢 available | medium     | —                |
 | F57-S09 | Build em CI + registry — deploy por digest, não build no nó de produção          | 🟢 available | medium     | F57-S01, F57-S04 |
 | F57-S10 | Lint type-aware (no-floating-promises) + react-hooks no apps/web                 | 🟢 available | medium     | F57-S01          |
