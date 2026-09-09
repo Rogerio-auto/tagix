@@ -142,3 +142,28 @@ export {
   declareCapabilities,
 } from './capabilities';
 export type { ChannelCapability, ChannelLimits, DeclaredCapabilities } from './capabilities';
+
+// Canal de e-mail (F60-S03 — CANAIS_PLAN §4).
+export type {
+  EmailAddress,
+  EmailAttachment,
+  EmailEvent,
+  EmailEventKind,
+  EmailStream,
+  IEmailProvider,
+  InboundEmail,
+  SendEmailInput,
+  SendEmailResult,
+} from './email/provider';
+export {
+  buildReferences,
+  normalizeMessageId,
+  normalizeSubject,
+  parseReferences,
+  replySubject,
+  threadKeyFrom,
+} from './email/threading';
+export { EmailChannelAdapter, EMAIL_CAPABILITIES } from './email/adapter';
+export type { EmailAdapterOptions } from './email/adapter';
+export { FakeEmailProvider } from './email/fake-provider';
+export type { FakeEmailProviderOptions, SentEmail } from './email/fake-provider';

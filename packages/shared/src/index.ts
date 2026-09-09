@@ -17,7 +17,10 @@ export type ConversationId = Brand<string, 'ConversationId'>;
 export * from './permissions';
 
 // --- Providers de canal (vide LIVECHAT.md / INSTAGRAM.md) ---
-export const CHANNEL_PROVIDERS = ['meta_whatsapp', 'meta_instagram', 'waha'] as const;
+// `email` entra na F60-S03. A ordem importa pouco, mas a lista e consumida por
+// `channels_provider_chk` no banco e pela trava de compilacao em `markets.ts`,
+// que exige todo provider ser um `ChannelKind` valido.
+export const CHANNEL_PROVIDERS = ['meta_whatsapp', 'meta_instagram', 'waha', 'email'] as const;
 export type ChannelProvider = (typeof CHANNEL_PROVIDERS)[number];
 
 // --- Market packs: regra por mercado (BR/US) — AGENCIA_PLAN.md §3.1 ---

@@ -61,6 +61,13 @@ export class ChannelInboundParser implements InboundParserPort {
       case 'meta_instagram':
         // F15-S03: parser real do Instagram (DM/story/share/comment/postback/...).
         return this.parsers.metaInstagram(raw);
+      case 'email':
+        // O parse de e-mail depende do provedor (cada um entrega o MIME num
+        // formato) e vive no `EmailChannelAdapter`, que o recebe injetado. Este
+        // parser roteia por payload cru de webhook Meta/WAHA; a rota de e-mail
+        // chama o adapter direto. Devolver `[]` aqui e o comportamento correto,
+        // nao um buraco: nenhum payload de e-mail passa por este caminho.
+        return [];
       default:
         return assertNever(provider);
     }
@@ -84,6 +91,10 @@ export function extractRoutingHints(provider: ChannelProvider, raw: unknown): Ro
       return extractInstagramRouting(raw);
     case 'waha':
       return extractWahaRouting(raw);
+    case 'email':
+      // O canal de e-mail e resolvido pelo endereco de destino, na propria rota
+      // de webhook, e nao por hint extraida do payload cru.
+      return {};
     default:
       return assertNever(provider);
   }

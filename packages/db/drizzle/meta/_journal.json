@@ -512,6 +512,13 @@
       "when": 1781452833000,
       "tag": "0072_f60_contact_identities",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1781452834000,
+      "tag": "0073_f60_email_channel",
+      "breakpoints": true
     }
   ]
 }

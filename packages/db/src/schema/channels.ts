@@ -37,6 +37,11 @@ export const channels = pgTable(
     igUsername: text('ig_username'),
     igAccountType: text('ig_account_type'),
     fbPageId: text('fb_page_id'),
+    // E-mail (F60-S03). `emailDomain` e o dominio autenticado com SPF/DKIM/
+    // DMARC — e ele que decide se a mensagem chega ou cai no spam.
+    emailFrom: text('email_from'),
+    emailFromName: text('email_from_name'),
+    emailDomain: text('email_domain'),
 
     // WAHA
     wahaSessionId: text('waha_session_id'),
@@ -63,7 +68,10 @@ export const channels = pgTable(
     index('idx_channels_provider')
       .on(t.workspaceId, t.provider)
       .where(sql`${t.isActive} = true`),
-    check('channels_provider_chk', sql`${t.provider} in ('meta_whatsapp','meta_instagram','waha')`),
+    check(
+      'channels_provider_chk',
+      sql`${t.provider} in ('meta_whatsapp','meta_instagram','waha','email')`,
+    ),
     check(
       'channels_ig_account_type_chk',
       sql`${t.igAccountType} in ('business','creator') or ${t.igAccountType} is null`,
