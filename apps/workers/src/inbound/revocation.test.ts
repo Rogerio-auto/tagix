@@ -63,7 +63,9 @@ const RAW = {
 
 describe('o passo roda antes de persistir', () => {
   it('é chamado com provider, routing e eventos', async () => {
-    const handle = vi.fn(async () => ({ suppressed: 0, flagged: 0 }));
+    // Tipar o mock pela assinatura da porta: sem isso o TS infere tupla de
+    // argumentos vazia e `mock.calls[0]` fica inacessível.
+    const handle = vi.fn<RevocationPort['handle']>(async () => ({ suppressed: 0, flagged: 0 }));
     const revocation: RevocationPort = { handle };
     const d = deps({
       parser: { parse: vi.fn(() => [mensagem('pare')]) },
@@ -73,9 +75,12 @@ describe('o passo roda antes de persistir', () => {
     await runInboundPipeline('meta_whatsapp', RAW, d.deps, logger);
 
     expect(handle).toHaveBeenCalledOnce();
-    const [provider, , eventos] = handle.mock.calls[0] ?? [];
-    expect(provider).toBe('meta_whatsapp');
-    expect(Array.isArray(eventos)).toBe(true);
+    expect(handle).toHaveBeenCalledWith(
+      'meta_whatsapp',
+      expect.anything(),
+      expect.arrayContaining([expect.objectContaining({ type: 'message' })]),
+      expect.anything(),
+    );
   });
 
   it('roda ANTES da persistência — a supressão precisa valer para a resposta do agente', async () => {
