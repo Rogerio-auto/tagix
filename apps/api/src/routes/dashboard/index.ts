@@ -15,6 +15,7 @@ import { z } from 'zod';
 import type { Role } from '@hm/shared';
 import { requireAuth, withRLS } from '../../middlewares/auth';
 import { drillDown, loadDashboard } from '../../services/dashboard';
+import { loadToday } from './today';
 
 const metricKeySchema = z
   .string()
@@ -30,6 +31,15 @@ const drillParamSchema = z
 export function createDashboardRouter(): Router {
   const router = Router();
   const guard = [requireAuth, withRLS] as const;
+
+  // GET /api/dashboard/today — a visão de dono (F61-S02). Uma chamada só: a tela
+  // abre no 4G, muitas vezes na obra, e três requisições em cascata são meio
+  // segundo a mais e três chances de a tela ficar pela metade.
+  router.get('/api/dashboard/today', ...guard, async (req: Request, res: Response) => {
+    const auth = req.auth!;
+    const payload = await req.scoped!((tx) => loadToday(tx, { workspaceId: auth.workspace.id }));
+    res.json(payload);
+  });
 
   // GET /api/dashboard/me — payload role-aware completo.
   router.get('/api/dashboard/me', ...guard, async (req: Request, res: Response) => {
