@@ -2,7 +2,7 @@
 id: F59-S01
 title: Market pack como fonte única de regra por mercado
 phase: F59
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []

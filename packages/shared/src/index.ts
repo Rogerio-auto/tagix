@@ -20,6 +20,11 @@ export * from './permissions';
 export const CHANNEL_PROVIDERS = ['meta_whatsapp', 'meta_instagram', 'waha'] as const;
 export type ChannelProvider = (typeof CHANNEL_PROVIDERS)[number];
 
+// --- Market packs: regra por mercado (BR/US) — AGENCIA_PLAN.md §3.1 ---
+// Fonte única de moeda, idioma, fuso, canais e política de outbound. Nenhuma
+// regra de conformidade vive fora deste módulo.
+export * from './markets';
+
 // --- Auth (IAuthProvider) ---
 export * from './auth';
 
