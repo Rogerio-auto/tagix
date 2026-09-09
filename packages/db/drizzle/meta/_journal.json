@@ -540,6 +540,13 @@
       "when": 1781452837000,
       "tag": "0076_f61_push_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1781452838000,
+      "tag": "0077_f61_notification_deliveries",
+      "breakpoints": true
     }
   ]
 }

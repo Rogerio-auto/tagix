@@ -14,7 +14,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Logger } from '@hm/logger';
 import type { Envelope } from '@hm/shared/mq';
 import type { ServerToClientEvent } from '@hm/shared';
-import { createRelayHandler } from './relay';
+import { createRelayHandler, inboundParaNotificar } from './relay';
 
 const WS = '11111111-1111-4111-8111-111111111111';
 
@@ -257,5 +257,83 @@ describe('relay — payload e logging', () => {
       event: 'typing:from_contact',
       rooms: [`ws:${WS}=3`],
     });
+  });
+});
+
+/**
+ * F61-S04 — o gancho de notificação pendurado no relay.
+ *
+ * O relay é o último trecho entre o banco e o navegador. Se ele engolir ou
+ * atrasar um evento, o sintoma é "o tempo real some às vezes" — caro de
+ * diagnosticar e péssimo de explicar. Estes testes existem para que o aviso ao
+ * dono nunca ganhe esse poder.
+ */
+describe('F61-S04 — notificação de inbound', () => {
+  const msgNova = (message: unknown) => ({
+    id: 'env-1',
+    type: 'socket.relay',
+    workspaceId: 'ws-1',
+    ts: Date.now(),
+    payload: {
+      event: 'message:new',
+      target: { conversationId: 'conv-1' },
+      data: { workspaceId: 'ws-1', conversationId: 'conv-1', message },
+    },
+  });
+
+  it('extrai conversa e mensagem de um inbound do contato', () => {
+    expect(inboundParaNotificar({ conversationId: 'c1', message: { id: 'm1', senderType: 'contact' } }))
+      .toEqual({ conversationId: 'c1', messageId: 'm1' });
+  });
+
+  it('NÃO notifica a própria resposta do atendente', () => {
+    // Avisar o dono da mensagem que ele acabou de mandar é a forma mais rápida
+    // de ele desligar as notificações.
+    for (const sender of ['member', 'agent', 'system']) {
+      expect(
+        inboundParaNotificar({ conversationId: 'c1', message: { id: 'm1', senderType: sender } }),
+      ).toBeNull();
+    }
+  });
+
+  it('payload de formato inesperado não vira notificação nem exceção', () => {
+    // Uma versão futura do worker não pode derrubar o relay.
+    for (const lixo of [null, undefined, 'texto', 42, {}, { conversationId: 'c1' }]) {
+      expect(inboundParaNotificar(lixo)).toBeNull();
+    }
+    expect(inboundParaNotificar({ conversationId: 'c1', message: { senderType: 'contact' } })).toBeNull();
+  });
+
+  it('o emit acontece ANTES e INDEPENDENTE do aviso', async () => {
+    const ordem: string[] = [];
+    let resolverAviso: (() => void) | undefined;
+    const handler = createRelayHandler({
+      emit: () => ordem.push('emit'),
+      bumpVersion: () => Promise.resolve(),
+      notifyInbound: () =>
+        new Promise<void>((r) => {
+          ordem.push('aviso-iniciado');
+          resolverAviso = r;
+        }),
+    });
+
+    // Não aguardamos o aviso: se o handler esperasse por ele, este await
+    // penduraria para sempre e o teste estouraria o timeout.
+    await handler(msgNova({ id: 'm1', senderType: 'contact' }));
+
+    expect(ordem).toEqual(['emit', 'aviso-iniciado']);
+    resolverAviso?.();
+  });
+
+  it('aviso que REJEITA não derruba o relay', async () => {
+    const emitidos: string[] = [];
+    const handler = createRelayHandler({
+      emit: (_r, event) => emitidos.push(event),
+      bumpVersion: () => Promise.resolve(),
+      notifyInbound: () => Promise.reject(new Error('push fora do ar')),
+    });
+
+    await expect(handler(msgNova({ id: 'm1', senderType: 'contact' }))).resolves.toBeUndefined();
+    expect(emitidos).toEqual(['message:new']);
   });
 });
