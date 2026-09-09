@@ -2,7 +2,7 @@
 id: F60-S07
 title: Campanhas para os outros canais
 phase: F60
-status: in-progress
+status: review
 priority: critical
 estimated_size: L
 depends_on: [F60-S03]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/CAMPAIGNS.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T16:31:19Z
+completed_at: 2026-09-09T17:22:07Z
 
 ---
 # F60-S07 — Campanhas para os outros canais
