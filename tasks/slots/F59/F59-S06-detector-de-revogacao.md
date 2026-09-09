@@ -2,7 +2,7 @@
 id: F59-S06
 title: Detector de revogação em linguagem natural
 phase: F59
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F59-S03, F59-S04]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/AGENCIA_PLAN.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T06:24:23Z
+completed_at: 2026-09-09T13:12:16Z
 
 ---
 # F59-S06 — Detector de revogação em linguagem natural
