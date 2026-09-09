@@ -2,7 +2,7 @@
 id: F60-S02
 title: Restrição de envio genérica no composer
 phase: F60
-status: blocked
+status: in-progress
 priority: high
 estimated_size: S
 depends_on: [F60-S01]
@@ -10,8 +10,10 @@ blocks: [F60-S03]
 source_docs:
   - docs/features/CANAIS_PLAN.md
   - docs/features/LIVECHAT.md
----
+agent_id: backend-engineer
+claimed_at: 2026-09-09T14:22:32Z
 
+---
 # F60-S02 — Restrição de envio genérica no composer
 
 ## Objetivo
