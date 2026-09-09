@@ -25,6 +25,9 @@ export type ChannelProvider = (typeof CHANNEL_PROVIDERS)[number];
 // regra de conformidade vive fora deste módulo.
 export * from './markets';
 
+// --- Portão de envio: decide se a mensagem pode sair (F59-S04) ---
+export * from './consent';
+
 // --- Auth (IAuthProvider) ---
 export * from './auth';
 
