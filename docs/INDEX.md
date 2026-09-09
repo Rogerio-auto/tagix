@@ -104,6 +104,7 @@ Cada arquivo abaixo é denso e independente. Ler na ordem recomendada para `/hm-
 | 17 | [`features/APP_MOBILE_PLAN.md`](./features/APP_MOBILE_PLAN.md) | Aplicativo do cliente (PWA, iPhone-first) sobre a base da F36: service worker, Web Push, instalação assistida, visão de dono, leitura offline. Decisão PWA vs App Store. Fase F61 |
 | 18 | [`features/CONTENT_STUDIO_PLAN.md`](./features/CONTENT_STUDIO_PLAN.md) | Módulo de conteúdo: voz de marca por evidência, estratégia antes de gravar, material bruto → peças, aprimoramento de fotos, calendário e publicação. Fases F62–F66 |
 | 19 | [`DESIGN_SYSTEM_V3_DELTA.md`](./DESIGN_SYSTEM_V3_DELTA.md) | Análise da proposta DS 3.0 "Agency OS" contra o DS v2 implementado: reversão tipográfica, colisão de tokens, contraste do tema claro, regras a adotar. Artefato em [`design/ds-3.0-agency-os.html`](./design/ds-3.0-agency-os.html) |
+| 20 | [`decisions/ADR-001-provedor-de-email.md`](./decisions/ADR-001-provedor-de-email.md) | Provedor de e-mail: Postmark, com dominio de ENVIO por cliente e dominio de RECEBIMENTO unico e nosso (o `Reply-To` dissolve o roteamento inbound entre N dominios). Fase F60 |
 | 20 | [`research/2026-09-08-modelo-agencia-local.md`](./research/2026-09-08-modelo-agencia-local.md) | Leitura crítica do modelo "monta uma vez, vende para todo negócio local" (GoHighLevel) + delta contra o tagix. Transcrição em `research/transcripts/` |
 
 ### Migração / decisões
