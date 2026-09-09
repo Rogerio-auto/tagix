@@ -2,7 +2,7 @@
 id: F61-S02
 title: Tela Hoje — a visão de dono
 phase: F61
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: []
@@ -12,6 +12,7 @@ source_docs:
   - docs/MOBILE_UX.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T18:54:48Z
+completed_at: 2026-09-09T19:10:38Z
 
 ---
 # F61-S02 — Tela Hoje: a visão de dono
