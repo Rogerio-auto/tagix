@@ -2,7 +2,7 @@
 id: F60-S07
 title: Campanhas para os outros canais
 phase: F60
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: L
 depends_on: [F60-S03]
@@ -10,8 +10,10 @@ blocks: []
 source_docs:
   - docs/features/CANAIS_PLAN.md
   - docs/features/CAMPAIGNS.md
----
+agent_id: backend-engineer
+claimed_at: 2026-09-09T16:31:19Z
 
+---
 # F60-S07 — Campanhas para os outros canais
 
 ## Objetivo
