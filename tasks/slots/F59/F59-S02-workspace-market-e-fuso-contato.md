@@ -2,7 +2,7 @@
 id: F59-S02
 title: Mercado no workspace e fuso no contato
 phase: F59
-status: review
+status: done
 priority: critical
 estimated_size: S
 depends_on: [F59-S01]

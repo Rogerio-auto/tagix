@@ -50,7 +50,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
 | F57   | 13     | 12   | 0   | 0   | 0   | 0   | 1   |
 | F58   | 14     | 9   | 0   | 0   | 0   | 0   | 5   |
-| F59   | 8     | 1   | 5   | 0   | 0   | 1   | 1   |
+| F59   | 8     | 1   | 5   | 0   | 0   | 0   | 2   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -673,7 +673,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ID      | Titulo                                                           | Status      | Prioridade | Depende de       |
 | ------- | ---------------------------------------------------------------- | ----------- | ---------- | ---------------- |
 | F59-S01 | Market pack como fonte única de regra por mercado                | ✅ done      | critical   | —                |
-| F59-S02 | Mercado no workspace e fuso no contato                           | 🟣 review    | critical   | F59-S01          |
+| F59-S02 | Mercado no workspace e fuso no contato                           | ✅ done      | critical   | F59-S01          |
 | F59-S03 | Consentimento e supressão por canal                              | ⏸️ blocked  | critical   | F59-S02          |
 | F59-S04 | Portão de consentimento como serviço único                       | ⏸️ blocked  | critical   | F59-S01, F59-S03 |
 | F59-S05 | Aplicar o portão no outbound, no agendador e nas tools do agente | ⏸️ blocked  | critical   | F59-S04          |
