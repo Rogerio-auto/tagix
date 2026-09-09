@@ -84,3 +84,28 @@ pnpm --filter @hm/api test
 
 - Não-recursivo é decisão de segurança, não simplificação: expansão recursiva com valor controlado
   pelo usuário é caminho de injeção em prompt de agente.
+
+## Decisoes tomadas na execucao (2026-09-09)
+
+1. **`repos/custom-values.ts`**, seguindo a convencao real do pacote (`repos/`, nao `repositories/`).
+2. **Chave exige 2+ caracteres** (`^[a-z][a-z0-9_]{1,48}$`), validada em CHECK no banco E em Zod na
+   borda. A chave e digitada a mao dentro de `{{...}}`: maiuscula, acento, traco e nome de uma letra
+   ficam de fora de proposito.
+3. **Resolver e puro e separado do I/O.** Recebe o mapa ja carregado, entao quem renderiza um flow,
+   um prompt e um e-mail carrega uma vez e substitui N textos sem N consultas.
+4. **Nao recursivo, por seguranca.** O valor e controlado pelo usuario e vai parar dentro de prompt
+   de agente; expandir `{{a}}` cujo conteudo contem `{{b}}` abriria injecao e laco. Testado.
+5. **Chave desconhecida fica intacta e e reportada.** Apagar silenciosamente produz "Ola, , tudo
+   bem?" — mensagem quebrada que ninguem percebe ate o cliente reclamar.
+6. **`secret` cifrado com o mesmo AES-256-GCM dos canais**, nunca volta na listagem (so `hasValue`), e
+   so e decifrado por `resolveMap`, que existe para o motor de renderizacao e nao para a API.
+7. **Bug corrigido antes de commitar:** o `remove` usava `&&` do JavaScript em vez de `and()` do
+   Drizzle, o que apagaria a chave em qualquer workspace. A RLS ainda seguraria, mas depender dela
+   para consertar bug de query e sorte, nao desenho.
+8. **Auditoria ficou de fora.** Nao existe helper `writeAudit` no repo (auditoria e escrita inline
+   com `schema.auditLogs` caso a caso) e replicar isso aqui sairia do escopo do slot. Fica anotado:
+   alteracao de valor personalizado merece entrada em `audit_logs` — sobretudo `secret`.
+
+## Resultado
+
+`@hm/db` 120 verdes (15 novos) · `@hm/api` 1021 verdes · typecheck limpo nos dois.

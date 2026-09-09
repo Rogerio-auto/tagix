@@ -108,3 +108,9 @@ export type {
   ContactConsent,
   ContactSuppression,
 } from './schema/consent';
+
+// Valores personalizados por workspace (F59-S07).
+export { customValuesRepo, resolveCustomValues } from './repos/custom-values';
+export type { CustomValueView, UpsertCustomValueInput, ResolveResult } from './repos/custom-values';
+export type { CustomValueKind, WorkspaceCustomValue } from './schema/custom_values';
+export { CUSTOM_VALUE_KINDS, CUSTOM_VALUE_KEY_PATTERN } from './schema/custom_values';
