@@ -150,7 +150,7 @@ function nextWindowOpening(timeZone: string, at: Date, startHour: number): Date 
  *   2. canal habilitado no mercado
  *   3. registro externo aprovado (10DLC)
  *   4. consentimento                   → só para `marketing`
- *   5. janela horária no fuso do contato
+ *   5. janela horária no fuso do contato → só para `marketing`
  *
  * `transactional` nunca é bloqueado por `no_consent`: confirmação de agendamento
  * não é marketing, e travar isso derruba a operação do cliente.
@@ -213,7 +213,16 @@ export function decideOutbound(input: OutboundDecisionInput): OutboundDecision {
     }
   }
 
-  if (policy.quietHours !== null) {
+  // A janela horária vale para MARKETING, não para transacional.
+  //
+  // A restrição do TCPA é sobre solicitação comercial. Resposta a quem acabou de
+  // escrever, confirmação de agendamento e lembrete não são solicitação — e
+  // bloquear o atendente de responder às 21h05 a quem escreveu às 21h04
+  // quebraria o uso central do produto sem nenhum ganho de conformidade.
+  //
+  // Descoberto na F60-S02, ao ligar o composer ao portão: o primeiro consumidor
+  // (campanha) é sempre marketing, então o defeito não aparecia.
+  if (input.purpose === 'marketing' && policy.quietHours !== null) {
     const hora = localHourIn(timezone, input.now);
     const { startHour, endHour } = policy.quietHours;
     const dentro = hora >= startHour && hora < endHour;

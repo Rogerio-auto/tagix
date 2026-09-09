@@ -252,3 +252,35 @@ describe('localHourIn', () => {
     expect(localHourIn('America/Sao_Paulo', meiaNoiteUtc)).toBe(21);
   });
 });
+
+describe('janela horária vale para marketing, não para transacional', () => {
+  it('transacional passa fora da janela — o atendente responde quem escreveu', () => {
+    // 22:30 em Nova York. Quem escreveu às 22:29 merece resposta; bloquear aqui
+    // quebraria o uso central do produto sem ganho de conformidade. A restrição
+    // do TCPA é sobre solicitação comercial.
+    const d = decideOutbound(
+      entrada({ purpose: 'transactional', now: new Date('2026-07-16T02:30:00Z') }),
+    );
+    expect(d.allowed).toBe(true);
+  });
+
+  it('marketing continua bloqueado no mesmo instante', () => {
+    const d = decideOutbound(
+      entrada({ purpose: 'marketing', now: new Date('2026-07-16T02:30:00Z') }),
+    );
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.reason).toBe('quiet_hours');
+  });
+
+  it('supressão bloqueia transacional mesmo fora da janela — supressão vence sempre', () => {
+    const d = decideOutbound(
+      entrada({
+        purpose: 'transactional',
+        now: new Date('2026-07-16T02:30:00Z'),
+        consent: { ...CONSENTIDO, suppressedGlobally: true },
+      }),
+    );
+    expect(d.allowed).toBe(false);
+    if (!d.allowed) expect(d.reason).toBe('suppressed');
+  });
+});
