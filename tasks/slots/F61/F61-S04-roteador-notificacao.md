@@ -2,7 +2,7 @@
 id: F61-S04
 title: Roteador de notificação — dedupe, preferência por evento e fuso do membro
 phase: F61
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: [F61-S03]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/APP_MOBILE_PLAN.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T23:11:33Z
+completed_at: 2026-09-09T23:23:50Z
 
 ---
 # F61-S04 — Roteador de notificação
