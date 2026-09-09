@@ -790,3 +790,33 @@ passam isolados. Medi os dois lados:
 Nao e mascarar falha: o hook faz trabalho real e demorado, e 10s e um numero que o Vitest escolheu
 sem saber disso. Enquanto nao for feito, **quem validar slot precisa reexecutar a suite isolada
 antes de concluir que ha regressao** — foi o que me custou dois diagnosticos errados.
+
+---
+
+## 2026-09-09 — Armadilha do `deploy.sh`: o script se atualiza no meio da propria execucao
+
+**Descoberto no deploy de producao de hoje**, e vale registrar porque nao e obvio e ja custou uma
+vez.
+
+`deploy.sh` faz `git reset --hard origin/main` no §1. Se o commit que esta sendo implantado alterou
+o proprio `deploy.sh`, o arquivo no disco muda — mas **o que continua executando e a versao
+antiga**, porque o bash ja abriu o arquivo. Consequencia: toda melhoria no processo de deploy so
+passa a valer no deploy SEGUINTE, sem aviso nenhum.
+
+**O que aconteceu:** o F57-S07 adicionou backup fail-closed antes das migrations. O deploy de hoje
+levou esse commit para a VPS — e rodou as migrations **sem backup**, usando a versao antiga do
+script. `/opt/leadium/backups/` ficou vazio enquanto `grep -c pg_dump /opt/leadium/scripts/deploy.sh`
+ja devolvia 2.
+
+**Nao houve dano:** as 6 migrations desta fase sao todas aditivas (coluna nova, tabela nova, CHECK
+relaxado) e o dado ficou intacto — 200 contatos, 2365 mensagens, e o backfill de
+`contact_identities` gerou as 200 linhas esperadas. Mas foi propriedade das migrations, nao rede de
+seguranca. Tirei um dump manual do estado bom logo depois.
+
+**Corrigido:** o §1 agora compara o sha de `scripts/deploy.sh` antes e depois do pull e, se mudou,
+faz `exec` da versao nova uma vez (`LEADIUM_DEPLOY_REEXEC` impede laco). Ha um segundo motivo alem
+da logica: mudar o TAMANHO de um script em execucao pode fazer o bash pular ou repetir trechos,
+porque ele guarda offset de leitura — bug muito pior de diagnosticar que este.
+
+**Para quem for mexer em `deploy.sh`:** valide o efeito no deploy N+1, nao no N. Ou, agora, confie
+no re-exec — mas confirme na saida que ele disparou.

@@ -38,8 +38,29 @@ if [ -d "$APP_DIR/.git" ]; then
   step "Atualizando código (branch $BRANCH)"
   git fetch --all --prune
   git checkout "$BRANCH"
+  BEFORE_SHA="$(git rev-parse HEAD)"
+  DEPLOY_SELF_SHA="$(git rev-parse "HEAD:scripts/deploy.sh" 2>/dev/null || echo none)"
   git reset --hard "origin/$BRANCH"
   ok "Código em $(git rev-parse --short HEAD)"
+
+  # --- 1.1 Re-exec se o PRÓPRIO script mudou -----------------------------------
+  # Armadilha real, custou um deploy: o bash lê este arquivo enquanto executa. O
+  # `git reset` acima troca o deploy.sh no disco, mas o que continua rodando é a
+  # versão ANTIGA — então qualquer melhoria no deploy (uma etapa de backup, por
+  # exemplo) só passa a valer no deploy SEGUINTE, silenciosamente.
+  #
+  # Pior: mudar o tamanho do arquivo durante a execução pode fazer o bash pular ou
+  # repetir trechos, porque ele guarda um offset de leitura.
+  #
+  # Re-executar a versão nova, uma vez, resolve. `LEADIUM_DEPLOY_REEXEC` impede
+  # laço infinito.
+  NEW_SELF_SHA="$(git rev-parse "HEAD:scripts/deploy.sh" 2>/dev/null || echo none)"
+  if [ "${LEADIUM_DEPLOY_REEXEC:-0}" != "1" ] && [ "$DEPLOY_SELF_SHA" != "$NEW_SELF_SHA" ]; then
+    c "1;33" "⚠ scripts/deploy.sh mudou neste pull (${BEFORE_SHA:0:7} → $(git rev-parse --short HEAD))."
+    step "Re-executando a versão nova do deploy.sh"
+    export LEADIUM_DEPLOY_REEXEC=1
+    exec bash "$APP_DIR/scripts/deploy.sh" "$BRANCH"
+  fi
 else
   c "1;33" "⚠ $APP_DIR não é um repositório git — pulando git pull (deploy do estado atual)."
 fi
