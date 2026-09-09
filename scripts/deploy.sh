@@ -74,6 +74,46 @@ for i in $(seq 1 30); do
   sleep 4
 done
 
+# --- 5.5 BACKUP PRÉ-MIGRATION (F57-S07) --------------------------------------
+# Dados são sagrados. Migration é a única etapa do deploy que altera o banco de
+# forma que `docker stack deploy` não desfaz: a imagem anterior volta com um
+# rollback, o schema não. Este dump é o que separa "voltamos em 5 minutos" de
+# "perdemos o histórico do cliente".
+#
+# FAIL-CLOSED: se o dump falhar, o deploy aborta ANTES de migrar.
+BACKUP_DIR="${BACKUP_DIR:-/opt/leadium/backups}"
+BACKUP_KEEP="${BACKUP_KEEP:-10}"
+step "Backup pré-migration ($BACKUP_DIR)"
+
+mkdir -p "$BACKUP_DIR"
+PG_CONTAINER="$(docker ps --format '{{.Names}}' | grep "^${STACK}_postgres" | head -1 || true)"
+[ -n "$PG_CONTAINER" ] || { err "Container do Postgres não encontrado — abortando ANTES de migrar."; exit 1; }
+
+BACKUP_FILE="$BACKUP_DIR/${STACK}-$(date -u +%Y%m%dT%H%M%SZ)-${APP_VERSION}.dump"
+# Formato custom (-Fc): comprimido e restaurável seletivamente por tabela.
+if ! docker exec "$PG_CONTAINER" pg_dump -U "$PG_USER" -d "$PG_DB" -Fc > "$BACKUP_FILE"; then
+  rm -f "$BACKUP_FILE"
+  err "pg_dump FALHOU. Deploy abortado antes das migrations — nada foi alterado no banco."
+  exit 1
+fi
+
+# Dump vazio é pior que dump nenhum: dá falsa segurança na hora do incidente.
+BACKUP_BYTES="$(wc -c < "$BACKUP_FILE")"
+if [ "$BACKUP_BYTES" -lt 1024 ]; then
+  err "Dump saiu com apenas ${BACKUP_BYTES} bytes — suspeito. Deploy abortado antes das migrations."
+  exit 1
+fi
+ok "Backup: $BACKUP_FILE ($(numfmt --to=iec "$BACKUP_BYTES" 2>/dev/null || echo "${BACKUP_BYTES}B"))"
+
+# A saída de restore fica IMPRESSA aqui de propósito: durante um incidente
+# ninguém quer procurar a sintaxe do pg_restore em runbook.
+c "1;33" "  Restore:  docker exec -i $PG_CONTAINER pg_restore -U $PG_USER -d $PG_DB --clean --if-exists < $BACKUP_FILE"
+
+# Retenção: mantém os N mais recentes.
+ls -1t "$BACKUP_DIR"/${STACK}-*.dump 2>/dev/null | tail -n +$((BACKUP_KEEP + 1)) | while read -r old_dump; do
+  rm -f "$old_dump" && c "0;90" "  poda: removido $(basename "$old_dump")"
+done
+
 # --- 6. Migrations (container efêmero na rede interna) -----------------------
 step "Rodando migrations (drizzle: @hm/db migrate)"
 mig_ok=0
