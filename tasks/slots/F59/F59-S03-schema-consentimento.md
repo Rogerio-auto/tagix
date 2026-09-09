@@ -2,7 +2,7 @@
 id: F59-S03
 title: Consentimento e supressão por canal
 phase: F59
-status: blocked
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F59-S02]
@@ -10,8 +10,11 @@ blocks: [F59-S04, F59-S06]
 source_docs:
   - docs/features/AGENCIA_PLAN.md
   - docs/features/CANAIS_PLAN.md
----
+agent_id: backend-engineer
+claimed_at: 2026-09-09T05:43:36Z
+completed_at: 2026-09-09T05:49:15Z
 
+---
 # F59-S03 — Consentimento e supressão por canal
 
 ## Objetivo
@@ -86,3 +89,23 @@ pnpm --filter @hm/db lint
   identificador de versão de texto: o texto pode mudar e a prova precisa valer no dia em que foi dada.
 - IP em `proof` é dado pessoal — entra na política de retenção existente (`retention` worker),
   não fica para sempre.
+
+## Decisões tomadas na execução (2026-09-09)
+
+1. **`repos/consent.ts`, não `repositories/consent.ts`.** A spec do slot inventou o caminho; a
+   convenção real do pacote é `packages/db/src/repos/`. Segui a convenção.
+2. **Dois índices únicos parciais em vez de um UNIQUE com `channel`.** No Postgres `NULL` nunca é
+   igual a `NULL`, então um UNIQUE comum permitiria duplicar exatamente a supressão global — a que
+   mais precisa ser única. `uq_contact_suppressions_global` (WHERE channel IS NULL) e
+   `uq_contact_suppressions_channel` (WHERE channel IS NOT NULL) resolvem.
+3. **O opt-in migrado vira consentimento de `meta_whatsapp`, não de todos os canais.** É o canal em
+   que o consentimento foi de fato obtido e o único que a prova sustenta. Espalhar para SMS e e-mail
+   seria inventar consentimento que ninguém deu — exatamente o que o slot existe para impedir.
+4. **Todo opt-out migrado vira supressão de EMPRESA (`channel = null`).** Quem pediu para sair não
+   pediu para sair de um canal só; o escopo mais restritivo é o seguro.
+5. **`revoke()` suprime e revoga na mesma chamada.** Separar deixaria uma janela em que o contato
+   revogou mas ainda passa pelo portão até alguém lembrar de criar a supressão.
+6. **CHECK `contact_consents_granted_at_chk`** — linha `granted` sem `granted_at` é prova incompleta
+   e não deve existir.
+7. **`contacts.marketing_opt_in` mantida e marcada como deprecated** via `COMMENT ON COLUMN`.
+   Remover no mesmo PR quebraria leitores ainda não migrados.

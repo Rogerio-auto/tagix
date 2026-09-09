@@ -491,6 +491,13 @@
       "when": 1781452830000,
       "tag": "0069_f59_market_and_contact_timezone",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1781452831000,
+      "tag": "0070_f59_contact_consents",
+      "breakpoints": true
     }
   ]
 }

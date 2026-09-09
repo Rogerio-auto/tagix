@@ -96,3 +96,15 @@ export { getBlueprint, isNicheKey, NICHE_KEYS, type NicheKey } from './seed/nich
 export type { NicheBlueprint, InstantiateResult } from './seed/niches/types';
 
 export const DB_PKG = '@hm/db' as const;
+
+// Consentimento e supressão por canal (F59-S03).
+export { consentRepo } from './repos/consent';
+export type { ConsentSnapshot, GrantConsentInput, RevokeConsentInput } from './repos/consent';
+export type {
+  ConsentChannel,
+  ConsentProof,
+  ConsentPurpose,
+  ConsentStatus,
+  ContactConsent,
+  ContactSuppression,
+} from './schema/consent';

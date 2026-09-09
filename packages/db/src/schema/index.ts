@@ -259,6 +259,7 @@ export * from './platform_secrets';
 export * from './webhook_events';
 // LiveChat: contacts → conversations → messages (ordem de dependência).
 export * from './contacts';
+export * from './consent'; // contact_consents, contact_suppressions (tenant)
 export * from './conversations';
 // messages também exporta `mediaStatusEnum` + tipo `MediaStatus` (F52-S01) p/ workers/shared.
 export * from './messages';
@@ -421,6 +422,10 @@ export const RLS_TABLES = [
   'tool_logs',
   'agent_executions',
   'llm_usage_logs',
+  // Consentimento e supressão por canal (F59-S03). Ambas com workspace_id
+  // próprio → RLS direto.
+  'contact_consents',
+  'contact_suppressions',
   // Knowledge Base domain (workspace-scoped).
   'kb_documents',
   'kb_chunks',
