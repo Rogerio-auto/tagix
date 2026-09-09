@@ -2,7 +2,7 @@
 id: F59-S04
 title: Portão de consentimento como serviço único
 phase: F59
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F59-S01, F59-S03]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/AGENCIA_PLAN.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T05:49:26Z
+completed_at: 2026-09-09T06:05:55Z
 
 ---
 # F59-S04 — Portão de consentimento como serviço único
