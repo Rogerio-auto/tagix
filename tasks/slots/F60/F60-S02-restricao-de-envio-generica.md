@@ -2,7 +2,7 @@
 id: F60-S02
 title: Restrição de envio genérica no composer
 phase: F60
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: [F60-S01]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/LIVECHAT.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T14:22:32Z
+completed_at: 2026-09-09T14:40:43Z
 
 ---
 # F60-S02 — Restrição de envio genérica no composer
