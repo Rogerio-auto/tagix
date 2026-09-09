@@ -61,6 +61,18 @@ export const workspaces = pgTable(
     industry: text('industry'),
     timezone: text('timezone').notNull().default('America/Sao_Paulo'),
     locale: text('locale').notNull().default('pt-BR'),
+    /**
+     * Mercado de operação (F59-S02 — AGENCIA_PLAN §3). Decide moeda, idiomas,
+     * canais e **política de outbound** via market pack em `@hm/shared`.
+     * Default `BR` preserva o comportamento de todo workspace existente.
+     */
+    market: text('market').notNull().default('BR').$type<'BR' | 'US'>(),
+    /**
+     * Idiomas habilitados. `null` = usar os locales do market pack (BR: pt-BR ·
+     * US: en-US + pt-BR). Só é preenchida quando o cliente restringe — evita
+     * duplicar o pack e evita que a coluna derive dele com o tempo.
+     */
+    locales: jsonb('locales').$type<string[] | null>(),
     logoUrl: text('logo_url'),
     settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
     // Estado de onboarding/verticalização (F43-S01: ONBOARDING.md §3.1). Coluna
@@ -87,6 +99,7 @@ export const workspaces = pgTable(
       'workspaces_subscription_status_chk',
       sql`${t.subscriptionStatus} in ('trial','active','past_due','canceled','expired')`,
     ),
+    check('workspaces_market_chk', sql`${t.market} in ('BR','US')`),
   ],
 );
 

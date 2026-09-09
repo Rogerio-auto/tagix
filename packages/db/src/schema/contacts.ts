@@ -49,6 +49,18 @@ export const contacts = pgTable(
     avatarUrl: text('avatar_url'),
     notes: text('notes'),
     language: text('language').default('pt-BR'),
+    /**
+     * Fuso IANA do contato (F59-S02 — AGENCIA_PLAN §4.1). `null` = usar o
+     * `defaultTimezone` do market pack do workspace.
+     *
+     * Nos EUA a janela horária legal de envio é calculada no fuso de QUEM RECEBE,
+     * não no da campanha — com contatos na Flórida e na Califórnia na mesma base,
+     * fuso por campanha manda mensagem fora da janela sem ninguém perceber.
+     *
+     * Sem CHECK no banco de propósito: a lista IANA muda e um CHECK engessaria a
+     * migration. Validação é Zod, na borda.
+     */
+    timezone: text('timezone'),
     source: text('source'),
     marketingOptIn: boolean('marketing_opt_in').notNull().default(false),
     optInMethod: text('opt_in_method'),
@@ -72,6 +84,11 @@ export const contacts = pgTable(
     index('idx_contacts_workspace_name').on(t.workspaceId, t.displayName),
     index('idx_contacts_owner').on(t.ownerId).where(sql`${t.ownerId} is not null`),
     index('idx_contacts_opt_in').on(t.workspaceId, t.marketingOptIn),
+    // Parcial: o agendador varre só quem tem fuso próprio para agrupar por janela
+    // horária. Contato sem fuso resolve pelo market pack e não precisa do índice.
+    index('idx_contacts_workspace_timezone')
+      .on(t.workspaceId, t.timezone)
+      .where(sql`${t.timezone} is not null and ${t.deletedAt} is null`),
     check(
       'contacts_opt_in_method_chk',
       sql`${t.optInMethod} in ('whatsapp','website','checkout','import','manual','api') or ${t.optInMethod} is null`,

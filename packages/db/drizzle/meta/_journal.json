@@ -484,6 +484,13 @@
       "when": 1781452829000,
       "tag": "0068_f58_meta_template_channel_resolver",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1781452830000,
+      "tag": "0069_f59_market_and_contact_timezone",
+      "breakpoints": true
     }
   ]
 }
