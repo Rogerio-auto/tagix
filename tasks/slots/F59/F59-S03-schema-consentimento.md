@@ -2,7 +2,7 @@
 id: F59-S03
 title: Consentimento e supressão por canal
 phase: F59
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F59-S02]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/CANAIS_PLAN.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T05:43:36Z
+completed_at: 2026-09-09T05:49:15Z
 
 ---
 # F59-S03 — Consentimento e supressão por canal
