@@ -30,6 +30,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { api } from '@/shared/lib/api-client';
+import { InstallPrompt } from '@/shared/pwa';
 
 type UrgencyBand = 'esfriando' | 'atencao' | 'agora';
 
@@ -310,6 +311,11 @@ export function TodayClient(): React.JSX.Element {
 
   return (
     <div className="space-y-6 pb-8">
+      {/* F61-S05: o convite vive AQUI, e não no app inteiro. Quem instala é o dono
+          que abre o celular entre uma tarefa e outra — e no iPhone a instalação é
+          a condição para o aviso de lead novo existir. */}
+      <InstallPrompt />
+
       {/* ── Aguardando resposta ─────────────────────────────────────────────── */}
       <section aria-labelledby="hoje-esperando">
         <div className="mb-3 flex items-baseline justify-between gap-3">
