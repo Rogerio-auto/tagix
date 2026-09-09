@@ -2,7 +2,7 @@
 id: F60-S08
 title: E-mail — recebimento, retorno e supressão por bounce
 phase: F60
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F60-S03]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/CANAIS_PLAN.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T15:16:40Z
+completed_at: 2026-09-09T16:18:38Z
 
 ---
 # F60-S08 — E-mail: recebimento, retorno e supressão por bounce
