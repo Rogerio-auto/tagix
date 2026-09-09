@@ -2,7 +2,7 @@
 id: F59-S07
 title: Valores personalizados por workspace
 phase: F59
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F59-S02]
