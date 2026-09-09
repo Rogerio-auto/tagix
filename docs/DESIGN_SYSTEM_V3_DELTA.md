@@ -221,3 +221,69 @@ O que não é defensável em nenhum cenário é colar o CSS por cima do `tokens.
 2. Se for B ou C: corrigir os dois valores do tema claro (§4) **antes** de implementar.
 3. Se for C: decidir o corpo (15px/500 vs 17px/400) e onde a marca vive sem o Orbitron.
 4. Ajustar `APP_MOBILE_PLAN` §3.1 para quatro abas + More (§6) — independe das opções acima.
+
+---
+
+## 9. Correcoes apos a implementacao (F59-S08, 2026-09-09)
+
+Ao implementar a opcao A eu li o codigo de perto e **duas afirmacoes deste documento estavam
+erradas**. Ficam registradas aqui em vez de apagadas, porque o erro muda a conclusao.
+
+### 9.1 A rampa de marca JA EXISTE no DS v2
+
+O §5.3 dizia "o v2 tem um verde so mais `--border-brand`, o que forca hover, foco, glow e estado
+desabilitado a serem inventados caso a caso". **Falso.** `packages/design-tokens/src/tokens.css` ja
+define, e o preset Tailwind ja expoe:
+
+| Token v2 | Valor | Equivalente DS 3.0 |
+|---|---|---|
+| `--brand` | `#1fff13` | `--brand` (identico) |
+| `--brand-strong` | `#16e00a` | `--brand-strong` (identico) |
+| `--brand-bright` | `#5bff51` | `--brand-bright` (`#72ff69` — tom diferente) |
+| `--brand-soft` | `#7feb7b` | `--brand-soft` (`#b1ffaa` — tom diferente) |
+| `--brand-faint` | `#abffa7` | — (nao existe no DS 3.0) |
+| `--brand-price` | `#25f018` | — (nao existe no DS 3.0) |
+| `--text-on-brand` | `#04210a` | `--brand-ink` (so rename) |
+
+Ou seja: a rampa do v2 e **mais completa** que a do DS 3.0. O que a proposta traz de novo em cor sao
+tons ligeiramente diferentes em `bright`/`soft` — preferencia estetica, nao lacuna. **Nao adotei**:
+mexer no tom repinta componente existente, que e exatamente o risco do §3.1.
+
+O `--brand-ink` tambem **nao foi criado**: e rename de `--text-on-brand`, que ja e o nome melhor
+(diz o papel, nao a cor). Alias por alias adiciona um nome a manter sem resolver nada.
+
+### 9.2 O contrato de radius do DS 3.0 esta CERTO; a pagina e que diverge
+
+O §3.2 apontou que o bloco de codigo do §07 usa `--r-xs/--r-sm/--r-md/--r-lg` enquanto o CSS da
+pagina usa `--radius-*`, e concluiu que "o contrato quebra a maquete". A leitura correta e outra: o
+**repo ja usa `--r-xs`…`--r-pill`**. O contrato do §07 esta alinhado com o codigo real; quem
+diverge e o CSS da propria pagina. Isso reforca que o §07 foi escrito olhando o repositorio.
+
+### 9.3 O que sobrou da opcao A, e foi entregue
+
+- **Tokens de motion** — lacuna real: nao havia nenhum. Entraram `--ease`, `--ease-spring`,
+  `--dur-fast/base/slow`, expostos no preset Tailwind.
+- **As tres regras de lint** — o item de maior valor, e o unico que muda comportamento futuro.
+
+### 9.4 As regras foram para `warn`, com numero medido
+
+O DoD do slot previa: mais de 10 ocorrencias fora da fronteira → `warn` com TODO datado. Medido:
+
+| Regra | Ocorrencias |
+|---|---|
+| hex literal em componente | 19 |
+| `toLocaleString/DateString/TimeString` com locale literal | 44 |
+| `new Intl.*` com locale literal | 32 |
+| fuso IANA literal | 14 |
+| **total** | **109** |
+
+Todas passam do limiar, entao as quatro entraram como `warn`. `pnpm lint` fecha com **0 erros e 109
+avisos**: a divida fica visivel e **para de crescer**, sem travar o CI por debito que nao e deste
+slot. Promover para `error` e o criterio de pronto do slot de limpeza (`tasks/COMMS.md`).
+
+### 9.5 Conclusao revisada
+
+A opcao B (repaleta) perde quase toda a justificativa tecnica: a paleta do v2 e completa e a do DS
+3.0 nao acrescenta capacidade, so tom. A escolha entre elas e **estetica**, e portanto do Rogerio —
+nao ha argumento de arquitetura de um lado nem do outro. A opcao C (tipografia) segue como estava:
+e reversao declarada, com o custo do §2 e do §4.

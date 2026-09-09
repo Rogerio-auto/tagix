@@ -741,3 +741,15 @@ valor personalizado merece trilha — especialmente `kind='secret'`, que guarda 
 cliente. Vale um slot pequeno: helper `writeAudit` compartilhado + uso nas rotas que ainda nao
 auditam. Quando existir, registrar APENAS `key` e `kind`, nunca o valor: o audit log e o lugar mais
 lido depois de um incidente, e vazar o segredo la anularia a cifragem.
+
+**F59-S08 — slot de limpeza DS/i18n (a criar):** as tres regras novas de `no-restricted-syntax`
+entraram como `warn` porque acusam 109 ocorrencias no codigo existente (19 hex, 44 `toLocaleX`, 32
+`Intl`, 14 fuso IANA). Elas impedem a divida de crescer, mas nao a zeram. Criterio de pronto do slot
+de limpeza: zerar as ocorrencias e promover a severidade para `error` em `eslint.config.mjs`. O
+grosso e locale e fuso literais em `apps/web` — que e exatamente o que quebra quando o primeiro
+workspace `market='US'` entrar.
+
+**Corrigido na F59-S08:** `apps/workers/src/inbound/ports.ts` tinha `import('./revocation').RevocationPort`
+inline, que viola `@typescript-eslint/consistent-type-imports`. Entrou na F59-S06 porque a validacao
+daquele slot rodava typecheck e test, mas **nao lint**. Vale revisar os blocos `## Validacao` dos
+slots: quem toca TS deveria rodar `pnpm lint` tambem.

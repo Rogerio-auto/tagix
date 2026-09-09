@@ -24,6 +24,9 @@ export interface TailwindPreset {
       readonly borderRadius: Record<string, string>;
       readonly boxShadow: Record<string, string>;
       readonly maxWidth: Record<string, string>;
+      /** Curvas nomeadas (F59-S08). Movimento mostra estado, nao pede atencao. */
+      readonly transitionTimingFunction: Record<string, string>;
+      readonly transitionDuration: Record<string, string>;
     };
   };
 }
@@ -31,6 +34,15 @@ export interface TailwindPreset {
 export const tailwindPreset: TailwindPreset = {
   theme: {
     extend: {
+      transitionTimingFunction: {
+        DEFAULT: 'var(--ease)',
+        spring: 'var(--ease-spring)',
+      },
+      transitionDuration: {
+        fast: 'var(--dur-fast)',
+        base: 'var(--dur-base)',
+        slow: 'var(--dur-slow)',
+      },
       colors: {
         brand: {
           DEFAULT: 'var(--brand)',

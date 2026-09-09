@@ -2,7 +2,7 @@
 id: F59-S08
 title: DS 3.0 opção A — rampa de marca, motion e regras em lint
 phase: F59
-status: available
+status: review
 priority: medium
 estimated_size: S
 depends_on: []
@@ -10,8 +10,11 @@ blocks: []
 source_docs:
   - docs/DESIGN_SYSTEM_V3_DELTA.md
   - docs/DESIGN_SYSTEM.md
----
+agent_id: backend-engineer
+claimed_at: 2026-09-09T13:23:12Z
+completed_at: 2026-09-09T13:32:19Z
 
+---
 # F59-S08 — DS 3.0 opção A — rampa de marca, motion e regras em lint
 
 ## Objetivo
@@ -86,3 +89,32 @@ pnpm typecheck
   escreve. É a melhor evidência de que a regra precisa existir em lint, não em documento.
 - `--brand-ink` como **alias** e não rename: `--text-on-brand` já é consumido; quebrar por estética
   de nome é exatamente o tipo de dívida que este repo existe para não ter.
+
+## Decisoes tomadas na execucao (2026-09-09)
+
+1. **A rampa de marca NAO foi adicionada — ela ja existia.** A premissa do slot ("hoje existe um
+   verde so") estava errada. `tokens.css` ja define `--brand-strong`, `--brand-bright`, `--brand-soft`,
+   `--brand-faint` e `--brand-price`, todos expostos no preset Tailwind. A rampa do v2 e **mais
+   completa** que a do DS 3.0. O que a proposta traz sao tons ligeiramente diferentes em
+   `bright`/`soft` — preferencia estetica, e mexer neles repintaria componente existente.
+   Correcao registrada em `docs/DESIGN_SYSTEM_V3_DELTA.md` §9.1.
+2. **`--brand-ink` nao foi criado.** E rename de `--text-on-brand`, que ja e o nome melhor (diz o
+   papel, nao a cor). Alias por alias adiciona nome a manter sem resolver nada.
+3. **Tokens de motion entraram — essa lacuna era real.** `--ease`, `--ease-spring`, `--dur-fast`,
+   `--dur-base`, `--dur-slow`, expostos no preset (`transitionTimingFunction`/`transitionDuration`).
+   Nao havia nenhum: cada componente escolhia a propria curva.
+4. **As quatro regras de lint entraram como `warn`, seguindo o proprio DoD.** Medicao: 19 hex, 44
+   `toLocaleX`, 32 `Intl`, 14 fuso IANA = **109 ocorrencias**. Todas acima do limiar de 10, entao
+   `error` travaria o CI por divida que nao e deste slot. `pnpm lint` fecha com **0 erros / 109
+   avisos**: a divida fica visivel e para de crescer. Promover para `error` e criterio de pronto do
+   slot de limpeza (`tasks/COMMS.md`).
+5. **Escapamento do seletor esquery.** O padrao de fuso precisa de `\/` no fonte JS para que o
+   esquery receba `\/`; com uma barra so a regex termina cedo e o ESLint falha ao carregar. Custou
+   tres tentativas e vale como nota para quem mexer nessas regras.
+6. **Corrigi um erro de lint que eu mesmo mergei na F59-S06:** `inbound/ports.ts` usava
+   `import('./revocation').RevocationPort` inline, proibido por `consistent-type-imports`. Passou
+   porque a `## Validacao` daquele slot roda typecheck e test, **nao lint**.
+
+## Resultado
+
+`pnpm lint` 0 erros / 109 avisos · `pnpm typecheck` limpo no repo · `@hm/design-tokens` typecheck OK.
