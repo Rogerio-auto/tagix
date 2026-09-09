@@ -519,6 +519,13 @@
       "when": 1781452834000,
       "tag": "0073_f60_email_channel",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1781452835000,
+      "tag": "0074_f60_campaign_channel_content",
+      "breakpoints": true
     }
   ]
 }

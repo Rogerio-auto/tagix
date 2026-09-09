@@ -65,10 +65,12 @@ export async function buildValidationCampaign(
     .from(campaignSteps)
     .where(eq(campaignSteps.campaignId, campaignId))
     .orderBy(campaignSteps.position);
-  const steps: ValidationStep[] = stepRows.map((s) => ({
-    templateName: s.templateName,
-    languageCode: s.languageCode,
-  }));
+  // F60-S07: só passo com modelo aprovado entra na validação de modelo. Passo de
+  // e-mail não tem modelo, e pedir um à Meta devolveria erro que o operador leria
+  // como "campanha quebrada" — quando o certo é "não se aplica".
+  const steps: ValidationStep[] = stepRows
+    .filter((s): s is typeof s & { templateName: string } => s.templateName !== null)
+    .map((s) => ({ templateName: s.templateName, languageCode: s.languageCode }));
 
   const recipientRows = await tx
     .select({ value: count() })

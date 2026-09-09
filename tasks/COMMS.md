@@ -759,3 +759,34 @@ mensagem `transactional`, o que bloquearia um atendente de responder as 21h05 a 
 21h04. Passou despercebido porque o primeiro consumidor do portao (campanha) e sempre `marketing`.
 Corrigido: a janela vale so para marketing; supressao continua vencendo tudo. **Licao:** portao com
 um consumidor so nao esta validado — o segundo consumidor e que revela a assimetria.
+
+---
+
+## 2026-09-09 — Flakiness real: `Hook timed out in 10000ms` sob carga
+
+Fecha o assunto que apareceu tres vezes nesta sessao e que eu diagnostiquei mal duas.
+
+**O que e:** `src/routes/v1/routes.test.ts` (e, em `@hm/workers`, `evaluation`, `billing/recurrence`
+e `dashboard-refresh`) falham com `Hook timed out in 10000ms` **quando a suite inteira roda**, e
+passam isolados. Medi os dois lados:
+
+- isolado: 28 testes passam, `collect` leva ~19s, o hook cabe
+- suite inteira, com lint ou outra suite em paralelo: o mesmo hook estoura os 10s
+
+**O que NAO e:**
+- Nao e falta de servico. Postgres, Redis e RabbitMQ estavam saudaveis nas duas medicoes.
+- Nao e regressao de codigo. Comparei com `git stash`: o arquivo passa igual antes e depois.
+
+**Minhas duas leituras erradas, para nao repetirem:**
+1. Chamei de "3 falhas pre-existentes em `main`" — nao eram; faltava RabbitMQ naquele momento.
+2. Depois chamei de "so ambiente, esta tudo verde" — tambem incompleto: com os servicos no ar as
+   falhas somem *quando a maquina nao esta sob carga*, e voltam quando esta.
+
+**A causa provavel** e o timeout de hook default de 10s do Vitest ser apertado demais para um
+`beforeAll` que sobe app + conexoes. Sob carga, `collect` sozinho passa de 18s.
+
+**Sugestao (dominio de F57 — CI/cobertura):** subir `hookTimeout` nesses arquivos (ou no
+`vitest.config.ts` de `@hm/api` e `@hm/workers`) para algo como 30s, com comentario dizendo por que.
+Nao e mascarar falha: o hook faz trabalho real e demorado, e 10s e um numero que o Vitest escolheu
+sem saber disso. Enquanto nao for feito, **quem validar slot precisa reexecutar a suite isolada
+antes de concluir que ha regressao** — foi o que me custou dois diagnosticos errados.

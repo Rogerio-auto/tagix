@@ -72,6 +72,22 @@ const CAPABILITIES: Readonly<Record<string, ChannelCapabilities>> = {
     testSend: false,
     requiresMarketingOptIn: true,
   },
+  // F60-S07: e-mail entra no criador guiado. Nao tem modelo aprovado (isso e do
+  // WhatsApp), tem mensagem livre, sequencia e envio de teste.
+  //
+  // `requiresMarketingOptIn: false` NAO significa "pode mandar para qualquer um":
+  // significa que a exigencia de opt-in nao e do CANAL. Quem decide e o portao
+  // (`decideOutbound`, F59-S04) a partir do market pack — nos EUA o CAN-SPAM
+  // dispensa opt-in previo para e-mail e o TCPA exige para SMS. Esta flag e
+  // dica de UI; a regra vive num lugar so.
+  email: {
+    guidedCampaigns: true,
+    approvedMessageTemplates: false,
+    freeformMessage: true,
+    sequence: true,
+    testSend: true,
+    requiresMarketingOptIn: false,
+  },
 };
 
 const UNKNOWN_PROVIDER_CAPABILITIES: ChannelCapabilities = {
@@ -83,12 +99,43 @@ const UNKNOWN_PROVIDER_CAPABILITIES: ChannelCapabilities = {
   requiresMarketingOptIn: true,
 };
 
-const INELIGIBLE_MESSAGE: Readonly<Record<ChannelIneligibleReason, string>> = {
-  provider_unsupported:
-    'Este canal não usa modelos aprovados do WhatsApp; o envio em massa por ele entra em uma fase seguinte.',
-  missing_credentials: 'Reconecte este número do WhatsApp para voltar a enviar campanhas por ele.',
-  incomplete_setup: 'Conclua a conexão deste número do WhatsApp para usá-lo em campanhas.',
+/**
+ * Mensagem de inelegibilidade POR PROVIDER (F60-S07).
+ *
+ * Antes toda mensagem falava de "número do WhatsApp", porque só havia WhatsApp.
+ * Com e-mail no fluxo, dizer ao usuário para "reconectar o número do WhatsApp"
+ * quando o problema é o remetente de e-mail é pior que não dizer nada.
+ */
+const INELIGIBLE_MESSAGE: Readonly<
+  Record<ChannelIneligibleReason, Readonly<Record<string, string>>>
+> = {
+  provider_unsupported: {
+    meta_instagram:
+      'O Instagram não permite disparo em massa por mensagem direta; use-o para responder quem já falou com você.',
+    waha:
+      'Este número não é oficial e disparo em massa por ele derruba a conta. Use o WhatsApp oficial para campanha.',
+    default: 'Este canal ainda não aceita campanha pelo criador guiado.',
+  },
+  missing_credentials: {
+    meta_whatsapp: 'Reconecte este número do WhatsApp para voltar a enviar campanhas por ele.',
+    email: 'Reconecte o remetente de e-mail deste canal para voltar a enviar campanhas.',
+    default: 'Reconecte este canal para voltar a enviar campanhas por ele.',
+  },
+  incomplete_setup: {
+    meta_whatsapp: 'Conclua a conexão deste número do WhatsApp para usá-lo em campanhas.',
+    email: 'Conclua a configuração do remetente de e-mail para usar este canal em campanhas.',
+    default: 'Conclua a conexão deste canal para usá-lo em campanhas.',
+  },
 };
+
+/** Mensagem do motivo, específica do provider quando houver. */
+export function ineligibleMessageFor(
+  reason: ChannelIneligibleReason,
+  provider: string,
+): string {
+  const porProvider = INELIGIBLE_MESSAGE[reason];
+  return porProvider[provider] ?? (porProvider['default'] as string);
+}
 
 export interface BuilderChannelOption {
   readonly id: string;
@@ -241,7 +288,7 @@ export async function loadBuilderOptions(
       provider: row.provider,
       eligible: reason === null,
       ineligibleReason: reason,
-      ineligibleMessage: reason === null ? null : INELIGIBLE_MESSAGE[reason],
+      ineligibleMessage: reason === null ? null : ineligibleMessageFor(reason, row.provider),
       capabilities: CAPABILITIES[row.provider] ?? UNKNOWN_PROVIDER_CAPABILITIES,
       approvedTemplateCount: approvedCounts.get(row.id) ?? 0,
       lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
@@ -422,7 +469,8 @@ type AggregateRow = Record<
 
 export interface CampaignStepSummary {
   readonly position: number;
-  readonly templateName: string;
+  /** Nulo em passo que nao usa modelo aprovado (e-mail, texto) — F60-S07. */
+  readonly templateName: string | null;
   readonly languageCode: string;
   readonly delaySeconds: number;
   readonly templateComponents: unknown;

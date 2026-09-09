@@ -123,6 +123,13 @@ export function runPreflight(input: PreflightInput): PreflightResult {
 
   for (const step of base.steps) {
     const at = step.position + 1;
+
+    // F60-S07: as checagens abaixo são todas sobre MODELO APROVADO da Meta.
+    // Passo de e-mail não tem modelo — passar por aqui geraria
+    // "modelo não está no catálogo" numa campanha de e-mail perfeitamente válida,
+    // que é o tipo de erro que faz o operador desistir do produto.
+    if (step.templateName === null) continue;
+
     if (step.status === null) {
       issues.push({
         code: 'CAMPAIGN_TEMPLATE_NOT_FOUND',
