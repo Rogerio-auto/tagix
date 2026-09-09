@@ -2,7 +2,7 @@
 id: F59-S05
 title: Aplicar o portão no outbound, no agendador e nas tools do agente
 phase: F59
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F59-S04]

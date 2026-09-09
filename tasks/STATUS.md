@@ -50,7 +50,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
 | F57   | 13     | 12   | 0   | 0   | 0   | 0   | 1   |
 | F58   | 14     | 9   | 0   | 0   | 0   | 0   | 5   |
-| F59   | 8     | 1   | 2   | 0   | 0   | 1   | 4   |
+| F59   | 8     | 1   | 2   | 0   | 0   | 0   | 5   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -676,7 +676,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F59-S02 | Mercado no workspace e fuso no contato                           | ✅ done      | critical   | F59-S01          |
 | F59-S03 | Consentimento e supressão por canal                              | ✅ done      | critical   | F59-S02          |
 | F59-S04 | Portão de consentimento como serviço único                       | ✅ done      | critical   | F59-S01, F59-S03 |
-| F59-S05 | Aplicar o portão no outbound, no agendador e nas tools do agente | 🟣 review    | critical   | F59-S04          |
+| F59-S05 | Aplicar o portão no outbound, no agendador e nas tools do agente | ✅ done      | critical   | F59-S04          |
 | F59-S06 | Detector de revogação em linguagem natural                       | ⏸️ blocked  | high       | F59-S03, F59-S04 |
 | F59-S07 | Valores personalizados por workspace                             | ⏸️ blocked  | high       | F59-S02          |
 | F59-S08 | DS 3.0 opção A — rampa de marca, motion e regras em lint         | 🟢 available | medium     | —                |
