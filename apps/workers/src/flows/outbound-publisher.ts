@@ -27,6 +27,7 @@ import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { connectMq, makeEnvelope, publish, QUEUES, type MqHandle } from '@hm/shared/mq';
+import { previewFor } from '@hm/shared';
 import { schema, withWorkspace } from '@hm/db';
 import { createStorage, type IStorageDriver } from '@hm/storage';
 import type {
@@ -172,27 +173,12 @@ export interface OutboundPersistencePort {
 }
 
 /** Preview pt-BR p/ a ChatList: usa o texto/legenda; senão um rótulo por tipo. */
+/**
+ * F61-S12: esta era a ÚNICA das quatro implementações que estava certa. Agora a
+ * regra vive em `@hm/shared` e as outras três também a usam.
+ */
 function previewForChatList(type: string, content: string | null): string {
-  const trimmed = content?.trim();
-  if (trimmed) return trimmed.slice(0, 280);
-  switch (type) {
-    case 'image':
-      return '📷 Imagem';
-    case 'video':
-      return '🎬 Vídeo';
-    case 'voice':
-      return '🎤 Mensagem de voz';
-    case 'audio':
-      return '🎧 Áudio';
-    case 'document':
-      return '📄 Documento';
-    case 'interactive':
-      return '💬 Mensagem interativa';
-    case 'template':
-      return '💬 Template';
-    default:
-      return '💬 Mensagem';
-  }
+  return previewFor(type, content);
 }
 
 /** Implementacao real: espelha `messages.ts` (insert pending) sob RLS. */

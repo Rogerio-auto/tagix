@@ -173,6 +173,16 @@ export type InboundEvent =
       type: 'message';
       provider: ChannelProvider;
       contactRemoteId: string;
+      /**
+       * Nome de perfil do remetente, quando o provider o expõe (F61-S12).
+       *
+       * O WhatsApp manda em `value.contacts[].profile.name`, fora do objeto da
+       * mensagem — e por isso passou anos sem ser lido: 199 dos 200 contatos de
+       * produção estavam sem nome. É um PALPITE (o dono do aparelho escolhe o
+       * próprio nome de perfil), então serve para preencher vazio, nunca para
+       * sobrescrever o que um atendente digitou.
+       */
+      contactName?: string;
       externalId: string;
       messageType: MessageType;
       content?: string;

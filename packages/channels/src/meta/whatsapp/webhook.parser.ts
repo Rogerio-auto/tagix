@@ -159,7 +159,31 @@ function extractMetadata(waType: string | undefined, msg: JsonRecord): Record<st
 }
 
 /** Constrói o evento de uma mensagem inbound WA. */
-function parseMessage(msg: JsonRecord): InboundEvent | undefined {
+/**
+ * Índice `wa_id → profile.name` construído a partir de `value.contacts[]`.
+ *
+ * O WhatsApp manda o perfil do remetente FORA do objeto da mensagem, num array
+ * irmão de `messages`. Um `value` pode conter várias mensagens de contatos
+ * diferentes, então casamos por `wa_id` — nunca assumimos `contacts[0]`.
+ */
+type ProfileNames = ReadonlyMap<string, string>;
+
+function parseProfileNames(value: JsonRecord): ProfileNames {
+  const nomes = new Map<string, string>();
+  for (const c of asArray(value['contacts'])) {
+    if (!isRecord(c)) continue;
+    const waId = asString(c['wa_id']);
+    const profile = c['profile'];
+    const nome = isRecord(profile) ? asString(profile['name']) : undefined;
+    // Nome vazio ou só espaço não é nome: gravá-lo trocaria "sem nome" por
+    // "com nome em branco", que é pior — some da UI e some do diagnóstico.
+    if (waId === undefined || nome === undefined || nome.trim() === '') continue;
+    nomes.set(waId, nome.trim());
+  }
+  return nomes;
+}
+
+function parseMessage(msg: JsonRecord, profileNames?: ProfileNames): InboundEvent | undefined {
   const externalId = asString(msg['id']);
   const from = asString(msg['from']);
   if (externalId === undefined || from === undefined) return undefined;
@@ -209,10 +233,13 @@ function parseMessage(msg: JsonRecord): InboundEvent | undefined {
       ? { ...(baseMeta ?? {}), unknownWaType: waType ?? '<missing>' }
       : baseMeta;
 
+  const contactName = profileNames?.get(from);
+
   return {
     type: 'message',
     provider: PROVIDER,
     contactRemoteId: from,
+    ...(contactName !== undefined ? { contactName } : {}),
     externalId,
     messageType,
     ...(content !== undefined ? { content } : {}),
@@ -272,9 +299,12 @@ export function parseWhatsAppWebhook(payload: unknown): InboundEvent[] {
       const value = change['value'];
       if (!isRecord(value)) continue;
 
+      // Perfis primeiro: `messages` e `contacts` são irmãos no mesmo `value`.
+      const profileNames = parseProfileNames(value);
+
       for (const msg of asArray(value['messages'])) {
         if (!isRecord(msg)) continue;
-        const event = parseMessage(msg);
+        const event = parseMessage(msg, profileNames);
         if (event !== undefined) events.push(event);
       }
 

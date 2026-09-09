@@ -64,6 +64,12 @@ export * from './types/inbox';
 // --- Eventos Socket.io Server→Client (LIVECHAT.md §6, tipos puros) ---
 export * from './socket-events';
 
+// --- Prévia da última mensagem (F61-S12). Fonte ÚNICA: havia 4 cópias, 3 erradas. ---
+export { previewFor, humanizePreview, labelForType } from './preview';
+
+// --- Telefone em formato humano (F61-S12). ---
+export { formatPhoneForDisplay } from './phone-display';
+
 // --- Central de Ajuda (F38 — SUPPORT.md §1). Exports explícitos (sem `export *`). ---
 export {
   HELP_ARTICLE_STATUSES,

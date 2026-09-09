@@ -34,6 +34,7 @@ import { getDb, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import { makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import type { ServerToClientEvent } from '@hm/shared';
+import { previewFor } from '@hm/shared';
 import type {
   CoexistenceAppStatePayload,
   CoexistenceEchoPayload,
@@ -206,9 +207,9 @@ function toDate(timestamp: number | undefined): Date {
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
+/** F61-S12: regra única em `@hm/shared` (antes emitia `[${type}]` cru). */
 function previewOf(text: string | undefined, type: string): string {
-  if (typeof text === 'string' && text.length > 0) return text.slice(0, 280);
-  return `[${type}]`;
+  return previewFor(type, text ?? null);
 }
 
 /**
