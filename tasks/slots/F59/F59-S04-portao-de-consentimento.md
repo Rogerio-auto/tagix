@@ -1,0 +1,90 @@
+---
+id: F59-S04
+title: Portão de consentimento como serviço único
+phase: F59
+status: blocked
+priority: critical
+estimated_size: M
+depends_on: [F59-S01, F59-S03]
+blocks: [F59-S05, F59-S06]
+source_docs:
+  - docs/features/AGENCIA_PLAN.md
+---
+
+# F59-S04 — Portão de consentimento como serviço único
+
+## Objetivo
+
+Uma função, testada, que decide se uma mensagem pode sair: consulta supressão, consentimento por
+canal e finalidade, janela horária no fuso do contato e estado de registro do canal. Devolve
+autorização ou recusa **com motivo estável**.
+
+## Contexto
+
+`AGENCIA_PLAN` §4.4: o portão precisa ser código, não disciplina — "a pessoa apressada às 23h não vai
+lembrar da regra". Este slot cria o serviço; F59-S05 o pluga nos três pontos de chamada.
+
+## Escopo
+
+### files_allowed
+
+- `apps/api/src/services/consent/**`
+- `packages/shared/src/consent.ts`
+- `packages/shared/src/index.ts`
+
+### files_forbidden
+
+- `apps/workers/**`
+- `packages/db/src/schema/**`
+
+## Contratos
+
+```ts
+export type OutboundDenyReason =
+  | 'suppressed'            // supressão global ou de canal
+  | 'no_consent'            // marketing sem consentimento onde o mercado exige
+  | 'quiet_hours'           // fora da janela legal no fuso do contato
+  | 'registration_pending'  // 10DLC não aprovado
+  | 'channel_disabled';     // canal não habilitado no market pack
+
+export type OutboundDecision =
+  | { readonly allowed: true }
+  | { readonly allowed: false; readonly reason: OutboundDenyReason;
+      readonly message: string; readonly retryAt?: Date };
+
+export function decideOutbound(input: {
+  readonly market: MarketCode;
+  readonly channel: ChannelKind;
+  readonly purpose: MessagePurpose;
+  readonly consent: ConsentSnapshot;
+  readonly contactTimezone: string | null;
+  readonly channelRegistration: 'none' | 'pending' | 'approved';
+  readonly now: Date;
+}): OutboundDecision;
+```
+
+## Definition of Done
+
+- [ ] `decideOutbound` é **pura**: recebe `now` e o snapshot, não consulta banco nem relógio. O I/O fica no serviço que a chama.
+- [ ] Ordem de avaliação fixa e testada: supressão → canal habilitado → registro → consentimento → janela horária. Supressão sempre vence.
+- [ ] `purpose: 'transactional'` **nunca** é bloqueado por `no_consent` — confirmação de agendamento não é marketing. Bloqueia por supressão, sim.
+- [ ] Janela horária usa o fuso do contato; quando `contactTimezone` é nulo, cai no `defaultTimezone` do market pack, e isso é registrado na decisão.
+- [ ] `retryAt` vem preenchido em `quiet_hours` com o próximo horário permitido no fuso correto — o chamador reagenda em vez de descartar.
+- [ ] Recusa **nunca é silenciosa**: cada `allowed: false` produz `message` pronta para log e para exibição ao atendente.
+- [ ] Testes com fuso real cobrindo virada de dia e horário de verão americano (contato em `America/New_York` às 20h59 e 21h00 locais).
+- [ ] Serviço em `apps/api/src/services/consent/` carrega o snapshot sob RLS e delega a decisão à função pura.
+
+## Validação
+
+```bash
+pnpm --filter @hm/shared typecheck
+pnpm --filter @hm/shared test
+pnpm --filter @hm/api typecheck
+pnpm --filter @hm/api test
+```
+
+## Notas
+
+- Horário de verão é o ponto onde implementação ingênua erra. Usar `Intl.DateTimeFormat` com
+  `timeZone`, nunca aritmética de offset fixo.
+- A decisão é auditável de propósito: o motivo é enum estável, não string livre, para virar métrica.

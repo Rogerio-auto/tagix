@@ -50,6 +50,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
 | F57   | 13     | 12   | 0   | 0   | 0   | 0   | 1   |
 | F58   | 14     | 9   | 0   | 0   | 0   | 0   | 5   |
+| F59   | 8     | 2   | 6   | 0   | 0   | 0   | 0   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -666,6 +667,19 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F58-S12 | Garantir que nenhuma mensagem da campanha se perca        | 🟢 available | critical   | F58-S02, F58-S11                            |
 | F58-S13 | Integrar o novo criador e revisar antes de iniciar        | 🟢 available | critical   | F58-S07, F58-S08, F58-S09, F58-S10, F58-S12 |
 | F58-S14 | Validar o fluxo completo com 1.000 contatos               | 🟢 available | critical   | F58-S13, F57-S02                            |
+
+## Fase 59
+
+| ID      | Titulo                                                           | Status      | Prioridade | Depende de       |
+| ------- | ---------------------------------------------------------------- | ----------- | ---------- | ---------------- |
+| F59-S01 | Market pack como fonte única de regra por mercado                | 🟢 available | critical   | —                |
+| F59-S02 | Mercado no workspace e fuso no contato                           | ⏸️ blocked  | critical   | F59-S01          |
+| F59-S03 | Consentimento e supressão por canal                              | ⏸️ blocked  | critical   | F59-S02          |
+| F59-S04 | Portão de consentimento como serviço único                       | ⏸️ blocked  | critical   | F59-S01, F59-S03 |
+| F59-S05 | Aplicar o portão no outbound, no agendador e nas tools do agente | ⏸️ blocked  | critical   | F59-S04          |
+| F59-S06 | Detector de revogação em linguagem natural                       | ⏸️ blocked  | high       | F59-S03, F59-S04 |
+| F59-S07 | Valores personalizados por workspace                             | ⏸️ blocked  | high       | F59-S02          |
+| F59-S08 | DS 3.0 opção A — rampa de marca, motion e regras em lint         | 🟢 available | medium     | —                |
 
 ## Fase 6 — Pipeline
 

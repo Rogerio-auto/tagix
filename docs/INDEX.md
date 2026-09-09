@@ -95,6 +95,17 @@ Cada arquivo abaixo é denso e independente. Ler na ordem recomendada para `/hm-
 | 13 | [`features/DASHBOARD.md`](./features/DASHBOARD.md) | Dashboard role-aware (5 dashboards) + sistema de conversões (lacuna do v1) |
 | 14 | [`features/PERMISSIONS.md`](./features/PERMISSIONS.md) | Roles, matriz de permissões, 3 níveis de configuração (pessoal/workspace/plataforma) |
 
+### Direção de produto (propostas — 2026-09-08, aguardando aprovação)
+
+| # | Arquivo | Propósito |
+|---|---|---|
+| 15 | [`features/AGENCIA_PLAN.md`](./features/AGENCIA_PLAN.md) | **Ler primeiro.** tagix como plataforma de entrega de uma agência, em **dois mercados (BR + EUA)**: posicionamento, market packs, conformidade (TCPA/10DLC/CAN-SPAM/LGPD), economia unitária a US$ 800, Meta BM, recomendação de nicho e ordem de execução |
+| 16 | [`features/CANAIS_PLAN.md`](./features/CANAIS_PLAN.md) | Paridade de canais com o GoHighLevel: e-mail (P0), webchat, SMS/10DLC, Messenger, voz. Onde o `IChannelAdapter` atual quebra e o motor de revogação. Fase F60 |
+| 17 | [`features/APP_MOBILE_PLAN.md`](./features/APP_MOBILE_PLAN.md) | Aplicativo do cliente (PWA, iPhone-first) sobre a base da F36: service worker, Web Push, instalação assistida, visão de dono, leitura offline. Decisão PWA vs App Store. Fase F61 |
+| 18 | [`features/CONTENT_STUDIO_PLAN.md`](./features/CONTENT_STUDIO_PLAN.md) | Módulo de conteúdo: voz de marca por evidência, estratégia antes de gravar, material bruto → peças, aprimoramento de fotos, calendário e publicação. Fases F62–F66 |
+| 19 | [`DESIGN_SYSTEM_V3_DELTA.md`](./DESIGN_SYSTEM_V3_DELTA.md) | Análise da proposta DS 3.0 "Agency OS" contra o DS v2 implementado: reversão tipográfica, colisão de tokens, contraste do tema claro, regras a adotar. Artefato em [`design/ds-3.0-agency-os.html`](./design/ds-3.0-agency-os.html) |
+| 20 | [`research/2026-09-08-modelo-agencia-local.md`](./research/2026-09-08-modelo-agencia-local.md) | Leitura crítica do modelo "monta uma vez, vende para todo negócio local" (GoHighLevel) + delta contra o tagix. Transcrição em `research/transcripts/` |
+
 ### Migração / decisões
 
 | # | Arquivo | Propósito |
