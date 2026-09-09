@@ -2,7 +2,7 @@
 id: F59-S07
 title: Valores personalizados por workspace
 phase: F59
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F59-S02]
@@ -12,6 +12,7 @@ source_docs:
   - docs/research/2026-09-08-modelo-agencia-local.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T13:12:30Z
+completed_at: 2026-09-09T13:23:02Z
 
 ---
 # F59-S07 — Valores personalizados por workspace
