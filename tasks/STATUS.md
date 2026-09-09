@@ -52,7 +52,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F58   | 14     | 9   | 0   | 0   | 0   | 0   | 5   |
 | F59   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F60   | 4     | 0   | 2   | 0   | 0   | 0   | 2   |
+| F60   | 5     | 0   | 2   | 0   | 0   | 1   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
@@ -702,8 +702,9 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ------- | --------------------------------------------------------- | ---------- | ---------- | ---------------- |
 | F60-S01 | Capacidades negociadas do adapter e identidade do contato | ✅ done     | critical   | —                |
 | F60-S02 | Restrição de envio genérica no composer                   | ✅ done     | high       | F60-S01          |
-| F60-S03 | E-mail como canal — envio, recebimento e encadeamento     | ⏸️ blocked | critical   | F60-S01, F60-S02 |
+| F60-S03 | E-mail como canal — fundação, envio e encadeamento        | 🟣 review   | critical   | F60-S01, F60-S02 |
 | F60-S07 | Campanhas para os outros canais                           | ⏸️ blocked | critical   | F60-S03          |
+| F60-S08 | E-mail — recebimento, retorno e supressão por bounce      | ⏸️ blocked | critical   | F60-S03          |
 
 ## Fase 7 — Dashboard + Conversões
 

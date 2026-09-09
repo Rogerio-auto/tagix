@@ -55,6 +55,12 @@ export interface Channel {
   // Instagram
   readonly igUserId?: string;
   readonly fbPageId?: string;
+  // E-mail (F60-S03). `emailFrom` e o remetente do cliente no dominio dele
+  // (`orcamento@cliente.com`); `emailDomain` e o dominio autenticado com
+  // SPF/DKIM/DMARC, que e o que decide se a mensagem chega ou cai no spam.
+  readonly emailFrom?: string;
+  readonly emailFromName?: string;
+  readonly emailDomain?: string;
 }
 
 /** Tag de mensagem IG fora da janela 24h (vide INSTAGRAM.md §6). */
@@ -66,11 +72,30 @@ export type IgMessageTag =
 
 // --- Inputs de envio (outbound) ---
 
+/**
+ * Opcoes de envio especificas de e-mail (F60-S03).
+ *
+ * Tipadas e OPCIONAIS, num campo proprio: e-mail precisa de assunto e cadeia de
+ * referencias, e nenhum outro canal precisa. Espalhar `subject?` e `references?`
+ * no contrato comum faria todo adapter carregar campo que nao usa — o vicio que
+ * `CANAIS_PLAN` §3.1 descreve. Um objeto nomeado por canal mantem o contrato
+ * comum limpo e o tipo honesto (nada de `Record<string, unknown>`).
+ */
+export interface EmailSendOptions {
+  /** Assunto explicito. Vence tudo. */
+  readonly subject?: string;
+  /** Assunto da thread, para derivar "Re: ...". */
+  readonly threadSubject?: string;
+  /** `References` recebidas, para montar a cadeia da resposta. */
+  readonly references?: readonly string[];
+}
+
 export interface SendTextInput {
   readonly contactRemoteId: string;
   readonly text: string;
   readonly replyToExternalId?: string;
   readonly messageTag?: IgMessageTag;
+  readonly email?: EmailSendOptions;
 }
 
 export interface SendMediaInput {
@@ -82,6 +107,7 @@ export interface SendMediaInput {
   readonly caption?: string;
   readonly replyToExternalId?: string;
   readonly messageTag?: IgMessageTag;
+  readonly email?: EmailSendOptions;
 }
 
 export interface TemplateComponent {
