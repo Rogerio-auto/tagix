@@ -13,6 +13,11 @@ import { parseOutboundJob } from './job';
 import { dispatchOutbound } from './dispatch';
 import { finalizeOutbound } from './finalize';
 import { handleOutboundEnvelope } from './worker';
+// O portao de consentimento (F59-S05) e parte do pipeline: seu default e o
+// portao REAL, que toca o banco. Estes testes exercitam roteamento/finalize,
+// nao conformidade — entao injetam explicitamente o permissivo. A conformidade
+// tem suite propria em `consent-gate.test.ts`.
+import { allowAllConsentGate } from './consent-gate';
 import type { OutboundDeps } from './ports';
 import type { OrphanStatusStore } from '../inbound/status';
 import type { Envelope } from '@hm/shared/mq';
@@ -331,7 +336,7 @@ describe('handleOutboundEnvelope — finalize', () => {
         text: 'hi',
       },
     };
-    await handleOutboundEnvelope(envelope, { deps: d.deps, logger });
+    await handleOutboundEnvelope(envelope, { deps: d.deps, logger, consentGate: allowAllConsentGate });
     expect(d.persist).toHaveBeenCalledOnce();
     expect(d.emit).toHaveBeenCalledOnce();
     expect(d.persist.mock.calls[0]?.[0]).toMatchObject({ status: 'sent', externalId: 'wamid.X' });
@@ -372,7 +377,7 @@ describe('handleOutboundEnvelope — finalize', () => {
         text: 'hi',
       },
     };
-    await handleOutboundEnvelope(envelope, { deps: d.deps, logger });
+    await handleOutboundEnvelope(envelope, { deps: d.deps, logger, consentGate: allowAllConsentGate });
     expect(d.persist.mock.calls[0]?.[0]).toMatchObject({ status: 'failed' });
     expect(d.emitNew).not.toHaveBeenCalled();
   });

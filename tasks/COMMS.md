@@ -679,3 +679,34 @@ Rogério: é o repositório dele, `main` tem branch protection e o push seria gr
 implementa precisa commitar antes. Perdi um ciclo com isso no F59-S01 — o código ficou na árvore
 de trabalho e só entrou em `main` no commit seguinte. Sem dano, mas vale um aviso no
 `PROTOCOL.md` §3 ("Implementar" → "Implementar **e commitar**").
+
+---
+
+## 2026-09-09 — F59-S05 · suite de @hm/workers ja vinha vermelha em `main`
+
+Medi o baseline com `git stash` antes de alterar qualquer coisa: em `main`, `pnpm --filter
+@hm/workers test` fecha com **4 arquivos e 3 testes falhando** (459 passam). Depois do slot: os
+**mesmos** 4 arquivos e 3 testes, com 471 passando. Zero regressao — mas a suite nao esta verde, e o
+DoD de qualquer slot que rode `@hm/workers test` fica impossivel de cumprir literalmente.
+
+Falhas, todas com `Hook timed out in 10000ms`:
+- `src/evaluation/*` — `runEvaluationTick` (3 testes)
+- `src/billing/recurrence.test.ts` — falha ao carregar
+- `src/dashboard-refresh/dashboard-refresh.test.ts` — falha ao carregar
+
+Parece hook de setup esperando recurso que nao sobe no ambiente dev local (ou timeout curto demais
+para o custo do setup). Sugestao: slot proprio no dominio de F57 (CI/cobertura) para (a) diagnosticar
+o hook, (b) marcar como integracao com `describe.skipIf(!process.env.X)` se depender de servico
+externo, ou (c) subir o timeout com justificativa. Enquanto isso, quem validar slot em `@hm/workers`
+precisa comparar contra este baseline em vez de exigir verde absoluto.
+
+Tambem: `apps/api` exige **RabbitMQ** no ar alem de Postgres e Redis — `app.test.ts` (health) e
+`routes/v1/routes.test.ts` falham com `ECONNREFUSED 5672` sem ele. Com os tres servicos: 1021 testes
+verdes.
+
+**Consolidacao pendente (baixa prioridade):** o carregamento do contexto de consentimento existe hoje
+em tres lugares parecidos — `apps/api/src/services/consent`, `apps/workers/src/outbound/consent-gate.ts`
+e `campaigns/db-ports.checkConsent`. A duplicacao e deliberada (workers nao pode depender de api) e
+pequena (uma consulta), e a REGRA nao esta duplicada: e sempre `decideOutbound` de `@hm/shared`.
+Ainda assim, mover o carregador para `@hm/db` (ex.: `consentRepo.loadDecisionContext`) deixaria um
+lugar so.

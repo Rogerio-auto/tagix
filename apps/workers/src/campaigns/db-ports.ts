@@ -21,9 +21,11 @@
  */
 import { Buffer } from 'node:buffer';
 import { and, asc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
-import { decryptSecret, getDb, schema, withWorkspace } from '@hm/db';
+import { consentRepo, decryptSecret, getDb, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import { GraphClient, fetchChannelQuality, type ChannelHealth } from '@hm/channels';
+import { decideOutbound, isMarketCode } from '@hm/shared';
+import type { ChannelKind, MarketCode, OutboundDecision } from '@hm/shared';
 import { makeEnvelope, QUEUES } from '@hm/shared/mq';
 import type { MqHandle } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
@@ -335,6 +337,87 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           });
         }
         return out;
+      });
+    },
+
+    /**
+     * F59-S05 — portao de consentimento antes de enfileirar.
+     *
+     * Campanha e sempre `marketing`: e o produtor que carrega a exigencia de
+     * consentimento (AGENCIA_PLAN §4.4). Checar aqui evita enfileirar mil
+     * mensagens que seriam recusadas uma a uma no worker outbound.
+     */
+    async checkConsent(
+      campaign: RunningCampaign,
+      dispatch: PendingDispatch,
+      now: Date,
+    ): Promise<OutboundDecision> {
+      return withWorkspace(campaign.workspaceId, async (tx) => {
+        const [canal] = await tx
+          .select({ provider: channels.provider })
+          .from(channels)
+          .where(eq(channels.id, campaign.channelId))
+          .limit(1);
+
+        const [ws] = await tx
+          .select({ market: schema.workspaces.market })
+          .from(schema.workspaces)
+          .where(eq(schema.workspaces.id, campaign.workspaceId))
+          .limit(1);
+
+        const [contato] = await tx
+          .select({ timezone: schema.contacts.timezone })
+          .from(schema.contacts)
+          .where(eq(schema.contacts.id, dispatch.contactId))
+          .limit(1);
+
+        if (!canal || !ws || !contato) {
+          return {
+            allowed: false,
+            reason: 'suppressed',
+            message: 'Canal, workspace ou contato nao encontrado — envio recusado por seguranca.',
+            usedFallbackTimezone: true,
+            timezone: 'UTC',
+          } satisfies OutboundDecision;
+        }
+
+        const market: MarketCode = isMarketCode(ws.market) ? ws.market : 'BR';
+        const channel = canal.provider as ChannelKind;
+
+        const consent = await consentRepo.getSnapshot(tx, {
+          workspaceId: campaign.workspaceId,
+          contactId: dispatch.contactId,
+          channel,
+          purpose: 'marketing',
+        });
+
+        return decideOutbound({
+          market,
+          channel,
+          purpose: 'marketing',
+          consent,
+          contactTimezone: contato.timezone ?? null,
+          // Canais de campanha de hoje (Meta/WAHA) nao exigem registro externo.
+          // Quando o SMS entrar (F60-F), este valor vem do estado do canal.
+          channelRegistration: 'none',
+          now,
+        });
+      });
+    },
+
+    /**
+     * F59-S05 — tira o recipient da execucao por supressao/falta de consentimento.
+     * Distinto de `invalid` (dado ruim): aqui o dado esta certo e a pessoa
+     * simplesmente nao pode receber. Reusa o mesmo caminho de `failed` para que
+     * o motivo apareca no relatorio da campanha.
+     */
+    async denyRecipient(
+      campaign: RunningCampaign,
+      dispatch: PendingDispatch,
+      reason: string,
+    ): Promise<void> {
+      await withWorkspace(campaign.workspaceId, async (tx) => {
+        await failRecipient(tx, dispatch.recipientId, `consent_${reason}`);
       });
     },
 

@@ -51,6 +51,17 @@ const base = {
   conversationId: z.string().min(1),
   /** Id da mensagem já persistida em estado `pending` (para correlação/status). */
   messageId: z.string().min(1),
+  /**
+   * Finalidade da mensagem (F59-S05 — AGENCIA_PLAN §4.4). Decide se o portão de
+   * consentimento exige opt-in registrado.
+   *
+   * Default `transactional` de propósito: atendente respondendo na inbox e agente
+   * respondendo numa conversa aberta são transacionais, e são a esmagadora maioria
+   * dos jobs. Só campanha marca `marketing` — e é ela que carrega a exigência de
+   * consentimento. Um default `marketing` bloquearia a operação inteira do cliente
+   * no primeiro deploy.
+   */
+  purpose: z.enum(['transactional', 'marketing']).optional(),
 };
 
 export const outboundJobSchema = z.discriminatedUnion('kind', [
@@ -161,4 +172,16 @@ export type IgMessageTag = z.infer<typeof igMessageTagSchema>;
 /** Valida o payload bruto do envelope. Lança `ZodError` em shape inválido. */
 export function parseOutboundJob(payload: unknown): OutboundJob {
   return outboundJobSchema.parse(payload);
+}
+
+/**
+ * Finalidade efetiva do job.
+ *
+ * Ausente significa `transactional`: jobs produzidos antes da F59-S05 não
+ * carregam o campo, e tratá-los como marketing bloquearia a operação inteira do
+ * cliente no primeiro deploy. Só quem envia campanha marca `marketing`
+ * explicitamente — e é essa marcação que aciona a exigência de consentimento.
+ */
+export function purposeOf(job: OutboundJob): 'transactional' | 'marketing' {
+  return 'purpose' in job && job.purpose !== undefined ? job.purpose : 'transactional';
 }
