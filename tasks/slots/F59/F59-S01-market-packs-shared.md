@@ -2,7 +2,7 @@
 id: F59-S01
 title: Market pack como fonte única de regra por mercado
 phase: F59
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: []
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/CANAIS_PLAN.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T05:21:25Z
+completed_at: 2026-09-09T05:25:02Z
 
 ---
 # F59-S01 — Market pack como fonte única de regra por mercado
