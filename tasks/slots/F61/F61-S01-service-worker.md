@@ -55,6 +55,7 @@ decisão explícita e auditável.
 - `apps/web/app/manifest.ts`
 - `apps/web/shared/pwa/**`
 - `apps/web/next.config.mjs`
+- `eslint.config.mjs`
 
 ### files_forbidden
 
@@ -105,13 +106,13 @@ decisão explícita e auditável.
 
 ## Definition of Done
 
-- [ ] `/api/**` nunca é servido do cache; teste cobre a decisão de rota.
-- [ ] Kill switch remove o SW e limpa os caches.
-- [ ] Cache de versão anterior é apagado no `activate`.
-- [ ] Nenhuma troca de versão no meio da sessão.
-- [ ] Erro no handler cai para a rede, nunca para tela branca.
-- [ ] `sw.js` servido com `no-store`.
-- [ ] Registro não bloqueia o primeiro paint.
+- [x] `/api/**` nunca é servido do cache; teste cobre a decisão de rota.
+- [x] Kill switch remove o SW e limpa os caches.
+- [x] Cache de versão anterior é apagado no `activate`.
+- [x] Nenhuma troca de versão no meio da sessão.
+- [x] Erro no handler cai para a rede, nunca para tela branca.
+- [x] `sw.js` servido com `no-store`.
+- [x] Registro não bloqueia o primeiro paint.
 
 ## Validação
 
@@ -124,3 +125,69 @@ pnpm lint
 ## Notas
 
 - A régua deste slot é a reversibilidade, não a velocidade. Velocidade é a F61-S06.
+
+## Decisões tomadas na execução (2026-09-09)
+
+1. **Kill switch antes do cache.** `/sw-kill.json` com `disabled: true` faz qualquer worker
+   instalado limpar os caches, sair do registro e recarregar os clientes. Não existe rollback de
+   deploy para service worker: um SW quebrado continua servindo a versão quebrada para quem nunca
+   mais vai receber a correção, porque a correção chega por uma rede que ele intercepta.
+
+2. **Falha de rede na checagem do kill switch NÃO desliga nada.** O padrão seguro é continuar
+   funcionando — desligar por causa de um 4G ruim tiraria o cache justamente de quem mais precisa
+   dele.
+
+3. **A regra de cache mora fora do worker.** `sw-strategy.js` é módulo ESM puro que o SW importa
+   em runtime e o Vitest importa no teste. Um SW roda num contexto que o Vitest não tem, e a
+   decisão que mais importa — "isto pode vir do cache?" — é justamente a que precisa de teste.
+   O teste carrega o arquivo REAL, não uma reimplementação.
+
+4. **Service worker de tipo `module`** (Safari 15.4+, Chrome 91+) para permitir esse `import`.
+   Onde não houver suporte, o registro rejeita e o app segue sem SW — que é o comportamento de
+   hoje. É melhoria progressiva, não dependência.
+
+5. **`/api`, `/auth` e `/socket.io` são rede pura, sem exceção.** "12 leads esperando" servido do
+   cache de ontem é pior que um erro honesto: o erro faz o dono tentar de novo, o número velho faz
+   ele ir dormir tranquilo. Há teste inclusive para o caso adversarial (`/api/contacts/avatar.png`
+   continua sendo rede) e para o quase-falso-positivo (`/apiary/...` não é `/api/`).
+
+6. **Nada é pré-cacheado no `install`.** Pré-cache exige conhecer os nomes com hash do build, o
+   que acoplaria o SW ao pipeline do Next. O ganho real vem do cache-first em `/_next/static`, que
+   se preenche sozinho na primeira visita.
+
+7. **Sem `skipWaiting` automático.** Trocar o código sob os pés de quem está no meio de uma
+   resposta a cliente é como recarregar a página sozinho. A versão nova assume na próxima
+   navegação, ou quando a página mandar `skip-waiting`.
+
+8. **`network-only` não chama `respondWith`.** Deixar o navegador seguir o caminho normal é mais
+   barato e menos arriscado que reimplementar um passthrough dentro do worker.
+
+9. **`no-store` em `sw.js`, `sw-strategy.js` e `sw-kill.json`.** Um worker cacheado pelo HTTP é o
+   mesmo problema um nível acima; um interruptor cacheado não desliga nada. Verificado no build de
+   produção: `Cache-Control: no-store, must-revalidate`.
+
+10. **`start_url` passa a ser `/hoje`, e `id` continua `/`.** Quem instala no celular quer três
+    respostas rápidas, não navegar. Mudar o `id` faria o navegador tratar como um app diferente e
+    perder a instalação existente.
+
+11. **Registro depois do primeiro paint, só em produção sob HTTPS.** Registrar durante o
+    carregamento disputa banda com o conteúdo que o SW deveria acelerar — deixaria a primeira
+    visita mais lenta para tornar a segunda mais rápida. Em dev, o SW serviria build antigo e
+    transformaria "não atualizou" no bug mais confuso do projeto.
+
+12. **Globais de service worker declarados no ESLint.** Sem isso o `no-undef` acusava 24 erros em
+    código correto, e um lint que erra sobre código correto é um lint que as pessoas aprendem a
+    ignorar.
+
+## Resultado
+
+- 12 testes novos em `shared/pwa/strategy.test.ts`; suíte web 202/202.
+- Typecheck limpo. Lint: 0 erros (as 109 warnings são dívida pré-existente de DS/i18n).
+- Build de produção verificado servindo `sw.js` com `no-store` e o manifest com `start_url: /hoje`.
+
+## Como desligar em produção, se precisar
+
+```bash
+# Em /opt/leadium, editar apps/web/public/sw-kill.json para {"disabled": true} e deployar.
+# Todo worker instalado se apaga na próxima checagem (imediata no activate, 6h no fetch).
+```

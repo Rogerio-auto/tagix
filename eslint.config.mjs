@@ -33,6 +33,33 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
+  // ── F61-S01 — service worker: outro runtime, outros globais.
+  //
+  // `sw.js` e `sw-strategy.js` não rodam no navegador nem no Node: rodam num
+  // ServiceWorkerGlobalScope, onde `self`, `caches`, `fetch`, `Request` e
+  // `Response` existem e `window`/`document` NÃO existem. Sem esta declaração o
+  // `no-undef` acusa 24 erros em código correto — e um lint que erra sobre código
+  // correto é um lint que as pessoas aprendem a ignorar.
+  {
+    files: ['apps/web/public/sw*.js'],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'module',
+      globals: {
+        self: 'readonly',
+        caches: 'readonly',
+        clients: 'readonly',
+        fetch: 'readonly',
+        Request: 'readonly',
+        Response: 'readonly',
+        URL: 'readonly',
+        Promise: 'readonly',
+        Date: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+      },
+    },
+  },
   // ── F59-S08 — regras vindas da proposta DS 3.0 §07 (docs/DESIGN_SYSTEM_V3_DELTA.md).
   //
   // As tres tratam do mesmo vicio: valor que deveria vir de configuracao aparecendo
