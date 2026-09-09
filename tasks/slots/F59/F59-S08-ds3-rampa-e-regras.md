@@ -2,7 +2,7 @@
 id: F59-S08
 title: DS 3.0 opção A — rampa de marca, motion e regras em lint
 phase: F59
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: []
