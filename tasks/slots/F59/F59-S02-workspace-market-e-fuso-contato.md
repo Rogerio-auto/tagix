@@ -2,7 +2,7 @@
 id: F59-S02
 title: Mercado no workspace e fuso no contato
 phase: F59
-status: in-progress
+status: review
 priority: critical
 estimated_size: S
 depends_on: [F59-S01]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/AGENCIA_PLAN.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T05:28:52Z
+completed_at: 2026-09-09T05:43:19Z
 
 ---
 # F59-S02 — Mercado no workspace e fuso no contato
