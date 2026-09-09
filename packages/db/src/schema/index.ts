@@ -262,6 +262,7 @@ export * from './contacts';
 export * from './consent'; // contact_consents, contact_suppressions (tenant)
 export * from './custom_values'; // workspace_custom_values (tenant)
 export * from './contact_identities'; // contact_identities (tenant)
+export * from './push'; // push_subscriptions (tenant — F61-S03)
 export * from './conversations';
 // messages também exporta `mediaStatusEnum` + tipo `MediaStatus` (F52-S01) p/ workers/shared.
 export * from './messages';
@@ -431,6 +432,8 @@ export const RLS_TABLES = [
   'workspace_custom_values',
   'contact_consents',
   'contact_suppressions',
+  // Assinaturas de Web Push por dispositivo (F61-S03).
+  'push_subscriptions',
   // Knowledge Base domain (workspace-scoped).
   'kb_documents',
   'kb_chunks',

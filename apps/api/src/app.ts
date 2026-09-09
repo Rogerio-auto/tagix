@@ -39,6 +39,7 @@ import { createUploadsRouter } from './routes/uploads';
 import { createOnboardingRouter } from './routes/onboarding';
 import { createCalendarRouter } from './routes/calendar';
 import { createDashboardRouter } from './routes/dashboard';
+import { createPushRouter } from './routes/push';
 import { createMembersMeRouter } from './routes/members/me';
 import { createWorkspaceSettingsRouter } from './routes/workspace';
 import { createOrgSettingsRouter } from './routes/org';
@@ -194,6 +195,8 @@ export function createApp(): Express {
   app.use(createCalendarRouter());
   // Dashboard (F8-S02): GET /dashboard/me role-filtered + drill-down /metrics/:key.
   app.use(createDashboardRouter());
+  // F61-S03 — assinatura de Web Push por dispositivo.
+  app.use(createPushRouter());
   // Settings pessoais (F8-S06): PATCH /members/me + password + sessions.
   app.use(createMembersMeRouter());
   // Dashboard customização (F8-S04): layout pessoal + config de obrigatórios/limites.
