@@ -9,6 +9,7 @@ import {
   Megaphone,
   MessagesSquare,
   Settings,
+  Sun,
   Users,
   Workflow,
   type LucideIcon,
@@ -41,6 +42,9 @@ export interface NavItem {
 // A ordem importa: os primeiros destinos visíveis (por role) preenchem a
 // bottom tab bar do mobile; o restante cai no drawer "Mais" (overflow).
 export const NAV: readonly NavItem[] = [
+  // F61-S02: `Hoje` vem primeiro porque é a tela que o dono abre no celular —
+  // e a ordem daqui decide quem ocupa a bottom tab bar.
+  { href: '/hoje', label: 'Hoje', icon: Sun },
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/conversations', label: 'Conversas', icon: MessagesSquare },
   { href: '/agents', label: 'Agentes', icon: Bot },

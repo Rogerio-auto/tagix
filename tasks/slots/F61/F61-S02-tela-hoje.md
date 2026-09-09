@@ -2,7 +2,7 @@
 id: F61-S02
 title: Tela Hoje — a visão de dono
 phase: F61
-status: available
+status: review
 priority: critical
 estimated_size: M
 depends_on: []
@@ -10,8 +10,11 @@ blocks: [F61-S08]
 source_docs:
   - docs/features/APP_MOBILE_PLAN.md
   - docs/MOBILE_UX.md
----
+agent_id: backend-engineer
+claimed_at: 2026-09-09T18:54:48Z
+completed_at: 2026-09-09T19:10:38Z
 
+---
 # F61-S02 — Tela Hoje: a visão de dono
 
 ## Objetivo
@@ -61,13 +64,13 @@ primeiro ganha. Ele fica em destaque.
 
 ## Definition of Done
 
-- [ ] Uma chamada só alimenta a tela; nada de três requisições em cascata no 4G.
-- [ ] O tempo de espera do lead é exibido em linguagem humana ("há 12 min"), não em timestamp.
-- [ ] Resultado do mês compara com o anterior e é honesto quando o mês está ruim.
-- [ ] Nenhum termo interno de infraestrutura aparece na tela.
-- [ ] Tudo que é ação fica na zona do polegar; nenhuma ação destrutiva sem confirmação.
-- [ ] A tela responde a workspace sem dado nenhum sem parecer quebrada.
-- [ ] RLS: o endpoint devolve só o workspace da sessão; teste cobre isolamento.
+- [x] Uma chamada só alimenta a tela; nada de três requisições em cascata no 4G.
+- [x] O tempo de espera do lead é exibido em linguagem humana ("há 12 min"), não em timestamp.
+- [x] Resultado do mês compara com o anterior e é honesto quando o mês está ruim.
+- [x] Nenhum termo interno de infraestrutura aparece na tela.
+- [x] Tudo que é ação fica na zona do polegar; nenhuma ação destrutiva sem confirmação.
+- [x] A tela responde a workspace sem dado nenhum sem parecer quebrada.
+- [x] RLS: o endpoint devolve só o workspace da sessão; teste cobre isolamento.
 
 ## Validação
 
@@ -82,3 +85,28 @@ pnpm lint
 
 - O dono abre isto no semáforo. Se precisar de dois toques para saber se tem lead esperando, falhou.
 - Zero é um número honesto; "—" não é. Workspace sem dado mostra zero e o que fazer a respeito.
+
+## Decisões tomadas na execução (2026-09-09)
+
+1. **"Aguardando resposta" = `lastMessageFrom = 'contact'`.** É o campo denormalizado que existe
+   exatamente para isso não virar join em `messages` toda vez que a tela abre — e ela abre a cada
+   minuto, no celular, no 4G.
+2. **Ordenado do MAIS ANTIGO para o mais novo.** Quem espera há mais tempo está mais perto de fechar
+   com o concorrente. Ordenar pelo mais recente seria confortável e errado.
+3. **Conversa adiada não conta como esperando.** Alguém decidiu que ela espera; não é lead
+   abandonado. Contá-la faria o dono perder a confiança no número.
+4. **Os minutos vêm calculados do SERVIDOR**, junto com `serverTime`. O relógio do celular pode estar
+   errado, e é justamente este número que decide se o dono para o que está fazendo.
+5. **Uma chamada, não três.** Três requisições em cascata no 4G são meio segundo a mais e três
+   chances de a tela ficar pela metade.
+6. **Vazio explicado, nunca em branco.** "Ninguém esperando · Todo mundo que escreveu já foi
+   respondido" é resposta. Tela vazia parece defeito, e o dono conclui que o produto quebrou.
+7. **`/hoje` convive com `/`,** não substitui. São públicos diferentes: o dashboard serve quem opera
+   o dia inteiro; esta tela serve quem abre o celular entre uma tarefa e outra.
+8. **Cor por urgência com corte em 15 e 60 minutos.** Acima de 15, o lead já está pedindo orçamento
+   para outro.
+
+## Resultado
+
+9 testes novos em `@hm/api`, cobrindo a definição de "esperando", o isolamento por workspace e o
+workspace vazio. Typecheck limpo em `@hm/api` e `@hm/web`.
