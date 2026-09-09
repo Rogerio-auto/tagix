@@ -2,7 +2,7 @@
 id: F61-S12
 title: Hoje enriquecida — identidade, linguagem, ação e distribuição
 phase: F61
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: [F61-S02]
