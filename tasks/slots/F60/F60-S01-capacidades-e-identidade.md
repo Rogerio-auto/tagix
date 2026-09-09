@@ -2,7 +2,7 @@
 id: F60-S01
 title: Capacidades negociadas do adapter e identidade do contato
 phase: F60
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: []
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/CANAIS_PLAN.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T14:09:12Z
+completed_at: 2026-09-09T14:22:03Z
 
 ---
 # F60-S01 — Capacidades negociadas do adapter e identidade do contato
