@@ -2,7 +2,7 @@
 id: F61-S12
 title: Hoje enriquecida — identidade, linguagem, ação e distribuição
 phase: F61
-status: in-progress
+status: review
 priority: critical
 estimated_size: L
 depends_on: [F61-S02]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/APP_MOBILE_PLAN.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T19:59:44Z
+completed_at: 2026-09-09T20:16:58Z
 
 ---
 # F61-S12 — Hoje enriquecida
