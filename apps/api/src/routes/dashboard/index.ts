@@ -16,6 +16,7 @@ import type { Role } from '@hm/shared';
 import { requireAuth, withRLS } from '../../middlewares/auth';
 import { drillDown, loadDashboard } from '../../services/dashboard';
 import { loadToday } from './today';
+import { createTodayActionsRouter } from './today-actions';
 
 const metricKeySchema = z
   .string()
@@ -31,6 +32,10 @@ const drillParamSchema = z
 export function createDashboardRouter(): Router {
   const router = Router();
   const guard = [requireAuth, withRLS] as const;
+
+  // Ações da tela "Hoje" (F61-S12) — montadas aqui para não multiplicar pontos
+  // de mount em `app.ts`. Guards próprios (a permissão varia por ação).
+  router.use(createTodayActionsRouter());
 
   // GET /api/dashboard/today — a visão de dono (F61-S02). Uma chamada só: a tela
   // abre no 4G, muitas vezes na obra, e três requisições em cascata são meio

@@ -42,6 +42,7 @@ import type {
   ServerToClientEvent,
   TypingFromContactPayload,
 } from '@hm/shared';
+import { previewFor } from '@hm/shared';
 import type { InboundEvent } from '@hm/channels';
 import type { DbTx } from '@hm/db';
 import type { Logger } from '@hm/logger';
@@ -310,11 +311,12 @@ interface InsertedMessage {
 }
 
 /** Preview curto da última mensagem (texto ou rótulo do tipo de mídia). */
+/**
+ * F61-S12: delega a `@hm/shared`. Antes emitia `[${type}]` — sintaxe de máquina
+ * que chegava à tela do dono como `[voice]`.
+ */
 function previewOf(event: InboundMessageEvent): string {
-  if (typeof event.content === 'string' && event.content.length > 0) {
-    return event.content.slice(0, 280);
-  }
-  return `[${event.messageType}]`;
+  return previewFor(event.messageType, event.content ?? null);
 }
 
 function toDate(rawTimestamp: string): Date {
@@ -424,6 +426,7 @@ export class DbInboundPersistence implements InboundPersistencePort {
     const autoAssignPort = this.autoAssign;
     const outcome = await withWorkspace(workspaceId, async (tx) => {
       const resolved = await ensureConversation(tx, workspaceId, channelId, remoteId);
+      await fillContactName(tx, resolved.contactId, messageEvents);
       const inserted = await insertMessages(
         tx,
         workspaceId,
@@ -805,6 +808,34 @@ async function ensureConversation(
     assignedTo: row.assignedTo ?? null,
     teamId: row.teamId ?? null,
   };
+}
+
+/**
+ * Preenche `display_name` do contato com o nome de perfil do provider (F61-S12).
+ *
+ * Por que existe: o WhatsApp manda o perfil do remetente em
+ * `value.contacts[].profile.name`, fora do objeto da mensagem — e o parser nunca
+ * lia. Resultado em produção: 199 dos 200 contatos sem nome, e a tela "Hoje"
+ * mostrando "Contato sem nome" em quase toda linha.
+ *
+ * **Só preenche vazio.** O nome de perfil é palpite do dono do aparelho ("Eu",
+ * "Casa", um emoji); o nome no CRM é decisão de quem atende. Decisão ganha de
+ * palpite, então o `WHERE display_name IS NULL` não é otimização — é a regra.
+ * Ele também torna a operação idempotente e imune a corrida entre consumidores.
+ */
+async function fillContactName(
+  tx: DbTx,
+  contactId: string,
+  events: readonly InboundMessageEvent[],
+): Promise<void> {
+  const { contacts } = schema;
+  const nome = events.find((e) => e.contactName !== undefined)?.contactName?.trim();
+  if (nome === undefined || nome === '') return;
+
+  await tx
+    .update(contacts)
+    .set({ displayName: nome })
+    .where(and(eq(contacts.id, contactId), isNull(contacts.displayName)));
 }
 
 /**

@@ -2,7 +2,7 @@
 id: F61-S12
 title: Hoje enriquecida — identidade, linguagem, ação e distribuição
 phase: F61
-status: available
+status: review
 priority: critical
 estimated_size: L
 depends_on: [F61-S02]
@@ -10,6 +10,8 @@ blocks: []
 source_docs:
   - docs/features/APP_MOBILE_PLAN.md
 agent_id: backend-engineer
+claimed_at: 2026-09-09T19:59:44Z
+completed_at: 2026-09-09T20:16:58Z
 
 ---
 # F61-S12 — Hoje enriquecida
@@ -90,8 +92,7 @@ uma fila; está errada para uma tela de decisão.
 - `apps/workers/src/outbound/db-ports.ts`
 - `apps/workers/src/flows/outbound-publisher.ts`
 - `apps/workers/src/**/*.test.ts`
-- `apps/api/src/routes/dashboard/today.ts`
-- `apps/api/src/routes/dashboard/today.test.ts`
+- `apps/api/src/routes/dashboard/**`
 - `apps/web/features/today/**`
 
 ### files_forbidden
@@ -152,16 +153,16 @@ Cada grupo mostra até 5 e diz quantos faltam. O total continua visível.
 
 ## Definition of Done
 
-- [ ] Parser captura `profile.name`; teste cobre envelope real com e sem `contacts`.
-- [ ] `ensureContact` preenche nome nulo e NUNCA sobrescreve nome existente; teste cobre.
-- [ ] Nenhum gerador de prévia emite `[${type}]`; teste cobre os quatro.
-- [ ] Prévia já gravada é normalizada na leitura.
-- [ ] Telefone formatado por market pack; desconhecido cai no E.164 sem inventar.
-- [ ] "Contato sem nome" não existe mais no código da tela.
-- [ ] As três ações funcionam e o item sai da lista sem recarregar a tela.
-- [ ] "Perdido" registra no pipeline; não é só esconder.
-- [ ] Agrupamento por urgência com contagem por grupo.
-- [ ] RLS preservada; teste de isolamento continua passando.
+- [x] Parser captura `profile.name`; teste cobre envelope real com e sem `contacts`.
+- [x] `ensureContact` preenche nome nulo e NUNCA sobrescreve nome existente; teste cobre.
+- [x] Nenhum gerador de prévia emite `[${type}]`; teste cobre os quatro.
+- [x] Prévia já gravada é normalizada na leitura.
+- [x] Telefone formatado por market pack; desconhecido cai no E.164 sem inventar.
+- [x] "Contato sem nome" não existe mais no código da tela.
+- [x] As três ações funcionam e o item sai da lista sem recarregar a tela.
+- [x] "Perdido" registra no pipeline; não é só esconder.
+- [x] Agrupamento por urgência com contagem por grupo.
+- [x] RLS preservada; teste de isolamento continua passando.
 
 ## Validação
 
@@ -180,3 +181,78 @@ pnpm lint
 
 - A régua: o dono olha a tela no semáforo e sabe **quem** está esperando e **o que fazer**.
   Nome, prévia e ação são as três coisas que faltavam para isso ser verdade.
+
+## Decisões tomadas na execução (2026-09-09)
+
+1. **O nome de perfil preenche, nunca sobrescreve.** `fillContactName` roda com
+   `WHERE display_name IS NULL`. O nome do WhatsApp é palpite do dono do aparelho ("Eu", "Casa",
+   um emoji); o nome no CRM é decisão de quem atende. Decisão ganha de palpite — e o `WHERE`
+   ainda deixa a operação idempotente e imune a corrida entre consumidores.
+
+2. **O parser casa por `wa_id`, nunca por `contacts[0]`.** Um `value` pode trazer mensagens de
+   contatos diferentes; pegar o primeiro colaria o nome de uma pessoa na conversa de outra. Há
+   teste para isso.
+
+3. **Nome em branco não vira nome.** Gravar `""` trocaria "sem nome" por "com nome vazio": some
+   da tela E some do diagnóstico.
+
+4. **Prévia humanizada na LEITURA, sem migration.** As linhas antigas carregam o tipo dentro do
+   próprio marcador (`[voice]`), então dá para traduzir na saída. O regex é ancorado nas duas
+   pontas de propósito: "[URGENTE] preciso de orçamento" é a mensagem mais valiosa da fila, e um
+   regex frouxo a transformaria em "💬 Mensagem". Há teste para isso.
+
+5. **Telefone formatado pelo DDI do número, não pelo market pack do workspace.** Usar a
+   configuração erraria justamente no caso que importa: o cliente brasileiro nos EUA, que atende
+   os dois. DDI desconhecido devolve o E.164 como veio — um número que parece errado não é
+   discado.
+
+6. **"Sem identificação" em vez de "Contato sem nome"**, e só quando não há nome NEM telefone.
+   O texto antigo aparecia em 199 de 200 linhas e soava como defeito do produto.
+
+7. **`WAITING_LIMIT` subiu de 10 para 30.** Com 61 na fila, um top-10 por antiguidade mostrava
+   só os mais frios — os únicos que já não dá para salvar — e escondia os que ainda dá.
+
+8. **"Esfriando" no topo**, contrariando a intuição de mostrar o mais novo primeiro. Quem espera
+   há duas horas está prestes a fechar com o concorrente; quem escreveu há três minutos ainda
+   espera com paciência.
+
+9. **As faixas são contadas em SQL sobre a fila inteira**, não derivadas da página. O dono
+   precisa do tamanho do problema ("38 esfriando"), não do tamanho da página — e contar no
+   servidor evita trazer 610 linhas quando o workspace crescer.
+
+10. **"Perdido" é uma chamada, não três.** Reusar as rotas existentes exigiria garantir o card,
+    fechar perdido e resolver a conversa — três round-trips de um celular no 4G, com dois estados
+    intermediários possíveis. `POST /api/dashboard/today/:id/lost` faz tudo numa transação: ou o
+    lead vira perdido registrado, ou nada muda.
+
+11. **"Perdido" mexe no pipeline de verdade.** Um botão que só some com a linha seria mentira: o
+    lead sumiria da vista e do número, sem virar aprendizado. Fecha o card (`closed_won = false`)
+    e grava no `deal_history` — é assim que o dono descobre, no fim do mês, quantos perdeu por
+    demora.
+
+12. **Sem pipeline configurado, "Perdido" ainda resolve a conversa.** O dono pediu para sumir da
+    tela; a ausência de pipeline é problema de configuração, não motivo para o botão não funcionar.
+
+13. **"Depois" e "Resolver" NÃO ganharam rota nova** — usam `POST /api/conversations/:id/status`,
+    que já tem guard de visibilidade, permissão dinâmica, marcos de ciclo e relay de socket.
+    Duplicar isso criaria uma segunda verdade sobre quem pode fechar conversa.
+
+14. **`::timestamptz` explícito no `sql` cru.** Num template cru o driver não infere o tipo do
+    parâmetro e rejeita `Date`; os helpers tipados (`lt`/`gte`) convertem sozinhos, o template
+    não. Custou um ciclo de teste.
+
+## Resultado
+
+- **16 testes** em `dashboard/today` (era 9), **16** no parser WA (era 11), **17** novos em
+  `@hm/shared` (`preview` + `phone-display`).
+- Suítes: `@hm/shared` 143 · `@hm/channels` 221 · `@hm/workers` 493 · `@hm/web` 190 — todas verdes.
+- Typecheck limpo em `@hm/api`, `@hm/web`, `@hm/workers`, `@hm/channels`, `@hm/shared`.
+- Lint: 0 erros.
+
+## O que NÃO foi feito, e por quê
+
+- **Backfill de nomes históricos**: o WhatsApp não reexpõe o perfil de mensagens antigas. Os 199
+  contatos ganham telefone formatado agora e nome quando escreverem de novo.
+- **Nome de perfil no Instagram**: igsid não é telefone e o caminho é outro — slot próprio.
+- **Rótulo "Sistema"** das 1.557 mensagens outbound importadas: é dado de importação, não bug
+  desta tela — slot próprio.
