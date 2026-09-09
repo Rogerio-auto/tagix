@@ -2,7 +2,7 @@
 id: F59-S04
 title: Portão de consentimento como serviço único
 phase: F59
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F59-S01, F59-S03]
