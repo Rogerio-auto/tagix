@@ -2,7 +2,7 @@
 id: F61-S05
 title: Instalação no iPhone — detecção de standalone e convite honesto
 phase: F61
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F61-S01]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/APP_MOBILE_PLAN.md
 agent_id: frontend-engineer
 claimed_at: 2026-09-09T22:03:30Z
+completed_at: 2026-09-09T22:07:40Z
 
 ---
 # F61-S05 — Instalação no iPhone
