@@ -441,23 +441,73 @@ function MediaError({
 }
 
 /**
- * Casca comum dos três estados de mídia (pending → ready → error). Escolhe o que
- * renderizar a partir do `resource`; o `render` recebe a URL pronta e o handler
- * de `onError` (reidratação) para plugar no elemento de mídia.
+ * Mídia que não existe mais na origem (F61-S11). Deliberadamente SEM "Tentar
+ * novamente": o arquivo não vai voltar, e oferecer o botão seria empurrar o
+ * usuário para um beco que já sabemos que não tem saída.
+ *
+ * Tom neutro, não `danger`: nada quebrou agora, e nada foi culpa de quem está
+ * olhando. É um fato do histórico, e a bolha diz o fato.
+ */
+function MediaUnavailable({ label, reason }: { label: string; reason: string | null }) {
+  return (
+    <div className="flex flex-col items-start gap-0.5 text-text-mid">
+      <span className="flex items-center gap-2 text-sm">
+        <FileWarning className="size-4 shrink-0" aria-hidden />
+        {label}
+      </span>
+      {reason !== null && <span className="text-xs text-text-low">{reason}</span>}
+    </div>
+  );
+}
+
+/**
+ * Explica, quando dá para explicar, por que a mídia sumiu. Só motivos que o
+ * usuário consegue entender sem saber o que é worker, fila ou provedor.
+ */
+function unavailableReason(raw: unknown): string | null {
+  if (raw === 'coexistence_echo') {
+    return 'O WhatsApp não disponibiliza o arquivo de mensagens sincronizadas do próprio celular.';
+  }
+  if (raw === 'expired_at_source') return 'O arquivo expirou antes de ser guardado.';
+  return null;
+}
+
+/** Lê `metadata.mediaUnavailable` sem confiar no formato (metadata é `unknown`). */
+function readUnavailable(message: MessageItem): { flag: boolean; reason: string | null } {
+  const meta = message.metadata;
+  if (meta === null || meta === undefined) return { flag: false, reason: null };
+  return {
+    flag: meta['mediaUnavailable'] === true,
+    reason: unavailableReason(meta['mediaUnavailableReason']),
+  };
+}
+
+/**
+ * Casca comum dos quatro estados de mídia (pending → ready → error →
+ * unavailable). Escolhe o que renderizar a partir do `resource`; o `render`
+ * recebe a URL pronta e o handler de `onError` (reidratação) para plugar no
+ * elemento de mídia.
  */
 function MediaSurface({
   resource,
   pendingLabel,
   errorIcon,
   errorLabel,
+  unavailableLabel,
+  unavailableReason: reason = null,
   render,
 }: {
   resource: MediaResource;
   pendingLabel: string;
   errorIcon: LucideIcon;
   errorLabel: string;
+  unavailableLabel: string;
+  unavailableReason?: string | null;
   render: (url: string, onError: () => void) => ReactNode;
 }) {
+  if (resource.state === 'unavailable') {
+    return <MediaUnavailable label={unavailableLabel} reason={reason} />;
+  }
   if (resource.state === 'error') {
     return <MediaError icon={errorIcon} label={errorLabel} onRetry={resource.retry} />;
   }
@@ -468,11 +518,13 @@ function MediaSurface({
 }
 
 function ImageBody({ message }: { message: MessageItem }) {
+  const indisponivel = readUnavailable(message);
   const resource = useMediaResource({
     conversationId: message.conversationId,
     messageId: message.id,
     initialUrl: message.mediaUrl,
     failed: message.mediaFailed,
+    unavailable: indisponivel.flag,
   });
   const caption = message.content;
   const alt = caption ?? 'Imagem recebida';
@@ -480,6 +532,8 @@ function ImageBody({ message }: { message: MessageItem }) {
     <MediaSurface
       resource={resource}
       pendingLabel="carregando mídia…"
+      unavailableLabel="Imagem não disponível"
+      unavailableReason={indisponivel.reason}
       errorIcon={ImageOff}
       errorLabel="Não foi possível carregar a imagem."
       render={(url, onError) => (
@@ -502,16 +556,20 @@ function ImageBody({ message }: { message: MessageItem }) {
 }
 
 function StickerBody({ message }: { message: MessageItem }) {
+  const indisponivel = readUnavailable(message);
   const resource = useMediaResource({
     conversationId: message.conversationId,
     messageId: message.id,
     initialUrl: message.mediaUrl,
     failed: message.mediaFailed,
+    unavailable: indisponivel.flag,
   });
   return (
     <MediaSurface
       resource={resource}
       pendingLabel="carregando sticker…"
+      unavailableLabel="Sticker não disponível"
+      unavailableReason={indisponivel.reason}
       errorIcon={ImageOff}
       errorLabel="Não foi possível carregar o sticker."
       render={(url, onError) => (
@@ -529,17 +587,21 @@ function StickerBody({ message }: { message: MessageItem }) {
 }
 
 function VideoBody({ message }: { message: MessageItem }) {
+  const indisponivel = readUnavailable(message);
   const resource = useMediaResource({
     conversationId: message.conversationId,
     messageId: message.id,
     initialUrl: message.mediaUrl,
     failed: message.mediaFailed,
+    unavailable: indisponivel.flag,
   });
   const caption = message.content;
   return (
     <MediaSurface
       resource={resource}
       pendingLabel="carregando vídeo…"
+      unavailableLabel="Vídeo não disponível"
+      unavailableReason={indisponivel.reason}
       errorIcon={ImageOff}
       errorLabel="Não foi possível carregar o vídeo."
       render={(url, onError) => (
@@ -565,11 +627,13 @@ function VideoBody({ message }: { message: MessageItem }) {
 
 function AudioBody({ message, isVoice }: { message: MessageItem; isVoice: boolean }) {
   const label = isVoice ? 'Mensagem de voz' : 'Áudio';
+  const indisponivel = readUnavailable(message);
   const resource = useMediaResource({
     conversationId: message.conversationId,
     messageId: message.id,
     initialUrl: message.mediaUrl,
     failed: message.mediaFailed,
+    unavailable: indisponivel.flag,
   });
   return (
     <div className="flex min-w-[12rem] flex-col gap-1">
@@ -577,6 +641,8 @@ function AudioBody({ message, isVoice }: { message: MessageItem; isVoice: boolea
       <MediaSurface
         resource={resource}
         pendingLabel="carregando áudio…"
+        unavailableLabel={`${label} não disponível`}
+        unavailableReason={indisponivel.reason}
         errorIcon={FileWarning}
         errorLabel={`Não foi possível carregar ${isVoice ? 'a mensagem de voz' : 'o áudio'}.`}
         render={(url, onError) => (
@@ -595,16 +661,21 @@ function AudioBody({ message, isVoice }: { message: MessageItem; isVoice: boolea
 }
 
 function DocumentBody({ message }: { message: MessageItem }) {
+  const indisponivel = readUnavailable(message);
   const resource = useMediaResource({
     conversationId: message.conversationId,
     messageId: message.id,
     initialUrl: message.mediaUrl,
     failed: message.mediaFailed,
+    unavailable: indisponivel.flag,
   });
   const caption = message.content;
   const name = caption !== null && caption !== '' ? caption : 'Documento';
   // Um <a> não dispara `onError` de carregamento (não é elemento de mídia), então
   // aqui só distinguimos pending vs error definitivo (failed) — sem auto-refresh.
+  if (resource.state === 'unavailable') {
+    return <MediaUnavailable label="Documento não disponível" reason={indisponivel.reason} />;
+  }
   if (resource.state === 'error') {
     return (
       <MediaError
