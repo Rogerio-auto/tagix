@@ -734,3 +734,10 @@ tinha subido, e o `Hook timed out in 10000ms` era a espera pela conexao.
 opt-out por keyword no escopo da campanha. O detector da F59-S06 e mais amplo e grava no modelo de
 consentimento novo. Coexistem sem conflito hoje; um slot futuro deveria fazer o caminho de campanha
 delegar ao detector, em vez de manter duas regras de opt-out no repo.
+
+**F59-S07 — auditoria pendente:** o CRUD de valores personalizados nao grava em `audit_logs` porque
+o repo nao tem helper de auditoria (cada rota escreve inline em `schema.auditLogs`). Alteracao de
+valor personalizado merece trilha — especialmente `kind='secret'`, que guarda token de API do
+cliente. Vale um slot pequeno: helper `writeAudit` compartilhado + uso nas rotas que ainda nao
+auditam. Quando existir, registrar APENAS `key` e `kind`, nunca o valor: o audit log e o lugar mais
+lido depois de um incidente, e vazar o segredo la anularia a cifragem.
