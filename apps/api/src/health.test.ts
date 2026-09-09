@@ -19,6 +19,8 @@ let connectMqImpl: () => Promise<ResilientMqHandle> = () =>
 
 const dbExecute = vi.fn<() => Promise<unknown>>(() => Promise.resolve(undefined));
 const redisPing = vi.fn<() => Promise<string>>(() => Promise.resolve('PONG'));
+/** F61-S11: o probe de storage é um `put` de verdade — aqui é o único mock que decide. */
+const storagePut = vi.fn<() => Promise<void>>(() => Promise.resolve());
 
 vi.mock('./config', () => ({
   loadConfig: () => ({
@@ -39,6 +41,10 @@ vi.mock('ioredis', () => ({
     ping = redisPing;
     quit = (): Promise<void> => Promise.resolve();
   },
+}));
+
+vi.mock('@hm/storage', () => ({
+  createStorage: () => ({ put: storagePut }),
 }));
 
 vi.mock('@hm/shared/mq', () => ({
@@ -93,6 +99,7 @@ beforeEach(() => {
   connectMqImpl = () => Promise.reject(new Error('connectMq não configurado no teste'));
   dbExecute.mockClear().mockResolvedValue(undefined);
   redisPing.mockClear().mockResolvedValue('PONG');
+  storagePut.mockClear().mockResolvedValue(undefined);
 });
 
 afterEach(async () => {
@@ -157,5 +164,54 @@ describe('GET /health — RabbitMQ', () => {
     expect(res.status).toBe(503);
     expect(res.body['db']).toBe('down');
     expect(res.body['rabbitmq']).toBe('down');
+  });
+});
+
+/**
+ * F61-S11 — o `/health` sabe dizer que perdeu o storage.
+ *
+ * Regressão do incidente de 2026-09-09: o token do R2 foi revogado e a API seguiu
+ * respondendo 200 "ok" por dias. Nenhuma mídia subia, nenhuma signed URL abria, e
+ * a primeira notícia veio de um print de cliente.
+ */
+describe('GET /health — storage', () => {
+  // Broker saudável em todos: isola o eixo storage (mesmo padrão do bloco acima).
+  beforeEach(() => {
+    mqHealthValue = { healthy: true, connections: [fakeHandle(true).state()] };
+  });
+
+  it('storage escrevendo → ok, storage connected', async () => {
+    const res = await callHealth();
+    expect(res.body['storage']).toBe('connected');
+    expect(res.body['status']).toBe('ok');
+  });
+
+  it('credencial morta (put rejeita) → degraded, storage down', async () => {
+    storagePut.mockRejectedValue(new Error('AccessDenied'));
+    const res = await callHealth();
+    expect(res.body['storage']).toBe('down');
+    expect(res.body['status']).toBe('degraded');
+  });
+
+  it('storage caído NÃO derruba o /health para 503', async () => {
+    // 503 tira a API de rotação. Uma plataforma inteira fora do ar é pior que
+    // mídia que não carrega — o alarme informa sem causar um segundo incidente.
+    storagePut.mockRejectedValue(new Error('AccessDenied'));
+    const res = await callHealth();
+    expect(res.status).toBe(200);
+  });
+
+  it('assinar URL não vale como probe — só um write prova a credencial', async () => {
+    // `getSignedUrl` é operação local: passa com credencial revogada. Se um dia
+    // alguém trocar o probe por ele, este teste cai.
+    await callHealth();
+    expect(storagePut).toHaveBeenCalledTimes(1);
+  });
+
+  it('o resultado é cacheado — /health a cada 5s não vira 1 write a cada 5s', async () => {
+    await callHealth();
+    await callHealth();
+    await callHealth();
+    expect(storagePut).toHaveBeenCalledTimes(1);
   });
 });
