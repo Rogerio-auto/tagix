@@ -505,6 +505,13 @@
       "when": 1781452832000,
       "tag": "0071_f59_workspace_custom_values",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1781452833000,
+      "tag": "0072_f60_contact_identities",
+      "breakpoints": true
     }
   ]
 }

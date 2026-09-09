@@ -133,3 +133,12 @@ export {
 } from './meta/templates';
 
 export const CHANNELS_PKG = '@hm/channels' as const;
+
+// Capacidades negociadas do adapter (F60-S01 — CANAIS_PLAN §3.1).
+export {
+  CHANNEL_CAPABILITIES,
+  NO_LIMITS,
+  capabilitiesFromLegacy,
+  declareCapabilities,
+} from './capabilities';
+export type { ChannelCapability, ChannelLimits, DeclaredCapabilities } from './capabilities';
