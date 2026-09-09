@@ -2,15 +2,18 @@
 id: F59-S02
 title: Mercado no workspace e fuso no contato
 phase: F59
-status: blocked
+status: review
 priority: critical
 estimated_size: S
 depends_on: [F59-S01]
 blocks: [F59-S03, F59-S07]
 source_docs:
   - docs/features/AGENCIA_PLAN.md
----
+agent_id: backend-engineer
+claimed_at: 2026-09-09T05:28:52Z
+completed_at: 2026-09-09T05:43:19Z
 
+---
 # F59-S02 — Mercado no workspace e fuso no contato
 
 ## Objetivo
@@ -76,3 +79,19 @@ pnpm --filter @hm/db lint
   Validação fica em Zod, na borda.
 - `locales` como jsonb e não como coluna de array PG: o resto do schema já usa jsonb para lista
   simples (`plans.features`), e a consulta por locale não existe.
+
+## Decisões tomadas na execução (2026-09-09)
+
+1. **`locales` é NULO por default, não `'["pt-BR"]'`.** A spec original pedia `not null default
+   '["pt-BR"]'`. Ao ler o schema descobri que `workspaces` **já tem** `locale` (singular, default
+   `pt-BR`) e `timezone`. Um `locales` obrigatório duplicaria o market pack e derivaria dele com o
+   tempo: workspace US nasceria com `["pt-BR"]` enquanto o pack diz `["en-US","pt-BR"]`, e alguém
+   leria o valor errado. Nulo significa **"usar os locales do market pack"**; a coluna só é
+   preenchida quando o cliente restringe (empresa nos EUA que atende só em inglês). `workspaces.locale`
+   segue sendo o idioma padrão da interface — são eixos diferentes e ambos continuam válidos.
+2. **Nenhuma coluna de endereço US.** `contacts.address` é jsonb com forma brasileira (`cep`,
+   `bairro`). Forçar a forma americana agora quebraria o cadastro BR sem ganho imediato — entra no
+   slot de cadastro, quando houver tela que a consuma.
+3. **`market` tipado como `'BR' | 'US'` via `$type<>()`** em vez de enum PG: o CHECK dá a garantia no
+   banco e o `$type` dá a garantia no TypeScript, sem o custo de migration de enum quando um terceiro
+   mercado entrar.

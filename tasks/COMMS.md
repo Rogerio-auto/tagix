@@ -649,3 +649,33 @@ escopo.
 to checkout existing" mas o `die()` de branch existente (`scripts/slot.py:644-645`) não olha
 `args.force` — com a branch já criada não há caminho de claim. Fiz `git checkout` da branch
 canônica já existente (criada por um claim anterior).
+
+---
+
+## 2026-09-09 — F59-S02 · achados de ambiente e de repo (fora do escopo do slot)
+
+**Postgres dev não sobe na 5432 nesta máquina.** O serviço nativo do Windows
+`postgresql-x64-18` (PID 8688) já ocupa a porta e não tem o papel `hm`, então toda conexão do
+host falhava com `28P01` — de dentro do container a mesma URL funciona, o que torna o sintoma
+confuso. Contornei com um override de compose **fora do repo** (scratchpad da sessão) expondo o
+container em `5442:5432`, e apontei `DATABASE_URL` do `.env` local para 5442. Nada versionado
+mudou e o serviço nativo do Rogério não foi tocado.
+
+> Sugestão de slot em F57 (dono do harness/infra dev): parametrizar a porta publicada em
+> `infra/docker/docker-compose.dev.yml` como `"${POSTGRES_HOST_PORT:-5432}:5432"` (e o mesmo em
+> redis/rabbit). Uma linha resolve para sempre, e o runbook `dev-environment-windows.md` ganha a
+> nota sobre conflito com instalação nativa do Postgres.
+
+**Não havia `.env` no repo** — só `.env.example`. Criei o `.env` local a partir do exemplo e
+gerei uma `ENCRYPTION_KEY` de 32 bytes de verdade (o placeholder `change-me-32-byte-hex-key`
+quebra o AES-256-GCM). Arquivo é gitignored.
+
+**`origin/main` está ~40 commits atrás do `main` local** — a F58 inteira nunca foi enviada.
+Abri o PR #1 por engano (ele arrastava todo esse histórico) e fechei em seguida. O fluxo real
+deste repo é merge local em `main`, e é o que estou seguindo. Sincronizar o GitHub é decisão do
+Rogério: é o repositório dele, `main` tem branch protection e o push seria grande.
+
+**`slot.py finish` só commita a papelada** (`tasks/<slot>.md` + `STATUS.md`), não o código. Quem
+implementa precisa commitar antes. Perdi um ciclo com isso no F59-S01 — o código ficou na árvore
+de trabalho e só entrou em `main` no commit seguinte. Sem dano, mas vale um aviso no
+`PROTOCOL.md` §3 ("Implementar" → "Implementar **e commitar**").
