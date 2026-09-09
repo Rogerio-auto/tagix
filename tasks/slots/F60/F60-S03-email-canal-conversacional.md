@@ -2,7 +2,7 @@
 id: F60-S03
 title: E-mail como canal — fundação, envio e encadeamento
 phase: F60
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: [F60-S01, F60-S02]
