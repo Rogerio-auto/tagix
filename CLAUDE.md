@@ -7,7 +7,12 @@ Flow Builder, conversões, dashboard role-aware. **Padrão world-class, inegoci�
 ## Ambiente
 
 - Dev **nativo no Windows** — terminal é **PowerShell** (`$env:VAR`, `Get-ChildItem`, `.ps1`). Nunca bash para a máquina local.
-- Toolchain: Node 22+ (via `fnm`), pnpm (global via npm), Python 3.13 (via `uv`), Docker Desktop.
+- Toolchain: Node 22+ (via `fnm`), pnpm **11.5.2** (fixado em `packageManager`), Python 3.13 (via `uv`), Docker Desktop.
+- **Use `corepack pnpm@11.5.2 <cmd>` para qualquer coisa que mexa no lockfile.** O `pnpm` global
+  do PATH pode ser 9.x, e o pnpm 9 **não lê `overrides` de `pnpm-workspace.yaml`** (recurso do
+  pnpm 10+): instalar com ele apaga silenciosamente o override de segurança do `rollup` do
+  lockfile, e o build de produção rejeita com `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. `corepack
+  enable` falha sem admin no Windows; `corepack pnpm@11.5.2 …` funciona sem elevação.
 - Setup completo: `docs/runbooks/dev-environment-windows.md`.
 - **Produção é Linux** (VPS Ubuntu) — comando que roda no servidor é bash; só esse contexto.
 
@@ -28,7 +33,8 @@ docs/             — especificação completa (PRD, ARCHITECTURE, DATA_MODEL, f
 ## Comandos
 
 ```powershell
-pnpm install
+corepack pnpm@11.5.2 install   # SEMPRE esta forma quando o lockfile puder mudar
+pnpm install                    # leitura/execução do dia a dia
 pnpm typecheck          # tsc --noEmit em todos os projetos TS
 pnpm lint               # eslint flat, zero `any`
 pnpm format             # prettier --write
