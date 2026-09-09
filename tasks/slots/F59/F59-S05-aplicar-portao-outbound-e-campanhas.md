@@ -2,7 +2,7 @@
 id: F59-S05
 title: Aplicar o portão no outbound, no agendador e nas tools do agente
 phase: F59
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F59-S04]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/CAMPAIGNS.md
 agent_id: backend-engineer
 claimed_at: 2026-09-09T06:06:09Z
+completed_at: 2026-09-09T06:24:03Z
 
 ---
 # F59-S05 — Aplicar o portão no outbound, no agendador e nas tools do agente
