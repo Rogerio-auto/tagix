@@ -90,3 +90,24 @@ pnpm --filter @hm/api test
 - Horário de verão é o ponto onde implementação ingênua erra. Usar `Intl.DateTimeFormat` com
   `timeZone`, nunca aritmética de offset fixo.
 - A decisão é auditável de propósito: o motivo é enum estável, não string livre, para virar métrica.
+
+## Decisões tomadas na execução (2026-09-09)
+
+1. **`checkOutboundInTx` além de `checkOutbound`.** O worker de campanha resolve centenas de
+   destinatários; abrir um `withWorkspace` por destinatário seria uma transação por mensagem.
+   A variante recebe a `tx` já aberta. A regra pura é a mesma nas duas — só muda quem abre a conexão.
+2. **Workspace/contato inexistente é RECUSA, não exceção.** O caminho de envio precisa de decisão,
+   não de stack trace. Recusa com `reason: 'suppressed'` (o mais restritivo) e mensagem explícita.
+3. **Mercado corrompido no banco cai em `BR`, não estoura.** `isMarketCode` filtra; o valor default
+   da coluna é `BR` e todo workspace existente é brasileiro.
+4. **`retryAt` calcula o offset duas vezes.** Na virada de horário de verão, o offset do momento
+   atual não é o do momento alvo — uma passada só erra a hora local em uma hora, exatamente na noite
+   em que a janela legal mais importa. Teste cobre 01/11/2026.
+5. **`localHourIn` exportada.** É usada no teste para asserir a hora local do `retryAt`, e vai
+   servir ao agendador da F59-S05 para agrupar destinatários por janela.
+
+## Achado de ambiente
+
+`pnpm --filter @hm/api test` exige **RabbitMQ**, além de Postgres e Redis: `app.test.ts` (health) e
+`routes/v1/routes.test.ts` falham com `ECONNREFUSED 127.0.0.1:5672` sem ele. Não estava óbvio.
+Com os três no ar: 1021 testes, todos verdes.
