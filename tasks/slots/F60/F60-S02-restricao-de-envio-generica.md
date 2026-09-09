@@ -2,7 +2,7 @@
 id: F60-S02
 title: Restrição de envio genérica no composer
 phase: F60
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F60-S01]
