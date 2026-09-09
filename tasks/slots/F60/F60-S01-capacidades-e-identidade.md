@@ -2,7 +2,7 @@
 id: F60-S01
 title: Capacidades negociadas do adapter e identidade do contato
 phase: F60
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
