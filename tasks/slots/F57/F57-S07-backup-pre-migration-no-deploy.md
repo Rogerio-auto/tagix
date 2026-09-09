@@ -2,7 +2,7 @@
 id: F57-S07
 title: Backup pré-migration no deploy.sh — dados são sagrados
 phase: F57
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: []
