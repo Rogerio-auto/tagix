@@ -2,7 +2,7 @@
 id: F61-S03
 title: Web Push — assinatura por dispositivo, VAPID e privacidade na tela bloqueada
 phase: F61
-status: available
+status: in-progress
 priority: critical
 estimated_size: L
 depends_on: [F61-S01, F61-S05]
@@ -10,6 +10,7 @@ blocks: [F61-S04, F61-S08]
 source_docs:
   - docs/features/APP_MOBILE_PLAN.md
 agent_id: backend-engineer
+claimed_at: 2026-09-09T22:15:46Z
 
 ---
 # F61-S03 — Web Push
