@@ -2,7 +2,7 @@
 id: F61-S01
 title: Service worker — app shell, versionamento e a saída de emergência
 phase: F61
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: []
@@ -10,6 +10,7 @@ blocks: [F61-S03, F61-S05, F61-S06]
 source_docs:
   - docs/features/APP_MOBILE_PLAN.md
 agent_id: frontend-engineer
+claimed_at: 2026-09-09T20:59:58Z
 
 ---
 # F61-S01 — Service worker
