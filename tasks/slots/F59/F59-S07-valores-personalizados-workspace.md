@@ -2,7 +2,7 @@
 id: F59-S07
 title: Valores personalizados por workspace
 phase: F59
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F59-S02]
@@ -10,8 +10,10 @@ blocks: []
 source_docs:
   - docs/features/AGENCIA_PLAN.md
   - docs/research/2026-09-08-modelo-agencia-local.md
----
+agent_id: backend-engineer
+claimed_at: 2026-09-09T13:12:30Z
 
+---
 # F59-S07 — Valores personalizados por workspace
 
 ## Objetivo
