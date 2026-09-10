@@ -2,7 +2,7 @@
 id: F58-S08
 title: Facilitar a escolha dos destinatários
 phase: F58
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F58-S06]
@@ -13,6 +13,7 @@ source_docs:
   - docs/features/PERMISSIONS.md
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-09-10T03:04:04Z
+completed_at: 2026-09-10T03:37:00Z
 
 ---
 # F58-S08 — Facilitar a escolha dos destinatários
