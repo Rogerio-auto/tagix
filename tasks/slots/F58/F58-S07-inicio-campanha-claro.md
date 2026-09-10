@@ -2,7 +2,7 @@
 id: F58-S07
 title: Tornar o início da campanha fácil de entender
 phase: F58
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: [F58-S06]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/CAMPAIGNS.md
   - docs/UX_PRINCIPLES.md
 claimed_at: 2026-09-10T02:57:15Z
+completed_at: 2026-09-10T03:03:16Z
 
 ---
 # F58-S07 — Tornar o início da campanha fácil de entender
