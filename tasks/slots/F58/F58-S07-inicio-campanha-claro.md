@@ -2,7 +2,7 @@
 id: F58-S07
 title: Tornar o início da campanha fácil de entender
 phase: F58
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F58-S06]
