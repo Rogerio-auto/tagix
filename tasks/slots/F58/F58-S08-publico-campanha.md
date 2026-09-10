@@ -2,7 +2,7 @@
 id: F58-S08
 title: Facilitar a escolha dos destinatários
 phase: F58
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F58-S06]
