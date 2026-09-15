@@ -10,11 +10,12 @@
  *  - rajadas coalescem o bump (PERF-05: evita stampede de cache);
  *  - payload inválido é descartado com log, sem derrubar o handler.
  */
+import { buildMessageNewPayload, type MessageNewMessage } from '@hm/shared';
 import { describe, expect, it, vi } from 'vitest';
 import type { Logger } from '@hm/logger';
 import type { Envelope } from '@hm/shared/mq';
 import type { ServerToClientEvent } from '@hm/shared';
-import { createRelayHandler, inboundParaNotificar } from './relay';
+import { createRelayHandler } from './relay';
 
 const WS = '11111111-1111-4111-8111-111111111111';
 
@@ -261,68 +262,76 @@ describe('relay — payload e logging', () => {
 });
 
 /**
- * F61-S04 — o gancho de notificação pendurado no relay.
+ * F61-S04 / F61-S13 — o gancho de notificação pendurado no relay.
  *
- * O relay é o último trecho entre o banco e o navegador. Se ele engolir ou
- * atrasar um evento, o sintoma é "o tempo real some às vezes" — caro de
- * diagnosticar e péssimo de explicar. Estes testes existem para que o aviso ao
- * dono nunca ganhe esse poder.
+ * O relay é o último trecho entre o banco e o navegador. Se ele engolir ou atrasar
+ * um evento, o sintoma é o tempo real sumindo às vezes. Estes testes existem para
+ * que o aviso ao dono nunca ganhe esse poder.
+ *
+ * F61-S13: os payloads saem de `buildMessageNewPayload`, o mesmo construtor dos
+ * emissores. O teste anterior montava o objeto à mão, com um `senderType` que
+ * nenhum emissor enviava — e por isso passava enquanto o aviso nunca disparava.
  */
 describe('F61-S04 — notificação de inbound', () => {
-  const msgNova = (message: unknown) => ({
+  const envelopeDe = (message: MessageNewMessage) => ({
     id: 'env-1',
     type: 'socket.relay',
     workspaceId: 'ws-1',
     ts: Date.now(),
     payload: {
       event: 'message:new',
-      target: { conversationId: 'conv-1' },
-      data: { workspaceId: 'ws-1', conversationId: 'conv-1', message },
+      target: { conversationId: message.conversationId },
+      data: buildMessageNewPayload({ workspaceId: 'ws-1', message }),
     },
   });
 
-  it('extrai conversa e mensagem de um inbound do contato', () => {
-    expect(inboundParaNotificar({ conversationId: 'c1', message: { id: 'm1', senderType: 'contact' } }))
-      .toEqual({ conversationId: 'c1', messageId: 'm1' });
-  });
+  const doContato: MessageNewMessage = {
+    id: 'm1',
+    conversationId: 'conv-1',
+    externalId: 'wamid.1',
+    type: 'text',
+    content: 'oi',
+    direction: 'inbound',
+    senderType: 'contact',
+    origin: 'live',
+  };
 
-  it('NÃO notifica a própria resposta do atendente', () => {
-    // Avisar o dono da mensagem que ele acabou de mandar é a forma mais rápida
-    // de ele desligar as notificações.
-    for (const sender of ['member', 'agent', 'system']) {
-      expect(
-        inboundParaNotificar({ conversationId: 'c1', message: { id: 'm1', senderType: sender } }),
-      ).toBeNull();
-    }
-  });
-
-  it('payload de formato inesperado não vira notificação nem exceção', () => {
-    // Uma versão futura do worker não pode derrubar o relay.
-    for (const lixo of [null, undefined, 'texto', 42, {}, { conversationId: 'c1' }]) {
-      expect(inboundParaNotificar(lixo)).toBeNull();
-    }
-    expect(inboundParaNotificar({ conversationId: 'c1', message: { senderType: 'contact' } })).toBeNull();
-  });
-
-  it('o emit acontece ANTES e INDEPENDENTE do aviso', async () => {
+  it('mensagem ao vivo do contato dispara o aviso depois do emit', async () => {
     const ordem: string[] = [];
     let resolverAviso: (() => void) | undefined;
     const handler = createRelayHandler({
       emit: () => ordem.push('emit'),
       bumpVersion: () => Promise.resolve(),
-      notifyInbound: () =>
+      notifyInbound: (input) =>
         new Promise<void>((r) => {
-          ordem.push('aviso-iniciado');
+          ordem.push(`aviso:${input.conversationId}:${input.messageId}`);
           resolverAviso = r;
         }),
     });
 
     // Não aguardamos o aviso: se o handler esperasse por ele, este await
     // penduraria para sempre e o teste estouraria o timeout.
-    await handler(msgNova({ id: 'm1', senderType: 'contact' }));
+    await handler(envelopeDe(doContato));
 
-    expect(ordem).toEqual(['emit', 'aviso-iniciado']);
+    expect(ordem).toEqual(['emit', 'aviso:conv-1:m1']);
     resolverAviso?.();
+  });
+
+  it('resposta do atendente e sincronização da coexistência não disparam aviso', async () => {
+    const avisos: string[] = [];
+    const handler = createRelayHandler({
+      emit: () => undefined,
+      bumpVersion: () => Promise.resolve(),
+      notifyInbound: (input) => {
+        avisos.push(input.messageId);
+        return Promise.resolve();
+      },
+    });
+    await handler(
+      envelopeDe({ ...doContato, id: 'resp', direction: 'outbound', senderType: 'member' }),
+    );
+    await handler(envelopeDe({ ...doContato, id: 'sync', origin: 'coexistence' }));
+    expect(avisos).toEqual([]);
   });
 
   it('aviso que REJEITA não derruba o relay', async () => {
@@ -333,7 +342,7 @@ describe('F61-S04 — notificação de inbound', () => {
       notifyInbound: () => Promise.reject(new Error('push fora do ar')),
     });
 
-    await expect(handler(msgNova({ id: 'm1', senderType: 'contact' }))).resolves.toBeUndefined();
+    await expect(handler(envelopeDe(doContato))).resolves.toBeUndefined();
     expect(emitidos).toEqual(['message:new']);
   });
 });

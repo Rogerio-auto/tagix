@@ -27,7 +27,7 @@ import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { connectMq, makeEnvelope, publish, QUEUES, type MqHandle } from '@hm/shared/mq';
-import { previewFor } from '@hm/shared';
+import { buildMessageNewPayload, previewFor } from '@hm/shared';
 import { schema, withWorkspace } from '@hm/db';
 import { createStorage, type IStorageDriver } from '@hm/storage';
 import type {
@@ -90,9 +90,9 @@ async function emitMessageNewRelay(input: OutboundMessageNewEmit): Promise<void>
   const envelope = makeEnvelope('socket.relay', input.workspaceId, {
     event: 'message:new',
     target: { conversationId: input.conversationId, workspace: true },
-    data: {
+    // F61-S13: contrato único. Gravada como `system` (ver o insert abaixo).
+    data: buildMessageNewPayload({
       workspaceId: input.workspaceId,
-      conversationId: input.conversationId,
       message: {
         id: input.messageId,
         conversationId: input.conversationId,
@@ -100,8 +100,10 @@ async function emitMessageNewRelay(input: OutboundMessageNewEmit): Promise<void>
         type: input.type,
         content: input.content,
         direction: 'outbound',
+        senderType: 'system',
+        origin: 'live',
       },
-    },
+    }),
   });
   channel.sendToQueue(SOCKET_RELAY_QUEUE, Buffer.from(JSON.stringify(envelope)), {
     persistent: true,

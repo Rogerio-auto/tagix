@@ -14,6 +14,7 @@
  * Tudo Zod-friendly: o `Envelope` carrega `payload` estruturado, validado no
  * boundary do consumer correspondente.
  */
+import { buildMessageNewPayload } from '@hm/shared';
 import { Buffer } from 'node:buffer';
 import { makeEnvelope, EXCHANGES, type MqHandle } from '@hm/shared/mq';
 import type {
@@ -94,17 +95,22 @@ export class MqSocketEmit implements SocketEmitPort {
       // qualquer operador) E em `ws:{workspaceId}` (ChatList de todos reordena/
       // atualiza o preview). Espelha o inbound, que sem isto era o único a emitir.
       target: { conversationId: input.conversationId, workspace: true },
-      data: {
+      // F61-S13: contrato único de `@hm/shared`. O job de outbound não carrega quem
+      // enviou (atendente, agente, campanha, lembrete…), então o remetente é declarado
+      // desconhecido em vez de chutado. Mensagem que sai nunca é de contato.
+      data: buildMessageNewPayload({
         workspaceId: input.workspaceId,
-        conversationId: input.conversationId,
         message: {
           id: input.messageId,
           conversationId: input.conversationId,
+          externalId: null,
           type: input.type,
           content: input.content,
           direction: 'outbound',
+          senderType: null,
+          origin: 'live',
         },
-      },
+      }),
     });
     this.channel.sendToQueue(SOCKET_RELAY_QUEUE, Buffer.from(JSON.stringify(envelope)), {
       persistent: true,
