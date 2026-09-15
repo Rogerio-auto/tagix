@@ -2,7 +2,7 @@
 id: F25-S10
 title: Tentativa negada à camada de plataforma podia não ficar registrada — auditoria antes da resposta
 phase: F25
-status: available
+status: in-progress
 priority: high
 estimated_size: S
 depends_on: [F25-S01]
@@ -10,6 +10,7 @@ blocks: []
 source_docs:
   - docs/INDEX.md
 agent_id: security-auditor
+claimed_at: 2026-09-15T14:23:22Z
 
 ---
 # F25-S10 — Tentativa negada à camada de plataforma podia não ficar registrada
