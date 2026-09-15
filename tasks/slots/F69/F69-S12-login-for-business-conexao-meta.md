@@ -2,7 +2,7 @@
 id: F69-S12
 title: Conectar a Meta falhava na troca do código — login da conexão passa a usar Facebook Login for Business
 phase: F69
-status: in-progress
+status: review
 priority: critical
 estimated_size: S
 depends_on: [F69-S02]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/META_INTEGRACAO_PLAN.md
 agent_id: fullstack-engineer
 claimed_at: 2026-09-15T15:52:51Z
+completed_at: 2026-09-15T15:58:17Z
 
 ---
 # F69-S12 — Conectar a Meta falhava na troca do código
@@ -53,6 +54,7 @@ tem `meta_*`), e bloqueio do perfil/empresa (o login na janela passou).
 - `infra/docker/docker-compose.prod.yml`
 - `.env.example`
 - `docs/features/META_INTEGRACAO_PLAN.md`
+- `apps/web/features/channels/components/ConnectWizard.tsx` *(correção 2026-09-15: o conectar do Instagram também chama `startMetaConnect` com `scope` e falharia na troca do código do mesmo jeito)*
 
 ### files_forbidden
 
@@ -75,9 +77,15 @@ tem `meta_*`), e bloqueio do perfil/empresa (o login na janela passou).
 
 ## Definition of Done
 
-- [ ] `startMetaConnect` abre `FB.login` com `config_id`, sem `scope` (teste).
-- [ ] Build sem `META_LOGIN_CONFIG_ID` mostra a configuração faltando e não abre o login (teste).
-- [ ] Conexão real em produção conclui e aparece em Configurações → Meta.
+- [x] `startMetaConnect` abre `FB.login` com `config_id`, sem `scope` (teste). *(`fb-login.test.ts`)*
+- [x] Build sem `META_LOGIN_CONFIG_ID` mostra a configuração faltando e não abre o login (teste). *(`fb-login.test.ts` + `signup-status.test.ts`; o painel lista a variável ausente)*
+- [ ] Conexão real em produção conclui e aparece em Configurações → Meta. *(pendente: Rogério criar a configuração no painel da Meta; `META_LOGIN_CONFIG_ID` no `.env` de produção e deploy)*
+
+## Resultado parcial (2026-09-15)
+
+- `@hm/web` 287/287 (7 novos: 3 da configuração de login, 4 do `startMetaConnect`); typecheck e lint limpos.
+- O conectar do Instagram (`ConnectWizard.tsx`) também usava `scope` e foi corrigido junto.
+- Passo a passo da configuração no painel: `docs/features/META_INTEGRACAO_PLAN.md` §4.1.
 
 ## Validação
 
