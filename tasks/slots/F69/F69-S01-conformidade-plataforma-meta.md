@@ -2,7 +2,7 @@
 id: F69-S01
 title: Conformidade de plataforma — exclusão de dados, desautorização, política e termos
 phase: F69
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
