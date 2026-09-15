@@ -2,7 +2,7 @@
 id: F2-S22
 title: Date em SQL cru quebrava rollup de métricas, cobrança PIX e agendadores — correção no cliente do banco
 phase: F2
-status: in-progress
+status: review
 priority: critical
 estimated_size: S
 depends_on: [F2-S13]
@@ -11,6 +11,7 @@ source_docs:
   - docs/INDEX.md
 agent_id: backend-engineer
 claimed_at: 2026-09-15T13:49:40Z
+completed_at: 2026-09-15T14:00:29Z
 
 ---
 # F2-S22 — Date em SQL cru quebrava rollup de métricas, cobrança PIX e agendadores
@@ -71,10 +72,10 @@ primeira retomada de IA seriam.
 
 ## Definition of Done
 
-- [ ] `Date` em `sql` cru funciona contra Postgres real (teste).
-- [ ] Coluna `timestamptz` tipada continua gravando e lendo igual, com microssegundos (teste).
-- [ ] Rollup de métricas e recorrência de cobrança param de falhar no log de produção.
-- [ ] Suítes de `@hm/db`, `@hm/workers` e `@hm/api` verdes.
+- [x] `Date` em `sql` cru funciona contra Postgres real (teste). *(`client-date-params.test.ts`: 4 casos falhavam com o mesmo `TypeError` de produção antes da correção; passam depois)*
+- [x] Coluna `timestamptz` tipada continua gravando e lendo igual, com microssegundos (teste). *(microssegundos em texto e ida e volta de coluna tipada — passavam antes e depois)*
+- [ ] Rollup de métricas e recorrência de cobrança param de falhar no log de produção. *(pendente do deploy; localmente o `runAgentMetricsRollup` real roda sem erro)*
+- [x] Suítes de `@hm/db`, `@hm/workers` e `@hm/api` verdes. *(`@hm/db` 151/151, `@hm/workers` 520/520, `@hm/api` 1158/1159 — a falha é `platform/help.test.ts > não-admin → 403 e auditado`, intermitente e anterior a este slot: isolado, passou com a correção e falhou com o `client.ts` de `main`)*
 
 ## Validação
 
