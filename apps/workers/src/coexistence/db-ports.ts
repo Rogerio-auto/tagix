@@ -34,7 +34,7 @@ import { getDb, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import { makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import type { ServerToClientEvent } from '@hm/shared';
-import { previewFor } from '@hm/shared';
+import { buildMessageNewPayload, previewFor } from '@hm/shared';
 import type {
   CoexistenceAppStatePayload,
   CoexistenceEchoPayload,
@@ -161,18 +161,27 @@ export class MqCoexistenceSocketEmit implements CoexistenceSocketPort {
   constructor(private readonly channel: MqChannel) {}
 
   async emitMessageNew(input: CoexistenceMessageNewEmit): Promise<void> {
-    relayEnvelope(this.channel, input.workspaceId, 'message:new', input.conversationId, {
-      workspaceId: input.workspaceId,
-      conversationId: input.conversationId,
-      message: {
-        id: input.messageId,
-        conversationId: input.conversationId,
-        externalId: input.externalId,
-        type: input.type,
-        content: input.content,
-        direction: input.direction,
-      },
-    });
+    // F61-S13: `origin: 'coexistence'` — sincronização não é lead chegando. O remetente
+    // espelha o que a coexistência grava (`system` para o que saiu do app do cliente).
+    relayEnvelope(
+      this.channel,
+      input.workspaceId,
+      'message:new',
+      input.conversationId,
+      buildMessageNewPayload({
+        workspaceId: input.workspaceId,
+        message: {
+          id: input.messageId,
+          conversationId: input.conversationId,
+          externalId: input.externalId,
+          type: input.type,
+          content: input.content,
+          direction: input.direction,
+          senderType: input.direction === 'inbound' ? 'contact' : 'system',
+          origin: 'coexistence',
+        },
+      }),
+    );
     await Promise.resolve();
   }
 
