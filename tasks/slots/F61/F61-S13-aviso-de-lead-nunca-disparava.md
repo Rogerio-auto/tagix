@@ -2,7 +2,7 @@
 id: F61-S13
 title: Aviso de lead novo nunca disparava — contrato único do message:new
 phase: F61
-status: available
+status: in-progress
 priority: critical
 estimated_size: S
 depends_on: [F61-S04]
@@ -10,6 +10,7 @@ blocks: []
 source_docs:
   - docs/features/APP_MOBILE_PLAN.md
 agent_id: backend-engineer
+claimed_at: 2026-09-15T04:42:51Z
 
 ---
 # F61-S13 — Aviso de lead novo nunca disparava
