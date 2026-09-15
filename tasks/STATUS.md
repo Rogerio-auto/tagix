@@ -53,7 +53,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F59   | 9     | 1   | 0   | 0   | 0   | 0   | 8   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F60   | 9     | 4   | 0   | 0   | 0   | 0   | 5   |
-| F61   | 8     | 0   | 0   | 0   | 1   | 0   | 7   |
+| F61   | 8     | 0   | 0   | 0   | 0   | 1   | 7   |
 | F69   | 10     | 8   | 0   | 0   | 0   | 0   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
@@ -716,16 +716,16 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 61
 
-| ID      | Titulo                                                                       | Status        | Prioridade | Depende de       |
-| ------- | ---------------------------------------------------------------------------- | ------------- | ---------- | ---------------- |
-| F61-S01 | Service worker — app shell, versionamento e a saída de emergência            | ✅ done        | critical   | —                |
-| F61-S02 | Tela Hoje — a visão de dono                                                  | ✅ done        | critical   | —                |
-| F61-S03 | Web Push — assinatura por dispositivo, VAPID e privacidade na tela bloqueada | ✅ done        | critical   | F61-S01, F61-S05 |
-| F61-S04 | Roteador de notificação — dedupe, preferência por evento e fuso do membro    | ✅ done        | high       | F61-S03          |
-| F61-S05 | Instalação no iPhone — detecção de standalone e convite honesto              | ✅ done        | critical   | F61-S01          |
-| F61-S11 | Mídia honesta — recuperar o recuperável, admitir o perdido                   | ✅ done        | critical   | —                |
-| F61-S12 | Hoje enriquecida — identidade, linguagem, ação e distribuição                | ✅ done        | critical   | F61-S02          |
-| F61-S13 | Aviso de lead novo nunca disparava — contrato único do message:new           | 🔵 in-progress | critical   | F61-S04          |
+| ID      | Titulo                                                                       | Status   | Prioridade | Depende de       |
+| ------- | ---------------------------------------------------------------------------- | -------- | ---------- | ---------------- |
+| F61-S01 | Service worker — app shell, versionamento e a saída de emergência            | ✅ done   | critical   | —                |
+| F61-S02 | Tela Hoje — a visão de dono                                                  | ✅ done   | critical   | —                |
+| F61-S03 | Web Push — assinatura por dispositivo, VAPID e privacidade na tela bloqueada | ✅ done   | critical   | F61-S01, F61-S05 |
+| F61-S04 | Roteador de notificação — dedupe, preferência por evento e fuso do membro    | ✅ done   | high       | F61-S03          |
+| F61-S05 | Instalação no iPhone — detecção de standalone e convite honesto              | ✅ done   | critical   | F61-S01          |
+| F61-S11 | Mídia honesta — recuperar o recuperável, admitir o perdido                   | ✅ done   | critical   | —                |
+| F61-S12 | Hoje enriquecida — identidade, linguagem, ação e distribuição                | ✅ done   | critical   | F61-S02          |
+| F61-S13 | Aviso de lead novo nunca disparava — contrato único do message:new           | 🟣 review | critical   | F61-S04          |
 
 ## Fase 69
 
