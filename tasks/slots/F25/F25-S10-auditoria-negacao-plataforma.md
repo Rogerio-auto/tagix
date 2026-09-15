@@ -2,7 +2,7 @@
 id: F25-S10
 title: Tentativa negada à camada de plataforma podia não ficar registrada — auditoria antes da resposta
 phase: F25
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F25-S01]

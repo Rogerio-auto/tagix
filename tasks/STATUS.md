@@ -13,7 +13,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F10   | 13     | 0   | 0   | 0   | 0   | 0   | 13   |
 | F15   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F2   | 22     | 0   | 0   | 0   | 0   | 0   | 22   |
-| F25   | 11     | 1   | 0   | 0   | 0   | 1   | 9   |
+| F25   | 11     | 1   | 0   | 0   | 0   | 0   | 10   |
 | F26   | 11     | 0   | 0   | 0   | 0   | 0   | 11   |
 | F27   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F28   | 2     | 0   | 0   | 0   | 0   | 0   | 2   |
@@ -183,7 +183,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F25-S07 | Páginas Modelos + Políticas (frontend) — catálogo LLM + editor de policy por workspace                  | ✅ done      | medium     | F25-S02, F25-S03, F25-S06 |
 | F25-S08 | Páginas Secrets + Uso (frontend) — rotação de platform_secrets + dashboard de custo LLM                 | ✅ done      | medium     | F25-S04, F25-S05, F25-S06 |
 | F25-S09 | Runbooks de plataforma — rotate-openrouter-key + manage-workspace-agent-policy                          | ✅ done      | low        | —                         |
-| F25-S10 | Tentativa negada à camada de plataforma podia não ficar registrada — auditoria antes da resposta        | 🟣 review    | high       | F25-S01                   |
+| F25-S10 | Tentativa negada à camada de plataforma podia não ficar registrada — auditoria antes da resposta        | ✅ done      | high       | F25-S01                   |
 | F25-S11 | Limite de tentativas na camada de plataforma — negação repetida não pode encher a auditoria nem o banco | 🟢 available | medium     | F25-S10                   |
 
 ## Fase 26
