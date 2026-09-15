@@ -2,7 +2,7 @@
 id: F69-S03
 title: Leads de anúncios — do formulário à inbox em segundos, com prova de consentimento
 phase: F69
-status: available
+status: in-progress
 priority: critical
 estimated_size: L
 depends_on: [F69-S02]
@@ -10,6 +10,7 @@ blocks: [F69-S06]
 source_docs: 
   - docs/features/META_INTEGRACAO_PLAN.md
 agent_id: backend-engineer
+claimed_at: 2026-09-15T04:39:34Z
 
 ---
 # F69-S03 — Leads de anúncios — do formulário à inbox em segundos, com prova de consentimento
