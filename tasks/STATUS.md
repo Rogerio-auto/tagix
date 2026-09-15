@@ -54,7 +54,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F60   | 9     | 4   | 0   | 0   | 0   | 0   | 5   |
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
-| F69   | 10     | 7   | 0   | 0   | 0   | 1   | 2   |
+| F69   | 11     | 8   | 0   | 0   | 0   | 1   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
@@ -741,6 +741,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F69-S08 | Instagram — verificar o caminho de login do caso de uso e alinhar permissões                | 🟢 available | high       | F69-S02                                                                         |
 | F69-S09 | Servidor MCP de anúncios — o agente sugere e prepara, o humano aprova                       | 🟢 available | medium     | F69-S05                                                                         |
 | F69-S10 | Kit de App Review — justificativa, roteiro de screencast e conta de teste por permissão     | 🟢 available | high       | F69-S01, F69-S02, F69-S03, F69-S04, F69-S05, F69-S06, F69-S07, F69-S08, F69-S09 |
+| F69-S11 | Consentimento do formulário de anúncio — caixa marcada vira consentimento de canal          | 🟢 available | high       | F69-S03                                                                         |
 
 ## Fase 7 — Dashboard + Conversões
 
