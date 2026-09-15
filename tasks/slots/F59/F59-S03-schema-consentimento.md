@@ -67,13 +67,13 @@ e por finalidade: quem aceitou WhatsApp não consentiu SMS de marketing (`AGENCI
 
 ## Definition of Done
 
-- [ ] Migration `0070` cria as duas tabelas com RLS habilitada e `force row level security`.
-- [ ] Teste de integração confirma que outro workspace não lê consentimento nem supressão.
-- [ ] Migração de dado é **idempotente**: rodar duas vezes não duplica linha (constraint única cobre).
-- [ ] Teste com fixture: workspace com 3 contatos opt-in e 1 opt-out gera 3 `granted` + 1 supressão global.
-- [ ] `proof` nunca é nulo em linha `granted` criada pela aplicação; em linha vinda da migração, carrega o que existia com `migratedFrom: 'contacts.marketing_opt_in'`.
-- [ ] Escopo de revogação suporta `channel: null` (empresa inteira) desde já — a cláusula que torna isso obrigatório nos EUA entra em 31/01/2027 e migrar consentimento depois é o pior tipo de migration.
-- [ ] Repositório expõe `getConsent`, `grantConsent`, `revokeConsent`, `isSuppressed` — todos sob RLS.
+- [x] Migration `0070` cria as duas tabelas com RLS habilitada e `force row level security`.
+- [x] Teste de integração confirma que outro workspace não lê consentimento nem supressão.
+- [x] Migração de dado é **idempotente**: rodar duas vezes não duplica linha (constraint única cobre).
+- [x] Teste com fixture: workspace com 3 contatos opt-in e 1 opt-out gera 3 `granted` + 1 supressão global.
+- [x] `proof` nunca é nulo em linha `granted` criada pela aplicação; em linha vinda da migração, carrega o que existia com `migratedFrom: 'contacts.marketing_opt_in'`.
+- [x] Escopo de revogação suporta `channel: null` (empresa inteira) desde já — a cláusula que torna isso obrigatório nos EUA entra em 31/01/2027 e migrar consentimento depois é o pior tipo de migration.
+- [x] Repositório expõe `getConsent`, `grantConsent`, `revokeConsent`, `isSuppressed` — todos sob RLS.
 
 ## Validação
 
@@ -109,3 +109,13 @@ pnpm --filter @hm/db lint
    e não deve existir.
 7. **`contacts.marketing_opt_in` mantida e marcada como deprecated** via `COMMENT ON COLUMN`.
    Remover no mesmo PR quebraria leitores ainda não migrados.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (7):** tinham entrega, só faltava o registro. Evidência: Isolamento testado em `packages/db/src/consent.test.ts` e `apps/api/src/services/consent/consent.test.ts`.
+- **Continuam em aberto (0):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

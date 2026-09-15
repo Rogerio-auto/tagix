@@ -65,14 +65,14 @@ queima o número do cliente no WhatsApp.
 
 ## Definition of Done
 
-- [ ] Camada 1 cobre pt e en em ambos os mercados; teste com `PARE`, `stop`, `Stop.`, `SAIR`, `cancelar`.
-- [ ] Camada 2 só é chamada quando a 1 falha e a mensagem é curta — teste confirma que mensagem longa não gasta chamada de modelo.
-- [ ] Falso positivo é o risco caro: "não para de chegar lead, que bom" **não** pode suprimir. Suíte de negativos com pelo menos 15 frases ambíguas em pt.
-- [ ] Confiança abaixo do limiar não suprime sozinha — marca para revisão humana e notifica, sem bloquear o canal.
-- [ ] A mensagem de esclarecimento é enviada **uma vez** e é idempotente por contato/canal.
-- [ ] Supressão é imediata; a lei dá 10 dias úteis, o produto honra no primeiro segundo.
-- [ ] Revogação genérica ("não quero mais nada de vocês") gera supressão de escopo **empresa**, não só do canal.
-- [ ] Métrica `hm.revocation.detected{layer,channel,market}`.
+- [x] Camada 1 cobre pt e en em ambos os mercados; teste com `PARE`, `stop`, `Stop.`, `SAIR`, `cancelar`.
+- [x] Camada 2 só é chamada quando a 1 falha e a mensagem é curta — teste confirma que mensagem longa não gasta chamada de modelo.
+- [x] Falso positivo é o risco caro: "não para de chegar lead, que bom" **não** pode suprimir. Suíte de negativos com pelo menos 15 frases ambíguas em pt.
+- [x] Confiança abaixo do limiar não suprime sozinha — marca para revisão humana e notifica, sem bloquear o canal.
+- [ ] A mensagem de esclarecimento é enviada **uma vez** e é idempotente por contato/canal. — **auditoria 2026-09-14:** não entregue: não há envio de esclarecimento no código. Movido para **F59-S09**.
+- [x] Supressão é imediata; a lei dá 10 dias úteis, o produto honra no primeiro segundo.
+- [x] Revogação genérica ("não quero mais nada de vocês") gera supressão de escopo **empresa**, não só do canal.
+- [x] Métrica `hm.revocation.detected{layer,channel,market}`.
 
 ## Validação
 
@@ -129,3 +129,13 @@ regra propria. Anotado em `tasks/COMMS.md`.
 
 - `@hm/shared`: 123 testes verdes, dos quais **48 novos** de deteccao (15 de falso positivo).
 - `@hm/workers`: **493 verdes, 0 falhas**, com os 5 novos de integracao no pipeline.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (7):** tinham entrega, só faltava o registro. Evidência: Camadas e suíte de negativos em `revocation.test.ts`; métrica `revocation.detected`; fala genérica suprime com escopo empresa (`channel: null`).
+- **Continuam em aberto (1):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

@@ -471,11 +471,17 @@ substituir o AbacatePay. Se algum entrar, entra como decisão nova e documentada
 
 ## 11. Ainda em aberto
 
-1. **Praça inicial:** Flórida é a minha recomendação (§7). Confirmar muda o fuso padrão, o
-   licenciamento a validar e a sazonalidade do funil.
-2. **Volume-alvo no primeiro ano.** Define se o template precisa suportar 5 ou 50 clientes — e
-   isso muda o quanto vale automatizar o onboarding.
-3. **Quem opera o disparo americano.** Se o SMS sai da conta do cliente, sob o 10DLC dele, o risco
+1. ~~**Praça inicial**~~ — **resolvido em 2026-09-14: Flórida.** Fuso padrão
+   `America/New_York` para o market pack US quando o contato não tiver fuso próprio; o
+   licenciamento a validar é o da Flórida (contratistas de reforma são licenciados pelo estado).
+2. ~~**Volume-alvo no primeiro ano**~~ — **resolvido em 2026-09-14: 50 clientes.** Com 50,
+   onboarding manual deixa de ser opção: cinquenta registros de canal, cinquenta configurações de
+   funil e cinquenta conexões Meta feitas à mão consomem o mês inteiro. Consequências:
+   - o template de workspace (F67) precisa instanciar tudo sem intervenção;
+   - o registro de SMS precisa ser feito **pelo produto**, por API — ver `CANAIS_PLAN` §5.3;
+   - a conexão Meta por workspace (F69-S02) precisa ser autosserviço guiado.
+3. **Quem opera o disparo americano.** Explicado ao Rogério em 2026-09-14 com os dois modelos em
+   `CANAIS_PLAN` §5.3; aguarda a decisão dele. Se o SMS sai da conta do cliente, sob o 10DLC dele, o risco
    é primariamente dele. Se sai de infraestrutura sua, você entra junto. A decisão muda o desenho
    do onboarding de canal, não só o contrato.
 

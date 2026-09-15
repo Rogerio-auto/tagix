@@ -66,12 +66,12 @@ agente. Um caminho não coberto anula os outros dois.
 
 ## Definition of Done
 
-- [ ] Nenhum caminho de envio promocional ignora o portão — teste de integração cobre os três pontos.
-- [ ] `quiet_hours` reagenda em vez de descartar; teste confirma que a mensagem sai na janela seguinte.
-- [ ] Recusa registrada com motivo estável em log estruturado e em métrica.
-- [ ] Mensagem transacional (confirmação, lembrete) continua saindo com contato sem opt-in de marketing — teste de regressão explícito, porque quebrar isso derruba a operação do cliente.
-- [ ] Campanha existente em base BR continua funcionando sem mudança de comportamento (market `BR` default, sem `requiresPriorConsent` em WhatsApp).
-- [ ] `pnpm --filter @hm/workers test` verde, incluindo os testes de campanha já existentes.
+- [x] Nenhum caminho de envio promocional ignora o portão — teste de integração cobre os três pontos.
+- [x] `quiet_hours` reagenda em vez de descartar; teste confirma que a mensagem sai na janela seguinte.
+- [x] Recusa registrada com motivo estável em log estruturado e em métrica.
+- [x] Mensagem transacional (confirmação, lembrete) continua saindo com contato sem opt-in de marketing — teste de regressão explícito, porque quebrar isso derruba a operação do cliente.
+- [x] Campanha existente em base BR continua funcionando sem mudança de comportamento (market `BR` default, sem `requiresPriorConsent` em WhatsApp).
+- [x] `pnpm --filter @hm/workers test` verde, incluindo os testes de campanha já existentes.
 
 ## Validação
 
@@ -144,3 +144,13 @@ A secao "Resultado da validacao" acima esta **errada** e fica registrada so como
 Postgres, Redis **e RabbitMQ** no ar, `pnpm --filter @hm/workers test` fecha **493 passando, 0
 falhando**. As 3 falhas que atribui a `main` eram do meu ambiente incompleto — eu tinha subido so
 Postgres e Redis. O DoD "suite verde" **foi cumprido**.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (6):** tinham entrega, só faltava o registro. Evidência: Portão testado no worker outbound (`consent-gate.test.ts`, `outbound.test.ts`) e no agendador (`campaigns/tick.test.ts`). Respostas do agente saem pela mesma fila `outbound` (`agents/worker.ts`), então passam pelo mesmo portão.
+- **Continuam em aberto (0):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

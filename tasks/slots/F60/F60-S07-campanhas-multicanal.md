@@ -78,9 +78,9 @@ Desenho em `CANAIS_PLAN` §12.
 
 **Fica para o slot seguinte** (ver "Escopo entregue"):
 
-- [ ] Wizard da UI montando os passos a partir da capacidade declarada.
-- [ ] Estimativa de público excluindo quem não tem o identificador do canal.
-- [ ] Métrica por canal (abertura e clique em e-mail; leitura em WhatsApp).
+- [ ] Wizard da UI montando os passos a partir da capacidade declarada. — **auditoria 2026-09-14:** não entregue. Movido para **F60-S09**.
+- [ ] Estimativa de público excluindo quem não tem o identificador do canal. — **auditoria 2026-09-14:** não entregue. Movido para **F60-S09**.
+- [ ] Métrica por canal (abertura e clique em e-mail; leitura em WhatsApp). — **auditoria 2026-09-14:** não entregue. Movido para **F60-S09**.
 
 ## Validação
 
@@ -150,3 +150,13 @@ Postgres, Redis e RabbitMQ. Subi para 30s em `@hm/api` e criei o config equivale
 demorado, e 10s é um número escolhido sem saber disso.
 
 Depois da correção: `@hm/api` **111 arquivos, 1046 testes, todos verdes**, na suíte completa.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (0):** tinham entrega, só faltava o registro. Evidência: Backend multicanal entregue com testes (`multicanal.test.ts`).
+- **Continuam em aberto (3):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

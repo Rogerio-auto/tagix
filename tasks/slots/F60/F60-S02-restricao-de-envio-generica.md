@@ -50,10 +50,10 @@ por canal e mercado, e o composer precisa consumir isso em vez de reimplementar.
 
 ## Definition of Done
 
-- [ ] O estado do composer vem do portão (`decideOutbound`), não de regra duplicada na UI.
-- [ ] Cada bloqueio exibe **por quê** e, quando aplicável, **quando volta a poder** (`retryAt`).
-- [ ] A trava de 24h do WhatsApp continua funcionando exatamente como hoje — teste de regressão.
-- [ ] Contato suprimido bloqueia o composer com mensagem clara, e o atendente entende que não é bug.
+- [ ] O estado do composer vem do portão (`decideOutbound`), não de regra duplicada na UI. — **auditoria 2026-09-14:** não entregue: `toRestriction` existe na API, mas a interface de conversas não consome. Movido para **F60-S11**.
+- [ ] Cada bloqueio exibe **por quê** e, quando aplicável, **quando volta a poder** (`retryAt`). — **auditoria 2026-09-14:** não entregue na interface. Movido para **F60-S11**.
+- [x] A trava de 24h do WhatsApp continua funcionando exatamente como hoje — teste de regressão.
+- [ ] Contato suprimido bloqueia o composer com mensagem clara, e o atendente entende que não é bug. — **auditoria 2026-09-14:** não entregue na interface (a API já bloqueia). Movido para **F60-S11**.
 
 ## Validação
 
@@ -100,3 +100,13 @@ para os tres casos.
 
 `@hm/shared` 126 verdes (3 novos da correcao) · `@hm/api` 1030 verdes (9 novos) · `@hm/workers` 493
 verdes, sem regressao.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (1):** tinham entrega, só faltava o registro. Evidência: `restriction.test.ts` cobre a janela de 24h do WhatsApp e o contato suprimido dentro dela.
+- **Continuam em aberto (3):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

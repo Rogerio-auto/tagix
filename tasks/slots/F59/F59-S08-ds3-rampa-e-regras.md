@@ -67,12 +67,12 @@ hover, foco, glow e desabilitado a serem inventados caso a caso.
 
 ## Definition of Done
 
-- [ ] Nenhum token existente muda de valor. `git diff` em `tokens.css` é só adição — verificável.
-- [ ] Rampa definida nos dois temas (dark e light), com o claro escolhido para contraste, não por espelho do escuro.
-- [ ] As três regras de lint pegam os casos reais e não quebram o build atual: rodar `pnpm lint` e corrigir o que aparecer **dentro** do `files_allowed`; ocorrência fora da fronteira vira linha em `tasks/COMMS.md`, não edição.
-- [ ] Se a regra 2 ou 3 acusar mais de 10 ocorrências fora da fronteira, entra como `warn` com TODO datado e um slot de limpeza é registrado — não `error` que trava o CI de todo mundo.
-- [ ] `pnpm lint` e `pnpm typecheck` verdes no repo inteiro.
-- [ ] `DESIGN_SYSTEM.md` documenta a rampa, os easings e as três regras.
+- [x] Nenhum token existente muda de valor. `git diff` em `tokens.css` é só adição — verificável.
+- [x] Rampa definida nos dois temas (dark e light), com o claro escolhido para contraste, não por espelho do escuro.
+- [x] As três regras de lint pegam os casos reais e não quebram o build atual: rodar `pnpm lint` e corrigir o que aparecer **dentro** do `files_allowed`; ocorrência fora da fronteira vira linha em `tasks/COMMS.md`, não edição.
+- [x] Se a regra 2 ou 3 acusar mais de 10 ocorrências fora da fronteira, entra como `warn` com TODO datado e um slot de limpeza é registrado — não `error` que trava o CI de todo mundo.
+- [x] `pnpm lint` e `pnpm typecheck` verdes no repo inteiro.
+- [x] `DESIGN_SYSTEM.md` documenta a rampa, os easings e as três regras.
 
 ## Validação
 
@@ -118,3 +118,13 @@ pnpm typecheck
 ## Resultado
 
 `pnpm lint` 0 erros / 109 avisos · `pnpm typecheck` limpo no repo · `@hm/design-tokens` typecheck OK.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (6):** tinham entrega, só faltava o registro. Evidência: Rampa, easings e regras documentados em `docs/DESIGN_SYSTEM.md`; lint com 0 erros e as regras em `warn` com TODO datado.
+- **Continuam em aberto (0):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

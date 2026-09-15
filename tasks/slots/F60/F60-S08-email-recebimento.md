@@ -47,12 +47,12 @@ saiu de um slot que já estava longo demais.
 ## Definition of Done
 
 - [x] Webhook **recusa payload não assinado** — sem isso, alguém forja um `hard_bounce` e suprime o contato de um cliente.
-- [ ] Anexo inbound vai para R2 e a mensagem referencia por `external_id`, como a mídia da Meta.
+- [ ] Anexo inbound vai para R2 e a mensagem referencia por `external_id`, como a mídia da Meta. — **auditoria 2026-09-14:** não entregue. Movido para **F60-S10**.
 - [x] **Bounce duro e reclamação de spam suprimem o endereço** em `contact_suppressions` (canal `email`), reusando `consentRepo.revoke`.
 - [x] Bounce leve **não** suprime: é transitório, e suprimir por caixa cheia perde o cliente para sempre.
 - [x] HTML inbound é sanitizado antes de chegar à UI. E-mail é vetor clássico de XSS armazenado, e a política de SVG do `uploads.ts` mostra que o repo já leva isso a sério.
-- [ ] Anti-SSRF em qualquer URL vinda do e-mail (política de F56-S07).
-- [ ] A thread encontrada por `threadKeyFrom` reusa a conversa existente; assunto alterado não cria conversa nova.
+- [ ] Anti-SSRF em qualquer URL vinda do e-mail (política de F56-S07). — **auditoria 2026-09-14:** não entregue. Movido para **F60-S10**.
+- [ ] A thread encontrada por `threadKeyFrom` reusa a conversa existente; assunto alterado não cria conversa nova. — **auditoria 2026-09-14:** não entregue: `threadKeyFrom` não é chamado no worker. Movido para **F60-S10**.
 - [x] Rate limit no webhook público, como nos demais.
 
 ## Validação
@@ -115,3 +115,13 @@ e-mail, e hoje ninguém busca.
 
 `@hm/channels` 216 verdes (47 novos: 34 de sanitização, 13 de bounce) · `@hm/api` 1046 verdes
 (16 novos de webhook).
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (0):** tinham entrega, só faltava o registro. Evidência: Assinatura, supressão por bounce duro e reclamação, bounce leve sem supressão, sanitização e rate limit entregues.
+- **Continuam em aberto (3):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

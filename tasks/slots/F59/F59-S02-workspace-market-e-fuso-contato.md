@@ -59,11 +59,11 @@ Desbloqueia F59-S03 (consentimento por mercado) e F59-S07 (valores personalizado
 
 ## Definition of Done
 
-- [ ] Migration `0069` aplica e reverte sem perda; `pnpm --filter @hm/db migrate` verde em base limpa e em base com dado.
-- [ ] `check` de `market` rejeita valor fora de `BR|US` (teste de integração).
-- [ ] `workspaces` e `contacts` já têm RLS; confirmar por teste que as colunas novas não abrem leitura cross-workspace.
-- [ ] Default `BR` preserva o comportamento de todos os workspaces existentes — nenhuma mudança observável para quem já usa.
-- [ ] `contacts.timezone` aceita apenas IANA válido na camada Zod (não no banco); documentar a escolha.
+- [ ] Migration `0069` aplica e reverte sem perda; `pnpm --filter @hm/db migrate` verde em base limpa e em base com dado. — **auditoria 2026-09-14:** não entregue como escrito: o repositório usa migrations só para frente (Drizzle, sem `down`). A proteção equivalente é o dump pré-migration da F57-S07, que ainda precisa ser provado (F57-S14). Sem slot próprio — reversão de migration seria uma decisão de arquitetura nova.
+- [x] `check` de `market` rejeita valor fora de `BR|US` (teste de integração).
+- [x] `workspaces` e `contacts` já têm RLS; confirmar por teste que as colunas novas não abrem leitura cross-workspace.
+- [x] Default `BR` preserva o comportamento de todos os workspaces existentes — nenhuma mudança observável para quem já usa.
+- [x] `contacts.timezone` aceita apenas IANA válido na camada Zod (não no banco); documentar a escolha.
 
 ## Validação
 
@@ -95,3 +95,13 @@ pnpm --filter @hm/db lint
 3. **`market` tipado como `'BR' | 'US'` via `$type<>()`** em vez de enum PG: o CHECK dá a garantia no
    banco e o `$type` dá a garantia no TypeScript, sem o custo de migration de enum quando um terceiro
    mercado entrar.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (4):** tinham entrega, só faltava o registro. Evidência: `packages/db/src/market-and-timezone.test.ts` cobre o CHECK de mercado e o fuso.
+- **Continuam em aberto (1):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

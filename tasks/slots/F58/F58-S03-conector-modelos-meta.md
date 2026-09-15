@@ -37,12 +37,12 @@ produto.
 
 ## Definition of Done
 
-- [ ] Listagem percorre paginação da Graph API até o fim, com limite defensivo e timeout.
-- [ ] Contrato normaliza nome, idioma, categoria, status, componentes, rejeição e identificador remoto.
-- [ ] Criação valida header/body/footer/buttons e variáveis antes de chamar a Meta.
-- [ ] Erros de permissão, payload, rate limit e indisponibilidade são tipados como permanentes ou transitórios.
-- [ ] Tokens e conteúdo sensível não aparecem em logs/exceções.
-- [ ] Testes cobrem paginação, status desconhecido, rejeição, 429/5xx e payload inválido.
+- [x] Listagem percorre paginação da Graph API até o fim, com limite defensivo e timeout.
+- [x] Contrato normaliza nome, idioma, categoria, status, componentes, rejeição e identificador remoto.
+- [x] Criação valida header/body/footer/buttons e variáveis antes de chamar a Meta.
+- [x] Erros de permissão, payload, rate limit e indisponibilidade são tipados como permanentes ou transitórios.
+- [x] Tokens e conteúdo sensível não aparecem em logs/exceções.
+- [x] Testes cobrem paginação, status desconhecido, rejeição, 429/5xx e payload inválido.
 
 ## Validação
 
@@ -54,3 +54,13 @@ pnpm --filter @hm/channels test
 ## Notas
 
 - A versão da Graph API deve vir da fonte canônica já existente em `GraphClient`.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (6):** tinham entrega, só faltava o registro. Evidência: Testes do conector de modelos cobrem paginação e 429.
+- **Continuam em aberto (0):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

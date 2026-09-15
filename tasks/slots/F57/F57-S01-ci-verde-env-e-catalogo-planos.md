@@ -2,7 +2,7 @@
 id: F57-S01
 title: CI verde — ENCRYPTION_KEY no job + catálogo de planos self-contained nos testes
 phase: F57
-status: done
+status: in-progress
 priority: critical
 estimated_size: S
 depends_on: []
@@ -94,11 +94,11 @@ Duas causas independentes, ambas de ambiente — **nenhum bug de produto**:
 
 ## Definition of Done
 
-- [ ] Em clone limpo, com infra de pé + `pnpm --filter @hm/db migrate`, o comando
+- [ ] Em clone limpo, com infra de pé + `pnpm --filter @hm/db migrate`, o comando — **auditoria 2026-09-14:** não verificado nesta auditoria.
       `pnpm -r --if-present test` sai **0**, sem nenhum seed manual.
-- [ ] `gh run list --branch main --limit 1` → `conclusion: success` no job `ci`.
-- [ ] Nenhum teste depende de ordem entre packages (rodar `@hm/api` isolado passa).
-- [ ] `ENCRYPTION_KEY` documentado como pré-requisito da suíte no `.env.example`.
+- [ ] `gh run list --branch main --limit 1` → `conclusion: success` no job `ci`. — **auditoria 2026-09-14:** não entregue: o CI da `main` ficou vermelho de 2026-06-09 a 2026-09-14. Causa: a chave de teste sem aspas no `ci.yml` era lida pelo YAML como o número 0. Corrigida nesta auditoria; o slot fecha quando o job `ci` passar.
+- [ ] Nenhum teste depende de ordem entre packages (rodar `@hm/api` isolado passa). — **auditoria 2026-09-14:** não verificado: o `pnpm -r test` do CI parava no primeiro pacote que falhava (`@hm/db`), então `@hm/api`, `@hm/workers` e `@hm/web` não rodaram no CI desde junho.
+- [x] `ENCRYPTION_KEY` documentado como pré-requisito da suíte no `.env.example`.
 
 ## Validação
 
@@ -121,3 +121,13 @@ pnpm --filter @hm/workers test
 - Postgres local: a porta 5432 do host pode estar tomada por um Postgres nativo
   (ver **F57-S06**). Se `pnpm --filter @hm/db migrate` devolver `28P01 auth_failed`,
   é colisão de porta, não credencial errada.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (1):** tinham entrega, só faltava o registro. Evidência: `ENCRYPTION_KEY` consta em `.env.example`.
+- **Continuam em aberto (3):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

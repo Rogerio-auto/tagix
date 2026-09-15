@@ -167,6 +167,53 @@ claro enquanto não estiver aprovado. Sem isso, o operador dispara, nada chega, 
 
 ---
 
+### 5.3 Quem opera o SMS — os dois modelos (2026-09-14)
+
+Duas coisas não mudam em nenhum modelo:
+
+- **Cada cliente é uma marca registrada no nome dele**, com o CNPJ americano (EIN) e o site
+  **dele**. Não existe registrar os cinquenta clientes sob a marca Leadium, nem dividir um número
+  entre empresas diferentes — a operadora bloqueia.
+- **O conteúdo e a lista são do cliente.** Quem decide para quem e o que mandar é quem aparece
+  como remetente.
+
+O que muda é **de quem é a conta** no provedor (Twilio, Telnyx):
+
+| | **A — conta do cliente** | **B — Leadium como ISV** |
+|---|---|---|
+| Conta no provedor | Uma por cliente, no nome dele | Uma conta Leadium, com uma **subconta por cliente** |
+| Registro 10DLC | O cliente faz (ou você faz logado na conta dele) | O produto faz por API, a partir de um formulário no onboarding |
+| Quem paga a operadora | O cliente, direto | Você, e repassa na mensalidade |
+| Se um cliente abusar | Só a conta dele é suspensa | A subconta dele é suspensa, **e a conta Leadium entra em análise** |
+| Onboarding de 50 clientes | 50 cadastros com verificação de identidade, feitos por gente que não é técnica | Formulário dentro do produto |
+| Visibilidade | Você não vê a entrega sem pedir acesso | Painel único |
+
+**Como fica o dia a dia no modelo A:** o dono da empresa de reforma cria uma conta na Twilio,
+passa pela verificação de identidade, preenche o registro da marca e da campanha, espera de uma a
+quatro semanas, compra um número e cola a credencial no Leadium. Na prática ele não vai conseguir
+sozinho — você vai fazer tudo isso por ele, logado na conta dele, cinquenta vezes. O risco jurídico
+fica mais longe de você, mas o trabalho não.
+
+**Como fica no modelo B:** o cliente preenche nome legal, EIN, endereço, site e exemplos de
+mensagem no onboarding; o produto cria a subconta, registra marca e campanha por API
+([Twilio — ISV A2P 10DLC](https://www.twilio.com/docs/messaging/compliance/a2p-10dlc/onboarding-isv))
+e mostra o andamento. Você vira o operador perante o provedor, e por isso o portão de
+consentimento da F59 deixa de ser boa prática e passa a ser a proteção da sua conta.
+
+**Custo por cliente (ordem de grandeza, fontes secundárias — confirmar no provedor):** registro
+de marca de ~US$ 25 a ~US$ 72 uma vez, análise de campanha de ~US$ 15, mensalidade por campanha de
+~US$ 1,50 a ~US$ 10, mais o número e o tráfego. Prazo total de uma a quatro semanas.
+([GHL Scale Up](https://www.ghlscaleup.com/blog/a2p-10dlc-fees-explained),
+[Aloware](https://support.aloware.com/en/articles/9032003-a2p-10dlc-fees-brand-and-campaign-registration))
+
+**Recomendação para 50 clientes: modelo B**, com três proteções: (1) contrato em que o cliente
+declara ter o consentimento da lista e responde pelo conteúdo; (2) portão da F59 obrigatório em
+todo envio, sem exceção por cliente; (3) teto de volume por subconta nas primeiras semanas.
+**A distribuição de responsabilidade entre plataforma e remetente perante a lei americana (TCPA)
+precisa de validação de advogado antes do primeiro cliente** — este plano não substitui isso.
+
+---
+
 ## 6. O detector de revogação
 
 A regra americana em vigor desde 11/04/2025 diz que o consumidor revoga por **qualquer meio

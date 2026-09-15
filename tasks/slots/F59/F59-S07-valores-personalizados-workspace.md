@@ -65,12 +65,12 @@ automações.
 
 ## Definition of Done
 
-- [ ] RLS testada: workspace A não lê valor de B.
-- [ ] `kind: 'secret'` cifrado em repouso; teste confirma que a leitura de API devolve `hasValue: true` e nunca o valor.
-- [ ] Resolver deixa `{{desconhecido}}` **intacto** e reporta — apagar silenciosamente produz mensagem quebrada que ninguém percebe.
-- [ ] Resolver não é recursivo: valor que contém `{{outra}}` não expande. Documentado e testado (evita laço e injeção).
-- [ ] `key` validada como slug (`^[a-z][a-z0-9_]{1,48}$`), rejeitando espaço e maiúscula.
-- [ ] Auditoria: alteração de valor entra em `audit_logs`.
+- [x] RLS testada: workspace A não lê valor de B.
+- [x] `kind: 'secret'` cifrado em repouso; teste confirma que a leitura de API devolve `hasValue: true` e nunca o valor.
+- [x] Resolver deixa `{{desconhecido}}` **intacto** e reporta — apagar silenciosamente produz mensagem quebrada que ninguém percebe.
+- [x] Resolver não é recursivo: valor que contém `{{outra}}` não expande. Documentado e testado (evita laço e injeção).
+- [x] `key` validada como slug (`^[a-z][a-z0-9_]{1,48}$`), rejeitando espaço e maiúscula.
+- [ ] Auditoria: alteração de valor entra em `audit_logs`. — **auditoria 2026-09-14:** não entregue: nenhuma escrita em `audit_logs` na alteração de valor. Movido para **F59-S09**.
 
 ## Validação
 
@@ -110,3 +110,13 @@ pnpm --filter @hm/api test
 ## Resultado
 
 `@hm/db` 120 verdes (15 novos) · `@hm/api` 1021 verdes · typecheck limpo nos dois.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (5):** tinham entrega, só faltava o registro. Evidência: `custom-values.test.ts` cobre unicidade, segredo cifrado, resolução não recursiva, chave desconhecida preservada e RLS. **Esse teste é o que deixou o CI vermelho visível** — por causa da chave do YAML, não do código.
+- **Continuam em aberto (1):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

@@ -66,12 +66,12 @@ o agente responde como se nunca tivesse falado com ele.
 
 ## Definition of Done
 
-- [ ] Os três adapters existentes continuam compilando **sem alteração** — a extensão é aditiva.
-- [ ] `contact_identities` com RLS testada e único por `(workspace, kind, value)`.
-- [ ] Normalização por tipo: e-mail minúsculo e sem espaço; telefone só dígitos com E.164 quando houver país.
-- [ ] Backfill idempotente de `contacts.phone`/`contacts.email` — rodar duas vezes não duplica.
-- [ ] `resolveContactByIdentity` devolve no máximo um contato; colisão é erro explícito, não escolha silenciosa.
-- [ ] Teste: lead por e-mail + mensagem de WhatsApp depois **sugere** fusão e não funde sozinho.
+- [x] Os três adapters existentes continuam compilando **sem alteração** — a extensão é aditiva.
+- [x] `contact_identities` com RLS testada e único por `(workspace, kind, value)`.
+- [x] Normalização por tipo: e-mail minúsculo e sem espaço; telefone só dígitos com E.164 quando houver país.
+- [x] Backfill idempotente de `contacts.phone`/`contacts.email` — rodar duas vezes não duplica.
+- [x] `resolveContactByIdentity` devolve no máximo um contato; colisão é erro explícito, não escolha silenciosa.
+- [x] Teste: lead por e-mail + mensagem de WhatsApp depois **sugere** fusão e não funde sozinho.
 
 ## Validação
 
@@ -118,3 +118,13 @@ pnpm lint
 
 `@hm/channels` 119 verdes (10 novos) · `@hm/db` 135 verdes (15 novos) · migration 0072 com RLS e
 backfill idempotente de `contacts.phone`/`contacts.email`.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (6):** tinham entrega, só faltava o registro. Evidência: `contact-identities.test.ts` cobre RLS, normalização e `suggestMerge` sugerindo sem fundir.
+- **Continuam em aberto (0):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

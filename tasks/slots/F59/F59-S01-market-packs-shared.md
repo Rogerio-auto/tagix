@@ -83,14 +83,14 @@ export const MARKET_CODES: readonly MarketCode[];
 
 ## Definition of Done
 
-- [ ] `markets.ts` exporta os tipos e as duas instâncias (`BR`, `US`) como `const` profundamente readonly, sem `any`.
-- [ ] US: `timezonePerContact: true`, `locales: ['en-US','pt-BR']`, `currency: 'USD'`; SMS com `requiresPriorConsent: true`, `registrationRequired: '10dlc'`, `quietHours: { startHour: 8, endHour: 21 }` e `revocationByAnyReasonableMeans: true`.
-- [ ] BR: `timezonePerContact: false`, `defaultTimezone: 'America/Sao_Paulo'`, `currency: 'BRL'`; canais sem SMS na lista habilitada.
-- [ ] `optOutKeywords` cobre **os dois idiomas** em ambos os mercados (`stop`, `unsubscribe`, `cancel`, `quit`, `end`, `pare`, `parar`, `sair`, `cancelar`, `descadastrar`) — o público responde no idioma dele, não no do mercado.
-- [ ] `getOutboundPolicy` é total: devolve política para todo `ChannelKind`, inclusive canal não habilitado no mercado (com `requiresPriorConsent: true` como padrão seguro).
-- [ ] `isChannelEnabled` não é usado como gate de conformidade — só de disponibilidade de UI; documentado no JSDoc.
-- [ ] Re-export em `packages/shared/src/index.ts`.
-- [ ] Testes cobrem: totalidade de `getOutboundPolicy`, padrão seguro para canal desconhecido, e que nenhuma política de marketing em US tem `requiresPriorConsent: false`.
+- [x] `markets.ts` exporta os tipos e as duas instâncias (`BR`, `US`) como `const` profundamente readonly, sem `any`.
+- [x] US: `timezonePerContact: true`, `locales: ['en-US','pt-BR']`, `currency: 'USD'`; SMS com `requiresPriorConsent: true`, `registrationRequired: '10dlc'`, `quietHours: { startHour: 8, endHour: 21 }` e `revocationByAnyReasonableMeans: true`.
+- [x] BR: `timezonePerContact: false`, `defaultTimezone: 'America/Sao_Paulo'`, `currency: 'BRL'`; canais sem SMS na lista habilitada.
+- [x] `optOutKeywords` cobre **os dois idiomas** em ambos os mercados (`stop`, `unsubscribe`, `cancel`, `quit`, `end`, `pare`, `parar`, `sair`, `cancelar`, `descadastrar`) — o público responde no idioma dele, não no do mercado.
+- [x] `getOutboundPolicy` é total: devolve política para todo `ChannelKind`, inclusive canal não habilitado no mercado (com `requiresPriorConsent: true` como padrão seguro).
+- [x] `isChannelEnabled` não é usado como gate de conformidade — só de disponibilidade de UI; documentado no JSDoc.
+- [x] Re-export em `packages/shared/src/index.ts`.
+- [x] Testes cobrem: totalidade de `getOutboundPolicy`, padrão seguro para canal desconhecido, e que nenhuma política de marketing em US tem `requiresPriorConsent: false`.
 
 ## Validação
 
@@ -106,3 +106,13 @@ pnpm --filter @hm/shared lint
   codifica o que aquele documento afirma.
 - `quietHours` é `8..21` inclusive-exclusivo no fim (21h = já fora da janela). Documentar no tipo.
 - O pacote é puro de propósito: nada de `Date.now()`, nada de leitura de env. Fuso é dado, não efeito.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (8):** tinham entrega, só faltava o registro. Evidência: `markets.test.ts` cobre totalidade e padrão seguro; palavras de descadastro em pt e en.
+- **Continuam em aberto (0):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

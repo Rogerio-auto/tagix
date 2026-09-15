@@ -68,14 +68,14 @@ export function decideOutbound(input: {
 
 ## Definition of Done
 
-- [ ] `decideOutbound` é **pura**: recebe `now` e o snapshot, não consulta banco nem relógio. O I/O fica no serviço que a chama.
-- [ ] Ordem de avaliação fixa e testada: supressão → canal habilitado → registro → consentimento → janela horária. Supressão sempre vence.
-- [ ] `purpose: 'transactional'` **nunca** é bloqueado por `no_consent` — confirmação de agendamento não é marketing. Bloqueia por supressão, sim.
-- [ ] Janela horária usa o fuso do contato; quando `contactTimezone` é nulo, cai no `defaultTimezone` do market pack, e isso é registrado na decisão.
-- [ ] `retryAt` vem preenchido em `quiet_hours` com o próximo horário permitido no fuso correto — o chamador reagenda em vez de descartar.
-- [ ] Recusa **nunca é silenciosa**: cada `allowed: false` produz `message` pronta para log e para exibição ao atendente.
-- [ ] Testes com fuso real cobrindo virada de dia e horário de verão americano (contato em `America/New_York` às 20h59 e 21h00 locais).
-- [ ] Serviço em `apps/api/src/services/consent/` carrega o snapshot sob RLS e delega a decisão à função pura.
+- [x] `decideOutbound` é **pura**: recebe `now` e o snapshot, não consulta banco nem relógio. O I/O fica no serviço que a chama.
+- [x] Ordem de avaliação fixa e testada: supressão → canal habilitado → registro → consentimento → janela horária. Supressão sempre vence.
+- [x] `purpose: 'transactional'` **nunca** é bloqueado por `no_consent` — confirmação de agendamento não é marketing. Bloqueia por supressão, sim.
+- [x] Janela horária usa o fuso do contato; quando `contactTimezone` é nulo, cai no `defaultTimezone` do market pack, e isso é registrado na decisão.
+- [x] `retryAt` vem preenchido em `quiet_hours` com o próximo horário permitido no fuso correto — o chamador reagenda em vez de descartar.
+- [x] Recusa **nunca é silenciosa**: cada `allowed: false` produz `message` pronta para log e para exibição ao atendente.
+- [x] Testes com fuso real cobrindo virada de dia e horário de verão americano (contato em `America/New_York` às 20h59 e 21h00 locais).
+- [x] Serviço em `apps/api/src/services/consent/` carrega o snapshot sob RLS e delega a decisão à função pura.
 
 ## Validação
 
@@ -112,3 +112,13 @@ pnpm --filter @hm/api test
 `pnpm --filter @hm/api test` exige **RabbitMQ**, além de Postgres e Redis: `app.test.ts` (health) e
 `routes/v1/routes.test.ts` falham com `ECONNREFUSED 127.0.0.1:5672` sem ele. Não estava óbvio.
 Com os três no ar: 1021 testes, todos verdes.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (8):** tinham entrega, só faltava o registro. Evidência: `consent.test.ts` cobre ordem de avaliação e fuso real (`America/New_York`).
+- **Continuam em aberto (0):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

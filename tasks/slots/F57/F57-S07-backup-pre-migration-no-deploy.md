@@ -78,12 +78,12 @@ maior consequência: as outras falham o deploy, esta perde dados de cliente paga
 
 ## Definition of Done
 
-- [ ] `deploy.sh` produz dump verificável antes de migrar; deploy aborta se o dump
+- [x] `deploy.sh` produz dump verificável antes de migrar; deploy aborta se o dump
       falhar (testar injetando falha).
-- [ ] Retenção implementada e testada (N+1 dumps → o mais antigo é podado).
-- [ ] Restore testado de verdade a partir de um dump gerado pelo script, num banco
+- [ ] Retenção implementada e testada (N+1 dumps → o mais antigo é podado). — **auditoria 2026-09-14:** parcial: a poda por `BACKUP_KEEP` existe em `scripts/deploy.sh`, mas não há teste. Movido para **F57-S14**.
+- [ ] Restore testado de verdade a partir de um dump gerado pelo script, num banco — **auditoria 2026-09-14:** não entregue: não há registro de restore a partir de um dump do script. Movido para **F57-S14**.
       descartável — não só documentado.
-- [ ] Runbooks de restore e rollback referenciam o caminho e o nome real do artefato.
+- [x] Runbooks de restore e rollback referenciam o caminho e o nome real do artefato.
 
 ## Validação
 
@@ -97,3 +97,13 @@ bash -n scripts/deploy.sh
   a resposta é PITR (slot futuro), **não** pular o dump.
 - Enquanto este slot não fechar: `pg_dump` manual antes de todo deploy que traga
   migration nova. É a regra provisória, e vale a partir de hoje.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (2):** tinham entrega, só faltava o registro. Evidência: `scripts/deploy.sh` faz `pg_dump` antes de migrar e aborta se falhar; produção tem 10 dumps em `/opt/leadium/backups`; o runbook de restore cita caminho e nome reais.
+- **Continuam em aberto (2):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

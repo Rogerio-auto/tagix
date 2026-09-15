@@ -83,10 +83,10 @@ externo, e é o canal de nutrição que hoje não existe.
 
 **Movido para F60-S08** (recebimento — ver "Escopo revisado" no fim):
 
-- [ ] Anexo inbound vai para R2 e a mensagem referencia por `external_id`.
-- [ ] Webhook valida assinatura do provider e recusa payload não assinado.
-- [ ] Bounce duro suprime o endereço via `contact_suppressions`.
-- [ ] Anti-SSRF em URL vinda do e-mail; HTML inbound sanitizado.
+- [ ] Anexo inbound vai para R2 e a mensagem referencia por `external_id`. — **auditoria 2026-09-14:** não entregue. Movido para **F60-S10**.
+- [x] Webhook valida assinatura do provider e recusa payload não assinado.
+- [x] Bounce duro suprime o endereço via `contact_suppressions`.
+- [ ] Anti-SSRF em URL vinda do e-mail; HTML inbound sanitizado. — **auditoria 2026-09-14:** parcial: sanitização entregue na F60-S08; anti-SSRF não. Movido para **F60-S10**.
 
 ## Escopo revisado durante a execução (2026-09-09)
 
@@ -151,3 +151,13 @@ pnpm lint
 
 - Encadear por assunto parece funcionar até o primeiro cliente que responde mudando o assunto.
 - Bounce duro que não suprime é o caminho mais rápido para queimar o domínio do cliente.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (2):** tinham entrega, só faltava o registro. Evidência: Assinatura do webhook e supressão por bounce duro foram entregues na F60-S08. **O canal não envia em produção: o único provedor é o `FakeEmailProvider` — provedor real movido para F60-S04.**
+- **Continuam em aberto (2):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

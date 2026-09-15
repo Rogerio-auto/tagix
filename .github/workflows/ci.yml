@@ -46,7 +46,12 @@ jobs:
       REDIS_URL: redis://localhost:6379
       AMQP_URL: amqp://hm:hm@localhost:5672
       # Chave fixa e não secreta, exclusiva do ambiente efêmero de testes.
-      ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+      #
+      # ENTRE ASPAS, OBRIGATORIAMENTE. Sem aspas o YAML lê 64 zeros como o NÚMERO 0,
+      # a variável chega ao processo como "0" e toda cifragem falha com "ENCRYPTION_KEY
+      # deve ter 32 bytes". Ficou escondido porque o único teste de cripto definia a
+      # própria chave; o CI da main ficou vermelho de 2026-06-09 a 2026-09-14.
+      ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
       NODE_ENV: test
     steps:
       - uses: actions/checkout@v4

@@ -45,14 +45,14 @@ um nome digitado manualmente.
 
 ## Definition of Done
 
-- [ ] Tabela `channel_message_templates` guarda workspace, canal, id externo, nome, idioma, categoria, status, componentes, motivo de rejeição e `last_synced_at`.
-- [ ] Unicidade por canal + nome + idioma e índices para lista por status/categoria.
-- [ ] FK para canal/workspace e deleção coerente.
-- [ ] A integridade impede associar `workspace_id` de um tenant ao canal de outro tenant.
-- [ ] Estado de sincronização por canal preserva o último sucesso mesmo quando o catálogo está vazio ou uma tentativa falha.
-- [ ] RLS criada, forçada e testada para isolamento entre workspaces.
-- [ ] Componentes externos permanecem `unknown` validado; zero `any`.
-- [ ] Migration idempotente e registrada conforme o guard de migrations.
+- [x] Tabela `channel_message_templates` guarda workspace, canal, id externo, nome, idioma, categoria, status, componentes, motivo de rejeição e `last_synced_at`.
+- [x] Unicidade por canal + nome + idioma e índices para lista por status/categoria.
+- [x] FK para canal/workspace e deleção coerente.
+- [x] A integridade impede associar `workspace_id` de um tenant ao canal de outro tenant.
+- [x] Estado de sincronização por canal preserva o último sucesso mesmo quando o catálogo está vazio ou uma tentativa falha.
+- [x] RLS criada, forçada e testada para isolamento entre workspaces.
+- [x] Componentes externos permanecem `unknown` validado; zero `any`.
+- [x] Migration idempotente e registrada conforme o guard de migrations.
 
 ## Validação
 
@@ -65,3 +65,13 @@ python scripts/slot.py check-migrations
 ## Notas
 
 - O catálogo é cache operacional da Meta; o identificador remoto continua sendo a referência externa.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (8):** tinham entrega, só faltava o registro. Evidência: Migration de `channel_message_templates` com RLS e resolver `SECURITY DEFINER`.
+- **Continuam em aberto (0):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+
