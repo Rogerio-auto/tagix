@@ -54,7 +54,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F60   | 9     | 4   | 0   | 0   | 0   | 0   | 5   |
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
-| F69   | 10     | 8   | 0   | 0   | 0   | 0   | 2   |
+| F69   | 10     | 7   | 0   | 0   | 0   | 1   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
@@ -733,7 +733,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | ------- | ------------------------------------------------------------------------------------------- | ----------- | ---------- | ------------------------------------------------------------------------------- |
 | F69-S01 | Conformidade de plataforma — exclusão de dados, desautorização, política e termos           | ✅ done      | critical   | —                                                                               |
 | F69-S02 | Conexão Meta por workspace — permissões dos casos de uso, token cifrado e reconexão guiada  | ✅ done      | critical   | F69-S01                                                                         |
-| F69-S03 | Leads de anúncios — do formulário à inbox em segundos, com prova de consentimento           | 🟢 available | critical   | F69-S02                                                                         |
+| F69-S03 | Leads de anúncios — do formulário à inbox em segundos, com prova de consentimento           | 🟣 review    | critical   | F69-S02                                                                         |
 | F69-S04 | API de Marketing — leitura: gasto, leads e custo por lead por campanha                      | 🟢 available | high       | F69-S02                                                                         |
 | F69-S05 | API de Marketing — gestão: pausar, ativar e ajustar orçamento com confirmação e trilha      | 🟢 available | medium     | F69-S04                                                                         |
 | F69-S06 | Conversão de volta para a Meta — o anúncio aprende com lead qualificado, agendado e fechado | 🟢 available | high       | F69-S03, F69-S04                                                                |

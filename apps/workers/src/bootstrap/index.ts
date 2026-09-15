@@ -126,6 +126,13 @@ import {
 } from '../campaigns/recompute/index';
 import { createDrainController, drainDeadlineFromEnv } from './drain';
 import {
+  createLeadgenDeps,
+  startLeadgenReconcileScheduler,
+  startLeadgenWorker,
+  type LeadgenReconcileHandle,
+  type LeadgenWorkerHandle,
+} from '../leadgen/index';
+import {
   adapterFactoryByChannel,
   createAdapterFactory,
   type AdapterFactoryOptions,
@@ -167,6 +174,8 @@ export interface WorkersBootstrapHandle {
   readonly flow: FlowWorkerHandle;
   readonly flowScheduler: FlowSchedulerHandle;
   readonly coexistence: CoexistenceWorkerHandle;
+  readonly leadgen: LeadgenWorkerHandle;
+  readonly leadgenReconcile: LeadgenReconcileHandle;
   readonly campaignWorker: CampaignSchedulerHandle;
   readonly followupProcessor: { handle: CampaignFollowupSchedulerHandle };
   readonly automationWorker: AutomationWorkerHandle;
@@ -280,6 +289,10 @@ export async function startWorkers(
     maxRetriesPerRequest: 1,
   });
   const followup = startFollowupScheduler({ redis, channel, logger });
+  // Leads de anúncios da Meta (F69-S03): consumer de hm.q.leadgen + reconciliação
+  // periódica (singleton via lock Redis) do que o webhook não entregou.
+  const leadgen = await startLeadgenWorker({ deps: createLeadgenDeps(channel, logger), logger });
+  const leadgenReconcile = startLeadgenReconcileScheduler({ redis, channel, logger });
   // Scheduler de reengajamento da IA (F30-S06): retoma conversas em handoff ociosas
   // ou quando a janela de horário comercial reabre; idempotente via Redis lock.
   const reengagement = startReengagementScheduler({ redis, channel, logger });
@@ -453,6 +466,8 @@ export async function startWorkers(
       'reengagement-scheduler',
       'flow',
       'coexistence',
+      'leadgen',
+      'leadgen-reconcile-scheduler',
       'flow-wakeup-scheduler',
       'campaign-scheduler',
       'campaign-followup-processor',
@@ -482,6 +497,8 @@ export async function startWorkers(
     flow,
     flowScheduler,
     coexistence,
+    leadgen,
+    leadgenReconcile,
     campaignWorker,
     followupProcessor,
     automationWorker,
@@ -516,6 +533,8 @@ export async function startWorkers(
       await calendarReminders.stop();
       await staleScheduler.stop();
       await automationWorker.stop();
+      await leadgenReconcile.stop();
+      await leadgen.stop();
       await coexistence.stop();
       await flow.stop();
       await reengagement.stop();

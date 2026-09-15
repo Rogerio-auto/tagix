@@ -170,3 +170,21 @@ export { SOFT_BOUNCE_LIMIT, decideOnEmailEvent, resetsSoftBounces } from './emai
 export type { BounceAction, BounceDecision } from './email/bounce';
 export { FakeEmailProvider } from './email/fake-provider';
 export type { FakeEmailProviderOptions, SentEmail } from './email/fake-provider';
+export {
+  FORM_DISCLAIMER_FIELDS,
+  LEAD_FIELDS,
+  answersSummary,
+  contactFieldsFrom,
+  customFieldsFrom,
+  parseFormDisclaimer,
+  parseLead,
+  parseLeadgenWebhook,
+} from './meta/leadgen/parse';
+export type {
+  FormDisclaimer,
+  FunnelFieldDef,
+  LeadAnswers,
+  LeadConsentResponse,
+  LeadgenNotification,
+  ParsedLead,
+} from './meta/leadgen/parse';

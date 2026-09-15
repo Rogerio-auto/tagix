@@ -37,10 +37,10 @@ Levantado no código em 2026-09-14:
 |---|---|
 | WhatsApp: Embedded Signup (`FB.login` com `config_id`), coexistência, envio, modelos HSM | ✅ em produção |
 | Instagram: DM, story reply/mention, comentários (listar, responder, ocultar, excluir) | ✅ código pronto |
-| Webhook único `/webhooks/meta` | ✅ trata `whatsapp_business_account` e `instagram`; **objeto `page` é descartado** |
+| Webhook único `/webhooks/meta` | ✅ trata `whatsapp_business_account`, `instagram` e — desde a F69-S03 — `page` (campo `leadgen`) |
 | Escopos pedidos no login do Instagram | `pages_show_list, pages_manage_metadata, instagram_basic, instagram_manage_messages, business_management` |
 | **Callback de exclusão de dados** | ❌ **não existe** — e sem ele o App Review reprova |
-| Lead Ads (`leadgen`) | ❌ |
+| Lead Ads (`leadgen`) | ✅ F69-S03 (2026-09-15): assinatura da página, busca imediata com retry, reconciliação a cada 15 min, contato + conversa + card + aviso, termo do formulário guardado como prova. Pendente: concessão de canal a partir das caixas (precisa do mapeamento caixa → canal) |
 | Marketing API (contas de anúncio, insights, gestão) | ❌ |
 | Envio de conversão de volta para a Meta | ❌ |
 | Instagram — publicação de conteúdo | ❌ |
@@ -103,8 +103,11 @@ Sem estes, **nenhuma** permissão é aprovada:
    o cliente sentir o produto no primeiro dia.
 2. **Lead é buscado no instante em que o webhook chega.** A Meta guarda o dado do formulário por
    90 dias; perder a busca é perder o lead sem aviso.
-3. **O texto de consentimento do formulário vira prova** em `contact_consents` (F59-S03). Nos EUA,
-   formulário de anúncio é a origem de consentimento mais comum — e a mais contestada.
+3. **O texto de consentimento do formulário vira prova.** Nos EUA, formulário de anúncio é a
+   origem de consentimento mais comum — e a mais contestada. *Como ficou (F69-S03):* o termo e o
+   texto de cada caixa são **copiados** junto do lead, com formulário e data. A concessão em
+   `contact_consents` (F59-S03) espera o cliente dizer qual caixa autoriza qual canal: o texto
+   da caixa é livre, e deduzir o canal dele seria afirmar um consentimento que ninguém deu.
 4. **Gestão de anúncios começa por leitura.** Pausar e ajustar orçamento vêm depois, com
    confirmação e auditoria; criar campanha do zero fica para quando houver demanda medida.
    Mexer no dinheiro do cliente sem trilha é o jeito mais rápido de perder um contrato.
@@ -113,7 +116,11 @@ Sem estes, **nenhuma** permissão é aprovada:
 6. **Tokens por workspace, cifrados, com as permissões concedidas registradas.** Quando falta uma
    permissão, a tela diz qual e oferece reconectar — em vez de falhar no meio de uma ação.
 7. **Um webhook só.** `/webhooks/meta` ganha o objeto `page` (campo `leadgen`) no mesmo
-   caminho de assinatura, deduplicação e fila que já protege WhatsApp e Instagram.
+   caminho de assinatura e fila que já protege WhatsApp e Instagram. *Como ficou:* sem dedup de
+   borda — o worker reserva o lead por `leadgen_id` e trava a linha, então reentrega e
+   reconciliação viram duplicata inofensiva. Falha no enqueue devolve 503 para a Meta reentregar.
+8. **Assinar página sem apagar o que ela já recebe.** `subscribed_apps` define a lista inteira de
+   campos do app na página; a assinatura lê a lista atual e envia a união com `leadgen`.
 
 ---
 

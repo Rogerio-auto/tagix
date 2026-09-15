@@ -24,7 +24,8 @@ import {
 } from './publisher';
 import { verifyMetaSignature } from './signature';
 import { summarizeInstagramEnvelope } from './meta-instagram';
-import { parseCoexistence } from '@hm/channels';
+import { parseCoexistence, parseLeadgenWebhook } from '@hm/channels';
+import { publishLeadgen } from '../../services/meta/leadgen/publish';
 import {
   createSubmissionDeps,
   processMetaFlowSubmission,
@@ -179,9 +180,37 @@ export function createMetaWebhookRouter(): Router {
 
       const body =
         typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : null;
+
+      // F69-S03: leads de formulário de anúncio chegam no objeto `page`, campo
+      // `leadgen`. Sem dedup de borda: o worker reserva o lead por `leadgen_id`, então
+      // uma reentrega vira no máximo um `duplicate` inofensivo. Falha no enqueue → 503
+      // para a Meta reentregar — lead pago não pode se perder no ack.
+      if (body?.['object'] === 'page') {
+        const leads = parseLeadgenWebhook(body);
+        for (const lead of leads) {
+          try {
+            if (!(await publishLeadgen(lead))) {
+              webhookLogger.warn('webhook.leadgen.enqueue.backpressure', { pageId: lead.pageId });
+              res.sendStatus(503);
+              return;
+            }
+          } catch (err) {
+            webhookLogger.error('webhook.leadgen.enqueue.failed', {
+              pageId: lead.pageId,
+              error: err instanceof Error ? err.message : 'unknown',
+            });
+            res.sendStatus(503);
+            return;
+          }
+        }
+        if (leads.length > 0) webhookLogger.info('webhook.leadgen.enqueued', { count: leads.length });
+        res.sendStatus(200);
+        return;
+      }
+
       const provider = providerForObject(body?.['object']);
 
-      // Objeto desconhecido (ex.: 'page' legado): ack sem publicar.
+      // Objeto desconhecido: ack sem publicar.
       if (!body || !provider) {
         res.sendStatus(200);
         return;

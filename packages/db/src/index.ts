@@ -100,6 +100,9 @@ export const DB_PKG = '@hm/db' as const;
 // Conexão Meta por workspace (F69-S02).
 export { metaConnectionsRepo } from './repos/meta-connections';
 export type { MetaConnectionPublic, UpsertMetaConnectionInput } from './repos/meta-connections';
+export { leadAdsRepo } from './repos/lead-ads';
+export type { ActiveLeadSource, ResolvedLeadSource, LeadSubmissionSummary } from './repos/lead-ads';
+export type { LeadAdSource, LeadAdSubmission, LeadConsentEvidence } from './schema/lead_ads';
 export type {
   MetaConnection,
   MetaConnectionAssets,
