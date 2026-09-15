@@ -74,7 +74,7 @@ primeira retomada de IA seriam.
 
 - [x] `Date` em `sql` cru funciona contra Postgres real (teste). *(`client-date-params.test.ts`: 4 casos falhavam com o mesmo `TypeError` de produção antes da correção; passam depois)*
 - [x] Coluna `timestamptz` tipada continua gravando e lendo igual, com microssegundos (teste). *(microssegundos em texto e ida e volta de coluna tipada — passavam antes e depois)*
-- [ ] Rollup de métricas e recorrência de cobrança param de falhar no log de produção. *(pendente do deploy; localmente o `runAgentMetricsRollup` real roda sem erro)*
+- [ ] Rollup de métricas e recorrência de cobrança param de falhar no log de produção. *(rollup ✅: deploy `:91ab6edc` às 14:09 UTC, primeiro tick ~14:19, 0 erro até 14:21 — antes falhava em todo tick. Recorrência pendente: tick horário, primeiro ~15:09 UTC)*
 - [x] Suítes de `@hm/db`, `@hm/workers` e `@hm/api` verdes. *(`@hm/db` 151/151, `@hm/workers` 520/520, `@hm/api` 1158/1159 — a falha é `platform/help.test.ts > não-admin → 403 e auditado`, intermitente e anterior a este slot: isolado, passou com a correção e falhou com o `client.ts` de `main`)*
 
 ## Validação
