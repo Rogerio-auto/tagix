@@ -2,7 +2,7 @@
 id: F2-S22
 title: Date em SQL cru quebrava rollup de métricas, cobrança PIX e agendadores — correção no cliente do banco
 phase: F2
-status: available
+status: in-progress
 priority: critical
 estimated_size: S
 depends_on: [F2-S13]
@@ -10,6 +10,7 @@ blocks: []
 source_docs:
   - docs/INDEX.md
 agent_id: backend-engineer
+claimed_at: 2026-09-15T13:49:40Z
 
 ---
 # F2-S22 — Date em SQL cru quebrava rollup de métricas, cobrança PIX e agendadores
