@@ -2,7 +2,7 @@
 id: F69-S01
 title: Conformidade de plataforma — exclusão de dados, desautorização, política e termos
 phase: F69
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: []
@@ -10,6 +10,7 @@ blocks: [F69-S02, F69-S10]
 source_docs: 
   - docs/features/META_INTEGRACAO_PLAN.md
 agent_id: backend-engineer
+claimed_at: 2026-09-15T02:02:18Z
 
 ---
 # F69-S01 — Conformidade de plataforma — exclusão de dados, desautorização, política e termos
