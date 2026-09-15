@@ -272,6 +272,7 @@ export * from './contact_identities'; // contact_identities (tenant)
 export * from './push'; // push_subscriptions (tenant — F61-S03)
 export * from './notifications'; // notification_deliveries (tenant — F61-S04)
 export * from './meta_data_requests'; // meta_data_requests (plataforma, sem RLS — F69-S01)
+export * from './meta_connections'; // meta_connections (tenant — F69-S02)
 export * from './conversations';
 // messages também exporta `mediaStatusEnum` + tipo `MediaStatus` (F52-S01) p/ workers/shared.
 export * from './messages';
@@ -445,6 +446,8 @@ export const RLS_TABLES = [
   'push_subscriptions',
   // Memória de entregas de notificação — dedupe + auditoria (F61-S04).
   'notification_deliveries',
+  // Conexão Meta por workspace (F69-S02).
+  'meta_connections',
   // Knowledge Base domain (workspace-scoped).
   'kb_documents',
   'kb_chunks',

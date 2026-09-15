@@ -41,6 +41,8 @@ import { createCalendarRouter } from './routes/calendar';
 import { createDashboardRouter } from './routes/dashboard';
 import { createPushRouter } from './routes/push';
 import { createMetaDataRequestsRouter } from './routes/meta/data-requests';
+import { createMetaConnectionsRouter } from './routes/meta/connections';
+import { metaConnectionsRepo } from '@hm/db';
 import { platformSecrets } from './secrets';
 import { createMembersMeRouter } from './routes/members/me';
 import { createWorkspaceSettingsRouter } from './routes/workspace';
@@ -131,6 +133,11 @@ export function createApp(): Express {
     createMetaDataRequestsRouter({
       appSecret: () => platformSecrets.get('meta_app_secret'),
       publicAppUrl: () => process.env['APP_PUBLIC_URL'] ?? 'https://app.leadium.com.br',
+      // F69-S02: agora que a conexão registra o ID de usuário da Meta, os
+      // callbacks têm o que encontrar — em qualquer workspace, via as funções
+      // SECURITY DEFINER da migration 0079.
+      deleteForMetaUser: (metaUserId) => metaConnectionsRepo.forgetMetaUser(metaUserId),
+      revokeForMetaUser: (metaUserId) => metaConnectionsRepo.revokeMetaUser(metaUserId),
     }),
   );
   // Endpoint interno service-to-service (runtime Python → Node): auth por token
@@ -208,6 +215,8 @@ export function createApp(): Express {
   app.use(createDashboardRouter());
   // F61-S03 — assinatura de Web Push por dispositivo.
   app.use(createPushRouter());
+  // F69-S02 — conexão Meta por workspace (casos de uso do app).
+  app.use(createMetaConnectionsRouter());
   // Settings pessoais (F8-S06): PATCH /members/me + password + sessions.
   app.use(createMembersMeRouter());
   // Dashboard customização (F8-S04): layout pessoal + config de obrigatórios/limites.

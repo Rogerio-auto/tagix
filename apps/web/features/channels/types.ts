@@ -78,7 +78,6 @@ export interface WaConnectInput {
 export interface IgAccountCandidate {
   pageId: string;
   pageName?: string;
-  pageAccessToken: string;
   igUserId: string;
   igUsername?: string;
   igAccountType?: 'business' | 'creator';
@@ -86,12 +85,12 @@ export interface IgAccountCandidate {
 
 /** Payload de POST /api/channels/instagram/connect (wizard Embedded Signup). */
 export interface IgConnectInput {
+  /** Conexão Meta do workspace (F69-S02). O token da página é obtido no servidor. */
+  connectionId: string;
   name: string;
   pageId: string;
-  pageAccessToken: string;
   igUserId: string;
   igUsername?: string;
   igAccountType?: 'business' | 'creator';
-  appSecret?: string;
   testRecipientIgsid?: string;
 }

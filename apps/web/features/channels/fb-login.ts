@@ -187,43 +187,30 @@ function loadFbSdk(): Promise<FbSdk> {
 }
 
 // ---------------------------------------------------------------------------
-// FB Login genérico (Instagram Messaging — fluxo baseado em token).
+// Login da Meta por caso de uso (F69-S02).
+//
+// Substitui o login antigo do Instagram, que devolvia o token de usuário ao
+// navegador. Removido em vez de mantido "por compatibilidade": código que entrega
+// token ao cliente, parado no repositório, é a próxima pessoa usando-o sem saber.
 // ---------------------------------------------------------------------------
 
-/** Escopos do FB Login para listar Páginas + contas IG vinculadas (Instagram). */
-const IG_LOGIN_SCOPE =
-  'pages_show_list,pages_manage_metadata,instagram_basic,instagram_manage_messages,business_management';
-
-export interface FbLoginResult {
-  /** Token de usuário (curta duração) — o backend troca/persiste com segurança. */
-  accessToken: string;
-  /** Específicos de WhatsApp Cloud. */
-  phoneNumberId?: string;
-  wabaId?: string;
-  phoneNumber?: string;
-  /** Específicos de Instagram Messaging. */
-  igUserId?: string;
-  igUsername?: string;
-  fbPageId?: string;
-}
-
 /**
- * Dispara o FB Login clássico (token) para o Instagram Messaging. Resolve com o
- * `accessToken` do usuário; o caller usa-o para listar Páginas/contas IG.
+ * Login da Meta para a conexão por workspace (F69-S02). Devolve **só o `code`**.
  *
- * Rejeita com `MetaSignupError` tipada (cancelamento, popup bloqueado/silencioso)
- * → o caller mostra a recuperação certa em vez de girar para sempre.
+ * O `code` sozinho não serve para nada sem o App Secret, que só existe no servidor:
+ * é a forma de o token nunca passar pelo navegador. As permissões pedidas vêm da
+ * API (`GET /api/meta/use-cases`), para existir uma lista só.
+ *
+ * `auth_type: 'rerequest'` faz a Meta perguntar de novo pelas permissões que a
+ * pessoa recusou antes — sem ele, reconectar para conceder o que faltava não abre
+ * a pergunta e nada muda.
  */
-export async function startFbLogin(
-  provider: 'meta_whatsapp' | 'meta_instagram',
-): Promise<FbLoginResult> {
+export async function startMetaConnect(scopes: readonly string[]): Promise<{ code: string }> {
   const fb = await loadFbSdk();
 
-  return new Promise<FbLoginResult>((resolve, reject) => {
+  return new Promise<{ code: string }>((resolve, reject) => {
     let settled = false;
 
-    // Popup bloqueado pelo navegador: o callback do FB.login nunca chega. Sem esse
-    // relógio, o botão fica em "loading" indefinidamente (UX-12).
     const watchdog = setTimeout(() => {
       if (settled) return;
       settled = true;
@@ -238,16 +225,19 @@ export async function startFbLogin(
         settled = true;
         clearTimeout(watchdog);
 
-        const token = response.authResponse?.accessToken;
-        if (response.status !== 'connected' || !token) {
-          reject(
-            new MetaSignupError('cancelled', 'Login da Meta cancelado ou não autorizado.'),
-          );
+        const code = response.authResponse?.code;
+        if (response.status !== 'connected' || !code) {
+          reject(new MetaSignupError('cancelled', 'Login da Meta cancelado ou não autorizado.'));
           return;
         }
-        resolve({ accessToken: token });
+        resolve({ code });
       },
-      provider === 'meta_instagram' ? { scope: IG_LOGIN_SCOPE } : undefined,
+      {
+        scope: scopes.join(','),
+        response_type: 'code',
+        override_default_response_type: true,
+        auth_type: 'rerequest',
+      },
     );
   });
 }

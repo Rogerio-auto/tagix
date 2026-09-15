@@ -97,6 +97,15 @@ export type { NicheBlueprint, InstantiateResult } from './seed/niches/types';
 
 export const DB_PKG = '@hm/db' as const;
 
+// Conexão Meta por workspace (F69-S02).
+export { metaConnectionsRepo } from './repos/meta-connections';
+export type { MetaConnectionPublic, UpsertMetaConnectionInput } from './repos/meta-connections';
+export type {
+  MetaConnection,
+  MetaConnectionAssets,
+  MetaConnectionStatus,
+} from './schema/meta_connections';
+
 // Pedidos da Meta sobre dados de usuário — exclusão e desautorização (F69-S01).
 export type {
   MetaDataRequest,

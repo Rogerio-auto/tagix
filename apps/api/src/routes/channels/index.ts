@@ -13,7 +13,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, asc, eq } from 'drizzle-orm';
-import { encryptSecret, schema } from '@hm/db';
+import { decryptSecret, encryptSecret, metaConnectionsRepo, schema } from '@hm/db';
 import { GraphClient, MetaError } from '@hm/channels';
 import { createLogger } from '@hm/logger';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
@@ -25,6 +25,7 @@ import {
 } from '../../services/channels/instagram-connect';
 import { WaConnectError, runWhatsAppConnect } from '../../services/channels/whatsapp-connect';
 import { platformSecrets } from '../../secrets';
+import { missingByUseCase } from '../../services/meta/permissions';
 import { createMessageTemplatesRouter } from './templates';
 
 // Logger do connect de canais. As falhas de connect Meta (exchange/register/
@@ -95,20 +96,31 @@ const connectSchema = z.discriminatedUnion('provider', [
 
 const disableSchema = z.object({ isActive: z.boolean() });
 
-/** Wizard IG: lista contas a partir do user access token do Embedded Signup. */
+/**
+ * Wizard IG: lista as contas a partir da CONEXÃO Meta do workspace (F69-S02).
+ *
+ * Antes recebia o token de usuário do navegador e devolvia o token de cada página
+ * para o navegador reenviar no passo seguinte. Agora o navegador só conhece o id
+ * da conexão; todo token fica no servidor.
+ */
 const igAccountsSchema = z.object({
-  userAccessToken: z.string().trim().min(1),
+  connectionId: z.string().uuid(),
 });
 
-/** Wizard IG: conecta a conta escolhida (subscribe + create + token cifrado + test). */
+/**
+ * Wizard IG: conecta a conta escolhida (subscribe + create + token cifrado + test).
+ *
+ * Sem `pageAccessToken` e sem `appSecret` vindos do cliente: o token da página é
+ * obtido no servidor a partir da conexão, e o App Secret é da plataforma. Aceitar
+ * segredo digitado no navegador era guardar, cifrado, algo que nenhum código lia.
+ */
 const igConnectSchema = z.object({
+  connectionId: z.string().uuid(),
   name: z.string().trim().min(1).max(120),
   pageId: z.string().trim().min(1).max(64),
-  pageAccessToken: z.string().trim().min(1),
   igUserId: z.string().trim().min(1).max(64),
   igUsername: z.string().trim().min(1).max(120).optional(),
   igAccountType: z.enum(['business', 'creator']).optional(),
-  appSecret: z.string().trim().min(1).optional(),
   /** IGSID alvo da mensagem de teste (default: o proprio dono). Opcional. */
   testRecipientIgsid: z.string().trim().min(1).max(64).optional(),
 });
@@ -140,6 +152,78 @@ const waConnectSchema = z.object({
 function param(req: Request, key: string): string {
   const raw = req.params[key];
   return typeof raw === 'string' ? raw : '';
+}
+
+/**
+ * Token de usuário da conexão Meta do workspace — só no servidor (F69-S02).
+ *
+ * 404 quando a conexão não é deste workspace (a RLS nem a devolve), 409 quando o
+ * acesso foi revogado: a saída é conectar de novo, e a resposta diz isso.
+ */
+async function tokenDaConexao(
+  req: Request,
+  connectionId: string,
+): Promise<
+  | { ok: true; token: string }
+  | { ok: false; status: number; body: { code: string; message: string; missing?: string[] } }
+> {
+  const conexao = await req.scoped!((tx) =>
+    metaConnectionsRepo.getWithToken(tx, req.auth!.workspace.id, connectionId),
+  );
+  if (conexao === null) {
+    return {
+      ok: false,
+      status: 404,
+      body: { code: 'META_CONNECTION_NOT_FOUND', message: 'Conexão com a Meta não encontrada.' },
+    };
+  }
+  if (conexao.status === 'revoked' || conexao.accessTokenEnc === null) {
+    return {
+      ok: false,
+      status: 409,
+      body: { code: 'META_RECONNECT_REQUIRED', message: 'O acesso à Meta foi removido. Conecte de novo.' },
+    };
+  }
+  // Checagem ANTES de chamar a Meta: falta de permissão vira resposta que diz o que
+  // autorizar, em vez de um erro da Graph no meio da conexão do Instagram.
+  const faltando = missingByUseCase(['instagram'], conexao.grantedPermissions).instagram ?? [];
+  if (faltando.length > 0) {
+    return {
+      ok: false,
+      status: 409,
+      body: {
+        code: 'META_PERMISSION_MISSING',
+        message: `Falta autorizar na Meta: ${faltando.join(', ')}. Reconecte em Configurações › Meta.`,
+        missing: faltando,
+      },
+    };
+  }
+  return { ok: true, token: decryptSecret(conexao.accessTokenEnc, conexao.keyVersion) };
+}
+
+/** Falha do wizard IG em resposta acionável, sem token no log. */
+function responderFalhaInstagram(res: Response, err: unknown, etapa: string): void {
+  if (err instanceof IgConnectError) {
+    connectLogger.warn('instagram: erro de domínio', { etapa, stage: err.code, message: err.message });
+    res.status(422).json({ code: err.code, message: err.message });
+    return;
+  }
+  if (err instanceof MetaError) {
+    connectLogger.error('instagram: Graph API recusou', {
+      etapa,
+      httpStatus: err.httpStatus,
+      graphCode: err.code,
+      graphSubcode: err.subcode,
+      message: err.message,
+    });
+    res.status(502).json({ code: 'IG_CONNECT_GRAPH_ERROR', message: `A Meta recusou: ${err.message}` });
+    return;
+  }
+  connectLogger.error('instagram: erro inesperado', {
+    etapa,
+    message: err instanceof Error ? err.message : String(err),
+  });
+  res.status(502).json({ code: 'IG_CONNECT_GRAPH_ERROR', message: 'Falha ao consultar a Meta. Tente novamente.' });
 }
 
 export function createChannelsRouter(): Router {
@@ -300,7 +384,7 @@ export function createChannelsRouter(): Router {
 
   // --- Wizard Instagram (Embedded Signup / Tech Provider — INSTAGRAM.md 12.1) ---
 
-  // POST /api/channels/instagram/accounts — lista Page+IGBA a partir do user token.
+  // POST /api/channels/instagram/accounts — lista Page+IGBA a partir da conexão Meta.
   router.post(
     '/api/channels/instagram/accounts',
     requireAuth,
@@ -309,43 +393,28 @@ export function createChannelsRouter(): Router {
     async (req: Request, res: Response) => {
       const parsed = igAccountsSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ message: 'userAccessToken obrigatorio.' });
+        res.status(400).json({ message: 'Conecte a Meta antes de escolher a conta do Instagram.' });
+        return;
+      }
+      const acesso = await tokenDaConexao(req, parsed.data.connectionId);
+      if (!acesso.ok) {
+        res.status(acesso.status).json(acesso.body);
         return;
       }
       try {
-        const accounts = await listInstagramAccounts(new GraphClient(), parsed.data.userAccessToken);
-        // Nunca devolve o pageAccessToken em claro? Ele e necessario no proximo passo;
-        // o frontend o reenvia ao /connect. Mantido apenas em transito (TLS), nunca logado.
+        const accounts = await listInstagramAccounts(new GraphClient(), acesso.token);
+        // F69-S02: SEM o token da página. O passo seguinte o obtém no servidor.
         res.json({
           accounts: accounts.map((a) => ({
             pageId: a.pageId,
             pageName: a.pageName,
-            pageAccessToken: a.pageAccessToken,
             igUserId: a.igUserId,
             igUsername: a.igUsername,
             igAccountType: a.igAccountType,
           })),
         });
       } catch (err: unknown) {
-        if (err instanceof IgConnectError) {
-          connectLogger.warn('instagram accounts: erro de domínio', { stage: err.code, message: err.message });
-          res.status(422).json({ code: err.code, message: err.message });
-          return;
-        }
-        if (err instanceof MetaError) {
-          connectLogger.error('instagram accounts: Graph API recusou', {
-            httpStatus: err.httpStatus,
-            graphCode: err.code,
-            graphSubcode: err.subcode,
-            message: err.message,
-          });
-          res.status(502).json({ code: 'IG_CONNECT_GRAPH_ERROR', message: `A Meta recusou: ${err.message}` });
-          return;
-        }
-        connectLogger.error('instagram accounts: erro inesperado', {
-          message: err instanceof Error ? err.message : String(err),
-        });
-        res.status(502).json({ code: 'IG_CONNECT_GRAPH_ERROR', message: 'Falha ao consultar a Meta. Tente novamente.' });
+        responderFalhaInstagram(res, err, 'accounts');
       }
     },
   );
@@ -366,9 +435,35 @@ export function createChannelsRouter(): Router {
       const workspaceId = req.auth!.workspace.id;
       const graph = new GraphClient();
 
+      const acesso = await tokenDaConexao(req, input.connectionId);
+      if (!acesso.ok) {
+        res.status(acesso.status).json(acesso.body);
+        return;
+      }
+
+      // 0) O token da página vem da Meta, pela conexão — e só se a conta escolhida
+      // estiver entre as que esta pessoa administra. Aceitar pageId arbitrário
+      // permitiria ligar ao workspace uma página de outra pessoa.
+      let pageAccessToken: string;
+      try {
+        const contas = await listInstagramAccounts(graph, acesso.token);
+        const conta = contas.find((a) => a.pageId === input.pageId && a.igUserId === input.igUserId);
+        if (conta === undefined) {
+          res.status(422).json({
+            code: 'IG_CONNECT_ACCOUNT_NOT_FOUND',
+            message: 'Esta conta do Instagram não está entre as que você administra na Meta.',
+          });
+          return;
+        }
+        pageAccessToken = conta.pageAccessToken;
+      } catch (err: unknown) {
+        responderFalhaInstagram(res, err, 'connect.accounts');
+        return;
+      }
+
       // 1) Subscreve Page+IGBA no webhook do app (idempotente do lado Meta).
       try {
-        await subscribeInstagramWebhook(graph, input.pageId, input.pageAccessToken);
+        await subscribeInstagramWebhook(graph, input.pageId, pageAccessToken);
       } catch (err: unknown) {
         if (err instanceof MetaError) {
           connectLogger.error('instagram connect: Graph API recusou subscribe', {
@@ -407,8 +502,7 @@ export function createChannelsRouter(): Router {
 
         await tx.insert(schema.channelSecrets).values({
           channelId: channel.id,
-          accessTokenEnc: encryptSecret(input.pageAccessToken),
-          appSecretEnc: input.appSecret ? encryptSecret(input.appSecret) : null,
+          accessTokenEnc: encryptSecret(pageAccessToken),
         });
         return channel;
       });
@@ -421,7 +515,7 @@ export function createChannelsRouter(): Router {
             graph,
             input.igUserId,
             input.testRecipientIgsid,
-            input.pageAccessToken,
+            pageAccessToken,
           );
         } catch {
           testMessageSent = false;
