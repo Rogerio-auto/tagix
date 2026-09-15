@@ -104,6 +104,9 @@ export function reliableQueues(): readonly string[] {
     QUEUES.campaigns,
     QUEUES.coexistence,
     QUEUES.kbIngest,
+    // F69-S03: lead de anúncio é pago. Falha transitória na busca precisa de retry,
+    // e o esgotado precisa cair na DLQ, onde o monitor alerta — nunca sumir.
+    QUEUES.leadgen,
   ];
 }
 

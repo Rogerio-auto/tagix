@@ -561,6 +561,13 @@
       "when": 1781452840000,
       "tag": "0079_f69_meta_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1781452841000,
+      "tag": "0080_f69_lead_ads",
+      "breakpoints": true
     }
   ]
 }

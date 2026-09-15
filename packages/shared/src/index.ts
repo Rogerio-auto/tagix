@@ -85,6 +85,8 @@ export { previewFor, humanizePreview, labelForType } from './preview';
 
 // --- Telefone em formato humano (F61-S12). ---
 export { formatPhoneForDisplay } from './phone-display';
+export { countryCodeForMarket, isE164Phone, normalizeE164 } from './phone-normalize';
+export type { PhoneCountryCode } from './phone-normalize';
 
 // --- Central de Ajuda (F38 — SUPPORT.md §1). Exports explícitos (sem `export *`). ---
 export {

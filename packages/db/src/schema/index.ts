@@ -273,6 +273,7 @@ export * from './push'; // push_subscriptions (tenant — F61-S03)
 export * from './notifications'; // notification_deliveries (tenant — F61-S04)
 export * from './meta_data_requests'; // meta_data_requests (plataforma, sem RLS — F69-S01)
 export * from './meta_connections'; // meta_connections (tenant — F69-S02)
+export * from './lead_ads'; // lead_ad_sources, lead_ad_submissions (tenant — F69-S03)
 export * from './conversations';
 // messages também exporta `mediaStatusEnum` + tipo `MediaStatus` (F52-S01) p/ workers/shared.
 export * from './messages';

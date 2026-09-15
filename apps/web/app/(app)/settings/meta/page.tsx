@@ -1,3 +1,4 @@
+import { LeadSourcesPanel } from '@/features/lead-ads/LeadSourcesPanel';
 import { MetaConnectionsPanel } from '@/features/meta-connection/MetaConnectionsPanel';
 import { PageContainer } from '@/shared/components/layout';
 
@@ -10,7 +11,10 @@ export const metadata = { title: 'Meta — Facebook e Instagram' };
 export default function SettingsMetaPage() {
   return (
     <PageContainer>
-      <MetaConnectionsPanel />
+      <div className="flex flex-col gap-10">
+        <MetaConnectionsPanel />
+        <LeadSourcesPanel />
+      </div>
     </PageContainer>
   );
 }

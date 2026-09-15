@@ -17,7 +17,13 @@ export const QUEUES = {
   kbIngest: 'hm.q.kb_ingest',
   /** Eventos de coexistência WhatsApp Business (echoes/history/app_state, F39). */
   coexistence: 'hm.q.coexistence',
+  /** Leads de formulário de anúncio da Meta (F69-S03): um envelope por `leadgen_id`. */
+  leadgen: 'hm.q.leadgen',
 } as const;
+
+/** Tipo do envelope de lead de anúncio e a routing key que bate no bind `hm.q.leadgen.#`. */
+export const LEADGEN_EVENT_TYPE = 'leadgen.received' as const;
+export const LEADGEN_ROUTING_KEY = `${QUEUES.leadgen}.received` as const;
 
 /**
  * Routing keys dos eventos de coexistência (F39-S03). Reusam o exchange

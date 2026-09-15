@@ -42,6 +42,7 @@ import { createDashboardRouter } from './routes/dashboard';
 import { createPushRouter } from './routes/push';
 import { createMetaDataRequestsRouter } from './routes/meta/data-requests';
 import { createMetaConnectionsRouter } from './routes/meta/connections';
+import { createLeadSourcesRouter } from './routes/meta/lead-sources';
 import { metaConnectionsRepo } from '@hm/db';
 import { platformSecrets } from './secrets';
 import { createMembersMeRouter } from './routes/members/me';
@@ -217,6 +218,8 @@ export function createApp(): Express {
   app.use(createPushRouter());
   // F69-S02 — conexão Meta por workspace (casos de uso do app).
   app.use(createMetaConnectionsRouter());
+  // F69-S03 — páginas que enviam leads de anúncio.
+  app.use(createLeadSourcesRouter());
   // Settings pessoais (F8-S06): PATCH /members/me + password + sessions.
   app.use(createMembersMeRouter());
   // Dashboard customização (F8-S04): layout pessoal + config de obrigatórios/limites.
