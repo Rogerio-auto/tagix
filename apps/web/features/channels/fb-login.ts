@@ -30,8 +30,10 @@
  */
 
 import {
+  getMetaLoginConfig,
   getMetaSignupConfig,
   MetaSignupError,
+  type MetaLoginConfig,
   type MetaSignupConfig,
   type SignupFailureReason,
 } from './signup-status';
@@ -135,11 +137,17 @@ export function isFbSdkAvailable(): boolean {
   return typeof window !== 'undefined' && getMetaSignupConfig().configured;
 }
 
-/** Carrega o `<script>` do SDK uma única vez e resolve com `window.FB` já inicializado. */
+/**
+ * Carrega o `<script>` do SDK uma única vez e resolve com `window.FB` já inicializado.
+ *
+ * Só exige o App ID. Cada fluxo confere a própria configuração antes de chamar: o Embedded Signup
+ * do WhatsApp e o login da conexão (F69-S12) usam `config_id` diferentes, e exigir aqui a do
+ * WhatsApp bloqueava a conexão Meta num build que só tivesse a do login.
+ */
 function loadFbSdk(): Promise<FbSdk> {
-  if (!isFbSdkAvailable() || typeof META_APP_ID !== 'string') {
+  if (typeof window === 'undefined' || typeof META_APP_ID !== 'string' || META_APP_ID.trim() === '') {
     return Promise.reject(
-      new MetaSignupError('not_configured', 'Meta App ID/Config ID não configurados neste build.'),
+      new MetaSignupError('not_configured', 'Meta App ID não configurado neste build.'),
     );
   }
   if (sdkPromise) return sdkPromise;
@@ -194,18 +202,37 @@ function loadFbSdk(): Promise<FbSdk> {
 // token ao cliente, parado no repositório, é a próxima pessoa usando-o sem saber.
 // ---------------------------------------------------------------------------
 
+/** Configuração do login da conexão neste build (F69-S12). */
+export function metaLoginConfig(): MetaLoginConfig {
+  return getMetaLoginConfig();
+}
+
 /**
  * Login da Meta para a conexão por workspace (F69-S02). Devolve **só o `code`**.
  *
  * O `code` sozinho não serve para nada sem o App Secret, que só existe no servidor:
- * é a forma de o token nunca passar pelo navegador. As permissões pedidas vêm da
- * API (`GET /api/meta/use-cases`), para existir uma lista só.
+ * é a forma de o token nunca passar pelo navegador.
+ *
+ * ## Por que `config_id` e não `scope` (F69-S12)
+ *
+ * O app Leadium é do tipo Business. Nele, a Meta exige o Facebook Login for Business: a
+ * configuração criada no painel define as permissões, e `scope` não deve ser usado. Com `scope`,
+ * o login abria, mas o `code` voltava atrelado a uma `redirect_uri` interna do SDK e a troca no
+ * servidor falhava com `100/36008` — foi o erro da primeira conexão real. As permissões que de fato
+ * vieram continuam conferidas no servidor (`GET /me/permissions`), e a tela diz o que falta.
  *
  * `auth_type: 'rerequest'` faz a Meta perguntar de novo pelas permissões que a
  * pessoa recusou antes — sem ele, reconectar para conceder o que faltava não abre
  * a pergunta e nada muda.
  */
-export async function startMetaConnect(scopes: readonly string[]): Promise<{ code: string }> {
+export async function startMetaConnect(): Promise<{ code: string }> {
+  const { configId } = getMetaLoginConfig();
+  if (configId === null) {
+    throw new MetaSignupError(
+      'not_configured',
+      'Configuração do Facebook Login for Business ausente (NEXT_PUBLIC_META_LOGIN_CONFIG_ID).',
+    );
+  }
   const fb = await loadFbSdk();
 
   return new Promise<{ code: string }>((resolve, reject) => {
@@ -233,7 +260,7 @@ export async function startMetaConnect(scopes: readonly string[]): Promise<{ cod
         resolve({ code });
       },
       {
-        scope: scopes.join(','),
+        config_id: configId,
         response_type: 'code',
         override_default_response_type: true,
         auth_type: 'rerequest',

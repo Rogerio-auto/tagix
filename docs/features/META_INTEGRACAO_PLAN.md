@@ -96,6 +96,40 @@ Sem estes, **nenhuma** permissão é aprovada:
 
 ---
 
+### 4.1 Configuração do login da conexão (Facebook Login for Business) — F69-S12
+
+O app Leadium é do tipo **Business**. Nele, o login da conexão por workspace (Configurações → Meta e o
+conectar do Instagram) **precisa** de uma configuração do Facebook Login for Business: o `FB.login`
+usa `config_id`, e não `scope`. Com `scope`, o login abre, mas a troca do código no servidor falha com
+`OAuthException 100 / 36008` ("redirect_uri is identical…") — foi o erro da primeira conexão real, em
+2026-09-15. ([Meta — Facebook Login for Business](https://developers.facebook.com/documentation/facebook-login/facebook-login-for-business))
+
+É uma configuração **separada** da do Embedded Signup do WhatsApp (`META_CONFIG_ID`): pede outro
+conjunto de permissões e não abre o cadastro de número.
+
+**Criar no painel da Meta:** Painel do app → **Facebook Login for Business** → **Configurações** →
+**+ Criar configuração**.
+
+1. **Nome:** `Leadium — conexão por workspace`.
+2. **Tipo de token de acesso:** **Token de acesso do usuário** (quem conecta entra com a própria conta;
+   o servidor guarda o token do usuário e deriva o token de cada página). Expiração: a mais longa
+   oferecida.
+3. **Ativos:** Páginas, Contas de anúncio e Contas do Instagram.
+4. **Permissões** — a união de todos os casos de uso (`apps/api/src/services/meta/permissions.ts`):
+   `leads_retrieval`, `pages_manage_ads`, `pages_manage_metadata`, `pages_show_list`,
+   `pages_read_engagement`, `ads_management`, `ads_read`, `business_management`, `instagram_basic`,
+   `instagram_manage_messages`, `instagram_manage_comments`, `instagram_content_publish`. Marque também
+   `ads_mcp_management` se aparecer na lista.
+5. **Criar** → copiar o **ID da configuração**.
+
+**Levar para o produto:** `META_LOGIN_CONFIG_ID=<id>` no `.env` de produção e deploy — o build do web
+mapeia para `NEXT_PUBLIC_META_LOGIN_CONFIG_ID`. O ID é público (vai no navegador).
+
+As permissões de fato concedidas continuam conferidas no servidor (`GET /me/permissions`), e a tela diz
+o que falta por caso de uso.
+
+---
+
 ## 5. Decisões de desenho
 
 1. **Lead de formulário é tratado como WhatsApp, não como planilha.** Entra na inbox, dispara o
