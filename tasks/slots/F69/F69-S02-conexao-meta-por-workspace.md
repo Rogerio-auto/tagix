@@ -2,7 +2,7 @@
 id: F69-S02
 title: Conexão Meta por workspace — permissões dos casos de uso, token cifrado e reconexão guiada
 phase: F69
-status: review
+status: done
 priority: critical
 estimated_size: L
 depends_on: [F69-S01]
