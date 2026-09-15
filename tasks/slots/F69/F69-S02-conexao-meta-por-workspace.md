@@ -2,7 +2,7 @@
 id: F69-S02
 title: Conexão Meta por workspace — permissões dos casos de uso, token cifrado e reconexão guiada
 phase: F69
-status: in-progress
+status: review
 priority: critical
 estimated_size: L
 depends_on: [F69-S01]
@@ -11,6 +11,7 @@ source_docs:
   - docs/features/META_INTEGRACAO_PLAN.md
 agent_id: fullstack-engineer
 claimed_at: 2026-09-15T02:23:48Z
+completed_at: 2026-09-15T02:54:43Z
 
 ---
 # F69-S02 — Conexão Meta por workspace — permissões dos casos de uso, token cifrado e reconexão guiada
