@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  describeMetaLoginConfig,
   describeMetaSignupConfig,
   describeSignupFailure,
   MetaSignupError,
@@ -32,6 +33,38 @@ describe('describeMetaSignupConfig', () => {
       configured: false,
       missing: ['NEXT_PUBLIC_META_APP_ID', 'NEXT_PUBLIC_META_CONFIG_ID'],
     });
+  });
+});
+
+/**
+ * F69-S12 — o login da conexão Meta tem configuração própria. Sem ela, a conexão falhava na troca do
+ * código (`100/36008`) porque o login abria com `scope`, que o app do tipo Business não aceita.
+ */
+describe('describeMetaLoginConfig', () => {
+  it('app id + configuração de login → login disponível, com o id da configuração', () => {
+    expect(describeMetaLoginConfig('123', ' 987654 ')).toEqual({
+      configured: true,
+      missing: [],
+      configId: '987654',
+    });
+  });
+
+  it('sem a configuração de login → indisponível, nomeando o que falta', () => {
+    expect(describeMetaLoginConfig('123', undefined)).toEqual({
+      configured: false,
+      missing: ['NEXT_PUBLIC_META_LOGIN_CONFIG_ID'],
+      configId: null,
+    });
+    expect(describeMetaLoginConfig(undefined, '   ')).toEqual({
+      configured: false,
+      missing: ['NEXT_PUBLIC_META_APP_ID', 'NEXT_PUBLIC_META_LOGIN_CONFIG_ID'],
+      configId: null,
+    });
+  });
+
+  it('não depende da configuração do WhatsApp', () => {
+    expect(describeMetaLoginConfig('123', 'login_cfg').configured).toBe(true);
+    expect(describeMetaSignupConfig('123', undefined).configured).toBe(false);
   });
 });
 

@@ -980,7 +980,10 @@ function MetaLoginNotice({
     setLoading(true);
     try {
       if (scopes === null) return;
-      const { code } = await startMetaConnect(scopes);
+      // F69-S12: as permissões pedidas vêm da configuração do Facebook Login for Business, não de
+      // `scope` — com `scope`, o código voltava introcável no servidor (100/36008). `scopes` segue
+      // só como sinal de que os casos de uso carregaram.
+      const { code } = await startMetaConnect();
       onCredentials(code);
     } catch (err) {
       onFailure(describeSignupFailure(err));

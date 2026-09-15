@@ -17,7 +17,7 @@ import { Check, RefreshCw, Trash2, TriangleAlert } from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
 import { ApiError } from '@/shared/lib/api-client';
 import { cn } from '@/shared/lib/cn';
-import { metaSignupConfig, startMetaConnect } from '@/features/channels/fb-login';
+import { metaLoginConfig, startMetaConnect } from '@/features/channels/fb-login';
 import {
   useCreateMetaConnection,
   useMetaConnections,
@@ -25,7 +25,7 @@ import {
   useRefreshMetaConnection,
   useRemoveMetaConnection,
 } from './queries';
-import type { MetaConnectionHealth, MetaConnectionView, MetaUseCaseId, MetaUseCaseOption } from './types';
+import type { MetaConnectionHealth, MetaConnectionView, MetaUseCaseId } from './types';
 
 const SAUDE: Readonly<Record<MetaConnectionHealth, { label: string; tom: 'ok' | 'aviso' | 'erro' }>> = {
   ok: { label: 'Funcionando', tom: 'ok' },
@@ -44,12 +44,6 @@ const TOM_CLASSE = {
 /** O que começa marcado: o que muda o dia do cliente (leads) e o que mostra resultado. */
 const PADRAO: readonly MetaUseCaseId[] = ['leads', 'ads_read'];
 
-function permissoesDe(opcoes: readonly MetaUseCaseOption[], ids: readonly MetaUseCaseId[]): string[] {
-  const set = new Set<string>();
-  for (const o of opcoes) if (ids.includes(o.id)) o.permissions.forEach((p) => set.add(p));
-  return [...set];
-}
-
 function mensagemDe(err: unknown): string {
   if (err instanceof ApiError) return err.message;
   if (err instanceof Error) return err.message;
@@ -58,7 +52,7 @@ function mensagemDe(err: unknown): string {
 
 export function MetaConnectionsPanel(): React.JSX.Element {
   const { toast } = useToast();
-  const config = metaSignupConfig();
+  const config = metaLoginConfig();
   const casos = useMetaUseCases();
   const conexoes = useMetaConnections();
   const criar = useCreateMetaConnection();
@@ -71,13 +65,13 @@ export function MetaConnectionsPanel(): React.JSX.Element {
 
   const opcoes = casos.data?.useCases ?? [];
 
-  const conectar = async (useCases: MetaUseCaseId[], soEstas?: string[]): Promise<void> => {
+  // As permissões pedidas vêm da configuração do Facebook Login for Business (F69-S12); os casos de
+  // uso escolhidos continuam indo ao servidor, que confere o que foi concedido e diz o que falta.
+  const conectar = async (useCases: MetaUseCaseId[]): Promise<void> => {
     if (useCases.length === 0) return;
     setConectando(true);
     try {
-      const escopo =
-        soEstas !== undefined && soEstas.length > 0 ? soEstas : permissoesDe(opcoes, useCases);
-      const { code } = await startMetaConnect(escopo);
+      const { code } = await startMetaConnect();
       await criar.mutateAsync({ code, useCases });
       toast({ variant: 'success', title: 'Meta conectada' });
     } catch (err) {
@@ -91,7 +85,10 @@ export function MetaConnectionsPanel(): React.JSX.Element {
     return (
       <div className="rounded-md border border-border bg-surface p-5">
         <p className="text-body text-text">O login da Meta ainda não está configurado nesta instalação.</p>
-        <p className="mt-1 text-small text-text-2">Peça ao administrador da plataforma para configurar o app da Meta.</p>
+        <p className="mt-1 text-small text-text-2">
+          Falta a configuração do Facebook Login for Business do app. Peça ao administrador da plataforma.
+        </p>
+        <p className="mt-2 font-mono text-small text-text-3">Ausente: {config.missing.join(', ')}</p>
       </div>
     );
   }
@@ -193,14 +190,9 @@ export function MetaConnectionsPanel(): React.JSX.Element {
                     variant="primary"
                     size="sm"
                     loading={conectando}
-                    // Pede só o que falta. Token expirado ou revogado não tem nada
-                    // faltando, e aí o conjunto inteiro dos casos de uso é pedido.
-                    onClick={() =>
-                      void conectar(
-                        c.useCases.map((u) => u.id),
-                        [...new Set(c.useCases.flatMap((u) => u.missing))],
-                      )
-                    }
+                    // Reabre o login da configuração: com `auth_type: 'rerequest'`, a Meta
+                    // pergunta de novo pelo que a pessoa recusou antes.
+                    onClick={() => void conectar(c.useCases.map((u) => u.id))}
                   >
                     Reconectar
                   </Button>
