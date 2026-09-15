@@ -42,7 +42,7 @@ import type {
   ServerToClientEvent,
   TypingFromContactPayload,
 } from '@hm/shared';
-import { previewFor } from '@hm/shared';
+import { buildMessageNewPayload, previewFor } from '@hm/shared';
 import type { InboundEvent } from '@hm/channels';
 import type { DbTx } from '@hm/db';
 import type { Logger } from '@hm/logger';
@@ -181,17 +181,22 @@ export class MqInboundSocketEmit implements InboundSocketPort {
   constructor(private readonly channel: MqChannel) {}
 
   async emitMessageNew(input: InboundMessageNewEmit): Promise<void> {
+    // F61-S13: montado pelo construtor de `@hm/shared`. Sem `senderType`, o gancho de
+    // aviso de lead novo descartava toda mensagem real — e o aviso nunca disparava.
     relayEnvelope(this.channel, input.workspaceId, 'message:new', input.conversationId, {
-      workspaceId: input.workspaceId,
-      conversationId: input.conversationId,
-      message: {
-        id: input.messageId,
-        conversationId: input.conversationId,
-        externalId: input.externalId,
-        type: input.type,
-        content: input.content,
-        direction: 'inbound',
-      },
+      ...buildMessageNewPayload({
+        workspaceId: input.workspaceId,
+        message: {
+          id: input.messageId,
+          conversationId: input.conversationId,
+          externalId: input.externalId,
+          type: input.type,
+          content: input.content,
+          direction: 'inbound',
+          senderType: 'contact',
+          origin: 'live',
+        },
+      }),
       // `workspace: true` → o relay emite também para `ws:{workspaceId}`, não só
       // para a sala da conversa. Sem isto, uma conversa NOVA (que ninguém abriu
       // ainda) não aparecia na lista ao vivo (ninguém está na sala dela). Assim a

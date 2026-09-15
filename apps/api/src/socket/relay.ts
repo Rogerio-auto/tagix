@@ -44,7 +44,11 @@
  */
 import { z } from 'zod';
 import { connectMq, consume, type Envelope } from '@hm/shared/mq';
-import { SERVER_TO_CLIENT_EVENTS, type ServerToClientEvent } from '@hm/shared';
+import {
+  newMessageNotificationTarget,
+  SERVER_TO_CLIENT_EVENTS,
+  type ServerToClientEvent,
+} from '@hm/shared';
 import { createLogger, type LogLevel, type Logger } from '@hm/logger';
 import { bumpVersion } from '../cache';
 import { notifyInboundMessage } from '../services/notifications/from-inbound';
@@ -307,7 +311,7 @@ export function createRelayHandler(ports: RelayPorts): (envelope: Envelope) => P
     // derrubar o tempo real. Um aviso perdido é ruim; "o tempo real some às
     // vezes" é um bug caro de diagnosticar.
     if (event === 'message:new') {
-      const alvo = inboundParaNotificar(payload.data);
+      const alvo = newMessageNotificationTarget(payload.data);
       if (alvo !== null) {
         // `.catch()` explícito, não só `void`: `void` descarta o VALOR, não a
         // rejeição — uma promise rejeitada aqui viraria unhandled rejection e,
@@ -327,33 +331,6 @@ export function createRelayHandler(ports: RelayPorts): (envelope: Envelope) => P
   };
 }
 
-/**
- * Extrai do `message:new` o que a notificação precisa — e devolve `null` quando
- * não há nada a notificar.
- *
- * Só mensagem **do contato** vira aviso: notificar o dono da própria resposta que
- * ele acabou de mandar é a forma mais rápida de ele desligar as notificações.
- *
- * `data` é `unknown` no contrato do relay (o shape é validado na publicação), por
- * isso o parse defensivo aqui: um payload de uma versão futura do worker não pode
- * derrubar o relay.
- */
-export function inboundParaNotificar(
-  data: unknown,
-): { conversationId: string; messageId: string } | null {
-  if (typeof data !== 'object' || data === null) return null;
-  const raiz = data as Record<string, unknown>;
-  const conversationId = raiz['conversationId'];
-  const message = raiz['message'];
-  if (typeof conversationId !== 'string' || typeof message !== 'object' || message === null) {
-    return null;
-  }
-  const msg = message as Record<string, unknown>;
-  if (msg['senderType'] !== 'contact') return null;
-  const messageId = msg['id'];
-  if (typeof messageId !== 'string') return null;
-  return { conversationId, messageId };
-}
 
 /**
  * Inicia o consumer do relay. Resolve quando o consumer está registrado.

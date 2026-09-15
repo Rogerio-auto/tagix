@@ -63,10 +63,10 @@ Nenhum lead perdido ainda — o primeiro seria.
 
 ## Definition of Done
 
-- [ ] Nenhum emissor monta o `message` à mão; o compilador recusa payload sem `senderType`.
-- [ ] Teste do relay usa a saída de `buildMessageNewPayload`, não objeto literal.
-- [ ] Mensagem ao vivo de contato dispara o aviso; resposta do atendente, mensagem de flow e histórico de coexistência não.
-- [ ] Suítes de `@hm/shared`, `@hm/workers` e `@hm/api` verdes.
+- [x] Nenhum emissor monta o `message` à mão; o compilador recusa payload sem `senderType`.
+- [x] Teste do relay usa a saída de `buildMessageNewPayload`, não objeto literal.
+- [x] Mensagem ao vivo de contato dispara o aviso; resposta do atendente, mensagem de flow e histórico de coexistência não.
+- [x] Suítes de `@hm/shared`, `@hm/workers` e `@hm/api` verdes.
 
 ## Validação
 
@@ -77,3 +77,33 @@ pnpm --filter @hm/api test
 pnpm typecheck
 pnpm lint
 ```
+
+## Decisões tomadas na execução (2026-09-15)
+
+1. **Contrato no tipo, não na disciplina.** `MessageNewPayload.message` deixou de ser `unknown`:
+   `senderType` e `origin` são obrigatórios em `MessageNewMessage`, e todo emissor passa por
+   `buildMessageNewPayload`. Um emissor novo que esqueça qualquer um dos dois não compila.
+2. **A regra do aviso mora ao lado do contrato** (`newMessageNotificationTarget`, em `@hm/shared`),
+   e o teste dela parte da saída do construtor. O teste da F61-S04 montava o payload à mão, com o
+   campo que nenhum emissor mandava — provava a regra e não provava a integração.
+3. **`origin` separa o que acabou de acontecer do que foi sincronizado.** Mensagem que a coexistência
+   traz do WhatsApp Business do cliente nunca avisa: sincronizar histórico não pode tocar o celular
+   uma vez por mensagem antiga.
+4. **Remetente desconhecido é declarado, não chutado.** O job de outbound não carrega quem enviou
+   (são oito produtores: atendente, API pública, campanha, comentário, agente, lembrete…), e a
+   persistência real publica numa fila, então não tem como devolver o valor. O outbound declara
+   `senderType: null`. Como o aviso só dispara para `'contact'`, `null` nunca avisa. Levar a origem
+   para o job é mudança nos oito produtores e fica fora deste slot.
+5. **O relay perdeu a cópia local da regra** e passou a usar a de `@hm/shared`.
+
+## Resultado
+
+- `@hm/shared` 173 testes (7 novos do contrato), `@hm/workers` 492 (1 estouro de tempo em
+  `evaluation.test`, que passa isolado e não importa nada alterado), relay e notificações 23.
+- Typecheck limpo em `@hm/shared`, `@hm/api`, `@hm/workers` e `@hm/web`. Lint: 0 erros.
+
+## Validação que só o Rogério consegue fazer
+
+Com o app instalado no iPhone e os avisos ligados, mandar uma mensagem de WhatsApp de outro número
+para o número da empresa. Deve chegar "Nova mensagem · WhatsApp" (ou "Lead novo", se for o primeiro
+contato daquele número), sem o conteúdo da mensagem na tela bloqueada.
