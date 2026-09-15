@@ -97,6 +97,13 @@ export type { NicheBlueprint, InstantiateResult } from './seed/niches/types';
 
 export const DB_PKG = '@hm/db' as const;
 
+// Pedidos da Meta sobre dados de usuário — exclusão e desautorização (F69-S01).
+export type {
+  MetaDataRequest,
+  MetaDataRequestKind,
+  MetaDataRequestStatus,
+} from './schema/meta_data_requests';
+
 // Assinaturas de Web Push por dispositivo (F61-S03).
 export { pushRepo } from './repos/push';
 export type { PushSubscriptionInput } from './repos/push';

@@ -40,6 +40,8 @@ import { createOnboardingRouter } from './routes/onboarding';
 import { createCalendarRouter } from './routes/calendar';
 import { createDashboardRouter } from './routes/dashboard';
 import { createPushRouter } from './routes/push';
+import { createMetaDataRequestsRouter } from './routes/meta/data-requests';
+import { platformSecrets } from './secrets';
 import { createMembersMeRouter } from './routes/members/me';
 import { createWorkspaceSettingsRouter } from './routes/workspace';
 import { createOrgSettingsRouter } from './routes/org';
@@ -122,6 +124,15 @@ export function createApp(): Express {
   app.get('/health', healthHandler);
   // Scrape Prometheus (F10-S01): fora de auth/api-key (rede interna).
   app.get('/metrics', metricsHandler);
+  // F69-S01: callbacks de dados de usuário que a Meta chama SEM sessão (exclusão e
+  // desautorização). Antes do auth, porque não há login; a prova de origem é o
+  // `signed_request` assinado com o App Secret.
+  app.use(
+    createMetaDataRequestsRouter({
+      appSecret: () => platformSecrets.get('meta_app_secret'),
+      publicAppUrl: () => process.env['APP_PUBLIC_URL'] ?? 'https://app.leadium.com.br',
+    }),
+  );
   // Endpoint interno service-to-service (runtime Python → Node): auth por token
   // compartilhado (AGENT_RUNTIME_TOKEN), NÃO por sessão de usuário. Ver F2-S07/S20.
   app.use(
