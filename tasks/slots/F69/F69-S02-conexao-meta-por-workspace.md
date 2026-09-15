@@ -37,6 +37,9 @@ Um jeito só de o cliente conectar a Meta ao Leadium, pedindo as permissões dos
 - `apps/api/src/app.ts`
 - `apps/web/features/meta-connection/**`
 - `apps/web/features/channels/fb-login.ts`
+- `apps/web/features/channels/components/ConnectWizard.tsx`
+- `apps/api/src/routes/channels/index.ts`
+- `apps/api/src/routes/meta/data-requests.ts`
 - `apps/web/app/(app)/settings/meta/**`
 
 ### files_forbidden
@@ -48,6 +51,14 @@ Um jeito só de o cliente conectar a Meta ao Leadium, pedindo as permissões dos
 
 - `meta_connections` (workspace, usuário Meta, Business, token de longa duração cifrado, expiração, **permissões concedidas e negadas**, ativos vinculados: páginas, contas de anúncio, contas IG, WABAs) com RLS.
 - Troca de código por token no servidor; token nunca vai ao navegador.
+  **Achado de 2026-09-14:** hoje `POST /api/channels/instagram/accounts` devolve o
+  `pageAccessToken` ao navegador, que o reenvia em `POST /api/channels/instagram/connect`
+  (`apps/api/src/routes/channels/index.ts`). O token de página trafega pelo cliente e fica
+  exposto a qualquer extensão ou script na página. Este slot passa a guardar o token no
+  servidor entre os dois passos (referência opaca e de curta duração no lugar do token).
+- **Registrar o ID de usuário com escopo do app** na conexão, e ligar as portas
+  `deleteForMetaUser` e `revokeForMetaUser` da F69-S01 — sem isso os callbacks de exclusão e
+  desautorização continuam sem ter o que remover.
 - Leitura de `/me/permissions` após conectar e antes de cada operação sensível.
 - Tela de conexão por caso de uso: o cliente escolhe o que quer ligar (leads, anúncios, Instagram) e vê o que cada um pede.
 - Estado de saúde: token perto de expirar, permissão revogada, ativo removido — com botão de reconectar pedindo só o que falta.
@@ -65,6 +76,8 @@ Um jeito só de o cliente conectar a Meta ao Leadium, pedindo as permissões dos
 - [ ] RLS: workspace A não lê a conexão de B; teste cobre.
 - [ ] Reconexão pede apenas as permissões que faltam.
 - [ ] Desautorização (F69-S01) marca a conexão como desconectada.
+- [ ] Nenhuma rota devolve token de página ou de usuário ao navegador — inclusive o fluxo atual do Instagram; teste cobre.
+- [ ] Callback de exclusão da F69-S01 remove conexões e tokens ligados ao ID de usuário; teste de ponta a ponta.
 
 ## Validação
 

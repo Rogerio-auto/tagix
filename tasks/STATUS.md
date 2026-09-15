@@ -54,7 +54,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F60   | 9     | 4   | 0   | 0   | 0   | 0   | 5   |
 | F61   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F69   | 10     | 10   | 0   | 0   | 0   | 0   | 0   |
+| F69   | 10     | 9   | 0   | 0   | 0   | 1   | 0   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
@@ -730,7 +730,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID      | Titulo                                                                                      | Status      | Prioridade | Depende de                                                                      |
 | ------- | ------------------------------------------------------------------------------------------- | ----------- | ---------- | ------------------------------------------------------------------------------- |
-| F69-S01 | Conformidade de plataforma — exclusão de dados, desautorização, política e termos           | 🟢 available | critical   | —                                                                               |
+| F69-S01 | Conformidade de plataforma — exclusão de dados, desautorização, política e termos           | 🟣 review    | critical   | —                                                                               |
 | F69-S02 | Conexão Meta por workspace — permissões dos casos de uso, token cifrado e reconexão guiada  | 🟢 available | critical   | F69-S01                                                                         |
 | F69-S03 | Leads de anúncios — do formulário à inbox em segundos, com prova de consentimento           | 🟢 available | critical   | F69-S02                                                                         |
 | F69-S04 | API de Marketing — leitura: gasto, leads e custo por lead por campanha                      | 🟢 available | high       | F69-S02                                                                         |
