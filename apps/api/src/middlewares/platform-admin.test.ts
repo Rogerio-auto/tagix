@@ -18,6 +18,7 @@ import { SESSION_COOKIE } from '../auth/session';
 import {
   createPlatformAdminGuard,
   requirePlatformAdmin,
+  type DeniedAccess,
   type DeniedAccessWriter,
   type PlatformAdminGuardDeps,
 } from './platform-admin';
@@ -154,5 +155,59 @@ describe('F25-S10 — tentativa negada registrada antes do 403', () => {
     expect(erros).toHaveLength(1);
     expect(erros[0]?.msg).toBe('platform.access_denied.audit_failed');
     expect(erros[0]?.meta).toMatchObject({ memberId: userMemberId, error: 'audit_logs indisponível' });
+  });
+
+  it('gravação travada não segura o 403: responde no timeout e registra', async () => {
+    const erros: string[] = [];
+    const logger = { error: (msg: string) => void erros.push(msg) };
+    const travado: DeniedAccessWriter = () => new Promise<void>(() => undefined);
+    const inicio = Date.now();
+    const res = await request(appCom({ writeDenied: travado, logger, auditTimeoutMs: 100 }))
+      .get('/platform/ping')
+      .set('Cookie', userCookie);
+    expect(res.status).toBe(403);
+    expect(Date.now() - inicio).toBeLessThan(2000);
+    expect(erros).toEqual(['platform.access_denied.audit_timeout']);
+  });
+
+  it('logger que lança não vira 500: a negação continua 403', async () => {
+    const falha: DeniedAccessWriter = async () => {
+      throw new Error('audit_logs indisponível');
+    };
+    const logger = {
+      error: () => {
+        throw new Error('destino de log fora');
+      },
+    };
+    const res = await request(appCom({ writeDenied: falha, logger }))
+      .get('/platform/ping')
+      .set('Cookie', userCookie);
+    expect(res.status).toBe(403);
+  });
+
+  it('query string não vai para a auditoria nem para o log', async () => {
+    const gravados: DeniedAccess[] = [];
+    const escreve: DeniedAccessWriter = async (entry) => {
+      gravados.push(entry);
+    };
+    const res = await request(appCom({ writeDenied: escreve }))
+      .get('/platform/ping?token=segredo-123&x=1')
+      .set('Cookie', userCookie);
+    expect(res.status).toBe(403);
+    expect(gravados).toHaveLength(1);
+    expect(gravados[0]?.path).toBe('/platform/ping');
+    expect(JSON.stringify(gravados)).not.toContain('segredo-123');
+  });
+
+  it('mensagem de erro longa é cortada no log', async () => {
+    const erros: Array<Record<string, unknown> | undefined> = [];
+    const logger = { error: (_msg: string, meta?: Record<string, unknown>) => void erros.push(meta) };
+    const falha: DeniedAccessWriter = async () => {
+      throw new Error(`Failed query: insert ... params: ${'x'.repeat(2000)}`);
+    };
+    await request(appCom({ writeDenied: falha, logger })).get('/platform/ping').set('Cookie', userCookie);
+    const erro = erros[0]?.['error'];
+    expect(typeof erro).toBe('string');
+    expect((erro as string).length).toBeLessThanOrEqual(300);
   });
 });
