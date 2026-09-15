@@ -2,7 +2,7 @@
 id: F2-S22
 title: Date em SQL cru quebrava rollup de métricas, cobrança PIX e agendadores — correção no cliente do banco
 phase: F2
-status: review
+status: done
 priority: critical
 estimated_size: S
 depends_on: [F2-S13]
@@ -74,7 +74,9 @@ primeira retomada de IA seriam.
 
 - [x] `Date` em `sql` cru funciona contra Postgres real (teste). *(`client-date-params.test.ts`: 4 casos falhavam com o mesmo `TypeError` de produção antes da correção; passam depois)*
 - [x] Coluna `timestamptz` tipada continua gravando e lendo igual, com microssegundos (teste). *(microssegundos em texto e ida e volta de coluna tipada — passavam antes e depois)*
-- [ ] Rollup de métricas e recorrência de cobrança param de falhar no log de produção. *(rollup ✅: deploy `:91ab6edc` às 14:09 UTC, primeiro tick ~14:19, 0 erro até 14:21 — antes falhava em todo tick. Recorrência pendente: tick horário, primeiro ~15:09 UTC)*
+- [x] Rollup de métricas e recorrência de cobrança param de falhar no log de produção.
+  - **Rollup:** deploy `:91ab6edc` com workers iniciados às 14:09:18 UTC; 6 ticks de 10 min até 15:12, **0 erro**. Antes: 45 falhas em ~8h, uma por tick.
+  - **Recorrência:** tick horário sem override de intervalo; primeiro após o deploy ~15:09:18. Às 15:12:34, **0 "tick falhou"**. Antes: 7 falhas, uma por hora. O tick não loga sucesso quando não há assinatura PIX a inspecionar (`inspected > 0`), e produção tem 0 — então a prova é a ausência do erro que aparecia em todo tick, somada ao `runRecurrenceTick` real rodando limpo contra Postgres local.
 - [x] Suítes de `@hm/db`, `@hm/workers` e `@hm/api` verdes. *(`@hm/db` 151/151, `@hm/workers` 520/520, `@hm/api` 1158/1159 — a falha é `platform/help.test.ts > não-admin → 403 e auditado`, intermitente e anterior a este slot: isolado, passou com a correção e falhou com o `client.ts` de `main`)*
 
 ## Validação
