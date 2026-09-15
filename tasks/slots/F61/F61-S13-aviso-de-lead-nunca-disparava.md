@@ -2,7 +2,7 @@
 id: F61-S13
 title: Aviso de lead novo nunca disparava — contrato único do message:new
 phase: F61
-status: review
+status: done
 priority: critical
 estimated_size: S
 depends_on: [F61-S04]
