@@ -18,6 +18,7 @@ const { workspaces, members, helpCategories } = schema;
 let ws = '';
 let adminCookie = '';
 let userCookie = '';
+let userMemberId = '';
 const slugSfx = randomUUID().slice(0, 8);
 
 const app = express();
@@ -44,7 +45,11 @@ beforeAll(async () => {
 
   const uAuth = randomUUID();
   const uEmail = `huser-${sfx}@t.local`;
-  await db.insert(members).values({ workspaceId: ws, authUserId: uAuth, email: uEmail, role: 'OWNER', status: 'active' });
+  const [u] = await db
+    .insert(members)
+    .values({ workspaceId: ws, authUserId: uAuth, email: uEmail, role: 'OWNER', status: 'active' })
+    .returning({ id: members.id });
+  userMemberId = u!.id;
   userCookie = cookieFor(uAuth, uEmail);
 });
 
@@ -63,10 +68,17 @@ describe('gate', () => {
     const res = await request(app).get('/api/platform/help/categories').set('Cookie', userCookie);
     expect(res.status).toBe(403);
     // O middleware requirePlatformAdmin audita a tentativa negada.
+    // Linha DESTE membro, sem espera (F25-S10): filtrar só pela ação aceitava qualquer linha
+    // antiga de outro teste, e a gravação corria depois do 403.
     const denied = await getDb()
       .select()
       .from(schema.auditLogs)
-      .where(eq(schema.auditLogs.action, 'platform.access_denied'));
+      .where(
+        and(
+          eq(schema.auditLogs.actorMemberId, userMemberId),
+          eq(schema.auditLogs.action, 'platform.access_denied'),
+        ),
+      );
     expect(denied.length).toBeGreaterThanOrEqual(1);
   });
 });
