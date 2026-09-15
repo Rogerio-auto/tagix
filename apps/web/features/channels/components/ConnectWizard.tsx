@@ -15,7 +15,8 @@ import { Button, Input, Modal, useToast } from '@hm/ui';
 import { ApiError } from '@/shared/lib/api-client';
 import { cn } from '@/shared/lib/cn';
 import { PROVIDER_META, PROVIDER_ORDER } from '../constants';
-import { startFbLogin, startWhatsAppSignup, type WaConnectMode, type WaSignupResult } from '../fb-login';
+import { startMetaConnect, startWhatsAppSignup, type WaConnectMode, type WaSignupResult } from '../fb-login';
+import { useCreateMetaConnection, useMetaUseCases } from '@/features/meta-connection/queries';
 import {
   useConnectChannel,
   useConnectInstagram,
@@ -741,6 +742,13 @@ function MetaInstagramForm({
   const listAccounts = useListInstagramAccounts();
   const connectIg = useConnectInstagram();
   const config = getMetaSignupConfig();
+  // F69-S02: o login entrega só o `code`; a conexão é criada no servidor e o
+  // navegador passa a conhecer apenas o id dela. As permissões vêm da API.
+  const criarConexao = useCreateMetaConnection();
+  const casosDeUso = useMetaUseCases();
+  const escopoInstagram =
+    casosDeUso.data?.useCases.find((u) => u.id === 'instagram')?.permissions ?? null;
+  const [connectionId, setConnectionId] = useState<string | null>(null);
 
   const [accounts, setAccounts] = useState<IgAccountCandidate[] | null>(null);
   const [selected, setSelected] = useState<IgAccountCandidate | null>(null);
@@ -752,9 +760,11 @@ function MetaInstagramForm({
   const [fbPageId, setFbPageId] = useState('');
   const [accessToken, setAccessToken] = useState('');
 
-  const handleToken = async (token: string) => {
+  const handleCode = async (code: string) => {
     try {
-      const res = await listAccounts.mutateAsync({ userAccessToken: token });
+      const { connection } = await criarConexao.mutateAsync({ code, useCases: ['instagram'] });
+      setConnectionId(connection.id);
+      const res = await listAccounts.mutateAsync({ connectionId: connection.id });
       setAccounts(res.accounts);
       if (res.accounts.length === 0) {
         toast({
@@ -773,12 +783,12 @@ function MetaInstagramForm({
   };
 
   const connectSelected = async () => {
-    if (!selected || !name.trim()) return;
+    if (!selected || !name.trim() || connectionId === null) return;
     try {
       const res = await connectIg.mutateAsync({
+        connectionId,
         name: name.trim(),
         pageId: selected.pageId,
-        pageAccessToken: selected.pageAccessToken,
         igUserId: selected.igUserId,
         igUsername: selected.igUsername,
         igAccountType: selected.igAccountType,
@@ -898,9 +908,10 @@ function MetaInstagramForm({
       {config.configured ? (
         <MetaLoginNotice
           failure={failure}
-          busy={listAccounts.isPending}
+          busy={listAccounts.isPending || criarConexao.isPending}
+          scopes={escopoInstagram}
           onFailure={setFailure}
-          onCredentials={(token) => void handleToken(token)}
+          onCredentials={(code) => void handleCode(code)}
         />
       ) : (
         <MetaSignupUnavailable config={config} onSwitchProvider={onSwitchProvider} />
@@ -951,13 +962,16 @@ function MetaInstagramForm({
 function MetaLoginNotice({
   failure,
   busy,
+  scopes,
   onFailure,
   onCredentials,
 }: {
   failure: SignupFailureCopy | null;
   busy: boolean;
   onFailure: (copy: SignupFailureCopy | null) => void;
-  onCredentials: (token: string) => void;
+  onCredentials: (code: string) => void;
+  /** Permissões do caso de uso Instagram, vindas da API. Nulo enquanto carrega. */
+  scopes: string[] | null;
 }) {
   const [loading, setLoading] = useState(false);
 
@@ -965,8 +979,9 @@ function MetaLoginNotice({
     onFailure(null);
     setLoading(true);
     try {
-      const result = await startFbLogin('meta_instagram');
-      onCredentials(result.accessToken);
+      if (scopes === null) return;
+      const { code } = await startMetaConnect(scopes);
+      onCredentials(code);
     } catch (err) {
       onFailure(describeSignupFailure(err));
     } finally {
@@ -981,6 +996,7 @@ function MetaLoginNotice({
           variant="secondary"
           size="sm"
           loading={loading || busy}
+          disabled={scopes === null}
           onClick={() => void onLogin()}
         >
           {failure ? 'Tentar de novo' : 'Entrar com a Meta'}

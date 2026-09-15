@@ -554,6 +554,13 @@
       "when": 1781452839000,
       "tag": "0078_f69_meta_data_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1781452840000,
+      "tag": "0079_f69_meta_connections",
+      "breakpoints": true
     }
   ]
 }
