@@ -30,8 +30,10 @@
  */
 
 import {
+  getMetaLoginConfig,
   getMetaSignupConfig,
   MetaSignupError,
+  type MetaLoginConfig,
   type MetaSignupConfig,
   type SignupFailureReason,
 } from './signup-status';
@@ -135,11 +137,17 @@ export function isFbSdkAvailable(): boolean {
   return typeof window !== 'undefined' && getMetaSignupConfig().configured;
 }
 
-/** Carrega o `<script>` do SDK uma única vez e resolve com `window.FB` já inicializado. */
+/**
+ * Carrega o `<script>` do SDK uma única vez e resolve com `window.FB` já inicializado.
+ *
+ * Só exige o App ID. Cada fluxo confere a própria configuração antes de chamar: o Embedded Signup
+ * do WhatsApp e o login da conexão (F69-S12) usam `config_id` diferentes, e exigir aqui a do
+ * WhatsApp bloqueava a conexão Meta num build que só tivesse a do login.
+ */
 function loadFbSdk(): Promise<FbSdk> {
-  if (!isFbSdkAvailable() || typeof META_APP_ID !== 'string') {
+  if (typeof window === 'undefined' || typeof META_APP_ID !== 'string' || META_APP_ID.trim() === '') {
     return Promise.reject(
-      new MetaSignupError('not_configured', 'Meta App ID/Config ID não configurados neste build.'),
+      new MetaSignupError('not_configured', 'Meta App ID não configurado neste build.'),
     );
   }
   if (sdkPromise) return sdkPromise;
@@ -187,43 +195,49 @@ function loadFbSdk(): Promise<FbSdk> {
 }
 
 // ---------------------------------------------------------------------------
-// FB Login genérico (Instagram Messaging — fluxo baseado em token).
+// Login da Meta por caso de uso (F69-S02).
+//
+// Substitui o login antigo do Instagram, que devolvia o token de usuário ao
+// navegador. Removido em vez de mantido "por compatibilidade": código que entrega
+// token ao cliente, parado no repositório, é a próxima pessoa usando-o sem saber.
 // ---------------------------------------------------------------------------
 
-/** Escopos do FB Login para listar Páginas + contas IG vinculadas (Instagram). */
-const IG_LOGIN_SCOPE =
-  'pages_show_list,pages_manage_metadata,instagram_basic,instagram_manage_messages,business_management';
-
-export interface FbLoginResult {
-  /** Token de usuário (curta duração) — o backend troca/persiste com segurança. */
-  accessToken: string;
-  /** Específicos de WhatsApp Cloud. */
-  phoneNumberId?: string;
-  wabaId?: string;
-  phoneNumber?: string;
-  /** Específicos de Instagram Messaging. */
-  igUserId?: string;
-  igUsername?: string;
-  fbPageId?: string;
+/** Configuração do login da conexão neste build (F69-S12). */
+export function metaLoginConfig(): MetaLoginConfig {
+  return getMetaLoginConfig();
 }
 
 /**
- * Dispara o FB Login clássico (token) para o Instagram Messaging. Resolve com o
- * `accessToken` do usuário; o caller usa-o para listar Páginas/contas IG.
+ * Login da Meta para a conexão por workspace (F69-S02). Devolve **só o `code`**.
  *
- * Rejeita com `MetaSignupError` tipada (cancelamento, popup bloqueado/silencioso)
- * → o caller mostra a recuperação certa em vez de girar para sempre.
+ * O `code` sozinho não serve para nada sem o App Secret, que só existe no servidor:
+ * é a forma de o token nunca passar pelo navegador.
+ *
+ * ## Por que `config_id` e não `scope` (F69-S12)
+ *
+ * O app Leadium é do tipo Business. Nele, a Meta exige o Facebook Login for Business: a
+ * configuração criada no painel define as permissões, e `scope` não deve ser usado. Com `scope`,
+ * o login abria, mas o `code` voltava atrelado a uma `redirect_uri` interna do SDK e a troca no
+ * servidor falhava com `100/36008` — foi o erro da primeira conexão real. As permissões que de fato
+ * vieram continuam conferidas no servidor (`GET /me/permissions`), e a tela diz o que falta.
+ *
+ * `auth_type: 'rerequest'` faz a Meta perguntar de novo pelas permissões que a
+ * pessoa recusou antes — sem ele, reconectar para conceder o que faltava não abre
+ * a pergunta e nada muda.
  */
-export async function startFbLogin(
-  provider: 'meta_whatsapp' | 'meta_instagram',
-): Promise<FbLoginResult> {
+export async function startMetaConnect(): Promise<{ code: string }> {
+  const { configId } = getMetaLoginConfig();
+  if (configId === null) {
+    throw new MetaSignupError(
+      'not_configured',
+      'Configuração do Facebook Login for Business ausente (NEXT_PUBLIC_META_LOGIN_CONFIG_ID).',
+    );
+  }
   const fb = await loadFbSdk();
 
-  return new Promise<FbLoginResult>((resolve, reject) => {
+  return new Promise<{ code: string }>((resolve, reject) => {
     let settled = false;
 
-    // Popup bloqueado pelo navegador: o callback do FB.login nunca chega. Sem esse
-    // relógio, o botão fica em "loading" indefinidamente (UX-12).
     const watchdog = setTimeout(() => {
       if (settled) return;
       settled = true;
@@ -238,16 +252,26 @@ export async function startFbLogin(
         settled = true;
         clearTimeout(watchdog);
 
-        const token = response.authResponse?.accessToken;
-        if (response.status !== 'connected' || !token) {
-          reject(
-            new MetaSignupError('cancelled', 'Login da Meta cancelado ou não autorizado.'),
-          );
+        const code = response.authResponse?.code;
+        if (response.status !== 'connected' || !code) {
+          reject(new MetaSignupError('cancelled', 'Login da Meta cancelado ou não autorizado.'));
           return;
         }
-        resolve({ accessToken: token });
+        resolve({ code });
       },
-      provider === 'meta_instagram' ? { scope: IG_LOGIN_SCOPE } : undefined,
+      {
+        // Exatamente os três parâmetros do exemplo da Meta para Login for Business.
+        //
+        // `auth_type: 'rerequest'` foi removido em 2026-09-22: com ele, e com uma autorização já
+        // concedida ao app (a do WhatsApp), o login voltava um `code` que a troca no servidor
+        // recusava com `100/36008` ("redirect_uri is identical…"), mesmo já usando `config_id`.
+        // O `rerequest` é do Login do Facebook clássico; aqui quem decide o que é pedido é a
+        // configuração. Reconceder o que foi recusado se faz reabrindo o login, que já mostra as
+        // permissões da configuração.
+        config_id: configId,
+        response_type: 'code',
+        override_default_response_type: true,
+      },
     );
   });
 }

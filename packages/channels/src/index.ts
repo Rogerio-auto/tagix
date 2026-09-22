@@ -133,3 +133,58 @@ export {
 } from './meta/templates';
 
 export const CHANNELS_PKG = '@hm/channels' as const;
+
+// Capacidades negociadas do adapter (F60-S01 — CANAIS_PLAN §3.1).
+export {
+  CHANNEL_CAPABILITIES,
+  NO_LIMITS,
+  capabilitiesFromLegacy,
+  declareCapabilities,
+} from './capabilities';
+export type { ChannelCapability, ChannelLimits, DeclaredCapabilities } from './capabilities';
+
+// Canal de e-mail (F60-S03 — CANAIS_PLAN §4).
+export type {
+  EmailAddress,
+  EmailAttachment,
+  EmailEvent,
+  EmailEventKind,
+  EmailStream,
+  IEmailProvider,
+  InboundEmail,
+  SendEmailInput,
+  SendEmailResult,
+} from './email/provider';
+export {
+  buildReferences,
+  normalizeMessageId,
+  normalizeSubject,
+  parseReferences,
+  replySubject,
+  threadKeyFrom,
+} from './email/threading';
+export { EmailChannelAdapter, EMAIL_CAPABILITIES } from './email/adapter';
+export type { EmailAdapterOptions } from './email/adapter';
+export { htmlToText, sanitizeEmailHtml } from './email/sanitize';
+export { SOFT_BOUNCE_LIMIT, decideOnEmailEvent, resetsSoftBounces } from './email/bounce';
+export type { BounceAction, BounceDecision } from './email/bounce';
+export { FakeEmailProvider } from './email/fake-provider';
+export type { FakeEmailProviderOptions, SentEmail } from './email/fake-provider';
+export {
+  FORM_DISCLAIMER_FIELDS,
+  LEAD_FIELDS,
+  answersSummary,
+  contactFieldsFrom,
+  customFieldsFrom,
+  parseFormDisclaimer,
+  parseLead,
+  parseLeadgenWebhook,
+} from './meta/leadgen/parse';
+export type {
+  FormDisclaimer,
+  FunnelFieldDef,
+  LeadAnswers,
+  LeadConsentResponse,
+  LeadgenNotification,
+  ParsedLead,
+} from './meta/leadgen/parse';

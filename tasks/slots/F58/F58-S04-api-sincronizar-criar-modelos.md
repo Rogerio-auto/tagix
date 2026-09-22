@@ -43,15 +43,15 @@ manual, criação para aprovação e atualização automática de status.
 
 ## Definition of Done
 
-- [ ] `GET /api/channels/:id/message-templates` lista com filtros de status, categoria, idioma e busca.
-- [ ] `POST .../sync` atualiza o catálogo por upsert e devolve resumo criado/atualizado/arquivado.
-- [ ] `POST .../message-templates` envia para aprovação e persiste o estado retornado.
-- [ ] Apenas canal ativo `meta_whatsapp` é aceito; demais retornam motivo claro e acionável.
-- [ ] Webhook de mudança de status atualiza o catálogo idempotentemente; reconciliação manual continua disponível.
-- [ ] Evento de status por `waba_id` atualiza todos os canais ativos associados, sem cruzar workspaces.
-- [ ] Descoberta cross-tenant usa resolver `SECURITY DEFINER` mínimo, com `search_path` fixo, acesso público revogado e teste sob `hm_app_login`/FORCE RLS.
-- [ ] Permissões distinguem visualizar de gerenciar modelos e são testadas.
-- [ ] Toda mutação de tenant usa RLS e nunca devolve credenciais do canal; o webhook só usa lookup privilegiado para descobrir os workspaces pelo `waba_id`.
+- [x] `GET /api/channels/:id/message-templates` lista com filtros de status, categoria, idioma e busca.
+- [x] `POST .../sync` atualiza o catálogo por upsert e devolve resumo criado/atualizado/arquivado.
+- [x] `POST .../message-templates` envia para aprovação e persiste o estado retornado.
+- [x] Apenas canal ativo `meta_whatsapp` é aceito; demais retornam motivo claro e acionável.
+- [x] Webhook de mudança de status atualiza o catálogo idempotentemente; reconciliação manual continua disponível.
+- [x] Evento de status por `waba_id` atualiza todos os canais ativos associados, sem cruzar workspaces.
+- [x] Descoberta cross-tenant usa resolver `SECURITY DEFINER` mínimo, com `search_path` fixo, acesso público revogado e teste sob `hm_app_login`/FORCE RLS.
+- [x] Permissões distinguem visualizar de gerenciar modelos e são testadas.
+- [x] Toda mutação de tenant usa RLS e nunca devolve credenciais do canal; o webhook só usa lookup privilegiado para descobrir os workspaces pelo `waba_id`.
 
 ## Validação
 
@@ -64,3 +64,13 @@ pnpm --filter @hm/shared test
 ## Notas
 
 - Se o payload de webhook não oferecer todos os campos, marcar o catálogo como `stale` e manter a sincronização manual disponível. Job durável de reconciliação fica fora deste slot.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (9):** tinham entrega, só faltava o registro. Evidência: Rotas de modelos, permissões de ver e gerenciar, resolver por `waba_id` e webhook de status existem com testes.
+- **Continuam em aberto (0):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

@@ -61,6 +61,18 @@ export const workspaces = pgTable(
     industry: text('industry'),
     timezone: text('timezone').notNull().default('America/Sao_Paulo'),
     locale: text('locale').notNull().default('pt-BR'),
+    /**
+     * Mercado de operação (F59-S02 — AGENCIA_PLAN §3). Decide moeda, idiomas,
+     * canais e **política de outbound** via market pack em `@hm/shared`.
+     * Default `BR` preserva o comportamento de todo workspace existente.
+     */
+    market: text('market').notNull().default('BR').$type<'BR' | 'US'>(),
+    /**
+     * Idiomas habilitados. `null` = usar os locales do market pack (BR: pt-BR ·
+     * US: en-US + pt-BR). Só é preenchida quando o cliente restringe — evita
+     * duplicar o pack e evita que a coluna derive dele com o tempo.
+     */
+    locales: jsonb('locales').$type<string[] | null>(),
     logoUrl: text('logo_url'),
     settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
     // Estado de onboarding/verticalização (F43-S01: ONBOARDING.md §3.1). Coluna
@@ -87,6 +99,7 @@ export const workspaces = pgTable(
       'workspaces_subscription_status_chk',
       sql`${t.subscriptionStatus} in ('trial','active','past_due','canceled','expired')`,
     ),
+    check('workspaces_market_chk', sql`${t.market} in ('BR','US')`),
   ],
 );
 
@@ -119,6 +132,13 @@ export const members = pgTable(
       .notNull()
       .default({}),
     localeOverride: text('locale_override'),
+    /**
+     * Fuso do MEMBRO (F61-S04). A janela de silêncio das notificações é calculada
+     * no relógio de quem recebe — não no do servidor nem no do workspace: o
+     * cliente brasileiro nos EUA tem equipe nos dois fusos. NULO = default do
+     * market pack do workspace.
+     */
+    timezone: text('timezone'),
     isOnline: boolean('is_online').notNull().default(false),
     lastSeenAt: ts('last_seen_at'),
     invitedBy: uuid('invited_by').references((): AnyPgColumn => members.id, { onDelete: 'set null' }),
@@ -246,6 +266,14 @@ export * from './platform_secrets';
 export * from './webhook_events';
 // LiveChat: contacts → conversations → messages (ordem de dependência).
 export * from './contacts';
+export * from './consent'; // contact_consents, contact_suppressions (tenant)
+export * from './custom_values'; // workspace_custom_values (tenant)
+export * from './contact_identities'; // contact_identities (tenant)
+export * from './push'; // push_subscriptions (tenant — F61-S03)
+export * from './notifications'; // notification_deliveries (tenant — F61-S04)
+export * from './meta_data_requests'; // meta_data_requests (plataforma, sem RLS — F69-S01)
+export * from './meta_connections'; // meta_connections (tenant — F69-S02)
+export * from './lead_ads'; // lead_ad_sources, lead_ad_submissions (tenant — F69-S03)
 export * from './conversations';
 // messages também exporta `mediaStatusEnum` + tipo `MediaStatus` (F52-S01) p/ workers/shared.
 export * from './messages';
@@ -408,6 +436,19 @@ export const RLS_TABLES = [
   'tool_logs',
   'agent_executions',
   'llm_usage_logs',
+  // Consentimento e supressão por canal (F59-S03). Ambas com workspace_id
+  // próprio → RLS direto.
+  // Valores personalizados por workspace (F59-S07).
+  'contact_identities',
+  'workspace_custom_values',
+  'contact_consents',
+  'contact_suppressions',
+  // Assinaturas de Web Push por dispositivo (F61-S03).
+  'push_subscriptions',
+  // Memória de entregas de notificação — dedupe + auditoria (F61-S04).
+  'notification_deliveries',
+  // Conexão Meta por workspace (F69-S02).
+  'meta_connections',
   // Knowledge Base domain (workspace-scoped).
   'kb_documents',
   'kb_chunks',

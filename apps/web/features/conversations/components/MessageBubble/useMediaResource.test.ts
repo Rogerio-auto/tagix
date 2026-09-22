@@ -39,3 +39,41 @@ describe('deriveMediaState', () => {
     );
   });
 });
+
+describe('mídia que não existe mais (F61-S11)', () => {
+  // Em produção eram 561 mensagens girando "carregando áudio…" para sempre.
+  // Este bloco existe para isso não voltar.
+  it('unavailable quando marcado e sem URL — não fica girando', () => {
+    expect(
+      deriveMediaState({ url: null, status: 'live', failed: false, unavailable: true }),
+    ).toBe('unavailable');
+  });
+
+  it('unavailable ganha de failed — o motivo mais específico é o que informa', () => {
+    // Ambos verdadeiros: dizer "erro, tente de novo" seria empurrar o usuário
+    // para um beco que já sabemos que não tem saída.
+    expect(
+      deriveMediaState({ url: null, status: 'live', failed: true, unavailable: true }),
+    ).toBe('unavailable');
+  });
+
+  it('URL servida prevalece sobre a marca antiga — mídia que voltou renderiza', () => {
+    // Se um backfill posterior recuperou o arquivo, a marca velha não pode
+    // esconder mídia que existe.
+    expect(
+      deriveMediaState({
+        url: 'https://x/a.ogg',
+        status: 'live',
+        failed: false,
+        unavailable: true,
+      }),
+    ).toBe('ready');
+  });
+
+  it('ausência da flag preserva o comportamento anterior', () => {
+    expect(deriveMediaState({ url: null, status: 'live', failed: false })).toBe('pending');
+    expect(
+      deriveMediaState({ url: null, status: 'live', failed: false, unavailable: false }),
+    ).toBe('pending');
+  });
+});

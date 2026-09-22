@@ -23,10 +23,87 @@ export interface RoutingChange {
 
 // --- Payloads por evento ---
 
+/** Quem mandou a mensagem — o mesmo vocabulário de `messages.sender_type`. */
+export type MessageSenderType = 'contact' | 'member' | 'agent' | 'system';
+
+/**
+ * De onde a mensagem veio (F61-S13).
+ *
+ * `live` é o que acabou de acontecer. `coexistence` é o que o WhatsApp Business do
+ * próprio cliente sincronizou — inclusive histórico. A diferença decide o aviso:
+ * sincronizar trezentas mensagens antigas não pode tocar o celular trezentas vezes.
+ */
+export type MessageOrigin = 'live' | 'coexistence';
+
+/**
+ * A mensagem dentro do `message:new`.
+ *
+ * Tipada (antes era `unknown`) porque o `unknown` deixou passar um defeito real: o
+ * gancho de aviso da F61-S04 notificava só `senderType === 'contact'`, e nenhum dos
+ * quatro emissores mandava `senderType`. O aviso de lead novo nunca disparava, e o
+ * compilador não tinha como saber. Com `senderType` e `origin` obrigatórios aqui,
+ * um emissor novo que esqueça qualquer um dos dois não compila.
+ */
+export interface MessageNewMessage {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly externalId: string | null;
+  readonly type: string;
+  readonly content: string | null;
+  readonly direction: 'inbound' | 'outbound';
+  /**
+   * `null` quando o emissor não tem como saber quem enviou — hoje, só o outbound,
+   * cujo job não carrega a origem (são oito produtores diferentes). O campo continua
+   * obrigatório: `null` é uma declaração consciente, não um esquecimento. E como o
+   * aviso só dispara para `'contact'`, `null` nunca avisa ninguém.
+   */
+  readonly senderType: MessageSenderType | null;
+  readonly origin: MessageOrigin;
+}
+
 export interface MessageNewPayload {
   workspaceId: string;
   conversationId: string;
-  message: unknown;
+  message: MessageNewMessage;
+}
+
+/**
+ * Único jeito de montar o `message:new`. Todo emissor passa por aqui — é o que faz o
+ * tipo acima valer na prática, e não só na declaração.
+ */
+export function buildMessageNewPayload(input: {
+  readonly workspaceId: string;
+  readonly message: MessageNewMessage;
+}): MessageNewPayload {
+  return {
+    workspaceId: input.workspaceId,
+    conversationId: input.message.conversationId,
+    message: { ...input.message },
+  };
+}
+
+/**
+ * O `message:new` merece aviso ao dono? Devolve o alvo, ou `null`.
+ *
+ * Só mensagem **ao vivo** de **contato**. Resposta do atendente, mensagem de flow ou
+ * de agente e sincronização da coexistência não avisam ninguém.
+ *
+ * Recebe `unknown` de propósito: o relay recebe o payload pela fila, e um payload de
+ * uma versão futura (ou antiga) do worker não pode derrubar o tempo real.
+ */
+export function newMessageNotificationTarget(
+  data: unknown,
+): { conversationId: string; messageId: string } | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const raiz = data as Record<string, unknown>;
+  const message = raiz['message'];
+  if (typeof message !== 'object' || message === null) return null;
+  const m = message as Record<string, unknown>;
+  if (m['senderType'] !== 'contact' || m['origin'] !== 'live') return null;
+  const conversationId = raiz['conversationId'];
+  const messageId = m['id'];
+  if (typeof conversationId !== 'string' || typeof messageId !== 'string') return null;
+  return { conversationId, messageId };
 }
 
 export interface MessageStatusChangedPayload {

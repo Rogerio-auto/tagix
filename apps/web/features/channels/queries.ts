@@ -68,9 +68,9 @@ export function useConnectWhatsApp() {
   });
 }
 
-/** Lista as contas IG (Page+IGBA) a partir do user access token (F15-S06). */
+/** Lista as contas IG (Page+IGBA) a partir da conexão Meta do workspace (F69-S02). */
 export function useListInstagramAccounts() {
-  return useMutation<{ accounts: IgAccountCandidate[] }, Error, { userAccessToken: string }>({
+  return useMutation<{ accounts: IgAccountCandidate[] }, Error, { connectionId: string }>({
     mutationFn: (input) =>
       api.post<{ accounts: IgAccountCandidate[] }>('/api/channels/instagram/accounts', input),
   });

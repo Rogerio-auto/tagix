@@ -27,6 +27,7 @@
  */
 import type { ChannelProvider } from '@hm/shared';
 import type { InboundEvent, MediaRef } from '@hm/channels';
+import type { RevocationPort } from './revocation';
 
 /**
  * Porta de parsing por provider. A impl. default roteia para os parsers de
@@ -135,4 +136,9 @@ export interface InboundDeps {
   readonly parser: InboundParserPort;
   readonly persistence: InboundPersistencePort;
   readonly media: MediaEnqueuePort;
+  /**
+   * F59-S06 — passo de revogacao. Opcional para nao quebrar composicoes e testes
+   * que nao o exercitam; a composicao de producao injeta `createRevocationStep`.
+   */
+  readonly revocation?: RevocationPort;
 }

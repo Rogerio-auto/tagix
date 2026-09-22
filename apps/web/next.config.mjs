@@ -134,6 +134,26 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [{ protocol: 'https', hostname: '**.r2.cloudflarestorage.com' }],
   },
+  /**
+   * F61-S01 — o service worker NUNCA pode vir do cache HTTP do navegador.
+   *
+   * Se `sw.js` for cacheado, o navegador serve o worker antigo e a correção de um
+   * worker quebrado nunca chega — o mesmo problema que o kill switch existe para
+   * resolver, um nível acima. `sw-strategy.js` vai junto: é o módulo que o worker
+   * importa, e um par desalinhado (worker novo, estratégia velha) seria pior que
+   * os dois velhos.
+   *
+   * `sw-kill.json` também, por razão óbvia: um interruptor cacheado não desliga
+   * nada.
+   */
+  async headers() {
+    const noStore = [{ key: 'Cache-Control', value: 'no-store, must-revalidate' }];
+    return [
+      { source: '/sw.js', headers: noStore },
+      { source: '/sw-strategy.js', headers: noStore },
+      { source: '/sw-kill.json', headers: noStore },
+    ];
+  },
   // Proxy de dev: o navegador fala só com o web (mesma origem) e o Next encaminha
   // /api, /auth e /socket.io para a API. Evita o inferno de cookie cross-origin
   // (SameSite) no localhost e espelha produção (web + api atrás do mesmo host).

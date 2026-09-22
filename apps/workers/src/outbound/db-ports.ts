@@ -15,6 +15,7 @@ import { and, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import type { Channel, IChannelAdapter } from '@hm/channels';
 import { decryptSecret, schema, withWorkspace } from '@hm/db';
 import type { ChannelProvider } from '@hm/shared';
+import { previewFor } from '@hm/shared';
 import { nextViewStatus } from '../inbound/status';
 import type { RecordAttemptInput, SendAttemptStore } from './retry-policy';
 import type {
@@ -88,10 +89,9 @@ function failedReason(input: PersistOutboundInput): string | null {
  * Preview curto da última mensagem outbound (texto truncado ou rótulo do tipo).
  * Espelha exatamente a convenção do inbound (`previewOf`): `[audio]`, `[image]`…
  */
+/** F61-S12: regra única em `@hm/shared` (antes emitia `[${type}]` cru). */
 function outboundPreview(content: string | null, type: string): string {
-  const trimmed = content?.trim();
-  if (trimmed) return trimmed.slice(0, 280);
-  return `[${type}]`;
+  return previewFor(type, content);
 }
 
 // ─── Idempotency guard (F52-S04) ──────────────────────────────────────────────

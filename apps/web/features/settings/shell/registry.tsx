@@ -150,6 +150,15 @@ const WORKSPACE: SettingsSection[] = [
     externalHref: '/settings/channels',
   },
   {
+    id: 'meta',
+    group: 'workspace',
+    label: 'Meta (Facebook e Instagram)',
+    description: 'Conectar a Meta por caso de uso: leads dos anúncios, anúncios e Instagram.',
+    keywords: ['meta', 'facebook', 'instagram', 'anúncios', 'leads', 'permissões', 'token'],
+    permission: 'channel.connect',
+    externalHref: '/settings/meta',
+  },
+  {
     id: 'membros',
     group: 'workspace',
     label: 'Membros',

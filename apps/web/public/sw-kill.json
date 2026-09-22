@@ -1,0 +1,4 @@
+{
+  "disabled": false,
+  "_comment": "Interruptor de emergência do service worker (F61-S01). Trocar para true faz todo worker instalado se apagar, limpar os caches e devolver os clientes à rede. É o caminho de volta quando um SW quebrado já está em produção — não existe rollback de deploy para service worker."
+}

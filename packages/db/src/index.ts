@@ -96,3 +96,51 @@ export { getBlueprint, isNicheKey, NICHE_KEYS, type NicheKey } from './seed/nich
 export type { NicheBlueprint, InstantiateResult } from './seed/niches/types';
 
 export const DB_PKG = '@hm/db' as const;
+
+// Conexão Meta por workspace (F69-S02).
+export { metaConnectionsRepo } from './repos/meta-connections';
+export type { MetaConnectionPublic, UpsertMetaConnectionInput } from './repos/meta-connections';
+export { leadAdsRepo } from './repos/lead-ads';
+export type { ActiveLeadSource, ResolvedLeadSource, LeadSubmissionSummary } from './repos/lead-ads';
+export type { LeadAdDelivery, LeadAdSource, LeadAdSubmission, LeadConsentEvidence } from './schema/lead_ads';
+export type {
+  MetaConnection,
+  MetaConnectionAssets,
+  MetaConnectionStatus,
+} from './schema/meta_connections';
+
+// Pedidos da Meta sobre dados de usuário — exclusão e desautorização (F69-S01).
+export type {
+  MetaDataRequest,
+  MetaDataRequestKind,
+  MetaDataRequestStatus,
+} from './schema/meta_data_requests';
+
+// Assinaturas de Web Push por dispositivo (F61-S03).
+export { pushRepo } from './repos/push';
+export type { PushSubscriptionInput } from './repos/push';
+export type { PushSubscriptionRow, NewPushSubscription } from './schema/push';
+
+// Consentimento e supressão por canal (F59-S03).
+export { consentRepo } from './repos/consent';
+export type { ConsentSnapshot, GrantConsentInput, RevokeConsentInput } from './repos/consent';
+export type {
+  ConsentChannel,
+  ConsentProof,
+  ConsentPurpose,
+  ConsentStatus,
+  ContactConsent,
+  ContactSuppression,
+} from './schema/consent';
+
+// Valores personalizados por workspace (F59-S07).
+export { customValuesRepo, resolveCustomValues } from './repos/custom-values';
+export type { CustomValueView, UpsertCustomValueInput, ResolveResult } from './repos/custom-values';
+export type { CustomValueKind, WorkspaceCustomValue } from './schema/custom_values';
+export { CUSTOM_VALUE_KINDS, CUSTOM_VALUE_KEY_PATTERN } from './schema/custom_values';
+
+// Identidades do contato (F60-S01).
+export { contactIdentitiesRepo, normalizeIdentity } from './repos/contact-identities';
+export type { IdentityRef } from './repos/contact-identities';
+export { CONTACT_IDENTITY_KINDS } from './schema/contact_identities';
+export type { ContactIdentity, ContactIdentityKind } from './schema/contact_identities';

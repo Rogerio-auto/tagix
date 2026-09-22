@@ -1,271 +1,106 @@
-# Runbook — Restore do Postgres a partir de backup (produção)
+# Runbook — Restaurar o banco a partir do backup de deploy
 
-> **Para quem:** SRE / on-call do `tagix` (Highermind v2) restaurando o banco de produção após corrupção, perda de dados ou desastre da VPS.
-> **Ambiente:** VPS Ubuntu, Docker Compose. Container `postgres` = `pgvector/pgvector:pg16`, DB `highermind`.
-> **Origem do backup:** cron diário 03:00 BRT (vide `INFRASTRUCTURE.md` §5.5):
-> `pg_dump --format=custom --compress=9 highermind` → cifrado `openssl aes-256-cbc -salt -k $BACKUP_KEY` → upload R2 `highermind-backups/{ano}/{mês}/{dia}/dump-{timestamp}.enc`. Retenção 30 dias.
-> **RPO esperado:** até 24h (último dump diário). **RTO alvo:** 1h.
-> **Comandos são bash (Linux/prod). Nunca PowerShell.**
-
-> 🔴 **AVISO — operação destrutiva.** Restaurar **sobrescreve o estado atual do banco**. Antes de qualquer `pg_restore --clean` ou recriação de DB, este runbook obriga um **dump de segurança do estado corrente** (§3). Nunca pule o §3.
+> **Quando usar:** uma migration passou, o deploy terminou, e o dado ficou errado.
+> Rollback de imagem devolve o código; **não** devolve o schema nem o dado.
+> **Pré-requisito:** o deploy que causou o problema gerou um dump — desde F57-S07 isso é garantido,
+> e o deploy **aborta** se o dump falhar.
 
 ---
 
-## 0. Pré-requisitos e convenções
+## 1. Onde está o backup
+
+`deploy.sh` grava em `/opt/leadium/backups`, um por deploy, nomeado por timestamp UTC + sha:
 
 ```bash
-cd /root/highermind
-export COMPOSE="docker compose -f infra/docker/docker-compose.prod.yml"
-set -a; source /root/highermind/.env; set +a   # PG_USER, PG_PASSWORD, BACKUP_KEY, R2_* etc.
-psqlc() { $COMPOSE exec -T postgres psql -U "$PG_USER" -d highermind "$@"; }
-WORK=/root/restore-$(date +%Y%m%d-%H%M%S); mkdir -p "$WORK"; cd "$WORK"
-echo "Workdir: $WORK"
+ssh root@187.77.237.233
+ls -lht /opt/leadium/backups | head
+# leadium-20260909T143000Z-9d5a9bca.dump
 ```
 
-Você precisa de: `BACKUP_KEY` (chave do `openssl` dos backups) e credenciais R2 (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID`, bucket `highermind-backups`). `aws` CLI configurado para o endpoint R2, ou use `rclone`.
+O sha no nome é o commit **que estava sendo implantado**. Ou seja: o dump
+`...-9d5a9bca.dump` é o estado do banco **antes** das migrations de `9d5a9bca`.
+
+Retenção: os 10 mais recentes (`BACKUP_KEEP`). Deploys antigos são podados.
 
 ---
 
-## 1. Sintomas / Quando restaurar
+## 2. Decida o que você quer
 
-Use este runbook quando:
+Restaurar é destrutivo — o `--clean` derruba objetos antes de recriar. Antes de rodar, saiba qual
+dos dois casos é o seu:
 
-- Postgres não recupera por restart (corrupção de WAL/checkpoint — encaminhado por [`incident-postgres-down.md`](./incident-postgres-down.md) §3).
-- Perda/corrupção lógica de dados (DELETE/UPDATE em massa acidental, migration destrutiva mal aplicada).
-- Provisionamento de VPS nova em DR (cenário "VPS down" do `INFRASTRUCTURE.md` §13.1).
+| Situação | O que fazer |
+|---|---|
+| A migration corrompeu ou apagou dado | Restore completo (§3) |
+| A migration está certa, mas o **código** quebrou | **Não restaure.** Faça rollback da imagem (`rollback-deploy.md`) — o schema novo geralmente é compatível com o código antigo quando a migration foi aditiva |
+| Só uma tabela ficou errada | Restore seletivo (§4) — muito menos arriscado |
 
-**Decisão rápida:** se o dado perdido é recente (< minutos) e o banco está íntegro, prefira correção pontual a restore total. Restore é a opção quando a integridade do cluster está comprometida.
-
----
-
-## 2. Selecionar e baixar o backup correto
-
-1. Liste os backups disponíveis (mais recentes primeiro):
-
-   ```bash
-   # Via AWS CLI apontado pro R2:
-   aws s3 ls "s3://highermind-backups/$(date +%Y/%m)/" \
-     --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
-     | sort | tail -20
-   ```
-
-2. Escolha o dump (em DR por corrupção, geralmente o **último íntegro** anterior ao incidente). Baixe:
-
-   ```bash
-   BACKUP_OBJECT="$(date +%Y/%m/%d)/dump-<timestamp>.enc"   # ajuste para o escolhido
-   aws s3 cp "s3://highermind-backups/${BACKUP_OBJECT}" "$WORK/dump.enc" \
-     --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-   ls -lh "$WORK/dump.enc"
-   ```
-
-3. Decifre (operação de leitura — não toca o banco):
-
-   ```bash
-   openssl aes-256-cbc -d -salt -in "$WORK/dump.enc" -out "$WORK/dump.pgcustom" -k "$BACKUP_KEY"
-   ls -lh "$WORK/dump.pgcustom"
-   ```
-
-4. **Valide o dump ANTES de tocar a produção.** `pg_restore --list` lê o TOC sem aplicar nada — se isto falhar, o backup está corrompido; volte ao §2 e escolha outro:
-
-   ```bash
-   $COMPOSE exec -T postgres pg_restore --list /dev/stdin < "$WORK/dump.pgcustom" | head -40
-   echo "TOC entries: $($COMPOSE exec -T postgres pg_restore --list /dev/stdin < "$WORK/dump.pgcustom" | grep -c ';')"
-   ```
+**A pergunta que decide:** a migration foi aditiva (coluna nova, tabela nova) ou destrutiva
+(coluna removida, tipo alterado)? Aditiva quase nunca precisa de restore.
 
 ---
 
-## 3. ⚠️ OBRIGATÓRIO — dump de segurança do estado atual
-
-Antes de sobrescrever qualquer coisa, capture o estado corrente. Isto é o rollback do restore. **Não prossiga sem este passo.**
+## 3. Restore completo
 
 ```bash
-$COMPOSE exec -T postgres pg_dump --format=custom --compress=9 -U "$PG_USER" highermind \
-  > "$WORK/PRE-RESTORE-safety.pgcustom"
-ls -lh "$WORK/PRE-RESTORE-safety.pgcustom"   # confirme tamanho > 0
+ssh root@187.77.237.233
+set -a; . /opt/leadium/.env; set +a
+PG=$(docker ps --format '{{.Names}}' | grep '^leadium_postgres' | head -1)
+DUMP=/opt/leadium/backups/leadium-20260909T143000Z-9d5a9bca.dump
+
+# 1) Pare quem escreve, para não gravar por cima durante o restore.
+docker service scale leadium_api=0 leadium_workers=0
+
+# 2) Segurança: um dump do estado ATUAL, antes de sobrescrevê-lo.
+#    Se o restore for a decisão errada, este é o caminho de volta.
+docker exec "$PG" pg_dump -U "$PG_USER" -d "$PG_DB" -Fc > /opt/leadium/backups/pre-restore-$(date -u +%Y%m%dT%H%M%SZ).dump
+
+# 3) Restore.
+docker exec -i "$PG" pg_restore -U "$PG_USER" -d "$PG_DB" --clean --if-exists < "$DUMP"
+
+# 4) Volte os serviços.
+docker service scale leadium_api=1 leadium_workers=1
 ```
 
-Se o banco estiver corrompido a ponto de `pg_dump` falhar, faça uma **cópia física do volume** (com Postgres parado para consistência):
+O passo 2 não é excesso de zelo: restore é decisão tomada sob pressão, e é comum descobrir depois
+que o problema era outro.
+
+---
+
+## 4. Restore seletivo (uma tabela)
+
+Menos arriscado e quase sempre suficiente:
 
 ```bash
-$COMPOSE stop postgres
-tar czf "$WORK/PRE-RESTORE-volume.tgz" -C /var/lib/docker/volumes/highermind_postgres-data .
-$COMPOSE start postgres   # se for só capturar; será derrubado de novo no §4
-ls -lh "$WORK/PRE-RESTORE-volume.tgz"
+docker exec -i "$PG" pg_restore -U "$PG_USER" -d "$PG_DB" \
+  --data-only --table=contacts --disable-triggers < "$DUMP"
 ```
 
-Guarde `$WORK` num caminho que sobreviva ao restore (idealmente faça upload do safety-dump pro R2 num prefixo `pre-restore/`).
+`--disable-triggers` evita que a reinserção dispare os hooks de aplicação. **RLS continua valendo** —
+o restore roda como owner do banco, então confira o `workspace_id` das linhas depois.
 
 ---
 
-## 4. Restaurar
+## 5. Depois de restaurar
 
-> **Pare o tráfego de escrita** durante o restore para evitar inconsistência. Mantenha `postgres` de pé; derrube apenas os consumidores.
-
-1. Quiesce os serviços que escrevem no banco (Postgres permanece up):
-
+1. **Confira a contagem** das tabelas que importam:
    ```bash
-   $COMPOSE stop api web worker-inbound worker-outbound worker-media \
-     worker-campaigns worker-flows scheduler agent-runtime
+   docker exec "$PG" psql -U "$PG_USER" -d "$PG_DB" -tAc \
+     "select 'contacts='||count(*) from contacts; select 'messages='||count(*) from messages;"
    ```
-
-2. Termine conexões residuais ao DB alvo (não destrutivo — só fecha sessões):
-
-   ```bash
-   psqlc -c "
-     select pg_terminate_backend(pid) from pg_stat_activity
-     where datname='highermind' and pid <> pg_backend_pid();"
-   ```
-
-3. **Restore.** Escolha UM caminho:
-
-   **Caminho A — banco íntegro, restaurar por cima (`--clean`):** dropa e recria objetos antes de restaurar. Mais rápido; preserva o database e roles.
-
-   ```bash
-   $COMPOSE exec -T postgres pg_restore \
-     --clean --if-exists --no-owner --no-privileges \
-     --exit-on-error -U "$PG_USER" -d highermind /dev/stdin < "$WORK/dump.pgcustom"
-   ```
-
-   **Caminho B — banco corrompido, recriar do zero:** recria o database. Mais seguro contra corrupção residual. O safety-dump do §3 é o seu rollback.
-
-   ```bash
-   psqlc -d postgres -c "select pg_terminate_backend(pid) from pg_stat_activity where datname='highermind';"
-   $COMPOSE exec -T postgres dropdb   -U "$PG_USER" --if-exists highermind   # destrutivo — coberto pelo §3
-   $COMPOSE exec -T postgres createdb -U "$PG_USER" -O "$PG_USER" highermind
-   $COMPOSE exec -T postgres pg_restore --no-owner --no-privileges --exit-on-error \
-     -U "$PG_USER" -d highermind /dev/stdin < "$WORK/dump.pgcustom"
-   ```
-
-4. Garanta extensões e re-aplique migrations pendentes (o dump custom traz extensões, mas confirme):
-
-   ```bash
-   psqlc -c "select extname from pg_extension order by 1;"
-   # Esperado conter: pgcrypto, uuid-ossp, pg_trgm, citext, vector, unaccent
-   # Aplique migrations se o dump for de um schema anterior ao código deployado:
-   $COMPOSE run --rm api pnpm db:migrate
-   ```
+2. **Verifique o `schema_migrations`.** Se você restaurou para antes das migrations, o Drizzle vai
+   querer reaplicá-las no próximo deploy — o que é o comportamento certo, mas precisa ser
+   intencional.
+3. **Registre o incidente** em `docs/audits/`: qual migration, qual dump, o que se perdeu entre o
+   dump e o restore.
 
 ---
 
-## 5. Validação de integridade (pós-restore)
+## 6. O que este backup NÃO cobre
 
-Não suba a app antes de TODOS passarem.
+Ele é um retrato do **momento do deploy**. Tudo que entrou entre o dump e o incidente se perde no
+restore completo — se o problema só apareceu horas depois, você perde essas horas.
 
-1. Schema e contagens sanas:
-
-   ```bash
-   psqlc -c "\dt" | head
-   psqlc -c "
-     select 'workspaces' t, count(*) c from workspaces
-     union all select 'conversations', count(*) from conversations
-     union all select 'messages', count(*) from messages
-     union all select 'contacts', count(*) from contacts
-     union all select 'channels', count(*) from channels;"
-   ```
-
-2. **RLS ativo** (isolamento multi-tenant é fundação):
-
-   ```bash
-   psqlc -c "
-     select relname, relrowsecurity from pg_class
-     where relname in ('conversations','messages','contacts','channels','channel_secrets')
-     order by relname;"
-   # Toda linha deve ter relrowsecurity = t.
-   psqlc -c "reset role; select count(*) from conversations;"   # esperado: 0 sem app.workspace_id
-   ```
-
-3. **Secrets cifrados decifram** — prova de que o dump não corrompeu `*_enc` e que a `ENCRYPTION_KEY` em prod casa com os dados restaurados:
-
-   ```bash
-   psqlc -c "select channel_id, key_version, length(access_token_enc) from channel_secrets limit 3;"
-   # Teste funcional de decrypt num secret (não vaza o plaintext nos logs):
-   $COMPOSE run --rm -T api node -e '
-     const { decryptSecret } = require("@hm/db");
-     const sample = process.env.SAMPLE_ENC;
-     if (sample) { decryptSecret(sample); console.log("decrypt OK"); }
-     else console.log("sem amostra — valide manualmente no painel");'
-   ```
-
-   Se o decrypt falhar com `Unsupported state or unable to authenticate data`, a `ENCRYPTION_KEY` em prod **não** corresponde aos dados restaurados → o backup é de outra época de chave. Faça rollback (§7) e vá para [`rotate-encryption-key.md`](./rotate-encryption-key.md) antes de seguir.
-
-4. Integridade referencial / chaves estrangeiras não violadas:
-
-   ```bash
-   psqlc -c "
-     select conrelid::regclass as table, conname from pg_constraint
-     where contype='f' limit 5;"   # smoke: FKs existem
-   ```
-
----
-
-## 6. Smoke test pós-restore (subir e provar fim-a-fim)
-
-1. Suba a stack de app de volta:
-
-   ```bash
-   $COMPOSE up -d api web worker-inbound worker-outbound worker-media \
-     worker-campaigns worker-flows scheduler agent-runtime
-   sleep 15
-   ```
-
-2. Health endpoints:
-
-   ```bash
-   curl -fsS http://localhost:3001/health
-   $COMPOSE exec -T api curl -fsS http://web:3000/api/healthz
-   $COMPOSE exec -T api curl -fsS http://agent-runtime:8001/healthz
-   ```
-
-3. Login + leitura tenant-scoped via UI (`app.<domínio>`): autentique com uma conta de teste, abra uma conversa, confirme que mensagens históricas aparecem.
-
-4. Workers drenando RabbitMQ sem erro (`mq.<domínio>` ou logs):
-
-   ```bash
-   $COMPOSE logs --tail=50 worker-inbound | grep -i -E 'ready|ack|processed'
-   ```
-
-5. Confirme que o cron de backup volta a operar (não quer ficar sem RPO após o incidente): cheque o `scheduler` no próximo ciclo ou force um backup manual de validação.
-
-**Resolvido quando:** §5 todo verde + §6 health 3/3 OK + login lê dados + workers sem erro.
-
----
-
-## 7. Rollback (o restore piorou as coisas)
-
-O §3 existe exatamente para isto.
-
-1. Pare a app de novo:
-
-   ```bash
-   $COMPOSE stop api web worker-inbound worker-outbound worker-media worker-campaigns worker-flows scheduler agent-runtime
-   psqlc -d postgres -c "select pg_terminate_backend(pid) from pg_stat_activity where datname='highermind';"
-   ```
-
-2. Restaure o safety-dump capturado no §3:
-
-   ```bash
-   $COMPOSE exec -T postgres dropdb   -U "$PG_USER" --if-exists highermind
-   $COMPOSE exec -T postgres createdb -U "$PG_USER" -O "$PG_USER" highermind
-   $COMPOSE exec -T postgres pg_restore --no-owner --no-privileges --exit-on-error \
-     -U "$PG_USER" -d highermind /dev/stdin < "$WORK/PRE-RESTORE-safety.pgcustom"
-   ```
-
-   Se você só tem a cópia física do volume (`PRE-RESTORE-volume.tgz`):
-
-   ```bash
-   $COMPOSE stop postgres
-   # Esvaziar o volume e reidratar a partir do tar (destrutivo — mas é o rollback intencional):
-   docker run --rm -v highermind_postgres-data:/data -v "$WORK":/bk alpine \
-     sh -c 'rm -rf /data/* && tar xzf /bk/PRE-RESTORE-volume.tgz -C /data'
-   $COMPOSE up -d postgres
-   ```
-
-3. Re-rode a validação do §5 contra o estado restaurado e reavalie a estratégia.
-
----
-
-## 8. Pós-incidente
-
-- Registre: qual backup foi usado, RPO real (delta entre o dump e o momento do incidente), RTO real.
-- Se o decrypt falhou em §5.3, documente a época de chave do backup e cruze com [`rotate-encryption-key.md`](./rotate-encryption-key.md).
-- Reforce a cadência de teste de restore mensal em staging (`INFRASTRUCTURE.md` §5.5) — incidente real é prova de que valeu a pena.
+A resposta certa para isso é backup contínuo com PITR (`wal-g` ou `pgbackrest`), que está fora do
+escopo do F57-S07 de propósito e merece slot próprio. Este runbook fecha o buraco agudo do deploy,
+não o problema geral de recuperação.

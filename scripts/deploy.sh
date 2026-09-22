@@ -38,8 +38,29 @@ if [ -d "$APP_DIR/.git" ]; then
   step "Atualizando código (branch $BRANCH)"
   git fetch --all --prune
   git checkout "$BRANCH"
+  BEFORE_SHA="$(git rev-parse HEAD)"
+  DEPLOY_SELF_SHA="$(git rev-parse "HEAD:scripts/deploy.sh" 2>/dev/null || echo none)"
   git reset --hard "origin/$BRANCH"
   ok "Código em $(git rev-parse --short HEAD)"
+
+  # --- 1.1 Re-exec se o PRÓPRIO script mudou -----------------------------------
+  # Armadilha real, custou um deploy: o bash lê este arquivo enquanto executa. O
+  # `git reset` acima troca o deploy.sh no disco, mas o que continua rodando é a
+  # versão ANTIGA — então qualquer melhoria no deploy (uma etapa de backup, por
+  # exemplo) só passa a valer no deploy SEGUINTE, silenciosamente.
+  #
+  # Pior: mudar o tamanho do arquivo durante a execução pode fazer o bash pular ou
+  # repetir trechos, porque ele guarda um offset de leitura.
+  #
+  # Re-executar a versão nova, uma vez, resolve. `LEADIUM_DEPLOY_REEXEC` impede
+  # laço infinito.
+  NEW_SELF_SHA="$(git rev-parse "HEAD:scripts/deploy.sh" 2>/dev/null || echo none)"
+  if [ "${LEADIUM_DEPLOY_REEXEC:-0}" != "1" ] && [ "$DEPLOY_SELF_SHA" != "$NEW_SELF_SHA" ]; then
+    c "1;33" "⚠ scripts/deploy.sh mudou neste pull (${BEFORE_SHA:0:7} → $(git rev-parse --short HEAD))."
+    step "Re-executando a versão nova do deploy.sh"
+    export LEADIUM_DEPLOY_REEXEC=1
+    exec bash "$APP_DIR/scripts/deploy.sh" "$BRANCH"
+  fi
 else
   c "1;33" "⚠ $APP_DIR não é um repositório git — pulando git pull (deploy do estado atual)."
 fi
@@ -72,6 +93,46 @@ for i in $(seq 1 30); do
   esac
   [ "$i" -eq 30 ] && { err "Postgres não subiu a tempo."; exit 1; }
   sleep 4
+done
+
+# --- 5.5 BACKUP PRÉ-MIGRATION (F57-S07) --------------------------------------
+# Dados são sagrados. Migration é a única etapa do deploy que altera o banco de
+# forma que `docker stack deploy` não desfaz: a imagem anterior volta com um
+# rollback, o schema não. Este dump é o que separa "voltamos em 5 minutos" de
+# "perdemos o histórico do cliente".
+#
+# FAIL-CLOSED: se o dump falhar, o deploy aborta ANTES de migrar.
+BACKUP_DIR="${BACKUP_DIR:-/opt/leadium/backups}"
+BACKUP_KEEP="${BACKUP_KEEP:-10}"
+step "Backup pré-migration ($BACKUP_DIR)"
+
+mkdir -p "$BACKUP_DIR"
+PG_CONTAINER="$(docker ps --format '{{.Names}}' | grep "^${STACK}_postgres" | head -1 || true)"
+[ -n "$PG_CONTAINER" ] || { err "Container do Postgres não encontrado — abortando ANTES de migrar."; exit 1; }
+
+BACKUP_FILE="$BACKUP_DIR/${STACK}-$(date -u +%Y%m%dT%H%M%SZ)-${APP_VERSION}.dump"
+# Formato custom (-Fc): comprimido e restaurável seletivamente por tabela.
+if ! docker exec "$PG_CONTAINER" pg_dump -U "$PG_USER" -d "$PG_DB" -Fc > "$BACKUP_FILE"; then
+  rm -f "$BACKUP_FILE"
+  err "pg_dump FALHOU. Deploy abortado antes das migrations — nada foi alterado no banco."
+  exit 1
+fi
+
+# Dump vazio é pior que dump nenhum: dá falsa segurança na hora do incidente.
+BACKUP_BYTES="$(wc -c < "$BACKUP_FILE")"
+if [ "$BACKUP_BYTES" -lt 1024 ]; then
+  err "Dump saiu com apenas ${BACKUP_BYTES} bytes — suspeito. Deploy abortado antes das migrations."
+  exit 1
+fi
+ok "Backup: $BACKUP_FILE ($(numfmt --to=iec "$BACKUP_BYTES" 2>/dev/null || echo "${BACKUP_BYTES}B"))"
+
+# A saída de restore fica IMPRESSA aqui de propósito: durante um incidente
+# ninguém quer procurar a sintaxe do pg_restore em runbook.
+c "1;33" "  Restore:  docker exec -i $PG_CONTAINER pg_restore -U $PG_USER -d $PG_DB --clean --if-exists < $BACKUP_FILE"
+
+# Retenção: mantém os N mais recentes.
+ls -1t "$BACKUP_DIR"/${STACK}-*.dump 2>/dev/null | tail -n +$((BACKUP_KEEP + 1)) | while read -r old_dump; do
+  rm -f "$old_dump" && c "0;90" "  poda: removido $(basename "$old_dump")"
 done
 
 # --- 6. Migrations (container efêmero na rede interna) -----------------------

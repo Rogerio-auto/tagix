@@ -39,12 +39,12 @@ nomes que expliquem a decisão do usuário. O novo criador deve falar em **Envio
 
 ## Definition of Done
 
-- [ ] Jornada de cinco etapas documentada com objetivo, estados e saída de cada etapa.
-- [ ] Glossário usuário → domínio técnico documentado (`Envio único` → `broadcast`, `Sequência` → `drip`).
-- [ ] `triggered` não aparece para o usuário enquanto não houver runtime específico.
-- [ ] Matriz de canal deixa claro que modelos aprovados pertencem ao WhatsApp oficial; Instagram e WAHA têm fluxos próprios.
-- [ ] Central de **Modelos de mensagem do WhatsApp** documentada: sincronizar, criar, acompanhar aprovação e usar em campanha.
-- [ ] Estados de loading, vazio, erro, permissão e canal desconectado têm texto acionável e sem jargão.
+- [x] Jornada de cinco etapas documentada com objetivo, estados e saída de cada etapa.
+- [x] Glossário usuário → domínio técnico documentado (`Envio único` → `broadcast`, `Sequência` → `drip`).
+- [x] `triggered` não aparece para o usuário enquanto não houver runtime específico.
+- [x] Matriz de canal deixa claro que modelos aprovados pertencem ao WhatsApp oficial; Instagram e WAHA têm fluxos próprios.
+- [x] Central de **Modelos de mensagem do WhatsApp** documentada: sincronizar, criar, acompanhar aprovação e usar em campanha.
+- [x] Estados de loading, vazio, erro, permissão e canal desconectado têm texto acionável e sem jargão.
 
 ## Validação
 
@@ -56,3 +56,13 @@ pnpm exec prettier --check docs/features/CAMPAIGNS.md docs/features/WHATSAPP_MES
 
 - A palavra técnica `template` pode existir em ajuda contextual, mas a interface principal usa **modelo de mensagem**.
 - Não prometer criação para Instagram: HSM é recurso do WhatsApp oficial.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (6):** tinham entrega, só faltava o registro. Evidência: `docs/features/CAMPAIGNS.md` tem a jornada de cinco etapas, o glossário `Envio único → broadcast` e a matriz de canais.
+- **Continuam em aberto (0):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

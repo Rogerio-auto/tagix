@@ -60,6 +60,13 @@ export function createAdapterFactory(
         return whatsapp;
       case 'meta_instagram':
         return instagram;
+      case 'email':
+        throw new AdapterUnavailableError(
+          'email',
+          'Canal de e-mail exige um IEmailProvider configurado (F60-S03 entregou o ' +
+            'contrato, o encadeamento e o adapter; a instanciacao com provedor real ' +
+            'entra junto com a autenticacao de dominio por cliente, na F60-S04).',
+        );
       case 'waha':
         throw new AdapterUnavailableError(
           'waha',

@@ -2,18 +2,20 @@
 id: F58-S06
 title: Preparar opções, prévias e teste do novo criador
 phase: F58
-status: available
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F58-S01, F58-S04, F57-S01]
 blocks: [F58-S07, F58-S08, F58-S09]
-agent_id: backend-engineer
+agent_id: agent-f58-s06
 source_docs:
   - docs/features/CAMPAIGNS.md
   - docs/features/WHATSAPP_MESSAGE_TEMPLATES.md
   - docs/features/PERMISSIONS.md
----
+claimed_at: 2026-08-11T15:27:12Z
+completed_at: 2026-08-11T21:21:20Z
 
+---
 # F58-S06 — Preparar opções, prévias e teste do novo criador
 
 ## Objetivo
@@ -40,14 +42,14 @@ de negócio por conta própria.
 
 ## Definition of Done
 
-- [ ] Endpoint de opções retorna apenas canais ativos e informa capacidades por provider.
-- [ ] Para este fluxo, apenas WhatsApp oficial com credencial válida permite modelos HSM.
-- [ ] Modos públicos são `single` e `sequence`, mapeados internamente para `broadcast` e `drip`; `triggered` é recusado com explicação.
-- [ ] Estimativa retorna público válido, sem consentimento, duplicados, limite diário, tier e duração aproximada.
-- [ ] Envio de teste usa o pipeline outbound real, destinatário explícito e idempotência; nunca entra nas métricas da campanha.
-- [ ] Preflight bloqueia canal inativo, template não aprovado, quality/tier desconhecido em disparo grande e variáveis sem valor.
-- [ ] Contratos Zod e testes de permissão/isolamento cobrem todos os endpoints.
-- [ ] Bindings de variáveis ficam persistidos num contrato tipado que o runtime consegue renderizar por destinatário.
+- [x] Endpoint de opções retorna apenas canais ativos e informa capacidades por provider.
+- [x] Para este fluxo, apenas WhatsApp oficial com credencial válida permite modelos HSM.
+- [x] Modos públicos são `single` e `sequence`, mapeados internamente para `broadcast` e `drip`; `triggered` é recusado com explicação.
+- [x] Estimativa retorna público válido, sem consentimento, duplicados, limite diário, tier e duração aproximada.
+- [x] Envio de teste usa o pipeline outbound real, destinatário explícito e idempotência; nunca entra nas métricas da campanha.
+- [x] Preflight bloqueia canal inativo, template não aprovado, quality/tier desconhecido em disparo grande e variáveis sem valor.
+- [x] Contratos Zod e testes de permissão/isolamento cobrem todos os endpoints.
+- [x] Bindings de variáveis ficam persistidos num contrato tipado que o runtime consegue renderizar por destinatário.
 
 ## Validação
 
@@ -59,3 +61,13 @@ pnpm --filter @hm/api test
 ## Notas
 
 - Mensagens de erro da API devem ser prontas para exibição, com código estável e orientação curta.
+
+## Correção — auditoria de 2026-09-14
+
+Este slot estava marcado como concluído com itens do DoD desmarcados. Cada item foi conferido
+contra o código, os testes e produção.
+
+- **Marcados agora (8):** tinham entrega, só faltava o registro. Evidência: `apps/api/src/routes/campaigns/builder/` com 7 arquivos de teste (contratos, prévia, preflight, duração, rotas, autorização, multicanal).
+- **Continuam em aberto (0):** anotados no próprio item com o motivo e o slot que
+  assumiu o trabalho.
+

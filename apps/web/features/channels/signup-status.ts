@@ -60,6 +60,49 @@ export function isMetaSignupConfigured(): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Login da conexão Meta por workspace (F69-S02 → F69-S12)
+// ---------------------------------------------------------------------------
+
+export type MetaLoginEnvKey = 'NEXT_PUBLIC_META_APP_ID' | 'NEXT_PUBLIC_META_LOGIN_CONFIG_ID';
+
+export interface MetaLoginConfig {
+  /** `true` quando o login da conexão pode ser aberto neste build. */
+  readonly configured: boolean;
+  readonly missing: readonly MetaLoginEnvKey[];
+  /** ID da configuração do Facebook Login for Business (público). */
+  readonly configId: string | null;
+}
+
+/**
+ * Núcleo puro da configuração do login da conexão.
+ *
+ * **Configuração própria, separada da do Embedded Signup do WhatsApp.** O app Leadium é do tipo
+ * Business, e nele a Meta exige `config_id` (Facebook Login for Business) no lugar de `scope`. Com
+ * `scope`, o login abre, mas o `code` volta atrelado a uma `redirect_uri` interna do SDK e a troca no
+ * servidor falha com `100/36008` — foi o erro da primeira conexão real (F69-S12). A configuração do
+ * WhatsApp pede outro conjunto de permissões e abre o fluxo de cadastro de número; reaproveitá-la
+ * aqui pediria a coisa errada.
+ */
+export function describeMetaLoginConfig(
+  appId: string | undefined,
+  loginConfigId: string | undefined,
+): MetaLoginConfig {
+  const missing: MetaLoginEnvKey[] = [];
+  if (typeof appId !== 'string' || appId.trim() === '') missing.push('NEXT_PUBLIC_META_APP_ID');
+  const configId = typeof loginConfigId === 'string' ? loginConfigId.trim() : '';
+  if (configId === '') missing.push('NEXT_PUBLIC_META_LOGIN_CONFIG_ID');
+  return { configured: missing.length === 0, missing, configId: configId === '' ? null : configId };
+}
+
+/** Configuração efetiva deste build (acesso literal para o Next inlinear). */
+export function getMetaLoginConfig(): MetaLoginConfig {
+  return describeMetaLoginConfig(
+    process.env['NEXT_PUBLIC_META_APP_ID'],
+    process.env['NEXT_PUBLIC_META_LOGIN_CONFIG_ID'],
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Falhas do signup
 // ---------------------------------------------------------------------------
 

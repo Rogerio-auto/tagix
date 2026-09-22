@@ -1,3 +1,4 @@
+import type { OutboundDecision } from '@hm/shared';
 /**
  * Worker-campaigns: tick que conduz o envio (CAMPAIGNS.md 7, 8).
  *
@@ -108,6 +109,29 @@ export interface CampaignTickPorts {
     limit: number,
     now: Date,
   ): Promise<PendingDispatch[]>;
+  /**
+   * F59-S05 — portao de consentimento, ANTES de enfileirar.
+   *
+   * Campanha e sempre `marketing`: e o unico produtor que marca assim, e e o que
+   * carrega a exigencia de consentimento (AGENCIA_PLAN §4.4). Checar aqui, e nao
+   * so no worker outbound, evita enfileirar mil mensagens que serao recusadas
+   * uma a uma la na frente.
+   */
+  checkConsent(
+    campaign: RunningCampaign,
+    dispatch: PendingDispatch,
+    now: Date,
+  ): Promise<OutboundDecision>;
+  /**
+   * F59-S05 — remove o recipient da execucao por supressao/falta de consentimento.
+   * Diferente de `invalid` (dado ruim): aqui o dado esta certo e a pessoa
+   * simplesmente nao pode receber.
+   */
+  denyRecipient(
+    campaign: RunningCampaign,
+    dispatch: PendingDispatch,
+    reason: string,
+  ): Promise<void>;
   enqueueDelivery(
     campaign: RunningCampaign,
     dispatch: PendingDispatch,
@@ -151,12 +175,18 @@ export interface CampaignTickResult {
   quotaExhausted: number;
   /** Recipients marcados failed por dado inviavel. */
   invalid: number;
+  /** F59-S05: recipients removidos por supressao/falta de consentimento. */
+  denied: number;
+  /** F59-S05: recipients adiados por janela horaria (tentam no proximo tick). */
+  deferred: number;
 }
 
 export interface ProcessCampaignResult {
   dispatched: number;
   duplicates: number;
   invalid: number;
+  denied: number;
+  deferred: number;
   paused: boolean;
   rescheduled: boolean;
   completed: boolean;
@@ -168,6 +198,8 @@ function emptyResult(): ProcessCampaignResult {
     dispatched: 0,
     duplicates: 0,
     invalid: 0,
+    denied: 0,
+    deferred: 0,
     paused: false,
     rescheduled: false,
     completed: false,
@@ -235,6 +267,35 @@ export async function processCampaign(
 
   const batch = await ports.pendingRecipients(campaign, limit, now);
   for (const d of batch) {
+    // F59-S05: o portao corre ANTES do enqueue. Recusa aqui nao vira mensagem
+    // na fila, entao nao gasta credito de provider nem polui a metrica de envio.
+    const decision = await ports.checkConsent(campaign, d, now);
+    if (!decision.allowed) {
+      if (decision.reason === 'quiet_hours') {
+        // Fora da janela legal no fuso DO CONTATO. Nao descarta: o recipient
+        // continua `pending` e o proximo tick tenta de novo — que e exatamente
+        // o reagendamento, sem inventar mecanismo novo.
+        result.deferred += 1;
+        logger.info('campaigns: recipient adiado por janela horaria', {
+          campaignId: campaign.id,
+          recipientId: d.recipientId,
+          timezone: decision.timezone,
+          retryAt: decision.retryAt?.toISOString(),
+        });
+        continue;
+      }
+      // Supressao ou falta de consentimento nao se resolve com o tempo:
+      // remove da execucao para nao tentar para sempre.
+      result.denied += 1;
+      await ports.denyRecipient(campaign, d, decision.reason);
+      logger.warn('campaigns: recipient removido pelo portao de consentimento', {
+        campaignId: campaign.id,
+        recipientId: d.recipientId,
+        reason: decision.reason,
+      });
+      continue;
+    }
+
     const key = deliveryIdempotencyKey(campaign.id, d.recipientId, d.stepId);
     const outcome = await ports.enqueueDelivery(campaign, d, key, now);
     switch (outcome.kind) {
@@ -318,6 +379,8 @@ export async function runCampaignTick(
     completed: 0,
     quotaExhausted: 0,
     invalid: 0,
+    denied: 0,
+    deferred: 0,
   };
 
   for (const campaign of due) {

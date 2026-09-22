@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { Metadata, Viewport } from 'next';
 import { Chakra_Petch, Manrope, Orbitron, Rajdhani } from 'next/font/google';
 import { Providers } from './providers';
+import { RegisterServiceWorker } from '@/shared/pwa';
 import './globals.css';
 
 const head = Rajdhani({ subsets: ['latin'], weight: ['500', '600', '700'], variable: '--font-head-next', display: 'swap' });
@@ -58,6 +59,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <Providers>{children}</Providers>
+        {/* F61-S01: registra o SW depois do primeiro paint, só em produção. */}
+        <RegisterServiceWorker />
       </body>
     </html>
   );

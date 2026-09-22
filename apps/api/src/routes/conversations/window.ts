@@ -18,8 +18,40 @@ import { Router, type Request, type Response } from 'express';
 import { and, desc, eq } from 'drizzle-orm';
 import { assertConversationVisible, schema } from '@hm/db';
 import type { IgMessageTag } from '@hm/channels';
-import type { Role } from '@hm/shared';
+import type { OutboundDecision, Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
+import { checkOutboundInTx } from '../../services/consent';
+
+/**
+ * Restrição de envio do canal (F60-S02 — CANAIS_PLAN §3.3).
+ *
+ * A trava do composer era específica de Meta ("janela 24h"). SMS tem janela
+ * horária legal, e-mail não tem janela nenhuma, e um contato suprimido não pode
+ * receber por canal nenhum. A UI precisa de UM contrato que responda "posso
+ * enviar agora?" e, quando não, **por quê** e **quando volta a poder**.
+ *
+ * `window` continua como está para não quebrar a UI atual; `restriction` é o
+ * contrato novo, que combina a janela do provider com o portão da F59.
+ */
+export interface SendRestriction {
+  canSend: boolean;
+  /**
+   * `provider_window` = regra do provider (Meta 24h). Os demais vêm do portão de
+   * consentimento e são o enum estável de `OutboundDenyReason`.
+   */
+  reason:
+    | 'ok'
+    | 'provider_window'
+    | 'suppressed'
+    | 'no_consent'
+    | 'quiet_hours'
+    | 'registration_pending'
+    | 'channel_disabled';
+  /** Pronta para exibir ao atendente. */
+  message: string;
+  /** ISO de quando volta a poder; `null` quando não se resolve com o tempo. */
+  retryAt: string | null;
+}
 
 /** Provider técnico do canal (espelha channels_provider_chk). */
 type Provider = 'meta_whatsapp' | 'meta_instagram' | 'waha';
@@ -86,6 +118,53 @@ function computeWindow(
   return { provider, isOpen: false, expiresAt, requiresTemplate: false, messageTag: 'HUMAN_AGENT' };
 }
 
+/**
+ * Combina a janela do provider com a decisão do portão.
+ *
+ * **O portão vence.** Contato suprimido não recebe nem dentro da janela de 24h —
+ * a janela diz o que a Meta permite, o portão diz o que a pessoa consentiu, e
+ * consentimento é o mais forte dos dois.
+ */
+export function toRestriction(
+  state: WindowState,
+  decision: OutboundDecision | null,
+): SendRestriction {
+  if (decision !== null && !decision.allowed) {
+    return {
+      canSend: false,
+      reason: decision.reason,
+      message: decision.message,
+      retryAt: decision.retryAt?.toISOString() ?? null,
+    };
+  }
+
+  if (state.isOpen) {
+    return { canSend: true, reason: 'ok', message: '', retryAt: null };
+  }
+
+  // Fora da janela do provider, mas há caminho: template (WA) ou tag (IG). O
+  // composer não fica bloqueado — muda de modo. `canSend: true` com motivo
+  // declarado deixa a UI escolher o que oferecer.
+  if (state.requiresTemplate) {
+    return {
+      canSend: true,
+      reason: 'provider_window',
+      message: 'Fora da janela de 24 horas: só um modelo aprovado reabre a conversa.',
+      retryAt: null,
+    };
+  }
+  if (state.messageTag !== null) {
+    return {
+      canSend: true,
+      reason: 'provider_window',
+      message: 'Fora da janela de 24 horas: o envio usará a tag de atendimento humano.',
+      retryAt: null,
+    };
+  }
+
+  return { canSend: true, reason: 'ok', message: '', retryAt: null };
+}
+
 function isProvider(value: string): value is Provider {
   return value === 'meta_whatsapp' || value === 'meta_instagram' || value === 'waha';
 }
@@ -121,7 +200,10 @@ export function createWindowRouter(): Router {
         }
         // Provider vem do canal da conversa (RLS-escopado por workspace).
         const [conv] = await tx
-          .select({ provider: schema.channels.provider })
+          .select({
+            provider: schema.channels.provider,
+            contactId: schema.conversations.contactId,
+          })
           .from(schema.conversations)
           .innerJoin(schema.channels, eq(schema.conversations.channelId, schema.channels.id))
           .where(eq(schema.conversations.id, conversationId))
@@ -142,7 +224,11 @@ export function createWindowRouter(): Router {
           .orderBy(desc(schema.messages.createdAt))
           .limit(1);
 
-        return { provider: conv.provider, lastInboundAt: lastInbound?.createdAt ?? null };
+        return {
+          provider: conv.provider,
+          contactId: conv.contactId,
+          lastInboundAt: lastInbound?.createdAt ?? null,
+        };
       });
 
       if (!result) {
@@ -154,8 +240,29 @@ export function createWindowRouter(): Router {
         return;
       }
 
-      const state = computeWindow(result.provider, result.lastInboundAt, new Date());
-      res.json({ window: state });
+      const provider = result.provider;
+      const state = computeWindow(provider, result.lastInboundAt, new Date());
+      const contactId = result.contactId;
+
+      // Conversa sem contato associado (grupo, thread de comentário órfã): não há
+      // consentimento a consultar. A janela do provider decide sozinha.
+      if (contactId === null) {
+        res.json({ window: state, restriction: toRestriction(state, null) });
+        return;
+      }
+
+      // O composer é atendente humano respondendo numa conversa aberta:
+      // TRANSACIONAL, sempre. Marketing sai por campanha, não por aqui.
+      const decision = await req.scoped!((tx) =>
+        checkOutboundInTx(tx, {
+          workspaceId,
+          contactId,
+          channel: provider,
+          purpose: 'transactional',
+        }),
+      );
+
+      res.json({ window: state, restriction: toRestriction(state, decision) });
     },
   );
 

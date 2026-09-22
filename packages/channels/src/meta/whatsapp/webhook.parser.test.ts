@@ -253,3 +253,115 @@ describe('parseWhatsAppWebhook', () => {
     expect(events).toEqual([]);
   });
 });
+
+/**
+ * F61-S12 — o nome do remetente.
+ *
+ * Este bloco existe porque 199 dos 200 contatos de produção estavam sem nome: o
+ * perfil vem em `value.contacts[]`, irmão de `messages`, e o parser só navegava
+ * `messages` e `statuses`.
+ */
+describe('nome de perfil do remetente', () => {
+  it('captura profile.name de value.contacts', () => {
+    const [ev] = parseWhatsAppWebhook(
+      envelope({
+        contacts: [{ profile: { name: 'Ana Souza' }, wa_id: '5511999999999' }],
+        messages: [
+          {
+            from: '5511999999999',
+            id: 'wamid.A',
+            timestamp: '1700000000',
+            type: 'text',
+            text: { body: 'quanto fica?' },
+          },
+        ],
+      }),
+    );
+    expect(ev?.type).toBe('message');
+    expect(ev && 'contactName' in ev ? ev.contactName : undefined).toBe('Ana Souza');
+  });
+
+  it('casa por wa_id — nunca assume contacts[0]', () => {
+    // Um `value` pode trazer mensagens de contatos diferentes. Pegar o primeiro
+    // colaria o nome de uma pessoa na conversa de outra.
+    const eventos = parseWhatsAppWebhook(
+      envelope({
+        contacts: [
+          { profile: { name: 'Ana' }, wa_id: '5511111111111' },
+          { profile: { name: 'Bruno' }, wa_id: '5522222222222' },
+        ],
+        messages: [
+          {
+            from: '5522222222222',
+            id: 'wamid.B',
+            timestamp: '1700000000',
+            type: 'text',
+            text: { body: 'oi' },
+          },
+        ],
+      }),
+    );
+    const ev = eventos[0];
+    expect(ev && 'contactName' in ev ? ev.contactName : undefined).toBe('Bruno');
+  });
+
+  it('sem contacts, o evento segue válido e sem nome', () => {
+    // O envelope sem `contacts` é comum (echo, reprocessamento). A mensagem não
+    // pode ser perdida por causa disso.
+    const [ev] = parseWhatsAppWebhook(
+      envelope({
+        messages: [
+          {
+            from: '5511999999999',
+            id: 'wamid.C',
+            timestamp: '1700000000',
+            type: 'text',
+            text: { body: 'oi' },
+          },
+        ],
+      }),
+    );
+    expect(ev?.type).toBe('message');
+    expect(ev && 'contactName' in ev ? ev.contactName : undefined).toBeUndefined();
+  });
+
+  it('nome em branco não vira nome', () => {
+    // Gravar "" trocaria "sem nome" por "com nome vazio": some da tela E some do
+    // diagnóstico.
+    const [ev] = parseWhatsAppWebhook(
+      envelope({
+        contacts: [{ profile: { name: '   ' }, wa_id: '5511999999999' }],
+        messages: [
+          {
+            from: '5511999999999',
+            id: 'wamid.D',
+            timestamp: '1700000000',
+            type: 'text',
+            text: { body: 'oi' },
+          },
+        ],
+      }),
+    );
+    expect(ev && 'contactName' in ev ? ev.contactName : undefined).toBeUndefined();
+  });
+
+  it('contacts malformado não derruba o parse', () => {
+    const eventos = parseWhatsAppWebhook(
+      envelope({
+        contacts: ['lixo', null, { wa_id: '5511999999999' }, { profile: 'x' }],
+        messages: [
+          {
+            from: '5511999999999',
+            id: 'wamid.E',
+            timestamp: '1700000000',
+            type: 'text',
+            text: { body: 'oi' },
+          },
+        ],
+      }),
+    );
+    expect(eventos).toHaveLength(1);
+    const ev = eventos[0];
+    expect(ev && 'contactName' in ev ? ev.contactName : undefined).toBeUndefined();
+  });
+});

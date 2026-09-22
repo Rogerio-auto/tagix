@@ -187,3 +187,25 @@ docker exec $(docker ps -qf name=leadium_postgres) \
   - CI (GitHub Actions) buildando/pushando imagens p/ registry em vez de buildar no nó.
   - `pgAdmin`/RabbitMQ UI atrás do Traefik com auth, se necessário.
   - Backups automáticos (cron) do Postgres da Leadium.
+
+---
+
+## Backup pré-migration (F57-S07)
+
+Desde 2026-09-09, `deploy.sh` faz `pg_dump` **antes** de rodar migrations, em
+`/opt/leadium/backups`, nomeado por timestamp UTC + sha do commit implantado.
+
+**É fail-closed:** se o dump falhar — ou sair suspeito de vazio (< 1 KB) — o deploy **aborta antes
+de tocar no banco**. Um deploy que não roda é problema de minutos; uma migration sobre dado sem
+backup é problema que pode não ter volta.
+
+O comando de restore é impresso na saída do próprio deploy, de propósito: durante um incidente
+ninguém quer procurar a sintaxe do `pg_restore` em documentação.
+
+Retenção: 10 dumps (`BACKUP_KEEP`), com poda automática. Caminho ajustável por `BACKUP_DIR`.
+
+Procedimento completo: [`restore-from-backup.md`](./restore-from-backup.md).
+
+**O que ele não é:** backup contínuo. É um retrato do momento do deploy — se o problema aparecer
+horas depois, o restore completo perde essas horas. PITR (`wal-g`/`pgbackrest`) é a resposta certa
+para isso e merece slot próprio.

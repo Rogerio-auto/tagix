@@ -6,9 +6,11 @@ import { Router } from 'express';
 import { createCampaignsCrudRouter } from './crud';
 import { createCampaignsLifecycleRouter } from './lifecycle';
 import { createCampaignsMetricsRouter } from './metrics';
+import { createCampaignBuilderRouter } from './builder';
 
 export function createCampaignsRouter(): Router {
   const router = Router();
+  router.use(createCampaignBuilderRouter());
   router.use(createCampaignsLifecycleRouter());
   router.use(createCampaignsMetricsRouter());
   router.use(createCampaignsCrudRouter());

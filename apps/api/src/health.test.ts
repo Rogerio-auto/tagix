@@ -19,6 +19,8 @@ let connectMqImpl: () => Promise<ResilientMqHandle> = () =>
 
 const dbExecute = vi.fn<() => Promise<unknown>>(() => Promise.resolve(undefined));
 const redisPing = vi.fn<() => Promise<string>>(() => Promise.resolve('PONG'));
+/** F61-S11: o probe de storage é um `put` de verdade — aqui é o único mock que decide. */
+const storagePut = vi.fn<() => Promise<void>>(() => Promise.resolve());
 
 vi.mock('./config', () => ({
   loadConfig: () => ({
@@ -41,12 +43,16 @@ vi.mock('ioredis', () => ({
   },
 }));
 
+vi.mock('@hm/storage', () => ({
+  createStorage: () => ({ put: storagePut }),
+}));
+
 vi.mock('@hm/shared/mq', () => ({
   getMqHealth: (): MqHealth => mqHealthValue,
   connectMq: (): Promise<ResilientMqHandle> => connectMqImpl(),
 }));
 
-const { healthHandler, closeHealth } = await import('./health');
+const { healthHandler, closeHealth, awaitStorageProbe } = await import('./health');
 
 // --- Helpers ---------------------------------------------------------------
 interface Captured {
@@ -93,6 +99,7 @@ beforeEach(() => {
   connectMqImpl = () => Promise.reject(new Error('connectMq não configurado no teste'));
   dbExecute.mockClear().mockResolvedValue(undefined);
   redisPing.mockClear().mockResolvedValue('PONG');
+  storagePut.mockClear().mockResolvedValue(undefined);
 });
 
 afterEach(async () => {
@@ -157,5 +164,85 @@ describe('GET /health — RabbitMQ', () => {
     expect(res.status).toBe(503);
     expect(res.body['db']).toBe('down');
     expect(res.body['rabbitmq']).toBe('down');
+  });
+});
+
+/**
+ * F61-S11 — o `/health` sabe dizer que perdeu o storage.
+ *
+ * Regressão do incidente de 2026-09-09: o token do R2 foi revogado e a API seguiu
+ * respondendo 200 "ok" por dias. Nenhuma mídia subia, nenhuma signed URL abria, e
+ * a primeira notícia veio de um print de cliente.
+ */
+describe('GET /health — storage', () => {
+  // Broker saudável em todos: isola o eixo storage (mesmo padrão do bloco acima).
+  beforeEach(() => {
+    mqHealthValue = { healthy: true, connections: [fakeHandle(true).state()] };
+  });
+
+  it('a PRIMEIRA chamada devolve "checking" e não espera pela sondagem', async () => {
+    // Regressão do incidente de 2026-09-09: o probe aguardava o PUT e reportava
+    // `down` ao estourar o prazo. Em produção isso marcou como caído um R2 vivo,
+    // porque a primeira chamada do processo paga a inicialização do cliente S3.
+    // Um alarme que mente é pior que nenhum: ensina a ser ignorado.
+    const res = await callHealth();
+    expect(res.body['storage']).toBe('checking');
+    expect(res.body['status']).toBe('ok');
+  });
+
+  it('"checking" NÃO degrada — container recém-subido não parece doente', async () => {
+    const res = await callHealth();
+    expect(res.status).toBe(200);
+    expect(res.body['status']).toBe('ok');
+  });
+
+  it('depois da sondagem, reporta connected', async () => {
+    await callHealth();
+    await awaitStorageProbe();
+    const res = await callHealth();
+    expect(res.body['storage']).toBe('connected');
+    expect(res.body['status']).toBe('ok');
+  });
+
+  it('credencial morta (put rejeita) → degraded, storage down', async () => {
+    storagePut.mockRejectedValue(new Error('AccessDenied'));
+    await callHealth();
+    await awaitStorageProbe();
+    const res = await callHealth();
+    expect(res.body['storage']).toBe('down');
+    expect(res.body['status']).toBe('degraded');
+  });
+
+  it('storage caído NÃO derruba o /health para 503', async () => {
+    // 503 tira a API de rotação. Uma plataforma inteira fora do ar é pior que
+    // mídia que não carrega — o alarme informa sem causar um segundo incidente.
+    storagePut.mockRejectedValue(new Error('AccessDenied'));
+    await callHealth();
+    await awaitStorageProbe();
+    const res = await callHealth();
+    expect(res.status).toBe(200);
+  });
+
+  it('assinar URL não vale como probe — só um write prova a credencial', async () => {
+    // `getSignedUrl` é operação local: passa com credencial revogada. Se um dia
+    // alguém trocar o probe por ele, este teste cai.
+    await callHealth();
+    await awaitStorageProbe();
+    expect(storagePut).toHaveBeenCalledTimes(1);
+  });
+
+  it('o resultado é cacheado — /health a cada 5s não vira 1 write a cada 5s', async () => {
+    await callHealth();
+    await awaitStorageProbe();
+    await callHealth();
+    await callHealth();
+    expect(storagePut).toHaveBeenCalledTimes(1);
+  });
+
+  it('chamadas simultâneas não disparam sondagens paralelas', async () => {
+    // Sem o guard de "em voo", dez healthchecks concorrentes viram dez PUTs.
+    await Promise.all([callHealth(), callHealth(), callHealth()]);
+    await awaitStorageProbe();
+    expect(storagePut).toHaveBeenCalledTimes(1);
   });
 });

@@ -39,6 +39,12 @@ import { createUploadsRouter } from './routes/uploads';
 import { createOnboardingRouter } from './routes/onboarding';
 import { createCalendarRouter } from './routes/calendar';
 import { createDashboardRouter } from './routes/dashboard';
+import { createPushRouter } from './routes/push';
+import { createMetaDataRequestsRouter } from './routes/meta/data-requests';
+import { createMetaConnectionsRouter } from './routes/meta/connections';
+import { createLeadSourcesRouter } from './routes/meta/lead-sources';
+import { metaConnectionsRepo } from '@hm/db';
+import { platformSecrets } from './secrets';
 import { createMembersMeRouter } from './routes/members/me';
 import { createWorkspaceSettingsRouter } from './routes/workspace';
 import { createOrgSettingsRouter } from './routes/org';
@@ -121,6 +127,20 @@ export function createApp(): Express {
   app.get('/health', healthHandler);
   // Scrape Prometheus (F10-S01): fora de auth/api-key (rede interna).
   app.get('/metrics', metricsHandler);
+  // F69-S01: callbacks de dados de usuário que a Meta chama SEM sessão (exclusão e
+  // desautorização). Antes do auth, porque não há login; a prova de origem é o
+  // `signed_request` assinado com o App Secret.
+  app.use(
+    createMetaDataRequestsRouter({
+      appSecret: () => platformSecrets.get('meta_app_secret'),
+      publicAppUrl: () => process.env['APP_PUBLIC_URL'] ?? 'https://app.leadium.com.br',
+      // F69-S02: agora que a conexão registra o ID de usuário da Meta, os
+      // callbacks têm o que encontrar — em qualquer workspace, via as funções
+      // SECURITY DEFINER da migration 0079.
+      deleteForMetaUser: (metaUserId) => metaConnectionsRepo.forgetMetaUser(metaUserId),
+      revokeForMetaUser: (metaUserId) => metaConnectionsRepo.revokeMetaUser(metaUserId),
+    }),
+  );
   // Endpoint interno service-to-service (runtime Python → Node): auth por token
   // compartilhado (AGENT_RUNTIME_TOKEN), NÃO por sessão de usuário. Ver F2-S07/S20.
   app.use(
@@ -194,6 +214,12 @@ export function createApp(): Express {
   app.use(createCalendarRouter());
   // Dashboard (F8-S02): GET /dashboard/me role-filtered + drill-down /metrics/:key.
   app.use(createDashboardRouter());
+  // F61-S03 — assinatura de Web Push por dispositivo.
+  app.use(createPushRouter());
+  // F69-S02 — conexão Meta por workspace (casos de uso do app).
+  app.use(createMetaConnectionsRouter());
+  // F69-S03 — páginas que enviam leads de anúncio.
+  app.use(createLeadSourcesRouter());
   // Settings pessoais (F8-S06): PATCH /members/me + password + sessions.
   app.use(createMembersMeRouter());
   // Dashboard customização (F8-S04): layout pessoal + config de obrigatórios/limites.

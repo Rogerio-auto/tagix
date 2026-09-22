@@ -38,6 +38,14 @@ function green(): ChannelHealth {
  */
 function makePorts(over: Partial<CampaignTickPorts> = {}): CampaignTickPorts {
   return {
+    // F59-S05: o portao roda antes de cada enqueue. Default permissivo aqui —
+    // a conformidade tem testes proprios; estes cobrem ritmo, cota e estado.
+    checkConsent: vi.fn(async () => ({
+      allowed: true as const,
+      usedFallbackTimezone: false,
+      timezone: 'America/Sao_Paulo',
+    })),
+    denyRecipient: vi.fn(async () => undefined),
     listDueCampaigns: vi.fn(async () => [CAMP]),
     fetchQuality: vi.fn(async () => green()),
     reapRecipients: vi.fn(async () => ({ recovered: 0, finalized: 0 })),
@@ -129,6 +137,90 @@ describe('processCampaign', () => {
     expect(ports.applyErrorAction).toHaveBeenCalledOnce();
     expect(r.paused).toBe(true);
     expect(ports.pauseCampaign).toHaveBeenCalled();
+  });
+});
+
+describe('processCampaign — portao de consentimento (F59-S05)', () => {
+  it('supressao remove o recipient da execucao e NAO enfileira', async () => {
+    const enqueueDelivery = vi.fn(async () => ({ kind: 'enqueued' }) as const);
+    const denyRecipient = vi.fn(async () => undefined);
+    const ports = makePorts({
+      pendingRecipients: vi.fn(async () => [D]),
+      enqueueDelivery,
+      denyRecipient,
+      checkConsent: vi.fn(async () => ({
+        allowed: false as const,
+        reason: 'suppressed' as const,
+        message: 'suprimido',
+        usedFallbackTimezone: false,
+        timezone: 'America/New_York',
+      })),
+    });
+
+    const r = await processCampaign(CAMP, { ports, logger: makeLogger() }, new Date());
+
+    expect(enqueueDelivery).not.toHaveBeenCalled();
+    expect(denyRecipient).toHaveBeenCalledOnce();
+    expect(r.denied).toBe(1);
+    expect(r.dispatched).toBe(0);
+  });
+
+  it('falta de consentimento tambem remove — nao se resolve com o tempo', async () => {
+    const denyRecipient = vi.fn(async () => undefined);
+    const ports = makePorts({
+      pendingRecipients: vi.fn(async () => [D]),
+      denyRecipient,
+      checkConsent: vi.fn(async () => ({
+        allowed: false as const,
+        reason: 'no_consent' as const,
+        message: 'sem consentimento',
+        usedFallbackTimezone: false,
+        timezone: 'America/New_York',
+      })),
+    });
+
+    const r = await processCampaign(CAMP, { ports, logger: makeLogger() }, new Date());
+    expect(r.denied).toBe(1);
+    expect(denyRecipient).toHaveBeenCalledWith(CAMP, D, 'no_consent');
+  });
+
+  it('janela horaria ADIA sem descartar: recipient nao e removido nem enfileirado', async () => {
+    // O recipient continua `pending`; o proximo tick tenta de novo. E o
+    // reagendamento, sem inventar mecanismo novo — e o oposto de descartar.
+    const enqueueDelivery = vi.fn(async () => ({ kind: 'enqueued' }) as const);
+    const denyRecipient = vi.fn(async () => undefined);
+    const ports = makePorts({
+      pendingRecipients: vi.fn(async () => [D]),
+      enqueueDelivery,
+      denyRecipient,
+      checkConsent: vi.fn(async () => ({
+        allowed: false as const,
+        reason: 'quiet_hours' as const,
+        message: 'fora da janela',
+        retryAt: new Date('2026-07-16T12:00:00Z'),
+        usedFallbackTimezone: false,
+        timezone: 'America/New_York',
+      })),
+    });
+
+    const r = await processCampaign(CAMP, { ports, logger: makeLogger() }, new Date());
+
+    expect(enqueueDelivery).not.toHaveBeenCalled();
+    expect(denyRecipient).not.toHaveBeenCalled();
+    expect(r.deferred).toBe(1);
+    expect(r.denied).toBe(0);
+  });
+
+  it('o portao roda ANTES do enqueue, uma vez por recipient', async () => {
+    const checkConsent = vi.fn(async () => ({
+      allowed: true as const,
+      usedFallbackTimezone: false,
+      timezone: 'America/Sao_Paulo',
+    }));
+    const ports = makePorts({ pendingRecipients: vi.fn(async () => [D]), checkConsent });
+
+    await processCampaign(CAMP, { ports, logger: makeLogger() }, new Date());
+    expect(checkConsent).toHaveBeenCalledOnce();
   });
 });
 

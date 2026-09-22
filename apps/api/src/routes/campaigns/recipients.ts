@@ -1,7 +1,27 @@
 /**
- * Recipients de campanha: import em massa + opt-in batch (CAMPAIGNS.md 12.3, 13).
+ * Público da campanha: importação em massa + registro de consentimento
+ * (CAMPAIGNS.md 12.3, 13 · F58-S08).
+ *
  * POST /api/campaigns/:id/recipients/bulk        (campaign.upload_recipients)
  * POST /api/campaigns/:id/recipients/bulk-opt-in (campaign.bulk_optin)
+ *
+ * ## Em lote, não linha a linha (F58-S08)
+ *
+ * A versão anterior fazia um SELECT e um INSERT **por linha**: mil contatos eram
+ * mais de dois mil round-trips ao banco, dentro de uma transação. Numa lista de
+ * verdade isso não é lentidão, é timeout — e timeout no meio da importação deixa
+ * o público pela metade sem ninguém saber quais faltaram.
+ *
+ * Agora são poucas consultas, independentemente do tamanho: uma busca os contatos
+ * que já existem, uma insere os novos, uma vincula todos à campanha.
+ *
+ * ## Consentimento exige ORIGEM
+ *
+ * `source` é obrigatório e não-vazio no registro de consentimento. Marcar mil
+ * pessoas como "aceitaram receber" sem dizer onde elas aceitaram não é um
+ * consentimento: é uma afirmação sem prova. No dia em que alguém reclamar — e nos
+ * EUA isso vem com multa por mensagem —, a origem é a única coisa que sustenta a
+ * defesa.
  */
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
@@ -30,7 +50,15 @@ const bulkSchema = z
     source: z.string().trim().max(200).optional(),
     optInOnImport: z.boolean().optional(),
   })
-  .refine((d) => d.rows || d.csv, { message: 'rows ou csv e obrigatorio' });
+  .refine((d) => d.rows || d.csv, { message: 'rows ou csv e obrigatorio' })
+  // Registrar consentimento na importação exige a mesma prova que registrá-lo
+  // depois: sem origem, o `opt_in_source` viraria NULL e o registro não
+  // sustentaria nada. O caminho continua aberto — só não em silêncio.
+  .refine((d) => d.optInOnImport !== true || (d.source ?? '').trim().length >= 3, {
+    message:
+      'Para registrar consentimento na importação, diga de onde ele veio (ex.: formulário do site).',
+    path: ['source'],
+  });
 
 interface ParsedRow {
   phone: string;
@@ -61,9 +89,16 @@ export function parseCsv(csv: string): ParsedRow[] {
   return out;
 }
 
+/**
+ * Classificação de uma linha, para o relatório dizer o que aconteceu com ela.
+ *
+ * `duplicated` é separado de `reused` de propósito: "o mesmo telefone apareceu
+ * duas vezes no SEU arquivo" e "este contato já existia aqui" são problemas
+ * diferentes, e só o primeiro é um erro do arquivo.
+ */
 export interface BulkReportLine {
   phone: string;
-  status: 'created' | 'reused' | 'skipped';
+  status: 'created' | 'reused' | 'duplicated' | 'skipped';
   reason?: string;
 }
 
@@ -73,9 +108,24 @@ export interface BulkResult {
   contactsCreated: number;
   contactsReused: number;
   invalid: number;
+  duplicated: number;
   report: BulkReportLine[];
 }
 
+/** Teto do relatório devolvido. O resumo numérico sempre cobre o arquivo inteiro. */
+const REPORT_LIMIT = 1_000;
+
+/**
+ * Importa o público em LOTE.
+ *
+ * Poucas consultas, independentemente do tamanho do arquivo:
+ *  1. quais destes telefones já são contatos do workspace;
+ *  2. insere os que faltam (um INSERT com N valores);
+ *  3. vincula todos à campanha (idem, com `onConflictDoNothing`).
+ *
+ * Reimportar é idempotente: o índice único `(campaign_id, contact_id)` absorve o
+ * repetido e **nada é removido** — quem já estava no público continua nele.
+ */
 export async function importRecipients(
   tx: DbTx,
   args: {
@@ -87,79 +137,144 @@ export async function importRecipients(
   },
 ): Promise<BulkResult> {
   const report: BulkReportLine[] = [];
-  let contactsCreated = 0;
-  let contactsReused = 0;
-  let recipientsAdded = 0;
+  const empurrar = (linha: BulkReportLine): void => {
+    if (report.length < REPORT_LIMIT) report.push(linha);
+  };
+
+  // 1. Normaliza e separa o que nem chega ao banco.
+  const validas = new Map<string, ParsedRow>();
   let invalid = 0;
+  let duplicated = 0;
 
   for (const row of args.rows) {
     const phone = row.phone.trim();
     if (!isE164(phone)) {
-      invalid++;
-      report.push({ phone, status: 'skipped', reason: 'phone_nao_e_E164' });
+      invalid += 1;
+      empurrar({ phone, status: 'skipped', reason: 'phone_nao_e_E164' });
       continue;
     }
+    if (validas.has(phone)) {
+      // O mesmo número duas vezes no arquivo do cliente. Contar como importado
+      // inflaria o tamanho do público que ele vê antes de enviar.
+      duplicated += 1;
+      empurrar({ phone, status: 'duplicated' });
+      continue;
+    }
+    validas.set(phone, { ...row, phone });
+  }
 
-    const [existing] = await tx
-      .select({ id: contacts.id })
-      .from(contacts)
-      .where(and(eq(contacts.phone, phone), isNull(contacts.deletedAt)));
+  if (validas.size === 0) {
+    return {
+      total: args.rows.length,
+      recipientsAdded: 0,
+      contactsCreated: 0,
+      contactsReused: 0,
+      invalid,
+      duplicated,
+      report,
+    };
+  }
 
-    let contactId: string;
-    if (existing) {
-      contactId = existing.id;
-      contactsReused++;
-      if (args.optInOnImport) {
-        await tx
-          .update(contacts)
-          .set({
-            marketingOptIn: true,
-            optInMethod: 'import',
-            optInSource: args.source ?? null,
-            optInAt: new Date(),
-            optOutAt: null,
-            optOutReason: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(contacts.id, contactId));
-      }
-      report.push({ phone, status: 'reused' });
-    } else {
-      const [created] = await tx
-        .insert(contacts)
-        .values({
+  const telefones = [...validas.keys()];
+
+  // 2. Quem já existe (UMA consulta).
+  const existentes = await tx
+    .select({ id: contacts.id, phone: contacts.phone })
+    .from(contacts)
+    .where(and(inArray(contacts.phone, telefones), isNull(contacts.deletedAt)));
+
+  const idPorTelefone = new Map<string, string>();
+  for (const c of existentes) {
+    if (c.phone !== null) idPorTelefone.set(c.phone, c.id);
+  }
+
+  const agora = new Date();
+  const optIn = args.optInOnImport;
+  const origem = args.source ?? null;
+
+  const novos = telefones.filter((t) => !idPorTelefone.has(t));
+  const novosSet = new Set(novos);
+  const reaproveitados = telefones.filter((t) => !novosSet.has(t));
+
+  // 3. Insere os que faltam (UM insert).
+  let contactsCreated = 0;
+  if (novos.length > 0) {
+    const criados = await tx
+      .insert(contacts)
+      .values(
+        novos.map((phone) => ({
           workspaceId: args.workspaceId,
           phone,
-          displayName: row.name ?? null,
+          displayName: validas.get(phone)?.name ?? null,
           source: 'campaign_import',
-          marketingOptIn: args.optInOnImport ? true : false,
-          optInMethod: args.optInOnImport ? 'import' : null,
-          optInSource: args.optInOnImport ? args.source ?? null : null,
-          optInAt: args.optInOnImport ? new Date() : null,
-        })
-        .returning({ id: contacts.id });
-      if (!created) continue;
-      contactId = created.id;
-      contactsCreated++;
-      report.push({ phone, status: 'created' });
+          marketingOptIn: optIn,
+          optInMethod: optIn ? 'import' : null,
+          optInSource: optIn ? origem : null,
+          optInAt: optIn ? agora : null,
+        })),
+      )
+      .returning({ id: contacts.id, phone: contacts.phone });
+    for (const c of criados) {
+      if (c.phone !== null) idPorTelefone.set(c.phone, c.id);
     }
+    contactsCreated = criados.length;
+  }
 
-    const inserted = await tx
+  // Contatos que já existiam e recebem consentimento agora (UM update).
+  if (optIn && reaproveitados.length > 0) {
+    const ids = reaproveitados
+      .map((t) => idPorTelefone.get(t))
+      .filter((id): id is string => id !== undefined);
+    if (ids.length > 0) {
+      await tx
+        .update(contacts)
+        .set({
+          marketingOptIn: true,
+          optInMethod: 'import',
+          optInSource: origem,
+          optInAt: agora,
+          optOutAt: null,
+          optOutReason: null,
+          updatedAt: agora,
+        })
+        .where(inArray(contacts.id, ids));
+    }
+  }
+
+  for (const phone of telefones) {
+    empurrar({ phone, status: novosSet.has(phone) ? 'created' : 'reused' });
+  }
+
+  // 4. Vincula à campanha (UM insert idempotente).
+  const contactIds = telefones
+    .map((t) => idPorTelefone.get(t))
+    .filter((id): id is string => id !== undefined);
+
+  let recipientsAdded = 0;
+  if (contactIds.length > 0) {
+    const inseridos = await tx
       .insert(campaignRecipients)
-      .values({ workspaceId: args.workspaceId, campaignId: args.campaignId, contactId })
+      .values(
+        contactIds.map((contactId) => ({
+          workspaceId: args.workspaceId,
+          campaignId: args.campaignId,
+          contactId,
+        })),
+      )
       .onConflictDoNothing({
         target: [campaignRecipients.campaignId, campaignRecipients.contactId],
       })
       .returning({ id: campaignRecipients.id });
-    if (inserted.length > 0) recipientsAdded++;
+    recipientsAdded = inseridos.length;
   }
 
   return {
     total: args.rows.length,
     recipientsAdded,
     contactsCreated,
-    contactsReused,
+    contactsReused: reaproveitados.length,
     invalid,
+    duplicated,
     report,
   };
 }
@@ -208,9 +323,24 @@ export function createCampaignRecipientsRouter(): Router {
     '/api/campaigns/:id/recipients/bulk-opt-in',
     ...bulkOptInGuard,
     async (req: Request, res: Response) => {
-      const schemaBody = z.object({ source: z.string().trim().max(200).nullish() });
+      // `source` OBRIGATÓRIO e não-vazio (F58-S08). Marcar mil pessoas como
+      // "aceitaram receber" sem dizer ONDE elas aceitaram não é consentimento: é
+      // uma afirmação sem prova. No dia em que alguém reclamar — e nos EUA isso
+      // vem com multa por mensagem — a origem é a única coisa que sustenta a
+      // defesa. Antes este campo era opcional e virava NULL em silêncio.
+      const schemaBody = z.object({
+        source: z
+          .string()
+          .trim()
+          .min(3, 'Diga de onde veio o consentimento (ex.: formulário do site, cadastro na loja).')
+          .max(200),
+      });
       const parsed = schemaBody.safeParse(req.body ?? {});
-      const source = parsed.success ? parsed.data.source ?? null : null;
+      if (!parsed.success) {
+        res.status(400).json({ error: 'consent_source_required', issues: parsed.error.issues });
+        return;
+      }
+      const source = parsed.data.source;
       const id = param(req, 'id');
 
       const outcome = await req.scoped!(async (tx) => {

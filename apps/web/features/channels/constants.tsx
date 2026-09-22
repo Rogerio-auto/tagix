@@ -1,4 +1,4 @@
-import { Instagram, MessageCircle, QrCode, type LucideIcon } from 'lucide-react';
+import { Instagram, Mail, MessageCircle, QrCode, type LucideIcon } from 'lucide-react';
 import type { ChannelProvider } from './types';
 
 export interface ProviderMeta {
@@ -28,10 +28,17 @@ export const PROVIDER_META: Record<ChannelProvider, ProviderMeta> = {
     blurb: 'Sessão não-oficial do WhatsApp via WAHA.',
     icon: QrCode,
   },
+  email: {
+    provider: 'email',
+    label: 'E-mail',
+    blurb: 'Conversas por e-mail na mesma inbox, encadeadas por thread.',
+    icon: Mail,
+  },
 };
 
 export const PROVIDER_ORDER: readonly ChannelProvider[] = [
   'meta_whatsapp',
   'meta_instagram',
+  'email',
   'waha',
 ];

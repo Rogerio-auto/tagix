@@ -12,8 +12,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F1   | 26     | 0   | 0   | 0   | 0   | 0   | 26   |
 | F10   | 13     | 0   | 0   | 0   | 0   | 0   | 13   |
 | F15   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F2   | 21     | 0   | 0   | 0   | 0   | 0   | 21   |
-| F25   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
+| F2   | 22     | 0   | 0   | 0   | 0   | 0   | 22   |
+| F25   | 11     | 1   | 0   | 0   | 0   | 0   | 10   |
 | F26   | 11     | 0   | 0   | 0   | 0   | 0   | 11   |
 | F27   | 3     | 0   | 0   | 0   | 0   | 0   | 3   |
 | F28   | 2     | 0   | 0   | 0   | 0   | 0   | 2   |
@@ -48,9 +48,13 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F54   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
-| F57   | 13     | 12   | 0   | 0   | 0   | 0   | 1   |
-| F58   | 14     | 9   | 0   | 0   | 1   | 0   | 4   |
+| F57   | 14     | 12   | 0   | 0   | 1   | 0   | 1   |
+| F58   | 14     | 6   | 0   | 0   | 1   | 0   | 7   |
+| F59   | 9     | 1   | 0   | 0   | 0   | 0   | 8   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
+| F60   | 9     | 4   | 0   | 0   | 0   | 0   | 5   |
+| F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
+| F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
@@ -141,43 +145,46 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 2 — Agent runtime + Agentes IA
 
-| ID     | Titulo                                                                                       | Status | Prioridade | Depende de             |
-| ------ | -------------------------------------------------------------------------------------------- | ------ | ---------- | ---------------------- |
-| F2-S01 | Schema de agentes IA (agents, templates, tools, executions, llm usage, policies)             | ✅ done | critical   | —                      |
-| F2-S02 | Container agent-runtime (FastAPI + LangGraph + LangServe + asyncpg) + logging                | ✅ done | critical   | —                      |
-| F2-S03 | Pacote @hm/agents-client (cliente Node tipado p/ agent-runtime)                              | ✅ done | critical   | F2-S02                 |
-| F2-S04 | OpenRouterProvider (chat completion + streaming + tool calls + usage capture)                | ✅ done | critical   | F2-S02                 |
-| F2-S05 | Grafo LangGraph (load_context → build_prompt → call_model → tools → finalize) + checkpointer | ✅ done | critical   | F2-S02, F2-S04, F2-S01 |
-| F2-S06 | Tool registry + tools "leves" (query_contact/conversation/search_kb) via asyncpg RLS         | ✅ done | high       | F2-S02, F2-S01, F2-S10 |
-| F2-S07 | Tools de negócio via callback HTTP para o Node (internal tools endpoint)                     | ✅ done | high       | F2-S06, F2-S01         |
-| F2-S08 | Policy enforcement no runtime (filtra tools, valida modelo, max_iterations)                  | ✅ done | high       | F2-S05, F2-S01         |
-| F2-S09 | Hard cap de custo no Node antes da chamada ao runtime                                        | ✅ done | high       | F2-S01, F2-S03         |
-| F2-S10 | Column-level access control para tools de database                                           | ✅ done | medium     | F2-S02                 |
-| F2-S11 | Worker de agentes — ai_mode='on' + inbound → agentsClient.run (stream)                       | ✅ done | critical   | F2-S03, F2-S05, F2-S09 |
-| F2-S12 | Aggregation buffer (window_sec) antes de chamar o runtime                                    | ✅ done | medium     | F2-S11                 |
-| F2-S13 | Cost tracking + agregação de agent_metrics a partir de llm_usage_logs                        | ✅ done | medium     | F2-S01                 |
-| F2-S14 | Seed — 5 agent templates globais + questions + default_tools + default_model                 | ✅ done | medium     | F2-S01                 |
-| F2-S15 | Seed — catálogo inicial llm_models_whitelist (top modelos OpenRouter)                        | ✅ done | medium     | F2-S01                 |
-| F2-S16 | API CRUD agents + tools_global + toggle agent_tools (Node)                                   | ✅ done | high       | F2-S01, F2-S03         |
-| F2-S17 | Frontend AgentsListPage + AgentCreationWizard                                                | ✅ done | high       | F2-S16, F2-S14, F2-S15 |
-| F2-S18 | Frontend AgentDetailPage com tabs (Config, Tools, Knowledge, Metrics, Playground)            | ✅ done | medium     | F2-S16, F2-S17         |
-| F2-S19 | Playground do agente com SSE streaming (proxy via API Node)                                  | ✅ done | medium     | F2-S16, F2-S05, F2-S18 |
-| F2-S20 | Tools workflow modulares + register_conversion (respeitando policies)                        | ✅ done | medium     | F2-S07, F2-S06         |
-| F2-S21 | Auto follow-up cron job idempotente                                                          | ✅ done | low        | F2-S11                 |
+| ID     | Titulo                                                                                                 | Status | Prioridade | Depende de             |
+| ------ | ------------------------------------------------------------------------------------------------------ | ------ | ---------- | ---------------------- |
+| F2-S01 | Schema de agentes IA (agents, templates, tools, executions, llm usage, policies)                       | ✅ done | critical   | —                      |
+| F2-S02 | Container agent-runtime (FastAPI + LangGraph + LangServe + asyncpg) + logging                          | ✅ done | critical   | —                      |
+| F2-S03 | Pacote @hm/agents-client (cliente Node tipado p/ agent-runtime)                                        | ✅ done | critical   | F2-S02                 |
+| F2-S04 | OpenRouterProvider (chat completion + streaming + tool calls + usage capture)                          | ✅ done | critical   | F2-S02                 |
+| F2-S05 | Grafo LangGraph (load_context → build_prompt → call_model → tools → finalize) + checkpointer           | ✅ done | critical   | F2-S02, F2-S04, F2-S01 |
+| F2-S06 | Tool registry + tools "leves" (query_contact/conversation/search_kb) via asyncpg RLS                   | ✅ done | high       | F2-S02, F2-S01, F2-S10 |
+| F2-S07 | Tools de negócio via callback HTTP para o Node (internal tools endpoint)                               | ✅ done | high       | F2-S06, F2-S01         |
+| F2-S08 | Policy enforcement no runtime (filtra tools, valida modelo, max_iterations)                            | ✅ done | high       | F2-S05, F2-S01         |
+| F2-S09 | Hard cap de custo no Node antes da chamada ao runtime                                                  | ✅ done | high       | F2-S01, F2-S03         |
+| F2-S10 | Column-level access control para tools de database                                                     | ✅ done | medium     | F2-S02                 |
+| F2-S11 | Worker de agentes — ai_mode='on' + inbound → agentsClient.run (stream)                                 | ✅ done | critical   | F2-S03, F2-S05, F2-S09 |
+| F2-S12 | Aggregation buffer (window_sec) antes de chamar o runtime                                              | ✅ done | medium     | F2-S11                 |
+| F2-S13 | Cost tracking + agregação de agent_metrics a partir de llm_usage_logs                                  | ✅ done | medium     | F2-S01                 |
+| F2-S14 | Seed — 5 agent templates globais + questions + default_tools + default_model                           | ✅ done | medium     | F2-S01                 |
+| F2-S15 | Seed — catálogo inicial llm_models_whitelist (top modelos OpenRouter)                                  | ✅ done | medium     | F2-S01                 |
+| F2-S16 | API CRUD agents + tools_global + toggle agent_tools (Node)                                             | ✅ done | high       | F2-S01, F2-S03         |
+| F2-S17 | Frontend AgentsListPage + AgentCreationWizard                                                          | ✅ done | high       | F2-S16, F2-S14, F2-S15 |
+| F2-S18 | Frontend AgentDetailPage com tabs (Config, Tools, Knowledge, Metrics, Playground)                      | ✅ done | medium     | F2-S16, F2-S17         |
+| F2-S19 | Playground do agente com SSE streaming (proxy via API Node)                                            | ✅ done | medium     | F2-S16, F2-S05, F2-S18 |
+| F2-S20 | Tools workflow modulares + register_conversion (respeitando policies)                                  | ✅ done | medium     | F2-S07, F2-S06         |
+| F2-S21 | Auto follow-up cron job idempotente                                                                    | ✅ done | low        | F2-S11                 |
+| F2-S22 | Date em SQL cru quebrava rollup de métricas, cobrança PIX e agendadores — correção no cliente do banco | ✅ done | critical   | F2-S13                 |
 
 ## Fase 25
 
-| ID      | Titulo                                                                                  | Status | Prioridade | Depende de                |
-| ------- | --------------------------------------------------------------------------------------- | ------ | ---------- | ------------------------- |
-| F25-S01 | Platform-admin guard — middleware requirePlatformAdmin (API)                            | ✅ done | critical   | —                         |
-| F25-S02 | LLM models catalog API — CRUD llm_models_whitelist + sync OpenRouter /models            | ✅ done | high       | F25-S01                   |
-| F25-S03 | Workspace agent policies API — editor por workspace (allowed_models, features, caps)    | ✅ done | high       | F25-S01                   |
-| F25-S04 | Platform secrets rotation API — rotaciona OpenRouter/Meta/encryption keys + auditoria   | ✅ done | high       | F25-S01                   |
-| F25-S05 | LLM usage rollup API — gasto por workspace/modelo/dia-mês + top spenders + caps         | ✅ done | high       | F25-S01                   |
-| F25-S06 | Platform-admin frontend shell — route group (platform) + guard + nav                    | ✅ done | high       | —                         |
-| F25-S07 | Páginas Modelos + Políticas (frontend) — catálogo LLM + editor de policy por workspace  | ✅ done | medium     | F25-S02, F25-S03, F25-S06 |
-| F25-S08 | Páginas Secrets + Uso (frontend) — rotação de platform_secrets + dashboard de custo LLM | ✅ done | medium     | F25-S04, F25-S05, F25-S06 |
-| F25-S09 | Runbooks de plataforma — rotate-openrouter-key + manage-workspace-agent-policy          | ✅ done | low        | —                         |
+| ID      | Titulo                                                                                                  | Status      | Prioridade | Depende de                |
+| ------- | ------------------------------------------------------------------------------------------------------- | ----------- | ---------- | ------------------------- |
+| F25-S01 | Platform-admin guard — middleware requirePlatformAdmin (API)                                            | ✅ done      | critical   | —                         |
+| F25-S02 | LLM models catalog API — CRUD llm_models_whitelist + sync OpenRouter /models                            | ✅ done      | high       | F25-S01                   |
+| F25-S03 | Workspace agent policies API — editor por workspace (allowed_models, features, caps)                    | ✅ done      | high       | F25-S01                   |
+| F25-S04 | Platform secrets rotation API — rotaciona OpenRouter/Meta/encryption keys + auditoria                   | ✅ done      | high       | F25-S01                   |
+| F25-S05 | LLM usage rollup API — gasto por workspace/modelo/dia-mês + top spenders + caps                         | ✅ done      | high       | F25-S01                   |
+| F25-S06 | Platform-admin frontend shell — route group (platform) + guard + nav                                    | ✅ done      | high       | —                         |
+| F25-S07 | Páginas Modelos + Políticas (frontend) — catálogo LLM + editor de policy por workspace                  | ✅ done      | medium     | F25-S02, F25-S03, F25-S06 |
+| F25-S08 | Páginas Secrets + Uso (frontend) — rotação de platform_secrets + dashboard de custo LLM                 | ✅ done      | medium     | F25-S04, F25-S05, F25-S06 |
+| F25-S09 | Runbooks de plataforma — rotate-openrouter-key + manage-workspace-agent-policy                          | ✅ done      | low        | —                         |
+| F25-S10 | Tentativa negada à camada de plataforma podia não ficar registrada — auditoria antes da resposta        | ✅ done      | high       | F25-S01                   |
+| F25-S11 | Limite de tentativas na camada de plataforma — negação repetida não pode encher a auditoria nem o banco | 🟢 available | medium     | F25-S10                   |
 
 ## Fase 26
 
@@ -632,21 +639,22 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 57
 
-| ID      | Titulo                                                                           | Status      | Prioridade | Depende de       |
-| ------- | -------------------------------------------------------------------------------- | ----------- | ---------- | ---------------- |
-| F57-S01 | CI verde — ENCRYPTION_KEY no job + catálogo de planos self-contained nos testes  | ✅ done      | critical   | —                |
-| F57-S02 | e2e determinístico — fechar o proxy SSR do Next (ECONNREFUSED :3001)             | 🟢 available | critical   | —                |
-| F57-S03 | Supply chain — zerar HIGH do pnpm audit e travar o gate no CI                    | 🟢 available | critical   | F57-S01          |
-| F57-S04 | Hardening do workflow — permissions mínimas, actions por SHA, host key pinado    | 🟢 available | high       | —                |
-| F57-S05 | .dockerignore do contexto landing/ + nginx non-root nas imagens estáticas        | 🟢 available | high       | —                |
-| F57-S06 | Dev compose — bind em loopback, portas sem colisão e WAHA pinado/autenticado     | 🟢 available | high       | —                |
-| F57-S07 | Backup pré-migration no deploy.sh — dados são sagrados                           | 🟢 available | high       | —                |
-| F57-S08 | Secrets do Swarm em vez de env vars no service spec                              | 🟢 available | medium     | —                |
-| F57-S09 | Build em CI + registry — deploy por digest, não build no nó de produção          | 🟢 available | medium     | F57-S01, F57-S04 |
-| F57-S10 | Lint type-aware (no-floating-promises) + react-hooks no apps/web                 | 🟢 available | medium     | F57-S01          |
-| F57-S11 | Piso de cobertura no CI — nada de "testes acompanham o código" sem medição       | 🟢 available | medium     | F57-S01          |
-| F57-S12 | Harness de slots — guard de migrations ligado, fases nomeadas, skills instaladas | 🟢 available | medium     | —                |
-| F57-S13 | README e AUDITORIA_TECNICA refletem o estado real do repo                        | 🟢 available | low        | —                |
+| ID      | Titulo                                                                           | Status        | Prioridade | Depende de       |
+| ------- | -------------------------------------------------------------------------------- | ------------- | ---------- | ---------------- |
+| F57-S01 | CI verde — ENCRYPTION_KEY no job + catálogo de planos self-contained nos testes  | 🔵 in-progress | critical   | —                |
+| F57-S02 | e2e determinístico — fechar o proxy SSR do Next (ECONNREFUSED :3001)             | 🟢 available   | critical   | —                |
+| F57-S03 | Supply chain — zerar HIGH do pnpm audit e travar o gate no CI                    | 🟢 available   | critical   | F57-S01          |
+| F57-S04 | Hardening do workflow — permissions mínimas, actions por SHA, host key pinado    | 🟢 available   | high       | —                |
+| F57-S05 | .dockerignore do contexto landing/ + nginx non-root nas imagens estáticas        | 🟢 available   | high       | —                |
+| F57-S06 | Dev compose — bind em loopback, portas sem colisão e WAHA pinado/autenticado     | 🟢 available   | high       | —                |
+| F57-S07 | Backup pré-migration no deploy.sh — dados são sagrados                           | ✅ done        | high       | —                |
+| F57-S08 | Secrets do Swarm em vez de env vars no service spec                              | 🟢 available   | medium     | —                |
+| F57-S09 | Build em CI + registry — deploy por digest, não build no nó de produção          | 🟢 available   | medium     | F57-S01, F57-S04 |
+| F57-S10 | Lint type-aware (no-floating-promises) + react-hooks no apps/web                 | 🟢 available   | medium     | F57-S01          |
+| F57-S11 | Piso de cobertura no CI — nada de "testes acompanham o código" sem medição       | 🟢 available   | medium     | F57-S01          |
+| F57-S12 | Harness de slots — guard de migrations ligado, fases nomeadas, skills instaladas | 🟢 available   | medium     | —                |
+| F57-S13 | README e AUDITORIA_TECNICA refletem o estado real do repo                        | 🟢 available   | low        | —                |
+| F57-S14 | Provar o backup — teste de retenção e restore de verdade                         | 🟢 available   | high       | F57-S07          |
 
 ## Fase 58
 
@@ -657,15 +665,29 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F58-S03 | Buscar e enviar modelos de mensagem para a Meta           | ✅ done        | critical   | F58-S02                                     |
 | F58-S04 | Sincronizar, criar e acompanhar modelos pela API          | ✅ done        | critical   | F58-S03                                     |
 | F58-S05 | Entregar a Central de Modelos do WhatsApp                 | 🔵 in-progress | high       | F58-S04                                     |
-| F58-S06 | Preparar opções, prévias e teste do novo criador          | 🟢 available   | critical   | F58-S01, F58-S04, F57-S01                   |
-| F58-S07 | Tornar o início da campanha fácil de entender             | 🟢 available   | high       | F58-S06                                     |
-| F58-S08 | Facilitar a escolha dos destinatários                     | 🟢 available   | high       | F58-S06                                     |
+| F58-S06 | Preparar opções, prévias e teste do novo criador          | ✅ done        | critical   | F58-S01, F58-S04, F57-S01                   |
+| F58-S07 | Tornar o início da campanha fácil de entender             | ✅ done        | high       | F58-S06                                     |
+| F58-S08 | Facilitar a escolha dos destinatários                     | ✅ done        | high       | F58-S06                                     |
 | F58-S09 | Escolher a mensagem com prévia e variáveis                | 🟢 available   | critical   | F58-S05, F58-S06                            |
 | F58-S10 | Configurar quando e como enviar sem termos técnicos       | 🟢 available   | high       | F58-S06                                     |
 | F58-S11 | Fazer o agendamento começar e respeitar o ritmo escolhido | 🟢 available   | critical   | F58-S06                                     |
 | F58-S12 | Garantir que nenhuma mensagem da campanha se perca        | 🟢 available   | critical   | F58-S02, F58-S11                            |
 | F58-S13 | Integrar o novo criador e revisar antes de iniciar        | 🟢 available   | critical   | F58-S07, F58-S08, F58-S09, F58-S10, F58-S12 |
 | F58-S14 | Validar o fluxo completo com 1.000 contatos               | 🟢 available   | critical   | F58-S13, F57-S02                            |
+
+## Fase 59
+
+| ID      | Titulo                                                                   | Status      | Prioridade | Depende de       |
+| ------- | ------------------------------------------------------------------------ | ----------- | ---------- | ---------------- |
+| F59-S01 | Market pack como fonte única de regra por mercado                        | ✅ done      | critical   | —                |
+| F59-S02 | Mercado no workspace e fuso no contato                                   | ✅ done      | critical   | F59-S01          |
+| F59-S03 | Consentimento e supressão por canal                                      | ✅ done      | critical   | F59-S02          |
+| F59-S04 | Portão de consentimento como serviço único                               | ✅ done      | critical   | F59-S01, F59-S03 |
+| F59-S05 | Aplicar o portão no outbound, no agendador e nas tools do agente         | ✅ done      | critical   | F59-S04          |
+| F59-S06 | Detector de revogação em linguagem natural                               | ✅ done      | high       | F59-S03, F59-S04 |
+| F59-S07 | Valores personalizados por workspace                                     | ✅ done      | high       | F59-S02          |
+| F59-S08 | DS 3.0 opção A — rampa de marca, motion e regras em lint                 | ✅ done      | medium     | —                |
+| F59-S09 | Pendências de conformidade — esclarecimento único e auditoria de valores | 🟢 available | high       | F59-S06, F59-S07 |
 
 ## Fase 6 — Pipeline
 
@@ -680,6 +702,51 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F6-S07 | Inbound hooks — opt-out por keyword + reply handling (mark responded + AI handoff + followup)   | ✅ done | high       | F6-S01         |
 | F6-S08 | Frontend CampaignEditor wizard (6 steps) + template picker + CSV import + send windows editor   | ✅ done | high       | F6-S03, F6-S04 |
 | F6-S09 | Frontend CampaignsPage + monitoring real-time + health badge                                    | ✅ done | high       | F6-S03         |
+
+## Fase 60
+
+| ID      | Titulo                                                                                | Status      | Prioridade | Depende de       |
+| ------- | ------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------- |
+| F60-S01 | Capacidades negociadas do adapter e identidade do contato                             | ✅ done      | critical   | —                |
+| F60-S02 | Restrição de envio genérica no composer                                               | ✅ done      | high       | F60-S01          |
+| F60-S03 | E-mail como canal — fundação, envio e encadeamento                                    | ✅ done      | critical   | F60-S01, F60-S02 |
+| F60-S04 | E-mail de verdade — provedor Postmark, domínio autenticado, descadastro e rampa       | 🟢 available | critical   | F60-S03, F60-S08 |
+| F60-S07 | Campanhas para os outros canais                                                       | ✅ done      | critical   | F60-S03          |
+| F60-S08 | E-mail — recebimento, retorno e supressão por bounce                                  | ✅ done      | critical   | F60-S03          |
+| F60-S09 | Campanha multicanal na interface — passos por capacidade, público e métrica por canal | 🟢 available | high       | F60-S07, F58-S12 |
+| F60-S10 | E-mail recebido completo — anexo no R2, anti-SSRF e reuso de thread                   | 🟢 available | high       | F60-S08          |
+| F60-S11 | Composer mostra a restrição de envio — por quê e quando volta a poder                 | 🟢 available | medium     | F60-S02          |
+
+## Fase 61
+
+| ID      | Titulo                                                                       | Status | Prioridade | Depende de       |
+| ------- | ---------------------------------------------------------------------------- | ------ | ---------- | ---------------- |
+| F61-S01 | Service worker — app shell, versionamento e a saída de emergência            | ✅ done | critical   | —                |
+| F61-S02 | Tela Hoje — a visão de dono                                                  | ✅ done | critical   | —                |
+| F61-S03 | Web Push — assinatura por dispositivo, VAPID e privacidade na tela bloqueada | ✅ done | critical   | F61-S01, F61-S05 |
+| F61-S04 | Roteador de notificação — dedupe, preferência por evento e fuso do membro    | ✅ done | high       | F61-S03          |
+| F61-S05 | Instalação no iPhone — detecção de standalone e convite honesto              | ✅ done | critical   | F61-S01          |
+| F61-S11 | Mídia honesta — recuperar o recuperável, admitir o perdido                   | ✅ done | critical   | —                |
+| F61-S12 | Hoje enriquecida — identidade, linguagem, ação e distribuição                | ✅ done | critical   | F61-S02          |
+| F61-S13 | Aviso de lead novo nunca disparava — contrato único do message:new           | ✅ done | critical   | F61-S04          |
+
+## Fase 69
+
+| ID      | Titulo                                                                                                 | Status      | Prioridade | Depende de                                                                      |
+| ------- | ------------------------------------------------------------------------------------------------------ | ----------- | ---------- | ------------------------------------------------------------------------------- |
+| F69-S01 | Conformidade de plataforma — exclusão de dados, desautorização, política e termos                      | ✅ done      | critical   | —                                                                               |
+| F69-S02 | Conexão Meta por workspace — permissões dos casos de uso, token cifrado e reconexão guiada             | ✅ done      | critical   | F69-S01                                                                         |
+| F69-S03 | Leads de anúncios — do formulário à inbox em segundos, com prova de consentimento                      | 🟣 review    | critical   | F69-S02                                                                         |
+| F69-S04 | API de Marketing — leitura: gasto, leads e custo por lead por campanha                                 | 🟢 available | high       | F69-S02                                                                         |
+| F69-S05 | API de Marketing — gestão: pausar, ativar e ajustar orçamento com confirmação e trilha                 | 🟢 available | medium     | F69-S04                                                                         |
+| F69-S06 | Conversão de volta para a Meta — o anúncio aprende com lead qualificado, agendado e fechado            | 🟢 available | high       | F69-S03, F69-S04                                                                |
+| F69-S07 | Instagram — publicação de conteúdo: imagem, carrossel e reels com fila e agendamento                   | 🟢 available | medium     | F69-S08                                                                         |
+| F69-S08 | Instagram — verificar o caminho de login do caso de uso e alinhar permissões                           | 🟢 available | high       | F69-S02                                                                         |
+| F69-S09 | Servidor MCP de anúncios — o agente sugere e prepara, o humano aprova                                  | 🟢 available | medium     | F69-S05                                                                         |
+| F69-S10 | Kit de App Review — justificativa, roteiro de screencast e conta de teste por permissão                | 🟢 available | high       | F69-S01, F69-S02, F69-S03, F69-S04, F69-S05, F69-S06, F69-S07, F69-S08, F69-S09 |
+| F69-S11 | Consentimento do formulário de anúncio — caixa marcada vira consentimento de canal                     | 🟢 available | high       | F69-S03                                                                         |
+| F69-S12 | Conectar a Meta falhava na troca do código — login da conexão passa a usar Facebook Login for Business | 🟣 review    | critical   | F69-S02                                                                         |
+| F69-S13 | Receber lead sem assinar a página — modo reconciliação enquanto o App Review não sai                   | 🟣 review    | critical   | F69-S03                                                                         |
 
 ## Fase 7 — Dashboard + Conversões
 

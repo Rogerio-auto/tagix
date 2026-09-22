@@ -14,7 +14,11 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'Leadium',
     description: 'Atendimento ao cliente, vendas conversacionais e automação.',
     id: '/',
-    start_url: '/',
+    // F61-S01: o app instalado abre na tela do DONO, não no dashboard de quem
+    // opera o dia inteiro. Quem instala no celular é quem quer três respostas
+    // rápidas, não quem vai navegar. `id` continua '/' — mudá-lo faria o
+    // navegador tratar como um app diferente e perder a instalação existente.
+    start_url: '/hoje',
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',

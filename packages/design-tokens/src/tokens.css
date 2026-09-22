@@ -49,6 +49,17 @@
   --sp-7: 48px;
   --sp-8: 64px;
   --sp-9: 96px;
+
+  /* Movimento (F59-S08 — adotado da proposta DS 3.0 §05).
+   * Curvas nomeadas em vez de cubic-bezier solto por componente: movimento
+   * mostra estado, nao pede atencao. Faixa util 180-320ms.
+   * `--ease` para transicao comum; `--ease-spring` para entrada/saida com
+   * sensacao de peso (sheet, drawer, toast). */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

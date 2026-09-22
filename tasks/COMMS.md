@@ -555,3 +555,268 @@ Nota de ambiente: worktree sem .env (gitignored) → copiado da raiz p/ os teste
 **INCIDENTE (importante para o orquestrador): `git stash` é COMPARTILHADO entre worktrees do mesmo repo.** Rodei `git stash -u` + `git stash pop` neste worktree para checar uma falha pré-existente e o agente do F56-S05 empilhou um stash no meio → cada um popou o do outro. Ambos recuperados (ele restaurou o meu na pilha; eu restaurei por SHA via `git fsck --unreachable` e devolvi a pilha limpa). O trabalho dele (`apps/web/features/channels/**`, 4 modificados + 6 novos) FICOU no meu worktree, intacto e NÃO commitado (meu commit adiciona só os meus 8 paths); backup em `…/scratchpad/foreign-stash/` (patch + arquivos). **Regra: NUNCA usar `git stash` em worktree paralelo — use `git worktree`/cópia ou branch temporária.**
 
 **Falha pré-existente/alheia:** `apps/workers/src/coexistence/coexistence.test.ts` quebra na `main` (`TypeError: sql.raw is not a function` em `packages/flow-engine/src/ports/db.port.ts:35`, `sql.raw` em top-level module scope) — confirmado com meus arquivos stashados. Não é regressão minha; dono provável = F56-S13 (flow-engine claim/antiloop). `pnpm --filter @hm/workers test` = 379 passed / 1 arquivo falho (esse).
+
+## F58-S06 — API do criador guiado: opções, prévia, estimativa, preflight e teste (2026-08-11, backend-engineer)
+
+Endpoints novos em `apps/api/src/routes/campaigns/builder/**`, montados ANTES do CRUD
+(`/api/campaigns/builder/options` precisa casar antes de `/api/campaigns/:id`). Todos sob
+`campaign.edit` (OWNER/ADMIN/SUPERVISOR) e dentro de `req.scoped` (RLS).
+
+- `GET  /api/campaigns/builder/options` → `{ modes, channels[], templates[], page }`.
+  `channels` traz TODOS os canais ativos com `capabilities` por provider + `eligible`/
+  `ineligibleReason`/`ineligibleMessage` (`provider_unsupported` | `incomplete_setup` |
+  `missing_credentials`), `approvedTemplateCount` e `lastSyncedAt`. IG/WAHA aparecem
+  inelegíveis COM motivo — sumir com eles deixaria a pergunta "cadê meu Instagram?" sem
+  resposta. `templates` só vem de canal elegível; filtros `channelId/search/category/
+  language/cursor/limit` (cursor = id, keyset).
+- `POST /api/campaigns/:id/builder/preview` → `{ template, preview }`. Prévia de texto puro
+  (nada de markup) + `preview.outbound` no shape da Graph.
+- `POST /api/campaigns/:id/builder/estimate` e `.../preflight` → aceitam ajustes AINDA NÃO
+  SALVOS (`ratePerMinute`, `dailyLimit`, `sendWindows`, `timezone`, `startAt`), schema
+  `.strict()`. Preflight devolve `{ ok, issues[], estimate }` — a Revisão não precisa de
+  segunda chamada.
+- `POST /api/campaigns/:id/builder/test` → 202 `{ messageId, queued, replayed }`. EXIGE
+  header `Idempotency-Key`.
+
+**PARA F58-S12 (dono de `packages/channels/src/types.ts` + workers) — contrato de bindings.**
+`campaign_steps.template_components` passa a guardar, quando o criador novo grava, o envelope
+`[{ type:'binding_contract', version:1, bindings:[...] }]` (helpers `encodeBindings`/
+`decodeBindings` em `builder/contracts.ts`). Sem mudança de schema neste slot.
+- `binding = { component:'header'|'body'|'button', index:number, source }`.
+- `source = {kind:'fixed', value}` | `{kind:'contact', field:'displayName'|'phone'|'email', fallback}`
+  | `{kind:'customField', key, fallback}`. **`fallback` é obrigatório e não-vazio** para origem
+  dinâmica — contato sem o campo não pode virar frase com buraco.
+- Semântica de `index`: header/body = número do `{{n}}`; **button = POSIÇÃO 1-based do botão**
+  (a Graph recebe `index` 0-based, convertido na saída).
+- `renderTemplate` (`builder/render.ts`) é a função pura que resolve binding → parâmetro por
+  contato. **S12 deve repetir exatamente esse cálculo por destinatário** (mesma resolução de
+  fallback: valor em branco/ausente cai no fallback). Ela já emite botão como componente
+  próprio com `sub_type` + `index`.
+- `decodeBindings` devolve `null` para componentes Graph legados → rascunho antigo continua
+  sendo enviado como está. **Contrato: nunca publicar o envelope cru no outbound.**
+- **Bloqueio conhecido, dono S12:** `packages/channels/src/types.ts` (`TemplateComponent =
+  {type, parameters?}`) e o `templateComponentSchema` do `outbound/job.ts` DESCARTAM
+  `sub_type`/`index` → variável de botão não chega íntegra à Meta hoje. Por isso o **envio de
+  teste recusa binding de botão** com `422 CAMPAIGN_TEST_BUTTON_VARIABLE_UNSUPPORTED`
+  (`builder/index.ts`). Quando S12 preservar os campos, **remover esse guard e o teste
+  correspondente** em `builder/routes.test.ts`.
+
+**PARA F58-S07/S08/S09/S10 (frontend).**
+- Modo público: `POST/PUT /api/campaigns` aceitam `mode:'single'|'sequence'` (mapeados para
+  `broadcast`/`drip`). `type` técnico continua aceito por compatibilidade; `mode` vence.
+  `type:'triggered'` (ou `mode:'triggered'`) → **422 `CAMPAIGN_TRIGGERED_NOT_AVAILABLE`** com
+  texto pronto. **O `<option value="triggered">` do editor ANTIGO
+  (`apps/web/features/campaigns/editor/CampaignEditor.tsx:353`) agora recebe 422** — remoção
+  é do S07/S13, fora do meu files_allowed.
+- `PUT /api/campaigns/:id/steps` aceita `bindings` por step (validado por Zod) e persiste o
+  envelope. Continuar mandando `templateComponents` cru também funciona; se os dois vierem,
+  `bindings` vence.
+- Pendências do preflight têm `stage: 'basics'|'audience'|'message'|'schedule'|'channel'`,
+  `blocking`, `code` estável e, quando cabe, `step`/`component`/`index` — é o link "corrigir
+  nesta etapa" do §4.2 do CAMPAIGNS.md.
+- `estimate.duration` = `{ approximateMinutes, approximateDays, finishesAt, limitedBy:
+  'rate'|'daily_limit'|'send_windows'|'none', exceedsHorizon }`. `limitedBy` é o texto de
+  "por que vai demorar isso" da etapa Quando enviar (S10).
+
+**Decisões que valem revisão em fase futura (não são bugs):**
+1. **Preflight é deliberadamente tão duro quanto a ativação.** `/validate` (que roda no
+   `activate`) trata `recipients > tierLimit` e `sem opt-in em MARKETING` como CRÍTICOS; o
+   preflight repete os dois como bloqueantes (`CAMPAIGN_AUDIENCE_EXCEEDS_TIER`,
+   `CAMPAIGN_AUDIENCE_WITHOUT_CONSENT`). Um preflight mais permissivo que a ativação seria uma
+   promessa quebrada na tela seguinte. **Mas o tier da Meta é um teto DIÁRIO** — público maior
+   deveria poder ser dividido em dias (é o que `duration.approximateDays` já calcula). Quem
+   fizer S11/S13 e quiser liberar isso precisa mudar `/validate` junto (o teste
+   `campaigns/routes.test.ts` "recipients > tierLimit -> critical" trava o comportamento atual
+   e está FORA do meu files_allowed). Não toquei em `validate.ts`.
+2. **Fonte do estado do modelo:** preflight lê o CATÁLOGO LOCAL (S02/S04, sync + webhook) para
+   responder rápido a cada mudança do formulário; `/validate` continua confirmando ao vivo na
+   Meta na ativação. Split proposital.
+3. **Saúde do canal tem cache de 60s por canal** (`healthTtlMs`) — a etapa Quando enviar
+   recalcula a cada tecla e a Meta limita requisição. Meta fora do ar → `UNKNOWN`, e aí
+   disparo acima de 1.000 contatos é bloqueado (`LARGE_SEND_THRESHOLD`).
+4. **Duração assume dia local de 1440 min.** Nos dois dias de virada de horário de verão o fim
+   estimado desloca até 1h. É rótulo "aproximado"; o instante real é do worker (S11).
+5. **Consentimento só é exigido quando algum modelo é MARKETING** (categoria vem do catálogo).
+   Exigir opt-in em UTILITY zeraria o público de quem nunca pediu marketing.
+
+**Ambiente / não-regressão:** Docker Desktop parado e SEM `.env` na raiz → toda a suíte de
+integração da API falha por `DATABASE_URL` ausente, na main e no worktree igualmente (37
+arquivos). Os 91 testes novos deste slot NÃO dependem de banco. Cobertura DB-real de RLS dos
+endpoints do builder fica para o **F58-S14** (QA com 1.000 contatos), que já tem infra no
+escopo.
+
+**Harness (dono F57-S12):** `python scripts/slot.py claim <id> --force` documenta "Use --force
+to checkout existing" mas o `die()` de branch existente (`scripts/slot.py:644-645`) não olha
+`args.force` — com a branch já criada não há caminho de claim. Fiz `git checkout` da branch
+canônica já existente (criada por um claim anterior).
+
+---
+
+## 2026-09-09 — F59-S02 · achados de ambiente e de repo (fora do escopo do slot)
+
+**Postgres dev não sobe na 5432 nesta máquina.** O serviço nativo do Windows
+`postgresql-x64-18` (PID 8688) já ocupa a porta e não tem o papel `hm`, então toda conexão do
+host falhava com `28P01` — de dentro do container a mesma URL funciona, o que torna o sintoma
+confuso. Contornei com um override de compose **fora do repo** (scratchpad da sessão) expondo o
+container em `5442:5432`, e apontei `DATABASE_URL` do `.env` local para 5442. Nada versionado
+mudou e o serviço nativo do Rogério não foi tocado.
+
+> Sugestão de slot em F57 (dono do harness/infra dev): parametrizar a porta publicada em
+> `infra/docker/docker-compose.dev.yml` como `"${POSTGRES_HOST_PORT:-5432}:5432"` (e o mesmo em
+> redis/rabbit). Uma linha resolve para sempre, e o runbook `dev-environment-windows.md` ganha a
+> nota sobre conflito com instalação nativa do Postgres.
+
+**Não havia `.env` no repo** — só `.env.example`. Criei o `.env` local a partir do exemplo e
+gerei uma `ENCRYPTION_KEY` de 32 bytes de verdade (o placeholder `change-me-32-byte-hex-key`
+quebra o AES-256-GCM). Arquivo é gitignored.
+
+**`origin/main` está ~40 commits atrás do `main` local** — a F58 inteira nunca foi enviada.
+Abri o PR #1 por engano (ele arrastava todo esse histórico) e fechei em seguida. O fluxo real
+deste repo é merge local em `main`, e é o que estou seguindo. Sincronizar o GitHub é decisão do
+Rogério: é o repositório dele, `main` tem branch protection e o push seria grande.
+
+**`slot.py finish` só commita a papelada** (`tasks/<slot>.md` + `STATUS.md`), não o código. Quem
+implementa precisa commitar antes. Perdi um ciclo com isso no F59-S01 — o código ficou na árvore
+de trabalho e só entrou em `main` no commit seguinte. Sem dano, mas vale um aviso no
+`PROTOCOL.md` §3 ("Implementar" → "Implementar **e commitar**").
+
+---
+
+## 2026-09-09 — F59-S05 · suite de @hm/workers ja vinha vermelha em `main` [CORRIGIDO ABAIXO]
+
+Medi o baseline com `git stash` antes de alterar qualquer coisa: em `main`, `pnpm --filter
+@hm/workers test` fecha com **4 arquivos e 3 testes falhando** (459 passam). Depois do slot: os
+**mesmos** 4 arquivos e 3 testes, com 471 passando. Zero regressao — mas a suite nao esta verde, e o
+DoD de qualquer slot que rode `@hm/workers test` fica impossivel de cumprir literalmente.
+
+Falhas, todas com `Hook timed out in 10000ms`:
+- `src/evaluation/*` — `runEvaluationTick` (3 testes)
+- `src/billing/recurrence.test.ts` — falha ao carregar
+- `src/dashboard-refresh/dashboard-refresh.test.ts` — falha ao carregar
+
+Parece hook de setup esperando recurso que nao sobe no ambiente dev local (ou timeout curto demais
+para o custo do setup). Sugestao: slot proprio no dominio de F57 (CI/cobertura) para (a) diagnosticar
+o hook, (b) marcar como integracao com `describe.skipIf(!process.env.X)` se depender de servico
+externo, ou (c) subir o timeout com justificativa. Enquanto isso, quem validar slot em `@hm/workers`
+precisa comparar contra este baseline em vez de exigir verde absoluto.
+
+Tambem: `apps/api` exige **RabbitMQ** no ar alem de Postgres e Redis — `app.test.ts` (health) e
+`routes/v1/routes.test.ts` falham com `ECONNREFUSED 5672` sem ele. Com os tres servicos: 1021 testes
+verdes.
+
+**Consolidacao pendente (baixa prioridade):** o carregamento do contexto de consentimento existe hoje
+em tres lugares parecidos — `apps/api/src/services/consent`, `apps/workers/src/outbound/consent-gate.ts`
+e `campaigns/db-ports.checkConsent`. A duplicacao e deliberada (workers nao pode depender de api) e
+pequena (uma consulta), e a REGRA nao esta duplicada: e sempre `decideOutbound` de `@hm/shared`.
+Ainda assim, mover o carregador para `@hm/db` (ex.: `consentRepo.loadDecisionContext`) deixaria um
+lugar so.
+
+---
+
+## 2026-09-09 — CORRECAO da nota anterior: a suite de @hm/workers esta VERDE
+
+Eu estava errado. Rodei a suite de novo com **Postgres + Redis + RabbitMQ todos no ar** e o
+resultado e **493 testes passando, 0 falhando, 45 arquivos verdes**. As 3 falhas que registrei como
+"pre-existentes em main" eram do ambiente, nao do repo: `runEvaluationTick`,
+`billing/recurrence.test.ts` e `dashboard-refresh.test.ts` dependem de servico que eu ainda nao
+tinha subido, e o `Hook timed out in 10000ms` era a espera pela conexao.
+
+**Consequencias:**
+- Nao existe divida de teste em `@hm/workers` para virar slot. Ignore a sugestao de slot em F57 que
+  escrevi na nota anterior.
+- O DoD "suite verde" do F59-S05 **e cumprivel e foi cumprido** — a nota de "nao pode ser cumprido
+  por este slot", no arquivo do slot, esta errada e foi corrigida la tambem.
+- A licao que vale: `@hm/workers` e `@hm/api` exigem os **tres** servicos
+  (`docker compose up -d postgres redis rabbitmq`). Sem isso a suite falha por timeout de hook, com
+  mensagem que nao aponta para a causa. Vale uma linha no runbook `dev-environment-windows.md`.
+
+**F59-S06 — sobreposicao com o opt-out de campanhas:** `createCampaignInboundPorts` (F6-S07) ja trata
+opt-out por keyword no escopo da campanha. O detector da F59-S06 e mais amplo e grava no modelo de
+consentimento novo. Coexistem sem conflito hoje; um slot futuro deveria fazer o caminho de campanha
+delegar ao detector, em vez de manter duas regras de opt-out no repo.
+
+**F59-S07 — auditoria pendente:** o CRUD de valores personalizados nao grava em `audit_logs` porque
+o repo nao tem helper de auditoria (cada rota escreve inline em `schema.auditLogs`). Alteracao de
+valor personalizado merece trilha — especialmente `kind='secret'`, que guarda token de API do
+cliente. Vale um slot pequeno: helper `writeAudit` compartilhado + uso nas rotas que ainda nao
+auditam. Quando existir, registrar APENAS `key` e `kind`, nunca o valor: o audit log e o lugar mais
+lido depois de um incidente, e vazar o segredo la anularia a cifragem.
+
+**F59-S08 — slot de limpeza DS/i18n (a criar):** as tres regras novas de `no-restricted-syntax`
+entraram como `warn` porque acusam 109 ocorrencias no codigo existente (19 hex, 44 `toLocaleX`, 32
+`Intl`, 14 fuso IANA). Elas impedem a divida de crescer, mas nao a zeram. Criterio de pronto do slot
+de limpeza: zerar as ocorrencias e promover a severidade para `error` em `eslint.config.mjs`. O
+grosso e locale e fuso literais em `apps/web` — que e exatamente o que quebra quando o primeiro
+workspace `market='US'` entrar.
+
+**Corrigido na F59-S08:** `apps/workers/src/inbound/ports.ts` tinha `import('./revocation').RevocationPort`
+inline, que viola `@typescript-eslint/consistent-type-imports`. Entrou na F59-S06 porque a validacao
+daquele slot rodava typecheck e test, mas **nao lint**. Vale revisar os blocos `## Validacao` dos
+slots: quem toca TS deveria rodar `pnpm lint` tambem.
+
+**F60-S02 — defeito corrigido na F59-S04:** `decideOutbound` aplicava a janela horaria tambem a
+mensagem `transactional`, o que bloquearia um atendente de responder as 21h05 a quem escreveu as
+21h04. Passou despercebido porque o primeiro consumidor do portao (campanha) e sempre `marketing`.
+Corrigido: a janela vale so para marketing; supressao continua vencendo tudo. **Licao:** portao com
+um consumidor so nao esta validado — o segundo consumidor e que revela a assimetria.
+
+---
+
+## 2026-09-09 — Flakiness real: `Hook timed out in 10000ms` sob carga
+
+Fecha o assunto que apareceu tres vezes nesta sessao e que eu diagnostiquei mal duas.
+
+**O que e:** `src/routes/v1/routes.test.ts` (e, em `@hm/workers`, `evaluation`, `billing/recurrence`
+e `dashboard-refresh`) falham com `Hook timed out in 10000ms` **quando a suite inteira roda**, e
+passam isolados. Medi os dois lados:
+
+- isolado: 28 testes passam, `collect` leva ~19s, o hook cabe
+- suite inteira, com lint ou outra suite em paralelo: o mesmo hook estoura os 10s
+
+**O que NAO e:**
+- Nao e falta de servico. Postgres, Redis e RabbitMQ estavam saudaveis nas duas medicoes.
+- Nao e regressao de codigo. Comparei com `git stash`: o arquivo passa igual antes e depois.
+
+**Minhas duas leituras erradas, para nao repetirem:**
+1. Chamei de "3 falhas pre-existentes em `main`" — nao eram; faltava RabbitMQ naquele momento.
+2. Depois chamei de "so ambiente, esta tudo verde" — tambem incompleto: com os servicos no ar as
+   falhas somem *quando a maquina nao esta sob carga*, e voltam quando esta.
+
+**A causa provavel** e o timeout de hook default de 10s do Vitest ser apertado demais para um
+`beforeAll` que sobe app + conexoes. Sob carga, `collect` sozinho passa de 18s.
+
+**Sugestao (dominio de F57 — CI/cobertura):** subir `hookTimeout` nesses arquivos (ou no
+`vitest.config.ts` de `@hm/api` e `@hm/workers`) para algo como 30s, com comentario dizendo por que.
+Nao e mascarar falha: o hook faz trabalho real e demorado, e 10s e um numero que o Vitest escolheu
+sem saber disso. Enquanto nao for feito, **quem validar slot precisa reexecutar a suite isolada
+antes de concluir que ha regressao** — foi o que me custou dois diagnosticos errados.
+
+---
+
+## 2026-09-09 — Armadilha do `deploy.sh`: o script se atualiza no meio da propria execucao
+
+**Descoberto no deploy de producao de hoje**, e vale registrar porque nao e obvio e ja custou uma
+vez.
+
+`deploy.sh` faz `git reset --hard origin/main` no §1. Se o commit que esta sendo implantado alterou
+o proprio `deploy.sh`, o arquivo no disco muda — mas **o que continua executando e a versao
+antiga**, porque o bash ja abriu o arquivo. Consequencia: toda melhoria no processo de deploy so
+passa a valer no deploy SEGUINTE, sem aviso nenhum.
+
+**O que aconteceu:** o F57-S07 adicionou backup fail-closed antes das migrations. O deploy de hoje
+levou esse commit para a VPS — e rodou as migrations **sem backup**, usando a versao antiga do
+script. `/opt/leadium/backups/` ficou vazio enquanto `grep -c pg_dump /opt/leadium/scripts/deploy.sh`
+ja devolvia 2.
+
+**Nao houve dano:** as 6 migrations desta fase sao todas aditivas (coluna nova, tabela nova, CHECK
+relaxado) e o dado ficou intacto — 200 contatos, 2365 mensagens, e o backfill de
+`contact_identities` gerou as 200 linhas esperadas. Mas foi propriedade das migrations, nao rede de
+seguranca. Tirei um dump manual do estado bom logo depois.
+
+**Corrigido:** o §1 agora compara o sha de `scripts/deploy.sh` antes e depois do pull e, se mudou,
+faz `exec` da versao nova uma vez (`LEADIUM_DEPLOY_REEXEC` impede laco). Ha um segundo motivo alem
+da logica: mudar o TAMANHO de um script em execucao pode fazer o bash pular ou repetir trechos,
+porque ele guarda offset de leitura — bug muito pior de diagnosticar que este.
+
+**Para quem for mexer em `deploy.sh`:** valide o efeito no deploy N+1, nao no N. Ou, agora, confie
+no re-exec — mas confirme na saida que ele disparou.

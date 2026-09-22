@@ -44,9 +44,14 @@
  */
 import { z } from 'zod';
 import { connectMq, consume, type Envelope } from '@hm/shared/mq';
-import { SERVER_TO_CLIENT_EVENTS, type ServerToClientEvent } from '@hm/shared';
+import {
+  newMessageNotificationTarget,
+  SERVER_TO_CLIENT_EVENTS,
+  type ServerToClientEvent,
+} from '@hm/shared';
 import { createLogger, type LogLevel, type Logger } from '@hm/logger';
 import { bumpVersion } from '../cache';
+import { notifyInboundMessage } from '../services/notifications/from-inbound';
 import type { IoServer } from './index';
 
 const RELAY_QUEUE = 'hm.q.socket.relay';
@@ -151,6 +156,16 @@ export interface RelayPorts {
   readonly bumpTimeoutMs?: number;
   /** Log por-emit (contagem de sockets). Default: só quando o nível é `debug`. */
   readonly logEmits?: boolean;
+  /**
+   * Aviso ao membro (F61-S04). Injetável para o teste do relay não depender de
+   * banco nem de push — e para o relay poder ser testado provando que NÃO espera
+   * por ele.
+   */
+  readonly notifyInbound?: (input: {
+    workspaceId: string;
+    conversationId: string;
+    messageId: string;
+  }) => Promise<void>;
 }
 
 /** Resolve `p` ou rejeita ao estourar `ms` — o trabalho pendente segue solto (best-effort). */
@@ -290,8 +305,32 @@ export function createRelayHandler(ports: RelayPorts): (envelope: Envelope) => P
     // io aceita evento arbitrário (DefaultEventsMap); o shape do `data` é o
     // contrato tipado de socket-events validado na publicação.
     ports.emit(rooms, event, payload.data);
+
+    // F61-S04 — o dono no celular. Sai DEPOIS do emit e sem `await`: o relay é o
+    // último trecho entre o banco e o navegador, e nada aqui pode atrasar ou
+    // derrubar o tempo real. Um aviso perdido é ruim; "o tempo real some às
+    // vezes" é um bug caro de diagnosticar.
+    if (event === 'message:new') {
+      const alvo = newMessageNotificationTarget(payload.data);
+      if (alvo !== null) {
+        // `.catch()` explícito, não só `void`: `void` descarta o VALOR, não a
+        // rejeição — uma promise rejeitada aqui viraria unhandled rejection e,
+        // dependendo da configuração do Node, derrubaria o processo da API
+        // inteira por causa de um aviso que não saiu.
+        (ports.notifyInbound ?? notifyInboundMessage)({
+          workspaceId: envelope.workspaceId,
+          conversationId: alvo.conversationId,
+          messageId: alvo.messageId,
+        }).catch((err: unknown) => {
+          log.warn('aviso de inbound falhou — o tempo real seguiu normalmente', {
+            erro: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
+    }
   };
 }
+
 
 /**
  * Inicia o consumer do relay. Resolve quando o consumer está registrado.

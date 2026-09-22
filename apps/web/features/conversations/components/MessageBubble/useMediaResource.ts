@@ -1,11 +1,21 @@
 /**
- * Ciclo de vida de uma mídia renderizável na bolha (F52-S07).
+ * Ciclo de vida de uma mídia renderizável na bolha (F52-S07, F61-S11).
  *
- * Três estados explícitos (UX: loading ≠ error; recuperação acionável):
- *  - `pending`  — ainda baixando (mediaUrl null) ou reidratando a signed URL.
- *  - `ready`    — temos uma URL para renderizar.
- *  - `error`    — falha definitiva (worker esgotou tentativas via `message:
- *                 media_failed`, ou a URL quebrou e o refresh também falhou).
+ * Quatro estados explícitos (UX: loading ≠ error ≠ inexistente):
+ *  - `pending`      — ainda baixando (mediaUrl null) ou reidratando a signed URL.
+ *  - `ready`        — temos uma URL para renderizar.
+ *  - `error`        — falha recuperável (worker esgotou tentativas via `message:
+ *                     media_failed`, ou a URL quebrou e o refresh também falhou).
+ *                     Tentar de novo faz sentido.
+ *  - `unavailable`  — o arquivo não existe e não vai existir (F61-S11). Tentar de
+ *                     novo não faz sentido, e oferecer o botão seria mentir.
+ *
+ * **Carregando é uma promessa.** Antes da F61-S11, mídia que nunca foi baixada
+ * (`mediaUrl` null, sem job em andamento) caía em `pending` e girava para sempre —
+ * em produção eram 561 mensagens, a maioria eco de coexistência do WhatsApp, que
+ * não expõe download por design. Girar sem fim é pior que erro: não dá ao usuário
+ * nada para fazer, e ele conclui que o produto está quebrado. O backfill da 0075
+ * marca essas mensagens com `metadata.mediaUnavailable`.
  *
  * Auto-recuperação: a `media_url` persistida é uma signed URL com TTL. Ao reabrir
  * uma conversa antiga ela pode ter expirado e o `<img>/<video>/<audio>` dispara
@@ -19,7 +29,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/shared/lib/api-client';
 
 /** Estado público da mídia para a UI escolher o que renderizar. */
-export type MediaResourceState = 'pending' | 'ready' | 'error';
+export type MediaResourceState = 'pending' | 'ready' | 'error' | 'unavailable';
 
 /** Estado interno de reidratação da signed URL. */
 type RefreshStatus = 'live' | 'refreshing' | 'error';
@@ -37,6 +47,11 @@ export interface UseMediaResourceArgs {
   initialUrl: string | null;
   /** Falha definitiva sinalizada pelo socket (`message:media_failed`). */
   failed?: boolean;
+  /**
+   * O arquivo não existe mais na origem (`metadata.mediaUnavailable`, gravado
+   * pelo backfill da 0075). Diferente de `failed`: não há o que retentar.
+   */
+  unavailable?: boolean;
 }
 
 export interface MediaResource {
@@ -53,14 +68,24 @@ export interface MediaResource {
  * Deriva o estado público a partir das fontes de verdade. PURA e exportada para
  * teste sem React/DOM (harness `node`).
  *
- * Precedência: erro definitivo (refresh falhou OU worker falhou e não há URL) →
- * carregando (reidratando OU sem URL ainda) → pronto.
+ * Precedência, do mais específico ao mais genérico:
+ *  1. `unavailable` sem URL — o arquivo não existe; nenhum estado abaixo se aplica.
+ *  2. `error` — refresh falhou OU o worker desistiu e não há URL.
+ *  3. `pending` — reidratando OU ainda sem URL.
+ *  4. `ready`.
+ *
+ * `unavailable` vem antes de tudo porque é a única informação que fecha a questão:
+ * um arquivo que não existe não está carregando nem falhou de forma recuperável.
+ * Mas só quando NÃO há URL — se o servidor entregou uma (backfill posterior, mídia
+ * reenviada), a URL manda, e a marca velha não pode esconder mídia que voltou.
  */
 export function deriveMediaState(args: {
   url: string | null;
   status: RefreshStatus;
   failed: boolean;
+  unavailable?: boolean;
 }): MediaResourceState {
+  if (args.unavailable === true && args.url === null) return 'unavailable';
   if (args.status === 'error') return 'error';
   if (args.failed && args.url === null) return 'error';
   if (args.status === 'refreshing' || args.url === null) return 'pending';
@@ -72,6 +97,7 @@ export function useMediaResource({
   messageId,
   initialUrl,
   failed = false,
+  unavailable = false,
 }: UseMediaResourceArgs): MediaResource {
   const [url, setUrl] = useState<string | null>(initialUrl);
   const [status, setStatus] = useState<RefreshStatus>('live');
@@ -116,7 +142,7 @@ export function useMediaResource({
     refresh();
   }, [refresh]);
 
-  const state = deriveMediaState({ url, status, failed });
+  const state = deriveMediaState({ url, status, failed, unavailable });
   return {
     url: state === 'ready' ? url : null,
     state,

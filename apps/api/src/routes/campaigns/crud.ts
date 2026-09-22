@@ -11,6 +11,12 @@ import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { param } from '../conversions/types';
 import { validateCampaign } from './validate';
 import { buildValidationCampaign, loadCampaignChannel, makeGraphPorts } from './service';
+import {
+  encodeBindings,
+  publicCampaignModeSchema,
+  templateBindingsSchema,
+  toStoredCampaignType,
+} from './builder/contracts';
 
 const { campaigns, campaignSteps, campaignFollowups } = schema;
 
@@ -25,10 +31,17 @@ const sendWindowsSchema = z.object({
   windows: z.array(windowSchema).optional(),
 });
 
-const createSchema = z.object({
+/**
+ * A interface escolhe `mode` (Envio único / Sequência de mensagens); o banco
+ * continua guardando `broadcast`/`drip` (CAMPAIGNS.md §2). `type` segue aceito
+ * para não quebrar quem já integra — quando os dois vêm, precisam concordar.
+ * `triggered` é recusado antes do Zod, com explicação (F58-S06).
+ */
+const campaignFieldsSchema = z.object({
   channelId: z.string().uuid(),
   name: z.string().trim().min(1).max(200),
-  type: z.enum(['broadcast', 'drip', 'triggered']),
+  mode: publicCampaignModeSchema.optional(),
+  type: z.enum(['broadcast', 'drip']).optional(),
   timezone: z.string().trim().min(1).optional(),
   startAt: z.string().datetime().nullish(),
   endAt: z.string().datetime().nullish(),
@@ -39,13 +52,44 @@ const createSchema = z.object({
   aiHandoffAgentId: z.string().uuid().nullish(),
 });
 
-const updateSchema = createSchema.partial().omit({ channelId: true });
+const createSchema = campaignFieldsSchema.superRefine((value, ctx) => {
+  if (!value.mode && !value.type) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['mode'], message: 'Escolha Envio único ou Sequência de mensagens.' });
+  }
+  if (value.mode && value.type && toStoredCampaignType(value.mode) !== value.type) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['mode'], message: 'O formato informado está inconsistente.' });
+  }
+});
+
+const updateSchema = campaignFieldsSchema.partial().omit({ channelId: true }).superRefine((value, ctx) => {
+  if (value.mode && value.type && toStoredCampaignType(value.mode) !== value.type) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['mode'], message: 'O formato informado está inconsistente.' });
+  }
+});
+
+function storedType(value: { readonly mode?: 'single' | 'sequence'; readonly type?: 'broadcast' | 'drip' }): 'broadcast' | 'drip' | undefined {
+  return value.mode ? toStoredCampaignType(value.mode) : value.type;
+}
+
+function rejectsTriggered(body: unknown): boolean {
+  if (typeof body !== 'object' || body === null) return false;
+  const record = body as Record<string, unknown>;
+  return record['type'] === 'triggered' || record['mode'] === 'triggered';
+}
+
+function sendTriggeredUnavailable(res: Response): void {
+  res.status(422).json({
+    code: 'CAMPAIGN_TRIGGERED_NOT_AVAILABLE',
+    message: 'Campanhas automáticas por evento ainda não estão disponíveis. Escolha Envio único ou Sequência de mensagens.',
+  });
+}
 
 const stepSchema = z.object({
   position: z.number().int().min(0),
   templateName: z.string().trim().min(1).max(200),
   languageCode: z.string().trim().min(2).max(10).optional(),
   templateComponents: z.array(z.record(z.string(), z.unknown())).optional(),
+  bindings: templateBindingsSchema.optional(),
   delaySeconds: z.number().int().min(0).optional(),
   stopOnReply: z.boolean().optional(),
 });
@@ -105,6 +149,10 @@ export function createCampaignsCrudRouter(): Router {
   });
 
   router.post('/api/campaigns', ...editGuard, async (req: Request, res: Response) => {
+    if (rejectsTriggered(req.body)) {
+      sendTriggeredUnavailable(res);
+      return;
+    }
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'invalid_payload', issues: parsed.error.issues });
@@ -119,7 +167,7 @@ export function createCampaignsCrudRouter(): Router {
           workspaceId,
           channelId: d.channelId,
           name: d.name,
-          type: d.type,
+          type: storedType(d)!,
           status: 'draft',
           timezone: d.timezone ?? 'America/Sao_Paulo',
           startAt: d.startAt ? new Date(d.startAt) : null,
@@ -137,6 +185,10 @@ export function createCampaignsCrudRouter(): Router {
   });
 
   router.put('/api/campaigns/:id', ...editGuard, async (req: Request, res: Response) => {
+    if (rejectsTriggered(req.body)) {
+      sendTriggeredUnavailable(res);
+      return;
+    }
     const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'invalid_payload', issues: parsed.error.issues });
@@ -146,7 +198,8 @@ export function createCampaignsCrudRouter(): Router {
     const d = parsed.data;
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     if (d.name !== undefined) patch['name'] = d.name;
-    if (d.type !== undefined) patch['type'] = d.type;
+    const nextType = storedType(d);
+    if (nextType !== undefined) patch['type'] = nextType;
     if (d.timezone !== undefined) patch['timezone'] = d.timezone;
     if (d.startAt !== undefined) patch['startAt'] = d.startAt ? new Date(d.startAt) : null;
     if (d.endAt !== undefined) patch['endAt'] = d.endAt ? new Date(d.endAt) : null;
@@ -205,7 +258,9 @@ export function createCampaignsCrudRouter(): Router {
             position: s.position,
             templateName: s.templateName,
             languageCode: s.languageCode ?? 'pt_BR',
-            templateComponents: s.templateComponents ?? [],
+            // Contrato `binding_contract/v1`: S12 resolve por destinatário antes de
+            // publicar o componente Graph. O JSON existente evita mudança de schema.
+            templateComponents: s.bindings ? encodeBindings(s.bindings) : s.templateComponents ?? [],
             delaySeconds: s.delaySeconds ?? 0,
             stopOnReply: s.stopOnReply ?? true,
           })),

@@ -1,7 +1,17 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE } from '@/shared/lib/session';
 
-const PUBLIC_PREFIXES = ['/login', '/reset-password', '/signup', '/verify'];
+// `/privacidade`, `/termos` e `/exclusao-de-dados` (F69-S01) abrem sem login por exigência
+// da Meta: o revisor do App Review e quem pediu exclusão de dados não têm conta aqui.
+const PUBLIC_PREFIXES = [
+  '/login',
+  '/reset-password',
+  '/signup',
+  '/verify',
+  '/privacidade',
+  '/termos',
+  '/exclusao-de-dados',
+];
 
 /** Cookie de claim de view-as (espelha IMPERSONATION_COOKIE da API, F26-S05). */
 const IMPERSONATION_COOKIE = 'hm_impersonation';

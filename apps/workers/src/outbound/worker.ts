@@ -30,7 +30,11 @@ import { runWithDistributedLock, type LockStore } from '../lock';
 import { resolveOutboundLockStore } from '../redis';
 import { parseOutboundJob, type OutboundJob } from './job';
 import { dispatchOutbound, type DispatchResult } from './dispatch';
+import { createConsentGate } from './consent-gate';
+import { purposeOf } from './job';
+import type { ConsentGatePort } from './ports';
 import { recordIgMessageTagUsed, recordIgWindowBlocked } from './ig-metrics';
+import { recordOutboundDenied } from './consent-metrics';
 import { finalizeOutbound } from './finalize';
 import { runPresencePreAction } from './presence';
 import {
@@ -58,6 +62,18 @@ export const OUTBOUND_QUEUE = 'hm.q.outbound' as const;
 
 /** TTL do lock por conversa (LIVECHAT.md §3.4). */
 export const OUTBOUND_LOCK_TTL_MS = 90_000;
+
+/**
+ * Portão real, criado sob demanda. Preguiçoso porque `createConsentGate` toca o
+ * pool do banco, e o módulo é importado também por testes que não têm banco.
+ */
+let consentGateSingleton: ConsentGatePort | null = null;
+const defaultConsentGate: ConsentGatePort = {
+  async check(input) {
+    consentGateSingleton ??= createConsentGate();
+    return consentGateSingleton.check(input);
+  },
+};
 
 /** Chave de lock FIFO por conversa. */
 export function lockKey(conversationId: string): string {
@@ -152,6 +168,15 @@ export interface OutboundWorkerOptions {
    * provider chegou a aceitar antes de a conexão cair.
    */
   readonly sendGuard?: OutboundSendGuard;
+  /**
+   * Portão de consentimento (F59-S05). Default: `createConsentGate()` — o real,
+   * apoiado no banco. Injetável para teste.
+   *
+   * Não há caminho que pule o portão: se esta opção vier ausente, o default é o
+   * portão REAL, não o permissivo. `allowAllConsentGate` existe só em teste e o
+   * nome diz isso.
+   */
+  readonly consentGate?: ConsentGatePort;
 }
 
 /**
@@ -191,6 +216,7 @@ export async function handleOutboundEnvelope(
   const { deps, logger, lockStore } = options;
   const attempts = options.attempts ?? defaultSendAttemptStore;
   const sendGuard = options.sendGuard ?? defaultOutboundSendGuard;
+  const consentGate = options.consentGate ?? defaultConsentGate;
   const job: OutboundJob = parseOutboundJob(envelope.payload);
   const workspaceId = envelope.workspaceId;
 
@@ -199,6 +225,44 @@ export async function handleOutboundEnvelope(
     OUTBOUND_LOCK_TTL_MS,
     async () => {
       const { channel, adapter } = await deps.channels.resolve(job.channelId, workspaceId);
+
+      // F59-S05: portão de consentimento. Última linha de defesa antes do
+      // provider — nenhum caminho de envio chega ao adapter sem passar por aqui.
+      //
+      // `typing_indicator` é presença, não mensagem: não carrega conteúdo, não
+      // é marketing e bloqueá-lo só degradaria a UX sem ganho de conformidade.
+      if (job.kind !== 'typing_indicator') {
+        const decision = await consentGate.check({
+          workspaceId,
+          conversationId: job.conversationId,
+          provider: channel.provider,
+          purpose: purposeOf(job),
+        });
+
+        if (!decision.allowed) {
+          recordOutboundDenied(decision.reason, channel.provider);
+          // Recusa NUNCA é silenciosa: vira status visível + log estruturado.
+          // O pior resultado possível seria o cliente achar que disparou.
+          logger.warn('outbound: envio recusado pelo portão de consentimento', {
+            kind: job.kind,
+            conversationId: job.conversationId,
+            messageId: job.messageId,
+            provider: channel.provider,
+            purpose: purposeOf(job),
+            reason: decision.reason,
+            timezone: decision.timezone,
+            usedFallbackTimezone: decision.usedFallbackTimezone,
+            retryAt: decision.retryAt?.toISOString(),
+          });
+          await finalizeOutbound(
+            job,
+            { ok: false, errorCode: `consent_${decision.reason}`, errorMessage: decision.message },
+            workspaceId,
+            deps,
+          );
+          return;
+        }
+      }
 
       // Pre-action: dispara "digitando…" no canal antes do envio real (F1-S21).
       // Best-effort — falha aqui não bloqueia o envio.

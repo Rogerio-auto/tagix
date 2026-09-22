@@ -17,8 +17,22 @@ export type ConversationId = Brand<string, 'ConversationId'>;
 export * from './permissions';
 
 // --- Providers de canal (vide LIVECHAT.md / INSTAGRAM.md) ---
-export const CHANNEL_PROVIDERS = ['meta_whatsapp', 'meta_instagram', 'waha'] as const;
+// `email` entra na F60-S03. A ordem importa pouco, mas a lista e consumida por
+// `channels_provider_chk` no banco e pela trava de compilacao em `markets.ts`,
+// que exige todo provider ser um `ChannelKind` valido.
+export const CHANNEL_PROVIDERS = ['meta_whatsapp', 'meta_instagram', 'waha', 'email'] as const;
 export type ChannelProvider = (typeof CHANNEL_PROVIDERS)[number];
+
+// --- Market packs: regra por mercado (BR/US) — AGENCIA_PLAN.md §3.1 ---
+// Fonte única de moeda, idioma, fuso, canais e política de outbound. Nenhuma
+// regra de conformidade vive fora deste módulo.
+export * from './markets';
+
+// --- Portão de envio: decide se a mensagem pode sair (F59-S04) ---
+export * from './consent';
+
+// --- Detector de revogacao em linguagem natural (F59-S06) ---
+export * from './revocation';
 
 // --- Auth (IAuthProvider) ---
 export * from './auth';
@@ -49,6 +63,30 @@ export * from './types/inbox';
 
 // --- Eventos Socket.io Server→Client (LIVECHAT.md §6, tipos puros) ---
 export * from './socket-events';
+
+// --- Roteador de notificação ao MEMBRO (F61-S04). Decisão pura, sem IO. ---
+export {
+  routeNotification,
+  channelsFor,
+  inQuietHours,
+  NOTIFICATION_EVENTS,
+  NOTIFICATION_CHANNELS,
+  JANELA_JA_VIU_MIN,
+} from './notifications';
+export type {
+  NotificationEvent,
+  NotificationChannel,
+  NotificationPrefs,
+  RoutingDecision,
+} from './notifications';
+
+// --- Prévia da última mensagem (F61-S12). Fonte ÚNICA: havia 4 cópias, 3 erradas. ---
+export { previewFor, humanizePreview, labelForType } from './preview';
+
+// --- Telefone em formato humano (F61-S12). ---
+export { formatPhoneForDisplay } from './phone-display';
+export { countryCodeForMarket, isE164Phone, normalizeE164 } from './phone-normalize';
+export type { PhoneCountryCode } from './phone-normalize';
 
 // --- Central de Ajuda (F38 — SUPPORT.md §1). Exports explícitos (sem `export *`). ---
 export {

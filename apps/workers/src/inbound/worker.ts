@@ -27,8 +27,9 @@ import type { Logger } from '@hm/logger';
 import { runInboundPipeline } from './pipeline';
 import { ChannelInboundParser } from './parse';
 import { createStatusDeps } from './status';
-import { DbInboundPersistence, MqInboundFlowEnqueue, MqInboundSocketEmit } from './db-ports';
+import { DbInboundChannelResolver, DbInboundPersistence, MqInboundFlowEnqueue, MqInboundSocketEmit } from './db-ports';
 import { MqMediaEnqueue } from './mq-ports';
+import { createRevocationStep } from './revocation';
 import {
   createCampaignInboundPorts,
   processCampaignInbound,
@@ -78,6 +79,9 @@ export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDe
     logger,
   );
   const socket = new MqInboundSocketEmit(channel);
+  // F59-S06: revogacao em linguagem natural, antes de persistir. Reusa o resolver
+  // de canal para nao duplicar `routing hints -> canal -> workspace`.
+  const revocation = createRevocationStep(new DbInboundChannelResolver());
   const flow = new MqInboundFlowEnqueue(channel);
   const statusDeps = createStatusDeps(channel);
   // Hook de trigger dispatch de flows (F4-S13): avalia/dispara flows + resume waiting.
@@ -135,7 +139,7 @@ export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDe
     contactMessageHook,
   );
   const media = new MqMediaEnqueue(channel);
-  return { parser, persistence, media };
+  return { parser, persistence, media, revocation };
 }
 
 /**
