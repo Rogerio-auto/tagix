@@ -120,7 +120,10 @@ export function formatDateTime(value: string | null): string {
   if (!value) return 'Ainda não sincronizado';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Horário indisponível';
-  return new Intl.DateTimeFormat('pt-BR', {
+  // Sem locale fixo: segue o idioma de quem está olhando. Fixar `pt-BR` aqui quebraria o mercado
+  // americano, onde a mesma tela mostra data no formato de lá (regra do lint: o idioma vem do
+  // market pack, nunca do componente).
+  return new Intl.DateTimeFormat(undefined, {
     dateStyle: 'short',
     timeStyle: 'short',
   }).format(date);
