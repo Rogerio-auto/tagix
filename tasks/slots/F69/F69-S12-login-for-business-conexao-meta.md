@@ -100,7 +100,7 @@ tentativa de diagnóstico seria adivinhação de novo.
 
 - [x] `startMetaConnect` abre `FB.login` com `config_id`, sem `scope` (teste). *(`fb-login.test.ts`)*
 - [x] Build sem `META_LOGIN_CONFIG_ID` mostra a configuração faltando e não abre o login (teste). *(`fb-login.test.ts` + `signup-status.test.ts`; o painel lista a variável ausente)*
-- [ ] Conexão real em produção conclui e aparece em Configurações → Meta. *(pendente: Rogério criar a configuração no painel da Meta; `META_LOGIN_CONFIG_ID` no `.env` de produção e deploy)*
+- [ ] Conexão real em produção conclui e aparece em Configurações → Meta. *(configuração criada e `META_LOGIN_CONFIG_ID` no ar desde 2026-09-22, bundle verificado; a 1ª tentativa com ela ainda falhou com `100/36008` e levou à remoção do `auth_type` — pendente a tentativa com o deploy `:5bd0fd09`)*
 
 ## Resultado parcial (2026-09-15)
 
