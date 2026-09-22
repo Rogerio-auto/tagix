@@ -23,6 +23,15 @@ export function useSubscribeLeadPage() {
   });
 }
 
+/** Tenta assinar de novo a página que ficou em modo conferência (F69-S13). */
+export function useRetrySubscribeLeadPage() {
+  const qc = useQueryClient();
+  return useMutation<unknown, Error, string>({
+    mutationFn: (id) => api.post(`/api/meta/lead-sources/${id}/subscribe`, {}),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
 export function useStopLeadPage() {
   const qc = useQueryClient();
   return useMutation<unknown, Error, string>({

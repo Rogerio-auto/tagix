@@ -54,6 +54,7 @@ melhor que não receber — e reversível no dia em que a permissão sair.
 - `apps/api/src/routes/meta/lead-sources.test.ts`
 - `packages/db/src/schema/lead_ads.ts`
 - `packages/db/src/repos/lead-ads.ts`
+- `packages/db/src/index.ts` *(correção 2026-09-22: exporta o tipo do modo de entrega para a API e a tela)*
 - `packages/db/drizzle/**`
 - `apps/web/features/lead-ads/**`
 - `docs/features/META_INTEGRACAO_PLAN.md`

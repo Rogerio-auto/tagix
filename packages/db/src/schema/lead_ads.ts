@@ -41,6 +41,16 @@ const ts = (name: string) => timestamp(name, { withTimezone: true });
 
 export type LeadAdSourceStatus = 'active' | 'inactive';
 
+/**
+ * Como o lead desta página chega (F69-S13).
+ *
+ * - `webhook`: a página está assinada no campo `leadgen` — lead em segundos.
+ * - `reconciliation`: a assinatura não foi possível (falta `pages_manage_metadata` no app), então a
+ *   conferência periódica busca os leads do formulário — até 15 min. Ler lead não depende dessa
+ *   permissão; só o webhook depende.
+ */
+export type LeadAdDelivery = 'webhook' | 'reconciliation';
+
 export const leadAdSources = pgTable(
   'lead_ad_sources',
   {
@@ -58,6 +68,9 @@ export const leadAdSources = pgTable(
     pageId: text('page_id').notNull(),
     pageName: text('page_name'),
     status: text('status').$type<LeadAdSourceStatus>().notNull().default('active'),
+    delivery: text('delivery').$type<LeadAdDelivery>().notNull().default('webhook'),
+    /** Por que a assinatura não foi possível, em linguagem de dono. Nulo quando está no webhook. */
+    subscribeError: text('subscribe_error'),
     subscribedAt: ts('subscribed_at'),
     /** Até quando a reconciliação já conferiu. Nulo = nunca reconciliou. */
     lastReconciledAt: ts('last_reconciled_at'),
@@ -68,6 +81,7 @@ export const leadAdSources = pgTable(
     uniqueIndex('uq_lead_ad_sources_workspace_page').on(t.workspaceId, t.pageId),
     index('idx_lead_ad_sources_page').on(t.pageId),
     check('lead_ad_sources_status_chk', sql`${t.status} in ('active','inactive')`),
+    check('lead_ad_sources_delivery_chk', sql`${t.delivery} in ('webhook','reconciliation')`),
   ],
 );
 

@@ -102,7 +102,7 @@ export { metaConnectionsRepo } from './repos/meta-connections';
 export type { MetaConnectionPublic, UpsertMetaConnectionInput } from './repos/meta-connections';
 export { leadAdsRepo } from './repos/lead-ads';
 export type { ActiveLeadSource, ResolvedLeadSource, LeadSubmissionSummary } from './repos/lead-ads';
-export type { LeadAdSource, LeadAdSubmission, LeadConsentEvidence } from './schema/lead_ads';
+export type { LeadAdDelivery, LeadAdSource, LeadAdSubmission, LeadConsentEvidence } from './schema/lead_ads';
 export type {
   MetaConnection,
   MetaConnectionAssets,
