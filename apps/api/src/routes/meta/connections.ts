@@ -41,6 +41,12 @@ const logger = createLogger('info', { svc: '@hm/api' });
 const criarSchema = z.object({
   code: z.string().trim().min(1).max(2048),
   useCases: z.array(z.enum(META_USE_CASES)).min(1).max(META_USE_CASES.length),
+  /**
+   * URL da página que abriu o login (F69-S12). Candidata a `redirect_uri` na troca do código: o SDK
+   * não diz qual usou no diálogo, e a Meta vinha recusando com `100/36008`. Opcional — sem ela, a
+   * troca segue o caminho documentado.
+   */
+  redirectUri: z.string().url().max(512).optional(),
 });
 
 const UUID = z.string().uuid();
@@ -163,11 +169,28 @@ export function createMetaConnectionsRouter(deps: MetaConnectionsDeps = {}): Rou
 
     let snapshot;
     try {
-      snapshot = await connectFromCode(graph, parsed.data.code, { appId, appSecret }, now());
+      snapshot = await connectFromCode(graph, parsed.data.code, { appId, appSecret }, now(), {
+        pageUrl: parsed.data.redirectUri ?? null,
+        onAttempt: (t) => {
+          logger.info('meta.connection.exchange.tentativa', {
+            redirectUri: t.redirectUri === null ? '(sem redirect_uri)' : t.redirectUri,
+            ok: t.ok,
+            graphCode: t.graphCode,
+            graphSubcode: t.graphSubcode,
+          });
+        },
+      });
     } catch (err) {
       responderFalha(res, err, 'connect');
       return;
     }
+    logger.info('meta.connection.exchange.aceita', {
+      redirectUri:
+        snapshot.exchange.redirectUriAceita === null
+          ? '(sem redirect_uri)'
+          : snapshot.exchange.redirectUriAceita,
+      tentativas: snapshot.exchange.tentativas.length,
+    });
 
     const agora = now();
     const workspaceId = req.auth!.workspace.id;

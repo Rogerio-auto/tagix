@@ -11,7 +11,7 @@
  * resposta desta camada para fora contém token — `ConnectionSnapshot.token` existe
  * só para a rota cifrar, e o tipo público da rota não o carrega.
  */
-import type { GraphClient } from '@hm/channels';
+import { MetaError, type GraphClient } from '@hm/channels';
 import { parsePermissions, type PermissionSnapshot } from './permissions';
 
 export type GraphGet = Pick<GraphClient, 'get'>;
@@ -55,6 +55,8 @@ export interface MetaAssets {
 }
 
 export interface ConnectionSnapshot extends PermissionSnapshot {
+  /** Como a troca do código foi aceita — só para o log da rota (F69-S12). */
+  readonly exchange: ExchangeDiagnostics;
   readonly metaUserId: string;
   readonly metaUserName: string | null;
   /** Só para a rota cifrar. Nunca serializar. */
@@ -66,19 +68,95 @@ export interface ConnectionSnapshot extends PermissionSnapshot {
 /** Teto defensivo de ativos por tipo — ninguém administra 200 páginas de um cliente só. */
 const LIMITE_ATIVOS = 200;
 
-/** Troca o `code` do login por um token de usuário de curta duração. */
+/** Uma tentativa de troca — é o que o log precisa para dizer o que a Meta aceitou ou recusou. */
+export interface ExchangeAttempt {
+  /** `null` = sem o parâmetro `redirect_uri`, que é o que a documentação da Meta manda. */
+  readonly redirectUri: string | null;
+  readonly ok: boolean;
+  readonly graphCode?: number;
+  readonly graphSubcode?: number;
+}
+
+/** O que a troca devolve além do token: qual `redirect_uri` a Meta aceitou, e o caminho até ela. */
+export interface ExchangeDiagnostics {
+  readonly redirectUriAceita: string | null;
+  readonly tentativas: readonly ExchangeAttempt[];
+}
+
+/** "Error validating verification code. Please make sure your redirect_uri is identical…" */
+const SUBCODE_REDIRECT_URI = 36008;
+
+export interface ExchangeOptions {
+  /** URL da página que abriu o login — candidata a `redirect_uri` (só o navegador a conhece). */
+  readonly pageUrl?: string | null;
+  /** Recebe cada tentativa, para o log. */
+  readonly onAttempt?: (tentativa: ExchangeAttempt) => void;
+}
+
+/**
+ * Troca o `code` do login por um token de usuário de curta duração.
+ *
+ * ## Por que há mais de uma tentativa (F69-S12)
+ *
+ * A Meta documenta a troca como `client_id` + `client_secret` + `code`, sem `redirect_uri` — e é
+ * assim que o Embedded Signup do WhatsApp funciona. Mas o login da conexão vinha recusado com
+ * `100/36008` ("redirect_uri is identical…"), mesmo com `config_id` e sem `auth_type`. O SDK não
+ * expõe qual `redirect_uri` usou no diálogo, então a ordem aqui testa as candidatas plausíveis:
+ * nenhuma (o documentado), a URL da página que abriu o login, e vazia.
+ *
+ * Insiste **apenas** enquanto a recusa é exatamente sobre `redirect_uri`. Token inválido, app errado
+ * ou instabilidade param na hora: cada chamada extra é mais uma chance de a Meta invalidar o código.
+ *
+ * Quando o log apontar a candidata aceita, esta lista colapsa para ela — a sonda existe para
+ * responder qual é, não para ficar.
+ */
 export async function exchangeCode(
   graph: GraphGet,
   code: string,
   app: { appId: string; appSecret: string },
-): Promise<string> {
-  const qs = new URLSearchParams({ client_id: app.appId, client_secret: app.appSecret, code });
-  const res = await graph.get(`oauth/access_token?${qs.toString()}`, '');
-  const token = isRecord(res) ? asString(res['access_token']) : undefined;
-  if (token === undefined) {
-    throw new MetaConnectError('META_EXCHANGE_FAILED', 'A Meta não devolveu um token na troca do código.');
+  opts: ExchangeOptions = {},
+): Promise<{ token: string } & ExchangeDiagnostics> {
+  const candidatas: Array<string | null> = [null];
+  if (opts.pageUrl !== undefined && opts.pageUrl !== null && opts.pageUrl !== '') {
+    candidatas.push(opts.pageUrl);
   }
-  return token;
+  candidatas.push('');
+
+  const tentativas: ExchangeAttempt[] = [];
+  let ultimoErro: unknown;
+
+  for (const redirectUri of candidatas) {
+    const qs = new URLSearchParams({ client_id: app.appId, client_secret: app.appSecret, code });
+    if (redirectUri !== null) qs.set('redirect_uri', redirectUri);
+    try {
+      const res = await graph.get(`oauth/access_token?${qs.toString()}`, '');
+      const token = isRecord(res) ? asString(res['access_token']) : undefined;
+      if (token === undefined) {
+        throw new MetaConnectError('META_EXCHANGE_FAILED', 'A Meta não devolveu um token na troca do código.');
+      }
+      const ok: ExchangeAttempt = { redirectUri, ok: true };
+      tentativas.push(ok);
+      opts.onAttempt?.(ok);
+      return { token, redirectUriAceita: redirectUri, tentativas };
+    } catch (err: unknown) {
+      ultimoErro = err;
+      const meta = err instanceof MetaError ? err : null;
+      const falha: ExchangeAttempt = {
+        redirectUri,
+        ok: false,
+        ...(meta?.code !== undefined ? { graphCode: meta.code } : {}),
+        ...(meta?.subcode !== undefined ? { graphSubcode: meta.subcode } : {}),
+      };
+      tentativas.push(falha);
+      opts.onAttempt?.(falha);
+      if (meta === null || meta.subcode !== SUBCODE_REDIRECT_URI) break;
+    }
+  }
+
+  throw (
+    ultimoErro ??
+    new MetaConnectError('META_EXCHANGE_FAILED', 'A Meta não devolveu um token na troca do código.')
+  );
 }
 
 /**
@@ -186,9 +264,10 @@ export async function connectFromCode(
   code: string,
   app: { appId: string; appSecret: string },
   now: Date,
+  opts: ExchangeOptions = {},
 ): Promise<ConnectionSnapshot> {
-  const curto = await exchangeCode(graph, code, app);
-  const { token, expiresAt } = await toLongLived(graph, curto, app, now);
+  const troca = await exchangeCode(graph, code, app, opts);
+  const { token, expiresAt } = await toLongLived(graph, troca.token, app, now);
   const [identidade, permissoes, assets] = await Promise.all([
     fetchIdentity(graph, token),
     fetchPermissions(graph, token),
@@ -202,5 +281,6 @@ export async function connectFromCode(
     granted: permissoes.granted,
     declined: permissoes.declined,
     assets,
+    exchange: { redirectUriAceita: troca.redirectUriAceita, tentativas: troca.tentativas },
   };
 }

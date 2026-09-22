@@ -2,7 +2,7 @@
 id: F69-S12
 title: Conectar a Meta falhava na troca do código — login da conexão passa a usar Facebook Login for Business
 phase: F69
-status: available
+status: review
 priority: critical
 estimated_size: S
 depends_on: [F69-S02]
@@ -10,8 +10,8 @@ blocks: [F69-S03]
 source_docs:
   - docs/features/META_INTEGRACAO_PLAN.md
 agent_id: fullstack-engineer
-claimed_at: 2026-09-22T16:19:37Z
-completed_at: 2026-09-22T16:22:10Z
+claimed_at: 2026-09-22T16:33:27Z
+completed_at: 2026-09-22T16:47:49Z
 
 ---
 # F69-S12 — Conectar a Meta falhava na troca do código
@@ -48,6 +48,8 @@ tem `meta_*`), e bloqueio do perfil/empresa (o login na janela passou).
 
 - `apps/web/features/channels/fb-login.ts`
 - `apps/api/src/routes/meta/connections.ts` *(correção 2026-09-22: o log da falha da Meta não trazia a mensagem dela, só os códigos — sem isso o diagnóstico vira adivinhação)*
+- `apps/api/src/services/meta/connection.ts` *(correção 2026-09-22: a troca do código precisa tentar a `redirect_uri` que a Meta exige — é onde o `36008` acontece)*
+- `apps/api/src/services/meta/connection.test.ts` *(correção 2026-09-22: teste da ordem de tentativas da troca)*
 - `apps/web/features/channels/signup-status.ts`
 - `apps/web/features/channels/*.test.ts`
 - `apps/web/features/meta-connection/**`
