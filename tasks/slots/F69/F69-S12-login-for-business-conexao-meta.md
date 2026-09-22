@@ -2,7 +2,7 @@
 id: F69-S12
 title: Conectar a Meta falhava na troca do código — login da conexão passa a usar Facebook Login for Business
 phase: F69
-status: review
+status: available
 priority: critical
 estimated_size: S
 depends_on: [F69-S02]
