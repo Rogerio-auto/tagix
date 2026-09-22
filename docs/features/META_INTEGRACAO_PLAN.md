@@ -40,7 +40,7 @@ Levantado no código em 2026-09-14:
 | Webhook único `/webhooks/meta` | ✅ trata `whatsapp_business_account`, `instagram` e — desde a F69-S03 — `page` (campo `leadgen`) |
 | Escopos pedidos no login do Instagram | `pages_show_list, pages_manage_metadata, instagram_basic, instagram_manage_messages, business_management` |
 | **Callback de exclusão de dados** | ❌ **não existe** — e sem ele o App Review reprova |
-| Lead Ads (`leadgen`) | ✅ F69-S03 (2026-09-15): assinatura da página, busca imediata com retry, reconciliação a cada 15 min, contato + conversa + card + aviso, termo do formulário guardado como prova. Pendente: concessão de canal a partir das caixas (precisa do mapeamento caixa → canal) |
+| Lead Ads (`leadgen`) | ✅ F69-S03 (2026-09-15): assinatura da página, busca imediata com retry, reconciliação a cada 15 min, contato + conversa + card + aviso, termo do formulário guardado como prova. **Bloqueio de 2026-09-22 (§4.1):** o app não tem `pages_manage_metadata`, então `subscribed_apps` falha e **o webhook de lead não chega para ninguém** — nem com função no app. Ler lead por formulário não depende dela ([Retrieving Leads](https://developers.facebook.com/documentation/ads-commerce/marketing-api/guides/lead-ads/retrieving): exigida "if using webhooks"), então a saída é o modo reconciliação da F69-S13 até o App Review. Pendente também: concessão de canal a partir das caixas (F69-S11) |
 | Marketing API (contas de anúncio, insights, gestão) | ❌ |
 | Envio de conversão de volta para a Meta | ❌ |
 | Instagram — publicação de conteúdo | ❌ |

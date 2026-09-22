@@ -22,6 +22,25 @@ Garantir que o login que o produto faz pede exatamente as permissões que o caso
 
 `docs/features/META_INTEGRACAO_PLAN.md` §3.1. A Meta mantém dois caminhos para o Instagram, com nomes de permissão diferentes (`instagram_basic`/`instagram_manage_messages` no login do Facebook; família `instagram_business_*` no login do Instagram). O código usa o primeiro. Submeter um conjunto e o login pedir o outro reprova, e cada rodada de revisão custa semanas.
 
+### Achado de 2026-09-22 (cadastro da configuração do Login for Business, F69-S12)
+
+No seletor de permissões da configuração, **`instagram_manage_messages` e `instagram_manage_comments`
+não aparecem** — o seletor só oferece permissão que já tem nível de acesso no app. `instagram_basic` e
+`instagram_content_publish` **apareceram** e foram marcadas. A leitura de quem cadastrou: o caso de uso
+"API do Instagram" deste app está na variante **login do Instagram** (família `instagram_business_*`),
+enquanto o código usa a família do **login do Facebook**.
+
+**Recomendação para decidir aqui (não executada ainda):** manter a variante **login do Facebook**.
+O adapter de DM, o parser de webhook, o token de página e o desenho da conexão por workspace assumem
+essa variante; migrar troca modelo de token e nomes de campo do webhook — semanas de trabalho, sem
+ganho para o primeiro cliente. O trabalho deste slot passa a ser: conferir no painel se o caso de uso
+do Instagram pode ser trocado para a variante do login do Facebook e, se puder, pedir
+`instagram_manage_messages` / `instagram_manage_comments` na análise. Só depois disso faz sentido
+mexer em `USE_CASE_PERMISSIONS.instagram` (`apps/api/src/services/meta/permissions.ts`).
+
+Enquanto isso, a configuração é editável: as permissões entram quando ganharem acesso, **sem trocar o
+`config_id`**.
+
 ## Escopo
 
 ### files_allowed

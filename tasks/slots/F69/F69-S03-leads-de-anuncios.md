@@ -70,7 +70,7 @@ Todo lead de formulário de anúncio da Meta vira, em segundos, contato + conver
 
 ## Definition of Done
 
-- [ ] Lead chega à inbox em menos de 10s do webhook em ambiente de teste da Meta.
+- [ ] Lead chega à inbox em menos de 10s do webhook em ambiente de teste da Meta. *(bloqueado em 2026-09-22: o app não tem `pages_manage_metadata`, então `POST /{page}/subscribed_apps` falha e nenhum webhook de lead chega — nem para quem tem função no app. Depende do App Review (F69-S10). Até lá, o caminho é o modo reconciliação da F69-S13, com lead em até 15 min; ler lead por formulário não exige essa permissão.)*
 - [x] Webhook de lead duplicado não cria contato nem card duplicado. *(db-store.test: repetido e concorrente)*
 - [x] Falha na busca faz retry e, esgotado, alerta — nunca some em silêncio. *(process.test; `hm.q.leadgen` em `reliableQueues` → DLQ monitorada; `failed` com motivo na tela)*
 - [x] Reconciliação recupera lead que o webhook não entregou. *(reconcile.test; em produção, validar com lead real)*
