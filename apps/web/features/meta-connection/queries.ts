@@ -30,7 +30,13 @@ export function useCreateMetaConnection() {
     { code: string; useCases: MetaUseCaseId[] }
   >({
     mutationFn: (input) =>
-      api.post<{ connection: MetaConnectionView }>('/api/meta/connections', input),
+      api.post<{ connection: MetaConnectionView }>('/api/meta/connections', {
+        ...input,
+        // F69-S12: a Meta recusa a troca do código com `100/36008` ("redirect_uri is identical…").
+        // A URL desta página é a candidata a `redirect_uri` que o servidor tenta — o SDK não expõe
+        // qual ele usou no diálogo, então quem sabe o endereço é o navegador.
+        redirectUri: typeof window === 'undefined' ? undefined : `${window.location.origin}${window.location.pathname}`,
+      }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: CONNECTIONS_KEY }),
   });
 }
