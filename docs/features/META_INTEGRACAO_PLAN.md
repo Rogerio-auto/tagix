@@ -107,23 +107,59 @@ usa `config_id`, e não `scope`. Com `scope`, o login abre, mas a troca do códi
 É uma configuração **separada** da do Embedded Signup do WhatsApp (`META_CONFIG_ID`): pede outro
 conjunto de permissões e não abre o cadastro de número.
 
-**Criar no painel da Meta:** Painel do app → **Facebook Login for Business** → **Configurações** →
-**+ Criar configuração**.
+**Criada em 2026-09-22.** `META_LOGIN_CONFIG_ID = 1072538632222832`
+(nome `Leadium — conexão por workspace`, app `1241342414558641`, portfólio `4136770246588242`).
+A do Embedded Signup do WhatsApp é a outra da lista: `7SionTech2` = `739536855573340`.
+
+**Caminho no painel:** Painel do app → **Login do Facebook para Empresas** → **Configurações**
+(o segundo item do submenu; o primeiro é o OAuth do app) → **+ Criar configuração**. URL direta:
+`developers.facebook.com/apps/1241342414558641/business-login/configurations/`.
+
+O assistente tem 5 passos, e dois deles **não podem ser alterados depois**:
 
 1. **Nome:** `Leadium — conexão por workspace`.
-2. **Tipo de token de acesso:** **Token de acesso do usuário** (quem conecta entra com a própria conta;
-   o servidor guarda o token do usuário e deriva o token de cada página). Expiração: a mais longa
-   oferecida.
-3. **Ativos:** Páginas, Contas de anúncio e Contas do Instagram.
-4. **Permissões** — a união de todos os casos de uso (`apps/api/src/services/meta/permissions.ts`):
-   `leads_retrieval`, `pages_manage_ads`, `pages_manage_metadata`, `pages_show_list`,
-   `pages_read_engagement`, `ads_management`, `ads_read`, `business_management`, `instagram_basic`,
-   `instagram_manage_messages`, `instagram_manage_comments`, `instagram_content_publish`. Marque também
-   `ads_mcp_management` se aparecer na lista.
-5. **Criar** → copiar o **ID da configuração**.
+2. **Variação de login:** **Geral**. A outra opção (*Cadastro incorporado do WhatsApp*) é a da
+   `META_CONFIG_ID` — ela abre o cadastro de número, não serve aqui. **Irreversível.**
+3. **Tipo de token de acesso:** **Token de acesso do usuário**. **Irreversível.** O painel sugere
+   *token de usuário do sistema* para "acesso contínuo aos ativos", mas a implementação é de token de
+   usuário: `connection.ts` troca o `code` por um token curto e faz `fb_exchange_token` para o
+   long-lived, depois lê `GET /me/permissions`. Consequência aceita: o token do usuário expira em
+   ~60 dias e a conexão precisa ser refeita — a tela de saúde da conexão é quem avisa.
+4. **Ativos:** **o passo é pulado.** Com token de usuário o painel desabilita a seleção de ativos
+   ("Não é possível selecionar ativos porque você optou por usar um token de acesso de usuário").
+   Os ativos vêm do que o usuário marca no popup de login.
+5. **Permissões:** o seletor **só oferece permissões que já têm nível de acesso** no caso de uso
+   correspondente (*Pronto para teste* ou *Pronto para publicar*). Permissão em
+   *Adicionar à análise do app* simplesmente não aparece na lista.
 
-**Levar para o produto:** `META_LOGIN_CONFIG_ID=<id>` no `.env` de produção e deploy — o build do web
-mapeia para `NEXT_PUBLIC_META_LOGIN_CONFIG_ID`. O ID é público (vai no navegador).
+**Marcadas (10):** `leads_retrieval`, `pages_manage_ads`, `pages_read_engagement`, `pages_show_list`,
+`ads_management`, `ads_read`, `ads_mcp_management`, `business_management`, `instagram_basic`,
+`instagram_content_publish`.
+
+**Faltando, porque o painel não as oferece** — três nomes que `permissions.ts` exige:
+
+- **`pages_manage_metadata` — bloqueio real do fluxo de leads.** Em *Casos de uso → Capturar e
+  gerenciar leads de anúncios* ela está com status vazio e ação *Adicionar à análise do app*: o app
+  não tem nem acesso padrão a ela. É a permissão que autoriza `POST /{page}/subscribed_apps`
+  (`apps/api/src/routes/meta/lead-sources.ts`), ou seja, **assinar a página para receber `leadgen`**.
+  Sem App Review não há como assinar a página, e sem assinatura não chega webhook de lead — nem para
+  quem tem função no app. Isso move o App Review de "necessário para escalar" para "necessário para o
+  fluxo de lead funcionar uma vez".
+- **`instagram_manage_messages` e `instagram_manage_comments` — nomes provavelmente errados.** O caso
+  de uso *API do Instagram* deste app está na variante **login do Instagram**, cujas permissões se
+  chamam `instagram_business_basic`, `instagram_business_manage_messages` e
+  `instagram_business_manage_comments`. O seletor do login só ofereceu `instagram_basic` e
+  `instagram_content_publish`. **Decidir antes de mexer no código:** manter o Instagram na variante
+  *login do Facebook* (nomes legados, tokens de página — casa com o desenho atual) ou migrar para
+  *login do Instagram* (nomes `instagram_business_*`, outro fluxo de token). Só depois atualizar
+  `USE_CASE_PERMISSIONS.instagram`.
+
+A configuração é **editável** depois (botão *Editar* na lista), então as três entram quando ganharem
+nível de acesso — sem criar outra configuração e sem trocar o `config_id`.
+
+**Levar para o produto:** `META_LOGIN_CONFIG_ID=1072538632222832` no `.env` de produção; o compose
+mapeia para o build arg `NEXT_PUBLIC_META_LOGIN_CONFIG_ID`. É **build-time**: exige rebuild da imagem
+do web, reiniciar não basta. O ID é público (vai no navegador).
 
 As permissões de fato concedidas continuam conferidas no servidor (`GET /me/permissions`), e a tela diz
 o que falta por caso de uso.
