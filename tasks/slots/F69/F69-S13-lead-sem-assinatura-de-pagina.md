@@ -2,7 +2,7 @@
 id: F69-S13
 title: Receber lead sem assinar a página — modo reconciliação enquanto o App Review não sai
 phase: F69
-status: available
+status: in-progress
 priority: critical
 estimated_size: S
 depends_on: [F69-S03]
@@ -10,6 +10,7 @@ blocks: []
 source_docs:
   - docs/features/META_INTEGRACAO_PLAN.md
 agent_id: fullstack-engineer
+claimed_at: 2026-09-22T16:04:28Z
 
 ---
 # F69-S13 — Receber lead sem assinar a página
