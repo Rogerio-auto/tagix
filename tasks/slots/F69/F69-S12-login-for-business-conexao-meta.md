@@ -2,7 +2,7 @@
 id: F69-S12
 title: Conectar a Meta falhava na troca do código — login da conexão passa a usar Facebook Login for Business
 phase: F69
-status: in-progress
+status: review
 priority: critical
 estimated_size: S
 depends_on: [F69-S02]
@@ -11,7 +11,7 @@ source_docs:
   - docs/features/META_INTEGRACAO_PLAN.md
 agent_id: fullstack-engineer
 claimed_at: 2026-09-22T16:19:37Z
-completed_at: 2026-09-15T15:58:17Z
+completed_at: 2026-09-22T16:22:10Z
 
 ---
 # F69-S12 — Conectar a Meta falhava na troca do código
