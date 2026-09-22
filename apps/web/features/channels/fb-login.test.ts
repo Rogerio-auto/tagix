@@ -71,6 +71,11 @@ describe('startMetaConnect', () => {
     expect(opcoes).not.toHaveProperty('scope');
     expect(opcoes['response_type']).toBe('code');
     expect(opcoes['override_default_response_type']).toBe(true);
+    // Sem `auth_type`: com ele (e com uma autorização já concedida ao app), o `code` voltava
+    // atrelado a uma `redirect_uri` e a troca no servidor era recusada com 100/36008 — mesmo já
+    // usando `config_id`. O exemplo da Meta para Login for Business tem só os três acima.
+    expect(opcoes).not.toHaveProperty('auth_type');
+    expect(Object.keys(opcoes).sort()).toEqual(['config_id', 'override_default_response_type', 'response_type']);
   });
 
   it('não depende da configuração do WhatsApp', async () => {
