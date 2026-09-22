@@ -1,0 +1,1 @@
+export { MessageTemplatesPage } from './MessageTemplatesPage';

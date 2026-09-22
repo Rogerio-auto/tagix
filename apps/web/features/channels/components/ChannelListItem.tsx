@@ -1,5 +1,8 @@
-import { Power, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { FileText, Info, Power, Trash2 } from 'lucide-react';
+import { can } from '@hm/shared';
 import { Button } from '@hm/ui';
+import { useAuthStore } from '@/shared/stores/auth.store';
 import { PROVIDER_META } from '../constants';
 import type { Channel } from '../types';
 import { ChannelStatusBadge } from './ChannelStatusBadge';
@@ -32,6 +35,8 @@ export function ChannelListItem({
   onToggleActive,
   onDelete,
 }: ChannelListItemProps) {
+  const role = useAuthStore((state) => state.auth?.role);
+  const canViewTemplates = role ? can(role, 'message_template.view') : false;
   const meta = PROVIDER_META[channel.provider];
   const Icon = meta.icon;
   const sub = subtitle(channel);
@@ -59,7 +64,30 @@ export function ChannelListItem({
 
       <ChannelStatusBadge channel={channel} />
 
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center justify-end gap-1">
+        {canViewTemplates && channel.provider === 'meta_whatsapp' ? (
+          <Link
+            href={`/settings/channels/${encodeURIComponent(channel.id)}/message-templates`}
+            className="inline-flex h-8 items-center justify-center gap-2 rounded-md bg-transparent px-3 font-head text-sm font-semibold text-text outline-none hover:bg-surface-2 focus-visible:shadow-glow-md"
+          >
+            <FileText className="size-4" aria-hidden />
+            Modelos de mensagem
+          </Link>
+        ) : canViewTemplates ? (
+          <span
+            className="inline-flex max-w-48 items-center gap-1.5 text-right text-xs text-text-low"
+            title={
+              channel.provider === 'meta_instagram'
+                ? 'O Instagram usa mensagens diretas e não oferece modelos aprovados do WhatsApp.'
+                : 'O WhatsApp via WAHA segue regras próprias e não usa modelos aprovados pela Meta.'
+            }
+          >
+            <Info className="size-4 shrink-0" aria-hidden />
+            {channel.provider === 'meta_instagram'
+              ? 'Instagram usa mensagem direta'
+              : 'WAHA não usa modelos da Meta'}
+          </span>
+        ) : null}
         {canDisable && (
           <Button
             variant="ghost"
