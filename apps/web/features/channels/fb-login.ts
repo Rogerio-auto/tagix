@@ -260,10 +260,17 @@ export async function startMetaConnect(): Promise<{ code: string }> {
         resolve({ code });
       },
       {
+        // Exatamente os três parâmetros do exemplo da Meta para Login for Business.
+        //
+        // `auth_type: 'rerequest'` foi removido em 2026-09-22: com ele, e com uma autorização já
+        // concedida ao app (a do WhatsApp), o login voltava um `code` que a troca no servidor
+        // recusava com `100/36008` ("redirect_uri is identical…"), mesmo já usando `config_id`.
+        // O `rerequest` é do Login do Facebook clássico; aqui quem decide o que é pedido é a
+        // configuração. Reconceder o que foi recusado se faz reabrindo o login, que já mostra as
+        // permissões da configuração.
         config_id: configId,
         response_type: 'code',
         override_default_response_type: true,
-        auth_type: 'rerequest',
       },
     );
   });

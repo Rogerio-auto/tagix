@@ -102,6 +102,10 @@ function responderFalha(res: Response, err: unknown, etapa: string): void {
       httpStatus: err.httpStatus,
       graphCode: err.code,
       graphSubcode: err.subcode,
+      // A mensagem da Meta é o que diz O QUE ela recusou — sem ela, uma falha de conexão vira um
+      // par de números e o diagnóstico depende de adivinhação (F69-S12). Não carrega token: o
+      // `code` e o segredo do app vão na query da chamada, nunca na resposta de erro.
+      graphMessage: err.message.slice(0, 300),
     });
     res.status(502).json({ code: 'META_GRAPH_ERROR', message: `A Meta recusou: ${err.message}` });
     return;

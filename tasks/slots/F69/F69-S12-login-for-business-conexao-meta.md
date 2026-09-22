@@ -2,7 +2,7 @@
 id: F69-S12
 title: Conectar a Meta falhava na troca do código — login da conexão passa a usar Facebook Login for Business
 phase: F69
-status: available
+status: review
 priority: critical
 estimated_size: S
 depends_on: [F69-S02]
@@ -10,8 +10,8 @@ blocks: [F69-S03]
 source_docs:
   - docs/features/META_INTEGRACAO_PLAN.md
 agent_id: fullstack-engineer
-claimed_at: 2026-09-15T15:52:51Z
-completed_at: 2026-09-15T15:58:17Z
+claimed_at: 2026-09-22T16:19:37Z
+completed_at: 2026-09-22T16:22:10Z
 
 ---
 # F69-S12 — Conectar a Meta falhava na troca do código
@@ -47,6 +47,7 @@ tem `meta_*`), e bloqueio do perfil/empresa (o login na janela passou).
 ### files_allowed
 
 - `apps/web/features/channels/fb-login.ts`
+- `apps/api/src/routes/meta/connections.ts` *(correção 2026-09-22: o log da falha da Meta não trazia a mensagem dela, só os códigos — sem isso o diagnóstico vira adivinhação)*
 - `apps/web/features/channels/signup-status.ts`
 - `apps/web/features/channels/*.test.ts`
 - `apps/web/features/meta-connection/**`
@@ -74,6 +75,26 @@ tem `meta_*`), e bloqueio do perfil/empresa (o login na janela passou).
 ## Fora de escopo
 
 - Mudar a troca do código no servidor (os parâmetros já são os que funcionam no WhatsApp).
+
+## Reaberto em 2026-09-22 — `config_id` não bastou
+
+Com a configuração no ar (`META_LOGIN_CONFIG_ID=1072538632222832`, bundle verificado em produção), a
+conexão **continuou falhando com o mesmo `100/36008`**, em duas tentativas (16:14:50 e 16:15:37 UTC).
+Descartado no caminho:
+
+- **app diferente entre web e servidor** — os dois usam `1241342414558641`;
+- **domínio não registrado** — `GET /{app-id}?fields=app_domains` devolve `["app.leadium.com.br"]`;
+- **troca fora do padrão** — o exemplo da Meta para Login for Business é exatamente `client_id` +
+  `client_secret` + `code`, sem `redirect_uri`, que é o que `connection.ts` faz.
+
+O que sobrou: a chamada do login mandava **`auth_type: 'rerequest'`**, que não existe no exemplo da
+Meta. É parâmetro do Login do Facebook clássico. A hipótese: com uma autorização já concedida ao app
+(a do WhatsApp, de junho), o `rerequest` leva o SDK ao caminho antigo, e o `code` volta atrelado a uma
+`redirect_uri` que a troca documentada não manda. Removido; o teste agora trava os três parâmetros do
+exemplo e a ausência do `auth_type`.
+
+Junto: o log da falha passou a trazer a **mensagem** da Meta, não só os códigos — sem ela, a terceira
+tentativa de diagnóstico seria adivinhação de novo.
 
 ## Definition of Done
 
