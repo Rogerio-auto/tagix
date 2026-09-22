@@ -2,7 +2,7 @@
 id: F69-S13
 title: Receber lead sem assinar a página — modo reconciliação enquanto o App Review não sai
 phase: F69
-status: available
+status: review
 priority: critical
 estimated_size: S
 depends_on: [F69-S03]
@@ -10,6 +10,8 @@ blocks: []
 source_docs:
   - docs/features/META_INTEGRACAO_PLAN.md
 agent_id: fullstack-engineer
+claimed_at: 2026-09-22T16:04:28Z
+completed_at: 2026-09-22T16:18:46Z
 
 ---
 # F69-S13 — Receber lead sem assinar a página
@@ -53,6 +55,7 @@ melhor que não receber — e reversível no dia em que a permissão sair.
 - `apps/api/src/routes/meta/lead-sources.test.ts`
 - `packages/db/src/schema/lead_ads.ts`
 - `packages/db/src/repos/lead-ads.ts`
+- `packages/db/src/index.ts` *(correção 2026-09-22: exporta o tipo do modo de entrega para a API e a tela)*
 - `packages/db/drizzle/**`
 - `apps/web/features/lead-ads/**`
 - `docs/features/META_INTEGRACAO_PLAN.md`

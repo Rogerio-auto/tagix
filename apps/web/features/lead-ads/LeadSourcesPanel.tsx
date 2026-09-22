@@ -14,7 +14,12 @@ import { CircleAlert, CircleCheck, Clock, Megaphone } from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
 import { ApiError } from '@/shared/lib/api-client';
 import { cn } from '@/shared/lib/cn';
-import { useLeadSources, useStopLeadPage, useSubscribeLeadPage } from './queries';
+import {
+  useLeadSources,
+  useRetrySubscribeLeadPage,
+  useStopLeadPage,
+  useSubscribeLeadPage,
+} from './queries';
 import type { RecentLeadView } from './types';
 
 function mensagemDe(err: unknown): string {
@@ -57,6 +62,7 @@ export function LeadSourcesPanel(): React.JSX.Element {
   const { toast } = useToast();
   const dados = useLeadSources();
   const assinar = useSubscribeLeadPage();
+  const assinarDeNovo = useRetrySubscribeLeadPage();
   const parar = useStopLeadPage();
 
   const ativas = dados.data?.sources.filter((s) => s.status === 'active') ?? [];
@@ -91,26 +97,60 @@ export function LeadSourcesPanel(): React.JSX.Element {
                 Nenhuma página ainda. Escolha abaixo de qual página os leads devem entrar.
               </p>
             ) : (
-              <ul className="mt-3 flex flex-col gap-2">
+              <ul className="mt-3 flex flex-col gap-3">
                 {ativas.map((s) => (
-                  <li key={s.id} className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="text-body text-text">{s.pageName ?? `Página ${s.pageId}`}</p>
-                      <p className="text-small text-text-3">Conferida pela última vez: {quando(s.lastReconciledAt)}</p>
+                  <li key={s.id} className="flex flex-col gap-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-body text-text">{s.pageName ?? `Página ${s.pageId}`}</p>
+                        {s.delivery === 'webhook' ? (
+                          <p className="flex items-center gap-1.5 text-small text-brand">
+                            <CircleCheck className="size-4" aria-hidden="true" /> Recebendo em segundos
+                          </p>
+                        ) : (
+                          <p className="flex items-center gap-1.5 text-small text-warning">
+                            <Clock className="size-4" aria-hidden="true" /> Conferindo a cada 15 minutos
+                          </p>
+                        )}
+                        <p className="text-small text-text-3">Conferida pela última vez: {quando(s.lastReconciledAt)}</p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={parar.isPending && parar.variables === s.id}
+                        onClick={() =>
+                          parar.mutate(s.id, {
+                            onError: (err) =>
+                              toast({ variant: 'error', title: 'Não foi possível parar', description: mensagemDe(err) }),
+                          })
+                        }
+                      >
+                        Parar de receber
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      loading={parar.isPending && parar.variables === s.id}
-                      onClick={() =>
-                        parar.mutate(s.id, {
-                          onError: (err) =>
-                            toast({ variant: 'error', title: 'Não foi possível parar', description: mensagemDe(err) }),
-                        })
-                      }
-                    >
-                      Parar de receber
-                    </Button>
+                    {s.delivery === 'reconciliation' && (
+                      <div className="rounded-md border border-border bg-surface-2 p-3">
+                        <p className="text-small text-text-2">
+                          {s.subscribeError ?? 'A Meta ainda não liberou a entrega em segundos para esta página.'}
+                        </p>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="mt-2"
+                          loading={assinarDeNovo.isPending && assinarDeNovo.variables === s.id}
+                          onClick={() =>
+                            assinarDeNovo.mutate(s.id, {
+                              onSuccess: () =>
+                                toast({ variant: 'success', title: 'Página passou a receber em segundos' }),
+                              onError: (err) =>
+                                toast({ variant: 'error', title: 'Ainda não foi', description: mensagemDe(err) }),
+                            })
+                          }
+                        >
+                          Tentar receber em segundos
+                        </Button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

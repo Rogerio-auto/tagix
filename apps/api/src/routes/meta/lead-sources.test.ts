@@ -7,8 +7,9 @@
 import express from 'express';
 import request from 'supertest';
 import { afterAll, describe, expect, it } from 'vitest';
+import { MetaError } from '@hm/channels';
 import { closeDb } from '@hm/db';
-import { createLeadSourcesRouter, mergeSubscribedFields } from './lead-sources';
+import { createLeadSourcesRouter, ehFaltaDePermissao, mergeSubscribedFields } from './lead-sources';
 
 const app = express();
 app.use(express.json());
@@ -30,6 +31,30 @@ describe('autorização', () => {
   });
   it('parar sem sessão → 401', async () => {
     expect((await request(app).delete('/api/meta/lead-sources/00000000-0000-0000-0000-000000000001')).status).toBe(401);
+  });
+  it('assinar de novo sem sessão → 401', async () => {
+    const res = await request(app).post('/api/meta/lead-sources/00000000-0000-0000-0000-000000000001/subscribe');
+    expect(res.status).toBe(401);
+  });
+});
+
+/**
+ * F69-S13 — só a falta de permissão degrada para conferência.
+ *
+ * Degradar em cima de token revogado ou instabilidade esconderia do cliente um problema que ele
+ * precisa resolver agora; por isso a classificação é estreita.
+ */
+describe('ehFaltaDePermissao', () => {
+  it('permissão que o app não tem → degrada', () => {
+    expect(ehFaltaDePermissao(new MetaError('(#200) Requires pages_manage_metadata permission', { httpStatus: 400, code: 200 }))).toBe(true);
+    expect(ehFaltaDePermissao(new MetaError('(#10) Application does not have permission', { httpStatus: 403, code: 10 }))).toBe(true);
+  });
+
+  it('token expirado, página de terceiro e instabilidade → NÃO degradam', () => {
+    expect(ehFaltaDePermissao(new MetaError('Error validating access token', { httpStatus: 400, code: 190 }))).toBe(false);
+    expect(ehFaltaDePermissao(new MetaError('Unsupported get request', { httpStatus: 400, code: 100 }))).toBe(false);
+    expect(ehFaltaDePermissao(new MetaError('Service unavailable', { httpStatus: 503, retryable: true }))).toBe(false);
+    expect(ehFaltaDePermissao(new Error('rede caiu'))).toBe(false);
   });
 });
 

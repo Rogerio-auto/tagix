@@ -11,6 +11,7 @@ import { getDb, type DbTx } from '../client';
 import {
   leadAdSources,
   leadAdSubmissions,
+  type LeadAdDelivery,
   type LeadAdSource,
   type LeadAdSubmissionStatus,
   type LeadConsentEvidence,
@@ -23,9 +24,15 @@ async function upsertSource(
     connectionId: string;
     pageId: string;
     pageName: string | null;
+    /** Default `webhook`: só quem assinou a página entrega em segundos (F69-S13). */
+    delivery?: LeadAdDelivery;
+    /** Por que a assinatura não foi possível — guardado para a tela explicar. */
+    subscribeError?: string | null;
     now: Date;
   },
 ): Promise<LeadAdSource> {
+  const delivery = input.delivery ?? 'webhook';
+  const subscribeError = input.subscribeError ?? null;
   const [linha] = await tx
     .insert(leadAdSources)
     .values({
@@ -34,7 +41,10 @@ async function upsertSource(
       pageId: input.pageId,
       pageName: input.pageName,
       status: 'active',
-      subscribedAt: input.now,
+      delivery,
+      subscribeError,
+      // Só carimba a assinatura quando ela de fato aconteceu.
+      subscribedAt: delivery === 'webhook' ? input.now : null,
     })
     .onConflictDoUpdate({
       target: [leadAdSources.workspaceId, leadAdSources.pageId],
@@ -42,13 +52,44 @@ async function upsertSource(
         connectionId: input.connectionId,
         pageName: input.pageName,
         status: 'active',
-        subscribedAt: input.now,
+        delivery,
+        subscribeError,
+        subscribedAt: delivery === 'webhook' ? input.now : null,
         updatedAt: input.now,
       },
     })
     .returning();
   if (linha === undefined) throw new Error('lead_ad_sources: upsert não devolveu linha.');
   return linha;
+}
+
+async function getSource(tx: DbTx, workspaceId: string, id: string): Promise<LeadAdSource | null> {
+  const [linha] = await tx
+    .select()
+    .from(leadAdSources)
+    .where(and(eq(leadAdSources.workspaceId, workspaceId), eq(leadAdSources.id, id)))
+    .limit(1);
+  return linha ?? null;
+}
+
+/**
+ * A assinatura funcionou: a página passa a entregar em segundos (F69-S13).
+ *
+ * Promove a fonte que já existe em vez de recadastrar — a página mantém id, histórico de leads e a
+ * janela já conferida, então ligar o webhook não reprocessa nem duplica nada.
+ */
+async function promoteSourceToWebhook(
+  tx: DbTx,
+  workspaceId: string,
+  id: string,
+  now: Date,
+): Promise<boolean> {
+  const linhas = await tx
+    .update(leadAdSources)
+    .set({ delivery: 'webhook', subscribeError: null, subscribedAt: now, updatedAt: now })
+    .where(and(eq(leadAdSources.workspaceId, workspaceId), eq(leadAdSources.id, id)))
+    .returning({ id: leadAdSources.id });
+  return linhas.length > 0;
 }
 
 async function listSources(tx: DbTx, workspaceId: string): Promise<LeadAdSource[]> {
@@ -275,6 +316,8 @@ async function listRecentSubmissions(
 
 export const leadAdsRepo = {
   upsertSource,
+  getSource,
+  promoteSourceToWebhook,
   listSources,
   deactivateSource,
   markReconciled,
