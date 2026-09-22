@@ -54,7 +54,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F60   | 9     | 4   | 0   | 0   | 0   | 0   | 5   |
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
-| F69   | 13     | 9   | 0   | 0   | 0   | 2   | 2   |
+| F69   | 13     | 8   | 0   | 0   | 1   | 2   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
@@ -732,21 +732,21 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 69
 
-| ID      | Titulo                                                                                                 | Status      | Prioridade | Depende de                                                                      |
-| ------- | ------------------------------------------------------------------------------------------------------ | ----------- | ---------- | ------------------------------------------------------------------------------- |
-| F69-S01 | Conformidade de plataforma — exclusão de dados, desautorização, política e termos                      | ✅ done      | critical   | —                                                                               |
-| F69-S02 | Conexão Meta por workspace — permissões dos casos de uso, token cifrado e reconexão guiada             | ✅ done      | critical   | F69-S01                                                                         |
-| F69-S03 | Leads de anúncios — do formulário à inbox em segundos, com prova de consentimento                      | 🟣 review    | critical   | F69-S02                                                                         |
-| F69-S04 | API de Marketing — leitura: gasto, leads e custo por lead por campanha                                 | 🟢 available | high       | F69-S02                                                                         |
-| F69-S05 | API de Marketing — gestão: pausar, ativar e ajustar orçamento com confirmação e trilha                 | 🟢 available | medium     | F69-S04                                                                         |
-| F69-S06 | Conversão de volta para a Meta — o anúncio aprende com lead qualificado, agendado e fechado            | 🟢 available | high       | F69-S03, F69-S04                                                                |
-| F69-S07 | Instagram — publicação de conteúdo: imagem, carrossel e reels com fila e agendamento                   | 🟢 available | medium     | F69-S08                                                                         |
-| F69-S08 | Instagram — verificar o caminho de login do caso de uso e alinhar permissões                           | 🟢 available | high       | F69-S02                                                                         |
-| F69-S09 | Servidor MCP de anúncios — o agente sugere e prepara, o humano aprova                                  | 🟢 available | medium     | F69-S05                                                                         |
-| F69-S10 | Kit de App Review — justificativa, roteiro de screencast e conta de teste por permissão                | 🟢 available | high       | F69-S01, F69-S02, F69-S03, F69-S04, F69-S05, F69-S06, F69-S07, F69-S08, F69-S09 |
-| F69-S11 | Consentimento do formulário de anúncio — caixa marcada vira consentimento de canal                     | 🟢 available | high       | F69-S03                                                                         |
-| F69-S12 | Conectar a Meta falhava na troca do código — login da conexão passa a usar Facebook Login for Business | 🟢 available | critical   | F69-S02                                                                         |
-| F69-S13 | Receber lead sem assinar a página — modo reconciliação enquanto o App Review não sai                   | 🟣 review    | critical   | F69-S03                                                                         |
+| ID      | Titulo                                                                                                 | Status        | Prioridade | Depende de                                                                      |
+| ------- | ------------------------------------------------------------------------------------------------------ | ------------- | ---------- | ------------------------------------------------------------------------------- |
+| F69-S01 | Conformidade de plataforma — exclusão de dados, desautorização, política e termos                      | ✅ done        | critical   | —                                                                               |
+| F69-S02 | Conexão Meta por workspace — permissões dos casos de uso, token cifrado e reconexão guiada             | ✅ done        | critical   | F69-S01                                                                         |
+| F69-S03 | Leads de anúncios — do formulário à inbox em segundos, com prova de consentimento                      | 🟣 review      | critical   | F69-S02                                                                         |
+| F69-S04 | API de Marketing — leitura: gasto, leads e custo por lead por campanha                                 | 🟢 available   | high       | F69-S02                                                                         |
+| F69-S05 | API de Marketing — gestão: pausar, ativar e ajustar orçamento com confirmação e trilha                 | 🟢 available   | medium     | F69-S04                                                                         |
+| F69-S06 | Conversão de volta para a Meta — o anúncio aprende com lead qualificado, agendado e fechado            | 🟢 available   | high       | F69-S03, F69-S04                                                                |
+| F69-S07 | Instagram — publicação de conteúdo: imagem, carrossel e reels com fila e agendamento                   | 🟢 available   | medium     | F69-S08                                                                         |
+| F69-S08 | Instagram — verificar o caminho de login do caso de uso e alinhar permissões                           | 🟢 available   | high       | F69-S02                                                                         |
+| F69-S09 | Servidor MCP de anúncios — o agente sugere e prepara, o humano aprova                                  | 🟢 available   | medium     | F69-S05                                                                         |
+| F69-S10 | Kit de App Review — justificativa, roteiro de screencast e conta de teste por permissão                | 🟢 available   | high       | F69-S01, F69-S02, F69-S03, F69-S04, F69-S05, F69-S06, F69-S07, F69-S08, F69-S09 |
+| F69-S11 | Consentimento do formulário de anúncio — caixa marcada vira consentimento de canal                     | 🟢 available   | high       | F69-S03                                                                         |
+| F69-S12 | Conectar a Meta falhava na troca do código — login da conexão passa a usar Facebook Login for Business | 🔵 in-progress | critical   | F69-S02                                                                         |
+| F69-S13 | Receber lead sem assinar a página — modo reconciliação enquanto o App Review não sai                   | 🟣 review      | critical   | F69-S03                                                                         |
 
 ## Fase 7 — Dashboard + Conversões
 
