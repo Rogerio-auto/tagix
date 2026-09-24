@@ -56,6 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
+| F70   | 6     | 0   | 5   | 0   | 1   | 0   | 0   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -759,6 +760,17 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F7-S05 | Event reminders cron — scheduler 5min + notification + outbound WhatsApp opcional                             | ✅ done | medium     | F7-S01, F7-S03 |
 | F7-S06 | Frontend CalendarPage (FullCalendar month/week/day) + EventForm + nav Agenda                                  | ✅ done | high       | F7-S02, F7-S03 |
 | F7-S07 | Frontend AvailabilityRulesPage (settings → calendar) + exceções                                               | ✅ done | medium     | F7-S02         |
+
+## Fase 70
+
+| ID      | Titulo                                                                       | Status        | Prioridade | Depende de       |
+| ------- | ---------------------------------------------------------------------------- | ------------- | ---------- | ---------------- |
+| F70-S01 | Restaurar o working tree e corrigir o worktree-clean que atravessa junctions | 🔵 in-progress | critical   | —                |
+| F70-S02 | Backup e limpeza da conta do Rogério                                         | ⏸️ blocked    | high       | F70-S01          |
+| F70-S03 | Canal de teste agora; número real em coexistência quando tudo estiver pronto | ⏸️ blocked    | critical   | F70-S02          |
+| F70-S04 | Eco do app vira mensagem humana e pausa a IA                                 | ⏸️ blocked    | high       | F70-S03          |
+| F70-S05 | Atribuição de anúncio no contato e no deal                                   | ⏸️ blocked    | high       | F70-S03          |
+| F70-S06 | Agente de atendimento da Arcada                                              | ⏸️ blocked    | high       | F70-S04, F70-S05 |
 
 ## Fase 8 — Permissions & Settings
 
