@@ -1878,6 +1878,46 @@ def cmd_check_migrations(args: argparse.Namespace) -> int:
 # Subcommand: worktree-clean (Windows long-path safe)
 # -----------------------------------------------------------------------------
 
+_NODE_MODULES_LINK_PATTERNS = ("node_modules", "apps/*/node_modules", "packages/*/node_modules")
+
+
+def _is_dir_link(p: Path) -> bool:
+    """True para symlink ou junction (reparse point) — sem seguir o alvo."""
+    try:
+        if p.is_symlink():
+            return True
+        isjunction = getattr(os.path, "isjunction", None)
+        if isjunction is not None:
+            return isjunction(p)
+        return bool(getattr(os.lstat(p), "st_file_attributes", 0) & 0x400)  # FILE_ATTRIBUTE_REPARSE_POINT
+    except OSError:
+        return False
+
+
+def _unlink_node_modules_links(worktree_root: Path) -> int:
+    """Remove os links de node_modules criados por _link_node_modules_for_validate, sem tocar no alvo.
+
+    Incidente 2026-09-22: `git worktree remove --force` no Windows atravessou essas junctions
+    (node_modules do main, que por sua vez aponta para packages/*) e esvaziou packages/* e
+    apps/*/node_modules do checkout principal. Desfazer os links antes de remover o worktree
+    tira o caminho até o main.
+    """
+    removed = 0
+    for pattern in _NODE_MODULES_LINK_PATTERNS:
+        for link in worktree_root.glob(pattern):
+            if not _is_dir_link(link):
+                continue
+            try:
+                if sys.platform == "win32" or not link.is_symlink():
+                    os.rmdir(link)  # em junction/symlink de diretório remove só o link
+                else:
+                    link.unlink()
+                removed += 1
+            except OSError as exc:
+                warn(f"[worktree-clean] nao removi o link {link}: {exc}")
+    return removed
+
+
 def cmd_worktree_clean(args: argparse.Namespace) -> int:
     r"""Limpa worktrees em .claude/worktrees/agent-*.
 
@@ -1903,10 +1943,13 @@ def cmd_worktree_clean(args: argparse.Namespace) -> int:
             targets.append(path)
 
     for p in targets:
+        _unlink_node_modules_links(p)
         run_git(["worktree", "unlock", str(p)], check=False)
         run_git(["worktree", "remove", "--force", str(p)], check=False)
 
     leftover = [p for p in base.iterdir() if p.is_dir() and p.name.startswith("agent-")]
+    for d in leftover:
+        _unlink_node_modules_links(d)
     if leftover and sys.platform == "win32":
         for d in leftover:
             try:
