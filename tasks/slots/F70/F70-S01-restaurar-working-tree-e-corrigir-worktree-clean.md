@@ -2,7 +2,7 @@
 id: F70-S01
 title: Restaurar o working tree e corrigir o worktree-clean que atravessa junctions
 phase: F70
-status: in-progress
+status: review
 priority: critical
 estimated_size: XS
 depends_on: []
@@ -11,6 +11,7 @@ source_docs:
   - rogerio-os/tasks/central-operacao/CO-02-conferir-e-restaurar-o-working-tree-do-leadium.md
 agent_id: backend-engineer
 claimed_at: 2026-09-24T22:29:25Z
+completed_at: 2026-09-24T22:29:47Z
 
 ---
 # F70-S01 — Restaurar o working tree e corrigir o worktree-clean que atravessa junctions
