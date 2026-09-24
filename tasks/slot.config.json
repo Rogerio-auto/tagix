@@ -27,7 +27,8 @@
     "F9": "Hardening + Observability",
     "F10": "Launch",
     "F38": "Suporte ao Cliente (Help Center + Live Support + Dev Portal)",
-    "F41": "Portal do Desenvolvedor — Referência rica + Console Try-it"
+    "F41": "Portal do Desenvolvedor — Referência rica + Console Try-it",
+    "F70": "Central de Operação — Atendimento da Arcada no Leadium"
   },
   "migrations": {
     "enabled": true,

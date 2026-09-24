@@ -761,7 +761,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F7-S06 | Frontend CalendarPage (FullCalendar month/week/day) + EventForm + nav Agenda                                  | ✅ done | high       | F7-S02, F7-S03 |
 | F7-S07 | Frontend AvailabilityRulesPage (settings → calendar) + exceções                                               | ✅ done | medium     | F7-S02         |
 
-## Fase 70
+## Fase 70 — Central de Operação — Atendimento da Arcada no Leadium
 
 | ID      | Titulo                                                                       | Status        | Prioridade | Depende de       |
 | ------- | ---------------------------------------------------------------------------- | ------------- | ---------- | ---------------- |
