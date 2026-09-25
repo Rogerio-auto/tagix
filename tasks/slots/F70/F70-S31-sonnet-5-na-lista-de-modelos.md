@@ -2,13 +2,16 @@
 id: F70-S31
 title: Sonnet 5 na lista de modelos e no agente da Arcada
 phase: F70
-status: available
+status: in-progress
 priority: medium
 estimated_size: S
 depends_on: [F70-S06]
 blocks: []
 source_docs:
   - tasks/slots/F70/F70-S06-agente-de-atendimento-da-arcada.md
+agent_id: backend-engineer
+claimed_at: 2026-09-25T20:32:21Z
+
 ---
 # F70-S31 — Sonnet 5 na lista de modelos e no agente da Arcada
 
