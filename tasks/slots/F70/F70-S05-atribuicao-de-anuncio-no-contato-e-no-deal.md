@@ -2,7 +2,7 @@
 id: F70-S05
 title: Atribuição de anúncio no contato e no deal
 phase: F70
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: [F70-S03]
@@ -11,6 +11,7 @@ source_docs:
   - rogerio-os/tasks/central-operacao/CO-09-atribuicao-de-anuncio-no-contato-e-no-deal.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T01:43:23Z
+completed_at: 2026-09-25T02:09:42Z
 
 ---
 # F70-S05 — Atribuição de anúncio no contato e no deal
