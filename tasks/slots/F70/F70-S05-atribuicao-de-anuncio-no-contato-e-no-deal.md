@@ -50,6 +50,29 @@ O parser do WhatsApp não lê `messages[].referral`; `ctwa_clid` e `source_id` s
 
 ## Definition of Done
 
-- [ ] teste com payload real de click-to-WhatsApp
-- [ ] migração aplicada com backup antes
-- [ ] campos visíveis na API v1
+- [x] teste com payload real de click-to-WhatsApp *(fixture no formato da doc da Meta em `ad-referral.fixtures.ts`; captura do número real depende da F70-S03)*
+- [ ] migração aplicada com backup antes *(0082 gerada; aplicação em produção é passo do orchestrator, com backup)*
+- [x] campos visíveis na API v1 *(`adAttribution` em contatos e deals + filtro `adSourceId`; OpenAPI atualizado)*
+
+## Validação
+
+```bash
+pnpm --filter @hm/channels typecheck
+pnpm --filter @hm/channels exec vitest run src/meta/whatsapp src/meta/instagram
+pnpm --filter @hm/db typecheck
+pnpm --filter @hm/db exec vitest run src/schema/ad-attribution.test.ts
+pnpm --filter @hm/api exec vitest run src/routes/v1/ad-attribution.test.ts
+python scripts/slot.py check-migrations
+```
+
+## Notas
+
+- Migração **0082_f70_ad_attribution** (aditiva): 9 colunas `ad_*` nullable em `contacts` e `deals`,
+  CHECK de canal e de tudo-ou-nada (`ad_channel`/`ad_source_type`/`ad_referred_at`), índice parcial
+  `(workspace_id, ad_source_id) WHERE ad_source_id IS NOT NULL`. RLS existente cobre as colunas.
+- `contacts` = primeiro toque (writer grava só com `ad_referred_at IS NULL`); `deals` = anúncio da
+  oportunidade (o `ctwa_clid` do deal alimenta a F69-S06).
+- Referral normalizado (`AdReferral`) vai em `metadata.adReferral` das mensagens WA e IG.
+- Wiring fora da fronteira (pendente, ver relatório do slot): exports no `packages/channels/src/index.ts`,
+  gravação das colunas no worker inbound (`apps/workers/src/inbound/**`), etiqueta de origem e gate do
+  `ai_action ACTIVATE` (`packages/flow-engine`).
