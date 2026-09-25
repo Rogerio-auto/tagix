@@ -64,12 +64,16 @@ vi.mock('drizzle-orm', () => ({
   and: (...parts: unknown[]) => ({ and: parts }),
   or: (...parts: unknown[]) => ({ or: parts }),
   inArray: (_col: unknown, vals: unknown) => ({ in: vals }),
+  // F70-S30: o predicado da trava (`aiOriginGateSql`) monta SQL com a tag `sql`.
+  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ sql: strings.join('?'), values }),
 }));
 
 vi.mock('@hm/db', () => ({
   schema: {
     conversations: 'conversations',
     channels: 'channels',
+    // F70-S30: o predicado da trava lê `workspaces` (subselect no próprio UPDATE).
+    workspaces: 'workspaces',
   },
   agentDepartmentsRepo: {
     areAgentsInSameDepartment: async () => sameDept,

@@ -212,6 +212,16 @@ const WORKSPACE: SettingsSection[] = [
     permission: 'workspace.edit',
     externalHref: '/settings/conversions',
   },
+  // F70-S30: trava de origem da IA (quem a IA automática pode atender).
+  {
+    id: 'ia',
+    group: 'workspace',
+    label: 'IA',
+    description: 'Quem a IA pode atender: só quem chegou por anúncio, site ou Instagram, ou qualquer conversa.',
+    keywords: ['ia', 'ai', 'trava', 'origem', 'anúncio', 'site', 'instagram', 'atendimento automático', 'número pessoal'],
+    permission: 'workspace.edit',
+    component: lazy(() => import('../sections/workspace-org/AiOriginLockSection')),
+  },
   {
     id: 'usage',
     group: 'workspace',

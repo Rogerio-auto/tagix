@@ -20,10 +20,11 @@
  * Idempotência: transferir para o agente já atual é no-op gracioso (`ok:true`, sem
  * mutação e sem enqueue).
  *
- * Trava de origem (F70-S08): a transferência é AUTOMÁTICA (decidida pela IA), então
- * não pode LIGAR a IA numa conversa sem origem comprovada. O UPDATE é condicional e
- * atômico: aplica se a origem é elegível (`AI_ELIGIBLE_CONVERSATION_ORIGINS`, a regra
- * do flow `ai_action`) OU se a IA já está `on` (a transferência só troca o agente —
+ * Trava de origem (F70-S08, configurável por workspace na F70-S30): a transferência é
+ * AUTOMÁTICA (decidida pela IA), então não pode LIGAR a IA numa conversa que a trava
+ * barra. O UPDATE é condicional e atômico: aplica se o predicado único da trava deixa
+ * (`aiOriginGateSql`: trava do workspace desligada ou origem elegível, lidos no próprio
+ * UPDATE) OU se a IA já está `on` (a transferência só troca o agente —
  * a conversa já foi ligada por caminho travado ou à mão por um humano). Uma conversa
  * `off`/`paused` sem origem nunca volta a `on` por aqui: nada muda, nada é
  * enfileirado, o agente recebe a recusa e o evento é logado.
@@ -36,10 +37,10 @@
  *   { targetAgentId: string (uuid), reason?: string (1..500) }
  */
 import { z } from 'zod';
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { agentDepartmentsRepo, enqueueOutbox, schema } from '@hm/db';
 import type { DbTx } from '@hm/db';
-import { AI_ELIGIBLE_CONVERSATION_ORIGINS } from '@hm/flow-engine';
+import { aiOriginGateSql } from '@hm/flow-engine';
 import { createLogger, type Logger } from '@hm/logger';
 import { agentRunJobOutbox, agentRunTriggerId } from '@hm/shared/mq';
 import { CHANNEL_PROVIDERS, type ChannelProvider } from '@hm/shared';
@@ -183,11 +184,9 @@ export function makeTransferToAgentHandler(deps?: {
       .where(
         and(
           eq(schema.conversations.id, env.conversationId),
-          // F70-S08 — trava de origem (ver cabeçalho): nunca LIGA a IA sem origem.
-          or(
-            inArray(schema.conversations.origin, [...AI_ELIGIBLE_CONVERSATION_ORIGINS]),
-            eq(schema.conversations.aiMode, 'on'),
-          ),
+          // F70-S08/S30 — trava de origem (ver cabeçalho): com a trava do workspace
+          // ligada, nunca LIGA a IA sem origem. Predicado único `aiOriginGateSql`.
+          or(aiOriginGateSql(), eq(schema.conversations.aiMode, 'on')),
         ),
       )
       .returning({ id: schema.conversations.id });

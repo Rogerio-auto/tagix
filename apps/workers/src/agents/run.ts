@@ -8,8 +8,8 @@
  * ```
  * load (RLS): conversa + agente ativo + texto do gatilho + histórico
  *   ai_mode != 'on' | sem agente ativo  → skip (no-op, ack)
- *   origem não elegível e sem marca humana posterior ao último `on` automático
- *                                       → skip (F70-S19, fail-closed; ver authorizeAiReply)
+ *   trava de origem do workspace ligada, origem não elegível e sem marca humana
+ *   posterior ao último `on` automático → skip (F70-S19/S30, fail-closed; ver authorizeAiReply)
  * resolvePolicy(ws, agentId)            → PolicySnapshot (wire) + cap/spend
  * estimateCostUsd (teto conservador)    → guardResolved
  *   deny → registra execução failed + agent_execution:completed → stop
@@ -36,7 +36,7 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { agentDepartmentsRepo, enqueueOutbox, schema, withWorkspace } from '@hm/db';
 import { makeEnvelope, queueJobOutbox, QUEUES } from '@hm/shared/mq';
-import { isConversationAiEligible } from '@hm/flow-engine';
+import { passesAiOriginGate, workspaceRequiresProvenOriginSql } from '@hm/flow-engine';
 import type { DbTx } from '@hm/db';
 import type { Logger } from '@hm/logger';
 import {
@@ -82,6 +82,12 @@ export interface AgentRunContext {
    * duas marcas abaixo decide se o agente pode responder ({@link authorizeAiReply}).
    */
   readonly origin: string | null;
+  /**
+   * Trava de origem do workspace (`workspaces.ai_requires_proven_origin`, F70-S30), lida
+   * pelo mesmo SQL dos UPDATEs (`workspaceRequiresProvenOriginSql`). Ausente/`null` conta
+   * como LIGADA (fail-closed): só `false` libera conversa sem origem comprovada.
+   */
+  readonly requiresProvenOrigin?: boolean | null;
   /** Última vez que um HUMANO ligou a IA (`conversations.ai_enabled_at`, F70-S19). */
   readonly aiEnabledAt: Date | null;
   /** Última transição automática para `on` (`conversations.ai_auto_enabled_at`, trigger). */
@@ -278,7 +284,11 @@ export type AgentRunOutcome =
 
 /** Por que o agente pode responder a esta conversa (ou por que não). */
 export type AiReplyAuthorization =
-  | { readonly allowed: true; readonly basis: 'origin' | 'human' }
+  | {
+      readonly allowed: true;
+      /** `origin_gate_off`: a trava de origem do workspace está desligada (F70-S30). */
+      readonly basis: 'origin' | 'origin_gate_off' | 'human';
+    }
   | { readonly allowed: false };
 
 /**
@@ -286,8 +296,9 @@ export type AiReplyAuthorization =
  * conversas ligadas antes da trava (legado, sem `origin`) ou por um caminho que a
  * contorne continuariam recebendo resposta automática. O agente só responde se:
  *
- *  - a origem é elegível (mesma regra única da F70-S07: `isConversationAiEligible`,
- *    NULL/desconhecida = `sem-origem`); **ou**
+ *  - a trava de origem deixa (F70-S30: a fonte única `passesAiOriginGate`, a mesma
+ *    decisão do `aiOriginGateSql` dos UPDATEs): trava do workspace desligada, ou origem
+ *    elegível (NULL/desconhecida = `sem-origem`); **ou**
  *  - um humano ligou a IA (`aiEnabledAt`) DEPOIS do último `on` automático
  *    (`aiAutoEnabledAt`, gravado pelo trigger da migração 0088). Um `on` automático
  *    posterior invalida a marca humana antiga.
@@ -295,9 +306,16 @@ export type AiReplyAuthorization =
  * Fail-closed: sem marca, marca inválida ou empate → não responde.
  */
 export function authorizeAiReply(
-  ctx: Pick<AgentRunContext, 'origin' | 'aiEnabledAt' | 'aiAutoEnabledAt'>,
+  ctx: Pick<
+    AgentRunContext,
+    'origin' | 'aiEnabledAt' | 'aiAutoEnabledAt' | 'requiresProvenOrigin'
+  >,
 ): AiReplyAuthorization {
-  if (isConversationAiEligible(ctx.origin)) return { allowed: true, basis: 'origin' };
+  // Só o booleano `false` desliga a trava; ausente/null/lixo = ligada (fail-closed).
+  const requiresProvenOrigin = ctx.requiresProvenOrigin ?? true;
+  if (passesAiOriginGate({ requiresProvenOrigin, origin: ctx.origin })) {
+    return { allowed: true, basis: requiresProvenOrigin === false ? 'origin_gate_off' : 'origin' };
+  }
   const human = validTime(ctx.aiEnabledAt);
   if (human === null) return { allowed: false };
   const auto = validTime(ctx.aiAutoEnabledAt);
@@ -487,6 +505,7 @@ export async function runAgent(
       conversationId: ctx.conversationId,
       origin: ctx.origin ?? null,
       hasHumanMark: ctx.aiEnabledAt !== null,
+      requiresProvenOrigin: ctx.requiresProvenOrigin ?? true,
     });
     return { status: 'skipped', reason: 'origin_not_eligible' };
   }
@@ -853,6 +872,8 @@ export class DbAgentRunStore implements AgentRunStore {
           contactId: conversations.contactId,
           aiMode: conversations.aiMode,
           origin: conversations.origin,
+          // F70-S30: a trava do workspace, pelo mesmo SQL dos UPDATEs que ligam a IA.
+          requiresProvenOrigin: workspaceRequiresProvenOriginSql(),
           aiEnabledAt: conversations.aiEnabledAt,
           aiAutoEnabledAt: conversations.aiAutoEnabledAt,
           agentId: conversations.agentId,
@@ -911,6 +932,7 @@ export class DbAgentRunStore implements AgentRunStore {
         // `?? null`: ausente (linha parcial, store de teste) vira "sem origem / sem marca",
         // que a trava lê como não autorizado (fail-closed).
         origin: conv.origin ?? null,
+        requiresProvenOrigin: conv.requiresProvenOrigin ?? true,
         aiEnabledAt: conv.aiEnabledAt ?? null,
         aiAutoEnabledAt: conv.aiAutoEnabledAt ?? null,
         agentId: agent.id,

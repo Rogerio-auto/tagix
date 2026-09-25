@@ -7,6 +7,7 @@
  *  - `origem:anuncio` → retoma (`on`) e publica o run;
  *  - `sem-origem` → continua `paused`, nada publicado;
  *  - origem NULL (legado) → continua `paused` (fail-closed).
+ * F70-S30: com a trava do workspace desligada, as duas últimas também retomam.
  *
  * Redis é fake em memória; o gatilho é lido da outbox (F70-S25), gravado na transação da
  * retomada. Skip automático sem `DATABASE_URL`.
@@ -126,5 +127,28 @@ describe.skipIf(!url)('reengajamento — trava de origem (DB, F70-S08)', () => {
 
     const warned = logger.warn.mock.calls.map((c) => (c[1] as { conversationId?: string }).conversationId);
     expect(warned.sort()).toEqual([convs.semOrigem, convs.legado].sort());
+  });
+
+  it('F70-S30: com a trava do workspace desligada, as pausadas sem origem também retomam', async () => {
+    await getDb()
+      .update(schema.workspaces)
+      .set({ aiRequiresProvenOrigin: false })
+      .where(eq(schema.workspaces.id, WS));
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), child: vi.fn() };
+    const deps = { redis: makeRedis(), logger } as unknown as ReengagementDeps;
+
+    const res = await runReengagementTick(deps, { workspaceId: WS, now, idleMinutes: 60 });
+
+    expect(res).toMatchObject({ ran: true, enqueued: 2, blockedByOrigin: 0 });
+    const published = (await outboxRowsOf(WS)).filter((r) => r.routingKey === 'hm.q.flows');
+    const resumed = published.map((r) => (r.envelope.payload as { conversationId?: string }).conversationId);
+    expect(resumed.sort()).toEqual([convs.anuncio, convs.semOrigem, convs.legado].sort());
+
+    const rows = await getDb()
+      .select({ id: schema.conversations.id, aiMode: schema.conversations.aiMode })
+      .from(schema.conversations)
+      .where(eq(schema.conversations.workspaceId, WS));
+    expect(rows.every((r) => r.aiMode === 'on')).toBe(true);
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });
