@@ -2,13 +2,16 @@
 id: F70-S15
 title: Tools dos agentes — endpoint confere habilitação, log correto e tools de contato
 phase: F70
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F70-S10]
 blocks: []
 source_docs:
   - tasks/slots/F70/F70-S10-agentes-recebem-as-tools.md
+agent_id: backend-engineer
+claimed_at: 2026-09-25T05:19:21Z
+
 ---
 # F70-S15 — Tools dos agentes: endpoint confere habilitação, log correto e tools de contato
 
