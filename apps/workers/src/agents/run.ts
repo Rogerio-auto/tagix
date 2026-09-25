@@ -32,7 +32,8 @@
  * agents-client) são injetadas para o handler ser testável sem RabbitMQ, sem
  * Postgres e sem o runtime Python.
  */
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { agentDepartmentsRepo, enqueueOutbox, schema, withWorkspace } from '@hm/db';
 import { makeEnvelope, queueJobOutbox, QUEUES } from '@hm/shared/mq';
 import { isConversationAiEligible } from '@hm/flow-engine';
@@ -123,9 +124,85 @@ export interface AgentRunStore {
   /**
    * Persiste a mensagem do agente (outbound, `pending`, `sender_type='agent'`) e grava
    * o job de envio em `hm.q.outbound` (kind `text`) na MESMA transação (F70-S21):
-   * commit da mensagem e do job é o mesmo. Retorna o `messageId`.
+   * commit da mensagem e do job é o mesmo. Retorna o `messageId`. Caminho sem gatilho de
+   * fila (flush do buffer de agregação); o turno reivindicado usa {@link deliverTurnReply}.
    */
   persistAgentMessage(input: PersistAgentMessageInput): Promise<string>;
+
+  // ─── Reivindicação do turno pelo id do gatilho (F70-S26) ───────────────────
+  /**
+   * Reivindica o turno do gatilho numa transação curta e ATÔMICA: cria a execução em
+   * `claimed` ou retoma a linha existente se ela está em `failed_before_runtime` ou em
+   * `claimed` com o lease vencido. Qualquer outro estado devolve o estado atual sem mudar
+   * nada. Duas entregas concorrentes: o índice único serializa, só uma sai `acquired`.
+   */
+  claimTurn(input: ClaimTurnInput): Promise<TurnClaim>;
+  /** `claimed` → `running` se o token ainda é o dono. `false` = perdeu a reivindicação. */
+  markTurnRunning(input: TurnRef): Promise<boolean>;
+  /**
+   * `claimed` → `failed_before_runtime` (token conferido): a retentativa da fila pode
+   * reivindicar de novo. A execução fica `failed` com o erro até lá.
+   */
+  releaseTurn(input: TurnRef & { readonly error: string }): Promise<void>;
+  /**
+   * `running` → `responded` guardando a resposta do runtime (token conferido). A partir
+   * daqui uma retentativa grava ESTA resposta, sem chamar o runtime de novo.
+   */
+  saveTurnReply(input: TurnRef & { readonly reply: string }): Promise<boolean>;
+  /**
+   * `responded` → `completed` + mensagem do agente + job de envio na outbox, na MESMA
+   * transação. A transição condicional é a garantia de UMA mensagem: quem a perde recebe
+   * `null` (outra entrega já gravou a resposta) e não grava nada.
+   */
+  deliverTurnReply(
+    input: PersistAgentMessageInput & { readonly executionId: string },
+  ): Promise<string | null>;
+}
+
+/** Quanto tempo uma reivindicação `claimed` vale antes de outra entrega poder retomá-la. */
+export const TURN_CLAIM_LEASE_MS = 120_000;
+
+export interface ClaimTurnInput extends StartExecutionInput {
+  /** Id estável do gatilho (`agentRunTriggerId`, `@hm/shared/mq`). */
+  readonly triggerId: string;
+  /** Lease de `claimed` (default {@link TURN_CLAIM_LEASE_MS}). */
+  readonly leaseMs: number;
+}
+
+/** Referência a uma reivindicação em posse desta entrega. */
+export interface TurnRef {
+  readonly workspaceId: string;
+  readonly executionId: string;
+  readonly token: string;
+}
+
+/** Resultado de {@link AgentRunStore.claimTurn}. */
+export type TurnClaim =
+  | {
+      readonly kind: 'acquired';
+      readonly executionId: string;
+      readonly token: string;
+      readonly attempt: number;
+    }
+  /** Outra entrega reivindicou e ainda está antes do runtime (lease vigente). */
+  | { readonly kind: 'in_flight'; readonly executionId: string | null }
+  /** O runtime já foi chamado para este gatilho: nunca chama de novo. */
+  | { readonly kind: 'running'; readonly executionId: string }
+  /** O runtime respondeu, a mensagem ainda não foi gravada: grava a resposta guardada. */
+  | { readonly kind: 'responded'; readonly executionId: string; readonly reply: string }
+  | { readonly kind: 'completed'; readonly executionId: string };
+
+/**
+ * Outra entrega do mesmo gatilho está com o turno, antes do runtime. Lançado para a fila
+ * RETENTAR (não é erro de conteúdo): se a dona concluir, a retentativa vira no-op; se ela
+ * falhar antes do runtime ou morrer (lease vencido), a retentativa roda o turno. Ack aqui
+ * perderia o turno quando a dona falha sem conseguir marcar `failed_before_runtime`.
+ */
+export class AgentTurnInFlightError extends Error {
+  override readonly name = 'AgentTurnInFlightError';
+  constructor(readonly triggerId: string) {
+    super(`agent-run: turno do gatilho ${triggerId} em curso noutra entrega; retentar.`);
+  }
 }
 
 export interface StartExecutionInput {
@@ -191,7 +268,13 @@ export type AgentRunOutcome =
   | { readonly status: 'budget_denied'; readonly executionId: string }
   | { readonly status: 'runtime_blocked'; readonly executionId: string; readonly reason: string }
   | { readonly status: 'failed'; readonly executionId: string; readonly error: string }
-  | { readonly status: 'replied'; readonly executionId: string; readonly messageId: string };
+  | { readonly status: 'replied'; readonly executionId: string; readonly messageId: string }
+  /** Gatilho repetido (F70-S26): o turno já rodou ou está no runtime. No-op. */
+  | {
+      readonly status: 'duplicate';
+      readonly executionId: string;
+      readonly turnState: 'running' | 'completed' | 'claim_lost';
+    };
 
 /** Por que o agente pode responder a esta conversa (ou por que não). */
 export type AiReplyAuthorization =
@@ -340,10 +423,41 @@ async function consumeStream(
 
 /**
  * Executa um turno de agente ponta-a-ponta. Lança apenas em falha de **infra**
- * (DB/MQ/socket) — o caller (`worker`) converte em nack→DLX. Falhas de **negócio**
+ * (DB/MQ/socket) — o caller (`worker`) converte em retry da fila. Falhas de **negócio**
  * (sem contexto, cap estourado, modelo bloqueado, erro do runtime) são tratadas
  * aqui (marcam a execução, emitem socket) e retornam um outcome sem lançar: o
  * envelope é ack'd (reprocessar um gatilho imutável não ajuda).
+ *
+ * ## Turno idempotente por gatilho (F70-S26)
+ *
+ * Com `trigger.triggerId` (todo envelope da fila; ver `handleAgentEnvelope`), o turno é
+ * reivindicado em `agent_executions` pelo id do gatilho DEPOIS das travas (que não têm
+ * efeito) e ANTES de qualquer efeito (cap, tools, socket, runtime). `turn_state`:
+ *
+ * ```
+ *  (nada) ──claim──▶ claimed ──markRunning──▶ running ──saveReply──▶ responded ──deliver──▶ completed
+ *                    │   ▲                      │                                        ▲
+ *        infra antes │   │ retentativa          └─ erro/bloqueio do runtime, resposta ───┘
+ *        do runtime  ▼   │ (ou lease vencido)       vazia, cap negado (a partir de claimed)
+ *            failed_before_runtime
+ * ```
+ *
+ * Entrega repetida, conforme o estado que encontra:
+ *  - `failed_before_runtime`, ou `claimed` com lease ({@link TURN_CLAIM_LEASE_MS}) vencido
+ *    (a dona morreu antes do runtime) → reivindica e roda o turno inteiro;
+ *  - `claimed` no lease → {@link AgentTurnInFlightError}: a fila retenta mais tarde;
+ *  - `running` → no-op. O runtime já foi chamado e pode ter executado tools; chamá-lo de
+ *    novo arrisca a segunda resposta e o efeito duplicado. Uma queda NO MEIO do runtime
+ *    (processo morto, erro de infra antes de guardar a resposta) deixa o turno sem
+ *    resposta: escolha consciente, a próxima mensagem do contato abre outro turno;
+ *  - `responded` → grava a resposta guardada sem chamar o runtime (a falha foi depois
+ *    dele, ao gravar a mensagem): o cliente recebe a resposta, uma vez;
+ *  - `completed` → no-op.
+ *
+ * A mensagem sai de `deliverTurnReply`, cuja transição condicional `responded → completed`
+ * é da mesma transação da mensagem e do job de envio: duas entregas concorrentes nunca
+ * gravam duas respostas. Sem `triggerId` (flush do buffer de agregação) o turno roda como
+ * antes, sem reivindicação.
  */
 export async function runAgent(
   workspaceId: string,
@@ -382,67 +496,78 @@ export async function runAgent(
 
   const resolved = await resolvePolicy(workspaceId, ctx.agentId);
 
-  // Cost-guard PRÉ-chamada (F2-S09): não dispara o runtime se estouraria o cap.
-  const estimatedCostUsd = estimateTurnCostUsd(resolved, ctx);
-  const decision = guardResolved(resolved, estimatedCostUsd);
-  if (!decision.ok) {
-    const executionId = await store.startExecution({
-      workspaceId,
-      agentId: ctx.agentId,
-      conversationId: ctx.conversationId,
-      threadId: ctx.conversationId,
-    });
-    await store.failExecution({ workspaceId, executionId, error: decision.reason });
-    await socket.emitCompleted({
+  // F70-S26: reivindica o turno pelo id do gatilho (ou abre execução avulsa, sem gatilho).
+  const begun = await beginTurn(workspaceId, trigger, ctx, deps);
+  if (begun.kind === 'done') return begun.outcome;
+  const { executionId, turn } = begun;
+
+  // Antes do runtime: uma falha de infra aqui libera o turno para a retentativa da fila.
+  let tools: ToolDescriptor[];
+  try {
+    // Cost-guard PRÉ-chamada (F2-S09): não dispara o runtime se estouraria o cap.
+    const estimatedCostUsd = estimateTurnCostUsd(resolved, ctx);
+    const decision = guardResolved(resolved, estimatedCostUsd);
+    if (!decision.ok) {
+      await store.failExecution({ workspaceId, executionId, error: decision.reason });
+      await socket.emitCompleted({
+        workspaceId,
+        conversationId: ctx.conversationId,
+        agentId: ctx.agentId,
+        executionId,
+      });
+      logger.warn('agent-run: bloqueado por cap de custo', {
+        conversationId: ctx.conversationId,
+        agentId: ctx.agentId,
+        reason: decision.reason,
+        message: decision.message,
+      });
+      return { status: 'budget_denied', executionId };
+    }
+
+    // Tools habilitadas do agente, filtradas pela MESMA policy que o runtime reaplica.
+    const loaded = (await store.loadTools?.(workspaceId, ctx.agentId)) ?? {
+      tools: [],
+      rejected: [],
+    };
+    const enabledTools = loaded.tools;
+    tools = filterToolsByPolicy(enabledTools, resolved.snapshot);
+    if (loaded.rejected.length > 0) {
+      // Linha de catálogo fora do contrato: nunca derruba o turno; o agente fica sem ela.
+      logger.warn('agent-run: tools fora do contrato descartadas', {
+        agentId: ctx.agentId,
+        rejected: loaded.rejected,
+      });
+    }
+    if (enabledTools.length > 0) {
+      logger.info('agent-run: tools entregues ao runtime', {
+        conversationId: ctx.conversationId,
+        agentId: ctx.agentId,
+        executionId,
+        tools: tools.map((t) => t.key),
+        droppedByPolicy: enabledTools.length - tools.length,
+      });
+    }
+
+    await socket.emitStarted({
       workspaceId,
       conversationId: ctx.conversationId,
       agentId: ctx.agentId,
       executionId,
     });
-    logger.warn('agent-run: bloqueado por cap de custo', {
-      conversationId: ctx.conversationId,
-      agentId: ctx.agentId,
-      reason: decision.reason,
-      message: decision.message,
-    });
-    return { status: 'budget_denied', executionId };
-  }
 
-  const executionId = await store.startExecution({
-    workspaceId,
-    agentId: ctx.agentId,
-    conversationId: ctx.conversationId,
-    threadId: ctx.conversationId,
-  });
-  await socket.emitStarted({
-    workspaceId,
-    conversationId: ctx.conversationId,
-    agentId: ctx.agentId,
-    executionId,
-  });
-
-  // Tools habilitadas do agente, filtradas pela MESMA policy que o runtime reaplica.
-  const loaded = (await store.loadTools?.(workspaceId, ctx.agentId)) ?? {
-    tools: [],
-    rejected: [],
-  };
-  const enabledTools = loaded.tools;
-  const tools = filterToolsByPolicy(enabledTools, resolved.snapshot);
-  if (loaded.rejected.length > 0) {
-    // Linha de catálogo fora do contrato: nunca derruba o turno; o agente fica sem ela.
-    logger.warn('agent-run: tools fora do contrato descartadas', {
-      agentId: ctx.agentId,
-      rejected: loaded.rejected,
-    });
-  }
-  if (enabledTools.length > 0) {
-    logger.info('agent-run: tools entregues ao runtime', {
-      conversationId: ctx.conversationId,
-      agentId: ctx.agentId,
-      executionId,
-      tools: tools.map((t) => t.key),
-      droppedByPolicy: enabledTools.length - tools.length,
-    });
+    // Último passo antes do runtime: daqui em diante o gatilho nunca chama o runtime de
+    // novo. Perder aqui = o lease venceu e outra entrega retomou a MESMA execução.
+    if (turn !== null && !(await store.markTurnRunning(turn))) {
+      logger.warn('agent-run: reivindicação perdida antes do runtime; outra entrega segue', {
+        conversationId: ctx.conversationId,
+        executionId,
+        triggerId: trigger.triggerId,
+      });
+      return { status: 'duplicate', executionId, turnState: 'claim_lost' };
+    }
+  } catch (err: unknown) {
+    if (turn !== null) await releaseTurnQuietly(store, turn, err, logger);
+    throw err;
   }
 
   const request = buildRunRequest(workspaceId, ctx, resolved, tools, executionId);
@@ -520,14 +645,31 @@ export async function runAgent(
   // na mesma transação — mesmo pipeline outbound de F1 (o worker outbound dispara ao
   // provider). F70-S21: antes o job era publicado depois do commit; uma queda entre os
   // dois deixava a resposta `pending` para sempre.
-  const messageId = await store.persistAgentMessage({
+  const message: PersistAgentMessageInput = {
     workspaceId,
     conversationId: ctx.conversationId,
     agentId: ctx.agentId,
     content: reply,
     channelId: ctx.channelId,
     chatId: ctx.chatId,
-  });
+  };
+  let messageId: string | null;
+  if (turn === null) {
+    messageId = await store.persistAgentMessage(message);
+  } else {
+    // F70-S26: guarda a resposta ANTES de gravar a mensagem. Se a gravação falhar, a
+    // retentativa da fila encontra `responded` e grava esta resposta sem outro runtime.
+    if (!(await store.saveTurnReply({ ...turn, reply }))) {
+      // `running` não é retomável; só chega aqui com o estado mexido por fora.
+      logger.error('agent-run: turno saiu de running durante o runtime; resposta descartada', {
+        conversationId: ctx.conversationId,
+        executionId,
+        triggerId: trigger.triggerId,
+      });
+      return { status: 'duplicate', executionId, turnState: 'claim_lost' };
+    }
+    messageId = await store.deliverTurnReply({ ...message, executionId });
+  }
 
   await store.completeExecution({
     workspaceId,
@@ -550,7 +692,129 @@ export async function runAgent(
     totalTokens: stream.totalTokens,
   });
 
+  if (messageId === null) {
+    // Uma entrega concorrente em `responded` gravou esta resposta primeiro.
+    return { status: 'duplicate', executionId, turnState: 'completed' };
+  }
   return { status: 'replied', executionId, messageId };
+}
+
+// ─── Reivindicação do turno (F70-S26) ─────────────────────────────────────────
+
+type BegunTurn =
+  | { readonly kind: 'run'; readonly executionId: string; readonly turn: TurnRef | null }
+  | { readonly kind: 'done'; readonly outcome: AgentRunOutcome };
+
+/**
+ * Abre a execução do turno. Sem `triggerId`: execução avulsa (`startExecution`). Com ele:
+ * reivindica e decide pelo estado encontrado (ver a máquina em {@link runAgent}).
+ */
+async function beginTurn(
+  workspaceId: string,
+  trigger: AgentRunTrigger,
+  ctx: AgentRunContext,
+  deps: AgentRunDeps,
+): Promise<BegunTurn> {
+  const { store, socket, logger } = deps;
+  const base: StartExecutionInput = {
+    workspaceId,
+    agentId: ctx.agentId,
+    conversationId: ctx.conversationId,
+    threadId: ctx.conversationId,
+  };
+  const triggerId = trigger.triggerId;
+  if (triggerId === undefined) {
+    return { kind: 'run', executionId: await store.startExecution(base), turn: null };
+  }
+
+  const claim = await store.claimTurn({ ...base, triggerId, leaseMs: TURN_CLAIM_LEASE_MS });
+  const fields = { conversationId: ctx.conversationId, triggerId };
+  switch (claim.kind) {
+    case 'acquired':
+      if (claim.attempt > 1) {
+        logger.info('agent-run: retentativa reivindicou o turno (falhou antes do runtime)', {
+          ...fields,
+          executionId: claim.executionId,
+          attempt: claim.attempt,
+        });
+      }
+      return {
+        kind: 'run',
+        executionId: claim.executionId,
+        turn: { workspaceId, executionId: claim.executionId, token: claim.token },
+      };
+    case 'in_flight':
+      logger.info('agent-run: gatilho em curso noutra entrega; a fila retenta', {
+        ...fields,
+        executionId: claim.executionId,
+      });
+      throw new AgentTurnInFlightError(triggerId);
+    case 'running':
+    case 'completed':
+      logger.info('agent-run: gatilho repetido; o turno já rodou, nada a fazer', {
+        ...fields,
+        executionId: claim.executionId,
+        turnState: claim.kind,
+      });
+      return {
+        kind: 'done',
+        outcome: { status: 'duplicate', executionId: claim.executionId, turnState: claim.kind },
+      };
+    case 'responded': {
+      // A entrega anterior guardou a resposta e caiu ao gravá-la: grava agora, sem runtime.
+      const messageId = await store.deliverTurnReply({
+        workspaceId,
+        conversationId: ctx.conversationId,
+        agentId: ctx.agentId,
+        content: claim.reply,
+        channelId: ctx.channelId,
+        chatId: ctx.chatId,
+        executionId: claim.executionId,
+      });
+      if (messageId === null) {
+        return {
+          kind: 'done',
+          outcome: { status: 'duplicate', executionId: claim.executionId, turnState: 'completed' },
+        };
+      }
+      await socket.emitCompleted({
+        workspaceId,
+        conversationId: ctx.conversationId,
+        agentId: ctx.agentId,
+        executionId: claim.executionId,
+      });
+      logger.warn('agent-run: resposta guardada gravada pela retentativa (sem novo runtime)', {
+        ...fields,
+        executionId: claim.executionId,
+        messageId,
+      });
+      return {
+        kind: 'done',
+        outcome: { status: 'replied', executionId: claim.executionId, messageId },
+      };
+    }
+  }
+}
+
+/**
+ * Libera o turno para a retentativa depois de uma falha antes do runtime. Best-effort: se
+ * nem isso grava (banco fora), o `claimed` expira pelo lease e a retentativa o retoma.
+ */
+async function releaseTurnQuietly(
+  store: AgentRunStore,
+  turn: TurnRef,
+  cause: unknown,
+  logger: Logger,
+): Promise<void> {
+  const error = cause instanceof Error ? cause.message : String(cause);
+  try {
+    await store.releaseTurn({ ...turn, error });
+  } catch (releaseErr: unknown) {
+    logger.error('agent-run: não liberou o turno; a retentativa espera o lease', {
+      executionId: turn.executionId,
+      error: releaseErr instanceof Error ? releaseErr.message : String(releaseErr),
+    });
+  }
 }
 
 // ─── Implementação default das portas DB (@hm/db + withWorkspace, RLS) ────────
@@ -694,6 +958,7 @@ export class DbAgentRunStore implements AgentRunStore {
           totalCostUsd: input.totalCostUsd.toFixed(6),
           completedAt: new Date(),
           updatedAt: new Date(),
+          ...turnConcluded(),
         })
         .where(eq(schema.agentExecutions.id, input.executionId));
     });
@@ -708,47 +973,192 @@ export class DbAgentRunStore implements AgentRunStore {
           error: input.error,
           completedAt: new Date(),
           updatedAt: new Date(),
+          ...turnConcluded(),
         })
         .where(eq(schema.agentExecutions.id, input.executionId));
     });
   }
 
-  async persistAgentMessage(input: PersistAgentMessageInput): Promise<string> {
+  async claimTurn(input: ClaimTurnInput): Promise<TurnClaim> {
+    const ae = schema.agentExecutions;
+    const token = randomUUID();
     return withWorkspace(input.workspaceId, async (tx) => {
-      const [row] = await tx
-        .insert(schema.messages)
+      // Uma instrução só: cria em `claimed` ou retoma a linha liberada/abandonada. O índice
+      // único parcial serializa entregas concorrentes; a segunda espera o commit da primeira
+      // e reavalia o `setWhere` sobre a linha já gravada (READ COMMITTED).
+      const [won] = await tx
+        .insert(ae)
         .values({
           workspaceId: input.workspaceId,
+          agentId: input.agentId,
           conversationId: input.conversationId,
-          direction: 'outbound',
-          senderType: 'agent',
-          senderAgentId: input.agentId,
-          type: 'text',
-          content: input.content,
-          viewStatus: 'pending',
-          externalId: null,
+          threadId: input.threadId,
+          status: 'running',
+          state: {},
+          triggerId: input.triggerId,
+          turnState: 'claimed',
+          turnToken: token,
+          turnAttempts: 1,
+          turnClaimedAt: sql`now()`,
         })
-        .returning({ id: schema.messages.id });
-      if (row === undefined) {
-        throw new Error('agent-run: mensagem do agente não materializou após insert.');
+        .onConflictDoUpdate({
+          target: [ae.workspaceId, ae.triggerId],
+          targetWhere: sql`${ae.triggerId} is not null`,
+          set: {
+            // O runtime nunca viu esta execução: o agente/conversa atuais valem.
+            agentId: sql`excluded.agent_id`,
+            conversationId: sql`excluded.conversation_id`,
+            threadId: sql`excluded.thread_id`,
+            status: 'running',
+            error: null,
+            completedAt: null,
+            updatedAt: sql`now()`,
+            turnState: 'claimed',
+            turnToken: sql`excluded.turn_token`,
+            turnAttempts: sql`coalesce(${ae.turnAttempts}, 0) + 1`,
+            turnClaimedAt: sql`now()`,
+          },
+          setWhere: sql`${ae.turnState} = 'failed_before_runtime' or (${ae.turnState} = 'claimed' and ${ae.turnClaimedAt} < now() - ${input.leaseMs}::double precision * interval '1 millisecond')`,
+        })
+        .returning({ id: ae.id, attempts: ae.turnAttempts });
+      if (won !== undefined) {
+        return { kind: 'acquired', executionId: won.id, token, attempt: won.attempts ?? 1 };
       }
-      // F70-S21: o job de envio (shape EXATO de `parseOutboundJob`, kind `text`) entra
-      // na outbox NESTA transação. O relay publica depois do commit, com confirms.
-      const job = {
-        kind: 'text',
-        channelId: input.channelId,
-        conversationId: input.conversationId,
-        messageId: row.id,
-        chatId: input.chatId,
-        text: input.content,
-      };
-      await enqueueOutbox(
-        tx,
-        queueJobOutbox(QUEUES.outbound, makeEnvelope(OUTBOUND_JOB_TYPE, input.workspaceId, job)),
-      );
-      return row.id;
+
+      const [current] = await tx
+        .select({
+          id: ae.id,
+          agentId: ae.agentId,
+          turnState: ae.turnState,
+          turnReply: ae.turnReply,
+        })
+        .from(ae)
+        .where(and(eq(ae.workspaceId, input.workspaceId), eq(ae.triggerId, input.triggerId)))
+        .limit(1);
+      if (current === undefined) return { kind: 'in_flight', executionId: null };
+      switch (current.turnState) {
+        case 'running':
+          return { kind: 'running', executionId: current.id };
+        case 'completed':
+          return { kind: 'completed', executionId: current.id };
+        case 'responded':
+          return { kind: 'responded', executionId: current.id, reply: current.turnReply ?? '' };
+        default:
+          // `claimed` no lease (ou liberado entre as duas leituras): a fila retenta.
+          return { kind: 'in_flight', executionId: current.id };
+      }
     });
   }
+
+  async markTurnRunning(input: TurnRef): Promise<boolean> {
+    return this.transitionTurn(input, 'claimed', { turnState: 'running' });
+  }
+
+  async releaseTurn(input: TurnRef & { readonly error: string }): Promise<void> {
+    await this.transitionTurn(input, 'claimed', {
+      turnState: 'failed_before_runtime',
+      status: 'failed',
+      error: input.error,
+      completedAt: new Date(),
+    });
+  }
+
+  async saveTurnReply(input: TurnRef & { readonly reply: string }): Promise<boolean> {
+    return this.transitionTurn(input, 'running', {
+      turnState: 'responded',
+      turnReply: input.reply,
+    });
+  }
+
+  async deliverTurnReply(
+    input: PersistAgentMessageInput & { readonly executionId: string },
+  ): Promise<string | null> {
+    const ae = schema.agentExecutions;
+    return withWorkspace(input.workspaceId, async (tx) => {
+      // Sem token de propósito: a entrega que retoma `responded` não é a dona original.
+      // A transição condicional, na transação da mensagem, é o que garante UMA resposta.
+      const [won] = await tx
+        .update(ae)
+        .set({ turnState: 'completed', turnReply: null, updatedAt: new Date() })
+        .where(and(eq(ae.id, input.executionId), eq(ae.turnState, 'responded')))
+        .returning({ id: ae.id });
+      if (won === undefined) return null;
+      return insertAgentMessage(tx, input);
+    });
+  }
+
+  /** Transição de `turn_state` condicionada ao estado de origem E ao token do dono. */
+  private async transitionTurn(
+    input: TurnRef,
+    from: 'claimed' | 'running',
+    set: Partial<typeof schema.agentExecutions.$inferInsert>,
+  ): Promise<boolean> {
+    const ae = schema.agentExecutions;
+    return withWorkspace(input.workspaceId, async (tx) => {
+      const rows = await tx
+        .update(ae)
+        .set({ ...set, updatedAt: new Date() })
+        .where(
+          and(eq(ae.id, input.executionId), eq(ae.turnToken, input.token), eq(ae.turnState, from)),
+        )
+        .returning({ id: ae.id });
+      return rows.length > 0;
+    });
+  }
+
+  async persistAgentMessage(input: PersistAgentMessageInput): Promise<string> {
+    return withWorkspace(input.workspaceId, (tx) => insertAgentMessage(tx, input));
+  }
+}
+
+/**
+ * Encerramento do turno junto com a execução (`completeExecution`/`failExecution`):
+ * execução sem gatilho continua com `turn_state` NULL; com gatilho vira `completed`.
+ */
+function turnConcluded() {
+  const { turnState } = schema.agentExecutions;
+  return {
+    turnState: sql<string | null>`case when ${turnState} is null then null else 'completed' end`,
+    turnReply: null,
+  } as const;
+}
+
+/**
+ * Mensagem do agente (outbound, `pending`) + job de envio na outbox, na transação `tx`.
+ */
+async function insertAgentMessage(tx: DbTx, input: PersistAgentMessageInput): Promise<string> {
+  const [row] = await tx
+    .insert(schema.messages)
+    .values({
+      workspaceId: input.workspaceId,
+      conversationId: input.conversationId,
+      direction: 'outbound',
+      senderType: 'agent',
+      senderAgentId: input.agentId,
+      type: 'text',
+      content: input.content,
+      viewStatus: 'pending',
+      externalId: null,
+    })
+    .returning({ id: schema.messages.id });
+  if (row === undefined) {
+    throw new Error('agent-run: mensagem do agente não materializou após insert.');
+  }
+  // F70-S21: o job de envio (shape EXATO de `parseOutboundJob`, kind `text`) entra
+  // na outbox NESTA transação. O relay publica depois do commit, com confirms.
+  const job = {
+    kind: 'text',
+    channelId: input.channelId,
+    conversationId: input.conversationId,
+    messageId: row.id,
+    chatId: input.chatId,
+    text: input.content,
+  };
+  await enqueueOutbox(
+    tx,
+    queueJobOutbox(QUEUES.outbound, makeEnvelope(OUTBOUND_JOB_TYPE, input.workspaceId, job)),
+  );
+  return row.id;
 }
 
 /** Texto do turno que disparou o agente (última inbound; gatilho por `externalId`). */

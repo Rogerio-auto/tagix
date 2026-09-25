@@ -149,6 +149,8 @@ describe.skipIf(!ready)('reengajamento → gatilho da IA na outbox (F70-S25)', (
       contactId: CONTACT,
       channelId: CHANNEL,
       provider: 'meta_whatsapp',
+      // F70-S26: id estável do gatilho = conversa + janela (epoch-seg).
+      triggerId: expect.stringMatching(new RegExp(`^reengagement:${conv}:\\d+$`)),
     });
   });
 

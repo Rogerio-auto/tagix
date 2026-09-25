@@ -73,7 +73,12 @@ import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { enqueueOutbox, getDb, schema, withWorkspace } from '@hm/db';
 import { AI_ELIGIBLE_CONVERSATION_ORIGINS } from '@hm/flow-engine';
 import type { DbTx } from '@hm/db';
-import { AGENT_RUN_REQUESTED_TYPE, agentRunJobOutbox, QUEUES } from '@hm/shared/mq';
+import {
+  AGENT_RUN_REQUESTED_TYPE,
+  agentRunJobOutbox,
+  agentRunTriggerId,
+  QUEUES,
+} from '@hm/shared/mq';
 import { CHANNEL_PROVIDERS, type ChannelProvider } from '@hm/shared';
 import type { Logger } from '@hm/logger';
 
@@ -509,6 +514,8 @@ async function enqueueReengagementRun(
       contactId: conv.contactId,
       channelId: conv.channelId,
       provider: conv.provider,
+      // F70-S26: uma retomada por conversa e janela (a mesma chave da marca Redis).
+      triggerId: agentRunTriggerId.reengagement(conv.conversationId, conv.windowBucket),
     }),
   );
 }

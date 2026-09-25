@@ -46,7 +46,14 @@ vi.mock('@hm/shared/mq', () => ({
     routingKey: 'hm.q.flows',
     envelope: { type: 'flow.run.requested', workspaceId, payload },
   }),
+  agentRunTriggerId: {
+    agentSwitch: (conversationId: string, micros: string) =>
+      `agent-switch:${conversationId}:${micros}`,
+  },
 }));
+
+/** `ai_enabled_at` (µs) devolvido pelo UPDATE da troca (F70-S26). */
+const AI_ENABLED_AT_MICROS = '1790000000000001';
 
 // Estado mutável da conversa.
 let convRow: {
@@ -158,7 +165,12 @@ function makeTx() {
       },
     }),
     update: (_table: unknown) => ({
-      set: (_data: unknown) => ({ where: (_cond: unknown) => Promise.resolve() }),
+      set: (_data: unknown) => ({
+        where: (_cond: unknown) => ({
+          returning: (_cols: unknown) =>
+            Promise.resolve([{ aiEnabledAtMicros: AI_ENABLED_AT_MICROS }]),
+        }),
+      }),
     }),
   };
 }
@@ -329,6 +341,7 @@ describe('POST /api/conversations/:id/agent', () => {
           contactId: '00000000-0000-0000-0000-0000000000ff',
           channelId: '00000000-0000-0000-0000-0000000000ce',
           provider: 'meta_whatsapp',
+          triggerId: `agent-switch:${CONV_ID}:${AI_ENABLED_AT_MICROS}`,
         },
       },
     });

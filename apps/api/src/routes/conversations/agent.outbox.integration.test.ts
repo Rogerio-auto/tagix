@@ -10,7 +10,7 @@
 import express from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type * as Db from '@hm/db';
 import type * as Mq from '@hm/shared/mq';
 
@@ -89,12 +89,32 @@ describe('POST /api/conversations/:id/agent → gatilho da IA na outbox (F70-S25
     expect(jobs[0]).toMatchObject({ kind: 'job', exchange: '', status: 'pending' });
     expect(jobs[0]?.eventId).toBe(jobs[0]?.envelope.id);
     expect(jobs[0]?.envelope).toMatchObject({ type: 'flow.run.requested', workspaceId: A.ws });
+    // F70-S26: id estável = conversa + `ai_enabled_at` (µs) gravado pela troca.
+    const [marked] = await getDb()
+      .select({
+        micros: sql<string>`(extract(epoch from ${schema.conversations.aiEnabledAt}) * 1000000)::bigint::text`,
+      })
+      .from(schema.conversations)
+      .where(eq(schema.conversations.id, A.conversation));
     expect(jobs[0]?.envelope.payload).toEqual({
       conversationId: A.conversation,
       contactId: A.contact,
       channelId: A.channel,
       provider: 'meta_whatsapp',
+      triggerId: `agent-switch:${A.conversation}:${marked?.micros ?? ''}`,
     });
+  });
+
+  it('cada troca manual é um gatilho novo, com id próprio (F70-S26)', async () => {
+    const before = await agentRunJobsOf(A.conversation);
+    const res = await request(app)
+      .post(`/api/conversations/${A.conversation}/agent`)
+      .send({ agentId: A.agent });
+    expect(res.status).toBe(200);
+    const after = await agentRunJobsOf(A.conversation);
+    expect(after).toHaveLength(before.length + 1);
+    const ids = after.map((j) => (j.envelope.payload as Record<string, unknown>)['triggerId']);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('rollback: a IA segue desligada e nada fica na outbox', async () => {

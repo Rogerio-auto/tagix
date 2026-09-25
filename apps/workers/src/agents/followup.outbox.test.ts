@@ -156,6 +156,8 @@ describe.skipIf(!ready)('follow-up → gatilho da IA na outbox (F70-S25)', () =>
       contactId: CONTACT,
       channelId: CHANNEL,
       provider: 'meta_whatsapp',
+      // F70-S26: id estável do gatilho = conversa + janela (epoch-seg).
+      triggerId: expect.stringMatching(new RegExp(`^followup:${conv}:\\d+$`)),
     });
 
     const second = await runFollowupTick(deps, { workspaceId: WS, now });

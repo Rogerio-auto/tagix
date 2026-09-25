@@ -61,6 +61,7 @@ import type { DbTx } from '@hm/db';
 import {
   AGENT_RUN_REQUESTED_TYPE,
   agentRunJobOutbox,
+  agentRunTriggerId,
   QUEUES,
   type OutboxMessage,
 } from '@hm/shared/mq';
@@ -301,6 +302,8 @@ function followupRunJob(workspaceId: string, conv: EligibleConversation): Outbox
     contactId: conv.contactId,
     channelId: conv.channelId,
     provider: conv.provider,
+    // F70-S26: um follow-up por conversa e janela (a mesma chave da marca Redis).
+    triggerId: agentRunTriggerId.followup(conv.conversationId, conv.windowBucket),
   });
 }
 
