@@ -2,13 +2,16 @@
 id: F70-S19
 title: Achados da auditoria que dependem da S15 e da S16 — IA legada, eco, assinatura com timestamp e consumer estrito
 phase: F70
-status: available
+status: in-progress
 priority: high
 estimated_size: S
 depends_on: [F70-S15, F70-S16]
 blocks: []
 source_docs:
   - tasks/slots/F70/F70-S18-achados-baixos-da-auditoria.md
+agent_id: backend-engineer
+claimed_at: 2026-09-25T06:21:59Z
+
 ---
 # F70-S19 — Achados da auditoria que dependem da S15 e da S16
 
