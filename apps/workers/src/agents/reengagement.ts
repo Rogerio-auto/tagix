@@ -53,9 +53,18 @@
  * o run NÃO é publicado e a recusa é logada uma vez por janela (a marca de
  * idempotência já foi gravada, então o tick seguinte não repete o log). Um humano
  * ainda pode religar a IA à mão.
+ *
+ * **Marca humana (F70-S23, nota do M2):** conversa sem origem elegível que um HUMANO
+ * ligou (`ai_enabled_at`, F70-S19) também retoma, se a marca era válida quando o
+ * atendente assumiu — a retomada devolve a IA ao estado que o humano autorizou, não a
+ * liga de novo. A regra é uma função só do banco (`conversation_ai_resume_keeps_human_mark`,
+ * migração 0089), usada aqui E pelo trigger `trg_conversations_ai_enable_mark`, que então
+ * não carimba `ai_auto_enabled_at` e a marca segue valendo no `authorizeAiReply`:
+ *   pausa `human_takeover` + marca anterior à pausa + marca não vencida por um `on`
+ *   automático. Fail-closed: qualquer campo NULL, pausa `manual` ou IA `off` não retoma.
  */
 import { Buffer } from 'node:buffer';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { getDb, schema, withWorkspace } from '@hm/db';
 import { AI_ELIGIBLE_CONVERSATION_ORIGINS } from '@hm/flow-engine';
 import type { DbTx } from '@hm/db';
@@ -454,8 +463,13 @@ async function resumeAiMode(
     .where(
       and(
         eq(schema.conversations.id, conversationId),
-        // F70-S08 — trava de origem: só retoma conversa com origem comprovada.
-        inArray(schema.conversations.origin, [...AI_ELIGIBLE_CONVERSATION_ORIGINS]),
+        // F70-S08 — trava de origem: só retoma conversa com origem comprovada, OU (F70-S23)
+        // ligada por um humano com a marca válida no momento da pausa. O estado lido aqui
+        // é o de antes do UPDATE, o mesmo que o trigger avalia.
+        or(
+          inArray(schema.conversations.origin, [...AI_ELIGIBLE_CONVERSATION_ORIGINS]),
+          sql`public.conversation_ai_resume_keeps_human_mark(${schema.conversations.aiMode}, ${schema.conversations.aiPausedReason}, ${schema.conversations.aiPausedAt}, ${schema.conversations.aiEnabledAt}, ${schema.conversations.aiAutoEnabledAt})`,
+        ),
       ),
     )
     .returning({ id: schema.conversations.id });

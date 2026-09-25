@@ -54,6 +54,8 @@ vi.mock('@hm/db', () => ({
       aiResumeAt: 'ai_resume_at',
       updatedAt: 'updated_at',
       origin: 'origin',
+      aiEnabledAt: 'ai_enabled_at',
+      aiAutoEnabledAt: 'ai_auto_enabled_at',
     },
   },
 }));
