@@ -2,7 +2,7 @@
 id: F70-S25
 title: Gatilhos da IA e passos de flow pela outbox, lembrete da agenda com conversa real
 phase: F70
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F70-S21]
@@ -11,6 +11,7 @@ source_docs:
   - tasks/slots/F70/F70-S21-ultimos-publicadores-pos-commit.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T13:20:25Z
+completed_at: 2026-09-25T14:09:45Z
 
 ---
 # F70-S25 — Gatilhos da IA e passos de flow pela outbox, lembrete da agenda com conversa real
