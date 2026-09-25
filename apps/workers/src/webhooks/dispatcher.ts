@@ -4,7 +4,8 @@
  * Drena `outbound_webhook_deliveries` com status `pending`/`retrying` e
  * `next_attempt_at <= now()`, faz o POST HTTP assinado com HMAC-SHA256 sobre o
  * segredo (decifrado de `outbound_webhooks.secret_enc`, AES-256-GCM) e atualiza o
- * estado:
+ * estado. A assinatura cobre `${x-hm-timestamp}.${corpo}` e é refeita a cada
+ * tentativa com o horário dela (F70-S19, ver `./signature`):
  *   - 2xx → `sent` (sent_at = now()).
  *   - falha (rede/timeout/≥400) → backoff exponencial: incrementa `attempt`, agenda
  *     `next_attempt_at` e marca `retrying`; ao exceder `MAX_ATTEMPTS`, marca `failed`.
@@ -13,11 +14,11 @@
  * tenants. Cada linha já carrega `workspace_id`; nada cruza tenant porque só lemos a
  * própria linha + seu webhook.
  */
-import { createHmac } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { decryptSecret, getDb } from '@hm/db';
 import { checkWebhookUrlSyntax, SsrfBlockedError, ssrfSafeFetch } from '@hm/shared/net';
 import type { Logger } from '@hm/logger';
+import { signatureHeaders } from './signature';
 
 /** Máximo de tentativas antes de `failed` (1 inicial + retries). */
 export const MAX_ATTEMPTS = 6;
@@ -29,9 +30,6 @@ const BATCH_SIZE = 50;
 /** Timeout do POST por entrega. */
 const REQUEST_TIMEOUT_MS = 10_000;
 
-/** Header da assinatura HMAC (cliente verifica `sha256=<hex>` sobre o corpo cru). */
-export const SIGNATURE_HEADER = 'x-hm-signature-256';
-
 interface DueDelivery extends Record<string, unknown> {
   readonly id: string;
   readonly url: string;
@@ -39,11 +37,6 @@ interface DueDelivery extends Record<string, unknown> {
   readonly event: string;
   readonly payload: unknown;
   readonly attempt: number;
-}
-
-/** Assina `body` com HMAC-SHA256 → `sha256=<hex>`. Mesmo esquema do test-delivery (S04). */
-export function signWebhook(secret: string, body: string): string {
-  return `sha256=${createHmac('sha256', secret).update(body, 'utf8').digest('hex')}`;
 }
 
 /** Backoff exponencial com teto (segundos) para a próxima tentativa. */
@@ -107,7 +100,7 @@ export async function dispatchPending(deps: DispatchDeps): Promise<DispatchTickR
   for (const row of rows) {
     const body = JSON.stringify(row.payload ?? {});
     const attemptNo = row.attempt + 1;
-    const outcome = await attemptDelivery(fetchImpl, row, body);
+    const outcome = await attemptDelivery(fetchImpl, row, body, now());
 
     if (outcome.ok) {
       await db.execute(sql`
@@ -172,11 +165,16 @@ interface AttemptOutcome {
   readonly blocked?: boolean;
 }
 
-/** Faz o POST assinado; classifica 2xx como sucesso, o resto como falha. */
+/**
+ * Faz o POST assinado; classifica 2xx como sucesso, o resto como falha. `at` é o
+ * instante da tentativa: vai em `x-hm-timestamp` e dentro da assinatura, então um
+ * retry horas depois continua dentro da janela do receptor.
+ */
 async function attemptDelivery(
   fetchImpl: FetchLike,
   row: DueDelivery,
   body: string,
+  at: Date,
 ): Promise<AttemptOutcome> {
   // Pré-checagem sintática barata (F56-S07): esquema/host/IP literal. Cobre também o
   // caminho com `fetchImpl` injetado; a validação do IP RESOLVIDO acontece dentro do
@@ -185,9 +183,9 @@ async function attemptDelivery(
     return { ok: false, blocked: true, error: 'blocked_url' };
   }
 
-  let signature: string;
+  let signed: ReturnType<typeof signatureHeaders>;
   try {
-    signature = signWebhook(decryptSecret(row.secretEnc), body);
+    signed = signatureHeaders(decryptSecret(row.secretEnc), body, at);
   } catch (err) {
     // Segredo corrompido/inválido — não-retentável de forma útil, mas tratamos como
     // falha comum (retry deixa o operador ver o erro no log de deliveries).
@@ -201,7 +199,7 @@ async function attemptDelivery(
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        [SIGNATURE_HEADER]: signature,
+        ...signed,
         'x-hm-event': row.event,
       },
       body,

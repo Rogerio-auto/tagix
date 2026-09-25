@@ -51,6 +51,114 @@ deduplicação) e `occurredAt` (instante da ocorrência, ISO-8601). Exemplo para
 }
 ```
 
+## Assinatura e janela de replay
+
+Toda entrega traz dois headers de assinatura:
+
+| Header               | Valor                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `x-hm-timestamp`     | Instante da tentativa em segundos Unix (inteiro decimal, ex.: `1790344991`).         |
+| `x-hm-signature-256` | `sha256=<hex>` do HMAC-SHA256, com o segredo do webhook, de `` `${timestamp}.${corpo}` `` |
+
+O conteúdo assinado é o valor exato de `x-hm-timestamp`, um ponto (`.`) e os
+**bytes crus** do corpo, sem reserializar o JSON. Para verificar:
+
+1. Leia os dois headers. Se faltar algum ou o formato não bater, recuse.
+2. Recuse se `|agora − timestamp|` passar de **300 segundos (5 minutos)**. Essa
+   janela é a proteção contra replay: uma entrega capturada não pode ser reenviada
+   depois. Como o timestamp está dentro da assinatura, trocá-lo invalida o HMAC.
+3. Calcule o HMAC esperado e compare com o recebido em **tempo constante**.
+
+<CodeGroup>
+
+```ts Node (Express)
+import express from "express";
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+const TOLERANCE_SECONDS = 300;
+const app = express();
+// O HMAC é sobre o corpo CRU: não deixe um parser de JSON rodar antes.
+app.use("/webhooks/hm", express.raw({ type: "application/json" }));
+
+app.post("/webhooks/hm", (req, res) => {
+  const timestamp = req.header("x-hm-timestamp") ?? "";
+  const signature = req.header("x-hm-signature-256") ?? "";
+  if (!/^\d{1,12}$/.test(timestamp) || !/^sha256=[0-9a-f]{64}$/.test(signature)) {
+    return res.status(401).end();
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - Number(timestamp)) > TOLERANCE_SECONDS) {
+    return res.status(401).end(); // fora da janela: possível replay
+  }
+  const expected = Buffer.from(
+    "sha256=" +
+      createHmac("sha256", process.env.HM_WEBHOOK_SECRET!)
+        .update(`${timestamp}.`)
+        .update(req.body) // Buffer cru
+        .digest("hex"),
+  );
+  const received = Buffer.from(signature);
+  if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
+    return res.status(401).end();
+  }
+
+  const event = JSON.parse(req.body.toString("utf8"));
+  // ... processe de forma idempotente por event._meta.eventId
+  res.sendStatus(200);
+});
+```
+
+```python Python (Flask)
+import hashlib, hmac, os, re, time
+from flask import Flask, abort, request
+
+TOLERANCE_SECONDS = 300
+app = Flask(__name__)
+
+@app.post("/webhooks/hm")
+def hm_webhook():
+    timestamp = request.headers.get("x-hm-timestamp", "")
+    signature = request.headers.get("x-hm-signature-256", "")
+    if not re.fullmatch(r"\d{1,12}", timestamp) or not re.fullmatch(r"sha256=[0-9a-f]{64}", signature):
+        abort(401)
+    if abs(int(time.time()) - int(timestamp)) > TOLERANCE_SECONDS:
+        abort(401)  # fora da janela: possível replay
+    raw = request.get_data()  # corpo cru
+    expected = "sha256=" + hmac.new(
+        os.environ["HM_WEBHOOK_SECRET"].encode(),
+        timestamp.encode() + b"." + raw,
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        abort(401)
+    event = request.get_json()
+    # ... processe de forma idempotente por event["_meta"]["eventId"]
+    return "", 200
+```
+
+</CodeGroup>
+
+- **Cada tentativa é assinada de novo** com o horário dela. Um retry horas depois
+  chega com timestamp novo e passa na janela. A deduplicação continua por
+  `_meta.eventId`, que não muda entre tentativas.
+- **Relógio.** A janela vale para os dois lados (atrasado ou adiantado). Mantenha o
+  relógio do seu servidor sincronizado (NTP).
+- **Implementação de referência:** `verifyWebhookSignature` em
+  `apps/workers/src/webhooks/signature.ts`. É o verificador usado no teste de
+  ponta a ponta.
+
+<Warning>
+  **Mudança de formato (25/09/2026).** Até esta data, `x-hm-signature-256` era o
+  HMAC só do corpo, sem timestamp. O header manteve o nome e agora cobre
+  `` `${timestamp}.${corpo}` ``. A troca foi direta, sem período com os dois
+  formatos: ainda não havia consumidor em produção, e manter o formato antigo em
+  paralelo manteria o replay que a mudança fecha. Um verificador escrito para o
+  formato antigo recusa todas as entregas até ser atualizado. A seção "Verificar a
+  assinatura" de [Webhooks](/guides/webhooks) e a entrega de teste de
+  **Settings → Dev** ainda descrevem e usam o formato antigo; a atualização delas
+  está pendente. Enquanto isso, vale o formato desta página para os eventos reais.
+</Warning>
+
 ## Dados de cada evento
 
 Todos os ids são UUIDs. Campos marcados com `?` podem vir `null`.
@@ -66,6 +174,19 @@ Todos os ids são UUIDs. Campos marcados com `?` podem vir `null`.
 | `deal.stage_changed`    | `dealId`, `pipelineId`, `fromStageId`, `toStageId`, `actorType` (`member`, `agent`, `system`, `api`) |
 | `deal.won` / `deal.lost`| `dealId`, `pipelineId`, `stageId`, `contactId`, `valueCents`, `currency`                             |
 | `conversion.registered` | `conversionId`, `conversionTypeId`, `contactId`, `conversationId?`, `dealId?`, `valueCents?`, `currency`, `source` |
+
+### Texto das mensagens
+
+O `text` de `message.received` e `message.sent` tem no máximo **4096 caracteres**
+(unidades UTF-16, como `String.length` em JavaScript). Texto maior chega cortado,
+terminando em `…`, sem partir um emoji ao meio. Para o texto completo, leia a
+mensagem pela API pública com o `messageId`.
+
+### Contrato estrito
+
+Um evento só é entregue se o `data` estiver exatamente no contrato acima. Um evento
+com campo não previsto ou tipo errado não é entregue a nenhum assinante: fica retido
+na nossa fila de erros para análise e não é reenviado a você.
 
 ### Origem da conversa (`trigger`)
 

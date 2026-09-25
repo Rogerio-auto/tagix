@@ -35,7 +35,15 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeDb, encryptSecret, getDb, schema } from '@hm/db';
 import { createLogger } from '@hm/logger';
-import { backoffSeconds, dispatchPending, fanoutEvent, MAX_ATTEMPTS, signWebhook } from './index';
+import {
+  backoffSeconds,
+  dispatchPending,
+  fanoutEvent,
+  MAX_ATTEMPTS,
+  signWebhook,
+  verifyWebhookSignature,
+  WEBHOOK_TOLERANCE_SECONDS,
+} from './index';
 
 const { workspaces, outboundWebhooks, outboundWebhookDeliveries } = schema;
 const logger = createLogger('error');
@@ -86,9 +94,17 @@ afterAll(async () => {
 });
 
 describe('signWebhook / backoff', () => {
-  it('assina HMAC-SHA256 prefixado e determinístico', () => {
-    const sig = signWebhook('k', '{"a":1}');
-    expect(sig).toBe(`sha256=${createHmac('sha256', 'k').update('{"a":1}').digest('hex')}`);
+  it('assina HMAC-SHA256 de `${timestamp}.${corpo}`, prefixado e determinístico (F70-S19)', () => {
+    const sig = signWebhook('k', 1_790_000_000, '{"a":1}');
+    expect(sig).toBe(
+      `sha256=${createHmac('sha256', 'k').update('1790000000.{"a":1}').digest('hex')}`,
+    );
+    // O timestamp faz parte do que é assinado: outro instante, outra assinatura.
+    expect(signWebhook('k', 1_790_000_001, '{"a":1}')).not.toBe(sig);
+  });
+  it('recusa timestamp que não é inteiro de segundos', () => {
+    expect(() => signWebhook('k', 1.5, '{}')).toThrow(RangeError);
+    expect(() => signWebhook('k', -1, '{}')).toThrow(RangeError);
   });
   it('backoff cresce exponencialmente com teto', () => {
     expect(backoffSeconds(0)).toBe(5);
@@ -147,15 +163,28 @@ describe('dispatchPending', () => {
     const wh = await mkWebhook({ events: ['message.sent'], secret });
     await fanoutEvent({ workspaceId: ws, event: 'message.sent', eventId: `${randomUUID()}:s`, data: { x: 1 } });
 
+    const at = new Date();
     const fetchImpl = vi.fn(async (_url: string, init: RequestInit) => {
-      // Verifica a assinatura sobre o corpo exato.
+      // Verifica a assinatura sobre `${x-hm-timestamp}.${corpo exato}` (F70-S19).
       const body = init.body as string;
-      const expected = signWebhook(secret, body);
-      expect((init.headers as Record<string, string>)['x-hm-signature-256']).toBe(expected);
+      const headers = init.headers as Record<string, string>;
+      expect(headers['x-hm-timestamp']).toBe(String(Math.floor(at.getTime() / 1000)));
+      expect(headers['x-hm-signature-256']).toBe(
+        signWebhook(secret, Number(headers['x-hm-timestamp']), body),
+      );
+      const verified = verifyWebhookSignature({
+        secret,
+        body,
+        signature: headers['x-hm-signature-256'],
+        timestamp: headers['x-hm-timestamp'],
+        now: at,
+      });
+      expect(verified.ok).toBe(true);
       return new Response('ok', { status: 200 });
     }) as unknown as typeof fetch;
 
-    const res = await dispatchPending({ logger, fetchImpl });
+    const res = await dispatchPending({ logger, fetchImpl, now: () => at });
+    expect(fetchImpl).toHaveBeenCalled();
     expect(res.sent).toBeGreaterThanOrEqual(1);
     const [d] = await deliveriesFor(wh.id);
     expect(d?.status).toBe('sent');
@@ -196,5 +225,96 @@ describe('dispatchPending', () => {
     const [d] = await deliveriesFor(wh.id);
     expect(d?.status).toBe('failed');
     expect(d?.attempt).toBe(MAX_ATTEMPTS);
+  });
+});
+
+describe('verifyWebhookSignature — verificador de referência (F70-S19)', () => {
+  const secret = 'whsec-reference-0123456789';
+  const body = '{"messageId":"m1","_meta":{"eventId":"m1:received"}}';
+  const sentAt = new Date('2026-09-25T12:00:00.000Z');
+  const ts = Math.floor(sentAt.getTime() / 1000);
+  const signature = signWebhook(secret, ts, body);
+  const at = (offsetSeconds: number) => new Date(sentAt.getTime() + offsetSeconds * 1000);
+
+  it('aceita a entrega dentro da janela (inclusive o limite exato)', () => {
+    for (const offset of [0, 60, WEBHOOK_TOLERANCE_SECONDS, -WEBHOOK_TOLERANCE_SECONDS]) {
+      expect(
+        verifyWebhookSignature({ secret, body, signature, timestamp: String(ts), now: at(offset) }),
+      ).toEqual({ ok: true, timestamp: ts });
+    }
+    // Corpo como Buffer (bytes crus, como chega no receptor).
+    expect(
+      verifyWebhookSignature({ secret, body: Buffer.from(body), signature, timestamp: String(ts), now: at(1) })
+        .ok,
+    ).toBe(true);
+  });
+
+  it('replay fora da janela é recusado, mesmo com assinatura válida', () => {
+    expect(
+      verifyWebhookSignature({
+        secret,
+        body,
+        signature,
+        timestamp: String(ts),
+        now: at(WEBHOOK_TOLERANCE_SECONDS + 1),
+      }),
+    ).toEqual({ ok: false, reason: 'outside_tolerance' });
+    // Timestamp no futuro além da janela também.
+    expect(
+      verifyWebhookSignature({
+        secret,
+        body,
+        signature,
+        timestamp: String(ts),
+        now: at(-(WEBHOOK_TOLERANCE_SECONDS + 1)),
+      }).ok,
+    ).toBe(false);
+  });
+
+  it('trocar o timestamp para caber na janela invalida a assinatura', () => {
+    const later = at(3600);
+    expect(
+      verifyWebhookSignature({
+        secret,
+        body,
+        signature, // assinada para `ts`
+        timestamp: String(Math.floor(later.getTime() / 1000)),
+        now: later,
+      }),
+    ).toEqual({ ok: false, reason: 'mismatch' });
+  });
+
+  it('corpo alterado ou segredo errado → mismatch', () => {
+    const now = at(1);
+    expect(
+      verifyWebhookSignature({ secret, body: `${body} `, signature, timestamp: String(ts), now }).ok,
+    ).toBe(false);
+    expect(
+      verifyWebhookSignature({ secret: 'outro', body, signature, timestamp: String(ts), now }),
+    ).toEqual({ ok: false, reason: 'mismatch' });
+  });
+
+  it('header ausente ou mal formado', () => {
+    const now = at(1);
+    expect(verifyWebhookSignature({ secret, body, signature: undefined, timestamp: String(ts), now })).toEqual(
+      { ok: false, reason: 'missing_header' },
+    );
+    expect(verifyWebhookSignature({ secret, body, signature, timestamp: undefined, now })).toEqual({
+      ok: false,
+      reason: 'missing_header',
+    });
+    for (const bad of [`${ts}.5`, `-${ts}`, `${ts}abc`, ' 1', '1e9']) {
+      expect(verifyWebhookSignature({ secret, body, signature, timestamp: bad, now })).toEqual({
+        ok: false,
+        reason: 'malformed',
+      });
+    }
+    // Formato antigo (sem prefixo) e hex truncado.
+    for (const bad of [signature.slice('sha256='.length), signature.slice(0, -2), 'sha256=XYZ']) {
+      expect(verifyWebhookSignature({ secret, body, signature: bad, timestamp: String(ts), now })).toEqual({
+        ok: false,
+        reason: 'malformed',
+      });
+    }
   });
 });
