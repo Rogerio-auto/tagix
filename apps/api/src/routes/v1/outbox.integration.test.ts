@@ -1,8 +1,10 @@
 /**
- * F70-S17 — API pública v1 grava os eventos de domínio na outbox, na transação do
- * dado (Postgres dev, RLS real):
+ * F70-S17/S20 — API pública v1 grava na outbox, na transação do dado (Postgres dev,
+ * RLS real):
  *  - `POST /api/v1/deals/:id/move` → `deal.stage_changed` (autor `api`);
- *  - `POST /api/v1/conversions` → `conversion.registered`.
+ *  - `POST /api/v1/conversions` → `conversion.registered`;
+ *  - `send_message`, `send_template`, `messages/media` → o job de envio em
+ *    `hm.q.outbound` (F70-S20), na transação da mensagem `pending`.
  *
  * Por produtor: commit → uma linha com o `event_id` canônico; rollback forçado depois
  * de todo o trabalho, antes do COMMIT → nenhuma linha.
@@ -13,7 +15,8 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { and, asc, eq } from 'drizzle-orm';
 import type * as Db from '@hm/db';
 
 const { keyWorkspace, rollback } = vi.hoisted(() => ({
@@ -37,6 +40,7 @@ vi.mock('../../middlewares/api-key', () => ({
 const { closeDb, getDb, schema } = await import('@hm/db');
 const { dropTenants, seedTenant } = await import('../deals/__tests__/two-workspaces');
 const { outboxEventsNamed } = await import('../deals/__tests__/outbox');
+const { envelopeSchema } = await import('@hm/shared/mq');
 type TenantFixture = Awaited<ReturnType<typeof seedTenant>>;
 const { createV1Router } = await import('./index');
 
@@ -173,5 +177,167 @@ describe('POST /api/v1/conversions → conversion.registered na outbox (F70-S17)
     expect(dup.status).toBe(200);
     expect(dup.body.status).toBe('deduped');
     expect(await outboxEventsNamed(A.ws, 'conversion.registered')).toHaveLength(1);
+  });
+});
+
+// ─── F70-S20: envios da API v1 pela outbox ────────────────────────────────────
+
+interface OutboxJobRow {
+  readonly eventId: string;
+  readonly exchange: string;
+  readonly routingKey: string;
+  readonly type: string;
+  readonly envelopeId: string;
+  readonly payload: Record<string, unknown>;
+}
+
+/**
+ * Jobs da outbox do workspace A, lidos por OUTRA conexão (a do processo): uma linha
+ * visível aqui está commitada.
+ */
+async function outboxJobs(): Promise<OutboxJobRow[]> {
+  const { outbox } = schema;
+  const rows = await getDb()
+    .select()
+    .from(outbox)
+    .where(and(eq(outbox.workspaceId, A.ws), eq(outbox.kind, 'job')))
+    .orderBy(asc(outbox.id));
+  return rows.map((r) => {
+    const envelope = envelopeSchema.parse(r.envelope);
+    return {
+      eventId: r.eventId,
+      exchange: r.exchange,
+      routingKey: r.routingKey,
+      type: envelope.type,
+      envelopeId: envelope.id,
+      payload: envelope.payload as Record<string, unknown>,
+    };
+  });
+}
+
+async function conversationTarget(): Promise<{ channelId: string; remoteId: string }> {
+  const [row] = await getDb()
+    .select({
+      channelId: schema.conversations.channelId,
+      remoteId: schema.conversations.remoteId,
+    })
+    .from(schema.conversations)
+    .where(eq(schema.conversations.id, A.conversation));
+  if (!row) throw new Error('fixture: conversa não encontrada');
+  return row;
+}
+
+interface SendCase {
+  readonly name: string;
+  readonly path: string;
+  /** Corpo com um marcador único (acha a mensagem e o job mesmo sem o id do 500). */
+  readonly body: (marker: string) => Record<string, unknown>;
+  /** Campos do job que dependem do endpoint. */
+  readonly job: (marker: string) => Record<string, unknown>;
+  /** Coluna da mensagem que carrega o marcador. */
+  readonly markerColumn: 'content' | 'mediaUrl';
+}
+
+const SEND_CASES: readonly SendCase[] = [
+  {
+    name: 'send_message',
+    path: '/api/v1/send_message',
+    body: (m) => ({ conversationId: A.conversation, text: m }),
+    job: (m) => ({ kind: 'text', text: m }),
+    markerColumn: 'content',
+  },
+  {
+    name: 'send_template',
+    path: '/api/v1/send_template',
+    body: (m) => ({
+      conversationId: A.conversation,
+      templateName: m,
+      languageCode: 'pt_BR',
+      components: [],
+    }),
+    job: (m) => ({ kind: 'template', templateName: m, languageCode: 'pt_BR', components: [] }),
+    markerColumn: 'content',
+  },
+  {
+    name: 'send_media',
+    path: '/api/v1/messages/media',
+    body: (m) => ({
+      conversationId: A.conversation,
+      mediaKind: 'image',
+      mediaUrl: `https://cdn.test/${m}.png`,
+      mime: 'image/png',
+      caption: 'foto',
+    }),
+    job: (m) => ({
+      kind: 'media',
+      mediaKind: 'image',
+      publicMediaUrl: `https://cdn.test/${m}.png`,
+      mime: 'image/png',
+      caption: 'foto',
+    }),
+    markerColumn: 'mediaUrl',
+  },
+];
+
+async function messagesMarked(c: SendCase, marker: string) {
+  const col = c.markerColumn === 'content' ? schema.messages.content : schema.messages.mediaUrl;
+  const value = c.markerColumn === 'content' ? marker : `https://cdn.test/${marker}.png`;
+  return getDb()
+    .select({ id: schema.messages.id })
+    .from(schema.messages)
+    .where(and(eq(schema.messages.workspaceId, A.ws), eq(col, value)));
+}
+
+describe.each(SEND_CASES)('POST $path → job de envio na outbox (F70-S20)', (c) => {
+  it('commit: a mensagem pending e UM job em hm.q.outbound, com o shape do worker', async () => {
+    const marker = `f70s20-${c.name}-${randomUUID()}`;
+    const before = (await outboxJobs()).length;
+
+    const res = await request(app).post(c.path).send(c.body(marker));
+    expect(res.status).toBe(201);
+    const messageId: string = res.body.message.id;
+    expect(res.body.message.viewStatus).toBe('pending');
+
+    const jobs = await outboxJobs();
+    expect(jobs).toHaveLength(before + 1);
+    const job = jobs.find((j) => j.payload['messageId'] === messageId);
+    expect(job).toBeDefined();
+    const target = await conversationTarget();
+    expect(job).toMatchObject({
+      exchange: '',
+      routingKey: 'hm.q.outbound',
+      type: 'outbound.job',
+    });
+    // Chave de idempotência da outbox = id do envelope (queueJobOutbox).
+    expect(job?.eventId).toBe(job?.envelopeId);
+    expect(job?.payload).toEqual({
+      channelId: target.channelId,
+      conversationId: A.conversation,
+      messageId,
+      chatId: target.remoteId,
+      ...c.job(marker),
+    });
+  });
+
+  it('rollback: nem a mensagem nem o job ficam', async () => {
+    const marker = `f70s20-${c.name}-rb-${randomUUID()}`;
+    const before = (await outboxJobs()).length;
+
+    rollback.armed = true;
+    const res = await request(app).post(c.path).send(c.body(marker));
+    expect(res.status).toBe(500);
+    rollback.armed = false;
+
+    expect(await messagesMarked(c, marker)).toHaveLength(0);
+    expect(await outboxJobs()).toHaveLength(before);
+  });
+
+  it('conversa fora do workspace da chave: 404 e nenhum job', async () => {
+    const before = (await outboxJobs()).length;
+    const res = await request(app)
+      .post(c.path)
+      .send({ ...c.body(`f70s20-404-${randomUUID()}`), conversationId: randomUUID() });
+    expect(res.status).toBe(404);
+    expect(await outboxJobs()).toHaveLength(before);
   });
 });

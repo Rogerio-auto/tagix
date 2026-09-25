@@ -59,9 +59,8 @@ export function domainEventOutbox(draft: DomainEventDraft): OutboxMessage {
 
 /**
  * Vários eventos → mensagens, na ordem. Evento que viola o contrato é LOGADO e
- * descartado (mesma semântica do `emitDomainEvent`): a mutação que ele descreve não
- * pode falhar por causa do aviso — e um contrato violado é defeito de código, que
- * nenhuma retentativa conserta.
+ * descartado: a mutação que ele descreve não pode falhar por causa do aviso — e um
+ * contrato violado é defeito de código, que nenhuma retentativa conserta.
  */
 export function domainEventsOutbox(drafts: readonly DomainEventDraft[]): OutboxMessage[] {
   const out: OutboxMessage[] = [];
@@ -75,8 +74,15 @@ export function domainEventsOutbox(drafts: readonly DomainEventDraft[]): OutboxM
   return out;
 }
 
-/** Filas de trabalho que aceitam job pela outbox (as que têm produtor transacional). */
-export const OUTBOX_JOB_QUEUES = [QUEUES.outbound] as const satisfies readonly QueueName[];
+/**
+ * Filas de trabalho que aceitam job pela outbox (as que têm produtor transacional):
+ * `outbound` (envios da API v1, campanhas, followups) e `media` (download da mídia
+ * dos ecos e do histórico da coexistência, F70-S20).
+ */
+export const OUTBOX_JOB_QUEUES = [
+  QUEUES.outbound,
+  QUEUES.media,
+] as const satisfies readonly QueueName[];
 export type OutboxJobQueue = (typeof OUTBOX_JOB_QUEUES)[number];
 
 /** Job numa fila de trabalho → mensagem da outbox (publicada direto na fila). */

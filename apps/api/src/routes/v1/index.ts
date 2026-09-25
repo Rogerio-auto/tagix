@@ -2,8 +2,10 @@
  * API pública v1 (F9-S03). Endpoints `/api/v1/*` gated por `requireApiKey` + scope.
  *
  * Cada handler é um WRAPPER FINO sobre serviço existente — sem reimplementar regra:
- * - send_message / send_template → persiste mensagem `pending` sob RLS + publica
- *   `OutboundJob` em `hm.q.outbound` (mesmo contrato do `messages.ts` da F1-S24).
+ * - send_message / send_template / send_media → persiste mensagem `pending` sob RLS e
+ *   grava o `OutboundJob` na OUTBOX, na mesma transação (F70-S20): commit enfileira
+ *   (o relay publica em `hm.q.outbound`), rollback não deixa job órfão. Mesmo
+ *   contrato de job do `messages.ts` da F1-S24.
  * - upsert_contact → contacts (upsert por id/phone/email) sob RLS.
  * - trigger_flow → `@hm/flow-engine`.triggerFlow com `triggeredBy: 'api'`.
  * - GET conversations / :id → query existente sob RLS.
@@ -27,10 +29,17 @@ import { triggerFlow } from '@hm/flow-engine';
 import { moveDealToStage, TransitionError } from '../../services/deal-move';
 import { createEvent, EventServiceError } from '../../services/event-service';
 import { registerConversion } from '../conversions/register';
-import { conversionRegisteredFromRow, domainEvents, domainEventsOutbox } from '@hm/shared/mq';
+import {
+  conversionRegisteredFromRow,
+  domainEvents,
+  domainEventsOutbox,
+  makeEnvelope,
+  queueJobOutbox,
+  QUEUES,
+} from '@hm/shared/mq';
 import swaggerUi from 'swagger-ui-express';
 import { requireApiKey, requireScope } from '../../middlewares/api-key';
-import { publishOutboundJob } from '../../mq/outbound-publisher';
+import { OUTBOUND_JOB_TYPE } from '../../mq/outbound-publisher';
 import { buildOpenApiDocument } from './openapi';
 import { withAdAttribution } from './ad-attribution';
 import {
@@ -74,6 +83,24 @@ async function resolveConversation(
   return conv ?? null;
 }
 
+/**
+ * Grava o `OutboundJob` na outbox, na transação `tx` da mensagem `pending` (F70-S20).
+ * Antes o job era publicado depois do commit: se o processo caísse entre os dois, a
+ * mensagem ficava `pending` para sempre; se o broker recusasse, idem. Agora o commit
+ * da mensagem e o do job são o mesmo, e o relay publica com confirms. O `job` segue o
+ * shape exato de `parseOutboundJob` (`apps/workers/src/outbound/job.ts`).
+ */
+async function enqueueOutboundJob(
+  tx: DbTx,
+  workspaceId: string,
+  job: Readonly<Record<string, unknown>>,
+): Promise<void> {
+  await enqueueOutbox(
+    tx,
+    queueJobOutbox(QUEUES.outbound, makeEnvelope(OUTBOUND_JOB_TYPE, workspaceId, job)),
+  );
+}
+
 export function createV1Router(): Router {
   const router = Router();
 
@@ -111,22 +138,22 @@ export function createV1Router(): Router {
             viewStatus: 'pending',
           })
           .returning();
-        return message ? { conv, message } : null;
+        if (!message) return null;
+        await enqueueOutboundJob(tx, workspaceId, {
+          kind: 'text',
+          channelId: conv.channelId,
+          conversationId,
+          messageId: message.id,
+          chatId: conv.remoteId,
+          text,
+        });
+        return message;
       });
       if (!result) {
         res.status(404).json({ error: 'not_found', message: 'Conversa não encontrada.' });
         return;
       }
-
-      await publishOutboundJob(workspaceId, {
-        kind: 'text',
-        channelId: result.conv.channelId,
-        conversationId,
-        messageId: result.message.id,
-        chatId: result.conv.remoteId,
-        text,
-      });
-      res.status(201).json({ message: result.message });
+      res.status(201).json({ message: result });
     },
   );
 
@@ -156,24 +183,24 @@ export function createV1Router(): Router {
             viewStatus: 'pending',
           })
           .returning();
-        return message ? { conv, message } : null;
+        if (!message) return null;
+        await enqueueOutboundJob(tx, workspaceId, {
+          kind: 'template',
+          channelId: conv.channelId,
+          conversationId,
+          messageId: message.id,
+          chatId: conv.remoteId,
+          templateName,
+          languageCode,
+          components,
+        });
+        return message;
       });
       if (!result) {
         res.status(404).json({ error: 'not_found', message: 'Conversa não encontrada.' });
         return;
       }
-
-      await publishOutboundJob(workspaceId, {
-        kind: 'template',
-        channelId: result.conv.channelId,
-        conversationId,
-        messageId: result.message.id,
-        chatId: result.conv.remoteId,
-        templateName,
-        languageCode,
-        components,
-      });
-      res.status(201).json({ message: result.message });
+      res.status(201).json({ message: result });
     },
   );
 
@@ -416,25 +443,25 @@ export function createV1Router(): Router {
             viewStatus: 'pending',
           })
           .returning();
-        return message ? { conv, message } : null;
+        if (!message) return null;
+        await enqueueOutboundJob(tx, workspaceId, {
+          kind: 'media',
+          channelId: conv.channelId,
+          conversationId,
+          messageId: message.id,
+          chatId: conv.remoteId,
+          mediaKind,
+          publicMediaUrl: mediaUrl,
+          mime,
+          ...(caption ? { caption } : {}),
+        });
+        return message;
       });
       if (!result) {
         res.status(404).json({ error: 'not_found', message: 'Conversa não encontrada.' });
         return;
       }
-
-      await publishOutboundJob(workspaceId, {
-        kind: 'media',
-        channelId: result.conv.channelId,
-        conversationId,
-        messageId: result.message.id,
-        chatId: result.conv.remoteId,
-        mediaKind,
-        publicMediaUrl: mediaUrl,
-        mime,
-        ...(caption ? { caption } : {}),
-      });
-      res.status(201).json({ message: result.message });
+      res.status(201).json({ message: result });
     },
   );
 
