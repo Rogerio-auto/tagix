@@ -377,6 +377,12 @@ export * from './dashboard';
 // (fila durável com retry). Ambas workspace-scoped (RLS direto).
 export * from './webhooks';
 
+// --- Outbox transacional (F70-S16) ---
+// outbox — eventos de domínio e jobs gravados na transação do dado; o relay dos workers
+// publica com confirms. Tabela de SISTEMA: hm_app só INSERT (RLS presa ao workspace da
+// transação), o relay usa hm_outbox_relay. NÃO entra em RLS_TABLES (política própria, 0086).
+export * from './outbox';
+
 // --- Privacy / LGPD domain (F10-S02) ---
 // data_export_jobs — fila durável de pedidos de export de PII (workspace-scoped, RLS
 // direto). O forget (anonimização) é síncrono na API + audit_logs (sem tabela própria).

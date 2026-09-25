@@ -7,10 +7,18 @@
  * worker não toca DB/Socket.io diretamente.
  *
  * `typing_indicator` não persiste status de mensagem (não é mensagem).
+ *
+ * `message.sent` (F70-S09) vai pela OUTBOX (F70-S16). O status é gravado pela porta de
+ * persistência, numa transação que este módulo não enxerga; o evento entra logo
+ * depois, numa transação própria, e o relay publica com confirms. Se a gravação do
+ * evento falhar, o erro SOBE: o job volta pela fila, a guarda de idempotência vê o
+ * external_id já gravado (`alreadySent`, sem reenviar ao provider) e o finalize roda
+ * de novo — o eventId `<messageId>:sent` deduplica na outbox e no fan-out.
  */
 import type { ViewStatus } from '@hm/shared';
 import type { SendResult } from '@hm/channels';
-import { domainEvents, emitDomainEvent } from '@hm/shared/mq';
+import { enqueueOutboxStandalone } from '@hm/db';
+import { domainEvents, domainEventsOutbox, type OutboxMessage } from '@hm/shared/mq';
 import {
   STATUS_RANK,
   defaultOrphanStatusStore,
@@ -53,6 +61,7 @@ export async function finalizeOutbound(
   workspaceId: string,
   deps: OutboundDeps,
   orphanStore: OrphanStatusStore = defaultOrphanStatusStore,
+  writeOutbox: (messages: readonly OutboxMessage[]) => Promise<number> = enqueueOutboxStandalone,
 ): Promise<void> {
   if (job.kind === 'typing_indicator') return;
 
@@ -87,15 +96,16 @@ export async function finalizeOutbound(
       type: job.kind,
       content: outboundJobContent(job),
     });
-    // F70-S09: `message.sent` aos webhooks de saída. O status já está gravado;
-    // o emissor nunca lança, e o eventId `<messageId>:sent` deduplica o reenvio.
-    await emitDomainEvent(
-      domainEvents.messageSent(workspaceId, {
-        conversationId: job.conversationId,
-        messageId: job.messageId,
-        type: job.kind,
-        text: outboundJobContent(job),
-      }),
+    // F70-S09/S16: `message.sent` aos webhooks de saída, pela outbox.
+    await writeOutbox(
+      domainEventsOutbox([
+        domainEvents.messageSent(workspaceId, {
+          conversationId: job.conversationId,
+          messageId: job.messageId,
+          type: job.kind,
+          text: outboundJobContent(job),
+        }),
+      ]),
     );
   }
 

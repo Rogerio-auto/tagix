@@ -27,11 +27,16 @@
  *   está no contrato não sai (nenhum dado pessoal vaza por descuido de um
  *   produtor). O contrato público vive em `docs/api-reference/guides/webhook-events.mdx`.
  *
- * ## Por que o produtor publica depois do commit
+ * ## Como o produtor publica: outbox transacional (F70-S16)
  * Evento de webhook dispara ação num sistema de fora. Publicar dentro da
- * transação arriscaria avisar algo que o rollback desfez. Todos os produtores
- * chamam {@link emitDomainEvent} depois que a transação devolve. Ele nunca lança:
- * a mutação já está gravada e não pode falhar por causa do aviso.
+ * transação arriscaria avisar algo que o rollback desfez; publicar depois do
+ * commit perde o aviso se o processo cair entre os dois. O produtor grava o evento
+ * na outbox NA transação do dado (`domainEventsOutbox` de `./outbox` +
+ * `enqueueOutbox` de `@hm/db`), e o relay dos workers publica com publisher
+ * confirms, pelo menos uma vez. O `eventId` deduplica a republicação no fan-out.
+ *
+ * {@link emitDomainEvent} (publicação direta, depois do commit, nunca lança) segue
+ * aqui só para os produtores da API que a F70-S17 migra para a outbox.
  */
 import { randomUUID } from 'node:crypto';
 import type { Channel } from 'amqplib';
@@ -520,7 +525,8 @@ async function getHandle(): Promise<MqHandle> {
   }
 }
 
-function logEmitFailure(draft: DomainEventDraft, err: unknown): void {
+/** Loga um evento que não saiu (contrato violado, broker fora). Nunca lança. */
+export function reportDomainEventFailure(draft: DomainEventDraft, err: unknown): void {
   const fields = {
     event: draft.event,
     eventId: draft.eventId,
@@ -550,7 +556,7 @@ export async function emitDomainEvent(draft: DomainEventDraft): Promise<boolean>
     await publishWithBackpressure(channel, routingKey, envelope);
     return true;
   } catch (err: unknown) {
-    logEmitFailure(draft, err);
+    reportDomainEventFailure(draft, err);
     return false;
   }
 }

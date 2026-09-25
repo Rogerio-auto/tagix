@@ -19,9 +19,10 @@
  * mensagem cai nesta mesma conversa. Sem canal ou sem telefone válido, o lead vira
  * contato e card, sem conversa.
  *
- * ## Webhooks de saída (F70-S13, F70-S14)
+ * ## Webhooks de saída (F70-S13, F70-S14, F70-S16)
  *
- * Depois do commit, com os construtores do catálogo, na ordem em que as coisas
+ * Gravados na OUTBOX, na MESMA transação do lead (o relay publica depois do commit,
+ * com confirms), com os construtores do catálogo, na ordem em que as coisas
  * nasceram:
  * 1. `conversation.opened` (`trigger: 'lead_ad'`) — só a conversa que ESTE lead
  *    abriu (eventId canônico `<conversa>:opened`, o mesmo de qualquer origem);
@@ -30,9 +31,9 @@
  *    card vira nota no histórico, não card novo, então não anuncia).
  *
  * O que é anunciado sai do que a transação de fato gravou (RETURNING / inserção
- * vencedora): rollback não publica nada; reprocesso do mesmo lead para na trava da
- * submissão, logo não republica — e o eventId estável deduplica no fan-out de
- * qualquer forma.
+ * vencedora): rollback não grava nada na outbox; queda do processo depois do commit
+ * não perde o aviso; reprocesso do mesmo lead para na trava da submissão, logo não
+ * regrava — e o eventId estável deduplica na outbox e no fan-out de qualquer forma.
  */
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import {
@@ -44,6 +45,7 @@ import {
 import {
   contactIdentitiesRepo,
   decryptSecret,
+  enqueueOutbox,
   leadAdsRepo,
   metaConnectionsRepo,
   schema,
@@ -55,7 +57,7 @@ import { countryCodeForMarket, getMarketPack, normalizeE164 } from '@hm/shared';
 import {
   dealCreatedFromRow,
   domainEvents,
-  emitDomainEvent,
+  domainEventsOutbox,
   type DealRowForEvent,
   type DomainEventDraft,
 } from '@hm/shared/mq';
@@ -77,10 +79,6 @@ const {
 export const LEAD_ADS_SOURCE = 'meta_lead_ads' as const;
 
 export class DbLeadStore implements LeadStore {
-  constructor(
-    /** F70-S13: publicação de eventos de domínio (webhooks de saída). Nunca lança. */
-    private readonly emitEvent: (draft: DomainEventDraft) => Promise<boolean> = emitDomainEvent,
-  ) {}
 
   async resolveSources(pageId: string): Promise<ResolvedLeadSource[]> {
     return leadAdsRepo.resolveSourcesForPage(pageId);
@@ -118,7 +116,7 @@ export class DbLeadStore implements LeadStore {
     const { source, lead, job, now } = input;
     const workspaceId = source.workspaceId;
 
-    const gravado = await withWorkspace(workspaceId, async (tx): Promise<StoredLead> => {
+    const gravar = async (tx: DbTx): Promise<StoredLead> => {
       const estado = await leadAdsRepo.lockSubmission(tx, workspaceId, input.submissionId);
       if (estado === 'processed' || estado === null) {
         return {
@@ -252,15 +250,19 @@ export class DbLeadStore implements LeadStore {
         opened,
         createdDeal: deal?.created ?? null,
       };
-    });
+    };
 
-    // Fora da transação — o commit aconteceu (F70-S13/S14).
-    for (const draft of leadEvents(workspaceId, gravado)) await this.emitEvent(draft);
+    // F70-S16: os avisos entram na outbox na MESMA transação do lead.
+    const gravado = await withWorkspace(workspaceId, async (tx) => {
+      const stored = await gravar(tx);
+      await enqueueOutbox(tx, domainEventsOutbox(leadEvents(workspaceId, stored)));
+      return stored;
+    });
     return gravado.result;
   }
 }
 
-/** Resultado da transação + o que ela criou (anunciado só depois do commit). */
+/** Resultado da transação + o que ela criou (anunciado pela outbox, na mesma transação). */
 interface StoredLead {
   readonly result: PersistLeadResult;
   /** Canal da conversa do lead (`null` = lead sem conversa). */

@@ -20,6 +20,8 @@ export * from './dlq';
 export * from './kb';
 export * from './flows';
 export * from './domain-events';
+export * from './outbox';
+export * from './confirm';
 export { connectMq, getMqHealth, isMqConnected, MqNotConnectedError } from './connection';
 export type {
   MqHandle,

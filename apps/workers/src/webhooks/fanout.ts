@@ -11,9 +11,11 @@
  * deduplicamos por (webhook_id, event_id) — um mesmo evento de domínio reentregue
  * (replay de fila, retry do produtor) não duplica deliveries.
  *
- * Corrida (F70-S09): o `INSERT … WHERE NOT EXISTS` sozinho deixa dois consumidores
- * do MESMO evento passarem juntos pelo NOT EXISTS. Cada par (webhook, eventId) é
- * serializado por um advisory lock de transação — sem índice único novo no schema.
+ * Dedup indexado (F70-S16): índice único `uq_outbound_webhook_deliveries_event` em
+ * `(webhook_id, payload #>> '{_meta,eventId}')` + `INSERT … ON CONFLICT DO NOTHING`.
+ * Um comando para todos os assinantes, sem varrer as entregas do webhook e sem
+ * advisory lock: dois consumidores do MESMO evento (reentrega da fila, republicação
+ * do relay da outbox) disputam no índice e só um grava.
  *
  * Roda como owner (`getDb()`): fan-out é operação de plataforma sobre um tenant
  * conhecido (workspaceId vem do evento); o isolamento já está embutido no filtro.
@@ -64,38 +66,25 @@ export async function fanoutEvent(evt: WebhookEvent): Promise<FanoutResult> {
     return { matchedWebhooks: 0, created: 0, deduped: 0 };
   }
 
-  let created = 0;
-  let deduped = 0;
   const meta = {
     eventId: evt.eventId,
     event: evt.event,
     ...(evt.occurredAt !== undefined ? { occurredAt: evt.occurredAt } : {}),
   };
   const payload = JSON.stringify({ ...evt.data, _meta: meta });
+  // Literal de array uuid (ids vêm do banco, validados como uuid pelo Postgres no cast).
+  const webhookIds = `{${subscribers.map((s) => s.id).join(',')}}`;
 
-  for (const sub of subscribers) {
-    const inserted = await db.transaction(async (tx) => {
-      // Serializa o par (webhook, eventId) até o fim da transação: o segundo
-      // consumidor só avalia o NOT EXISTS depois que o primeiro gravou.
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${sub.id}:${evt.eventId}`}, 0))`,
-      );
-      // Dedup por (webhook_id, _meta.eventId): só insere se ainda não existe.
-      return tx.execute(sql`
-        INSERT INTO outbound_webhook_deliveries
-          (webhook_id, workspace_id, event, payload, status, next_attempt_at)
-        SELECT ${sub.id}::uuid, ${evt.workspaceId}::uuid, ${evt.event}, ${payload}::jsonb, 'pending', now()
-        WHERE NOT EXISTS (
-          SELECT 1 FROM outbound_webhook_deliveries d
-          WHERE d.webhook_id = ${sub.id}::uuid
-            AND d.payload #>> '{_meta,eventId}' = ${evt.eventId}
-        )
-        RETURNING id
-      `);
-    });
-    if (Array.from(inserted).length > 0) created += 1;
-    else deduped += 1;
-  }
+  const inserted = await db.execute(sql`
+    INSERT INTO outbound_webhook_deliveries
+      (webhook_id, workspace_id, event, payload, status, next_attempt_at)
+    SELECT w.id, ${evt.workspaceId}::uuid, ${evt.event}, ${payload}::jsonb, 'pending', now()
+      FROM unnest(${webhookIds}::uuid[]) AS w(id)
+    ON CONFLICT (webhook_id, (payload #>> '{_meta,eventId}')) DO NOTHING
+    RETURNING id
+  `);
+  const created = Array.from(inserted).length;
+  const deduped = subscribers.length - created;
 
   return { matchedWebhooks: subscribers.length, created, deduped };
 }

@@ -4,12 +4,14 @@
  * Protege: lead vira contato + conversa + mensagem + card; o mesmo lead duas vezes
  * não duplica nada; contato que já falou pelo WhatsApp é reaproveitado; e um
  * workspace não enxerga o lead do outro.
- * F70-S13: a conversa aberta pelo lead publica `conversation.opened` uma vez, só
- * depois do commit (outra conexão já a enxerga no momento da publicação); rollback
- * não publica.
- * F70-S14: origem `lead_ad`; a mensagem-resumo publica `message.received` e o card
- * novo `deal.created`, na ordem conversa → mensagem → card, todos depois do commit.
+ * F70-S13: a conversa aberta pelo lead anuncia `conversation.opened` uma vez;
+ * rollback não anuncia.
+ * F70-S14: origem `lead_ad`; a mensagem-resumo anuncia `message.received` e o card
+ * novo `deal.created`, na ordem conversa → mensagem → card.
  * Formulário que cai em conversa com card anuncia só a mensagem.
+ * F70-S16: os avisos são linhas da OUTBOX gravadas na transação do lead. Lidas por
+ * outra conexão (commitadas), cada uma aponta para o que ela anuncia já visível;
+ * rollback não deixa linha.
  *
  * Pula sem `DATABASE_URL`.
  */
@@ -18,7 +20,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ParsedLead } from '@hm/channels';
 import { closeDb, encryptSecret, getDb, leadAdsRepo, schema, withWorkspace } from '@hm/db';
-import type { DomainEventDraft } from '@hm/shared/mq';
+import { outboxEventsOf, type OutboxTestEvent } from '../outbox/testing';
 import { DbLeadStore, LEAD_ADS_SOURCE } from './db-store';
 import { consentEvidence } from './process';
 import type { LeadgenJob } from './ports';
@@ -28,10 +30,10 @@ const url = process.env['DATABASE_URL'];
 describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
   const sfx = randomUUID().slice(0, 8);
   const pageId = `9${Date.now()}`;
-  /** Cada publicação + se o que ela anuncia já estava commitado (visível por outra conexão). */
-  const publicados: Array<{ draft: DomainEventDraft; commitada: boolean }> = [];
-  const visivel = async (draft: DomainEventDraft): Promise<boolean> => {
+  /** O que o evento anuncia já está commitado (visível por outra conexão)? */
+  const visivel = async (draft: OutboxTestEvent): Promise<boolean> => {
     const db = getDb();
+    const ref = (key: string): string => String(draft.data[key]);
     switch (draft.event) {
       case 'conversation.opened':
         return (
@@ -39,7 +41,7 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
             await db
               .select({ id: schema.conversations.id })
               .from(schema.conversations)
-              .where(eq(schema.conversations.id, draft.data.conversationId))
+              .where(eq(schema.conversations.id, ref('conversationId')))
           ).length === 1
         );
       case 'message.received':
@@ -48,33 +50,35 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
             await db
               .select({ id: schema.messages.id })
               .from(schema.messages)
-              .where(eq(schema.messages.id, draft.data.messageId))
+              .where(eq(schema.messages.id, ref('messageId')))
           ).length === 1
         );
       case 'deal.created':
         return (
-          (await db.select({ id: schema.deals.id }).from(schema.deals).where(eq(schema.deals.id, draft.data.dealId)))
+          (await db.select({ id: schema.deals.id }).from(schema.deals).where(eq(schema.deals.id, ref('dealId'))))
             .length === 1
         );
       default:
         return false;
     }
   };
-  const store = new DbLeadStore(async (draft) => {
-    publicados.push({ draft, commitada: await visivel(draft) });
-    return true;
-  });
-  const abertas = (conversationId: string) =>
-    publicados.filter(
-      (p) => p.draft.event === 'conversation.opened' && p.draft.data.conversationId === conversationId,
+  const store = new DbLeadStore();
+  /** Tudo o que está na outbox do workspace, na ordem + se o anunciado já é visível. */
+  const publicados = async (): Promise<Array<{ draft: OutboxTestEvent; commitada: boolean }>> => {
+    const eventos = await outboxEventsOf(workspaceId);
+    return Promise.all(eventos.map(async (draft) => ({ draft, commitada: await visivel(draft) })));
+  };
+  const abertas = async (conversationId: string) =>
+    (await publicados()).filter(
+      (p) => p.draft.event === 'conversation.opened' && p.draft.data['conversationId'] === conversationId,
     );
-  /** Tudo o que foi publicado sobre a conversa (e o card dela), na ordem. */
-  const daConversa = (conversationId: string, dealId: string | null) =>
-    publicados.filter((p) => {
+  /** Tudo o que foi anunciado sobre a conversa (e o card dela), na ordem. */
+  const daConversa = async (conversationId: string, dealId: string | null) =>
+    (await publicados()).filter((p) => {
       const d = p.draft;
-      if (d.event === 'deal.created') return d.data.dealId === dealId;
+      if (d.event === 'deal.created') return d.data['dealId'] === dealId;
       if (d.event === 'conversation.opened' || d.event === 'message.received') {
-        return d.data.conversationId === conversationId;
+        return d.data['conversationId'] === conversationId;
       }
       return false;
     });
@@ -211,7 +215,7 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
 
     // F70-S13/S14: conversa → mensagem → card, cada um uma vez, depois do commit,
     // com o eventId canônico do catálogo.
-    const eventos = daConversa(gravado!.conversationId!, gravado!.dealId);
+    const eventos = await daConversa(gravado!.conversationId!, gravado!.dealId);
     expect(eventos.map((e) => e.draft.event)).toEqual([
       'conversation.opened',
       'message.received',
@@ -268,7 +272,7 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
   });
 
   it('segundo formulário da mesma pessoa reaproveita contato, conversa e card', async () => {
-    const antes = publicados.length;
+    const antes = (await publicados()).length;
     const primeiro = await processar(`lg2-${sfx}`, '+13055550142');
     expect(primeiro.gravado?.created).toBe(true);
     const db = getDb();
@@ -280,9 +284,9 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
       .where(eq(schema.messages.conversationId, primeiro.gravado!.conversationId!));
     expect(mensagens).toHaveLength(2);
     // F70-S13: conversa reaproveitada não é "aberta" de novo.
-    expect(abertas(primeiro.gravado!.conversationId!)).toHaveLength(1);
+    expect(await abertas(primeiro.gravado!.conversationId!)).toHaveLength(1);
     // F70-S14: só a mensagem nova é anunciada; o card existente ganha nota, não `deal.created`.
-    const novos = publicados.slice(antes);
+    const novos = (await publicados()).slice(antes);
     expect(novos.map((p) => p.draft.event)).toEqual(['message.received']);
     expect(novos[0]?.commitada).toBe(true);
     expect(novos[0]?.draft).toMatchObject({
@@ -296,13 +300,13 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
     const reserva = await store.claim(fonte, job);
     const l = lead(job.leadgenId, '+13055550199');
     const entrada = { source: fonte, submissionId: reserva.submissionId, job, lead: l, consent: consentEvidence(l, 'f1', null), now: new Date() };
-    const antes = publicados.length;
+    const antes = (await publicados()).length;
     const [a, b] = await Promise.all([store.persist(entrada), store.persist(entrada)]);
     expect([a.created, b.created].sort()).toEqual([false, true]);
     const vencedor = a.created ? a : b;
-    expect(abertas(vencedor.conversationId!)).toHaveLength(1);
+    expect(await abertas(vencedor.conversationId!)).toHaveLength(1);
     // Só o vencedor anuncia: um de cada, nada do perdedor.
-    expect(publicados.slice(antes).map((p) => p.draft.event)).toEqual([
+    expect((await publicados()).slice(antes).map((p) => p.draft.event)).toEqual([
       'conversation.opened',
       'message.received',
       'deal.created',
@@ -314,12 +318,12 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
       vi.restoreAllMocks();
     });
 
-    it('transação falha depois de criar a conversa → nada publicado, nada gravado', async () => {
-      const antes = publicados.length;
+    it('transação falha depois de criar a conversa → nada na outbox, nada gravado', async () => {
+      const antes = (await publicados()).length;
       vi.spyOn(leadAdsRepo, 'completeSubmission').mockRejectedValueOnce(new Error('falha simulada'));
       await expect(processar(`lg4-${sfx}`, '+13055550177')).rejects.toThrow('falha simulada');
 
-      expect(publicados.length).toBe(antes);
+      expect((await publicados()).length).toBe(antes);
       const conversas = await getDb()
         .select({ id: schema.conversations.id })
         .from(schema.conversations)

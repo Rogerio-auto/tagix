@@ -341,6 +341,8 @@ vi.mock('@hm/db', () => ({
   schema: db.schema,
   getDb: db.getDb,
   withWorkspace: db.withWorkspace,
+  // F70-S16: a outbox real é coberta em conversation-opened.test.ts (Postgres dev).
+  enqueueOutbox: async (_tx: unknown, messages: readonly unknown[]) => messages.length,
 }));
 
 vi.mock('drizzle-orm', () => ({
