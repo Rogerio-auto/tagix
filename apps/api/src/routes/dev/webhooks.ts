@@ -8,15 +8,19 @@
  * configurar a verificação da assinatura no endpoint dele.
  *
  * O dispatch real recorrente é do worker-webhooks (F9-S05); aqui o "test" faz UM POST
- * síncrono assinado para validar a URL/segredo na hora.
+ * síncrono assinado para validar a URL/segredo na hora. A entrega de teste tem a mesma
+ * anatomia de uma entrega real (headers `x-hm-event`/`x-hm-timestamp`/
+ * `x-hm-signature-256` e bloco `_meta` no corpo) e é assinada pelo MESMO signer do
+ * dispatcher (`signatureHeaders`, `@hm/shared/mq`, F70-S20): o verificador que o
+ * cliente escreveu para os eventos reais aceita o ping, e vice-versa.
  */
-import { createHmac, randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { desc, eq } from 'drizzle-orm';
 import { decryptSecret, encryptSecret, schema } from '@hm/db';
 import { assertSafeWebhookUrl, checkWebhookUrlSyntax, ssrfSafeFetch } from '@hm/shared/net';
-import { DOMAIN_EVENTS } from '@hm/shared/mq';
+import { DOMAIN_EVENTS, signatureHeaders } from '@hm/shared/mq';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
 const { outboundWebhooks, outboundWebhookDeliveries } = schema;
@@ -100,9 +104,37 @@ const publicColumns = {
   updatedAt: outboundWebhooks.updatedAt,
 };
 
-/** Assina `payload` com HMAC-SHA256 (mesmo esquema do dispatch da F9-S05). */
-function signPayload(secret: string, payload: string): string {
-  return `sha256=${createHmac('sha256', secret).update(payload, 'utf8').digest('hex')}`;
+/** Nome do evento da entrega de teste (fora do catálogo: nunca é assinável). */
+export const WEBHOOK_TEST_EVENT = 'webhook.test' as const;
+
+/** Uma entrega pronta para o POST: corpo cru e headers (assinatura inclusa). */
+export interface SignedTestDelivery {
+  readonly body: string;
+  readonly headers: Readonly<Record<string, string>>;
+}
+
+/**
+ * Monta a entrega de teste assinada. `at` é o instante da tentativa: vai em
+ * `x-hm-timestamp`, dentro da assinatura (`${timestamp}.${corpo}`) e em
+ * `_meta.occurredAt`, como numa entrega real.
+ */
+export function buildTestDelivery(secret: string, at: Date = new Date()): SignedTestDelivery {
+  const body = JSON.stringify({
+    message: 'Entrega de teste do Highermind.',
+    _meta: {
+      eventId: `${WEBHOOK_TEST_EVENT}:${randomUUID()}`,
+      event: WEBHOOK_TEST_EVENT,
+      occurredAt: at.toISOString(),
+    },
+  });
+  return {
+    body,
+    headers: {
+      'content-type': 'application/json',
+      ...signatureHeaders(secret, body, at),
+      'x-hm-event': WEBHOOK_TEST_EVENT,
+    },
+  };
 }
 
 export function createDevWebhooksRouter(): Router {
@@ -203,8 +235,6 @@ export function createDevWebhooksRouter(): Router {
       res.status(400).json({ error: 'invalid_request', message: 'id ausente.' });
       return;
     }
-    const workspaceId = req.auth!.workspace.id;
-
     const webhook = await req.scoped!(async (tx) => {
       const [row] = await tx
         .select({ url: outboundWebhooks.url, secretEnc: outboundWebhooks.secretEnc })
@@ -218,14 +248,7 @@ export function createDevWebhooksRouter(): Router {
       return;
     }
 
-    const payloadObj = {
-      event: 'webhook.test',
-      workspaceId,
-      data: { message: 'Entrega de teste do Highermind.' },
-      timestamp: new Date().toISOString(),
-    };
-    const payload = JSON.stringify(payloadObj);
-    const signature = signPayload(decryptSecret(webhook.secretEnc), payload);
+    const delivery = buildTestDelivery(decryptSecret(webhook.secretEnc));
 
     // POST síncrono com timeout curto — só validar URL/conectividade. F56-S07:
     // o fetch é o guardado (anti-SSRF: lookup validado no connect, sem redirects) e a
@@ -237,8 +260,8 @@ export function createDevWebhooksRouter(): Router {
       try {
         const resp = await ssrfSafeFetch(webhook.url, {
           method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-hm-signature-256': signature },
-          body: payload,
+          headers: delivery.headers,
+          body: delivery.body,
           signal: controller.signal,
         });
         // Status aqui é sempre de destino permitido pelo guarda (nunca de host interno).
@@ -280,6 +303,3 @@ export function createDevWebhooksRouter(): Router {
 
   return router;
 }
-
-// Exposto p/ testes do slot (assinatura idêntica ao dispatch da F9-S05).
-export const __test = { signPayload };

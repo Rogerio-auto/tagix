@@ -141,6 +141,10 @@ export type {
 //     bundler do browser resolve o import dinâmico em build-time, quebrando todo
 //     client component que toque este barrel. Consuma pelo leaf: `@hm/shared/net`.
 
+// --- Assinatura dos webhooks de saída (F70-S20, signer único API + workers). ---
+//     NÃO re-exportado aqui pelo mesmo motivo: `webhook-signature` importa
+//     `node:crypto`. Consuma por `@hm/shared/mq` (subpath node-only).
+
 // --- Resposta humana: pausa da IA + primeira resposta (F70-S07 — regra única UI/eco). ---
 export { planHumanReply } from './human-reply';
 export type {
