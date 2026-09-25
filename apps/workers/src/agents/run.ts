@@ -11,6 +11,8 @@
  * resolvePolicy(ws, agentId)            → PolicySnapshot (wire) + cap/spend
  * estimateCostUsd (teto conservador)    → guardResolved
  *   deny → registra execução failed + agent_execution:completed → stop
+ * loadTools (RLS): agent_tools habilitadas → ToolDescriptor[] (F70-S10)
+ *   → filtro da policy (categorias + teto) → `tools` do request
  * insert agent_executions (running) + agent_execution:started
  * client.run({ ..., policy_snapshot })  → consome o stream:
  *   token              → acumula a reply (relay de token-a-token é F2 futuro — ver REPORT)
@@ -43,8 +45,15 @@ import type {
   AgentStreamEvent,
   ChatMessage,
   RunOptions,
+  ToolDescriptor,
 } from '@hm/agents-client';
 import { AgentRuntimeError } from '@hm/agents-client';
+import {
+  filterToolsByPolicy,
+  loadAgentToolRows,
+  toToolDescriptors,
+  type ToolDescriptorBuild,
+} from './tools';
 import type { AgentRunTrigger } from './worker';
 
 /** Quantas mensagens recentes carregar como histórico para o runtime. */
@@ -61,6 +70,12 @@ export interface AgentRunContext {
   readonly aiMode: string;
   readonly agentId: string;
   readonly agentStatus: string;
+  /**
+   * Contato da conversa (`conversations.contact_id`). Vai como `contact_id` no
+   * `/run`: o runtime carrega o contato no prompt e as tools `database`
+   * (`query_contact`/`query_deal`) operam sobre ele. Ausente/`null` = sem contato.
+   */
+  readonly contactId?: string | null;
   /** Texto do turno novo (a mensagem que disparou o agente). */
   readonly userInput: string;
   /** Histórico recente (do mais antigo ao mais novo) já no shape do runtime. */
@@ -74,10 +89,14 @@ export interface AgentRunStore {
    * `null` quando a conversa sumiu, não tem agente associado, ou o agente não
    * está ativo (nada a executar — o caller ack'a).
    */
-  loadContext(
-    workspaceId: string,
-    trigger: AgentRunTrigger,
-  ): Promise<AgentRunContext | null>;
+  loadContext(workspaceId: string, trigger: AgentRunTrigger): Promise<AgentRunContext | null>;
+  /**
+   * Tools habilitadas do agente (`agent_tools` ⋈ `tools`, sob RLS) já no contrato do
+   * runtime, ANTES do filtro da policy (aplicado por `runAgent`); `rejected` = keys
+   * fora do contrato (descartadas). Opcional: store sem este método roda o agente sem
+   * tools (comportamento anterior à F70-S10).
+   */
+  loadTools?(workspaceId: string, agentId: string): Promise<ToolDescriptorBuild>;
   /** Cria a linha de `agent_executions` em `running`. Retorna o `executionId`. */
   startExecution(input: StartExecutionInput): Promise<string>;
   /** Marca a execução como `completed` (tokens/cost reais do `final`). */
@@ -185,19 +204,25 @@ function estimateTurnCostUsd(resolved: ResolvedPolicy, ctx: AgentRunContext): nu
   );
 }
 
-/** Monta o `AgentRunRequest` (snake_case no wire) a partir do contexto + snapshot. */
-function buildRunRequest(
+/**
+ * Monta o `AgentRunRequest` (snake_case no wire) a partir do contexto + snapshot +
+ * tools já filtradas pela policy. Sem tools, o runtime não oferece nenhuma ao modelo.
+ */
+export function buildRunRequest(
   workspaceId: string,
   ctx: AgentRunContext,
   resolved: ResolvedPolicy,
+  tools: readonly ToolDescriptor[],
 ): AgentRunRequest {
   return {
     workspace_id: workspaceId,
     agent_id: ctx.agentId,
     conversation_id: ctx.conversationId,
+    ...(ctx.contactId ? { contact_id: ctx.contactId } : {}),
     user_input: ctx.userInput,
     messages: ctx.history,
     policy_snapshot: resolved.snapshot,
+    tools: [...tools],
     // `thread_id` derivado da conversa: um thread de checkpoint estável por conversa.
     thread_id: ctx.conversationId,
   };
@@ -329,7 +354,31 @@ export async function runAgent(
     executionId,
   });
 
-  const request = buildRunRequest(workspaceId, ctx, resolved);
+  // Tools habilitadas do agente, filtradas pela MESMA policy que o runtime reaplica.
+  const loaded = (await store.loadTools?.(workspaceId, ctx.agentId)) ?? {
+    tools: [],
+    rejected: [],
+  };
+  const enabledTools = loaded.tools;
+  const tools = filterToolsByPolicy(enabledTools, resolved.snapshot);
+  if (loaded.rejected.length > 0) {
+    // Linha de catálogo fora do contrato: nunca derruba o turno; o agente fica sem ela.
+    logger.warn('agent-run: tools fora do contrato descartadas', {
+      agentId: ctx.agentId,
+      rejected: loaded.rejected,
+    });
+  }
+  if (enabledTools.length > 0) {
+    logger.info('agent-run: tools entregues ao runtime', {
+      conversationId: ctx.conversationId,
+      agentId: ctx.agentId,
+      executionId,
+      tools: tools.map((t) => t.key),
+      droppedByPolicy: enabledTools.length - tools.length,
+    });
+  }
+
+  const request = buildRunRequest(workspaceId, ctx, resolved, tools);
 
   let stream: StreamOutcome;
   try {
@@ -475,6 +524,7 @@ export class DbAgentRunStore implements AgentRunStore {
         .select({
           remoteId: conversations.remoteId,
           channelId: conversations.channelId,
+          contactId: conversations.contactId,
           aiMode: conversations.aiMode,
           agentId: conversations.agentId,
           departmentId: conversations.departmentId,
@@ -517,9 +567,7 @@ export class DbAgentRunStore implements AgentRunStore {
         await tx
           .update(conversations)
           .set({ agentId: agent.id })
-          .where(
-            and(eq(conversations.id, trigger.conversationId), isNull(conversations.agentId)),
-          );
+          .where(and(eq(conversations.id, trigger.conversationId), isNull(conversations.agentId)));
       }
 
       const userInput = await loadTriggerInput(tx, trigger);
@@ -529,6 +577,7 @@ export class DbAgentRunStore implements AgentRunStore {
         conversationId: trigger.conversationId,
         chatId: conv.remoteId,
         channelId: conv.channelId,
+        contactId: conv.contactId ?? null,
         aiMode: conv.aiMode,
         agentId: agent.id,
         agentStatus: agent.status,
@@ -536,6 +585,13 @@ export class DbAgentRunStore implements AgentRunStore {
         history,
       };
     });
+  }
+
+  async loadTools(workspaceId: string, agentId: string): Promise<ToolDescriptorBuild> {
+    const rows = await withWorkspace(workspaceId, (tx) =>
+      loadAgentToolRows(tx, workspaceId, agentId),
+    );
+    return toToolDescriptors(rows);
   }
 
   async startExecution(input: StartExecutionInput): Promise<string> {

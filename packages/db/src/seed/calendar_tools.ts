@@ -15,6 +15,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import type { DB } from '../client';
 import { tools } from '../schema';
+import { seedAgentTools } from './tools_agent';
 
 type ToolSeed = {
   key: string;
@@ -35,8 +36,7 @@ const CALENDAR_TOOLS: readonly ToolSeed[] = [
   {
     key: 'list_calendars',
     name: 'Listar calendários',
-    description:
-      'Lista os calendários disponíveis no workspace, com seus IDs, nomes e tipos.',
+    description: 'Lista os calendários disponíveis no workspace, com seus IDs, nomes e tipos.',
     schema: fn('list_calendars', 'Lista calendários do workspace.', {
       type: 'object',
       properties: {
@@ -101,7 +101,11 @@ const CALENDAR_TOOLS: readonly ToolSeed[] = [
   },
 ];
 
-/** Seeda (upsert por key, entre as globais) as tools de calendar. */
+/**
+ * Seeda (upsert por key, entre as globais) as tools de calendar e, na sequência, o
+ * restante do catálogo de tools de agente (workflow/knowledge/database — F70-S10), para
+ * que `seed.ts`/`seed-owner.ts` sincronizem o catálogo inteiro numa chamada só.
+ */
 export async function seedCalendarTools(db: DB): Promise<void> {
   for (const t of CALENDAR_TOOLS) {
     const [existing] = await db
@@ -136,4 +140,5 @@ export async function seedCalendarTools(db: DB): Promise<void> {
       });
     }
   }
+  await seedAgentTools(db);
 }

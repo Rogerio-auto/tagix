@@ -589,6 +589,13 @@
       "when": 1781452844000,
       "tag": "0083_f70_conversation_origin",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1781452845000,
+      "tag": "0084_f70_agent_tools_catalog",
+      "breakpoints": true
     }
   ]
 }

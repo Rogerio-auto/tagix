@@ -307,6 +307,7 @@ async def test_graph_tool_loop_then_final() -> None:
     assert args == {"fields": ["name"]}
     assert ctx["workspace_id"] == "22222222-2222-2222-2222-222222222222"
     assert ctx["execution_id"] == "33333333-3333-3333-3333-333333333333"
+    assert "contact_id" in ctx
     # usage acumulado das duas chamadas.
     assert out["usage"].total_tokens == 26
 
@@ -446,3 +447,15 @@ def test_run_request_parses_client_shape() -> None:
     assert req.messages[0].role == "user"
     # serializa de volta sem perder snake_case
     assert "policy_snapshot" in json.loads(req.model_dump_json())
+
+
+def test_tool_dispatch_ctx_carries_contact_id() -> None:
+    """F70-S10: o ctx do dispatch leva o `contact_id` do state (tools `database`)."""
+    from app.nodes.tool_dispatch import _build_ctx
+    from app.tools.base import ToolContext
+
+    state = _initial_state(_policy())
+    state["contact_id"] = "44444444-4444-4444-4444-444444444444"
+    ctx = _build_ctx(state)
+    assert ctx["contact_id"] == "44444444-4444-4444-4444-444444444444"
+    assert ToolContext.model_validate(ctx).contact_id == "44444444-4444-4444-4444-444444444444"
