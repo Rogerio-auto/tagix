@@ -273,7 +273,10 @@ export function inboundAgentRunJob(input: {
   readonly provider: ChannelProvider;
   readonly aiMode: string;
   readonly inserted: number;
-  /** `externalId` da última mensagem inbound desta requisição. */
+  /**
+   * `externalId` da última mensagem inbound INSERIDA nesta requisição. Vira o id estável
+   * do gatilho (`agentRunTriggerId.inbound`, F70-S26) no construtor.
+   */
   readonly lastInboundExternalId: string;
 }): OutboxMessage | null {
   if (input.inserted === 0 || input.aiMode !== 'on') return null;
@@ -546,7 +549,10 @@ export class DbInboundPersistence implements InboundPersistencePort {
       // F70-S25: o gatilho do agente de IA entra na outbox junto da mensagem do contato
       // que o motiva. Antes era publicado depois do commit: uma queda entre os dois
       // deixava a mensagem sem resposta. Reentrega deduplicada não regrava (`inserted`).
-      const lastEvent = messageEvents[messageEvents.length - 1];
+      // F70-S26: o gatilho aponta para a última mensagem INSERIDA agora. A última do lote
+      // pode ser uma reentrega já respondida; o id do gatilho (conversa + external_id)
+      // colidiria com o turno antigo e a mensagem nova ficaria sem resposta.
+      const lastInserted = inserted[inserted.length - 1];
       const agentRun = inboundAgentRunJob({
         workspaceId,
         conversationId: resolved.conversationId,
@@ -555,7 +561,7 @@ export class DbInboundPersistence implements InboundPersistencePort {
         provider,
         aiMode: resolved.aiMode,
         inserted: inserted.length,
-        lastInboundExternalId: lastEvent?.externalId ?? anchor.externalId,
+        lastInboundExternalId: lastInserted?.externalId ?? anchor.externalId,
       });
       if (agentRun !== null) await enqueueOutbox(tx, agentRun);
 

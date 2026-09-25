@@ -234,6 +234,8 @@ describe('runReengagementTick — gatilho idle', () => {
       contactId: CONTACT,
       channelId: CHANNEL_ID,
       provider: 'meta_whatsapp',
+      // F70-S26: id estável do gatilho = conversa + janela.
+      triggerId: `reengagement:${CONV}:${BUCKET}`,
     });
 
     // Gravou a marca de idempotência.

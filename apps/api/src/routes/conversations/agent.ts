@@ -41,7 +41,13 @@ import {
   schema,
   type DbTx,
 } from '@hm/db';
-import { agentRunJobOutbox, connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
+import {
+  agentRunJobOutbox,
+  agentRunTriggerId,
+  connectMq,
+  makeEnvelope,
+  type MqHandle,
+} from '@hm/shared/mq';
 import {
   CHANNEL_PROVIDERS,
   type ChannelProvider,
@@ -55,6 +61,12 @@ import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
 /** Permissão dedicada (D4). */
 const ASSIGN_AGENT_PERM: Permission = 'conversation.assign_agent';
+
+/**
+ * `ai_enabled_at` em microssegundos (texto), exato: o `Date` do JS perderia os µs do
+ * `clock_timestamp()`. Compõe o id estável do gatilho da troca manual (F70-S26).
+ */
+const AI_ENABLED_AT_MICROS = sql<string>`(extract(epoch from ${schema.conversations.aiEnabledAt}) * 1000000)::bigint::text`;
 
 /** Narrowing do `req.params['id']` (Express 5 tipa como `string | string[]`). */
 function paramId(req: Request, name: string): string {
@@ -272,7 +284,7 @@ export function createConversationAgentRouter(): Router {
           .where(eq(schema.channels.id, conversation.channelId))
           .limit(1);
 
-        await tx
+        const [switched] = await tx
           .update(schema.conversations)
           .set({
             agentId,
@@ -289,13 +301,15 @@ export function createConversationAgentRouter(): Router {
             aiEnabledBy: memberId,
             updatedAt: now,
           })
-          .where(eq(schema.conversations.id, conversationId));
+          .where(eq(schema.conversations.id, conversationId))
+          // F70-S26: a marca em microssegundos identifica ESTA troca (id do gatilho).
+          .returning({ aiEnabledAtMicros: AI_ENABLED_AT_MICROS });
 
         // Re-engajamento na MESMA transação (F70-S25): só com gatilho válido (contato +
         // provider conhecidos) — o worker de agentes exige os dois no envelope.
         const provider = channel?.provider ?? null;
         const contactId = conversation.contactId;
-        if (contactId !== null && isChannelProvider(provider)) {
+        if (switched !== undefined && contactId !== null && isChannelProvider(provider)) {
           await enqueueOutbox(
             tx,
             agentRunJobOutbox(workspaceId, {
@@ -303,6 +317,7 @@ export function createConversationAgentRouter(): Router {
               contactId,
               channelId: conversation.channelId,
               provider,
+              triggerId: agentRunTriggerId.agentSwitch(conversationId, switched.aiEnabledAtMicros),
             }),
           );
         }

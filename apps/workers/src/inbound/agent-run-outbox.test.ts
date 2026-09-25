@@ -36,7 +36,7 @@ vi.mock('@hm/db', async (importOriginal) => {
 });
 
 const { closeDb, getDb, schema } = await import('@hm/db');
-const { agentRunRequestedPayloadSchema } = await import('@hm/shared/mq');
+const { agentRunRequestedPayloadSchema, agentRunTriggerId } = await import('@hm/shared/mq');
 const { outboxRowsOf } = await import('../outbox/testing');
 const { DbInboundPersistence, INBOUND_FLOW_TYPE } = await import('./db-ports');
 const { agentRunTriggerSchema } = await import('../agents/worker');
@@ -198,9 +198,32 @@ describe.skipIf(!ready)('inbound → gatilho do agente na outbox (F70-S25)', () 
       channelId: CHANNEL,
       provider: 'meta_whatsapp',
       triggerExternalId: last,
+      // F70-S26: id estável do gatilho = conversa + mensagem.
+      triggerId: agentRunTriggerId.inbound(CONV_ON, last),
     });
     // O consumidor aceita o que o produtor grava.
     expect(agentRunTriggerSchema.safeParse(jobs[0]?.envelope.payload).success).toBe(true);
+  });
+
+  it('lote com reentrega no fim: o gatilho aponta para a mensagem NOVA (F70-S26)', async () => {
+    const old = `wamid.f70s26.old.${randomUUID()}`;
+    await persistence.persist(request([textEvent(REMOTE_ON, old)]));
+    const before = (await agentRunJobsOf(CONV_ON)).length;
+
+    const fresh = `wamid.f70s26.new.${randomUUID()}`;
+    const result = await persistence.persist(
+      request([textEvent(REMOTE_ON, fresh), textEvent(REMOTE_ON, old)]),
+    );
+    expect(result).toMatchObject({ inserted: 1, deduped: 1 });
+
+    const jobs = await agentRunJobsOf(CONV_ON);
+    expect(jobs).toHaveLength(before + 1);
+    const payloads = jobs.map((j) => agentRunRequestedPayloadSchema.parse(j.envelope.payload));
+    // Um gatilho por mensagem: o antigo continua único e o novo aponta para a nova.
+    expect(payloads.filter((p) => p.triggerExternalId === old)).toHaveLength(1);
+    const forFresh = payloads.filter((p) => p.triggerExternalId === fresh);
+    expect(forFresh).toHaveLength(1);
+    expect(forFresh[0]?.triggerId).toBe(agentRunTriggerId.inbound(CONV_ON, fresh));
   });
 
   it('reentrega do mesmo envelope: mensagem deduplicada, nenhum job novo', async () => {

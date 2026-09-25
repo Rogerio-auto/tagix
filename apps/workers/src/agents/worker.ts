@@ -9,16 +9,19 @@
  * consume hm.q.flows → valida Envelope (Zod, em `consume`)
  *   → filtra type === 'flow.run.requested'  (outros tipos de flow não são deste worker)
  *   → parseAgentRunTrigger (Zod do payload de F1-S26)
- *   → runAgent (resolve-policy → cost-guard → client.run → persist + job na outbox)
- *   → ack/nack
+ *   → resolveAgentRunTriggerId (id estável do gatilho, F70-S26)
+ *   → runAgent (reivindica o turno → cost-guard → client.run → mensagem + job na outbox)
+ *   → ack / retry
  * ```
  *
- * `consume` de `@hm/shared/mq` já valida o `Envelope`, faz `ack` em sucesso e
- * `nack(requeue=false)→DLX` se o handler lançar. Gatilho de **conteúdo** inválido
- * (payload malformado, type alheio) NÃO lança: loga-warn e ack'a (reprocessar um
- * payload imutável não ajuda). `runAgent` trata as falhas de **negócio** (sem
- * contexto, cap, modelo bloqueado, erro do runtime) sem lançar. Só erro de
- * **infra** (DB/socket) propaga → nack→DLX.
+ * `consume` de `@hm/shared/mq` já valida o `Envelope`, faz `ack` em sucesso e manda
+ * para a ladder de retry (depois DLQ) se o handler lançar. Gatilho de **conteúdo**
+ * inválido (payload malformado, type alheio) NÃO lança: loga-warn e ack'a. `runAgent`
+ * trata as falhas de **negócio** (sem contexto, cap, modelo bloqueado, erro do runtime)
+ * sem lançar. Só erro de **infra** (DB/socket) e o turno em curso noutra entrega
+ * (`AgentTurnInFlightError`) propagam. A retentativa é segura: o turno é reivindicado
+ * pelo id do gatilho, e o mesmo gatilho nunca chama o runtime duas vezes nem grava duas
+ * respostas (máquina de estados em `run.ts`).
  *
  * Mira a MESMA fila do stub de F1-S26 (`hm.q.flows`); até o flow-engine
  * determinístico (F2 futuro) existir, todo envelope `flow.run.requested` é de
@@ -29,6 +32,8 @@ import { z } from 'zod';
 import { Buffer } from 'node:buffer';
 import {
   AGENT_RUN_REQUESTED_TYPE,
+  AGENT_RUN_TRIGGER_ID_MAX,
+  resolveAgentRunTriggerId,
   connectMq,
   consume,
   makeEnvelope,
@@ -99,6 +104,12 @@ export const agentRunTriggerSchema = z.object({
   channelId: z.string().min(1),
   provider: z.enum(CHANNEL_PROVIDERS),
   triggerExternalId: z.string().min(1).optional(),
+  /**
+   * Id estável do gatilho (F70-S26). Ausente em envelope antigo: `handleAgentEnvelope`
+   * deriva com `resolveAgentRunTriggerId`. Ausente também no contexto do buffer de
+   * agregação, que roda sem reivindicação.
+   */
+  triggerId: z.string().min(1).max(AGENT_RUN_TRIGGER_ID_MAX).optional(),
 });
 
 export type AgentRunTrigger = z.infer<typeof agentRunTriggerSchema>;
@@ -341,7 +352,10 @@ export async function handleAgentEnvelope(
     return;
   }
 
-  await runAgent(envelope.workspaceId, parsed.data, deps);
+  // F70-S26: todo gatilho da fila roda reivindicado pelo id do fato. Envelope antigo (sem
+  // `triggerId`) usa a mesma derivação do produtor, ou o id do envelope em último caso.
+  const triggerId = resolveAgentRunTriggerId(parsed.data, envelope.id);
+  await runAgent(envelope.workspaceId, { ...parsed.data, triggerId }, deps);
 }
 
 export interface AgentWorkerHandle {
@@ -361,9 +375,7 @@ export interface AgentWorkerHandle {
  * anterior (restart/deploy/crash no meio da janela). Retorna handle para parada
  * limpa (consumer + scheduler + buffer + Redis próprio).
  */
-export async function startAgentWorker(
-  options: AgentWorkerOptions,
-): Promise<AgentWorkerHandle> {
+export async function startAgentWorker(options: AgentWorkerOptions): Promise<AgentWorkerHandle> {
   const { logger } = options;
   const { connection, channel } = await connectMq();
   await channel.assertQueue(AGENT_QUEUE, { durable: true });

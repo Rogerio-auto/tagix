@@ -141,6 +141,8 @@ describe('transfer_to_agent — same-dept válido', () => {
       contactId: 'contact-uuid',
       channelId: 'channel-uuid',
       provider: 'meta_whatsapp',
+      // F70-S26: execução que chamou a tool + agente de destino.
+      triggerId: `transfer:exec:${TARGET}`,
     });
   });
 

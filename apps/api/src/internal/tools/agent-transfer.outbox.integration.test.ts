@@ -84,14 +84,14 @@ describe.skipIf(!url)('transfer_to_agent → gatilho da IA na outbox (DB, F70-S2
     return id;
   }
 
-  function transfer(conversationId: string, forceRollback = false) {
+  function transfer(conversationId: string, forceRollback = false, executionId = randomUUID()) {
     return withWorkspace(WS, async (tx) => {
       const res = await handler(
         {
           workspaceId: WS,
           conversationId,
           agentId: FROM_AGENT,
-          executionId: randomUUID(),
+          executionId,
           args: { targetAgentId: TO_AGENT, reason: 'teste' },
         },
         tx,
@@ -124,7 +124,8 @@ describe.skipIf(!url)('transfer_to_agent → gatilho da IA na outbox (DB, F70-S2
 
   it('commit: transfere, liga a IA e grava UM job em hm.q.flows', async () => {
     const conv = await conversation('origem:anuncio');
-    const res = await transfer(conv);
+    const executionId = randomUUID();
+    const res = await transfer(conv, false, executionId);
     expect(res.ok).toBe(true);
     expect(await stateOf(conv)).toEqual({ aiMode: 'on', agentId: TO_AGENT });
 
@@ -137,6 +138,8 @@ describe.skipIf(!url)('transfer_to_agent → gatilho da IA na outbox (DB, F70-S2
       contactId: CONTACT,
       channelId: CHANNEL,
       provider: 'meta_whatsapp',
+      // F70-S26: a mesma transferência na mesma execução é o mesmo gatilho.
+      triggerId: `transfer:${executionId}:${TO_AGENT}`,
     });
   });
 
