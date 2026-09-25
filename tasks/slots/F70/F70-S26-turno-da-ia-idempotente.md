@@ -147,9 +147,14 @@ runtime reescreve `status`.
 - **Ordem de deploy:** o migrator do Drizzle só aplica migração com `when` maior que o da última
   aplicada. A 0091 (`when` menor) tem de entrar na main e ser aplicada ANTES ou JUNTO da 0092. Se a
   0092 for aplicada sozinha, a 0091 é pulada em silêncio depois.
-- **Banco dev:** a 0092 foi aplicada direto pelo SQL (idempotente), SEM registro em
-  `drizzle.__drizzle_migrations`, para não fazer a 0091 da F70-S24 ser pulada no dev compartilhado.
-  O `pnpm migrate` depois do merge a registra sem erro.
+- A main (F70-S24) foi mesclada, e o journal está em 0090 → 0091 → 0092. Nada aqui usa
+  `ON CONFLICT (event_id)` nem lê a outbox como `hm_app`: a outbox só é escrita por `enqueueOutbox`.
+- **Bancos dev:**
+  - A validação final rodou num banco isolado, `highermind_f70s26`, com migrate completo até a 0092
+    (93 registradas) e o seed.
+  - No `highermind` compartilhado, a 0092 foi aplicada antes, direto pelo SQL (idempotente), SEM
+    registro em `drizzle.__drizzle_migrations`. Assim a 0091 não é pulada lá. O `pnpm migrate`
+    depois da 0091 registra a 0092 sem erro.
 
 ## Validação
 
@@ -180,3 +185,10 @@ node --env-file=.env apps/api/node_modules/vitest/vitest.mjs run --root apps/api
   falham.
 - **Outros testes:** `shared/mq` com construtor e derivações, inbound com o lote misto, e troca manual
   com dois cliques e ids distintos.
+- `slot.py validate` (banco isolado `highermind_f70s26`, com 0091 + 0092, `--maxWorkers=1`), tudo
+  verde:
+  - `shared/mq`: 55 (+1 skip);
+  - workers `agents`: 111;
+  - workers `inbound` + `campaigns-inbound`: 80;
+  - API troca de agente + tools: 103;
+  - 4 typechecks e `check-migrations`.
