@@ -10,6 +10,7 @@
  * Cobertura desta fase:
  *  - transfer_to_human / mark_resolved / change_conversation_status → mutam `conversations`.
  *  - escalate → registrado em `tool_logs` (sem tabela de notificações ainda; auditável).
+ *  - add_contact_tag / update_contact (F70-S15) → `contact-handlers.ts`.
  *  - register_conversion → respeita `allow_agent_conversions`; registra de verdade via o
  *    serviço de conversões (F5-S12). Fecha o stub-até-F5 de F2-S20.
  *
@@ -38,6 +39,7 @@ import { emitConversationResolvedMetrics } from '../../services/dashboard/emit';
 import { moveDealToStage, TransitionError } from '../../routes/deals';
 import { and, desc, isNull } from 'drizzle-orm';
 import { transferToAgent } from './agent-transfer-handlers';
+import { addContactTag, updateContact } from './contact-handlers';
 
 function fail(error: string): ToolHandlerResult {
   return { ok: false, error };
@@ -341,5 +343,8 @@ export function buildWorkflowRegistry(): ToolHandlerRegistry {
     .register('mark_resolved', markResolved)
     .register('change_conversation_status', changeConversationStatus)
     .register('register_conversion', registerConversion)
-    .register('move_deal_stage', moveDealStage);
+    .register('move_deal_stage', moveDealStage)
+    // F70-S15: tools de contato (alvo = contato da conversa; ver contact-handlers.ts).
+    .register('add_contact_tag', addContactTag)
+    .register('update_contact', updateContact);
 }

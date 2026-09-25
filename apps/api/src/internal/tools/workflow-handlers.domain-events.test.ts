@@ -10,6 +10,9 @@
  *
  * O transporte do emissor é trocado por um coletor (sem RabbitMQ). Skip automático
  * se o Postgres dev não estiver acessível.
+ *
+ * F70-S15: o endpoint só executa tool habilitada para o agente, numa execução em
+ * curso dele — o setup cria o agente, habilita as tools e abre uma execução por chamada.
  */
 import { randomUUID } from 'node:crypto';
 import express from 'express';
@@ -33,6 +36,23 @@ const published: Array<{ rk: string; env: Envelope }> = [];
 const app = express();
 app.use(express.json());
 app.use(createInternalToolsRouter({ registry: buildWorkflowRegistry(), token: TOKEN }));
+
+/** Execução `running` do agente na conversa (o que o worker cria antes do /run). */
+async function freshExecution(conversationId: string): Promise<string> {
+  const [row] = await getDb()
+    .insert(schema.agentExecutions)
+    .values({
+      workspaceId: WS,
+      agentId: AGENT_ID,
+      conversationId,
+      threadId: conversationId,
+      status: 'running',
+      state: {},
+    })
+    .returning({ id: schema.agentExecutions.id });
+  if (!row) throw new Error('execução não criada');
+  return row.id;
+}
 
 async function freshConversation(): Promise<string> {
   const id = randomUUID();
@@ -86,6 +106,26 @@ beforeAll(async () => {
       name: 'Canal F70',
       wahaSessionId: `s-${CHANNEL.slice(0, 8)}`,
     });
+    await db
+      .insert(schema.agents)
+      .values({ id: AGENT_ID, workspaceId: WS, name: 'Agente F70', systemPrompt: 'F70-S09' });
+    // Tools do próprio workspace (somem com ele no cascade), habilitadas no agente.
+    const toolRows = await db
+      .insert(schema.tools)
+      .values(
+        ['transfer_to_human', 'mark_resolved'].map((key) => ({
+          workspaceId: WS,
+          key,
+          name: key,
+          description: key,
+          category: 'workflow',
+          schema: {},
+        })),
+      )
+      .returning({ id: schema.tools.id });
+    await db
+      .insert(schema.agentTools)
+      .values(toolRows.map((t) => ({ agentId: AGENT_ID, toolId: t.id })));
   } catch (err) {
     dbAvailable = false;
     console.warn('[F70-S09 tools] Postgres dev indisponível — testes pulados.', err);
@@ -113,7 +153,7 @@ const maybe = (name: string, fn: () => Promise<void>) =>
 describe('F70-S09 — eventos de domínio das tools da IA', () => {
   maybe('transfer_to_human publica conversation.handoff mínimo, depois do commit', async () => {
     const conv = await freshConversation();
-    const executionId = randomUUID();
+    const executionId = await freshExecution(conv);
 
     const res = await callTool('transfer_to_human', conv, executionId, {
       reason: 'Cliente Maria (CPF 123.456.789-00) quer falar com humano',
@@ -142,7 +182,9 @@ describe('F70-S09 — eventos de domínio das tools da IA', () => {
 
   maybe('mark_resolved publica conversation.resolved com autor agente', async () => {
     const conv = await freshConversation();
-    const res = await callTool('mark_resolved', conv, randomUUID(), { resolution: 'ok' });
+    const res = await callTool('mark_resolved', conv, await freshExecution(conv), {
+      resolution: 'ok',
+    });
     expect(res.status).toBe(200);
 
     expect(published).toHaveLength(1);
@@ -157,7 +199,11 @@ describe('F70-S09 — eventos de domínio das tools da IA', () => {
   });
 
   maybe('tool que falha não publica evento', async () => {
-    const res = await callTool('transfer_to_human', randomUUID(), randomUUID(), { reason: 'x' });
+    const conv = await freshConversation();
+    // Args inválidos: o handler recusa (422) depois de passar pela barreira.
+    const res = await callTool('transfer_to_human', conv, await freshExecution(conv), {
+      reason: '',
+    });
     expect(res.status).toBe(422);
     expect(published).toHaveLength(0);
   });

@@ -9,22 +9,32 @@
  *   2. Resolve o handler por `:toolKey` no registry. Desconhecido → 404.
  *   3. Valida o envelope `{ workspace_id, conversation_id, agent_id,
  *      execution_id, args }` via Zod. Inválido → 400.
- *   4. Roda o handler DENTRO de `withWorkspace(workspace_id, …)` (RLS escopada),
- *      cronometra a latência, e grava uma linha em `tool_logs` (best-effort:
- *      uma falha de auditoria não derruba a ação).
- *   5. Depois do commit, publica os eventos de domínio que o handler declarou
+ *   4. Barreira de habilitação (F70-S15, `access.ts`), na MESMA transação RLS: a
+ *      tool tem de estar habilitada para o agente e a execução tem de ser dele e
+ *      estar em curso. Recusa → 403, nada executa, e a recusa fica em `tool_logs`
+ *      (`action='denied'`) + log estruturado.
+ *   5. Roda o handler DENTRO de `withWorkspace(workspace_id, …)` (RLS escopada),
+ *      cronometra a latência, e grava uma linha em `tool_logs` apontando para a
+ *      linha de `tools` que a barreira resolveu (custom do workspace > global).
+ *   6. Depois do commit, publica os eventos de domínio que o handler declarou
  *      (`result.events`, F70-S09) — webhooks de saída.
- *   6. Responde JSON tipado `{ ok, content?, error?, payload? }`.
+ *   7. Responde JSON tipado `{ ok, content?, error?, payload? }`.
  *
  * Boundary (F2-S07): este router é exportado por `createInternalToolsRouter` e
  * o orchestrator o monta em `app.ts` (vide nota no relatório). Ele NÃO entra
  * atrás de `requireAuth`/`withRLS`.
  */
 import { Router, type Request, type Response } from 'express';
-import { eq } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
+import { createLogger, type Logger } from '@hm/logger';
 import { emitDomainEvents } from '@hm/shared/mq';
+import {
+  authorizeToolCall,
+  writeDenialLog,
+  type ToolCallAuthorizer,
+  type ToolCallDenialReason,
+} from './access';
 import { createInternalTokenGuard } from './auth';
 import { toolCallEnvelopeSchema } from './schema';
 import {
@@ -54,31 +64,24 @@ function summarize(value: unknown): Record<string, unknown> {
 }
 
 /**
- * Grava a trilha em `tool_logs` (best-effort). Resolve `tools.id` por `key` no
- * escopo do workspace; se a tool não estiver no catálogo (ex.: handler embutido
- * `ping`), pula a auditoria — a FK `tool_id` é NOT NULL e não inventamos id.
+ * Grava a trilha em `tool_logs`. `toolId` é a linha que a barreira de habilitação
+ * resolveu (custom do workspace > global) — nunca uma busca solta por `key`, que
+ * podia cair na tool custom de outro workspace (`tools` não tem RLS).
  */
 async function writeToolLog(
   tx: DbTx,
   params: {
-    toolKey: string;
+    toolId: string;
     envelope: ToolCallEnvelope;
     result: ToolHandlerResult;
     durationMs: number;
   },
 ): Promise<void> {
-  const { toolKey, envelope, result, durationMs } = params;
-  const [tool] = await tx
-    .select({ id: schema.tools.id })
-    .from(schema.tools)
-    .where(eq(schema.tools.key, toolKey))
-    .limit(1);
-  if (!tool) return; // tool não catalogada (ex.: `ping`) → sem linha de auditoria.
-
+  const { toolId, envelope, result, durationMs } = params;
   await tx.insert(schema.toolLogs).values({
     workspaceId: envelope.workspaceId,
     agentId: envelope.agentId,
-    toolId: tool.id,
+    toolId,
     conversationId: envelope.conversationId,
     executionId: envelope.executionId,
     action: result.action ?? 'workflow',
@@ -90,11 +93,20 @@ async function writeToolLog(
   });
 }
 
+/** Resultado da transação: recusa (nada executou) ou o que o handler devolveu. */
+type CallOutcome =
+  | { readonly kind: 'denied'; readonly reason: ToolCallDenialReason }
+  | { readonly kind: 'executed'; readonly result: ToolHandlerResult };
+
 export interface InternalToolsRouterOptions {
   /** Override do registry (testes). Default: registry com os built-ins do slot. */
   readonly registry?: ToolHandlerRegistry;
   /** Override do token (testes). Default: `process.env['AGENT_RUNTIME_TOKEN']`. */
   readonly token?: string;
+  /** Override da barreira de habilitação (testes). Default: `authorizeToolCall` (banco). */
+  readonly authorize?: ToolCallAuthorizer;
+  /** Logger (testes). Default: `createLogger('info', { svc: '@hm/api', component: 'internal-tools' })`. */
+  readonly logger?: Logger;
 }
 
 /**
@@ -107,6 +119,8 @@ export function createInternalToolsRouter(options: InternalToolsRouterOptions = 
   const registry = options.registry ?? createDefaultRegistry();
   const token = options.token ?? process.env['AGENT_RUNTIME_TOKEN'] ?? '';
   const guard = createInternalTokenGuard(token);
+  const authorize = options.authorize ?? authorizeToolCall;
+  const logger = options.logger ?? createLogger('info', { svc: '@hm/api', component: 'internal-tools' });
 
   router.post('/internal/tools/:toolKey', guard, async (req: Request, res: Response) => {
     const rawKey = req.params['toolKey'];
@@ -133,31 +147,58 @@ export function createInternalToolsRouter(options: InternalToolsRouterOptions = 
     };
 
     const startedAt = Date.now();
-    let result: ToolHandlerResult;
+    let outcome: CallOutcome;
     try {
-      result = await withWorkspace(envelope.workspaceId, async (tx) => {
+      outcome = await withWorkspace(envelope.workspaceId, async (tx): Promise<CallOutcome> => {
+        const decision = await authorize(tx, toolKey, envelope);
+        if (!decision.allowed) {
+          // A recusa commita (o log fica); o handler nunca é chamado.
+          if (decision.toolId !== null) {
+            await writeDenialLog(tx, {
+              toolId: decision.toolId,
+              toolKey,
+              envelope,
+              reason: decision.reason,
+            });
+          }
+          return { kind: 'denied', reason: decision.reason };
+        }
         const r = await handler(envelope, tx);
         await writeToolLog(tx, {
-          toolKey,
+          toolId: decision.toolId,
           envelope,
           result: r,
           durationMs: Date.now() - startedAt,
         });
-        return r;
+        return { kind: 'executed', result: r };
       });
     } catch (err) {
       // Falha do handler ou da transação: nunca vaza stack/PII ao runtime.
-      const ref = `hm_tool_${toolKey}`;
-      console.error(
-        JSON.stringify({
-          level: 'error',
-          ref,
-          message: err instanceof Error ? err.message : String(err),
-        }),
-      );
+      logger.error('internal-tools: falha ao executar tool', {
+        ref: `hm_tool_${toolKey}`,
+        toolKey,
+        workspaceId: envelope.workspaceId,
+        executionId: envelope.executionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
       res.status(500).json({ ok: false, error: `Failed to execute '${toolKey}'.` });
       return;
     }
+
+    if (outcome.kind === 'denied') {
+      logger.warn('internal-tools: chamada recusada', {
+        toolKey,
+        reason: outcome.reason,
+        workspaceId: envelope.workspaceId,
+        agentId: envelope.agentId,
+        executionId: envelope.executionId,
+        conversationId: envelope.conversationId,
+      });
+      // Motivo detalhado fica no log; o runtime recebe só a recusa.
+      res.status(403).json({ ok: false, error: `Tool '${toolKey}' is not enabled for this agent.` });
+      return;
+    }
+    const { result } = outcome;
 
     // F70-S09: eventos de domínio da ação, só agora — a transação já commitou.
     // O emissor nunca lança; a resposta ao runtime não espera o broker falhar.
