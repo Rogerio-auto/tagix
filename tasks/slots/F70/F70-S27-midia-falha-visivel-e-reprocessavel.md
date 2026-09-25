@@ -2,13 +2,16 @@
 id: F70-S27
 title: Falha de storage visível e mídia reprocessável depois de corrigida
 phase: F70
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F70-S25]
 blocks: []
 source_docs:
   - tasks/slots/F70/F70-S21-ultimos-publicadores-pos-commit.md
+agent_id: backend-engineer
+claimed_at: 2026-09-25T14:41:44Z
+
 ---
 # F70-S27 — Falha de storage visível e mídia reprocessável depois de corrigida
 
