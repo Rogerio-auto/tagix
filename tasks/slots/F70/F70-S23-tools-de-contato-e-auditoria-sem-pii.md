@@ -2,7 +2,7 @@
 id: F70-S23
 title: Tools de contato com allowlist de escrita, auditoria sem PII e execução com prazo
 phase: F70
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F70-S15]
