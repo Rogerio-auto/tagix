@@ -45,9 +45,9 @@ describe('verifyWebhookSignature', () => {
   it('aceita a entrega dentro da janela, com corpo string ou Buffer cru', () => {
     const { signature, timestamp } = signed();
     const ts = unixSeconds(AT);
-    expect(verifyWebhookSignature({ secret: SECRET, body: BODY, signature, timestamp, now: AT })).toEqual(
-      { ok: true, timestamp: ts },
-    );
+    expect(
+      verifyWebhookSignature({ secret: SECRET, body: BODY, signature, timestamp, now: AT }),
+    ).toEqual({ ok: true, timestamp: ts });
     expect(
       verifyWebhookSignature({
         secret: SECRET,
@@ -81,9 +81,9 @@ describe('verifyWebhookSignature', () => {
     const { signature, timestamp } = signed();
     const drift = (WEBHOOK_TOLERANCE_SECONDS + 1) * 1000;
     for (const now of [new Date(AT.getTime() + drift), new Date(AT.getTime() - drift)]) {
-      expect(verifyWebhookSignature({ secret: SECRET, body: BODY, signature, timestamp, now })).toEqual(
-        { ok: false, reason: 'outside_tolerance' },
-      );
+      expect(
+        verifyWebhookSignature({ secret: SECRET, body: BODY, signature, timestamp, now }),
+      ).toEqual({ ok: false, reason: 'outside_tolerance' });
     }
   });
 

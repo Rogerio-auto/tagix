@@ -17,6 +17,8 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as Db from '@hm/db';
+import type { OrphanStatusStore } from '../inbound/status';
+import type { OutboundDeps } from './ports';
 
 const FORCED = 'F70-S20: rollback forçado pelo teste';
 const rollback = vi.hoisted(() => ({ armed: false }));
@@ -37,8 +39,6 @@ const { outboxEventsOf } = await import('../outbox/testing');
 const { finalizeOutbound } = await import('./finalize');
 const { DbOutboundPersistence } = await import('./db-ports');
 const { parseOutboundJob } = await import('./job');
-type OrphanStatusStore = import('../inbound/status').OrphanStatusStore;
-type OutboundDeps = import('./ports').OutboundDeps;
 
 const ready = Boolean(process.env['DATABASE_URL']);
 const WS = randomUUID();
@@ -99,8 +99,12 @@ async function sentEventsOf(messageId: string) {
 beforeAll(async () => {
   if (!ready) return;
   const db = getDb();
-  await db.insert(schema.workspaces).values({ id: WS, name: 'F70-S20 sent', slug: `f70s20-${WS.slice(0, 8)}` });
-  await db.insert(schema.contacts).values({ id: CONTACT, workspaceId: WS, phone: `+55119${WS.slice(0, 8)}` });
+  await db
+    .insert(schema.workspaces)
+    .values({ id: WS, name: 'F70-S20 sent', slug: `f70s20-${WS.slice(0, 8)}` });
+  await db
+    .insert(schema.contacts)
+    .values({ id: CONTACT, workspaceId: WS, phone: `+55119${WS.slice(0, 8)}` });
   await db.insert(schema.channels).values({
     id: CHANNEL,
     workspaceId: WS,
@@ -131,7 +135,13 @@ afterAll(async () => {
 describe.skipIf(!ready)('message.sent atômico com o status (F70-S20)', () => {
   it('commit: status sent, external_id e UM message.sent com o eventId canônico', async () => {
     const id = await pendingMessage();
-    await finalizeOutbound(textJob(id), { ok: true, externalId: `wamid.${id}` }, WS, deps, noOrphan);
+    await finalizeOutbound(
+      textJob(id),
+      { ok: true, externalId: `wamid.${id}` },
+      WS,
+      deps,
+      noOrphan,
+    );
 
     expect(await messageRow(id)).toEqual({ viewStatus: 'sent', externalId: `wamid.${id}` });
     const events = await sentEventsOf(id);
