@@ -22,10 +22,14 @@ import { and, eq } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
 import {
   assertTopology,
+  closeDomainEventEmitter,
   connectMq,
   consume,
+  conversionRegisteredFromRow,
+  emitDomainEvent,
   getMqHealth,
   QUEUES,
+  setDomainEventLogger,
   type Envelope,
   type MqHandle,
 } from '@hm/shared/mq';
@@ -105,7 +109,7 @@ import {
 
 /** Intervalo do rollup de métricas de agentes (F2-S13); idempotente. */
 const METRICS_ROLLUP_INTERVAL_MS = 10 * 60_000;
-import { startWebhookDispatcher } from '../webhooks/index';
+import { startWebhookDispatcher, startWebhookFanoutWorker } from '../webhooks/index';
 import {
   initSentry,
   startMetricsServer,
@@ -230,6 +234,10 @@ export async function startWorkers(
   // Coordenador de drain (F56-S17, INF-10): rastreia in-flight dos consumers que o
   // bootstrap controla diretamente, para o shutdown aguardar antes de fechar.
   const drain = createDrainController();
+
+  // Eventos de domínio (F70-S09): inbound/outbound publicam pelo emissor do
+  // processo; falha de publicação vai para o log estruturado.
+  setDomainEventLogger(logger);
 
   // Conexão de boot: assertTopology + transporte das deps (socket/media/flow).
   const boot = await connectMq();
@@ -365,13 +373,13 @@ export async function startWorkers(
       });
     },
     async registerConversion({ workspaceId, dealId }, config) {
-      await withWorkspace(workspaceId, async (tx) => {
+      const created = await withWorkspace(workspaceId, async (tx) => {
         const [deal] = await tx
           .select({ contactId: schema.deals.contactId })
           .from(schema.deals)
           .where(eq(schema.deals.id, dealId))
           .limit(1);
-        if (!deal) return;
+        if (!deal) return null;
         const [type] = await tx
           .select()
           .from(schema.conversionTypes)
@@ -385,8 +393,12 @@ export async function startWorkers(
         if (!type) throw new Error(`conversion_type inexistente: ${config.conversionTypeKey}`);
         const valueCents =
           config.valueFrom === 'fixed' ? (config.valueCents ?? null) : null;
-        try {
-          await tx.insert(schema.conversionEvents).values({
+        // Dedup same-day (uq_conv_events_dedup) resolvido no Postgres: sem linha =
+        // já registrada hoje. ON CONFLICT não envenena a transação RLS (o INSERT que
+        // estoura 23505 abortaria a tx inteira, mesmo com o erro capturado).
+        const [row] = await tx
+          .insert(schema.conversionEvents)
+          .values({
             workspaceId,
             conversionTypeId: type.id,
             contactId: deal.contactId,
@@ -394,14 +406,15 @@ export async function startWorkers(
             valueCents,
             currency: type.currency,
             source: 'deal_won',
-          });
-        } catch (err: unknown) {
-          // dedup same-day (uq_conv_events_dedup) -> idempotente.
-          if (!(typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505')) {
-            throw err;
-          }
-        }
+          })
+          .onConflictDoNothing()
+          .returning();
+        return row ?? null;
       });
+      // F70-S09: conversão NOVA vira evento de domínio, depois do commit.
+      if (created) {
+        await emitDomainEvent(conversionRegisteredFromRow(workspaceId, created));
+      }
     },
   };
   const automationExecutor = createActionExecutor(automationPorts);
@@ -421,6 +434,10 @@ export async function startWorkers(
   // Dispatcher de webhooks outbound (F9-S05): drena deliveries pendentes/retrying e
   // faz o POST assinado com HMAC + retry exponencial. Singleton via lock Redis.
   const webhookDispatcher = startWebhookDispatcher({ redis, logger });
+  // Fan-out de webhooks (F70-S09): consome os eventos de domínio (`domain.#` →
+  // hm.q.webhooks) e grava as deliveries que o dispatcher acima entrega. Ack só
+  // depois de gravar; retry/DLQ pela política de filas confiáveis.
+  const webhookFanout = await startWebhookFanoutWorker({ logger });
   // Processor de export LGPD (F10-S02): drena data_export_jobs pendentes, reúne PII
   // sob RLS e grava o artefato via @hm/storage. Singleton via lock Redis.
   const privacyExport = startPrivacyExportProcessor({ redis, logger });
@@ -477,6 +494,7 @@ export async function startWorkers(
       'dashboard-snapshot-scheduler',
       'dashboard-mv-scheduler',
       'webhook-dispatcher',
+      'webhook-fanout',
       'privacy-export-processor',
       'evaluation-scheduler',
       'billing-recurrence-scheduler',
@@ -523,6 +541,7 @@ export async function startWorkers(
       await billingRecurrence.stop();
       await evaluationScheduler.stop();
       await privacyExport.stop();
+      await webhookFanout.stop();
       await webhookDispatcher.stop();
       await dashboardSnapshot.stop();
       await dashboardMv.stop();
@@ -545,6 +564,7 @@ export async function startWorkers(
       await outbound.stop();
       await inbound.stop();
       await redis.quit();
+      await closeDomainEventEmitter();
       await boot.connection.close();
       // Observabilidade (F10-S01/F56-S17): desregistra probes/heartbeats, para o
       // /metrics + /healthz e dá flush no Sentry por último.

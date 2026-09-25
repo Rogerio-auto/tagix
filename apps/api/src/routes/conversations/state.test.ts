@@ -10,6 +10,7 @@
  * a falha de broker não derruba a operação — mockamos sendToQueue mas não
  * precisamos asserta-la.
  */
+import type * as MqModule from '@hm/shared/mq';
 import express from 'express';
 import request from 'supertest';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -25,10 +26,20 @@ const connectMqMock = vi.fn().mockResolvedValue({
   connection: {},
 });
 
-vi.mock('@hm/shared/mq', () => ({
-  connectMq: (...args: unknown[]) => connectMqMock(...args),
-  makeEnvelope: (_type: string, _ws: string, payload: unknown) => payload,
+// F70-S09: eventos de domínio — construtores reais, emissor capturado.
+const { emitDomainEventMock } = vi.hoisted(() => ({
+  emitDomainEventMock: vi.fn().mockResolvedValue(true),
 }));
+
+vi.mock('@hm/shared/mq', async () => {
+  const actual = await vi.importActual<typeof MqModule>('@hm/shared/mq');
+  return {
+    connectMq: (...args: unknown[]) => connectMqMock(...args),
+    makeEnvelope: (_type: string, _ws: string, payload: unknown) => payload,
+    domainEvents: actual.domainEvents,
+    emitDomainEvent: (...args: unknown[]) => emitDomainEventMock(...args),
+  };
+});
 
 // Conversas em memória para o mock de DB.
 const CONV_ID = '00000000-0000-0000-0000-000000000c01';
@@ -37,7 +48,7 @@ const MEMBER_AGENT = '00000000-0000-0000-0000-000000000002';
 const MEMBER_OTHER = '00000000-0000-0000-0000-000000000003';
 
 /** Estado mutável da conversa usada nos testes. */
-let convRow: { assignedTo: string | null } | null = { assignedTo: MEMBER_AGENT };
+let convRow: { assignedTo: string | null; status?: string } | null = { assignedTo: MEMBER_AGENT };
 
 vi.mock('@hm/db', () => ({
   schema: {
@@ -250,6 +261,45 @@ describe('POST /api/conversations/:id/status', () => {
       .send({ status: 'resolved' });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ conversationId: CONV_ID, status: 'resolved' });
+  });
+
+  it('F70-S09: resolver publica conversation.resolved (autor membro)', async () => {
+    convRow = { assignedTo: MEMBER_AGENT, status: 'open' };
+    const res = await request(makeApp())
+      .post(`/api/conversations/${CONV_ID}/status`)
+      .set('x-test-auth', '1')
+      .send({ status: 'resolved' });
+    expect(res.status).toBe(200);
+    expect(emitDomainEventMock).toHaveBeenCalledTimes(1);
+    expect(emitDomainEventMock.mock.calls[0]?.[0]).toMatchObject({
+      event: 'conversation.resolved',
+      workspaceId: 'ws-test',
+      data: { conversationId: CONV_ID, resolvedBy: 'member', memberId: MEMBER_OWNER, agentId: null },
+    });
+  });
+
+  it('F70-S09: resolver o que já estava resolvido não publica de novo', async () => {
+    convRow = { assignedTo: MEMBER_AGENT, status: 'resolved' };
+    const res = await request(makeApp())
+      .post(`/api/conversations/${CONV_ID}/status`)
+      .set('x-test-auth', '1')
+      .send({ status: 'resolved' });
+    expect(res.status).toBe(200);
+    expect(emitDomainEventMock).not.toHaveBeenCalled();
+  });
+
+  it('F70-S09: reabrir conversa resolvida publica conversation.opened (reopened)', async () => {
+    convRow = { assignedTo: MEMBER_AGENT, status: 'resolved' };
+    const res = await request(makeApp())
+      .post(`/api/conversations/${CONV_ID}/status`)
+      .set('x-test-auth', '1')
+      .send({ status: 'open' });
+    expect(res.status).toBe(200);
+    expect(emitDomainEventMock).toHaveBeenCalledTimes(1);
+    expect(emitDomainEventMock.mock.calls[0]?.[0]).toMatchObject({
+      event: 'conversation.opened',
+      data: { conversationId: CONV_ID, trigger: 'reopened' },
+    });
   });
 
   it('snooze futuro válido → 200 com snoozedUntil', async () => {

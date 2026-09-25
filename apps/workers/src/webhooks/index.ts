@@ -1,9 +1,10 @@
 /**
  * Worker de webhooks outbound (F9-S05) — barrel + scheduler.
  *
- * Duas superfícies:
- *  - `fanoutEvent(evt)`: chamado pelas seams de evento de domínio (no bootstrap, ao
- *    consumir `hm.events`) → cria deliveries pendentes para os assinantes.
+ * Três superfícies:
+ *  - `startWebhookFanoutWorker`: consumer de `hm.q.webhooks` (eventos de domínio
+ *    `domain.#` em `hm.events`, F70-S09) → `fanoutEvent`.
+ *  - `fanoutEvent(evt)`: cria deliveries pendentes para os assinantes.
  *  - `startWebhookDispatcher({ redis, logger })`: cron tick (singleton via lock Redis)
  *    que drena `outbound_webhook_deliveries` vencidas e despacha com HMAC + retry.
  *
@@ -80,6 +81,13 @@ export function startWebhookDispatcher(deps: {
 }
 
 export { fanoutEvent, type WebhookEvent, type FanoutResult } from './fanout';
+export {
+  handleDomainEventEnvelope,
+  startWebhookFanoutWorker,
+  WEBHOOKS_QUEUE,
+  type WebhookFanoutDeps,
+  type WebhookFanoutWorkerHandle,
+} from './consumer';
 export {
   dispatchPending,
   signWebhook,

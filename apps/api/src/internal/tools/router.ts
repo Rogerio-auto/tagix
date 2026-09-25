@@ -12,7 +12,9 @@
  *   4. Roda o handler DENTRO de `withWorkspace(workspace_id, …)` (RLS escopada),
  *      cronometra a latência, e grava uma linha em `tool_logs` (best-effort:
  *      uma falha de auditoria não derruba a ação).
- *   5. Responde JSON tipado `{ ok, content?, error?, payload? }`.
+ *   5. Depois do commit, publica os eventos de domínio que o handler declarou
+ *      (`result.events`, F70-S09) — webhooks de saída.
+ *   6. Responde JSON tipado `{ ok, content?, error?, payload? }`.
  *
  * Boundary (F2-S07): este router é exportado por `createInternalToolsRouter` e
  * o orchestrator o monta em `app.ts` (vide nota no relatório). Ele NÃO entra
@@ -22,6 +24,7 @@ import { Router, type Request, type Response } from 'express';
 import { eq } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
+import { emitDomainEvents } from '@hm/shared/mq';
 import { createInternalTokenGuard } from './auth';
 import { toolCallEnvelopeSchema } from './schema';
 import {
@@ -154,6 +157,12 @@ export function createInternalToolsRouter(options: InternalToolsRouterOptions = 
       );
       res.status(500).json({ ok: false, error: `Failed to execute '${toolKey}'.` });
       return;
+    }
+
+    // F70-S09: eventos de domínio da ação, só agora — a transação já commitou.
+    // O emissor nunca lança; a resposta ao runtime não espera o broker falhar.
+    if (result.ok && result.events && result.events.length > 0) {
+      await emitDomainEvents(result.events);
     }
 
     res.status(result.ok ? 200 : 422).json({
