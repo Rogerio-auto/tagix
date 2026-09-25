@@ -2,7 +2,7 @@
 id: F70-S22
 title: deploy.sh migra antes de subir o código novo
 phase: F70
-status: review
+status: done
 priority: critical
 estimated_size: S
 depends_on: [F70-S20]
