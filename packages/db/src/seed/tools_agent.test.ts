@@ -4,7 +4,8 @@
  * 1) Contrato (puro): toda tool semeada tem executor — classe `Tool` no runtime Python
  *    com a mesma `key`/categoria e, se `workflow`, handler registrado no endpoint interno
  *    da API. Nenhuma tool sem handler entra no catálogo.
- * 2) Divergência TS ↔ migration: a 0084 é exatamente o SQL gerado de `AGENT_TOOLS`.
+ * 2) Divergência TS ↔ migration: cada migration de catálogo (0084, 0087) é exatamente o
+ *    SQL gerado das suas keys, e juntas cobrem todo `AGENT_TOOLS`.
  * 3) Integração (Postgres dev): o seed é idempotente (1 linha global por key).
  */
 import { readFileSync, readdirSync } from 'node:fs';
@@ -14,7 +15,12 @@ import { and, inArray, isNull } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb } from '../client';
 import { tools } from '../schema';
-import { AGENT_TOOLS, renderAgentToolsInsertSql, seedAgentTools } from './tools_agent';
+import {
+  AGENT_TOOLS,
+  AGENT_TOOL_MIGRATIONS,
+  renderAgentToolsInsertSql,
+  seedAgentTools,
+} from './tools_agent';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../../../..');
@@ -80,13 +86,29 @@ describe('catálogo de tools de agente — contrato', () => {
     }
   });
 
-  it('a migration 0084 é exatamente o SQL gerado do catálogo', () => {
-    const sql = readFileSync(
-      path.resolve(here, '../../drizzle/0084_f70_agent_tools_catalog.sql'),
-      'utf8',
-    );
-    expect(sql).toContain(renderAgentToolsInsertSql());
-    expect(sql.match(/INSERT INTO "tools"/g)).toHaveLength(AGENT_TOOLS.length);
+  it('cada migration de catálogo é exatamente o SQL gerado das suas keys', () => {
+    for (const m of AGENT_TOOL_MIGRATIONS) {
+      const sql = readFileSync(path.resolve(here, '../../drizzle', m.file), 'utf8');
+      expect(sql, m.file).toContain(renderAgentToolsInsertSql(m.keys));
+      expect(sql.match(/INSERT INTO "tools"/g), m.file).toHaveLength(m.keys.length);
+    }
+  });
+
+  it('as migrations cobrem o catálogo inteiro, sem key repetida', () => {
+    const keys = AGENT_TOOL_MIGRATIONS.flatMap((m) => m.keys);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect([...keys].sort()).toEqual(AGENT_TOOLS.map((t) => t.key).sort());
+  });
+
+  it('update_contact não expõe telefone, e-mail, dono nem consentimento (F70-S15)', () => {
+    const tool = AGENT_TOOLS.find((t) => t.key === 'update_contact');
+    const fnSpec = tool?.schema['function'] as { parameters: { properties: object } };
+    expect(Object.keys(fnSpec.parameters.properties).sort()).toEqual([
+      'custom_fields',
+      'display_name',
+      'language',
+      'timezone',
+    ]);
   });
 });
 
@@ -122,6 +144,6 @@ describe('catálogo de tools de agente — seed no banco (dev)', () => {
         isActive: true,
       });
     }
-    // 2 rodadas x 11 tools em série contra o Postgres dev compartilhado: folga sob carga.
+    // 2 rodadas x 13 tools em série contra o Postgres dev compartilhado: folga sob carga.
   }, 30_000);
 });
