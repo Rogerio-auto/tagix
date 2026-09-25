@@ -10,8 +10,8 @@
  *   3. Valida o envelope `{ workspace_id, conversation_id, agent_id,
  *      execution_id, args }` via Zod. Inválido → 400.
  *   4. Roda o handler DENTRO de `withWorkspace(workspace_id, …)` (RLS escopada),
- *      cronometra a latência, e grava uma linha em `tool_logs` (best-effort:
- *      uma falha de auditoria não derruba a ação).
+ *      cronometra a latência e, depois do commit, grava uma linha em `tool_logs`
+ *      numa transação própria (best-effort: uma falha de auditoria não derruba a ação).
  *   5. Depois do commit, publica os eventos de domínio que o handler declarou
  *      (`result.events`, F70-S09) — webhooks de saída.
  *   6. Responde JSON tipado `{ ok, content?, error?, payload? }`.
@@ -135,16 +135,7 @@ export function createInternalToolsRouter(options: InternalToolsRouterOptions = 
     const startedAt = Date.now();
     let result: ToolHandlerResult;
     try {
-      result = await withWorkspace(envelope.workspaceId, async (tx) => {
-        const r = await handler(envelope, tx);
-        await writeToolLog(tx, {
-          toolKey,
-          envelope,
-          result: r,
-          durationMs: Date.now() - startedAt,
-        });
-        return r;
-      });
+      result = await withWorkspace(envelope.workspaceId, (tx) => handler(envelope, tx));
     } catch (err) {
       // Falha do handler ou da transação: nunca vaza stack/PII ao runtime.
       const ref = `hm_tool_${toolKey}`;
@@ -157,6 +148,29 @@ export function createInternalToolsRouter(options: InternalToolsRouterOptions = 
       );
       res.status(500).json({ ok: false, error: `Failed to execute '${toolKey}'.` });
       return;
+    }
+
+    // Auditoria best-effort, em transação PRÓPRIA depois do commit da ação. Na mesma
+    // transação, um erro no INSERT de `tool_logs` (ex.: FK 23503 com agent_id ou
+    // conversation_id inexistentes) abortava tudo: a ação era desfeita e virava 500.
+    const durationMs = Date.now() - startedAt;
+    try {
+      await withWorkspace(envelope.workspaceId, (tx) =>
+        writeToolLog(tx, { toolKey, envelope, result, durationMs }),
+      );
+    } catch (logErr) {
+      // Só código/constraint do Postgres: a `message` do Drizzle embute os params da
+      // query (args do modelo, possivelmente PII).
+      const cause: unknown = logErr instanceof Error ? logErr.cause : undefined;
+      const pg = typeof cause === 'object' && cause !== null ? cause : {};
+      console.error(
+        JSON.stringify({
+          level: 'warn',
+          ref: `hm_tool_log_${toolKey}`,
+          code: 'code' in pg ? String(pg.code) : undefined,
+          constraint: 'constraint_name' in pg ? String(pg.constraint_name) : undefined,
+        }),
+      );
     }
 
     // F70-S09: eventos de domínio da ação, só agora — a transação já commitou.
