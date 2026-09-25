@@ -820,3 +820,25 @@ porque ele guarda offset de leitura — bug muito pior de diagnosticar que este.
 
 **Para quem for mexer em `deploy.sh`:** valide o efeito no deploy N+1, nao no N. Ou, agora, confie
 no re-exec — mas confirme na saida que ele disparou.
+
+## Incidente 2026-09-22 — `worktree-clean` esvaziou packages/* do checkout principal (registrado em 2026-09-24)
+
+**O que aconteceu:** em 22/09, 16:58, depois do merge da F58-S05, `python scripts/slot.py worktree-clean`
+removeu 7 worktrees. O `slot.py validate` cria junctions nos worktrees apontando para os
+`node_modules` do main, e o `node_modules` do main tem junctions para `packages/*` (workspace do pnpm).
+O `git worktree remove --force` do Git para Windows (2.49) **atravessa junctions**: apagou o conteúdo
+de `packages/*` (484 arquivos rastreados) e de `apps/*/node_modules` do checkout principal. As pastas
+ficaram vazias, todas com mtime 16:58. Ninguém percebeu por dois dias.
+
+**Não houve dano:** o commit e o deploy de 16:58 saíram antes da limpeza; produção sai do git; HEAD
+local = origin/main. Restaurado em 24/09 com `git restore packages` + `pnpm install --force`
+(o `node_modules/.pnpm` também tinha sido esvaziado; `--frozen-lockfile` sozinho falhava com ENOENT).
+
+**Corrigido:** `cmd_worktree_clean` agora desfaz os links de node_modules do worktree
+(`_unlink_node_modules_links`, remove só o link) antes de `git worktree remove`.
+`scripts/tests/test_worktree_clean.py` monta o mesmo desenho num repo descartável; o teste de controle
+prova que o Git ainda atravessa a junction sem a correção.
+
+**Regra:** nunca rodar `git worktree remove` direto num worktree criado pelo `slot.py`; usar
+`python scripts/slot.py worktree-clean`. O mesmo `slot.py` existe no Elemento e no projeto28, com o
+mesmo defeito.
