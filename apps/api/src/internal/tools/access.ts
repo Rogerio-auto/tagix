@@ -7,14 +7,16 @@
  * Antes de qualquer handler, o router pergunta aqui, sob a RLS do workspace do
  * envelope:
  *
- *  1. **A tool existe para este workspace?** `tools` não tem RLS (as globais são de
- *     todos), então o filtro é explícito: `workspace_id IS NULL OR = ws`, ativa, e a
- *     custom do workspace vence a global de mesma key — a MESMA precedência que o
- *     worker usa para montar o request (`apps/workers/src/agents/tools.ts`). Uma tool
- *     custom de OUTRO workspace com a mesma key nunca é vista.
- *  2. **Está habilitada para o agente?** `agent_tools.is_enabled` para essa linha
- *     vencedora. `agent_tools` isola por `agents` (RLS): agente de outro workspace
+ *  1. **A tool está habilitada para o agente?** `agent_tools.is_enabled` ⋈ `tools`
+ *     ativa com a key. `tools` não tem RLS (as globais são de todos), então o filtro
+ *     é explícito: `workspace_id IS NULL OR = ws`, e a custom do workspace vence a
+ *     global de mesma key — a MESMA resolução que o worker usa para montar o request
+ *     (`apps/workers/src/agents/tools.ts#loadAgentToolRows`). Uma tool custom de OUTRO
+ *     workspace com a mesma key nunca é vista, nem se um `agent_tools` torto apontar
+ *     para ela. `agent_tools` isola por `agents` (RLS): agente de outro workspace
  *     não enxerga vínculo nenhum.
+ *  2. Recusada, a linha de `tools` que vale para o workspace (se existir) vai para o
+ *     log da recusa.
  *  3. **A execução é deste agente?** `envelope.execution_id` é o `agent_executions.id`
  *     criado pelo worker antes de chamar o runtime (F70-S15). A linha tem de existir
  *     sob a RLS, estar `running`, ser do mesmo agente e da mesma conversa do envelope.
@@ -84,19 +86,47 @@ export async function resolveWorkspaceTool(
   return row?.id ?? null;
 }
 
+/**
+ * Linha de `tools` HABILITADA para o agente com esta key — a mesma que o worker
+ * mandou no request: `agent_tools` habilitada ⋈ `tools` ativa, global ou do
+ * workspace, custom vencendo global (`loadAgentToolRows`). `null` se não houver.
+ */
+async function resolveEnabledTool(
+  tx: DbTx,
+  envelope: ToolCallEnvelope,
+  toolKey: string,
+): Promise<string | null> {
+  const { agentTools, tools } = schema;
+  const [row] = await tx
+    .select({ id: tools.id })
+    .from(agentTools)
+    .innerJoin(tools, eq(tools.id, agentTools.toolId))
+    .where(
+      and(
+        eq(agentTools.agentId, envelope.agentId),
+        eq(agentTools.isEnabled, true),
+        eq(tools.key, toolKey),
+        eq(tools.isActive, true),
+        or(isNull(tools.workspaceId), eq(tools.workspaceId, envelope.workspaceId)),
+      ),
+    )
+    .orderBy(asc(tools.workspaceId), asc(tools.createdAt))
+    .limit(1);
+  return row?.id ?? null;
+}
+
 /** Authorizer default, contra o banco (vide cabeçalho). */
 export const authorizeToolCall: ToolCallAuthorizer = async (tx, toolKey, envelope) => {
-  const toolId = await resolveWorkspaceTool(tx, envelope.workspaceId, toolKey);
-  if (toolId === null) return { allowed: false, reason: 'tool_not_found', toolId: null };
+  const toolId = await resolveEnabledTool(tx, envelope, toolKey);
+  if (toolId === null) {
+    // Para o log da recusa: a linha que vale para o workspace, se existir.
+    const visible = await resolveWorkspaceTool(tx, envelope.workspaceId, toolKey);
+    return visible === null
+      ? { allowed: false, reason: 'tool_not_found', toolId: null }
+      : { allowed: false, reason: 'tool_not_enabled', toolId: visible };
+  }
 
-  const { agentTools, agentExecutions } = schema;
-  const [link] = await tx
-    .select({ enabled: agentTools.isEnabled })
-    .from(agentTools)
-    .where(and(eq(agentTools.agentId, envelope.agentId), eq(agentTools.toolId, toolId)))
-    .limit(1);
-  if (link?.enabled !== true) return { allowed: false, reason: 'tool_not_enabled', toolId };
-
+  const { agentExecutions } = schema;
   const [execution] = await tx
     .select({
       agentId: agentExecutions.agentId,
