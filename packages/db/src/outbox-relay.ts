@@ -181,10 +181,24 @@ function pgTextArray(values: readonly string[]): string {
   return `{${items.join(',')}}`;
 }
 
+/** Retenção de `sent` (dias). */
+export const DEFAULT_OUTBOX_SENT_RETENTION_DAYS = 7;
+/**
+ * Retenção de `dead` (dias, F70-S24; era 30). A linha morta carrega o envelope inteiro,
+ * com dado pessoal, e a outbox não entra na redação/exclusão de contato (LGPD). Sete dias
+ * cobrem uma semana inteira de triagem (fim de semana incluso), com alerta `error` a cada
+ * 10 min enquanto houver morto; guardar mais só prolonga a cópia do dado.
+ */
+export const DEFAULT_OUTBOX_DEAD_RETENTION_DAYS = 7;
+
 export interface PurgeOutboxOptions {
-  /** Enviados mais velhos que isto somem (default 7 dias). */
+  /** Enviados mais velhos que isto somem (default {@link DEFAULT_OUTBOX_SENT_RETENTION_DAYS}). */
   readonly sentRetentionDays?: number;
-  /** Mortos mais velhos que isto somem (default 30 dias). */
+  /**
+   * Mortos mais velhos que isto somem (default {@link DEFAULT_OUTBOX_DEAD_RETENTION_DAYS}).
+   * O envelope guarda dado pessoal (texto de mensagem, telefone): a janela é a mesma dos
+   * enviados, e o relay loga `error` a cada limpeza enquanto houver morto.
+   */
   readonly deadRetentionDays?: number;
   /** Linhas por DELETE (default 5000). */
   readonly batchSize?: number;
@@ -203,8 +217,14 @@ export interface PurgeOutboxResult {
  * mesmo tempo sem se esperar.
  */
 export async function purgeOutbox(opts: PurgeOutboxOptions = {}): Promise<PurgeOutboxResult> {
-  const sentDays = Math.max(1, Math.trunc(opts.sentRetentionDays ?? 7));
-  const deadDays = Math.max(1, Math.trunc(opts.deadRetentionDays ?? 30));
+  const sentDays = Math.max(
+    1,
+    Math.trunc(opts.sentRetentionDays ?? DEFAULT_OUTBOX_SENT_RETENTION_DAYS),
+  );
+  const deadDays = Math.max(
+    1,
+    Math.trunc(opts.deadRetentionDays ?? DEFAULT_OUTBOX_DEAD_RETENTION_DAYS),
+  );
   const batch = Math.max(1, Math.trunc(opts.batchSize ?? 5_000));
   const maxBatches = Math.max(1, Math.trunc(opts.maxBatches ?? 20));
   const db = getDb();

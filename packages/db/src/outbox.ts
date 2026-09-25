@@ -8,10 +8,20 @@
  *    seja do workspace da transação;
  *  - `getDb().transaction` (papel de conexão dos workers).
  *
- * Idempotente pelo `event_id`: `ON CONFLICT DO NOTHING` — gravar o mesmo evento de
- * novo (retentativa do produtor, dois caminhos disputando a mesma criação) não
- * duplica e, principalmente, não aborta a transação de negócio. Sem RETURNING: o
- * hm_app não lê a outbox.
+ * Idempotente por `(workspace_id, event_id)`: `ON CONFLICT DO NOTHING` — gravar o
+ * mesmo evento de novo (retentativa do produtor, dois caminhos disputando a mesma
+ * criação) não duplica e, principalmente, não aborta a transação de negócio. O mesmo
+ * `event_id` em outro workspace é outra linha (F70-S24): um tenant não silencia o
+ * evento de outro.
+ *
+ * O ON CONFLICT vai SEM alvo, de propósito. Com alvo, o Postgres exige SELECT nas
+ * colunas árbitro e aplica a policy de SELECT à linha nova; sem alvo, basta INSERT —
+ * e o hm_app não lê NADA da outbox (0091). É equivalente porque o único índice único
+ * além da PK (identity, nunca colide) é `uq_outbox_workspace_event`; o teste de
+ * constraints dos workers trava esse conjunto. Sem RETURNING pelo mesmo motivo.
+ *
+ * Os CHECKs da 0091 recusam (23514) a mensagem cujo envelope é de outro workspace ou
+ * cujo destino não é uma fila/routing key aceita — a transação do produtor cai.
  *
  * As mensagens vêm prontas dos construtores de `@hm/shared/mq`
  * (`domainEventsOutbox`, `queueJobOutbox`), que já validaram o envelope.
@@ -25,7 +35,7 @@ export const OUTBOX_NOTIFY_CHANNEL = 'hm_outbox';
 
 /**
  * Grava as mensagens na outbox, na transação `tx`. Devolve quantas linhas entraram
- * (as repetidas pelo `event_id` não contam).
+ * (as repetidas pelo `(workspace_id, event_id)` não contam).
  */
 export async function enqueueOutbox(
   tx: DbTx,
@@ -45,7 +55,8 @@ export async function enqueueOutbox(
         envelope: { ...m.envelope },
       })),
     )
-    .onConflictDoNothing({ target: outbox.eventId });
+    // Sem alvo: ver o cabeçalho (privilégio mínimo do hm_app).
+    .onConflictDoNothing();
   return result.count;
 }
 
