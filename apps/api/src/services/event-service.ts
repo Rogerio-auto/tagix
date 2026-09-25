@@ -10,7 +10,15 @@
  * commit, e o seam dispara DEPOIS (best-effort, não derruba a operação).
  */
 import { and, eq } from 'drizzle-orm';
-import { CalendarNotFoundError, calendarRepo, schema, type DbTx } from '@hm/db';
+import {
+  assertRefsInWorkspace,
+  CalendarNotFoundError,
+  calendarRepo,
+  invalidReferenceBody,
+  schema,
+  type DbTx,
+  type TenantRef,
+} from '@hm/db';
 
 const { events, eventParticipants } = schema;
 
@@ -157,11 +165,23 @@ export interface CreateEventInput {
 export class EventServiceError extends Error {
   readonly code: string;
   readonly status: number;
-  constructor(code: string, message: string, status = 400) {
+  /** Campos recusados (só em `invalid_reference`, F70-S11). */
+  readonly fields: readonly string[] | undefined;
+  constructor(code: string, message: string, status = 400, fields?: readonly string[]) {
     super(message);
     this.name = 'EventServiceError';
     this.code = code;
     this.status = status;
+    this.fields = fields;
+  }
+
+  /** Corpo HTTP do erro (`fields` só quando há referência recusada). */
+  toBody(): { error: string; message: string; fields?: readonly string[] } {
+    return {
+      error: this.code,
+      message: this.message,
+      ...(this.fields ? { fields: this.fields } : {}),
+    };
   }
 }
 
@@ -187,6 +207,20 @@ export async function createEvent(
 ): Promise<EventRow> {
   if (input.endAt <= input.startAt) {
     throw new EventServiceError('invalid_range', 'endAt deve ser depois de startAt.', 422);
+  }
+
+  // F70-S11: contato/deal/conversa/membros precisam ser DESTE workspace (a FK ignora
+  // RLS). Antes de qualquer escrita, inclusive do provisionamento do calendário pessoal.
+  const refs: TenantRef[] = [
+    { kind: 'contact', id: input.contactId, field: 'contactId' },
+    { kind: 'deal', id: input.dealId, field: 'dealId' },
+    { kind: 'conversation', id: input.conversationId, field: 'conversationId' },
+    ...(input.memberIds ?? []).map((id): TenantRef => ({ kind: 'member', id, field: 'memberIds' })),
+  ];
+  const missing = await assertRefsInWorkspace(tx, refs);
+  if (missing.length > 0) {
+    const body = invalidReferenceBody(missing.map((m) => m.field));
+    throw new EventServiceError(body.error, body.message, 422, body.fields);
   }
 
   // Resolve o calendar de destino. Ausente + ator member → pessoal do criador

@@ -15,7 +15,7 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { and, asc, desc, eq, gte, ilike, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
-import { schema, withWorkspace, type DbTx } from '@hm/db';
+import { assertRefsInWorkspace, schema, TenantRefError, withWorkspace, type DbTx } from '@hm/db';
 import { triggerFlow } from '@hm/flow-engine';
 import { moveDealToStage, TransitionError } from '../../services/deal-move';
 import { createEvent, EventServiceError } from '../../services/event-service';
@@ -237,17 +237,30 @@ export function createV1Router(): Router {
       const { flowId, conversationId, contactId, triggerData } = parsed.data;
       const workspaceId = req.apiAuth!.workspaceId;
 
-      // Confirma que o flow existe e está no workspace da chave (RLS) antes de disparar.
-      const exists = await withWorkspace(workspaceId, async (tx) => {
+      // Confirma que o flow existe e está no workspace da chave (RLS) antes de disparar,
+      // e (F70-S11) que conversa/contato do payload também são DESTE workspace: o engine
+      // grava a execução com esses ids e a FK ignora RLS.
+      const check = await withWorkspace(workspaceId, async (tx) => {
         const [flow] = await tx
           .select({ id: schema.flows.id })
           .from(schema.flows)
           .where(eq(schema.flows.id, flowId))
           .limit(1);
-        return Boolean(flow);
+        if (!flow) return { kind: 'no_flow' as const };
+        const missing = await assertRefsInWorkspace(tx, [
+          { kind: 'conversation', id: conversationId, field: 'conversationId' },
+          { kind: 'contact', id: contactId, field: 'contactId' },
+        ]);
+        return missing.length > 0
+          ? { kind: 'bad_refs' as const, error: new TenantRefError(missing) }
+          : { kind: 'ok' as const };
       });
-      if (!exists) {
+      if (check.kind === 'no_flow') {
         res.status(404).json({ error: 'not_found', message: 'Flow não encontrado.' });
+        return;
+      }
+      if (check.kind === 'bad_refs') {
+        res.status(422).json(check.error.body);
         return;
       }
 
@@ -528,45 +541,55 @@ export function createV1Router(): Router {
       // Como o repo de conversões (register.ts) está fora do escopo deste slot,
       // pré-checamos a existência de um evento same-day (não cancelado) e curto-
       // circuitamos em `deduped` — sem o INSERT que aborta a transação. Ver COMMS.
-      const result = await withWorkspace(workspaceId, async (tx) => {
-        const [type] = await tx
-          .select({ id: schema.conversionTypes.id })
-          .from(schema.conversionTypes)
-          .where(
-            and(
-              eq(schema.conversionTypes.workspaceId, workspaceId),
-              eq(schema.conversionTypes.key, body.conversionTypeKey),
-            ),
-          )
-          .limit(1);
-        if (!type) return { kind: 'type_not_found' as const };
+      let result: Awaited<ReturnType<typeof registerConversion>>;
+      try {
+        result = await withWorkspace(workspaceId, async (tx) => {
+          const [type] = await tx
+            .select({ id: schema.conversionTypes.id })
+            .from(schema.conversionTypes)
+            .where(
+              and(
+                eq(schema.conversionTypes.workspaceId, workspaceId),
+                eq(schema.conversionTypes.key, body.conversionTypeKey),
+              ),
+            )
+            .limit(1);
+          if (!type) return { kind: 'type_not_found' as const };
 
-        const [dup] = await tx
-          .select({ id: schema.conversionEvents.id })
-          .from(schema.conversionEvents)
-          .where(
-            and(
-              eq(schema.conversionEvents.conversionTypeId, type.id),
-              eq(schema.conversionEvents.contactId, body.contactId),
-              isNull(schema.conversionEvents.cancelledAt),
-              sql`(${schema.conversionEvents.occurredAt} at time zone 'UTC')::date = (now() at time zone 'UTC')::date`,
-            ),
-          )
-          .limit(1);
-        if (dup) return { kind: 'deduped' as const };
+          const [dup] = await tx
+            .select({ id: schema.conversionEvents.id })
+            .from(schema.conversionEvents)
+            .where(
+              and(
+                eq(schema.conversionEvents.conversionTypeId, type.id),
+                eq(schema.conversionEvents.contactId, body.contactId),
+                isNull(schema.conversionEvents.cancelledAt),
+                sql`(${schema.conversionEvents.occurredAt} at time zone 'UTC')::date = (now() at time zone 'UTC')::date`,
+              ),
+            )
+            .limit(1);
+          if (dup) return { kind: 'deduped' as const };
 
-        return registerConversion(tx, {
-          workspaceId,
-          conversionTypeId: type.id,
-          contactId: body.contactId,
-          conversationId: body.conversationId ?? null,
-          dealId: body.dealId ?? null,
-          valueCents: body.valueCents ?? null,
-          currency: body.currency,
-          note: body.note ?? null,
-          source: 'api',
+          return registerConversion(tx, {
+            workspaceId,
+            conversionTypeId: type.id,
+            contactId: body.contactId,
+            conversationId: body.conversationId ?? null,
+            dealId: body.dealId ?? null,
+            valueCents: body.valueCents ?? null,
+            currency: body.currency,
+            note: body.note ?? null,
+            source: 'api',
+          });
         });
-      });
+      } catch (err: unknown) {
+        // F70-S11: contato/conversa/deal de outro workspace (ou inexistente) → 422.
+        if (err instanceof TenantRefError) {
+          res.status(422).json(err.body);
+          return;
+        }
+        throw err;
+      }
 
       if (result.kind === 'type_not_found') {
         res.status(404).json({ error: 'not_found', message: 'Tipo de conversão não encontrado.' });
@@ -684,7 +707,7 @@ export function createV1Router(): Router {
         res.status(201).json({ event });
       } catch (err: unknown) {
         if (err instanceof EventServiceError) {
-          res.status(err.status).json({ error: err.code, message: err.message });
+          res.status(err.status).json(err.toBody());
           return;
         }
         throw err;

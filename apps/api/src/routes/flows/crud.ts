@@ -20,7 +20,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { asc, desc, eq, max } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { assertRefsInWorkspace, schema, TenantRefError } from '@hm/db';
 import { validateFlow } from '@hm/flow-engine';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { flowEngine } from './engine';
@@ -308,17 +308,28 @@ export function createFlowsCrudRouter(): Router {
     const id = param(req, 'id');
     const workspaceId = req.auth!.workspace.id;
 
-    // So dispara flow ATIVO (precisa de version publicada).
-    const flow = await req.scoped!(async (tx) => {
+    // So dispara flow ATIVO (precisa de version publicada). F70-S11: conversa e contato
+    // do payload tambem precisam ser DESTE workspace (a execucao grava os ids e a FK
+    // ignora RLS); inexistente e alheio respondem o mesmo 422.
+    const lookup = await req.scoped!(async (tx) => {
       const [row] = await tx.select().from(flows).where(eq(flows.id, id)).limit(1);
-      return row ?? null;
+      if (!row) return null;
+      const missing = await assertRefsInWorkspace(tx, [
+        { kind: 'conversation', id: parsed.data.conversationId, field: 'conversationId' },
+        { kind: 'contact', id: parsed.data.contactId, field: 'contactId' },
+      ]);
+      return { flow: row, missing };
     });
-    if (!flow) {
+    if (!lookup) {
       res.sendStatus(404);
       return;
     }
-    if (flow.status !== 'active') {
+    if (lookup.flow.status !== 'active') {
       res.status(409).json({ error: 'flow_not_active' });
+      return;
+    }
+    if (lookup.missing.length > 0) {
+      res.status(422).json(new TenantRefError(lookup.missing).body);
       return;
     }
 
