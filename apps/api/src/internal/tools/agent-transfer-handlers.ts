@@ -54,7 +54,8 @@ const INBOUND_FLOW_TYPE = 'flow.run.requested' as const;
  */
 export const transferToAgentArgs = z.object({
   targetAgentId: z.string().uuid(),
-  reason: z.string().min(1).max(500).optional(),
+  // `null` = não informado: o catálogo declara `["string","null"]` (F70-S23, L-g).
+  reason: z.string().min(1).max(500).nullish(),
 });
 
 export type TransferToAgentArgs = z.infer<typeof transferToAgentArgs>;

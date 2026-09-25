@@ -491,3 +491,35 @@ def test_load_context_hides_custom_fields_unless_query_contact_allows() -> None:
     assert safe["custom_fields"] == {"interesse": "anual"}
     assert safe["display_name"] == "Maria"
     assert _prompt_safe_contact(None, with_keys) is None
+
+
+# ---------------------------------------------------------------------------
+# F70-S23: `null` = não informado (L-g) e teto do nome (L-f)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_update_contact_null_fields_are_not_sent() -> None:
+    captured: dict[str, Any] = {}
+    tool = UpdateContactTool(client=_client(_capture(captured)))
+    result = await tool.execute(
+        {
+            "display_name": None,
+            "timezone": None,
+            "language": "pt-BR",
+            "custom_fields": {"interesse": None},
+        },
+        _tool_ctx(),
+    )
+    assert result.ok is True
+    # `null` no topo some; dentro de `custom_fields` é valor (limpa a chave).
+    assert captured["body"]["args"] == {"language": "pt-BR", "custom_fields": {"interesse": None}}
+
+
+@pytest.mark.asyncio
+async def test_update_contact_display_name_over_80_is_rejected_without_callback() -> None:
+    captured: dict[str, Any] = {}
+    tool = UpdateContactTool(client=_client(_capture(captured)))
+    result = await tool.execute({"display_name": "A" * 81}, _tool_ctx())
+    assert result.ok is False
+    assert captured == {}

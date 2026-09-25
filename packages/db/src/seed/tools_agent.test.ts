@@ -4,8 +4,8 @@
  * 1) Contrato (puro): toda tool semeada tem executor — classe `Tool` no runtime Python
  *    com a mesma `key`/categoria e, se `workflow`, handler registrado no endpoint interno
  *    da API. Nenhuma tool sem handler entra no catálogo.
- * 2) Divergência TS ↔ migration: cada migration de catálogo (0084, 0087) é exatamente o
- *    SQL gerado das suas keys, e juntas cobrem todo `AGENT_TOOLS`.
+ * 2) Divergência TS ↔ migration: cada migration de catálogo (0084, 0087, 0089) é
+ *    exatamente o SQL gerado das suas keys, e juntas cobrem todo `AGENT_TOOLS`.
  * 3) Integração (Postgres dev): o seed é idempotente (1 linha global por key).
  */
 import { readFileSync, readdirSync } from 'node:fs';
@@ -93,7 +93,7 @@ describe('catálogo de tools de agente — contrato', () => {
       const rewrittenLater = new Set(
         AGENT_TOOL_MIGRATIONS.slice(i + 1).flatMap((later) => later.updates ?? []),
       );
-      expect(sql.match(/INSERT INTO "tools"/g), m.file).toHaveLength(m.keys.length);
+      expect(sql.match(/INSERT INTO "tools"/g) ?? [], m.file).toHaveLength(m.keys.length);
       for (const key of m.keys) {
         // Conteúdo reescrito por migration posterior é histórico: só a presença conta.
         if (rewrittenLater.has(key)) {
@@ -121,6 +121,22 @@ describe('catálogo de tools de agente — contrato', () => {
     const keys = AGENT_TOOL_MIGRATIONS.flatMap((m) => m.keys);
     expect(new Set(keys).size).toBe(keys.length);
     expect([...keys].sort()).toEqual(AGENT_TOOLS.map((t) => t.key).sort());
+  });
+
+  it('tools de contato: nenhuma allowlist de escrita no catálogo global (F70-S23)', () => {
+    // Ausência = nada liberado. Declarar aqui viraria teto (ou concessão) para TODO
+    // workspace; a liberação é do operador, por agente, em `agent_tools.overrides`.
+    for (const key of ['add_contact_tag', 'update_contact']) {
+      const tool = AGENT_TOOLS.find((t) => t.key === key);
+      expect(tool?.handlerConfig, key).toEqual({});
+    }
+    const update = AGENT_TOOLS.find((t) => t.key === 'update_contact');
+    const props = (
+      update?.schema['function'] as {
+        parameters: { properties: Record<string, { maxLength?: number }> };
+      }
+    ).parameters.properties;
+    expect(props['display_name']?.maxLength).toBe(80);
   });
 
   it('update_contact não expõe telefone, e-mail, dono nem consentimento (F70-S15)', () => {

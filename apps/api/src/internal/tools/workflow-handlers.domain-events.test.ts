@@ -29,6 +29,7 @@ import request from 'supertest';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as Db from '@hm/db';
+import { EMPTY_TOOL_CONTEXT } from './registry';
 
 const rollback = vi.hoisted(() => ({ armed: false }));
 vi.mock('@hm/db', async (importOriginal) => {
@@ -73,7 +74,11 @@ appWithBrokenAudit.use(
   createInternalToolsRouter({
     registry: buildWorkflowRegistry(),
     token: TOKEN,
-    authorize: async () => ({ allowed: true, toolId: randomUUID() }),
+    authorize: async () => ({
+      allowed: true,
+      toolId: randomUUID(),
+      toolConfig: EMPTY_TOOL_CONTEXT.toolConfig,
+    }),
   }),
 );
 
@@ -106,7 +111,11 @@ appWithForeignEvent.use(
       };
     }),
     token: TOKEN,
-    authorize: async () => ({ allowed: true, toolId: randomUUID() }),
+    authorize: async () => ({
+      allowed: true,
+      toolId: randomUUID(),
+      toolConfig: EMPTY_TOOL_CONTEXT.toolConfig,
+    }),
   }),
 );
 

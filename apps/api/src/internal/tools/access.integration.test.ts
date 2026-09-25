@@ -286,18 +286,27 @@ beforeAll(async () => {
     otherWsMarkResolved = await customTool(WS_OTHER, 'mark_resolved');
     otherWsEscalate = await customTool(WS_OTHER, 'escalate');
 
-    const link = (agentId: string, toolId: string, isEnabled = true) => ({
+    const link = (
+      agentId: string,
+      toolId: string,
+      isEnabled = true,
+      overrides: Record<string, unknown> = {},
+    ) => ({
       agentId,
       toolId,
       isEnabled,
+      overrides,
     });
     await db.insert(schema.agentTools).values([
       link(AGENT, globalTool['mark_resolved']!),
       link(AGENT, globalTool['move_deal_stage']!),
       link(AGENT, globalTool['register_conversion']!),
       link(AGENT, globalTool['transfer_to_human']!, false),
-      link(AGENT, addTag),
-      link(AGENT, updContact),
+      // F70-S23: escrita negada por padrão; o operador libera por agente.
+      link(AGENT, addTag, true, { allowed_tags: ['atendimento-humano'] }),
+      link(AGENT, updContact, true, {
+        custom_fields_write_keys: ['interesse', 'leads', 'cidade'],
+      }),
       // Vínculo torto: o agente de WS aponta para a custom `escalate` de WS_OTHER.
       link(AGENT, otherWsEscalate),
       link(AGENT_OTHER_WS, otherWsMarkResolved),

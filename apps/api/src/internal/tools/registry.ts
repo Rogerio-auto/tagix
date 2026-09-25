@@ -45,14 +45,41 @@ export interface ToolHandlerResult {
 }
 
 /**
+ * Configuração da tool que a barreira de habilitação leu do BANCO (F70-S23), nunca do
+ * request: o runtime e o modelo não conseguem mudá-la.
+ *
+ *  - `base`: `tools.handler_config` da linha vencedora (custom do workspace > global);
+ *  - `overrides`: `agent_tools.overrides` do vínculo deste agente.
+ *
+ * Cada handler interpreta as chaves que lhe dizem respeito (ex.: `allowed_tags`,
+ * `custom_fields_write_keys` em `contact-handlers.ts`), sempre fail-closed.
+ */
+export interface ToolConfigSnapshot {
+  readonly base: Readonly<Record<string, unknown>>;
+  readonly overrides: Readonly<Record<string, unknown>>;
+}
+
+/** Contexto resolvido pelo router e entregue ao handler junto do envelope. */
+export interface ToolHandlerContext {
+  readonly toolConfig: ToolConfigSnapshot;
+}
+
+/** Contexto sem configuração nenhuma: toda allowlist fica vazia (negação). */
+export const EMPTY_TOOL_CONTEXT: ToolHandlerContext = Object.freeze({
+  toolConfig: Object.freeze({ base: Object.freeze({}), overrides: Object.freeze({}) }),
+});
+
+/**
  * Contrato de um handler de tool de negócio. Roda DENTRO de `withWorkspace`
  * (RLS já escopada ao `envelope.workspaceId`) — use o `tx` para qualquer escrita.
+ * `ctx` traz a configuração que a barreira leu do banco (F70-S23).
  * Deve ser determinístico quanto a erros: lançar é permitido (o router captura),
  * mas prefira devolver `{ ok: false, error }` com mensagem estável.
  */
 export type ToolHandler = (
   envelope: ToolCallEnvelope,
   tx: DbTx,
+  ctx: ToolHandlerContext,
 ) => Promise<ToolHandlerResult>;
 
 /**

@@ -40,6 +40,7 @@ import {
   type ToolCallDecision,
 } from './access';
 import { createInternalTokenGuard } from './auth';
+import { maskText, redactLogArgs, redactLogResult } from './log-redaction';
 import { toolCallEnvelopeSchema } from './schema';
 import {
   createDefaultRegistry,
@@ -50,11 +51,13 @@ import {
 
 /** Tamanho máximo serializado dos `params`/`result` persistidos em `tool_logs`. */
 const LOG_SUMMARY_MAX = 4_000;
+/** Teto da mensagem de erro do handler no log. */
+const LOG_ERROR_MAX = 300;
 
 /** Trunca um objeto JSON-serializável para caber no log (sem PII extra). */
-function summarize(value: unknown): Record<string, unknown> {
+function summarize(value: Record<string, unknown>): Record<string, unknown> {
   try {
-    const json = JSON.stringify(value ?? {});
+    const json = JSON.stringify(value);
     if (json.length <= LOG_SUMMARY_MAX) {
       const parsed: unknown = JSON.parse(json);
       return typeof parsed === 'object' && parsed !== null
@@ -68,33 +71,12 @@ function summarize(value: unknown): Record<string, unknown> {
 }
 
 /**
- * Campos de texto livre que o modelo escreve (motivo, nota, resolução…). Costumam
- * repetir o que o cliente disse — CPF, telefone, e-mail. No log ficam curtos e sem
- * dígitos nem e-mail: dá para auditar a intenção sem guardar o dado (F70-S15, L8).
+ * Erro do handler para o log: as mensagens são do Node, mas algumas repetem um valor
+ * do modelo (ex.: a key de um tipo de conversão inexistente). Mesma máscara do texto
+ * livre (sem dígitos nem e-mail), com teto próprio.
  */
-const FREE_TEXT_KEYS: ReadonlySet<string> = new Set([
-  'reason',
-  'note',
-  'resolution',
-  'message',
-  'text',
-  'summary',
-  'comment',
-]);
-const FREE_TEXT_MAX = 120;
-
-function maskFreeText(value: string): string {
-  const masked = value.replace(/[^\s@]+@[^\s@]+/g, '[email]').replace(/\d/g, '#');
-  return masked.length > FREE_TEXT_MAX ? `${masked.slice(0, FREE_TEXT_MAX)}…` : masked;
-}
-
-/** Args para o log: texto livre mascarado e truncado; o resto como veio. */
-export function redactLogArgs(args: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(args)) {
-    out[key] = FREE_TEXT_KEYS.has(key) && typeof value === 'string' ? maskFreeText(value) : value;
-  }
-  return out;
+function redactLogError(error: string): string {
+  return maskText(error, LOG_ERROR_MAX);
 }
 
 /**
@@ -106,12 +88,13 @@ async function writeToolLog(
   tx: DbTx,
   params: {
     toolId: string;
+    toolKey: string;
     envelope: ToolCallEnvelope;
     result: ToolHandlerResult;
     durationMs: number;
   },
 ): Promise<void> {
-  const { toolId, envelope, result, durationMs } = params;
+  const { toolId, toolKey, envelope, result, durationMs } = params;
   await tx.insert(schema.toolLogs).values({
     workspaceId: envelope.workspaceId,
     agentId: envelope.agentId,
@@ -120,9 +103,12 @@ async function writeToolLog(
     executionId: envelope.executionId,
     action: result.action ?? 'workflow',
     tableName: result.tableName ?? null,
-    params: summarize(redactLogArgs(envelope.args)),
-    result: result.ok ? summarize(result.payload ?? { content: result.content }) : null,
-    error: result.ok ? null : (result.error ?? 'unknown error'),
+    // F70-S23 (L-b): só o que a política da tool libera; o resto, mascarado.
+    params: summarize(redactLogArgs(toolKey, envelope.args)),
+    result: result.ok
+      ? summarize(redactLogResult(toolKey, result.payload ?? { content: result.content }))
+      : null,
+    error: result.ok ? null : redactLogError(result.error ?? 'unknown error'),
     durationMs,
   });
 }
@@ -219,7 +205,8 @@ export function createInternalToolsRouter(options: InternalToolsRouterOptions = 
         const decision = await authorize(tx, toolKey, envelope);
         // Recusa: o handler nunca é chamado.
         if (!decision.allowed) return { kind: 'denied', decision };
-        const result = await handler(envelope, tx);
+        // A config vem da barreira (banco), nunca do request (F70-S23).
+        const result = await handler(envelope, tx, { toolConfig: decision.toolConfig });
         // F70-S17: os eventos da ação entram na outbox na transação dela. Contrato
         // violado é logado e descartado (`domainEventsOutbox`); evento de outro
         // workspace é recusado pela RLS da outbox e desfaz a ação (fail-closed).
@@ -268,7 +255,7 @@ export function createInternalToolsRouter(options: InternalToolsRouterOptions = 
     const { result, toolId } = outcome;
     const durationMs = Date.now() - startedAt;
     await audit(toolKey, envelope, (tx) =>
-      writeToolLog(tx, { toolId, envelope, result, durationMs }),
+      writeToolLog(tx, { toolId, toolKey, envelope, result, durationMs }),
     );
 
     res.status(result.ok ? 200 : 422).json({
