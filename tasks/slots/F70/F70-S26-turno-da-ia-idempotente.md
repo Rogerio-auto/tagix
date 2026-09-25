@@ -2,7 +2,7 @@
 id: F70-S26
 title: Turno da IA idempotente por envelope
 phase: F70
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: [F70-S25]
@@ -11,6 +11,7 @@ source_docs:
   - tasks/slots/F70/F70-S25-gatilhos-da-ia-e-flows-pela-outbox.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T14:11:49Z
+completed_at: 2026-09-25T19:06:42Z
 
 ---
 # F70-S26 — Turno da IA idempotente por envelope
