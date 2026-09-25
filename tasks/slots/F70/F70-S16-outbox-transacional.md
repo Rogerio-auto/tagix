@@ -2,7 +2,7 @@
 id: F70-S16
 title: Outbox transacional para eventos de domínio e jobs, com dedup indexado dos webhooks
 phase: F70
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 depends_on: [F70-S14, F70-S12]
@@ -12,6 +12,7 @@ source_docs:
   - tasks/slots/F70/F70-S14-eventos-completos-de-lead-ads-e-campanha.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T05:22:14Z
+completed_at: 2026-09-25T06:20:11Z
 
 ---
 # F70-S16 — Outbox transacional para eventos de domínio e jobs, com dedup indexado dos webhooks
