@@ -164,20 +164,16 @@ function makeDeps(
   deps: AgentRunDeps;
   started: ReturnType<typeof vi.fn>;
   completed: ReturnType<typeof vi.fn>;
-  enqueue: ReturnType<typeof vi.fn>;
 } {
   const started = vi.fn(async () => undefined);
   const completed = vi.fn(async () => undefined);
-  const enqueue = vi.fn(async () => undefined);
   return {
     started,
     completed,
-    enqueue,
     deps: {
       store,
       socket: { emitStarted: started, emitCompleted: completed },
       client: { run, health: vi.fn(), cancel: vi.fn() } as never,
-      outbound: { enqueueText: enqueue },
       logger,
     },
   };
@@ -254,7 +250,7 @@ describe('runAgent — happy path', () => {
       },
     ];
     const runSpy = vi.fn(() => gen(events));
-    const { deps, started, completed, enqueue } = makeDeps(s.store, runSpy);
+    const { deps, started, completed } = makeDeps(s.store, runSpy);
 
     const outcome = await runAgent(WS, { conversationId: CONV, contactId: 'c1', channelId: 'ch1', provider: 'waha' }, deps);
 
@@ -262,18 +258,14 @@ describe('runAgent — happy path', () => {
     expect(runSpy).toHaveBeenCalledOnce();
     expect(started).toHaveBeenCalledOnce();
     expect(s.persistAgentMessage).toHaveBeenCalledOnce();
+    // F70-S21: o store grava a mensagem E o job de envio (outbox) na mesma transação;
+    // por isso recebe o canal e o chatId do contexto.
     expect(s.persistAgentMessage.mock.calls[0]?.[0]).toMatchObject({
       conversationId: CONV,
       agentId: AGENT,
       content: 'Olá, tudo bem?',
-    });
-    expect(enqueue).toHaveBeenCalledOnce();
-    expect(enqueue.mock.calls[0]?.[0]).toMatchObject({
-      conversationId: CONV,
       channelId: 'ch1',
       chatId: '5511999',
-      messageId: 'msg1',
-      text: 'Olá, tudo bem?',
     });
     expect(s.completeExecution).toHaveBeenCalledOnce();
     expect(s.completeExecution.mock.calls[0]?.[0]).toMatchObject({ totalTokens: 15 });

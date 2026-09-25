@@ -9,7 +9,7 @@
  * consume hm.q.flows → valida Envelope (Zod, em `consume`)
  *   → filtra type === 'flow.run.requested'  (outros tipos de flow não são deste worker)
  *   → parseAgentRunTrigger (Zod do payload de F1-S26)
- *   → runAgent (resolve-policy → cost-guard → client.run → persist + enqueue outbound)
+ *   → runAgent (resolve-policy → cost-guard → client.run → persist + job na outbox)
  *   → ack/nack
  * ```
  *
@@ -18,7 +18,7 @@
  * (payload malformado, type alheio) NÃO lança: loga-warn e ack'a (reprocessar um
  * payload imutável não ajuda). `runAgent` trata as falhas de **negócio** (sem
  * contexto, cap, modelo bloqueado, erro do runtime) sem lançar. Só erro de
- * **infra** (DB/socket/enqueue) propaga → nack→DLX.
+ * **infra** (DB/socket) propaga → nack→DLX.
  *
  * Mira a MESMA fila do stub de F1-S26 (`hm.q.flows`); até o flow-engine
  * determinístico (F2 futuro) existir, todo envelope `flow.run.requested` é de
@@ -42,8 +42,6 @@ import {
   DbAgentRunStore,
   runAgent,
   type AgentRunDeps,
-  type AgentOutboundEnqueueInput,
-  type AgentOutboundEnqueuePort,
   type AgentRunSocketPort,
   type AgentExecutionEmit,
 } from './run';
@@ -80,8 +78,11 @@ export const OUTBOUND_QUEUE = QUEUES.outbound;
 /** Tipo do envelope de disparo (espelha `INBOUND_FLOW_TYPE` de F1-S26). */
 export const AGENT_RUN_TYPE = 'flow.run.requested' as const;
 
-/** Tipo do envelope outbound (espelha `OUTBOUND_JOB_TYPE` de `apps/api`). */
-export const OUTBOUND_JOB_TYPE = 'outbound.job' as const;
+/**
+ * Tipo do envelope outbound (espelha `OUTBOUND_JOB_TYPE` de `apps/api`). O job da
+ * resposta do agente é gravado na outbox por `DbAgentRunStore.persistAgentMessage`.
+ */
+export { OUTBOUND_JOB_TYPE } from './run';
 
 /**
  * Envelope de gatilho publicado por F1-S26 (`MqInboundFlowEnqueue`). Espelha o
@@ -99,7 +100,7 @@ export const agentRunTriggerSchema = z.object({
 
 export type AgentRunTrigger = z.infer<typeof agentRunTriggerSchema>;
 
-// ─── Portas MQ default (socket relay + outbound enqueue) ──────────────────────
+// ─── Porta MQ default (socket relay) ──────────────────────────────────────────
 
 /** Publica `{ event, target:{conversationId}, data }` no relay → room conversation:{id}. */
 function relaySocket(
@@ -150,33 +151,6 @@ export class MqAgentRunSocketEmit implements AgentRunSocketPort {
         executionId: input.executionId,
       },
     );
-    await Promise.resolve();
-  }
-}
-
-/**
- * Enfileiramento default da resposta do agente em `hm.q.outbound`. Monta um
- * `OutboundJob` kind `text` no shape EXATO de `parseOutboundJob`
- * (`apps/workers/src/outbound/job.ts`) — o worker outbound consome, valida e
- * dispara ao provider (reusa todo o pipeline de envio de F1).
- */
-export class MqAgentOutboundEnqueue implements AgentOutboundEnqueuePort {
-  constructor(private readonly channel: MqChannel) {}
-
-  async enqueueText(input: AgentOutboundEnqueueInput): Promise<void> {
-    const job = {
-      kind: 'text',
-      channelId: input.channelId,
-      conversationId: input.conversationId,
-      messageId: input.messageId,
-      chatId: input.chatId,
-      text: input.text,
-    };
-    const envelope = makeEnvelope(OUTBOUND_JOB_TYPE, input.workspaceId, job);
-    this.channel.sendToQueue(OUTBOUND_QUEUE, Buffer.from(JSON.stringify(envelope)), {
-      persistent: true,
-      contentType: 'application/json',
-    });
     await Promise.resolve();
   }
 }
@@ -321,7 +295,8 @@ export function agentRuntimeConfigFromEnv(
 /**
  * Monta as dependências default do worker de agentes a partir da infra real:
  * store DIRETO `@hm/db`+RLS, socket via fila de relay, cliente do runtime
- * (`@hm/agents-client`) e enqueue outbound. O `channel` AMQP é o do consumer.
+ * (`@hm/agents-client`). O job de envio vai pela outbox, na transação do store. O
+ * `channel` AMQP é o do consumer.
  */
 export function createAgentDeps(
   channel: MqChannel,
@@ -332,7 +307,6 @@ export function createAgentDeps(
     store: new DbAgentRunStore(),
     socket: new MqAgentRunSocketEmit(channel),
     client: createAgentsClient({ baseUrl: runtime.baseUrl, token: runtime.token }),
-    outbound: new MqAgentOutboundEnqueue(channel),
     logger,
   };
 }

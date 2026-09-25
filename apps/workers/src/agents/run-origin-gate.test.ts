@@ -106,7 +106,6 @@ describe.skipIf(!url)('worker de agentes — trava de origem e marca humana (DB,
     };
   }
 
-  const enqueueText = vi.fn(async () => {});
   const deps: AgentRunDeps = {
     store: new DbAgentRunStore(),
     socket: { emitStarted: vi.fn(async () => {}), emitCompleted: vi.fn(async () => {}) },
@@ -115,7 +114,6 @@ describe.skipIf(!url)('worker de agentes — trava de origem e marca humana (DB,
       health: vi.fn(),
       cancel: vi.fn(),
     } as unknown as AgentRunDeps['client'],
-    outbound: { enqueueText },
     logger: logger as unknown as AgentRunDeps['logger'],
   };
 
