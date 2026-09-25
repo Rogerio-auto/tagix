@@ -2,7 +2,7 @@
 id: F70-S10
 title: Agentes recebem as tools (transfer_to_human, base de conhecimento e workflow)
 phase: F70
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F70-S08]
@@ -10,6 +10,9 @@ blocks: [F70-S06]
 source_docs:
   - tasks/slots/F70/F70-S06-agente-de-atendimento-da-arcada.md
   - tasks/COMMS.md
+agent_id: backend-engineer
+claimed_at: 2026-09-25T04:13:46Z
+
 ---
 # F70-S10 — Agentes recebem as tools
 
