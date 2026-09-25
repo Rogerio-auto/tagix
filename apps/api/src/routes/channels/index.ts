@@ -23,7 +23,11 @@ import {
   subscribeInstagramWebhook,
   sendInstagramTestMessage,
 } from '../../services/channels/instagram-connect';
-import { WaConnectError, runWhatsAppConnect } from '../../services/channels/whatsapp-connect';
+import {
+  WaConnectError,
+  runWhatsAppConnect,
+  type WaConnectResult,
+} from '../../services/channels/whatsapp-connect';
 import { platformSecrets } from '../../secrets';
 import { missingByUseCase } from '../../services/meta/permissions';
 import { createMessageTemplatesRouter } from './templates';
@@ -137,16 +141,31 @@ const igConnectSchema = z.object({
  * app WhatsApp Business durante o Embedded Signup; numero novo (`cloud_api`) e
  * provisionado pelo proprio Signup. `pin` permanece opcional/ignorado (compat).
  */
-const waConnectSchema = z.object({
-  code: z.string().trim().min(1),
-  phoneNumberId: z.string().trim().min(1).max(64),
-  wabaId: z.string().trim().min(1).max(64),
-  pin: z.string().trim().optional(),
-  mode: z.enum(['cloud_api', 'coexistence']),
-  name: z.string().trim().min(1).max(120),
-  phoneNumber: z.string().trim().min(1).max(32).optional(),
-  displayHandle: z.string().trim().min(1).max(120).optional(),
-});
+const waConnectSchema = z
+  .object({
+    /** `code` do Embedded Signup (popup). */
+    code: z.string().trim().min(1).max(2048).optional(),
+    /**
+     * Conector manual: token de acesso ja emitido (ex.: usuario do sistema do
+     * Business Manager). Nunca volta ao cliente; cifrado como o do popup.
+     */
+    accessToken: z.string().trim().min(20).max(1024).optional(),
+    /**
+     * Opcional: no fim da coexistencia a Meta so devolve `waba_id`
+     * (`FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING`). O servidor resolve pela WABA e,
+     * quando informado, confere que pertence a ela.
+     */
+    phoneNumberId: z.string().trim().min(1).max(64).optional(),
+    wabaId: z.string().trim().min(1).max(64),
+    pin: z.string().trim().optional(),
+    mode: z.enum(['cloud_api', 'coexistence']),
+    name: z.string().trim().min(1).max(120),
+    phoneNumber: z.string().trim().min(1).max(32).optional(),
+    displayHandle: z.string().trim().min(1).max(120).optional(),
+  })
+  .refine((v) => (v.code === undefined) !== (v.accessToken === undefined), {
+    message: 'Informe o code do Embedded Signup ou um token de acesso (um dos dois).',
+  });
 
 /** Narrowing de `req.params['x']` (string | string[] no @types/express 5). */
 function param(req: Request, key: string): string {
@@ -559,14 +578,18 @@ export function createChannelsRouter(): Router {
       // 1) Orquestra Graph: exchange → (coexistencia? register com PIN) → subscribe.
       // Numero novo NAO registra/pede PIN. Falha em qualquer etapa aborta antes de
       // criar o canal (token cifrado so se tudo passou).
-      let token: string;
+      let connected: WaConnectResult;
       try {
-        token = await runWhatsAppConnect(
+        connected = await runWhatsAppConnect(
           graph,
           {
-            code: input.code,
+            credential:
+              input.code !== undefined
+                ? { code: input.code }
+                : { accessToken: input.accessToken ?? '' },
             phoneNumberId: input.phoneNumberId,
             wabaId: input.wabaId,
+            phoneNumberHint: input.phoneNumber,
             pin: input.pin,
             mode: input.mode,
           },
@@ -617,9 +640,9 @@ export function createChannelsRouter(): Router {
             workspaceId,
             provider: 'meta_whatsapp',
             name: input.name,
-            displayHandle: input.displayHandle ?? null,
-            phoneNumber: input.phoneNumber ?? null,
-            phoneNumberId: input.phoneNumberId,
+            displayHandle: input.displayHandle ?? connected.phoneNumber.verifiedName ?? null,
+            phoneNumber: input.phoneNumber ?? connected.phoneNumber.displayPhoneNumber ?? null,
+            phoneNumberId: connected.phoneNumber.id,
             wabaId: input.wabaId,
             metadata: { waConnectMode: input.mode },
             isActive: true,
@@ -629,7 +652,7 @@ export function createChannelsRouter(): Router {
 
         await tx.insert(schema.channelSecrets).values({
           channelId: channel.id,
-          accessTokenEnc: encryptSecret(token),
+          accessTokenEnc: encryptSecret(connected.token),
         });
         return channel;
       });
