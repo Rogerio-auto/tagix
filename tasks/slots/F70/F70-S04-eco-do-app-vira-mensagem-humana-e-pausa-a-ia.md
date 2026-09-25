@@ -2,13 +2,16 @@
 id: F70-S04
 title: Eco do app vira mensagem humana e pausa a IA
 phase: F70
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F70-S03]
 blocks: [F70-S06]
 source_docs:
   - rogerio-os/tasks/central-operacao/CO-08-eco-do-app-vira-mensagem-humana-e-pausa-a-ia.md
+agent_id: backend-engineer
+claimed_at: 2026-09-25T01:43:10Z
+
 ---
 # F70-S04 — Eco do app vira mensagem humana e pausa a IA
 
