@@ -35,8 +35,8 @@
  * `enqueueOutbox` de `@hm/db`), e o relay dos workers publica com publisher
  * confirms, pelo menos uma vez. O `eventId` deduplica a republicação no fan-out.
  *
- * A outbox é o ÚNICO caminho de publicação: o emissor direto pós-commit
- * (`emitDomainEvent`) saiu na F70-S20, quando o último produtor migrou.
+ * A outbox é o ÚNICO caminho de publicação: o emissor direto pós-commit saiu na
+ * F70-S20, quando o último produtor migrou.
  */
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
