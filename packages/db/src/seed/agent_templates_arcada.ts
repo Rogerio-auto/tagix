@@ -23,7 +23,8 @@
  *    prompt/modelo do seed mudou e ainda não existe versão igual, grava um DRAFT
  *    (staging: o Rogério publica pela UI). Rodar 2x sem mudança não cria nada.
  *  - tags: UNIQUE (workspace, name) → do nothing.
- *  - agent_tools: PK (agent, tool) → do nothing.
+ *  - agent_tools: PK (agent, tool); a liberação das tools de contato (F70-S23) só é
+ *    gravada enquanto `overrides` estiver vazio — a edição do operador vence.
  *  - KB: criado uma vez; re-rodar atualiza o texto só enquanto o doc está em
  *    `draft` e invisível (depois de publicado, a UI manda).
  *  - flows: criados uma vez; nunca sobrescritos (o Rogério edita/publica na UI).
@@ -58,6 +59,7 @@ import {
   type ArcadaKbDocument,
   type ArcadaTagKey,
 } from './agent_templates_arcada.content';
+import { ARCADA_AGENT_TOOL_OVERRIDES, seededToolOverrides } from './tools_agent_grants';
 
 // ─── Ids determinísticos.
 
@@ -546,10 +548,24 @@ export async function seedArcadaAttendance(
       ),
     );
   if (toolRows.length > 0) {
+    // Liberações de escrita das tools de contato (F70-S23): negação por padrão, e a
+    // Arcada só aplica `atendimento-humano`. Vínculo que já existe recebe a liberação
+    // apenas enquanto `overrides` estiver vazio — o que o operador mudou pela UI vence.
     await tx
       .insert(agentTools)
-      .values(toolRows.map((t) => ({ agentId: ids.agentId, toolId: t.id, isEnabled: true })))
-      .onConflictDoNothing();
+      .values(
+        toolRows.map((t) => ({
+          agentId: ids.agentId,
+          toolId: t.id,
+          isEnabled: true,
+          overrides: seededToolOverrides(ARCADA_AGENT_TOOL_OVERRIDES, t.key),
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [agentTools.agentId, agentTools.toolId],
+        set: { overrides: sql`excluded.overrides` },
+        setWhere: sql`${agentTools.overrides} = '{}'::jsonb and excluded.overrides <> '{}'::jsonb`,
+      });
   }
   const linkedTools = ARCADA_TOOL_KEYS.filter((k) => toolRows.some((t) => t.key === k));
   const missingTools = ARCADA_TOOL_KEYS.filter((k) => !linkedTools.includes(k));
