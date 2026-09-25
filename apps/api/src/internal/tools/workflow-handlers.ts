@@ -10,6 +10,7 @@
  * Cobertura desta fase:
  *  - transfer_to_human / mark_resolved / change_conversation_status → mutam `conversations`.
  *  - escalate → registrado em `tool_logs` (sem tabela de notificações ainda; auditável).
+ *  - add_contact_tag / update_contact (F70-S15) → `contact-handlers.ts`.
  *  - register_conversion → respeita `allow_agent_conversions`; registra de verdade via o
  *    serviço de conversões (F5-S12). Fecha o stub-até-F5 de F2-S20.
  *
@@ -20,11 +21,7 @@
 import { z } from 'zod';
 import { eq, sql } from 'drizzle-orm';
 import { schema } from '@hm/db';
-import {
-  conversionRegisteredFromRow,
-  domainEvents,
-  type DomainEventDraft,
-} from '@hm/shared/mq';
+import { conversionRegisteredFromRow, domainEvents, type DomainEventDraft } from '@hm/shared/mq';
 import {
   createDefaultRegistry,
   type ToolCallEnvelope,
@@ -36,8 +33,9 @@ import type { DbTx } from '@hm/db';
 import { registerConversion as registerConversionEvent } from '../../routes/conversions';
 import { emitConversationResolvedMetrics } from '../../services/dashboard/emit';
 import { moveDealToStage, TransitionError } from '../../routes/deals';
-import { and, desc, isNull } from 'drizzle-orm';
+import { and, desc, isNull, or } from 'drizzle-orm';
 import { transferToAgent } from './agent-transfer-handlers';
+import { addContactTag, updateContact } from './contact-handlers';
 
 function fail(error: string): ToolHandlerResult {
   return { ok: false, error };
@@ -189,12 +187,33 @@ const changeConversationStatus: ToolHandler = async (env, tx) => {
   };
 };
 
-const registerConversionArgs = z.object({
-  conversion_type_key: z.string().min(1).max(64),
-  value_cents: z.number().int().min(0).nullish(),
-  note: z.string().max(1000).nullish(),
-  contact_id: z.string().uuid().nullish(),
-});
+/** Contato da conversa (sob RLS). `null` se a conversa não existir ou não tiver contato. */
+async function conversationContactId(tx: DbTx, conversationId: string): Promise<string | null> {
+  const [conv] = await tx
+    .select({ contactId: schema.conversations.contactId })
+    .from(schema.conversations)
+    .where(eq(schema.conversations.id, conversationId))
+    .limit(1);
+  return conv?.contactId ?? null;
+}
+
+// `type_key` é o nome do contrato do runtime e do catálogo (F70-S15: antes o Node só
+// lia `conversion_type_key`, e toda chamada real do agente caía em "argumentos
+// inválidos"). `conversion_type_key` segue aceito por compatibilidade.
+const registerConversionArgs = z
+  .object({
+    type_key: z.string().min(1).max(120).optional(),
+    conversion_type_key: z.string().min(1).max(120).optional(),
+    value_cents: z.number().int().min(0).nullish(),
+    currency: z.string().length(3).nullish(),
+    note: z.string().max(1000).nullish(),
+    contact_id: z.string().uuid().nullish(),
+  })
+  .transform(({ type_key, conversion_type_key, ...rest }) => ({
+    ...rest,
+    conversion_type_key: type_key ?? conversion_type_key ?? '',
+  }))
+  .refine((v) => v.conversion_type_key.length > 0);
 
 const registerConversion: ToolHandler = async (env, tx) => {
   // Checagem autoritativa de policy (defense-in-depth do lado Node).
@@ -210,15 +229,14 @@ const registerConversion: ToolHandler = async (env, tx) => {
   const parsed = registerConversionArgs.safeParse(env.args);
   if (!parsed.success) return fail('Argumentos inválidos para register_conversion.');
 
-  // Resolve o contato: explícito nos args ou a partir da conversa do contexto.
-  let contactId = parsed.data.contact_id ?? null;
-  if (!contactId && env.conversationId) {
-    const [conv] = await tx
-      .select({ contactId: schema.conversations.contactId })
-      .from(schema.conversations)
-      .where(eq(schema.conversations.id, env.conversationId))
-      .limit(1);
-    contactId = conv?.contactId ?? null;
+  // Resolve o contato (F70-S15): com conversa no contexto, SEMPRE o contato dela — o
+  // `contact_id` dos args é do modelo e seria o jeito de creditar a conversão a outro
+  // contato do workspace. Só sem conversa (execução avulsa) o dos args é aceito.
+  let contactId: string | null;
+  if (env.conversationId) {
+    contactId = await conversationContactId(tx, env.conversationId);
+  } else {
+    contactId = parsed.data.contact_id ?? null;
   }
   if (!contactId) return fail('Contato ausente no contexto da conversão.');
 
@@ -268,20 +286,32 @@ const moveDealStage: ToolHandler = async (env, tx) => {
   const parsed = moveDealStageArgs.safeParse(env.args);
   if (!parsed.success) return fail('Argumentos inválidos para move_deal_stage.');
 
-  // Resolve o deal: explícito ou o deal aberto mais recente do contato da conversa.
-  let dealId = parsed.data.deal_id ?? null;
-  if (!dealId) {
-    if (!env.conversationId) return fail('Conversa ausente no contexto.');
-    const [conv] = await tx
-      .select({ contactId: schema.conversations.contactId })
-      .from(schema.conversations)
-      .where(eq(schema.conversations.id, env.conversationId))
-      .limit(1);
-    if (!conv?.contactId) return fail('Contato ausente no contexto.');
+  // F70-S15: só age em deal do contexto — do contato da conversa ou da própria
+  // conversa. Sem conversa não há contexto, e um `deal_id` solto do modelo moveria
+  // qualquer negócio do workspace.
+  if (!env.conversationId) return fail('Conversa ausente no contexto.');
+  const contactId = await conversationContactId(tx, env.conversationId);
+  if (!contactId) return fail('Contato ausente no contexto.');
+  const inContext = or(
+    eq(schema.deals.contactId, contactId),
+    eq(schema.deals.conversationId, env.conversationId),
+  );
+
+  // Resolve o deal: o informado (se for do contexto) ou o aberto mais recente do contato.
+  let dealId: string;
+  if (parsed.data.deal_id) {
     const [deal] = await tx
       .select({ id: schema.deals.id })
       .from(schema.deals)
-      .where(and(eq(schema.deals.contactId, conv.contactId), isNull(schema.deals.closedAt)))
+      .where(and(eq(schema.deals.id, parsed.data.deal_id), inContext))
+      .limit(1);
+    if (!deal) return fail('Negócio não pertence ao contato desta conversa.');
+    dealId = deal.id;
+  } else {
+    const [deal] = await tx
+      .select({ id: schema.deals.id })
+      .from(schema.deals)
+      .where(and(eq(schema.deals.contactId, contactId), isNull(schema.deals.closedAt)))
       .orderBy(desc(schema.deals.createdAt))
       .limit(1);
     if (!deal) return fail('Contato sem negócio aberto.');
@@ -322,7 +352,10 @@ const moveDealStage: ToolHandler = async (env, tx) => {
     };
   } catch (err: unknown) {
     if (err instanceof TransitionError) return fail(err.message);
-    if (err instanceof Error && (err.message === 'deal_not_found' || err.message === 'stage_not_found')) {
+    if (
+      err instanceof Error &&
+      (err.message === 'deal_not_found' || err.message === 'stage_not_found')
+    ) {
       return fail('Negócio ou estágio não encontrado.');
     }
     throw err;
@@ -334,12 +367,17 @@ const moveDealStage: ToolHandler = async (env, tx) => {
  * embutido (F2-S07). É o registry que o `app.ts` injeta em `createInternalToolsRouter`.
  */
 export function buildWorkflowRegistry(): ToolHandlerRegistry {
-  return createDefaultRegistry()
-    .register('transfer_to_human', transferToHuman)
-    .register('transfer_to_agent', transferToAgent)
-    .register('escalate', escalate)
-    .register('mark_resolved', markResolved)
-    .register('change_conversation_status', changeConversationStatus)
-    .register('register_conversion', registerConversion)
-    .register('move_deal_stage', moveDealStage);
+  return (
+    createDefaultRegistry()
+      .register('transfer_to_human', transferToHuman)
+      .register('transfer_to_agent', transferToAgent)
+      .register('escalate', escalate)
+      .register('mark_resolved', markResolved)
+      .register('change_conversation_status', changeConversationStatus)
+      .register('register_conversion', registerConversion)
+      .register('move_deal_stage', moveDealStage)
+      // F70-S15: tools de contato (alvo = contato da conversa; ver contact-handlers.ts).
+      .register('add_contact_tag', addContactTag)
+      .register('update_contact', updateContact)
+  );
 }

@@ -459,3 +459,58 @@ def test_tool_dispatch_ctx_carries_contact_id() -> None:
     ctx = _build_ctx(state)
     assert ctx["contact_id"] == "44444444-4444-4444-4444-444444444444"
     assert ToolContext.model_validate(ctx).contact_id == "44444444-4444-4444-4444-444444444444"
+
+
+# ---------------------------------------------------------------------------
+# F70-S15 (H1): o modelo só executa tool habilitada — nome fora da lista não roda
+# ---------------------------------------------------------------------------
+
+
+def _multi_tool_result(names: list[str]) -> ChatResult:
+    return ChatResult(
+        content=None,
+        tool_calls=[
+            ToolCall(id=f"call_{i}", name=name, arguments="{}") for i, name in enumerate(names)
+        ],
+        finish_reason="tool_calls",
+        usage=Usage(prompt_tokens=8, completion_tokens=3, total_tokens=11, cost_usd=0.0005),
+        generation_id="gen-tools",
+    )
+
+
+@pytest.mark.asyncio
+async def test_graph_refuses_tool_calls_outside_enabled_list() -> None:
+    """Nome fora de `state["tools"]` não executa — `database` e `workflow`.
+
+    `mark_resolved` veio no request, mas a policy (só `database`) a corta no
+    `load_context`; `query_deal` nunca veio. O modelo "chama" as duas mesmo assim:
+    só `query_contact`, habilitada, chega ao registry.
+    """
+    provider = FakeProvider(
+        [
+            _multi_tool_result(["query_contact", "query_deal", "mark_resolved"]),
+            _text_result("ok"),
+        ]
+    )
+    registry = FakeRegistry()
+    pool = FakePool(_agent_row())
+    graph = _build(provider, registry, pool)
+
+    out = await graph.ainvoke(
+        _initial_state(
+            _policy(allowed_tool_categories=["database"]),
+            tools=[
+                {"key": "query_contact", "category": "database"},
+                {"key": "mark_resolved", "category": "workflow"},
+            ],
+        ),
+        config=_CONFIG,
+    )
+
+    assert [d[0] for d in registry.dispatched] == ["query_contact"]
+    executed = {e["tool_key"]: e["ok"] for e in out["tool_calls_executed"]}
+    assert executed == {"query_contact": True, "query_deal": False, "mark_resolved": False}
+    refused = [m for m in out["messages"] if m.role == "tool" and m.name != "query_contact"]
+    assert {m.name for m in refused} == {"query_deal", "mark_resolved"}
+    assert all("não disponível" in (m.content or "") for m in refused)
+    assert out["final_reply"] == "ok"

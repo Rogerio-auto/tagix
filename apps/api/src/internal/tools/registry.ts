@@ -80,6 +80,8 @@ export class ToolHandlerRegistry {
 /**
  * Handler embutido `ping`: ecoa os args. Não toca o DB. Existe para validar o
  * canal de transporte + auth + envelope ponta-a-ponta sem depender de F2-S20.
+ * Desde a F70-S15 passa pela mesma barreira de habilitação das demais: sem linha
+ * em `tools` habilitada para o agente, o router responde 403 (fail-closed).
  */
 export const pingHandler: ToolHandler = async (envelope) => ({
   ok: true,

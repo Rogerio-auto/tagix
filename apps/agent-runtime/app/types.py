@@ -116,8 +116,9 @@ class ToolDescriptor(BaseModel):
     """Tool habilitada para o agente (categoria + config), vinda do Node.
 
     `config` é arbitrário (column-level ACL etc., §6.5). O grafo NÃO interpreta
-    `config`; ele só carrega `key`/`category` para filtro de policy e repassa o
-    descriptor ao registry no dispatch.
+    `config`; ele só carrega `key`/`category` para filtro de policy e, no dispatch
+    (F70-S15), repassa `config` no `ctx["tool_config"]` — o registry o aplica na
+    tool via `with_config` (tools `database` não ampliam a ACL de coluna com ele).
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -232,7 +233,8 @@ class ToolRegistry(Protocol):
       de execução. Retorna `{"ok": bool, "content": str, "error": str | None}`.
       `ctx` é o dict construído pelo `tool_dispatch`:
       `{"workspace_id", "conversation_id", "agent_id", "execution_id"}`
-      (mais `is_playground` para o modo simulação).
+      (mais `is_playground` para o modo simulação e, F70-S15, `tool_config` com o
+      `ToolDescriptor.config` da tool chamada, quando houver).
     """
 
     def specs_for(self, allowed_keys: set[str] | None) -> list[dict[str, Any]]:

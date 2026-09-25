@@ -56,7 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 19     | 3   | 4   | 0   | 0   | 1   | 11   |
+| F70   | 19     | 2   | 4   | 0   | 0   | 2   | 11   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -779,7 +779,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70-S12 | FKs compostas por workspace nas referências de deals e stages                                                   | ✅ done      | high       | F70-S10, F70-S11          |
 | F70-S13 | conversation.opened em todos os caminhos de criação e handoff de campanha honesto                               | ✅ done      | medium     | F70-S09                   |
 | F70-S14 | Origem real no conversation.opened, eventos de lead ads e outbound da campanha depois do commit                 | ✅ done      | medium     | F70-S13                   |
-| F70-S15 | Tools dos agentes — endpoint confere habilitação, log correto e tools de contato                                | 🟢 available | high       | F70-S10                   |
+| F70-S15 | Tools dos agentes — endpoint confere habilitação, log correto e tools de contato                                | 🟣 review    | high       | F70-S10                   |
 | F70-S16 | Outbox transacional para eventos de domínio e jobs, com dedup indexado dos webhooks                             | 🟢 available | high       | F70-S14, F70-S12          |
 | F70-S17 | Produtores da API publicam pelo outbox                                                                          | ⏸️ blocked  | medium     | F70-S16, F70-S11          |
 | F70-S18 | Achados baixos da auditoria pré-deploy — marcadores de origem, referências restantes e guarda do seed           | 🟢 available | medium     | F70-S11                   |

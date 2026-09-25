@@ -1,14 +1,17 @@
 /**
- * Testes do endpoint interno de tools (callback Python → Node) — F2-S07.
+ * Testes do endpoint interno de tools (callback Python → Node) — F2-S07 / F70-S15.
  *
- * `@hm/db` é mockado: `withWorkspace` apenas executa o callback com um `tx`
- * fake que (a) responde a busca de `tools` por key e (b) captura o insert em
- * `tool_logs`. Sem Postgres real. Cobre: rejeição/aceite por token, tool
- * desconhecida (404), envelope inválido (400), e escrita de `tool_logs`.
+ * `@hm/db` é mockado: `withWorkspace` apenas executa o callback com um `tx` fake que
+ * captura os inserts em `tool_logs` (e responde vazio às leituras da recusa). A
+ * barreira de habilitação é injetada (`authorize`): permite só as keys de
+ * `toolCatalog`. Sem Postgres real — a barreira contra o banco é coberta em
+ * `access.integration.test.ts`. Cobre: token (401/500), tool desconhecida (404),
+ * envelope inválido (400), recusa (403, nada executa, recusa logada), `tool_logs`.
  */
 import express from 'express';
 import request from 'supertest';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ToolCallAuthorizer } from './access';
 
 // ─── Mock de @hm/db ───────────────────────────────────────────────────────────
 
@@ -17,20 +20,17 @@ interface LogCapture {
 }
 const toolLogInserts: LogCapture[] = [];
 
-/** key → id de `tools`. Vazio = tool não catalogada (pula auditoria). */
+/** key → id de `tools` habilitada. Fora daqui = recusa. */
 let toolCatalog: Record<string, string> = {};
+/** key → id de `tools` que existe mas NÃO está habilitada (recusa com log). */
+let disabledCatalog: Record<string, string> = {};
 let lastWorkspaceId: string | null = null;
 
 function makeTx() {
   return {
     select: () => ({
       from: () => ({
-        where: (cond: { key: string }) => ({
-          limit: async () => {
-            const id = toolCatalog[cond.key];
-            return id ? [{ id }] : [];
-          },
-        }),
+        where: () => ({ limit: async () => [] }),
       }),
     }),
     insert: () => ({
@@ -41,9 +41,12 @@ function makeTx() {
   };
 }
 
-// `eq(col, val)` → `{ key: val }` para o `where` fake casar a busca por key.
 vi.mock('drizzle-orm', () => ({
-  eq: (_col: unknown, val: unknown) => ({ key: val }),
+  and: () => ({}),
+  asc: () => ({}),
+  eq: () => ({}),
+  isNull: () => ({}),
+  or: () => ({}),
 }));
 
 vi.mock('@hm/db', () => ({
@@ -52,10 +55,29 @@ vi.mock('@hm/db', () => ({
     return fn(makeTx());
   },
   schema: {
+    agents: { id: 'id' },
+    conversations: { id: 'id' },
     tools: { id: 'id', key: 'key' },
     toolLogs: {},
   },
 }));
+
+const fakeAuthorize: ToolCallAuthorizer = async (_tx, toolKey) => {
+  const enabled = toolCatalog[toolKey];
+  if (enabled) return { allowed: true, toolId: enabled };
+  const disabled = disabledCatalog[toolKey];
+  return disabled
+    ? { allowed: false, reason: 'tool_not_enabled', toolId: disabled }
+    : { allowed: false, reason: 'tool_not_found', toolId: null };
+};
+
+const silentLogger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  child: vi.fn(),
+};
 
 // Import DEPOIS do mock (hoisting do vi.mock garante a ordem em runtime).
 const { createInternalToolsRouter, ToolHandlerRegistry } = await import('./index');
@@ -80,14 +102,24 @@ function envelope(over: Record<string, unknown> = {}): Record<string, unknown> {
 function makeApp(token: string = TOKEN, registry?: InstanceType<typeof ToolHandlerRegistry>) {
   const app = express();
   app.use(express.json());
-  app.use(createInternalToolsRouter({ token, ...(registry ? { registry } : {}) }));
+  app.use(
+    createInternalToolsRouter({
+      token,
+      authorize: fakeAuthorize,
+      logger: silentLogger,
+      ...(registry ? { registry } : {}),
+    }),
+  );
   return app;
 }
 
 beforeEach(() => {
   toolLogInserts.length = 0;
-  toolCatalog = {};
+  // `ping` habilitada por padrão: os testes de transporte não dependem da barreira.
+  toolCatalog = { ping: 'tool-ping' };
+  disabledCatalog = {};
   lastWorkspaceId = null;
+  vi.clearAllMocks();
 });
 
 describe('POST /internal/tools/:toolKey — auth por token interno', () => {
@@ -144,13 +176,63 @@ describe('POST /internal/tools/:toolKey — dispatch', () => {
     expect(res.status).toBe(400);
   });
 
-  it('ping não está no catálogo → não grava tool_logs', async () => {
+  it('ping habilitada → 200 e tool_logs aponta para a linha resolvida pela barreira', async () => {
     const res = await request(makeApp())
       .post('/internal/tools/ping')
       .set('Authorization', `Bearer ${TOKEN}`)
       .send(envelope());
     expect(res.status).toBe(200);
+    expect(toolLogInserts).toHaveLength(1);
+    expect(toolLogInserts[0]!.values['toolId']).toBe('tool-ping');
+  });
+});
+
+describe('POST /internal/tools/:toolKey — barreira de habilitação (F70-S15)', () => {
+  it('tool não habilitada → 403, handler não roda, recusa em tool_logs e no log', async () => {
+    disabledCatalog['do_thing'] = 'tool-disabled';
+    const handler = vi.fn(async () => ({ ok: true, content: 'não devia rodar' }));
+    const registry = new ToolHandlerRegistry().register('do_thing', handler);
+
+    const res = await request(makeApp(TOKEN, registry))
+      .post('/internal/tools/do_thing')
+      .set('Authorization', `Bearer ${TOKEN}`)
+      .send(envelope());
+
+    expect(res.status).toBe(403);
+    expect(res.body.ok).toBe(false);
+    expect(handler).not.toHaveBeenCalled();
+    expect(toolLogInserts).toHaveLength(1);
+    const v = toolLogInserts[0]!.values;
+    expect(v['toolId']).toBe('tool-disabled');
+    expect(v['action']).toBe('denied');
+    expect(v['error']).toBe('tool_not_enabled');
+    expect(v['executionId']).toBe(EXEC);
+    // Args do modelo não entram na recusa; agente/conversa não visíveis sob RLS → null.
+    expect(v['params']).toEqual({ tool: 'do_thing' });
+    expect(v['agentId']).toBeNull();
+    expect(v['conversationId']).toBeNull();
+    expect(silentLogger.warn).toHaveBeenCalledWith(
+      'internal-tools: chamada recusada',
+      expect.objectContaining({ toolKey: 'do_thing', reason: 'tool_not_enabled' }),
+    );
+  });
+
+  it('tool fora do catálogo do workspace → 403 sem linha em tool_logs (FK exige tool)', async () => {
+    const handler = vi.fn(async () => ({ ok: true }));
+    const registry = new ToolHandlerRegistry().register('ghost', handler);
+
+    const res = await request(makeApp(TOKEN, registry))
+      .post('/internal/tools/ghost')
+      .set('Authorization', `Bearer ${TOKEN}`)
+      .send(envelope());
+
+    expect(res.status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
     expect(toolLogInserts).toHaveLength(0);
+    expect(silentLogger.warn).toHaveBeenCalledWith(
+      'internal-tools: chamada recusada',
+      expect.objectContaining({ toolKey: 'ghost', reason: 'tool_not_found' }),
+    );
   });
 });
 
@@ -179,6 +261,37 @@ describe('POST /internal/tools/:toolKey — tool_logs', () => {
     expect(v['action']).toBe('workflow');
     expect(v['error']).toBeNull();
     expect(typeof v['durationMs']).toBe('number');
+  });
+
+  it('texto livre do modelo vai ao log mascarado e truncado (L8)', async () => {
+    toolCatalog['note_thing'] = 'tool-uuid-9';
+    const registry = new ToolHandlerRegistry().register('note_thing', async () => ({
+      ok: true,
+      content: 'ok',
+    }));
+
+    const res = await request(makeApp(TOKEN, registry))
+      .post('/internal/tools/note_thing')
+      .set('Authorization', `Bearer ${TOKEN}`)
+      .send(
+        envelope({
+          args: {
+            reason: `Maria, CPF 123.456.789-00, maria@x.com, fone 11 99999-0000 ${'x'.repeat(200)}`,
+            severity: 'high',
+            stage_id: '11111111-1111-1111-1111-111111111111',
+          },
+        }),
+      );
+
+    expect(res.status).toBe(200);
+    const params = toolLogInserts[0]!.values['params'] as Record<string, string>;
+    expect(params['reason']).not.toMatch(/\d/);
+    expect(params['reason']).not.toContain('maria@x.com');
+    expect(params['reason']).toContain('[email]');
+    expect(params['reason']!.length).toBeLessThanOrEqual(121);
+    // Campos que não são texto livre ficam intactos (ids, enums).
+    expect(params['severity']).toBe('high');
+    expect(params['stage_id']).toBe('11111111-1111-1111-1111-111111111111');
   });
 
   it('handler com ok=false → 422 e tool_logs com erro', async () => {

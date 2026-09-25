@@ -603,6 +603,13 @@
       "when": 1781452846000,
       "tag": "0085_f70_workspace_composite_fks",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1781452848000,
+      "tag": "0087_f70_agent_contact_tools",
+      "breakpoints": true
     }
   ]
 }

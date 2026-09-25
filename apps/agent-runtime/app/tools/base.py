@@ -115,6 +115,9 @@ class Tool(ABC):
     Args: ClassVar[type[BaseModel]]
     table: ClassVar[str | None] = None
     default_handler_config: ClassVar[dict[str, Any]] = {}
+    # Teto da ACL de coluna (F70-S15): o máximo que a config vinda do Node pode liberar.
+    # `None` = o próprio `default_handler_config` é o teto.
+    max_handler_config: ClassVar[dict[str, Any] | None] = None
 
     def __init__(self, handler_config: dict[str, Any] | None = None) -> None:
         # validação de declaração: falha cedo se a subclasse está incompleta.

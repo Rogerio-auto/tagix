@@ -17,10 +17,14 @@
  * baseline `ALWAYS_DENIED` por cima.
  *
  * Duas portas de entrada, mesmo conteúdo:
- *  - migration `0084_f70_agent_tools_catalog.sql` (insere o que falta — produção);
+ *  - migrations de catálogo (`AGENT_TOOL_MIGRATIONS`: 0084 com as 11 da F70-S10, 0087
+ *    com as tools de contato da F70-S15) — inserem o que falta (produção);
  *  - `seedAgentTools` (upsert por `key` entre as globais — sincroniza nome/descrição/
  *    schema/config em re-execuções do seed).
  * `tools_agent.test.ts` trava a divergência entre as duas.
+ *
+ * `add_contact_tag` / `update_contact` (F70-S15) são `workflow`: o efeito roda no Node
+ * (`apps/api/src/internal/tools/contact-handlers.ts`) sobre o contato da conversa.
  */
 import { and, eq, isNull } from 'drizzle-orm';
 import type { DB } from '../client';
@@ -59,7 +63,10 @@ function readOnlyAcl(
   };
 }
 
-const CONTACT_READ = ['display_name', 'email', 'phone', 'language', 'source', 'custom_fields'];
+// F70-S15 (M1): sem telefone/e-mail na leitura padrão — o runtime ainda os aceita
+// como teto, liberados por agente em `agent_tools.overrides`. `custom_fields` só sai
+// com as chaves de `custom_fields_keys` (default: nenhuma).
+const CONTACT_READ = ['display_name', 'language', 'source', 'custom_fields'];
 const DEAL_READ = [
   'id',
   'title',
@@ -205,6 +212,61 @@ export const AGENT_TOOLS: readonly AgentToolSeed[] = [
     }),
     handlerConfig: {},
   },
+  // ─── contato (callback Node, F70-S15) ─────────────────────────────────────
+  {
+    key: 'add_contact_tag',
+    name: 'Etiquetar contato',
+    description:
+      "Aplica uma etiqueta já existente ao contato desta conversa (ex.: 'atendimento-humano' quando uma pessoa da equipe precisa assumir). Não cria etiquetas novas: se a etiqueta não existir, a ação é recusada.",
+    category: 'workflow',
+    schema: fn('add_contact_tag', 'Aplica uma etiqueta existente ao contato da conversa.', {
+      type: 'object',
+      required: ['tag'],
+      properties: {
+        tag: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 80,
+          description: 'Nome exato de uma etiqueta que já existe no workspace.',
+        },
+      },
+      additionalProperties: false,
+    }),
+    handlerConfig: {},
+  },
+  {
+    key: 'update_contact',
+    name: 'Atualizar contato',
+    description:
+      'Atualiza dados do contato desta conversa: nome de exibição, idioma, fuso horário e campos personalizados. Telefone, e-mail e consentimento NÃO podem ser alterados por aqui.',
+    category: 'workflow',
+    schema: fn('update_contact', 'Atualiza campos permitidos do contato da conversa.', {
+      type: 'object',
+      properties: {
+        display_name: { type: ['string', 'null'], minLength: 1, maxLength: 200 },
+        language: {
+          type: ['string', 'null'],
+          pattern: '^[a-z]{2,3}(-([A-Z]{2}|[0-9]{3}))?$',
+          description: "Idioma preferido (BCP 47, ex.: 'pt-BR').",
+        },
+        timezone: {
+          type: ['string', 'null'],
+          minLength: 1,
+          maxLength: 64,
+          description: "Fuso IANA (ex.: 'America/Sao_Paulo').",
+        },
+        custom_fields: {
+          type: ['object', 'null'],
+          maxProperties: 20,
+          propertyNames: { pattern: '^[a-z][a-z0-9_]{0,63}$' },
+          additionalProperties: { type: ['string', 'number', 'boolean', 'null'] },
+          description: 'Campos personalizados (merge: só as chaves informadas mudam).',
+        },
+      },
+      additionalProperties: false,
+    }),
+    handlerConfig: {},
+  },
   // ─── knowledge (runtime, RLS) ─────────────────────────────────────────────
   {
     key: 'search_knowledge_base',
@@ -227,7 +289,8 @@ export const AGENT_TOOLS: readonly AgentToolSeed[] = [
   {
     key: 'query_contact',
     name: 'Consultar contato',
-    description: 'Lê dados do contato atual da conversa (nome, e-mail, telefone, etc.).',
+    description:
+      'Lê dados do contato atual da conversa (nome, idioma, origem e os campos personalizados liberados para este agente).',
     category: 'database',
     schema: fn('query_contact', 'Lê dados do contato atual.', {
       type: 'object',
@@ -236,7 +299,7 @@ export const AGENT_TOOLS: readonly AgentToolSeed[] = [
       },
       additionalProperties: false,
     }),
-    handlerConfig: readOnlyAcl('contacts', CONTACT_READ, ['notes']),
+    handlerConfig: { ...readOnlyAcl('contacts', CONTACT_READ, ['notes']), custom_fields_keys: [] },
   },
   {
     key: 'query_deal',
@@ -298,17 +361,80 @@ export async function seedAgentTools(db: DB): Promise<void> {
 }
 
 /**
- * SQL da migration de catálogo, derivado de `AGENT_TOOLS`: insere cada tool global
- * que ainda não existe (o UNIQUE `(workspace_id, key)` trata NULL como distinto, então
- * `ON CONFLICT` não serve — `WHERE NOT EXISTS`). Usado para gerar a migration 0084 e
- * pelo teste que trava a divergência TS ↔ SQL.
+ * Migrations de catálogo: as keys que cada uma insere (`keys`) e as globais que ela
+ * reescreve (`updates`). Migration aplicada nunca muda: tool nova ou mudança de
+ * conteúdo entra numa migration nova, com o SQL gerado só do que ela toca.
  */
-export function renderAgentToolsInsertSql(): string {
+export const AGENT_TOOL_MIGRATIONS: ReadonlyArray<{
+  readonly file: string;
+  readonly keys: readonly string[];
+  readonly updates?: readonly string[];
+}> = [
+  {
+    file: '0084_f70_agent_tools_catalog.sql',
+    keys: [
+      'transfer_to_human',
+      'transfer_to_agent',
+      'escalate',
+      'mark_resolved',
+      'change_conversation_status',
+      'register_conversion',
+      'move_deal_stage',
+      'search_knowledge_base',
+      'query_contact',
+      'query_deal',
+      'query_conversation',
+    ],
+  },
+  {
+    file: '0087_f70_agent_contact_tools.sql',
+    keys: ['add_contact_tag', 'update_contact'],
+    // M1: leitura padrão sem telefone/e-mail + `custom_fields_keys` vazio.
+    updates: ['query_contact'],
+  },
+];
+
+const sqlLiteral = (s: string): string => `'${s.replace(/'/g, "''")}'`;
+
+/**
+ * SQL que reescreve o conteúdo de tools GLOBAIS já existentes (nome, descrição,
+ * schema e `handler_config`) a partir de `AGENT_TOOLS`. As globais são da plataforma
+ * (o `seedAgentTools` já as sobrescreve); overrides por agente ficam em `agent_tools`.
+ */
+export function renderAgentToolsUpdateSql(keys: readonly string[]): string {
+  return AGENT_TOOLS.filter((t) => keys.includes(t.key))
+    .map(
+      (t) =>
+        `UPDATE "tools" SET "name" = ${sqlLiteral(t.name)}, "description" = ${sqlLiteral(t.description)}, "schema" = ${sqlLiteral(JSON.stringify(t.schema))}::jsonb, "handler_config" = ${sqlLiteral(JSON.stringify(t.handlerConfig))}::jsonb, "updated_at" = now()\n` +
+        `WHERE "key" = ${sqlLiteral(t.key)} AND "workspace_id" IS NULL;`,
+    )
+    .join('\n--> statement-breakpoint\n');
+}
+
+/** Corpo SQL de uma migration de catálogo (inserts e depois updates). */
+export function renderAgentToolMigrationSql(m: (typeof AGENT_TOOL_MIGRATIONS)[number]): string {
+  return [renderAgentToolsInsertSql(m.keys), renderAgentToolsUpdateSql(m.updates ?? [])]
+    .filter((part) => part.length > 0)
+    .join('\n--> statement-breakpoint\n');
+}
+
+/**
+ * SQL de migration de catálogo, derivado de `AGENT_TOOLS` (todas, ou só `keys`, na
+ * ordem do catálogo): insere cada tool global que ainda não existe (o UNIQUE
+ * `(workspace_id, key)` trata NULL como distinto, então `ON CONFLICT` não serve —
+ * `WHERE NOT EXISTS`). Usado para gerar as migrations e pelo teste que trava a
+ * divergência TS ↔ SQL.
+ */
+export function renderAgentToolsInsertSql(keys?: readonly string[]): string {
   const lit = (s: string): string => `'${s.replace(/'/g, "''")}'`;
-  return AGENT_TOOLS.map(
-    (t) =>
-      `INSERT INTO "tools" ("workspace_id", "key", "name", "description", "category", "schema", "handler_config", "is_global", "is_active")\n` +
-      `SELECT NULL, ${lit(t.key)}, ${lit(t.name)}, ${lit(t.description)}, ${lit(t.category)}, ${lit(JSON.stringify(t.schema))}::jsonb, ${lit(JSON.stringify(t.handlerConfig))}::jsonb, true, true\n` +
-      `WHERE NOT EXISTS (SELECT 1 FROM "tools" WHERE "key" = ${lit(t.key)} AND "workspace_id" IS NULL);`,
-  ).join('\n--> statement-breakpoint\n');
+  const selected =
+    keys === undefined ? AGENT_TOOLS : AGENT_TOOLS.filter((t) => keys.includes(t.key));
+  return selected
+    .map(
+      (t) =>
+        `INSERT INTO "tools" ("workspace_id", "key", "name", "description", "category", "schema", "handler_config", "is_global", "is_active")\n` +
+        `SELECT NULL, ${lit(t.key)}, ${lit(t.name)}, ${lit(t.description)}, ${lit(t.category)}, ${lit(JSON.stringify(t.schema))}::jsonb, ${lit(JSON.stringify(t.handlerConfig))}::jsonb, true, true\n` +
+        `WHERE NOT EXISTS (SELECT 1 FROM "tools" WHERE "key" = ${lit(t.key)} AND "workspace_id" IS NULL);`,
+    )
+    .join('\n--> statement-breakpoint\n');
 }
