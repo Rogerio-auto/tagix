@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest';
 // Módulo JS puro em `public/` — o mesmo arquivo que o service worker importa em
 // runtime. Testar a cópia real, e não uma reimplementação, é o ponto.
-import { chooseStrategy } from '../../public/sw-strategy.js';
+import { chooseStrategy, isCacheable } from '../../public/sw-strategy.js';
 
 const ORIGEM = 'https://app.leadium.com.br';
 
@@ -57,16 +57,9 @@ describe('o que pode ser cacheado', () => {
     expect(chooseStrategy(req('/_next/static/chunks/main-abc123.js'))).toBe('cache-first');
   });
 
-  it('navegação é network-first — a tela de ontem não serve', () => {
-    expect(chooseStrategy(req('/hoje', { mode: 'navigate' }))).toBe('network-first');
-    expect(chooseStrategy(req('/hoje', { destination: 'document' }))).toBe('network-first');
-  });
-
   it('ícones e fontes são stale-while-revalidate', () => {
     expect(chooseStrategy(req('/icons/icon-192.png'))).toBe('stale-while-revalidate');
-    expect(chooseStrategy(req('/f.woff2', { destination: 'font' }))).toBe(
-      'stale-while-revalidate',
-    );
+    expect(chooseStrategy(req('/f.woff2', { destination: 'font' }))).toBe('stale-while-revalidate');
   });
 });
 
@@ -92,5 +85,67 @@ describe('regressão — a rota de API mais parecida com asset', () => {
     expect(chooseStrategy(req('/apiary/icons/x.png', { destination: 'image' }))).toBe(
       'stale-while-revalidate',
     );
+  });
+});
+
+/**
+ * F70-S28 — sessão expirada no PWA. A navegação é onde mora o redirect de sessão
+ * (`/hoje` → `/login?next=…`); o worker não pode nem servi-la do cache nem ficar no
+ * meio dela.
+ */
+describe('F70-S28 — navegação e auth nunca do cache', () => {
+  it('navegação (documento) é rede pura, sem respondWith', () => {
+    expect(chooseStrategy(req('/hoje', { mode: 'navigate' }))).toBe('network-only');
+    expect(chooseStrategy(req('/hoje', { destination: 'document' }))).toBe('network-only');
+    expect(chooseStrategy(req('/login?next=%2Fhoje', { mode: 'navigate' }))).toBe('network-only');
+    expect(chooseStrategy(req('/', { mode: 'navigate' }))).toBe('network-only');
+  });
+
+  it('/auth/* é rede pura em qualquer método', () => {
+    for (const method of ['GET', 'POST']) {
+      expect(chooseStrategy(req('/auth/login', { method }))).toBe('network-only');
+      expect(chooseStrategy(req('/auth/logout', { method }))).toBe('network-only');
+    }
+  });
+
+  it('POST /auth/login passa direto, mesmo com cara de navegação', () => {
+    expect(
+      chooseStrategy(
+        req('/auth/login', { method: 'POST', mode: 'navigate', destination: 'document' }),
+      ),
+    ).toBe('network-only');
+  });
+
+  it('GET /api/me (checagem de sessão) é rede pura', () => {
+    expect(chooseStrategy(req('/api/me'))).toBe('network-only');
+  });
+
+  it('pedido RSC da navegação client-side (`?_rsc=`) é rede pura', () => {
+    expect(chooseStrategy(req('/hoje?_rsc=abc123', { mode: 'cors', destination: '' }))).toBe(
+      'network-only',
+    );
+  });
+});
+
+describe('F70-S28 — redirect nunca entra no cache', () => {
+  const ok = { ok: true, type: 'basic', redirected: false };
+
+  it('resposta própria 2xx sem redirect pode ser guardada', () => {
+    expect(isCacheable(ok)).toBe(true);
+  });
+
+  it('opaqueredirect (redirect: manual) não entra', () => {
+    expect(isCacheable({ ok: false, type: 'opaqueredirect', redirected: false })).toBe(false);
+  });
+
+  it('resposta que veio de um redirect seguido não entra', () => {
+    expect(isCacheable({ ...ok, redirected: true })).toBe(false);
+  });
+
+  it('opaque (cross-origin), erro e ausência não entram', () => {
+    expect(isCacheable({ ok: false, type: 'opaque', redirected: false })).toBe(false);
+    expect(isCacheable({ ok: false, type: 'basic', redirected: false })).toBe(false);
+    expect(isCacheable(null)).toBe(false);
+    expect(isCacheable(undefined)).toBe(false);
   });
 });

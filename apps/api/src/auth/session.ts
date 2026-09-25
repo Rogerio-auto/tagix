@@ -93,14 +93,22 @@ export function __resetIdentityCache(): void {
 }
 
 /**
- * `verifyToken` com cache fresh + stale-on-error. Exportada p/ teste; o resto da app
- * usa `resolveSession`.
+ * Resultado da verificação com o MOTIVO da recusa (F70-S28). `invalid` é decisão
+ * definitiva do provider (token expirado/revogado/malformado, ou member inativo):
+ * o cliente deve voltar ao login. `unavailable` é infra (provider lançou, sem cache
+ * recente): NÃO é "sessão terminou" — responder 401 aqui mandaria todo mundo para o
+ * login a cada instabilidade do Supabase.
  */
-export async function verifyTokenResilient(token: string): Promise<AuthIdentity | null> {
+type TokenVerification =
+  | { readonly kind: 'ok'; readonly identity: AuthIdentity }
+  | { readonly kind: 'invalid' }
+  | { readonly kind: 'unavailable' };
+
+async function verifyTokenDetailed(token: string): Promise<TokenVerification> {
   const key = tokenKey(token);
   const now = Date.now();
   const cached = identityCache.get(key);
-  if (cached && cached.freshUntil > now) return cached.identity;
+  if (cached && cached.freshUntil > now) return { kind: 'ok', identity: cached.identity };
 
   let identity: AuthIdentity | null;
   try {
@@ -108,31 +116,56 @@ export async function verifyTokenResilient(token: string): Promise<AuthIdentity 
   } catch {
     // Provider LANÇOU = indisponibilidade de infra (rede/5xx): serve o último bom
     // recente (stale-on-error, bounded por STALE_MS) em vez de rejeitar.
-    if (cached && cached.staleUntil > now) return cached.identity;
-    return null;
+    if (cached && cached.staleUntil > now) return { kind: 'ok', identity: cached.identity };
+    return { kind: 'unavailable' };
   }
 
   if (identity) {
     pruneIfNeeded(now);
     identityCache.set(key, { identity, freshUntil: now + FRESH_MS, staleUntil: now + STALE_MS });
-    return identity;
+    return { kind: 'ok', identity };
   }
 
   // `null` = token genuinamente inválido (expirado/revogado/malformado). Decisão
   // definitiva do provider — NUNCA cai no stale (SEC-08). Purga o cache.
   identityCache.delete(key);
-  return null;
+  return { kind: 'invalid' };
+}
+
+/**
+ * `verifyToken` com cache fresh + stale-on-error. Exportada p/ teste; o resto da app
+ * usa `resolveSession`/`resolveSessionStatus`. `null` cobre inválido E indisponível.
+ */
+export async function verifyTokenResilient(token: string): Promise<AuthIdentity | null> {
+  const v = await verifyTokenDetailed(token);
+  return v.kind === 'ok' ? v.identity : null;
+}
+
+/** Sessão resolvida, ou o motivo de não haver uma (ver `TokenVerification`). */
+export type SessionResolution =
+  | { readonly kind: 'ok'; readonly session: SessionContext }
+  | { readonly kind: 'invalid' }
+  | { readonly kind: 'unavailable' };
+
+/**
+ * Verifica o token e resolve member + workspace, distinguindo "sessão morta"
+ * (`invalid` → 401) de "provider fora do ar" (`unavailable` → 503). Member inativo
+ * ou sem workspace é `invalid`: a sessão existe no provider mas não dá acesso.
+ */
+export async function resolveSessionStatus(token: string): Promise<SessionResolution> {
+  const v = await verifyTokenDetailed(token);
+  if (v.kind !== 'ok') return v;
+  const member = await membersRepo.findByEmail(v.identity.email);
+  if (!member || member.status !== 'active') return { kind: 'invalid' };
+  const workspace = await workspacesRepo.findById(member.workspaceId);
+  if (!workspace) return { kind: 'invalid' };
+  return { kind: 'ok', session: { identity: v.identity, member, workspace } };
 }
 
 /** Verifica o token e resolve member + workspace (member precisa estar ativo). */
 export async function resolveSession(token: string): Promise<SessionContext | null> {
-  const identity = await verifyTokenResilient(token);
-  if (!identity) return null;
-  const member = await membersRepo.findByEmail(identity.email);
-  if (!member || member.status !== 'active') return null;
-  const workspace = await workspacesRepo.findById(member.workspaceId);
-  if (!workspace) return null;
-  return { identity, member, workspace };
+  const r = await resolveSessionStatus(token);
+  return r.kind === 'ok' ? r.session : null;
 }
 
 /** Versão segura do member para enviar ao cliente (sem campos internos). */

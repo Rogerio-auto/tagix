@@ -18,8 +18,22 @@
  * velho faz ele ir dormir tranquilo. Leitura offline é outro slot (F61-S06) e
  * exige carimbo de "visto às 14:32" — que ainda não existe.
  *
- * @typedef {'cache-first'|'network-first'|'stale-while-revalidate'|'network-only'} Strategy
+ * @typedef {'cache-first'|'stale-while-revalidate'|'network-only'} Strategy
  */
+
+/**
+ * Pode guardar esta resposta no cache? Só resposta própria (`basic`), 2xx e que
+ * NÃO veio de redirect. `opaqueredirect` (fetch com `redirect: 'manual'`),
+ * `opaque` (cross-origin) e `redirected: true` nunca entram: servir um redirect do
+ * cache prende a pessoa no destino de ontem — o login, ou a tela de antes dele.
+ *
+ * @param {{ ok: boolean, type: string, redirected: boolean } | null | undefined} res
+ * @returns {boolean}
+ */
+export function isCacheable(res) {
+  if (!res) return false;
+  return res.ok === true && res.type === 'basic' && res.redirected !== true;
+}
 
 /**
  * Caminhos que NUNCA podem ser servidos do cache, com o motivo.
@@ -63,10 +77,13 @@ export function chooseStrategy(req) {
   //    conteúdo. Cache-first aqui é o que paga o slot inteiro em 4G.
   if (caminho.startsWith('/_next/static/')) return 'cache-first';
 
-  // 5. Navegação (o documento HTML). Network-first: o dono prefere esperar
-  //    300ms a abrir a tela de ontem. O cache é rede de segurança para quando
-  //    a rede não responde, não atalho de velocidade.
-  if (req.mode === 'navigate' || req.destination === 'document') return 'network-first';
+  // 5. Navegação (o documento HTML): rede pura, SEM `respondWith` (F70-S28).
+  //    Era network-first e guardava o HTML autenticado de cada tela: com rede
+  //    ruim, quem já não tinha sessão recebia o shell "logado" de ontem. E o
+  //    documento é onde mora o redirect de sessão (`/hoje` → `/login?next=…`):
+  //    deixar o navegador buscar direto é a única forma de nenhum redirect ser
+  //    engolido, reescrito ou servido de cache — em nenhum navegador.
+  if (req.mode === 'navigate' || req.destination === 'document') return 'network-only';
 
   // 6. Ícones e fontes: mudam pouco e não mentem sobre o negócio. Serve rápido
   //    do cache e atualiza atrás.

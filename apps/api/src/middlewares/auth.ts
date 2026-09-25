@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { withWorkspace, type DbTx } from '@hm/db';
 import { can, type Permission, type Role } from '@hm/shared';
-import { readToken, resolveSession } from '../auth';
+import { readToken, resolveSessionStatus } from '../auth';
 
 /** Exige sessão válida; popula `req.auth` (member + workspace). */
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -15,12 +15,22 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
   const token = readToken(req);
-  const session = token ? await resolveSession(token) : null;
-  if (!session) {
-    res.status(401).json({ message: 'Não autenticado.' });
+  const result = token ? await resolveSessionStatus(token) : ({ kind: 'invalid' } as const);
+  if (result.kind === 'unavailable') {
+    // F70-S28: provider de auth fora do ar (sem cache recente) NÃO é sessão morta.
+    // 401 aqui mandaria todo mundo para o login a cada instabilidade do Supabase.
+    res.status(503).json({
+      message: 'Não foi possível confirmar sua sessão agora. Tente de novo em instantes.',
+      error: 'auth_unavailable',
+    });
     return;
   }
-  req.auth = session;
+  if (result.kind === 'invalid') {
+    // `error` estável: o web trata este 401 como "sessão terminou" (volta ao login).
+    res.status(401).json({ message: 'Não autenticado.', error: 'session_invalid' });
+    return;
+  }
+  req.auth = result.session;
   next();
 }
 

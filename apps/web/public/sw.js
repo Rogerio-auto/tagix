@@ -19,16 +19,25 @@
  *    rede pura, sem exceção (ver `sw-strategy.js`).
  * 3. **Nunca troca de versão no meio da sessão.** Sem `skipWaiting` automático:
  *    trocar o código sob os pés de quem está respondendo um cliente é como
- *    recarregar a página sozinho.
+ *    recarregar a página sozinho. A página pede a troca (`skip-waiting`) num
+ *    momento seguro — tela pública ou app em segundo plano (F70-S28) —, para a
+ *    versão nova não ficar presa em `waiting` enquanto o PWA vive em memória.
+ *
+ * ## Sessão (F70-S28)
+ *
+ * Navegação (documento), `/auth`, `/api` e `/socket.io` são rede pura e não passam
+ * por `respondWith`: o redirect de sessão expirada (`/hoje` → `/login?next=…`) é
+ * do navegador, nunca deste worker. `POST` idem.
  */
 
-import { chooseStrategy, describeRequest } from './sw-strategy.js';
+import { chooseStrategy, describeRequest, isCacheable } from './sw-strategy.js';
 
 /**
  * Versão do cache. Trocar esta string invalida TODO o cache anterior no próximo
  * `activate` — é o botão de "limpa tudo" quando algum asset entrar corrompido.
  */
-const VERSAO = 'leadium-v1';
+// v2 (F70-S28): apaga o cache da v1, que guardava HTML autenticado de navegação.
+const VERSAO = 'leadium-v2';
 const CACHE = `${VERSAO}-assets`;
 
 /** Onde a checagem de desligamento mora, e de quanto em quanto tempo. */
@@ -93,7 +102,7 @@ self.addEventListener('activate', (event) => {
 
 /** Guarda no cache, ignorando falha de quota — cache cheio não pode virar erro. */
 async function guardar(request, response) {
-  if (!response || !response.ok || response.type === 'opaque') return;
+  if (!isCacheable(response)) return;
   try {
     const cache = await caches.open(CACHE);
     await cache.put(request, response.clone());
@@ -108,18 +117,6 @@ async function cacheFirst(request) {
   const res = await fetch(request);
   await guardar(request, res);
   return res;
-}
-
-async function networkFirst(request) {
-  try {
-    const res = await fetch(request);
-    await guardar(request, res);
-    return res;
-  } catch (err) {
-    const hit = await caches.match(request);
-    if (hit) return hit;
-    throw err;
-  }
 }
 
 async function staleWhileRevalidate(request) {
@@ -165,7 +162,6 @@ self.addEventListener('fetch', (event) => {
       semRejeicao(checarKillSwitch());
       try {
         if (estrategia === 'cache-first') return await cacheFirst(request);
-        if (estrategia === 'network-first') return await networkFirst(request);
         return await staleWhileRevalidate(request);
       } catch {
         // Última linha: qualquer falha inesperada no handler vira a rede crua.

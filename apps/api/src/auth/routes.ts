@@ -8,7 +8,7 @@ import {
   clearSessionCookie,
   publicMember,
   readToken,
-  resolveSession,
+  resolveSessionStatus,
   setSessionCookie,
 } from './session';
 import { signupHandler } from './signup';
@@ -75,13 +75,18 @@ export function createAuthRouter(): Router {
     }
     try {
       const session = await getAuthProvider().signIn(parsed.data);
-      setSessionCookie(res, session.accessToken);
       const member = await membersRepo.findByEmail(session.identity.email);
       const workspace = member ? await workspacesRepo.findById(member.workspaceId) : null;
       if (!member || !workspace) {
+        // F70-S28: sem workspace não há sessão utilizável — não emite cookie. Antes o
+        // cookie saía antes deste check e deixava no navegador um token que passa no
+        // middleware do web mas volta 401 em `/api/me`.
         res.status(403).json({ message: 'Usuário sem workspace ativo.' });
         return;
       }
+      // Substitui qualquer `hm_session` anterior (inclusive um morto): mesmo nome,
+      // mesmo path — o cookie inválido nunca impede o login (F70-S28).
+      setSessionCookie(res, session.accessToken);
       // Intenção de plano da página de venda (signup): consome 1x e devolve ao web,
       // que redireciona ao checkout. One-shot (não força redirect a cada login) —
       // o usuário pode assinar depois pelo billing. Nunca libera plano pago aqui.
@@ -108,7 +113,9 @@ export function createAuthRouter(): Router {
     const token = extractTurnstileToken(req);
     const ok = await verifyTurnstile(token, clientIp(req));
     if (!ok) {
-      res.status(400).json({ message: 'Verificação anti-robô falhou. Recarregue e tente de novo.' });
+      res
+        .status(400)
+        .json({ message: 'Verificação anti-robô falhou. Recarregue e tente de novo.' });
       return;
     }
     await signupHandler(req, res);
@@ -127,11 +134,20 @@ export function createAuthRouter(): Router {
 
   router.get('/api/me', async (req: Request, res: Response) => {
     const token = readToken(req);
-    const session = token ? await resolveSession(token) : null;
-    if (!session) {
-      res.status(401).json({ message: 'Não autenticado.' });
+    const result = token ? await resolveSessionStatus(token) : ({ kind: 'invalid' } as const);
+    if (result.kind === 'unavailable') {
+      // F70-S28: provider fora do ar não é sessão morta — 503 não desloga ninguém.
+      res.status(503).json({
+        message: 'Não foi possível confirmar sua sessão agora. Tente de novo em instantes.',
+        error: 'auth_unavailable',
+      });
       return;
     }
+    if (result.kind === 'invalid') {
+      res.status(401).json({ message: 'Não autenticado.', error: 'session_invalid' });
+      return;
+    }
+    const { session } = result;
     res.json({ member: publicMember(session.member), workspace: session.workspace });
   });
 

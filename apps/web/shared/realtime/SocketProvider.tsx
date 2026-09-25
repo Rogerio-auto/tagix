@@ -13,15 +13,21 @@
  * "transport-agnostic" já existentes (`useConversationSocket`, `TypingIndicator`,
  * …) sem acoplá-los a `socket.io-client`.
  *
- * Resiliência: a conexão nunca lança em falha (o socket.io reconecta sozinho);
- * SSR-safe (só conecta no browser). Cleanup no unmount: desconecta e limpa o
- * global.
+ * Resiliência: a conexão nunca lança em falha (o socket.io reconecta sozinho em
+ * erro de transporte; recusa de handshake passa pelo `session-guard`, F70-S28);
+ * SSR-safe (só conecta no browser) e só em telas protegidas. Cleanup no unmount:
+ * desconecta e limpa o global.
  */
 
 import type { ReactNode } from 'react';
 import { createContext, useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { io, type Socket } from 'socket.io-client';
 import type { ServerToClient } from '@hm/shared';
+import { handleSessionExpired } from '@/shared/auth/session-expiry';
+import { isPublicPath } from '@/shared/lib/public-routes';
+import { attachSessionGuard } from './session-guard';
 
 /**
  * Eventos que o client EMITE para o servidor pedindo entrada/saída da room de
@@ -63,10 +69,18 @@ export function SocketProvider({ children }: SocketProviderProps) {
   const socketRef = useRef<HmSocket | null>(null);
   const [socket, setSocket] = useState<HmSocket | null>(null);
   const [connected, setConnected] = useState(false);
+  const queryClient = useQueryClient();
+  // F70-S28: socket autenticado só onde há sessão. Nas telas públicas (login,
+  // signup…) o handshake seria recusado sempre — o "handshake unauthorized" que
+  // enchia o log a cada abertura do login. E, como o provider vive no layout RAIZ, a
+  // chave `enabled` é o que faz o socket nascer de novo, com o cookie novo, quando o
+  // login leva (client-side) para a primeira tela protegida.
+  const pathname = usePathname();
+  const enabled = !isPublicPath(pathname ?? '/');
 
   useEffect(() => {
     // SSR-safe: só conecta no browser.
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !enabled) return;
 
     const instance: HmSocket = io(API_URL, {
       withCredentials: true,
@@ -89,16 +103,23 @@ export function SocketProvider({ children }: SocketProviderProps) {
 
     const onConnect = (): void => setConnected(true);
     const onDisconnect = (): void => setConnected(false);
-    // Falha de conexão NUNCA lança: apenas logamos; o socket.io tenta reconectar.
+    // Falha de conexão NUNCA lança: o guard abaixo decide entre login, nova
+    // tentativa com backoff ou deixar o socket.io reconectar sozinho.
     const onConnectError = (err: Error): void => {
-      console.warn('[socket] connect_error — tentando reconectar:', err.message);
+      console.warn('[socket] connect_error:', err.message);
     };
 
     instance.on('connect', onConnect);
     instance.on('disconnect', onDisconnect);
     instance.on('connect_error', onConnectError);
+    // Handshake `unauthorized` = sessão morta: para de tentar e vai ao login pelo
+    // MESMO handler central dos 401 de API (idempotente, um único redirect).
+    const disposeGuard = attachSessionGuard(instance, {
+      onSessionExpired: () => handleSessionExpired(queryClient),
+    });
 
     return () => {
+      disposeGuard();
       instance.off('connect', onConnect);
       instance.off('disconnect', onDisconnect);
       instance.off('connect_error', onConnectError);
@@ -110,7 +131,7 @@ export function SocketProvider({ children }: SocketProviderProps) {
       setSocket(null);
       setConnected(false);
     };
-  }, []);
+  }, [enabled, queryClient]);
 
   const value = useMemo<SocketContextValue>(
     () => ({

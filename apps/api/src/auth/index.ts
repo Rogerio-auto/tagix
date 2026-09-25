@@ -8,6 +8,7 @@ export {
   clearSessionCookie,
   readToken,
   resolveSession,
+  resolveSessionStatus,
   publicMember,
 } from './session';
-export type { SessionContext, Member, Workspace } from './session';
+export type { SessionContext, SessionResolution, Member, Workspace } from './session';

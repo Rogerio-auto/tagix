@@ -18,6 +18,7 @@ const providerState: {
   signInThrows: boolean;
   signInEmail: string | null;
   confirmReset: boolean;
+  verifyThrows: boolean;
 } = {
   signUpResult: { authUserId: 'auth-user-1', created: true },
   signUpThrows: false,
@@ -25,6 +26,7 @@ const providerState: {
   signInThrows: true,
   signInEmail: null,
   confirmReset: true,
+  verifyThrows: false,
 };
 
 const fakeProvider: IAuthProvider = {
@@ -35,6 +37,7 @@ const fakeProvider: IAuthProvider = {
     return { accessToken: 't', identity: { authUserId: 'u', email }, expiresAt: null };
   },
   async verifyToken() {
+    if (providerState.verifyThrows) throw new Error('fetch failed');
     return null;
   },
   async signOut() {},
@@ -146,10 +149,16 @@ beforeEach(() => {
   providerState.signInThrows = true;
   providerState.signInEmail = null;
   providerState.confirmReset = true;
+  providerState.verifyThrows = false;
   captchaState.required = false;
   recordFailureMock.mockClear();
   provisionMock.mockReset();
-  provisionMock.mockResolvedValue({ workspaceId: 'ws-1', memberId: 'm-1', slug: 'acme', created: true });
+  provisionMock.mockResolvedValue({
+    workspaceId: 'ws-1',
+    memberId: 'm-1',
+    slug: 'acme',
+    created: true,
+  });
 });
 
 function validSignup(overrides: Record<string, unknown> = {}) {
@@ -180,7 +189,9 @@ describe('POST /auth/signup', () => {
   });
 
   it('senha fraca → 400', async () => {
-    const res = await request(app).post('/auth/signup').send(validSignup({ password: 'curta' }));
+    const res = await request(app)
+      .post('/auth/signup')
+      .send(validSignup({ password: 'curta' }));
     expect(res.status).toBe(400);
   });
 
@@ -197,7 +208,12 @@ describe('POST /auth/signup', () => {
     // created:false (usuário já existe no provider). O provisioner é chamado e é
     // idempotente — no-op se já tem workspace, ou completa o tenant de um órfão.
     providerState.signUpResult = { authUserId: 'existing', created: false };
-    provisionMock.mockResolvedValue({ workspaceId: 'ws-1', memberId: 'm-1', slug: 'acme', created: false });
+    provisionMock.mockResolvedValue({
+      workspaceId: 'ws-1',
+      memberId: 'm-1',
+      slug: 'acme',
+      created: false,
+    });
     const res = await request(app).post('/auth/signup').send(validSignup());
     expect(res.status).toBe(202);
     expect(res.body).toEqual({ status: 'verification_sent' });
@@ -367,7 +383,12 @@ describe('POST /auth/login (intenção de plano da venda)', () => {
       .where(eq(schema.plans.key, 'free'));
     const [ws] = await db
       .insert(schema.workspaces)
-      .values({ name: `LP ${sfx}`, slug: `lp-${sfx}`, planId: freePlan!.id, subscriptionStatus: 'trial' })
+      .values({
+        name: `LP ${sfx}`,
+        slug: `lp-${sfx}`,
+        planId: freePlan!.id,
+        subscriptionStatus: 'trial',
+      })
       .returning({ id: schema.workspaces.id });
     createdWorkspaces.push(ws!.id);
     await db.insert(schema.members).values({
@@ -398,5 +419,93 @@ describe('POST /auth/login (intenção de plano da venda)', () => {
     const res2 = await request(app).post('/auth/login').send({ email, password: 'x' });
     expect(res2.status).toBe(200);
     expect(res2.body.pendingPlanKey).toBeNull();
+  });
+});
+
+/** Cria workspace + member ativo direto no DB (cascade limpa no afterAll). */
+async function seedActiveMember(email: string): Promise<void> {
+  const db = getDb();
+  const sfx = randomUUID().slice(0, 8);
+  const [freePlan] = await db
+    .select({ id: schema.plans.id })
+    .from(schema.plans)
+    .where(eq(schema.plans.key, 'free'));
+  const [ws] = await db
+    .insert(schema.workspaces)
+    .values({
+      name: `S28 ${sfx}`,
+      slug: `s28-${sfx}`,
+      planId: freePlan!.id,
+      subscriptionStatus: 'trial',
+    })
+    .returning({ id: schema.workspaces.id });
+  createdWorkspaces.push(ws!.id);
+  await db.insert(schema.members).values({
+    workspaceId: ws!.id,
+    authUserId: randomUUID(),
+    email,
+    name: 'S28',
+    role: 'OWNER',
+    status: 'active',
+    isPlatformAdmin: false,
+  });
+}
+
+/** Header `Set-Cookie` normalizado para array (supertest devolve string | string[]). */
+function setCookies(res: request.Response): string[] {
+  const raw: unknown = res.headers['set-cookie'];
+  if (Array.isArray(raw)) return raw.filter((c): c is string => typeof c === 'string');
+  return typeof raw === 'string' ? [raw] : [];
+}
+
+describe('F70-S28 — sessão morta não impede o login', () => {
+  it('login com hm_session inválido presente funciona na 1ª tentativa e emite o cookie novo', async () => {
+    const email = `s28-login-${randomUUID().slice(0, 8)}@empresa.com`;
+    await seedActiveMember(email);
+    providerState.signInThrows = false;
+    providerState.signInEmail = email;
+
+    const res = await request(app)
+      .post('/auth/login')
+      .set('Cookie', 'hm_session=token-morto-de-ontem')
+      .send({ email, password: 'x' });
+
+    expect(res.status).toBe(200);
+    const cookie = setCookies(res).find((c) => c.startsWith('hm_session='));
+    // Mesmo nome e path do cookie morto: o navegador SUBSTITUI, não acumula.
+    expect(cookie).toMatch(/^hm_session=t;/);
+    expect(cookie).toMatch(/Path=\//);
+    expect(cookie).toMatch(/HttpOnly/);
+  });
+
+  it('login de quem não tem workspace → 403 SEM emitir cookie (não planta sessão inútil)', async () => {
+    providerState.signInThrows = false;
+    providerState.signInEmail = `s28-orfao-${randomUUID().slice(0, 8)}@empresa.com`;
+
+    const res = await request(app).post('/auth/login').send({ email: 'a@b.com', password: 'x' });
+
+    expect(res.status).toBe(403);
+    expect(setCookies(res).some((c) => c.startsWith('hm_session='))).toBe(false);
+  });
+});
+
+describe('F70-S28 — GET /api/me distingue sessão morta de provider fora do ar', () => {
+  it('cookie inválido → 401 session_invalid (o web volta ao login)', async () => {
+    const res = await request(app).get('/api/me').set('Cookie', `hm_session=morto-${randomUUID()}`);
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('session_invalid');
+  });
+
+  it('sem cookie → 401 session_invalid', async () => {
+    const res = await request(app).get('/api/me');
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('session_invalid');
+  });
+
+  it('provider lança (Supabase fora) → 503 auth_unavailable, NÃO 401', async () => {
+    providerState.verifyThrows = true;
+    const res = await request(app).get('/api/me').set('Cookie', `hm_session=novo-${randomUUID()}`);
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('auth_unavailable');
   });
 });
