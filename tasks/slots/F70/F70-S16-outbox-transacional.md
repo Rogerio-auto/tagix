@@ -2,7 +2,7 @@
 id: F70-S16
 title: Outbox transacional para eventos de domínio e jobs, com dedup indexado dos webhooks
 phase: F70
-status: review
+status: done
 priority: high
 estimated_size: L
 depends_on: [F70-S14, F70-S12]

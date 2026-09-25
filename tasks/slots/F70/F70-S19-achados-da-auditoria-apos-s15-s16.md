@@ -2,7 +2,7 @@
 id: F70-S19
 title: Achados da auditoria que dependem da S15 e da S16 — IA legada, eco, assinatura com timestamp e consumer estrito
 phase: F70
-status: blocked
+status: available
 priority: high
 estimated_size: S
 depends_on: [F70-S15, F70-S16]
