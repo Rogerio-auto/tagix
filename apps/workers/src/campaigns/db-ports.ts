@@ -11,9 +11,21 @@
  *      conflito => o step JA foi despachado antes -> NAO reenvia, mas AVANCA o
  *      recipient (cura a linha que ficaria presa se um crash matasse o processo
  *      entre o envio e a transicao).
- *   3. DRIP (CAMP-03): apos publicar em hm.q.outbound, `advanceAfterDispatch`
- *      devolve o recipient a `pending` com next_step_at = now + delaySeconds do
- *      PROXIMO step — ou o marca `completed` quando os steps acabam (CAMP-04).
+ *   3. DRIP (CAMP-03): `advanceAfterDispatch` devolve o recipient a `pending`
+ *      com next_step_at = now + delaySeconds do PROXIMO step — ou o marca
+ *      `completed` quando os steps acabam (CAMP-04).
+ *
+ * F70-S14 — o job de outbound (hm.q.outbound) e publicado DEPOIS do commit.
+ * Publicar dentro da transacao deixava, num rollback, um job apontando para uma
+ * mensagem que nunca existiu (o outbound worker enviaria um template fantasma).
+ * A ordem agora e: commit → `conversation.opened` (se o disparo abriu a
+ * conversa) → job. Se a publicacao falhar depois do commit (canal AMQP fechado),
+ * uma transacao de COMPENSACAO desfaz o que so fazia sentido com o job na fila:
+ * apaga a delivery (libera a idempotencyKey para a retentativa) e a mensagem
+ * `pending` que nunca saiu, e devolve o recipient ao passo anterior com o backoff
+ * de falha — guardada pelo estado que o disparo gravou, para nao atropelar outro
+ * tick que ja tenha avancado a linha. A conversa fica (existe e ja foi
+ * anunciada). O erro e relancado: canal fechado derruba o tick, como antes.
  *
  * O que era o bug: o recipient virava `sending` e ninguem o tirava de la;
  * `delaySeconds` nunca era lido; a campanha nunca chegava a `completed`; e o
@@ -32,7 +44,7 @@ import { GraphClient, fetchChannelQuality, type ChannelHealth } from '@hm/channe
 import { decideOutbound, isMarketCode } from '@hm/shared';
 import type { ChannelKind, MarketCode, OutboundDecision } from '@hm/shared';
 import { domainEvents, emitDomainEvent, makeEnvelope, QUEUES } from '@hm/shared/mq';
-import type { DomainEventDraft, MqHandle } from '@hm/shared/mq';
+import type { DomainEventDraft, Envelope, MqHandle } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
 import type { CampaignErrorAction } from '@hm/channels';
 import type {
@@ -80,13 +92,36 @@ export interface CampaignDbDeps {
   readonly emitEvent?: (draft: DomainEventDraft) => Promise<boolean>;
 }
 
-/** Resultado da transacao de disparo + a conversa que ela abriu (anunciada apos o commit). */
+/** Estado do recipient ANTES do disparo (restaurado se o job nao chegar a fila). */
+interface RecipientSnapshot {
+  readonly lastStepIndex: number | null;
+  readonly lastStepAt: Date | null;
+  readonly completedAt: Date | null;
+}
+
+/** Job de outbound pronto, publicado so depois do commit (F70-S14). */
+interface PendingOutboundJob {
+  readonly envelope: Envelope;
+  readonly deliveryId: string;
+  readonly messageId: string;
+  /** `attempts` depois do claim (base do backoff na compensacao). */
+  readonly attempts: number;
+  /** Transicao que o disparo gravou (guarda da compensacao). */
+  readonly applied: RecipientTransition;
+  readonly previous: RecipientSnapshot;
+}
+
+/**
+ * Resultado da transacao de disparo + o que ela deixou para DEPOIS do commit: a
+ * conversa que abriu (anunciada) e o job de outbound (publicado).
+ */
 interface DispatchTx {
   readonly outcome: DispatchOutcome;
   readonly opened: { readonly conversationId: string; readonly contactId: string } | null;
+  readonly job: PendingOutboundJob | null;
 }
 
-const settled = (outcome: DispatchOutcome): DispatchTx => ({ outcome, opened: null });
+const settled = (outcome: DispatchOutcome): DispatchTx => ({ outcome, opened: null, job: null });
 
 async function loadChannelToken(
   tx: DbTx,
@@ -458,10 +493,21 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
               isDue(now),
             ),
           )
-          .returning({ attempts: campaignRecipients.attempts });
+          .returning({
+            attempts: campaignRecipients.attempts,
+            // O claim nao mexe nestas: sao o estado anterior ao disparo.
+            lastStepIndex: campaignRecipients.lastStepIndex,
+            lastStepAt: campaignRecipients.lastStepAt,
+            completedAt: campaignRecipients.completedAt,
+          });
         const claim = claimed[0];
         if (!claim) return settled({ kind: 'skipped' });
         const attempts = claim.attempts;
+        const previous: RecipientSnapshot = {
+          lastStepIndex: claim.lastStepIndex,
+          lastStepAt: claim.lastStepAt,
+          completedAt: claim.completedAt,
+        };
 
         const steps = await loadSteps(tx, campaign.id);
 
@@ -576,7 +622,7 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
         if (!message) {
           await applyFailure(tx, dispatch.recipientId, attempts, now, 'message_failed');
           // A conversa criada acima commita junto com a falha: continua anunciada.
-          return { outcome: { kind: 'error', errorCode: '131008' }, opened };
+          return { outcome: { kind: 'error', errorCode: '131008' }, opened, job: null };
         }
         const messageId = message.id;
 
@@ -586,11 +632,8 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           .where(eq(campaignDeliveries.id, deliveryId));
 
         // (3) Drip: proximo step agendado em now + delaySeconds (ou terminal).
-        await applyTransition(
-          tx,
-          dispatch.recipientId,
-          advanceAfterDispatch(steps, dispatch.stepIndex, now),
-        );
+        const applied = advanceAfterDispatch(steps, dispatch.stepIndex, now);
+        await applyTransition(tx, dispatch.recipientId, applied);
 
         const job = {
           kind: 'template',
@@ -602,25 +645,38 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           languageCode: step.languageCode,
           components: step.templateComponents ?? [],
         };
+        // F70-S14: o envelope sai daqui PRONTO, mas so e publicado depois do commit.
         const envelope = makeEnvelope(OUTBOUND_JOB_TYPE, campaign.workspaceId, job);
-        deps.channel.sendToQueue(OUTBOUND_QUEUE, Buffer.from(JSON.stringify(envelope)), {
-          persistent: true,
-          contentType: 'application/json',
-        });
-
-        return { outcome: { kind: 'enqueued' }, opened };
+        return {
+          outcome: { kind: 'enqueued' },
+          opened,
+          job: { envelope, deliveryId, messageId, attempts, applied, previous },
+        };
       });
 
-      // F70-S13: fora da transacao — o commit aconteceu.
+      // Fora da transacao — o commit aconteceu. A conversa nasce antes da mensagem
+      // dela sair (F70-S13/S14).
       if (done.opened !== null) {
         await emitEvent(
           domainEvents.conversationOpened(campaign.workspaceId, {
             conversationId: done.opened.conversationId,
             contactId: done.opened.contactId,
             channelId: campaign.channelId,
-            trigger: 'inbound',
+            trigger: 'campaign',
           }),
         );
+      }
+      if (done.job !== null) {
+        const pending = done.job;
+        try {
+          deps.channel.sendToQueue(OUTBOUND_QUEUE, Buffer.from(JSON.stringify(pending.envelope)), {
+            persistent: true,
+            contentType: 'application/json',
+          });
+        } catch (err: unknown) {
+          await compensateUnpublishedJob(campaign.workspaceId, dispatch, pending, now, deps.logger);
+          throw err;
+        }
       }
       return done.outcome;
     },
@@ -717,6 +773,64 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
  * (ou marca failed ao esgotar as tentativas). Nunca deixa o recipient preso em
  * `sending` — que era exatamente o estado morto do CAMP-03.
  */
+/**
+ * F70-S14 — o job nao chegou a fila depois do commit: desfaz o que so fazia
+ * sentido com ele la. Nunca lanca (o erro original e o que o caller relanca);
+ * falha aqui e logada com os ids para reconciliacao manual.
+ */
+async function compensateUnpublishedJob(
+  workspaceId: string,
+  dispatch: PendingDispatch,
+  job: PendingOutboundJob,
+  now: Date,
+  logger: Logger,
+): Promise<void> {
+  try {
+    const restored = await withWorkspace(workspaceId, async (tx) => {
+      await tx.delete(campaignDeliveries).where(eq(campaignDeliveries.id, job.deliveryId));
+      // So a mensagem que nunca saiu: sem job, nenhum worker a tocou.
+      await tx
+        .delete(messages)
+        .where(and(eq(messages.id, job.messageId), eq(messages.viewStatus, 'pending')));
+      const failure = afterDispatchFailure(job.attempts, now, 'outbound_publish_failed');
+      const rows = await tx
+        .update(campaignRecipients)
+        .set({
+          status: failure.status,
+          nextStepAt: failure.nextStepAt,
+          failedReason: failure.failedReason,
+          lastStepIndex: job.previous.lastStepIndex,
+          lastStepAt: job.previous.lastStepAt,
+          completedAt: job.previous.completedAt,
+          attempts: job.attempts,
+        })
+        .where(
+          and(
+            eq(campaignRecipients.id, dispatch.recipientId),
+            eq(campaignRecipients.status, job.applied.status),
+            eq(campaignRecipients.lastStepIndex, job.applied.lastStepIndex),
+          ),
+        )
+        .returning({ id: campaignRecipients.id });
+      return rows.length > 0;
+    });
+    logger.warn('campaigns: job de outbound nao publicado — disparo compensado', {
+      recipientId: dispatch.recipientId,
+      stepId: dispatch.stepId,
+      deliveryId: job.deliveryId,
+      recipientRestored: restored,
+    });
+  } catch (err: unknown) {
+    logger.error('campaigns: compensacao do job nao publicado falhou', {
+      recipientId: dispatch.recipientId,
+      stepId: dispatch.stepId,
+      deliveryId: job.deliveryId,
+      messageId: job.messageId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 async function applyFailure(
   tx: DbTx,
   recipientId: string,

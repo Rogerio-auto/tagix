@@ -59,13 +59,40 @@ Todos os ids são UUIDs. Campos marcados com `?` podem vir `null`.
 | ----------------------- | --------------------------------------------------------------------------------------------------- |
 | `message.received`      | `conversationId`, `messageId`, `contactId?`, `channelId`, `type`, `text?`                            |
 | `message.sent`          | `conversationId`, `messageId`, `type`, `text?`                                                      |
-| `conversation.opened`   | `conversationId`, `contactId?`, `channelId?`, `trigger` (`inbound` = primeira mensagem do contato; `reopened` = reaberta) |
+| `conversation.opened`   | `conversationId`, `contactId?`, `channelId?`, `trigger` (origem — ver [abaixo](#origem-da-conversa-trigger)) |
 | `conversation.resolved` | `conversationId`, `resolvedBy` (`member` ou `agent`), `memberId?`, `agentId?`                        |
 | `conversation.handoff`  | `conversationId`, `agentId` (agente de IA que pediu), `departmentId?` (departamento pedido)           |
 | `deal.created`          | `dealId`, `pipelineId`, `stageId`, `contactId`, `conversationId?`, `valueCents`, `currency`          |
 | `deal.stage_changed`    | `dealId`, `pipelineId`, `fromStageId`, `toStageId`, `actorType` (`member`, `agent`, `system`, `api`) |
 | `deal.won` / `deal.lost`| `dealId`, `pipelineId`, `stageId`, `contactId`, `valueCents`, `currency`                             |
 | `conversion.registered` | `conversionId`, `conversionTypeId`, `contactId`, `conversationId?`, `dealId?`, `valueCents?`, `currency`, `source` |
+
+### Origem da conversa (`trigger`)
+
+O `conversation.opened` diz como a conversa passou a estar aberta:
+
+| `trigger`  | Significa                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------- |
+| `inbound`  | A primeira mensagem do contato criou a conversa.                                            |
+| `lead_ad`  | Um formulário de anúncio da Meta (lead ads) criou a conversa.                               |
+| `app_echo` | A empresa escreveu primeiro pelo app do WhatsApp Business ou do Instagram.                  |
+| `history`  | A importação do histórico do app do WhatsApp Business trouxe uma conversa nova.             |
+| `campaign` | O disparo de uma campanha criou a conversa.                                                 |
+| `reopened` | Uma conversa resolvida voltou a ficar aberta.                                               |
+
+A criação acontece uma vez por conversa, qualquer que seja a origem: o `eventId`
+é `<conversationId>:opened`. Cada reabertura é uma ocorrência nova, com `eventId`
+próprio. Novas origens podem ser adicionadas; trate valor desconhecido como
+criação genérica.
+
+### Lead ads
+
+Um lead de anúncio que chega com telefone e um canal de WhatsApp ativo produz,
+nesta ordem: `conversation.opened` (`trigger: lead_ad`, só se a conversa não
+existia), `message.received` (o resumo das respostas do formulário, `type: text`)
+e `deal.created` (só se o lead criou um card; lead de quem já tem card na conversa
+vira nota no card existente e não gera `deal.created`). Sem telefone ou sem canal,
+só o `deal.created`.
 
 <Note>
   Fora o `text` das mensagens, os eventos carregam ids, não cadastro: para

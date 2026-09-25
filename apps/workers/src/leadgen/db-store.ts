@@ -19,12 +19,20 @@
  * mensagem cai nesta mesma conversa. Sem canal ou sem telefone válido, o lead vira
  * contato e card, sem conversa.
  *
- * ## Webhooks de saída (F70-S13)
+ * ## Webhooks de saída (F70-S13, F70-S14)
  *
- * Conversa que ESTE lead abriu publica `conversation.opened` depois do commit, com o
- * construtor do catálogo (eventId canônico `<conversa>:opened`, o mesmo do inbound:
- * se a pessoa já tivesse escrito, a conversa não seria criada aqui). Rollback não
- * publica nada; reprocesso do mesmo lead não recria a conversa, logo não republica.
+ * Depois do commit, com os construtores do catálogo, na ordem em que as coisas
+ * nasceram:
+ * 1. `conversation.opened` (`trigger: 'lead_ad'`) — só a conversa que ESTE lead
+ *    abriu (eventId canônico `<conversa>:opened`, o mesmo de qualquer origem);
+ * 2. `message.received` — a mensagem-resumo do formulário, se foi inserida agora;
+ * 3. `deal.created` — só o card que ESTE lead criou (lead que cai numa conversa com
+ *    card vira nota no histórico, não card novo, então não anuncia).
+ *
+ * O que é anunciado sai do que a transação de fato gravou (RETURNING / inserção
+ * vencedora): rollback não publica nada; reprocesso do mesmo lead para na trava da
+ * submissão, logo não republica — e o eventId estável deduplica no fan-out de
+ * qualquer forma.
  */
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import {
@@ -44,7 +52,13 @@ import {
   type ResolvedLeadSource,
 } from '@hm/db';
 import { countryCodeForMarket, getMarketPack, normalizeE164 } from '@hm/shared';
-import { domainEvents, emitDomainEvent, type DomainEventDraft } from '@hm/shared/mq';
+import {
+  dealCreatedFromRow,
+  domainEvents,
+  emitDomainEvent,
+  type DealRowForEvent,
+  type DomainEventDraft,
+} from '@hm/shared/mq';
 import type { ClaimResult, LeadgenJob, LeadStore, PersistLeadInput, PersistLeadResult } from './ports';
 
 const {
@@ -109,7 +123,9 @@ export class DbLeadStore implements LeadStore {
       if (estado === 'processed' || estado === null) {
         return {
           result: { created: false, contactId: null, conversationId: null, dealId: null, message: null },
-          opened: null,
+          channelId: null,
+          opened: false,
+          createdDeal: null,
         };
       }
 
@@ -133,7 +149,8 @@ export class DbLeadStore implements LeadStore {
       const resumo = answersSummary(lead.answers);
       const externalId = `leadgen:${lead.leadgenId}`;
       let conversationId: string | null = null;
-      let opened: StoredLead['opened'] = null;
+      let channelId: string | null = null;
+      let opened = false;
       let mensagem: PersistLeadResult['message'] = null;
 
       if (digitos !== null) {
@@ -153,7 +170,8 @@ export class DbLeadStore implements LeadStore {
         if (canal !== undefined) {
           const conversa = await ensureLeadConversation(tx, workspaceId, canal.id, digitos, contactId);
           conversationId = conversa.id;
-          if (conversa.created) opened = { conversationId: conversa.id, channelId: canal.id };
+          channelId = canal.id;
+          opened = conversa.created;
           const quando = lead.createdTime === null ? now : new Date(lead.createdTime);
           const [msg] = await tx
             .insert(messages)
@@ -198,7 +216,7 @@ export class DbLeadStore implements LeadStore {
         }
       }
 
-      const dealId = await createLeadDeal(tx, {
+      const deal = await createLeadDeal(tx, {
         workspaceId,
         contactId,
         conversationId,
@@ -224,35 +242,68 @@ export class DbLeadStore implements LeadStore {
         consent: input.consent,
         contactId,
         conversationId,
-        dealId,
+        dealId: deal?.id ?? null,
         now,
       });
 
       return {
-        result: { created: true, contactId, conversationId, dealId, message: mensagem },
+        result: { created: true, contactId, conversationId, dealId: deal?.id ?? null, message: mensagem },
+        channelId,
         opened,
+        createdDeal: deal?.created ?? null,
       };
     });
 
-    // F70-S13: fora da transação — o commit aconteceu. Só a conversa criada AGORA.
-    if (gravado.opened !== null) {
-      await this.emitEvent(
-        domainEvents.conversationOpened(workspaceId, {
-          conversationId: gravado.opened.conversationId,
-          contactId: gravado.result.contactId,
-          channelId: gravado.opened.channelId,
-          trigger: 'inbound',
-        }),
-      );
-    }
+    // Fora da transação — o commit aconteceu (F70-S13/S14).
+    for (const draft of leadEvents(workspaceId, gravado)) await this.emitEvent(draft);
     return gravado.result;
   }
 }
 
-/** Resultado da transação + a conversa que ela abriu (publicada só depois do commit). */
+/** Resultado da transação + o que ela criou (anunciado só depois do commit). */
 interface StoredLead {
   readonly result: PersistLeadResult;
-  readonly opened: { readonly conversationId: string; readonly channelId: string } | null;
+  /** Canal da conversa do lead (`null` = lead sem conversa). */
+  readonly channelId: string | null;
+  /** A conversa foi inserida por ESTE lead (não existia). */
+  readonly opened: boolean;
+  /** Card inserido por ESTE lead (`null` = sem card ou card já existente). */
+  readonly createdDeal: DealRowForEvent | null;
+}
+
+/**
+ * Eventos de domínio do lead gravado, na ordem em que as coisas nasceram. Puro:
+ * só lê o que a transação devolveu.
+ */
+function leadEvents(workspaceId: string, stored: StoredLead): DomainEventDraft[] {
+  const { result, channelId } = stored;
+  const drafts: DomainEventDraft[] = [];
+  if (result.conversationId !== null && channelId !== null) {
+    if (stored.opened) {
+      drafts.push(
+        domainEvents.conversationOpened(workspaceId, {
+          conversationId: result.conversationId,
+          contactId: result.contactId,
+          channelId,
+          trigger: 'lead_ad',
+        }),
+      );
+    }
+    if (result.message !== null) {
+      drafts.push(
+        domainEvents.messageReceived(workspaceId, {
+          conversationId: result.conversationId,
+          messageId: result.message.id,
+          contactId: result.contactId,
+          channelId,
+          type: 'text',
+          text: result.message.content,
+        }),
+      );
+    }
+  }
+  if (stored.createdDeal !== null) drafts.push(dealCreatedFromRow(workspaceId, stored.createdDeal));
+  return drafts;
 }
 
 async function ensureLeadContact(
@@ -375,7 +426,7 @@ async function createLeadDeal(
     answers: PersistLeadInput['lead']['answers'];
     origin: Record<string, string | null>;
   },
-): Promise<string | null> {
+): Promise<{ readonly id: string; readonly created: DealRowForEvent | null } | null> {
   if (input.conversationId !== null) {
     const [existente] = await tx
       .select({ id: deals.id })
@@ -394,7 +445,7 @@ async function createLeadDeal(
         actorType: 'system',
         metadata: { kind: 'lead_ad_received', source: LEAD_ADS_SOURCE, ...input.origin },
       });
-      return existente.id;
+      return { id: existente.id, created: null };
     }
   }
 
@@ -438,7 +489,16 @@ async function createLeadDeal(
       target: deals.conversationId,
       where: sql`${deals.conversationId} is not null`,
     })
-    .returning({ id: deals.id });
+    .returning({
+      id: deals.id,
+      pipelineId: deals.pipelineId,
+      stageId: deals.stageId,
+      contactId: deals.contactId,
+      conversationId: deals.conversationId,
+      valueCents: deals.valueCents,
+      currency: deals.currency,
+      closedAt: deals.closedAt,
+    });
   if (criado === undefined) return null;
 
   await tx.insert(dealHistory).values({
@@ -448,5 +508,5 @@ async function createLeadDeal(
     actorType: 'system',
     metadata: { source: LEAD_ADS_SOURCE, ...input.origin },
   });
-  return criado.id;
+  return { id: criado.id, created: criado };
 }
