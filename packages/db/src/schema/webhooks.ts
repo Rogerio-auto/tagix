@@ -24,6 +24,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { workspaces } from './index';
@@ -78,6 +79,12 @@ export const outboundWebhookDeliveries = pgTable(
     index('idx_outbound_webhook_deliveries_pending')
       .on(t.nextAttemptAt)
       .where(sql`${t.status} in ('pending','retrying')`),
+    // F70-S16: dedup do fan-out por (webhook, eventId) — `ON CONFLICT DO NOTHING` no lugar
+    // da varredura com advisory lock. Entrega sem `_meta.eventId` (NULL) não colide.
+    uniqueIndex('uq_outbound_webhook_deliveries_event').on(
+      t.webhookId,
+      sql`(${t.payload} #>> '{_meta,eventId}')`,
+    ),
     check(
       'outbound_webhook_deliveries_status_chk',
       sql`${t.status} in ('pending','sent','failed','retrying')`,
