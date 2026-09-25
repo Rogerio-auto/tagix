@@ -107,6 +107,9 @@ export function reliableQueues(): readonly string[] {
     // F69-S03: lead de anúncio é pago. Falha transitória na busca precisa de retry,
     // e o esgotado precisa cair na DLQ, onde o monitor alerta — nunca sumir.
     QUEUES.leadgen,
+    // F70-S09: evento de domínio é o aviso a um sistema de fora. Falha de banco no
+    // fan-out retenta com backoff; esgotado, DLQ com alerta — nunca some.
+    QUEUES.webhooks,
   ];
 }
 

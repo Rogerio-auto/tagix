@@ -16,6 +16,7 @@ import { schema } from '@hm/db';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { param } from './types';
 import { registerConversion } from './register';
+import { conversionRegisteredFromRow, emitDomainEvent } from '@hm/shared/mq';
 
 const { conversionEvents } = schema;
 
@@ -82,6 +83,8 @@ export function createConversionEventsRouter(): Router {
     );
     switch (result.kind) {
       case 'created':
+        // F70-S09: webhooks de saída, pós-commit (o emissor nunca lança).
+        void emitDomainEvent(conversionRegisteredFromRow(workspaceId, result.event));
         res.status(201).json({ conversion: result.event });
         return;
       case 'deduped':

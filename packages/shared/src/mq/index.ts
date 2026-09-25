@@ -19,6 +19,7 @@ export * from './retry';
 export * from './dlq';
 export * from './kb';
 export * from './flows';
+export * from './domain-events';
 export { connectMq, getMqHealth, isMqConnected, MqNotConnectedError } from './connection';
 export type {
   MqHandle,

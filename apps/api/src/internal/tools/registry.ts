@@ -10,6 +10,7 @@
  * handler trivial embutido (`ping`) para testes de ponta-a-ponta do canal.
  */
 import type { DbTx } from '@hm/db';
+import type { DomainEventDraft } from '@hm/shared/mq';
 
 /** Envelope validado que chega do runtime (vide `schema.ts`). */
 export interface ToolCallEnvelope {
@@ -33,6 +34,12 @@ export interface ToolHandlerResult {
   readonly action?: string;
   /** Tabela tocada, se houver — para `tool_logs.table_name`. */
   readonly tableName?: string;
+  /**
+   * Eventos de domínio da ação (F70-S09). Declarados como DADO, não publicados pelo
+   * handler: o handler roda dentro da transação e o router só publica depois do
+   * commit — rollback nunca vira aviso para um sistema de fora. Só saem se `ok`.
+   */
+  readonly events?: readonly DomainEventDraft[];
 }
 
 /**

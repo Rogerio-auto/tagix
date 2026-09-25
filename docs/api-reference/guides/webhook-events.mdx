@@ -15,6 +15,7 @@ quer receber. O nome do evento chega no header `x-hm-event` e em
 | `message.sent`           | Uma mensagem outbound é enviada com sucesso pelo canal.    |
 | `conversation.opened`    | Uma conversa é aberta.                                     |
 | `conversation.resolved`  | Uma conversa é marcada como resolvida.                     |
+| `conversation.handoff`   | O agente de IA pediu atendimento humano.                   |
 | `deal.created`           | Um deal é criado no pipeline.                              |
 | `deal.stage_changed`     | Um deal muda de estágio no pipeline.                       |
 | `deal.won`               | Um deal é marcado como ganho.                              |
@@ -30,20 +31,47 @@ quer receber. O nome do evento chega no header `x-hm-event` e em
 ## Envelope
 
 Todos os eventos compartilham o mesmo envelope: os campos de dados do evento no
-topo, mais um bloco `_meta` com `event` e `eventId` (id estável para
-deduplicação). Exemplo para `message.received`:
+topo, mais um bloco `_meta` com `event`, `eventId` (id estável para
+deduplicação) e `occurredAt` (instante da ocorrência, ISO-8601). Exemplo para
+`message.received`:
 
 ```json
 {
   "conversationId": "5e2c…",
   "messageId": "0b9a…",
+  "contactId": "7d41…",
+  "channelId": "a3f0…",
+  "type": "text",
   "text": "Oi, tudo bem?",
   "_meta": {
     "eventId": "0b9a…:received",
-    "event": "message.received"
+    "event": "message.received",
+    "occurredAt": "2026-09-25T14:03:11.402Z"
   }
 }
 ```
+
+## Dados de cada evento
+
+Todos os ids são UUIDs. Campos marcados com `?` podem vir `null`.
+
+| Evento                  | Campos                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| `message.received`      | `conversationId`, `messageId`, `contactId?`, `channelId`, `type`, `text?`                            |
+| `message.sent`          | `conversationId`, `messageId`, `type`, `text?`                                                      |
+| `conversation.opened`   | `conversationId`, `contactId?`, `channelId?`, `trigger` (`inbound` = primeira mensagem do contato; `reopened` = reaberta) |
+| `conversation.resolved` | `conversationId`, `resolvedBy` (`member` ou `agent`), `memberId?`, `agentId?`                        |
+| `conversation.handoff`  | `conversationId`, `agentId` (agente de IA que pediu), `departmentId?` (departamento pedido)           |
+| `deal.created`          | `dealId`, `pipelineId`, `stageId`, `contactId`, `conversationId?`, `valueCents`, `currency`          |
+| `deal.stage_changed`    | `dealId`, `pipelineId`, `fromStageId`, `toStageId`, `actorType` (`member`, `agent`, `system`, `api`) |
+| `deal.won` / `deal.lost`| `dealId`, `pipelineId`, `stageId`, `contactId`, `valueCents`, `currency`                             |
+| `conversion.registered` | `conversionId`, `conversionTypeId`, `contactId`, `conversationId?`, `dealId?`, `valueCents?`, `currency`, `source` |
+
+<Note>
+  Fora o `text` das mensagens, os eventos carregam ids, não cadastro: para
+  nome, telefone ou o histórico, consulte a API pública com a sua chave. O `conversation.handoff`
+  não traz o motivo escrito pelo agente — ele fica na conversa.
+</Note>
 
 <Warning>
   O formato exato dos campos de dados de cada evento pode evoluir de forma

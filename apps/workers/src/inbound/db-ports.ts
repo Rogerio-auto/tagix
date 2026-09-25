@@ -36,7 +36,13 @@
 import { Buffer } from 'node:buffer';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { getDb, pickAutoAssignee, schema, withWorkspace } from '@hm/db';
-import { makeEnvelope, type MqHandle } from '@hm/shared/mq';
+import {
+  domainEvents,
+  emitDomainEvent,
+  makeEnvelope,
+  type DomainEventDraft,
+  type MqHandle,
+} from '@hm/shared/mq';
 import type {
   ChannelProvider,
   ContactPresence,
@@ -386,6 +392,8 @@ export class DbInboundPersistence implements InboundPersistencePort {
     private readonly channels: InboundChannelResolver = new DbInboundChannelResolver(),
     private readonly contactMessageHook?: InboundContactMessageHook,
     private readonly autoAssign: InboundAutoAssignPort = new DbInboundAutoAssign(),
+    /** F70-S09: publicação de eventos de domínio (webhooks de saída). Nunca lança. */
+    private readonly emitEvent: (draft: DomainEventDraft) => Promise<boolean> = emitDomainEvent,
   ) {}
 
   async persist(request: PersistInboundRequest): Promise<PersistInboundResult> {
@@ -520,6 +528,33 @@ export class DbInboundPersistence implements InboundPersistencePort {
         type: msg.type,
         content: msg.content,
       });
+    }
+
+    // F70-S09: eventos de domínio, já fora da transação (o commit aconteceu). A
+    // conversa criada AGORA abre antes das mensagens dela. Reentrega do envelope não
+    // repete: `inserted` só traz linhas novas e `createdWithOrigin` só vem na criação
+    // (e o eventId estável deduplica no fan-out de qualquer forma).
+    if (outcome.resolved.createdWithOrigin !== null) {
+      await this.emitEvent(
+        domainEvents.conversationOpened(workspaceId, {
+          conversationId: outcome.resolved.conversationId,
+          contactId: outcome.resolved.contactId,
+          channelId,
+          trigger: 'inbound',
+        }),
+      );
+    }
+    for (const msg of outcome.inserted) {
+      await this.emitEvent(
+        domainEvents.messageReceived(workspaceId, {
+          conversationId: outcome.resolved.conversationId,
+          messageId: msg.messageId,
+          contactId: outcome.resolved.contactId,
+          channelId,
+          type: msg.type,
+          text: msg.content,
+        }),
+      );
     }
 
     // Trigger dispatcher de flows (F4-S13): avalia/dispara flows e retoma waiting por

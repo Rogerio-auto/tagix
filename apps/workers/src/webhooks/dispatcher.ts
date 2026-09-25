@@ -59,6 +59,11 @@ export interface DispatchDeps {
    */
   readonly fetchImpl?: typeof fetch;
   readonly now?: () => Date;
+  /**
+   * Restringe o drain a um workspace (F70-S09: teste de ponta a ponta e
+   * diagnóstico). Ausente = todos os tenants (produção).
+   */
+  readonly workspaceId?: string;
 }
 
 /** Superfície de fetch que o dispatch usa (subconjunto do `fetch` global). */
@@ -88,6 +93,7 @@ export async function dispatchPending(deps: DispatchDeps): Promise<DispatchTickR
     JOIN outbound_webhooks w ON w.id = d.webhook_id
     WHERE d.status IN ('pending', 'retrying')
       AND (d.next_attempt_at IS NULL OR d.next_attempt_at <= now())
+      AND (${deps.workspaceId ?? null}::uuid IS NULL OR d.workspace_id = ${deps.workspaceId ?? null}::uuid)
     ORDER BY d.next_attempt_at NULLS FIRST
     LIMIT ${BATCH_SIZE}
     FOR UPDATE OF d SKIP LOCKED

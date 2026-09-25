@@ -16,26 +16,17 @@ import { z } from 'zod';
 import { desc, eq } from 'drizzle-orm';
 import { decryptSecret, encryptSecret, schema } from '@hm/db';
 import { assertSafeWebhookUrl, checkWebhookUrlSyntax, ssrfSafeFetch } from '@hm/shared/net';
+import { DOMAIN_EVENTS } from '@hm/shared/mq';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
 const { outboundWebhooks, outboundWebhookDeliveries } = schema;
 
 /**
- * Catálogo de eventos assináveis. Fonte canônica dos eventos de domínio que o
- * worker-webhooks (F9-S05) faz fan-out. Mantido aqui (borda de validação); S05
- * consome os mesmos nomes.
+ * Catálogo de eventos assináveis — o MESMO que os produtores publicam e o
+ * worker-webhooks faz fan-out (F70-S09: fonte única `DOMAIN_EVENTS` em
+ * `@hm/shared/mq`). Evento novo entra lá e aparece aqui e na tela sozinho.
  */
-export const WEBHOOK_EVENTS = [
-  'message.received',
-  'message.sent',
-  'conversation.opened',
-  'conversation.resolved',
-  'deal.created',
-  'deal.stage_changed',
-  'deal.won',
-  'deal.lost',
-  'conversion.registered',
-] as const;
+export const WEBHOOK_EVENTS = DOMAIN_EVENTS;
 
 const eventEnum = z.enum(WEBHOOK_EVENTS);
 

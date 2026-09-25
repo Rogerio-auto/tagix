@@ -13,6 +13,7 @@
  * `withRLS` injeta `req.scoped = withWorkspace` real. Mq + publisher outbound
  * mockados (sem broker). Skip automático se o Postgres dev não estiver acessível.
  */
+import type * as MqModule from '@hm/shared/mq';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import request from 'supertest';
@@ -64,10 +65,16 @@ vi.mock('../../../middlewares/auth', () => ({
 }));
 
 // Relay de socket + publisher outbound: sem broker nos testes.
-vi.mock('@hm/shared/mq', () => ({
-  connectMq: vi.fn().mockResolvedValue({ channel: { sendToQueue: vi.fn() }, connection: {} }),
-  makeEnvelope: (_type: string, _ws: string, payload: unknown) => payload,
-}));
+vi.mock('@hm/shared/mq', async () => {
+  const actual = await vi.importActual<typeof MqModule>('@hm/shared/mq');
+  return {
+    connectMq: vi.fn().mockResolvedValue({ channel: { sendToQueue: vi.fn() }, connection: {} }),
+    makeEnvelope: (_type: string, _ws: string, payload: unknown) => payload,
+    // F70-S09: a rota de status publica eventos de domínio pós-commit (sem broker aqui).
+    domainEvents: actual.domainEvents,
+    emitDomainEvent: vi.fn().mockResolvedValue(true),
+  };
+});
 vi.mock('../../../mq/outbound-publisher', () => ({
   publishOutboundJob: vi.fn().mockResolvedValue(true),
 }));
