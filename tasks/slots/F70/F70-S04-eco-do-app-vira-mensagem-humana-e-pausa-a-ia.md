@@ -2,7 +2,7 @@
 id: F70-S04
 title: Eco do app vira mensagem humana e pausa a IA
 phase: F70
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F70-S03]

@@ -2,7 +2,7 @@
 id: F70-S05
 title: Atribuição de anúncio no contato e no deal
 phase: F70
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F70-S03]
