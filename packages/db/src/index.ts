@@ -7,6 +7,18 @@ export type { DB, DbClient, DbTx, Schema } from './client';
 export { withWorkspace } from './rls';
 export * from './outbox'; // F70-S16: outbox transacional (gravação + relay)
 export * from './outbox-relay';
+// Referências entre workspaces nas rotas de escrita (F70-S11).
+export {
+  assertRefsInWorkspace,
+  requireRefsInWorkspace,
+  invalidReferenceBody,
+  uniqueViolationConstraint,
+  TenantRefError,
+  type TenantRef,
+  type TenantRefKind,
+  type MissingRef,
+  type InvalidReferenceBody,
+} from './tenant-refs';
 export { encryptSecret, decryptSecret } from './crypto';
 export * as schema from './schema';
 export { RLS_TABLES } from './schema';

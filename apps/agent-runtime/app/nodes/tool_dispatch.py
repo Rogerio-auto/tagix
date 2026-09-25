@@ -12,6 +12,13 @@ sequencial. Incrementa `iteration` (o conditional edge usa para o cap).
 
 O grafo NUNCA importa as tools — só conhece o registry. `ctx` é o dict acordado:
 `{workspace_id, conversation_id, agent_id, execution_id, is_playground}`.
+
+F70-S15:
+  - só despacha tool que está em `state["tools"]` (as habilitadas que o Node mandou,
+    já filtradas pela policy no `load_context`). Um nome que o modelo "inventa" —
+    mesmo que exista no registry — vira erro para o modelo, sem executar nada;
+  - o `config` do descritor (catálogo + `agent_tools.overrides`) vai no `ctx` da
+    chamada em `tool_config`; o registry o aplica na tool (`with_config`).
 """
 
 from __future__ import annotations
@@ -24,7 +31,7 @@ from typing import Any
 from langgraph.types import StreamWriter
 
 from app.logging import get_logger
-from app.types import AgentState, ChatMessage, PolicySnapshot, ToolRegistry
+from app.types import AgentState, ChatMessage, PolicySnapshot, ToolDescriptor, ToolRegistry
 
 logger = get_logger()
 
@@ -53,6 +60,15 @@ def _build_ctx(state: AgentState) -> dict[str, Any]:
     }
 
 
+# Mesma chave de `app.tools.registry.TOOL_CONFIG_CTX_KEY` (o grafo não importa tools).
+_TOOL_CONFIG_CTX_KEY = "tool_config"
+
+
+def _enabled_tools(state: AgentState) -> dict[str, ToolDescriptor]:
+    """Descritores habilitados nesta execução, por key."""
+    return {t.key: t for t in state.get("tools") or []}
+
+
 def make_tool_dispatch_node(*, tool_registry: ToolRegistry):
     """Fábrica do node `tool_dispatch`, ligada ao tool registry injetado."""
 
@@ -66,7 +82,8 @@ def make_tool_dispatch_node(*, tool_registry: ToolRegistry):
             # Nada a despachar; só avança a iteração (guard defensivo).
             return {"iteration": state.get("iteration", 0) + 1}
 
-        ctx = _build_ctx(state)
+        base_ctx = _build_ctx(state)
+        enabled = _enabled_tools(state)
 
         async def run_one(call: dict[str, Any]) -> tuple[ChatMessage, dict[str, Any]]:
             fn = call.get("function") or {}
@@ -76,8 +93,20 @@ def make_tool_dispatch_node(*, tool_registry: ToolRegistry):
 
             writer({"type": "tool_call_started", "tool_key": key, "args": args})
             started = time.monotonic()
+            descriptor = enabled.get(key)
             try:
-                result = await tool_registry.dispatch(key, args, ctx)
+                if descriptor is None:
+                    logger.warning("tool_dispatch: tool não habilitada recusada", tool_key=key)
+                    result = {
+                        "ok": False,
+                        "content": "",
+                        "error": f"Ferramenta não disponível: '{key}'.",
+                    }
+                else:
+                    ctx = dict(base_ctx)
+                    if descriptor.config:
+                        ctx[_TOOL_CONFIG_CTX_KEY] = dict(descriptor.config)
+                    result = await tool_registry.dispatch(key, args, ctx)
             except Exception as exc:  # noqa: BLE001 - falha de tool nunca derruba o grafo
                 logger.warning(
                     "tool_dispatch: tool levantou exceção",

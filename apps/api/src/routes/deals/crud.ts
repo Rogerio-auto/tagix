@@ -17,7 +17,17 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, asc, desc, eq, type SQL } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import {
+  assertConversationVisible,
+  assertRefsInWorkspace,
+  schema,
+  TenantRefError,
+  uniqueViolationConstraint,
+  type DbTx,
+  type MissingRef,
+  type TenantRef,
+  type VisibilityContext,
+} from '@hm/db';
 import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import {
@@ -49,6 +59,55 @@ function memberActor(req: Request): DealActor {
     type: 'member',
     memberId: req.auth!.member.id,
     role: req.auth!.member.role as Role,
+  };
+}
+
+/**
+ * F70-S11: confere, ANTES de escrever, que toda referência do payload é do workspace
+ * (a FK do Postgres ignora RLS e aceitaria id de outro tenant). A conversa passa ainda
+ * pela visibilidade do membro (mesmo guard de `POST /api/conversations/:id/deal`).
+ * Falha → `TenantRefError` (422, corpo único: "não existe" = "é de outro workspace").
+ */
+async function requireDealRefs(
+  tx: DbTx,
+  ctx: VisibilityContext,
+  refs: readonly TenantRef[],
+  conversationId: string | null | undefined,
+): Promise<void> {
+  const missing: MissingRef[] = await assertRefsInWorkspace(tx, refs);
+  if (conversationId && !(await assertConversationVisible(tx, ctx, conversationId))) {
+    missing.push({ kind: 'conversation', id: conversationId, field: 'conversationId' });
+  }
+  if (missing.length > 0) throw new TenantRefError(missing);
+}
+
+/**
+ * Mapeia as recusas de escrita de deal: referência inválida → 422; conversa que já tem
+ * card (`uq_deals_conversation`, índice único GLOBAL) → 409. Devolve `true` se respondeu.
+ */
+function respondDealWriteError(res: Response, err: unknown): boolean {
+  if (err instanceof TenantRefError) {
+    res.status(422).json(err.body);
+    return true;
+  }
+  if (uniqueViolationConstraint(err) === 'uq_deals_conversation') {
+    res.status(409).json({
+      error: 'conversation_already_has_deal',
+      message:
+        'Não foi possível vincular a conversa a este negócio. ' +
+        'Cada conversa tem um único card e esta já está ligada a outro. ' +
+        'Abra o card existente pela conversa ou escolha outra conversa.',
+    });
+    return true;
+  }
+  return false;
+}
+
+function visibilityCtx(req: Request): VisibilityContext {
+  return {
+    memberId: req.auth!.member.id,
+    role: req.auth!.member.role as Role,
+    workspaceId: req.auth!.workspace.id,
   };
 }
 
@@ -111,40 +170,59 @@ export function createDealsCrudRouter(): Router {
     }
     const workspaceId = req.auth!.workspace.id;
     const d = parsed.data;
-    const result = await req.scoped!(async (tx) => {
-      // F70-S07: deal ligado a uma conversa herda o anúncio que a trouxe.
-      const adAttribution = d.conversationId
-        ? await loadConversationAdAttribution(tx, d.conversationId)
-        : null;
-      const [created] = await tx
-        .insert(deals)
-        .values({
-          workspaceId,
-          pipelineId: d.pipelineId,
-          stageId: d.stageId,
-          contactId: d.contactId,
-          conversationId: d.conversationId ?? null,
-          title: d.title,
-          valueCents: d.valueCents ?? 0,
-          currency: d.currency ?? 'BRL',
-          source: d.source ?? null,
-          ownerId: d.ownerId ?? null,
-          customFields: d.customFields ?? {},
-          notes: d.notes ?? null,
-          ...(adAttribution ?? {}),
-        })
-        .returning();
-      if (created) {
-        await tx.insert(dealHistory).values({
-          dealId: created.id,
-          workspaceId,
-          eventType: 'created',
-          actorMemberId: req.auth!.member.id,
-          actorType: 'member',
-        });
-      }
-      return created;
-    });
+    const ctx = visibilityCtx(req);
+    let result: typeof deals.$inferSelect | undefined;
+    try {
+      result = await req.scoped!(async (tx) => {
+        await requireDealRefs(
+          tx,
+          ctx,
+          [
+            { kind: 'pipeline', id: d.pipelineId, field: 'pipelineId' },
+            { kind: 'stage', id: d.stageId, field: 'stageId', pipelineId: d.pipelineId },
+            { kind: 'contact', id: d.contactId, field: 'contactId' },
+            { kind: 'member', id: d.ownerId, field: 'ownerId' },
+          ],
+          d.conversationId,
+        );
+        // F70-S07: deal ligado a uma conversa herda o anúncio que a trouxe.
+        const adAttribution = d.conversationId
+          ? await loadConversationAdAttribution(tx, d.conversationId)
+          : null;
+        const [created] = await tx
+          .insert(deals)
+          .values({
+            workspaceId,
+            pipelineId: d.pipelineId,
+            stageId: d.stageId,
+            contactId: d.contactId,
+            conversationId: d.conversationId ?? null,
+            title: d.title,
+            valueCents: d.valueCents ?? 0,
+            currency: d.currency ?? 'BRL',
+            source: d.source ?? null,
+            ownerId: d.ownerId ?? null,
+            customFields: d.customFields ?? {},
+            notes: d.notes ?? null,
+            ...(adAttribution ?? {}),
+          })
+          .returning();
+        if (created) {
+          await tx.insert(dealHistory).values({
+            dealId: created.id,
+            workspaceId,
+            eventType: 'created',
+            actorMemberId: req.auth!.member.id,
+            actorType: 'member',
+          });
+        }
+        return created;
+      });
+    } catch (err: unknown) {
+      if (respondDealWriteError(res, err)) return;
+      throw err;
+    }
+    // Só chega aqui com o commit feito: referência recusada nunca publica evento.
     if (result) {
       void emitDealCreated({ workspaceId, deal: result });
       // F70-S09: webhooks de saída, pós-commit (o emissor nunca lança).
@@ -185,9 +263,31 @@ export function createDealsCrudRouter(): Router {
     for (const [k, v] of Object.entries(parsed.data)) {
       if (v !== undefined) patch[k] = v;
     }
-    const [updated] = await req.scoped!((tx) =>
-      tx.update(deals).set(patch).where(eq(deals.id, id)).returning(),
-    );
+    const d = parsed.data;
+    const ctx = visibilityCtx(req);
+    let updated: typeof deals.$inferSelect | undefined;
+    try {
+      updated = await req.scoped!(async (tx) => {
+        // Deal alheio/inexistente é 404 ANTES de olhar as referências do payload.
+        const [current] = await tx
+          .select({ id: deals.id })
+          .from(deals)
+          .where(eq(deals.id, id))
+          .limit(1);
+        if (!current) return undefined;
+        await requireDealRefs(
+          tx,
+          ctx,
+          [{ kind: 'member', id: d.ownerId, field: 'ownerId' }],
+          d.conversationId,
+        );
+        const [row] = await tx.update(deals).set(patch).where(eq(deals.id, id)).returning();
+        return row;
+      });
+    } catch (err: unknown) {
+      if (respondDealWriteError(res, err)) return;
+      throw err;
+    }
     if (!updated) {
       res.sendStatus(404);
       return;

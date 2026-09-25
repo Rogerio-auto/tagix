@@ -11,9 +11,11 @@
  * retorna { deduped: true } em vez de estourar 500.
  *
  * Roda SEMPRE dentro de uma transacao RLS (`tx` injetado pelo caller).
+ *
+ * Referencia de outro workspace (ou inexistente) lanca `TenantRefError` (F70-S11).
  */
 import { and, eq } from 'drizzle-orm';
-import { schema, type DbTx } from '@hm/db';
+import { requireRefsInWorkspace, schema, type DbTx } from '@hm/db';
 import { emitConversionRegisteredMetrics } from '../../services/dashboard/emit';
 
 const { conversionTypes, conversionEvents } = schema;
@@ -96,6 +98,20 @@ export async function registerConversion(
   })();
 
   if (!typeRow) return { kind: 'type_not_found' };
+
+  // F70-S11: toda referência precisa ser DESTE workspace (a FK ignora RLS). Vale para
+  // todos os chamadores (rota, API v1, tool do agente). Falha → `TenantRefError`, que a
+  // rota mapeia a 422 com corpo único (inexistente = de outro workspace). Lançar (em vez
+  // de um novo `kind`) aborta a transação inteira e mantém o contrato dos chamadores.
+  await requireRefsInWorkspace(tx, [
+    { kind: 'contact', id: input.contactId, field: 'contactId' },
+    { kind: 'conversation', id: input.conversationId, field: 'conversationId' },
+    { kind: 'deal', id: input.dealId, field: 'dealId' },
+    { kind: 'channel', id: input.attributedChannelId, field: 'attributedChannelId' },
+    { kind: 'member', id: input.triggeredByMemberId, field: 'triggeredByMemberId' },
+    { kind: 'agent', id: input.triggeredByAgentId, field: 'triggeredByAgentId' },
+    { kind: 'flow', id: input.triggeredByFlowId, field: 'triggeredByFlowId' },
+  ]);
 
   if (typeRow.valueRequired && (input.valueCents === undefined || input.valueCents === null)) {
     return { kind: 'value_required' };

@@ -15,6 +15,7 @@ import httpx
 
 from app.tools.base import Tool
 from app.tools.registry import ToolRegistry
+from app.tools.workflow.add_contact_tag import AddContactTagArgs, AddContactTagTool
 from app.tools.workflow.change_conversation_status import (
     ChangeConversationStatusArgs,
     ChangeConversationStatusTool,
@@ -34,8 +35,11 @@ from app.tools.workflow.transfer_to_human import (
     TransferToHumanArgs,
     TransferToHumanTool,
 )
+from app.tools.workflow.update_contact import UpdateContactArgs, UpdateContactTool
 
 __all__ = [
+    "AddContactTagArgs",
+    "AddContactTagTool",
     "ChangeConversationStatusArgs",
     "ChangeConversationStatusTool",
     "EscalateArgs",
@@ -50,6 +54,8 @@ __all__ = [
     "TransferToAgentTool",
     "TransferToHumanArgs",
     "TransferToHumanTool",
+    "UpdateContactArgs",
+    "UpdateContactTool",
     "build_workflow_tools",
     "register_workflow_tools",
 ]
@@ -63,6 +69,9 @@ _WORKFLOW_TOOL_CLASSES: tuple[type[Tool], ...] = (
     ChangeConversationStatusTool,
     RegisterConversionTool,
     MoveDealStageTool,
+    # F70-S15: tools de contato (alvo = contato da conversa, resolvido no Node).
+    AddContactTagTool,
+    UpdateContactTool,
 )
 
 

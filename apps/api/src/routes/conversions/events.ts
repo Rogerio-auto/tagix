@@ -12,7 +12,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, desc, eq, gte, isNull, lte } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { schema, TenantRefError } from '@hm/db';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { param } from './types';
 import { registerConversion } from './register';
@@ -63,24 +63,34 @@ export function createConversionEventsRouter(): Router {
     }
     const workspaceId = req.auth!.workspace.id;
     const d = parsed.data;
-    const result = await req.scoped!((tx) =>
-      registerConversion(tx, {
-        workspaceId,
-        conversionTypeId: d.conversionTypeId,
-        conversionTypeKey: d.conversionTypeKey,
-        contactId: d.contactId,
-        conversationId: d.conversationId ?? null,
-        dealId: d.dealId ?? null,
-        valueCents: d.valueCents ?? null,
-        currency: d.currency,
-        note: d.note ?? null,
-        source: d.source,
-        triggeredByMemberId: req.auth!.member.id,
-        attributedCampaignId: d.attributedCampaignId ?? null,
-        attributedChannelId: d.attributedChannelId ?? null,
-        occurredAt: d.occurredAt ? new Date(d.occurredAt) : undefined,
-      }),
-    );
+    let result: Awaited<ReturnType<typeof registerConversion>>;
+    try {
+      result = await req.scoped!((tx) =>
+        registerConversion(tx, {
+          workspaceId,
+          conversionTypeId: d.conversionTypeId,
+          conversionTypeKey: d.conversionTypeKey,
+          contactId: d.contactId,
+          conversationId: d.conversationId ?? null,
+          dealId: d.dealId ?? null,
+          valueCents: d.valueCents ?? null,
+          currency: d.currency,
+          note: d.note ?? null,
+          source: d.source,
+          triggeredByMemberId: req.auth!.member.id,
+          attributedCampaignId: d.attributedCampaignId ?? null,
+          attributedChannelId: d.attributedChannelId ?? null,
+          occurredAt: d.occurredAt ? new Date(d.occurredAt) : undefined,
+        }),
+      );
+    } catch (err: unknown) {
+      // F70-S11: referência de outro workspace (ou inexistente) → 422, nada gravado nem publicado.
+      if (err instanceof TenantRefError) {
+        res.status(422).json(err.body);
+        return;
+      }
+      throw err;
+    }
     switch (result.kind) {
       case 'created':
         // F70-S09: webhooks de saída, pós-commit (o emissor nunca lança).

@@ -343,7 +343,7 @@ export function createEventsRouter(): Router {
       res.status(201).json({ event });
     } catch (err) {
       if (err instanceof EventServiceError) {
-        res.status(err.status).json({ error: err.code, message: err.message });
+        res.status(err.status).json(err.toBody());
         return;
       }
       throw err;

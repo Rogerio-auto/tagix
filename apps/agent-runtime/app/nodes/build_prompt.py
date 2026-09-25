@@ -33,6 +33,9 @@ logger = get_logger()
 
 _MAX_HISTORY = 12
 
+# Teto do bloco `campos:` do contato no prompt (F70-S15, M1): PII e custo.
+_CUSTOM_FIELDS_PROMPT_MAX = 1500
+
 # Rótulos legíveis por autoria (LIVECHAT_OPS §2). `ai` é a própria IA em turnos
 # anteriores; `ai_other` é OUTRO agente de IA que atendeu antes (handoff IA→IA, F34);
 # `human` é o atendente que assumiu; `contact` é o cliente.
@@ -154,11 +157,17 @@ def _system_prompt(state: AgentState) -> str:
             data_lines.append(f"nome: {raw_name}")
         custom = contact.get("custom_fields")
         if custom:
-            # custom_fields pode ser dict (JSONB) — serializa de forma estável.
+            # custom_fields pode ser dict (JSONB) — serializa de forma estável. O
+            # `load_context` já filtrou as chaves (F70-S15); aqui fica só o teto de
+            # tamanho, para nenhum caminho inflar o prompt com o JSONB inteiro.
             try:
-                data_lines.append(f"campos: {json.dumps(custom, ensure_ascii=False)}")
+                serialized = json.dumps(custom, ensure_ascii=False)
             except (TypeError, ValueError):
-                pass
+                serialized = ""
+            if len(serialized) > _CUSTOM_FIELDS_PROMPT_MAX:
+                serialized = serialized[:_CUSTOM_FIELDS_PROMPT_MAX] + "…"
+            if serialized:
+                data_lines.append(f"campos: {serialized}")
         if data_lines:
             parts.append(wrap_untrusted("\n".join(data_lines), label="dados-do-contato"))
 

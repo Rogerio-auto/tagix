@@ -38,6 +38,9 @@ _ALL_KEYS = {
     "change_conversation_status",
     "register_conversion",
     "move_deal_stage",
+    # F70-S15
+    "add_contact_tag",
+    "update_contact",
 }
 
 

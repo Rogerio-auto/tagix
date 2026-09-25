@@ -610,6 +610,13 @@
       "when": 1781452847000,
       "tag": "0086_f70_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1781452848000,
+      "tag": "0087_f70_agent_contact_tools",
+      "breakpoints": true
     }
   ]
 }
