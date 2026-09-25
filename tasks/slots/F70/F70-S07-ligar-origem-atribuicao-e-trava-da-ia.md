@@ -2,7 +2,7 @@
 id: F70-S07
 title: Ligar origem, atribuição e eco do IG no pipeline; IA só com origem comprovada
 phase: F70
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F70-S04, F70-S05]

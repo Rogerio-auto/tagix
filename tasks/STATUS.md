@@ -56,7 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 7     | 0   | 3   | 0   | 0   | 1   | 3   |
+| F70   | 7     | 0   | 3   | 0   | 0   | 0   | 4   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -771,7 +771,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70-S04 | Eco do app vira mensagem humana e pausa a IA                                  | ✅ done     | high       | F70-S03                   |
 | F70-S05 | Atribuição de anúncio no contato e no deal                                    | ✅ done     | high       | F70-S03                   |
 | F70-S06 | Agente de atendimento da Arcada                                               | ⏸️ blocked | high       | F70-S04, F70-S05, F70-S07 |
-| F70-S07 | Ligar origem, atribuição e eco do IG no pipeline; IA só com origem comprovada | 🟣 review   | critical   | F70-S04, F70-S05          |
+| F70-S07 | Ligar origem, atribuição e eco do IG no pipeline; IA só com origem comprovada | ✅ done     | critical   | F70-S04, F70-S05          |
 
 ## Fase 8 — Permissions & Settings
 
