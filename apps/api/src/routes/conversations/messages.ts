@@ -20,6 +20,8 @@
  *    `ai_paused_by=<member>`, `ai_last_human_at=now()` na mesma transação.
  *  - Se já `paused` ou `off`, apenas atualiza `ai_last_human_at` (idempotente).
  *  - Emite `conversation:ai_mode_changed` via relay best-effort quando a IA pausa.
+ *  - F70-S07: a regra é `planHumanReply` (`@hm/shared`), a MESMA que o worker aplica
+ *    ao eco do app (WhatsApp coexistência / Instagram). Uma regra, duas pontas.
  *
  * Router NÃO montado aqui — o orchestrator monta `createMessagesRouter()` em
  * `apps/api/src/app.ts`.
@@ -33,6 +35,7 @@ import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import {
   contactsPayloadSchema,
   locationPayloadSchema,
+  planHumanReply,
   reactionPayloadSchema,
 } from '@hm/shared';
 import type {
@@ -517,44 +520,31 @@ export function createMessagesRouter(): Router {
           });
         }
 
-        // F30-S04 — auto-pausa de IA ao humano responder.
-        // Narrows: aiMode vem do DB como `text` (string); o check constraint garante
-        // o domínio ('off'|'on'|'paused'), mas o TS ainda vê `string` — comparamos
-        // diretamente com a literal para manter strict sem cast.
+        // F30-S04 — auto-pausa de IA ao humano responder (regra única em
+        // `@hm/shared`, F70-S07). on → paused + human_takeover; paused/off só
+        // registram a atividade humana (nunca regridem).
+        //
+        // A rota não lê `first_response_at`/`ai_last_human_at` (não precisa de lock):
+        // passa `null` e deixa o banco proteger a 1ª resposta com `coalesce` — só
+        // grava se ainda NULL (F55-S02), com `now()` do servidor (mesma estratégia de
+        // resolved_at/closed_at). `at = now` sempre avança `ai_last_human_at`.
         const now = new Date();
-        let aiPausedByHandoff = false;
-
-        if (conversation.aiMode === 'on') {
-          // Transição on → paused (human_takeover). Seta todos os campos de pausa.
-          await tx
-            .update(schema.conversations)
-            .set({
-              aiMode: 'paused',
-              aiPausedReason: 'human_takeover',
-              aiPausedAt: now,
-              aiPausedBy: senderMemberId,
-              aiLastHumanAt: now,
-              // F55-S02 — marca a 1ª resposta de member. Guard `coalesce`: só grava se
-              // ainda NULL (nunca sobrescreve — senão viraria "última resposta"). Usa
-              // `now()` do servidor (mesma estratégia de resolved_at/closed_at).
-              firstResponseAt: sql`coalesce(${schema.conversations.firstResponseAt}, now())`,
-              updatedAt: now,
-            })
-            .where(eq(schema.conversations.id, conversationId));
-          aiPausedByHandoff = true;
-        } else {
-          // Já paused ou off: apenas registra a atividade humana (base de S06).
-          // Não regride: paused não vira on; off não muda.
-          await tx
-            .update(schema.conversations)
-            .set({
-              aiLastHumanAt: now,
-              // F55-S02 — idem ao ramo acima: 1ª resposta de member, só se NULL.
-              firstResponseAt: sql`coalesce(${schema.conversations.firstResponseAt}, now())`,
-              updatedAt: now,
-            })
-            .where(eq(schema.conversations.id, conversationId));
-        }
+        const plan = planHumanReply(
+          { aiMode: conversation.aiMode, firstResponseAt: null, aiLastHumanAt: null },
+          { memberId: senderMemberId, at: now, countsAsResponse: true },
+        );
+        const { firstResponseAt: markFirstResponse, ...patch } = plan.patch;
+        await tx
+          .update(schema.conversations)
+          .set({
+            ...patch,
+            ...(markFirstResponse !== undefined
+              ? { firstResponseAt: sql`coalesce(${schema.conversations.firstResponseAt}, now())` }
+              : {}),
+            updatedAt: now,
+          })
+          .where(eq(schema.conversations.id, conversationId));
+        const aiPausedByHandoff = plan.paused;
 
         return { kind: 'created', conversation, message, aiPausedByHandoff, rich };
       });

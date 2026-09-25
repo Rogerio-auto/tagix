@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import type { ConversationOriginValue } from '@hm/shared';
 import { agents, channels, contacts, departments, members, teams, workspaces } from './index';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -38,6 +39,11 @@ export const conversations = pgTable(
     aiLastHumanAt: ts('ai_last_human_at'),
     // Reengajamento agendado (cron idempotente) — null quando não há retomada pendente.
     aiResumeAt: ts('ai_resume_at'),
+    // F70-S07 — de onde a conversa veio, classificada UMA vez na criação
+    // (`classifyConversationOrigin`, @hm/channels). NULL = conversa anterior à 0083
+    // ou criada por caminho que não classifica: lido como `sem-origem` (fail-closed).
+    // A IA só é ligada automaticamente com origem comprovada (anúncio/site/instagram).
+    origin: text('origin').$type<ConversationOriginValue>(),
     assignedTo: uuid('assigned_to').references(() => members.id, { onDelete: 'set null' }),
     // F56-S24 (DB-06): FKs antes pendentes, agora resolvidas. department_id/team_id
     // já tinham a constraint no banco desde a 0033 (backfill F8) — aqui o schema TS
@@ -99,6 +105,10 @@ export const conversations = pgTable(
     check('conversations_kind_chk', sql`${t.kind} in ('direct','group','story_thread','comment_thread')`),
     check('conversations_status_chk', sql`${t.status} in ('open','pending','closed','resolved','snoozed')`),
     check('conversations_ai_mode_chk', sql`${t.aiMode} in ('off','on','paused')`),
+    check(
+      'conversations_origin_chk',
+      sql`${t.origin} is null or ${t.origin} in ('origem:anuncio','origem:site','origem:instagram','origem:prospeccao','sem-origem')`,
+    ),
     check(
       'conversations_ai_paused_reason_chk',
       sql`${t.aiPausedReason} in ('human_takeover','manual') or ${t.aiPausedReason} is null`,

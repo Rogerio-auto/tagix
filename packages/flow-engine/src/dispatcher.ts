@@ -166,8 +166,8 @@ function buildContext(
       await deps.outbound.sendPresence(exec.workspaceId, action);
     },
     async setConversationAi(in0) {
-      if (!exec.conversationId) return;
-      await deps.outbound.setConversationAi(exec.workspaceId, {
+      if (!exec.conversationId) return { applied: false, reason: 'conversation_not_found' };
+      return deps.outbound.setConversationAi(exec.workspaceId, {
         conversationId: exec.conversationId,
         aiMode: in0.aiMode,
         agentId: in0.agentId,

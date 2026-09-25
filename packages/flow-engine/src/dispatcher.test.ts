@@ -123,7 +123,7 @@ function makeDeps(exec: LoadedExecution, opts: MakeDepsOpts = {}) {
     outbound: {
       sendMessage: vi.fn(async () => {}),
       sendPresence: vi.fn(async () => {}),
-      setConversationAi: vi.fn(async () => {}),
+      setConversationAi: vi.fn(async () => ({ applied: true as const })),
       setConversationStatus: vi.fn(async () => {}),
     },
     http: { request: vi.fn(async () => ({ status: 200, ok: true, body: null, headers: {} })) },
