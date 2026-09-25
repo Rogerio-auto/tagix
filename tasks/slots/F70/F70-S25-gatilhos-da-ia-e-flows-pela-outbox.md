@@ -244,8 +244,9 @@ node --env-file=.env apps/workers/node_modules/vitest/vitest.mjs run --root apps
 - **Coexistência:** usa `inboundMediaJobOutbox`.
 - **Testes (Postgres dev, commit e rollback forçado):**
   - novos contra o banco: inbound 4, reengajamento 2, follow-up 2, troca de agente 2,
-    `transfer_to_agent` 3, port de flows + `go_to_flow` 8, recuperação 3, agenda 10,
-    campaigns-inbound 5;
+    `transfer_to_agent` 3, port de flows + `go_to_flow` 8, recuperação 3, campaigns-inbound 5;
   - novos sem banco: construtores 7, scheduler 4, follow-up (marca desfeita) 1;
-  - suítes das pastas tocadas: workers 180 + 153 + 9, API 122 + 31 + 5, flow-engine 111,
-    shared/mq 51 — todas verdes.
+  - agenda: o teste da F70-S21 foi reescrito (5 casos viraram 10);
+  - `slot.py validate` (suítes das pastas tocadas, uma por vez, `--maxWorkers=1`): shared/mq 51
+    (+1 skip), flow-engine 111, API 141, workers inbound + campaigns-inbound 79, agents 101,
+    flows + flows-triggers + agenda + coexistência + mídia 157. Todas verdes.
