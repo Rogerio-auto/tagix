@@ -2,13 +2,16 @@
 id: F70-S18
 title: Achados baixos da auditoria pré-deploy — marcadores de origem, referências restantes e guarda do seed
 phase: F70
-status: available
+status: in-progress
 priority: medium
 estimated_size: S
 depends_on: [F70-S11]
 blocks: []
 source_docs:
   - tasks/slots/F70/F70-S11-referencias-cruzadas-entre-workspaces.md
+agent_id: backend-engineer
+claimed_at: 2026-09-25T05:57:17Z
+
 ---
 # F70-S18 — Achados baixos da auditoria pré-deploy
 
