@@ -2,7 +2,7 @@
 id: F70-S12
 title: FKs compostas por workspace nas referências de deals e stages
 phase: F70
-status: blocked
+status: available
 priority: high
 estimated_size: M
 depends_on: [F70-S10, F70-S11]

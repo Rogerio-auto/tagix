@@ -2,7 +2,7 @@
 id: F70-S10
 title: Agentes recebem as tools (transfer_to_human, base de conhecimento e workflow)
 phase: F70
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F70-S08]
