@@ -2,7 +2,7 @@
 id: F70-S09
 title: Ligar os webhooks de saída
 phase: F70
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: [F70-S01]
@@ -11,6 +11,7 @@ source_docs:
   - rogerio-os/tasks/central-operacao/CO-21-ligar-os-webhooks-de-saida-do-leadium.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T03:57:10Z
+completed_at: 2026-09-25T04:21:42Z
 
 ---
 # F70-S09 — Ligar os webhooks de saída
