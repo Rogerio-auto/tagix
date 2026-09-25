@@ -15,6 +15,7 @@ import {
   channels,
   contacts,
   conversations,
+  departments,
   members,
   pipelines,
   plans,
@@ -35,6 +36,7 @@ interface Fixture {
   stage: string;
   otherPipeline: string;
   otherStage: string;
+  department: string;
 }
 
 let A: Fixture;
@@ -99,7 +101,11 @@ async function seedWorkspace(label: string, planId: string | null): Promise<Fixt
     .insert(stages)
     .values({ workspaceId: ws.id, pipelineId: otherPipeline.id, name: 'Onboarding', position: 0 })
     .returning();
-  if (!stage || !otherStage) throw new Error('fixture');
+  const [department] = await db
+    .insert(departments)
+    .values({ workspaceId: ws.id, name: `Comercial ${sfx}` })
+    .returning();
+  if (!stage || !otherStage || !department) throw new Error('fixture');
   return {
     ws: ws.id,
     member: member.id,
@@ -109,6 +115,7 @@ async function seedWorkspace(label: string, planId: string | null): Promise<Fixt
     stage: stage.id,
     otherPipeline: otherPipeline.id,
     otherStage: otherStage.id,
+    department: department.id,
   };
 }
 
@@ -165,6 +172,21 @@ describe('assertRefsInWorkspace (F70-S11)', () => {
     const absent = new TenantRefError([{ kind: 'contact', id: ghost, field: 'contactId' }]);
     expect(foreign.body).toEqual(absent.body);
     expect(JSON.stringify(foreign.body)).not.toContain(B.contact);
+  });
+
+  it('departamento (F70-S18): o próprio passa; o de B volta ausente, igual a inexistente', async () => {
+    const ghost = randomUUID();
+    const missing = await withWorkspace(A.ws, (tx) =>
+      assertRefsInWorkspace(tx, [
+        { kind: 'department', id: A.department, field: 'departmentId' },
+        { kind: 'department', id: B.department, field: 'departmentIds' },
+        { kind: 'department', id: ghost, field: 'departmentIds' },
+      ]),
+    );
+    expect(missing).toEqual([
+      { kind: 'department', id: B.department, field: 'departmentIds' },
+      { kind: 'department', id: ghost, field: 'departmentIds' },
+    ]);
   });
 
   it('estágio de outro pipeline do MESMO workspace é recusado', async () => {

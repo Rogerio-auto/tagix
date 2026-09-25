@@ -2,11 +2,14 @@
  * CRUD de campanhas + steps/followups + validate (CAMPAIGNS.md 4, 5, 13).
  * Guards: list/get -> campaign.list; create/update/delete/steps/followups -> campaign.edit.
  * RLS via req.scoped. Toda input via Zod. validate roda o validador puro com ports reais.
+ *
+ * Referências (F70-S18): `channelId` e `aiHandoffAgentId` precisam ser DESTE workspace (a FK
+ * ignora RLS). Id de outro workspace responde igual a id inexistente: 422 `invalid_reference`.
  */
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, asc, desc, eq } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { requireRefsInWorkspace, schema, TenantRefError } from '@hm/db';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { param } from '../conversions/types';
 import { validateCampaign } from './validate';
@@ -19,6 +22,13 @@ import {
 } from './builder/contracts';
 
 const { campaigns, campaignSteps, campaignFollowups } = schema;
+
+/** 422 canônico da F70-S11 para referência fora do workspace; `false` = não era esse erro. */
+function sendInvalidReference(res: Response, err: unknown): boolean {
+  if (!(err instanceof TenantRefError)) return false;
+  res.status(422).json(err.body);
+  return true;
+}
 
 const windowSchema = z.object({
   day: z.number().int().min(0).max(6),
@@ -54,20 +64,38 @@ const campaignFieldsSchema = z.object({
 
 const createSchema = campaignFieldsSchema.superRefine((value, ctx) => {
   if (!value.mode && !value.type) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['mode'], message: 'Escolha Envio único ou Sequência de mensagens.' });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['mode'],
+      message: 'Escolha Envio único ou Sequência de mensagens.',
+    });
   }
   if (value.mode && value.type && toStoredCampaignType(value.mode) !== value.type) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['mode'], message: 'O formato informado está inconsistente.' });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['mode'],
+      message: 'O formato informado está inconsistente.',
+    });
   }
 });
 
-const updateSchema = campaignFieldsSchema.partial().omit({ channelId: true }).superRefine((value, ctx) => {
-  if (value.mode && value.type && toStoredCampaignType(value.mode) !== value.type) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['mode'], message: 'O formato informado está inconsistente.' });
-  }
-});
+const updateSchema = campaignFieldsSchema
+  .partial()
+  .omit({ channelId: true })
+  .superRefine((value, ctx) => {
+    if (value.mode && value.type && toStoredCampaignType(value.mode) !== value.type) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['mode'],
+        message: 'O formato informado está inconsistente.',
+      });
+    }
+  });
 
-function storedType(value: { readonly mode?: 'single' | 'sequence'; readonly type?: 'broadcast' | 'drip' }): 'broadcast' | 'drip' | undefined {
+function storedType(value: {
+  readonly mode?: 'single' | 'sequence';
+  readonly type?: 'broadcast' | 'drip';
+}): 'broadcast' | 'drip' | undefined {
   return value.mode ? toStoredCampaignType(value.mode) : value.type;
 }
 
@@ -80,7 +108,8 @@ function rejectsTriggered(body: unknown): boolean {
 function sendTriggeredUnavailable(res: Response): void {
   res.status(422).json({
     code: 'CAMPAIGN_TRIGGERED_NOT_AVAILABLE',
-    message: 'Campanhas automáticas por evento ainda não estão disponíveis. Escolha Envio único ou Sequência de mensagens.',
+    message:
+      'Campanhas automáticas por evento ainda não estão disponíveis. Escolha Envio único ou Sequência de mensagens.',
   });
 }
 
@@ -160,27 +189,37 @@ export function createCampaignsCrudRouter(): Router {
     }
     const d = parsed.data;
     const workspaceId = req.auth!.workspace.id;
-    const [created] = await req.scoped!((tx) =>
-      tx
-        .insert(campaigns)
-        .values({
-          workspaceId,
-          channelId: d.channelId,
-          name: d.name,
-          type: storedType(d)!,
-          status: 'draft',
-          timezone: d.timezone ?? 'America/Sao_Paulo',
-          startAt: d.startAt ? new Date(d.startAt) : null,
-          endAt: d.endAt ? new Date(d.endAt) : null,
-          sendWindows: (d.sendWindows ?? { enabled: false }) as schema.SendWindows,
-          rateLimitPerMinute: d.rateLimitPerMinute ?? 30,
-          dailyLimit: d.dailyLimit ?? 1000,
-          autoHandoffOnReply: d.autoHandoffOnReply ?? true,
-          aiHandoffAgentId: d.aiHandoffAgentId ?? null,
-          createdBy: req.auth!.member.id,
-        })
-        .returning(),
-    );
+    let created: typeof campaigns.$inferSelect | undefined;
+    try {
+      [created] = await req.scoped!(async (tx) => {
+        await requireRefsInWorkspace(tx, [
+          { kind: 'channel', id: d.channelId, field: 'channelId' },
+          { kind: 'agent', id: d.aiHandoffAgentId, field: 'aiHandoffAgentId' },
+        ]);
+        return tx
+          .insert(campaigns)
+          .values({
+            workspaceId,
+            channelId: d.channelId,
+            name: d.name,
+            type: storedType(d)!,
+            status: 'draft',
+            timezone: d.timezone ?? 'America/Sao_Paulo',
+            startAt: d.startAt ? new Date(d.startAt) : null,
+            endAt: d.endAt ? new Date(d.endAt) : null,
+            sendWindows: (d.sendWindows ?? { enabled: false }) as schema.SendWindows,
+            rateLimitPerMinute: d.rateLimitPerMinute ?? 30,
+            dailyLimit: d.dailyLimit ?? 1000,
+            autoHandoffOnReply: d.autoHandoffOnReply ?? true,
+            aiHandoffAgentId: d.aiHandoffAgentId ?? null,
+            createdBy: req.auth!.member.id,
+          })
+          .returning();
+      });
+    } catch (err: unknown) {
+      if (sendInvalidReference(res, err)) return;
+      throw err;
+    }
     res.status(201).json({ campaign: created });
   });
 
@@ -209,15 +248,34 @@ export function createCampaignsCrudRouter(): Router {
     if (d.autoHandoffOnReply !== undefined) patch['autoHandoffOnReply'] = d.autoHandoffOnReply;
     if (d.aiHandoffAgentId !== undefined) patch['aiHandoffAgentId'] = d.aiHandoffAgentId;
 
-    const [updated] = await req.scoped!((tx) =>
-      tx
-        .update(campaigns)
-        .set(patch)
-        .where(and(eq(campaigns.id, id), eq(campaigns.status, 'draft')))
-        .returning(),
-    );
+    let updated: typeof campaigns.$inferSelect | undefined;
+    try {
+      updated = await req.scoped!(async (tx) => {
+        // Campanha alheia/inexistente/fora de rascunho responde ANTES de olhar o payload.
+        const [current] = await tx
+          .select({ id: campaigns.id })
+          .from(campaigns)
+          .where(and(eq(campaigns.id, id), eq(campaigns.status, 'draft')))
+          .limit(1);
+        if (!current) return undefined;
+        await requireRefsInWorkspace(tx, [
+          { kind: 'agent', id: d.aiHandoffAgentId, field: 'aiHandoffAgentId' },
+        ]);
+        const [row] = await tx
+          .update(campaigns)
+          .set(patch)
+          .where(and(eq(campaigns.id, id), eq(campaigns.status, 'draft')))
+          .returning();
+        return row;
+      });
+    } catch (err: unknown) {
+      if (sendInvalidReference(res, err)) return;
+      throw err;
+    }
     if (!updated) {
-      res.status(409).json({ error: 'not_editable', message: 'So campanhas em rascunho podem ser editadas.' });
+      res
+        .status(409)
+        .json({ error: 'not_editable', message: 'So campanhas em rascunho podem ser editadas.' });
       return;
     }
     res.json({ campaign: updated });
@@ -247,7 +305,10 @@ export function createCampaignsCrudRouter(): Router {
     }
     const id = param(req, 'id');
     const result = await req.scoped!(async (tx) => {
-      const [campaign] = await tx.select({ id: campaigns.id }).from(campaigns).where(eq(campaigns.id, id));
+      const [campaign] = await tx
+        .select({ id: campaigns.id })
+        .from(campaigns)
+        .where(eq(campaigns.id, id));
       if (!campaign) return null;
       await tx.delete(campaignSteps).where(eq(campaignSteps.campaignId, id));
       const rows = await tx
@@ -260,7 +321,9 @@ export function createCampaignsCrudRouter(): Router {
             languageCode: s.languageCode ?? 'pt_BR',
             // Contrato `binding_contract/v1`: S12 resolve por destinatário antes de
             // publicar o componente Graph. O JSON existente evita mudança de schema.
-            templateComponents: s.bindings ? encodeBindings(s.bindings) : s.templateComponents ?? [],
+            templateComponents: s.bindings
+              ? encodeBindings(s.bindings)
+              : (s.templateComponents ?? []),
             delaySeconds: s.delaySeconds ?? 0,
             stopOnReply: s.stopOnReply ?? true,
           })),
@@ -283,7 +346,10 @@ export function createCampaignsCrudRouter(): Router {
     }
     const id = param(req, 'id');
     const result = await req.scoped!(async (tx) => {
-      const [campaign] = await tx.select({ id: campaigns.id }).from(campaigns).where(eq(campaigns.id, id));
+      const [campaign] = await tx
+        .select({ id: campaigns.id })
+        .from(campaigns)
+        .where(eq(campaigns.id, id));
       if (!campaign) return null;
       await tx.delete(campaignFollowups).where(eq(campaignFollowups.campaignId, id));
       if (parsed.data.followups.length === 0) return [];

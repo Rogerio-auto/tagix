@@ -66,7 +66,12 @@ const NO_MARKERS: OriginPrefillMarkersConfig = { site: [], instagram: [] };
 
 /**
  * Extrai os marcadores de `workspaces.settings`. Formato:
- * `{ "originPrefillMarkers": { "site": ["Vim pelo site"], "instagram": ["Vim pelo Instagram"] } }`.
+ * `{ "originPrefillMarkers": { "site": ["[ref:site-7f3a]"], "instagram": ["[ref:ig-2c9d]"] } }`.
+ *
+ * Desde a F70-S18 o marcador só casa como PREFIXO da primeira mensagem (normalizada),
+ * com no mínimo 8 caracteres. O formato recomendado é um token não natural no começo do
+ * texto do link `wa.me/<n>?text=` — `[ref:<fonte>-<hex aleatório>]` seguido da frase
+ * para o humano. Regra completa: `OriginPrefillMarkers` em `@hm/channels`.
  *
  * Ausente ou inválido → listas vazias (fail-closed: sem marcador, só anúncio e o
  * Direct do Instagram comprovam origem). Configuração inválida não derruba o

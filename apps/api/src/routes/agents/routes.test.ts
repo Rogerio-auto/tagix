@@ -67,6 +67,10 @@ vi.mock('@hm/db', () => {
       setAgentDepartments: setAgentDepartmentsMock,
       listDepartmentsForAgent: listDepartmentsForAgentMock,
     },
+    // F70-S18: a checagem "é deste workspace" roda contra o Postgres real em
+    // `cross-tenant.test.ts`; aqui todo id conta como do tenant.
+    requireRefsInWorkspace: vi.fn(async () => {}),
+    TenantRefError: class TenantRefError extends Error {},
     closeDb: vi.fn(),
   };
 });
@@ -317,7 +321,8 @@ describe('F34-S02 — config de departamentos', () => {
     expect(setAgentDepartmentsMock).not.toHaveBeenCalled();
   });
 
-  it('rejeita departamento arquivado/inexistente → 400', async () => {
+  // Inexistente / de outro workspace → 422 `invalid_reference` (ver cross-tenant.test.ts).
+  it('rejeita departamento arquivado → 400', async () => {
     const res = await request(makeApp())
       .post('/api/agents')
       .set('x-test-auth', '1')
