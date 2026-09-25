@@ -37,6 +37,7 @@ import {
   conversionTypes,
   conversations,
   deals,
+  departments,
   flows,
   kbChunks,
   kbDocuments,
@@ -56,6 +57,7 @@ export type TenantRefKind =
   | 'conversation'
   | 'conversionType'
   | 'deal'
+  | 'department'
   | 'flow'
   | 'kbChunk'
   | 'kbDocument'
@@ -120,6 +122,11 @@ const REF_TABLES: Readonly<Record<TenantRefKind, RefTable>> = {
     workspaceId: conversionTypes.workspaceId,
   },
   deal: { table: deals, id: deals.id, workspaceId: deals.workspaceId },
+  department: {
+    table: departments,
+    id: departments.id,
+    workspaceId: departments.workspaceId,
+  },
   flow: { table: flows, id: flows.id, workspaceId: flows.workspaceId },
   kbChunk: { table: kbChunks, id: kbChunks.id, workspaceId: kbChunks.workspaceId },
   kbDocument: { table: kbDocuments, id: kbDocuments.id, workspaceId: kbDocuments.workspaceId },

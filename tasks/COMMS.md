@@ -853,3 +853,24 @@ chamar `transfer_to_human`, `search_knowledge_base`, `add_contact_tag` etc. Alé
 **Pedido:** slot para (1) semear as tools de workflow/KB/database no catálogo `tools` e (2) carregar
 `agent_tools` habilitadas → `ToolDescriptor[]` no request do worker. Pré-requisito do DoD da F70-S06
 ("handoff testado nos 4 gatilhos"). O seed da Arcada vincula as tools quando existirem (re-rodar).
+
+## F70-S18 → dono de `apps/workers/src/inbound/**` (F70-S16) (2026-09-25) — marcador de origem agora só casa como prefixo
+
+**Mudança:** `classifyConversationOrigin` (`packages/channels/src/meta/whatsapp/origin.ts`) passou a
+aceitar o marcador de site/Instagram só como PREFIXO da primeira mensagem (normalizada), com
+fronteira de palavra no fim. Marcador no meio da mensagem virou `sem-origem`.
+
+**Impacto fora do meu `files_allowed`:** `apps/workers/src/inbound/origin-gate.test.ts:442` manda
+`'Olá! vim pelo site do leadium, quero um orçamento'` e espera `origem:site`. Com a regra nova o
+resultado é `sem-origem`. O teste hoje fica em `skip` no dev (6 de 8 pulados), então não quebrou
+aqui, mas quebra onde ele roda.
+
+**Pedido:** trocar o texto para começar pelo marcador, ex.:
+`'Vim pelo site do Leadium, quero um orçamento'`. Vale acrescentar o caso negativo (marcador no
+meio → `sem-origem`, IA não ativa).
+
+**Operação:** workspace que já tem `settings.originPrefillMarkers` precisa conferir que o texto do
+link `wa.me?text=` COMEÇA com o marcador. Formato recomendado: token `[ref:<fonte>-<hex>]` no
+começo do texto (detalhes no slot F70-S18).
+
+**Resolvido (2026-09-25):** `origin-gate.test.ts` ajustado para o marcador como prefixo (F70-S18), com um caso novo, contra o banco, de marcador no meio da mensagem → `sem-origem`. Branch `fix/f70-origin-gate-prefix`.
