@@ -34,6 +34,19 @@ O Claude Sonnet 5 poder ser escolhido nos agentes do Leadium e ser o modelo do a
 - `packages/db/drizzle/**` *(se o catálogo for dado no banco)*
 - testes ao lado
 
+### Caminhos localizados (antes de editar, 25/09)
+
+- **Catálogo/whitelist global (Node):** `packages/db/src/seed/llm_models.ts` — seed idempotente de
+  `llm_models_whitelist` (upsert por `slug`). É a única lista de modelos do Leadium: `GET /api/agents/models`
+  (`apps/api/src/routes/agents/models.ts`) lista as linhas ativas; o seed da Arcada faz fail-fast nela.
+  O catálogo é **dado no banco semeado por código**, não migração: nenhuma migração é necessária.
+- **Whitelist do runtime (Python):** `apps/agent-runtime/app/policy.py` (`model_block_reason`) — não há
+  catálogo estático no runtime; ele bloqueia pelo `allowed_models` da policy do workspace que o Node envia
+  (`packages/agents-core/src/policy-resolver.ts`). Teste ao lado: `apps/agent-runtime/tests/test_policy.py`.
+- **Modelo da Arcada:** `packages/db/src/seed/agent_templates_arcada.content.ts` (`ARCADA_MODEL`).
+- **Testes:** `packages/db/src/seed/llm_models.test.ts` (novo), `packages/db/src/seed/agent_templates_arcada.test.ts`.
+- `packages/shared/src/**`: nenhum catálogo de modelos lá (grep por `claude-`/`sonnet`/`gpt-4o-mini`).
+
 ## Escopo (faz)
 
 - Confirmar o id exato do Sonnet 5 no OpenRouter (fonte e data no slot) e o preço, para o teto de custo.
