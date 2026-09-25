@@ -2,7 +2,7 @@
 id: F70-S11
 title: Bloquear referências cruzadas entre workspaces nas rotas de escrita
 phase: F70
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F70-S08]
@@ -11,6 +11,7 @@ source_docs:
   - tasks/slots/F70/F70-S08-defesa-em-profundidade-da-trava-da-ia.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T04:18:05Z
+completed_at: 2026-09-25T05:19:49Z
 
 ---
 # F70-S11 — Bloquear referências cruzadas entre workspaces nas rotas de escrita
