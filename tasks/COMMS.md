@@ -872,3 +872,5 @@ meio → `sem-origem`, IA não ativa).
 **Operação:** workspace que já tem `settings.originPrefillMarkers` precisa conferir que o texto do
 link `wa.me?text=` COMEÇA com o marcador. Formato recomendado: token `[ref:<fonte>-<hex>]` no
 começo do texto (detalhes no slot F70-S18).
+
+**Resolvido (2026-09-25):** `origin-gate.test.ts` ajustado para o marcador como prefixo (F70-S18), com um caso novo, contra o banco, de marcador no meio da mensagem → `sem-origem`. Branch `fix/f70-origin-gate-prefix`.
