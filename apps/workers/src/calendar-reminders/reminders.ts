@@ -7,7 +7,8 @@
  *  2. para cada (evento, offset) due: NOTIFICA o organizer em tempo real (publica
  *     `appointment:due` no socket relay `hm.q.socket.relay` → member/ws, F53-S05) +
  *     auditLog (rastreável), e — se o evento tem contato com telefone + canal
- *     WhatsApp default ativo — publica um job outbound (reusa o pipeline F1-S07);
+ *     WhatsApp default ativo — grava um job outbound na OUTBOX (reusa o pipeline
+ *     F1-S07);
  *  3. NO VENCIMENTO (`start_at <= now`), se `metadata.dueAction` presente e ainda
  *     não executada, ENFILEIRA a ação reusando os ports existentes
  *     (`triggerFlow`/outbound/`move_stage`/`add_tag`). Idempotente via
@@ -15,14 +16,20 @@
  *  4. marca os offsets enviados em `events.metadata.remindersSent` (idempotente —
  *     re-tick nunca duplica; sem coluna nova: S01 está fechado).
  *
+ * F70-S21 — o job WhatsApp (lembrete ao contato e ação `send_message`) nasce da marca de
+ * idempotência e vai com ela: na MESMA transação, a marca é REIVINDICADA por um UPDATE
+ * condicional (só passa quem ainda não a tem) e o job entra na outbox. Commit grava os
+ * dois; rollback, nenhum. Antes o job era publicado e a marca gravada depois, em outra
+ * transação: uma falha entre os dois reenviava o lembrete no próximo tick.
+ *
  * Lock distribuído (Redis): só um worker tica por vez. DB/MQ são injetados via
  * ports → testáveis sem Postgres/RabbitMQ reais.
  */
 import { Buffer } from 'node:buffer';
 import { z } from 'zod';
 import { and, desc, eq, isNull, ne, sql } from 'drizzle-orm';
-import { getDb, schema, withWorkspace, type DbTx } from '@hm/db';
-import { makeEnvelope, publish, QUEUES } from '@hm/shared/mq';
+import { enqueueOutbox, getDb, schema, withWorkspace, type DbTx } from '@hm/db';
+import { makeEnvelope, publish, queueJobOutbox, QUEUES } from '@hm/shared/mq';
 import type { MqHandle } from '@hm/shared/mq';
 import type { AppointmentDuePayload } from '@hm/shared';
 import { createFlowEngine, createQueuePort, type FlowEngineApi } from '@hm/flow-engine';
@@ -221,7 +228,11 @@ export interface ReminderPorts {
    * Best-effort: erro de socket não pode abortar o tick.
    */
   notifyOrganizer(reminder: DueReminder, offsetMin: number): Promise<void>;
-  /** Envia lembrete WhatsApp ao contato (se houver). Retorna true se publicou. */
+  /**
+   * Enfileira o lembrete WhatsApp ao contato (se houver), pela outbox, na transação que
+   * reivindica o offset em `remindersSent`. `true` se enfileirou; `false` sem contato,
+   * telefone, canal, ou se o offset já tinha sido enviado.
+   */
   sendContactReminder(reminder: DueReminder, offsetMin: number): Promise<boolean>;
   /**
    * Executa a `dueAction` do compromisso no vencimento, reusando os ports
@@ -239,6 +250,73 @@ export interface ReminderPorts {
 export interface ReminderDbDeps {
   readonly channel: MqChannel;
   readonly logger: Logger;
+}
+
+/**
+ * `metadata` do evento com os `offsets` acrescentados a `remindersSent` (sem repetir).
+ * Merge atômico no jsonb, usado pela marca do tick e pela reivindicação do envio.
+ *
+ * Os offsets vão como UM parâmetro jsonb. F70-S21: a versão anterior interpolava o array
+ * JS (`${offsets}::int[]`); o Drizzle expande array em lista de parâmetros (`($1, $2)`),
+ * e o driver recusava o número num parâmetro tipado `int[]` — a marca nunca gravava.
+ */
+function withRemindersSent(offsets: readonly number[]) {
+  return sql`jsonb_set(
+    coalesce(${events.metadata}, '{}'::jsonb),
+    '{remindersSent}',
+    (
+      select coalesce(jsonb_agg(distinct v), '[]'::jsonb)
+      from (
+        select jsonb_array_elements(
+          coalesce(${events.metadata}->'remindersSent', '[]'::jsonb)
+        ) as v
+        union
+        select jsonb_array_elements(${JSON.stringify(offsets)}::jsonb) as v
+      ) s
+    )
+  )`;
+}
+
+/** `metadata` do evento com `dueActionDone = true`. */
+function withDueActionDone() {
+  return sql`jsonb_set(coalesce(${events.metadata}, '{}'::jsonb), '{dueActionDone}', 'true'::jsonb)`;
+}
+
+/**
+ * Reivindica o lembrete `offsetMin` do evento, na transação `tx`: acrescenta o offset a
+ * `remindersSent` SÓ se ainda não estiver lá. `true` = esta transação é a dona do envio.
+ * Duas execuções concorrentes serializam no lock da linha; a segunda relê a marca e não
+ * passa.
+ */
+async function claimReminderOffset(tx: DbTx, eventId: string, offsetMin: number): Promise<boolean> {
+  const rows = await tx
+    .update(events)
+    .set({ metadata: withRemindersSent([offsetMin]), updatedAt: new Date() })
+    .where(
+      and(
+        eq(events.id, eventId),
+        ne(events.status, 'cancelled'),
+        sql`not (coalesce(${events.metadata}->'remindersSent', '[]'::jsonb) @> jsonb_build_array(${offsetMin}::int))`,
+      ),
+    )
+    .returning({ id: events.id });
+  return rows.length > 0;
+}
+
+/** Reivindica a ação de vencimento do evento (`dueActionDone`), como acima. */
+async function claimDueAction(tx: DbTx, eventId: string): Promise<boolean> {
+  const rows = await tx
+    .update(events)
+    .set({ metadata: withDueActionDone(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(events.id, eventId),
+        ne(events.status, 'cancelled'),
+        sql`coalesce(${events.metadata}->'dueActionDone', 'false'::jsonb) <> 'true'::jsonb`,
+      ),
+    )
+    .returning({ id: events.id });
+  return rows.length > 0;
 }
 
 /** Publica um envelope no socket relay (`hm.q.socket.relay`) — consome o relay existente. */
@@ -305,15 +383,19 @@ export function createReminderPorts(deps: ReminderDbDeps): ReminderPorts {
     return channel?.id ?? null;
   }
 
-  /** Enfileira um template outbound ao contato (reusa o pipeline F1-S07). */
-  function enqueueTemplate(
+  /**
+   * Grava um template outbound ao contato na outbox, na transação `tx` (reusa o pipeline
+   * F1-S07). Quem chama já reivindicou a marca de idempotência nesta mesma transação.
+   */
+  async function enqueueTemplate(
+    tx: DbTx,
     workspaceId: string,
     channelId: string,
     chatId: string,
     messageId: string,
     templateName: string,
     languageCode: string,
-  ): void {
+  ): Promise<void> {
     const job = {
       kind: 'template' as const,
       channelId,
@@ -324,11 +406,10 @@ export function createReminderPorts(deps: ReminderDbDeps): ReminderPorts {
       languageCode,
       components: [],
     };
-    const envelope = makeEnvelope(OUTBOUND_JOB_TYPE, workspaceId, job);
-    deps.channel.sendToQueue(OUTBOUND_QUEUE, Buffer.from(JSON.stringify(envelope)), {
-      persistent: true,
-      contentType: 'application/json',
-    });
+    await enqueueOutbox(
+      tx,
+      queueJobOutbox(OUTBOUND_QUEUE, makeEnvelope(OUTBOUND_JOB_TYPE, workspaceId, job)),
+    );
   }
 
   return {
@@ -393,7 +474,10 @@ export function createReminderPorts(deps: ReminderDbDeps): ReminderPorts {
         const channelId = await defaultWhatsappChannel(tx);
         if (!channelId) return false;
 
-        enqueueTemplate(
+        // Marca e job na mesma transação: outro tick que já enviou este offset não passa.
+        if (!(await claimReminderOffset(tx, reminder.eventId, offsetMin))) return false;
+        await enqueueTemplate(
+          tx,
           reminder.workspaceId,
           channelId,
           phone,
@@ -437,7 +521,12 @@ export function createReminderPorts(deps: ReminderDbDeps): ReminderPorts {
               if (!phone) return { ok: false as const, reason: 'no_phone' };
               const channelId = action.channelId ?? (await defaultWhatsappChannel(tx));
               if (!channelId) return { ok: false as const, reason: 'no_channel' };
-              enqueueTemplate(
+              // Marca e job na mesma transação (a marca do tick depois é idempotente).
+              if (!(await claimDueAction(tx, reminder.eventId))) {
+                return { ok: false as const, reason: 'already_done' };
+              }
+              await enqueueTemplate(
+                tx,
                 reminder.workspaceId,
                 channelId,
                 phone,
@@ -546,23 +635,7 @@ export function createReminderPorts(deps: ReminderDbDeps): ReminderPorts {
         // Merge atômico no jsonb: append offsets ao array remindersSent (sem dup).
         await tx
           .update(events)
-          .set({
-            metadata: sql`jsonb_set(
-              coalesce(${events.metadata}, '{}'::jsonb),
-              '{remindersSent}',
-              (
-                select coalesce(jsonb_agg(distinct v), '[]'::jsonb)
-                from (
-                  select jsonb_array_elements(
-                    coalesce(${events.metadata}->'remindersSent', '[]'::jsonb)
-                  ) as v
-                  union
-                  select to_jsonb(o) from unnest(${offsets}::int[]) as o
-                ) s
-              )
-            )`,
-            updatedAt: new Date(),
-          })
+          .set({ metadata: withRemindersSent(offsets), updatedAt: new Date() })
           .where(and(eq(events.id, eventId), ne(events.status, 'cancelled')));
       });
     },
@@ -571,14 +644,7 @@ export function createReminderPorts(deps: ReminderDbDeps): ReminderPorts {
       await withWorkspace(workspaceId, async (tx) => {
         await tx
           .update(events)
-          .set({
-            metadata: sql`jsonb_set(
-              coalesce(${events.metadata}, '{}'::jsonb),
-              '{dueActionDone}',
-              'true'::jsonb
-            )`,
-            updatedAt: new Date(),
-          })
+          .set({ metadata: withDueActionDone(), updatedAt: new Date() })
           .where(and(eq(events.id, eventId), ne(events.status, 'cancelled')));
       });
     },
