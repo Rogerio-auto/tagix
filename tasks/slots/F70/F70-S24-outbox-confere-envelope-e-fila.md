@@ -2,13 +2,16 @@
 id: F70-S24
 title: Outbox confere envelope e fila contra o workspace, retenção configurável e event_id por workspace
 phase: F70
-status: available
+status: in-progress
 priority: medium
 estimated_size: S
 depends_on: [F70-S25]
 blocks: []
 source_docs:
   - tasks/slots/F70/F70-S16-outbox-transacional.md
+agent_id: backend-engineer
+claimed_at: 2026-09-25T14:11:57Z
+
 ---
 # F70-S24 — Outbox confere envelope e fila contra o workspace
 
