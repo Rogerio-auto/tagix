@@ -32,6 +32,14 @@ export interface RecentDelivery {
   readonly hasOnReplyFollowup: boolean;
 }
 
+/**
+ * Resultado do handoff para a IA (F70-S13). `applied=false` quando a trava de origem
+ * (F70-S07/S08) recusou: a IA continua desligada e o outcome tem de dizer isso.
+ */
+export interface HandoffResult {
+  readonly applied: boolean;
+}
+
 /** Ports do processor — injetadas pelo bootstrap, mockadas em teste. */
 export interface CampaignInboundPorts {
   /** Opta o contato out + tira de campanhas MARKETING (reusa optOutContact da API). */
@@ -42,8 +50,8 @@ export interface CampaignInboundPorts {
   findRecentDelivery(message: InboundMessage): Promise<RecentDelivery | null>;
   /** Marca o recipient como respondido. */
   markRecipientResponded(workspaceId: string, recipientId: string): Promise<void>;
-  /** Liga a IA na conversa apontando o agente de handoff da campanha. */
-  handoffToAgent(message: InboundMessage, agentId: string): Promise<void>;
+  /** Tenta ligar a IA na conversa com o agente da campanha; devolve se ligou de fato. */
+  handoffToAgent(message: InboundMessage, agentId: string): Promise<HandoffResult>;
   /** Publica o evento de followup on_reply (duravel via scheduled_followups). */
   publishFollowup(args: {
     workspaceId: string;
@@ -91,10 +99,12 @@ export async function processCampaignInbound(
 
   await ports.markRecipientResponded(message.workspaceId, delivery.recipientId);
 
+  // `handedOff` reflete o que aconteceu com a IA, não a intenção da campanha: a
+  // trava de origem pode recusar (conversa sem origem comprovada).
   let handedOff = false;
   if (delivery.autoHandoffOnReply && delivery.aiHandoffAgentId) {
-    await ports.handoffToAgent(message, delivery.aiHandoffAgentId);
-    handedOff = true;
+    const handoff = await ports.handoffToAgent(message, delivery.aiHandoffAgentId);
+    handedOff = handoff.applied;
   }
 
   if (delivery.hasOnReplyFollowup) {

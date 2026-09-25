@@ -18,6 +18,13 @@
  * do telefone — exatamente a chave que o inbound usa. Quando a pessoa responder, a
  * mensagem cai nesta mesma conversa. Sem canal ou sem telefone válido, o lead vira
  * contato e card, sem conversa.
+ *
+ * ## Webhooks de saída (F70-S13)
+ *
+ * Conversa que ESTE lead abriu publica `conversation.opened` depois do commit, com o
+ * construtor do catálogo (eventId canônico `<conversa>:opened`, o mesmo do inbound:
+ * se a pessoa já tivesse escrito, a conversa não seria criada aqui). Rollback não
+ * publica nada; reprocesso do mesmo lead não recria a conversa, logo não republica.
  */
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import {
@@ -37,6 +44,7 @@ import {
   type ResolvedLeadSource,
 } from '@hm/db';
 import { countryCodeForMarket, getMarketPack, normalizeE164 } from '@hm/shared';
+import { domainEvents, emitDomainEvent, type DomainEventDraft } from '@hm/shared/mq';
 import type { ClaimResult, LeadgenJob, LeadStore, PersistLeadInput, PersistLeadResult } from './ports';
 
 const {
@@ -55,6 +63,11 @@ const {
 export const LEAD_ADS_SOURCE = 'meta_lead_ads' as const;
 
 export class DbLeadStore implements LeadStore {
+  constructor(
+    /** F70-S13: publicação de eventos de domínio (webhooks de saída). Nunca lança. */
+    private readonly emitEvent: (draft: DomainEventDraft) => Promise<boolean> = emitDomainEvent,
+  ) {}
+
   async resolveSources(pageId: string): Promise<ResolvedLeadSource[]> {
     return leadAdsRepo.resolveSourcesForPage(pageId);
   }
@@ -91,10 +104,13 @@ export class DbLeadStore implements LeadStore {
     const { source, lead, job, now } = input;
     const workspaceId = source.workspaceId;
 
-    return withWorkspace(workspaceId, async (tx) => {
+    const gravado = await withWorkspace(workspaceId, async (tx): Promise<StoredLead> => {
       const estado = await leadAdsRepo.lockSubmission(tx, workspaceId, input.submissionId);
       if (estado === 'processed' || estado === null) {
-        return { created: false, contactId: null, conversationId: null, dealId: null, message: null };
+        return {
+          result: { created: false, contactId: null, conversationId: null, dealId: null, message: null },
+          opened: null,
+        };
       }
 
       const [ws] = await tx
@@ -117,6 +133,7 @@ export class DbLeadStore implements LeadStore {
       const resumo = answersSummary(lead.answers);
       const externalId = `leadgen:${lead.leadgenId}`;
       let conversationId: string | null = null;
+      let opened: StoredLead['opened'] = null;
       let mensagem: PersistLeadResult['message'] = null;
 
       if (digitos !== null) {
@@ -134,7 +151,9 @@ export class DbLeadStore implements LeadStore {
           .limit(1);
 
         if (canal !== undefined) {
-          conversationId = await ensureLeadConversation(tx, workspaceId, canal.id, digitos, contactId);
+          const conversa = await ensureLeadConversation(tx, workspaceId, canal.id, digitos, contactId);
+          conversationId = conversa.id;
+          if (conversa.created) opened = { conversationId: conversa.id, channelId: canal.id };
           const quando = lead.createdTime === null ? now : new Date(lead.createdTime);
           const [msg] = await tx
             .insert(messages)
@@ -209,9 +228,31 @@ export class DbLeadStore implements LeadStore {
         now,
       });
 
-      return { created: true, contactId, conversationId, dealId, message: mensagem };
+      return {
+        result: { created: true, contactId, conversationId, dealId, message: mensagem },
+        opened,
+      };
     });
+
+    // F70-S13: fora da transação — o commit aconteceu. Só a conversa criada AGORA.
+    if (gravado.opened !== null) {
+      await this.emitEvent(
+        domainEvents.conversationOpened(workspaceId, {
+          conversationId: gravado.opened.conversationId,
+          contactId: gravado.result.contactId,
+          channelId: gravado.opened.channelId,
+          trigger: 'inbound',
+        }),
+      );
+    }
+    return gravado.result;
   }
+}
+
+/** Resultado da transação + a conversa que ela abriu (publicada só depois do commit). */
+interface StoredLead {
+  readonly result: PersistLeadResult;
+  readonly opened: { readonly conversationId: string; readonly channelId: string } | null;
 }
 
 async function ensureLeadContact(
@@ -286,7 +327,7 @@ async function ensureLeadConversation(
   channelId: string,
   remoteId: string,
   contactId: string,
-): Promise<string> {
+): Promise<{ readonly id: string; readonly created: boolean }> {
   const [existente] = await tx
     .select({ id: conversations.id, contactId: conversations.contactId })
     .from(conversations)
@@ -296,7 +337,7 @@ async function ensureLeadConversation(
     if (existente.contactId === null) {
       await tx.update(conversations).set({ contactId }).where(eq(conversations.id, existente.id));
     }
-    return existente.id;
+    return { id: existente.id, created: false };
   }
 
   const [criada] = await tx
@@ -304,7 +345,8 @@ async function ensureLeadConversation(
     .values({ workspaceId, channelId, contactId, remoteId, kind: 'direct', status: 'open', aiMode: 'off' })
     .onConflictDoNothing({ target: [conversations.channelId, conversations.remoteId] })
     .returning({ id: conversations.id });
-  if (criada !== undefined) return criada.id;
+  // Só quem de fato inseriu "abriu" a conversa; o perdedor da corrida reseleciona.
+  if (criada !== undefined) return { id: criada.id, created: true };
 
   const [vencedora] = await tx
     .select({ id: conversations.id })
@@ -312,7 +354,7 @@ async function ensureLeadConversation(
     .where(and(eq(conversations.channelId, channelId), eq(conversations.remoteId, remoteId)))
     .limit(1);
   if (vencedora === undefined) throw new Error('leadgen: conversa não materializou após upsert.');
-  return vencedora.id;
+  return { id: vencedora.id, created: false };
 }
 
 /**

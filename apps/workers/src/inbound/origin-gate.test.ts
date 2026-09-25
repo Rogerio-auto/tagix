@@ -85,7 +85,7 @@ describe('gateCampaignAiHandoff (F70-S07)', () => {
     sendOptOutConfirmation: vi.fn(async () => undefined),
     findRecentDelivery: vi.fn(async () => null),
     markRecipientResponded: vi.fn(async () => undefined),
-    handoffToAgent: vi.fn(async () => undefined),
+    handoffToAgent: vi.fn(async () => ({ applied: true })),
     publishFollowup: vi.fn(async () => undefined),
   };
 
@@ -95,7 +95,7 @@ describe('gateCampaignAiHandoff (F70-S07)', () => {
     );
     const logger = createLogger('error');
     const gated = gateCampaignAiHandoff(base, { setConversationAi }, logger);
-    await gated.handoffToAgent(message, 'agent-1');
+    await expect(gated.handoffToAgent(message, 'agent-1')).resolves.toEqual({ applied: true });
     expect(setConversationAi).toHaveBeenCalledWith('ws', {
       conversationId: 'conv',
       aiMode: 'on',
@@ -114,7 +114,8 @@ describe('gateCampaignAiHandoff (F70-S07)', () => {
     const logger = createLogger('error');
     const warn = vi.spyOn(logger, 'warn');
     const gated = gateCampaignAiHandoff(base, { setConversationAi }, logger);
-    await expect(gated.handoffToAgent(message, 'agent-1')).resolves.toBeUndefined();
+    // F70-S13: a recusa sobe (antes o contrato era `void` e o processor dizia handedOff).
+    await expect(gated.handoffToAgent(message, 'agent-1')).resolves.toEqual({ applied: false });
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('recusado'),
       expect.objectContaining({ reason: 'origin_not_eligible', conversationId: 'conv' }),

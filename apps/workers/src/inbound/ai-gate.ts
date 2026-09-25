@@ -13,7 +13,11 @@
  */
 import type { FlowOutboundPort } from '@hm/flow-engine';
 import type { Logger } from '@hm/logger';
-import type { CampaignInboundPorts, InboundMessage } from '../campaigns-inbound/processor';
+import type {
+  CampaignInboundPorts,
+  HandoffResult,
+  InboundMessage,
+} from '../campaigns-inbound/processor';
 
 /** Só a mutação de IA do port de outbound da engine. */
 export type AiActivationPort = Pick<FlowOutboundPort, 'setConversationAi'>;
@@ -26,7 +30,7 @@ export function gateCampaignAiHandoff(
 ): CampaignInboundPorts {
   return {
     ...ports,
-    async handoffToAgent(message: InboundMessage, agentId: string): Promise<void> {
+    async handoffToAgent(message: InboundMessage, agentId: string): Promise<HandoffResult> {
       const result = await ai.setConversationAi(message.workspaceId, {
         conversationId: message.conversationId,
         aiMode: 'on',
@@ -39,6 +43,8 @@ export function gateCampaignAiHandoff(
           reason: result.reason,
         });
       }
+      // F70-S13: a recusa sobe até o processor (`handedOff: false`).
+      return { applied: result.applied };
     },
   };
 }

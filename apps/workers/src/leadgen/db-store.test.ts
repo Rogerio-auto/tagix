@@ -4,14 +4,18 @@
  * Protege: lead vira contato + conversa + mensagem + card; o mesmo lead duas vezes
  * não duplica nada; contato que já falou pelo WhatsApp é reaproveitado; e um
  * workspace não enxerga o lead do outro.
+ * F70-S13: a conversa aberta pelo lead publica `conversation.opened` uma vez, só
+ * depois do commit (outra conexão já a enxerga no momento da publicação); rollback
+ * não publica.
  *
  * Pula sem `DATABASE_URL`.
  */
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ParsedLead } from '@hm/channels';
 import { closeDb, encryptSecret, getDb, leadAdsRepo, schema, withWorkspace } from '@hm/db';
+import type { DomainEventDraft } from '@hm/shared/mq';
 import { DbLeadStore, LEAD_ADS_SOURCE } from './db-store';
 import { consentEvidence } from './process';
 import type { LeadgenJob } from './ports';
@@ -21,7 +25,21 @@ const url = process.env['DATABASE_URL'];
 describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
   const sfx = randomUUID().slice(0, 8);
   const pageId = `9${Date.now()}`;
-  const store = new DbLeadStore();
+  /** Cada publicação + se a conversa já estava commitada (visível por outra conexão). */
+  const publicados: Array<{ draft: DomainEventDraft; commitada: boolean }> = [];
+  const store = new DbLeadStore(async (draft) => {
+    const conversationId = draft.event === 'conversation.opened' ? draft.data.conversationId : '';
+    const visiveis = await getDb()
+      .select({ id: schema.conversations.id })
+      .from(schema.conversations)
+      .where(eq(schema.conversations.id, conversationId));
+    publicados.push({ draft, commitada: visiveis.length === 1 });
+    return true;
+  });
+  const abertas = (conversationId: string) =>
+    publicados.filter(
+      (p) => p.draft.event === 'conversation.opened' && p.draft.data.conversationId === conversationId,
+    );
   let workspaceId = '';
   let outroWorkspaceId = '';
   let channelId = '';
@@ -152,6 +170,22 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
     expect(card?.source).toBe(LEAD_ADS_SOURCE);
     expect(card?.currency).toBe('USD');
     expect(card?.customFields).toMatchObject({ tipo_de_obra: 'Cozinha' });
+
+    // F70-S13: uma publicação, depois do commit, com o eventId canônico e sem PII.
+    const eventos = abertas(gravado!.conversationId!);
+    expect(eventos).toHaveLength(1);
+    expect(eventos[0]?.commitada).toBe(true);
+    expect(eventos[0]?.draft).toMatchObject({
+      event: 'conversation.opened',
+      workspaceId,
+      eventId: `${gravado!.conversationId!}:opened`,
+      data: {
+        conversationId: gravado!.conversationId!,
+        contactId: gravado!.contactId!,
+        channelId,
+        trigger: 'inbound',
+      },
+    });
   });
 
   it('o mesmo lead de novo não cria nada', async () => {
@@ -174,6 +208,8 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
       .from(schema.messages)
       .where(eq(schema.messages.conversationId, primeiro.gravado!.conversationId!));
     expect(mensagens).toHaveLength(2);
+    // F70-S13: conversa reaproveitada não é "aberta" de novo.
+    expect(abertas(primeiro.gravado!.conversationId!)).toHaveLength(1);
   });
 
   it('persist concorrente: o segundo vê processed e não grava', async () => {
@@ -184,6 +220,27 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
     const entrada = { source: fonte, submissionId: reserva.submissionId, job, lead: l, consent: consentEvidence(l, 'f1', null), now: new Date() };
     const [a, b] = await Promise.all([store.persist(entrada), store.persist(entrada)]);
     expect([a.created, b.created].sort()).toEqual([false, true]);
+    const vencedor = a.created ? a : b;
+    expect(abertas(vencedor.conversationId!)).toHaveLength(1);
+  });
+
+  describe('F70-S13: rollback', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('transação falha depois de criar a conversa → nada publicado, nada gravado', async () => {
+      const antes = publicados.length;
+      vi.spyOn(leadAdsRepo, 'completeSubmission').mockRejectedValueOnce(new Error('falha simulada'));
+      await expect(processar(`lg4-${sfx}`, '+13055550177')).rejects.toThrow('falha simulada');
+
+      expect(publicados.length).toBe(antes);
+      const conversas = await getDb()
+        .select({ id: schema.conversations.id })
+        .from(schema.conversations)
+        .where(eq(schema.conversations.remoteId, '13055550177'));
+      expect(conversas).toHaveLength(0);
+    });
   });
 
   it('RLS: outro workspace não enxerga fontes nem leads', async () => {

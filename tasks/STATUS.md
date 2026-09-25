@@ -56,7 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 13     | 3   | 3   | 0   | 0   | 1   | 6   |
+| F70   | 13     | 2   | 3   | 0   | 0   | 2   | 6   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -777,7 +777,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70-S10 | Agentes recebem as tools (transfer_to_human, base de conhecimento e workflow)     | 🟢 available | critical   | F70-S08                   |
 | F70-S11 | Bloquear referências cruzadas entre workspaces nas rotas de escrita               | 🟢 available | critical   | F70-S08                   |
 | F70-S12 | FKs compostas por workspace nas referências de deals e stages                     | ⏸️ blocked  | high       | F70-S10, F70-S11          |
-| F70-S13 | conversation.opened em todos os caminhos de criação e handoff de campanha honesto | 🟢 available | medium     | F70-S09                   |
+| F70-S13 | conversation.opened em todos os caminhos de criação e handoff de campanha honesto | 🟣 review    | medium     | F70-S09                   |
 
 ## Fase 8 — Permissions & Settings
 
