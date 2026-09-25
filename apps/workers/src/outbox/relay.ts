@@ -21,6 +21,14 @@
  *   tentativa, volta com backoff exponencial com jitter (teto) e, no máximo de
  *   tentativas, vira `dead` com log de erro.
  *
+ * ## Linha que não pode sair (F70-S24)
+ * Antes de publicar, o relay repete os CHECKs do banco (`outboxRowViolation`): envelope
+ * válido, workspace do envelope = coluna, `job` só nas filas de `OUTBOX_JOB_QUEUES`,
+ * `event` só com routing key `domain.*`. A linha que viola vai DIRETO para `dead`, sem
+ * tentar publicar, com log `error` (motivo, workspace, destino — nunca o payload). O
+ * banco já recusa essas linhas na gravação; esta é a segunda trava, no único ponto que
+ * publica.
+ *
  * Vários relays (uma instância por processo de workers) em paralelo: `SKIP LOCKED`
  * reparte as linhas; o NOTIFY acorda todos, e quem chega depois encontra o lote vazio.
  */
@@ -38,6 +46,7 @@ import {
 import {
   envelopeSchema,
   openConfirmPublisher,
+  outboxRowViolation,
   type ConfirmPublisher,
   type ConfirmPublishItem,
 } from '@hm/shared/mq';
@@ -64,7 +73,7 @@ export interface OutboxRelayOptions {
   readonly reconnectBackoff?: BackoffOptions;
   /** `LISTEN hm_outbox` (default true). */
   readonly listen?: boolean;
-  /** Limpeza (default: a cada 10min; enviados 7 dias, mortos 30). `false` desliga. */
+  /** Limpeza (default: a cada 10min; enviados 7 dias, mortos 7). `false` desliga. */
   readonly cleanup?: (PurgeOutboxOptions & { readonly intervalMs?: number }) | false;
   /** Cinto de transação presa (default 30s; precisa ser maior que o prazo de confirmação). */
   readonly idleInTransactionTimeoutMs?: number;
@@ -360,7 +369,21 @@ export class OutboxRelay {
       const parsed = envelopeSchema.safeParse(row.envelope);
       if (!parsed.success) {
         // Linha corrompida não melhora com retentativa: morta já, com log.
-        outcomes.push(this.dead(row, `invalid_envelope: ${parsed.error.issues[0]?.message ?? ''}`));
+        outcomes.push(
+          this.rejected(row, `invalid_envelope: ${parsed.error.issues[0]?.message ?? ''}`),
+        );
+        continue;
+      }
+      const violation = outboxRowViolation({
+        kind: row.kind,
+        workspaceId: row.workspaceId,
+        exchange: row.exchange,
+        routingKey: row.routingKey,
+        envelope: parsed.data,
+      });
+      if (violation !== null) {
+        // Destino fora da lista ou tenant trocado: publicar seria o dano. Morta já.
+        outcomes.push(this.rejected(row, violation));
         continue;
       }
       items.push({
@@ -398,6 +421,20 @@ export class OutboxRelay {
       }
     }
     return outcomes;
+  }
+
+  /** Linha que o relay se recusa a publicar (envelope inválido, destino ou tenant). */
+  private rejected(row: ClaimedOutboxRow, error: string): OutboxOutcome {
+    this.opts.logger.error('outbox relay: mensagem MORTA — recusada antes de publicar', {
+      outboxId: row.id,
+      eventId: row.eventId,
+      kind: row.kind,
+      workspaceId: row.workspaceId,
+      exchange: row.exchange,
+      routingKey: row.routingKey,
+      error,
+    });
+    return { id: row.id, kind: 'dead', error };
   }
 
   private dead(row: ClaimedOutboxRow, error: string): OutboxOutcome {
