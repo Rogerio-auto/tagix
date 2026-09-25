@@ -2,7 +2,7 @@
 id: F70-S13
 title: conversation.opened em todos os caminhos de criação e handoff de campanha honesto
 phase: F70
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F70-S09]
