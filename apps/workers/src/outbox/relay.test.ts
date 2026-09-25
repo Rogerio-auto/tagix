@@ -11,9 +11,14 @@
  * Mais a fronteira de segurança: hm_app só grava (no próprio workspace) e não lê.
  *
  * Cada relay aqui drena SÓ o workspace do teste (`workspaceId`), para não levar ao
- * broker as linhas de outros testes que rodam em paralelo no mesmo banco. As filas
- * são privadas do teste (`hm.test.outbox.*`); o evento de domínio vai ao exchange
- * real `hm.events` e é observado por uma fila privada ligada em `domain.#`.
+ * broker as linhas de outros testes que rodam em paralelo no mesmo banco. O evento de
+ * domínio vai ao exchange real `hm.events` e é observado por uma fila privada ligada em
+ * `domain.#`.
+ *
+ * Jobs: desde a F70-S24 o banco só aceita job nas filas de `OUTBOX_JOB_QUEUES`. A linha
+ * é gravada como job real de `hm.q.media` (passa pelos CHECKs e pela checagem do relay)
+ * e o publisher do teste ({@link redirect}) desvia, só no broker, para a fila privada
+ * (`hm.test.outbox.*`) indicada no payload — o teste observa sem tocar a fila real.
  *
  * Pula sem `DATABASE_URL`/`AMQP_URL`.
  */
@@ -32,6 +37,7 @@ import {
   openConfirmPublisher,
   queueJobOutbox,
   QUEUES,
+  type ConfirmPublisher,
   type Envelope,
   type MqHandle,
   type OutboxMessage,
@@ -61,6 +67,35 @@ async function waitFor<T>(
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Fila real em que as linhas de job do teste são gravadas (aceita pelo CHECK da 0091). */
+const TEST_ROUTE_QUEUE = QUEUES.media;
+
+/** Fila privada que o job do teste carrega no payload (`testQueue`), ou `null`. */
+function testQueueOf(envelope: Envelope): string | null {
+  const payload = envelope.payload;
+  if (typeof payload !== 'object' || payload === null) return null;
+  const q: unknown = (payload as Record<string, unknown>)['testQueue'];
+  return typeof q === 'string' ? q : null;
+}
+
+/**
+ * Publisher que desvia, no broker, o job do teste para a fila privada dele. O relay
+ * confere a linha real (`hm.q.media`) antes; o desvio acontece depois, na publicação.
+ */
+function redirect(inner: ConfirmPublisher): ConfirmPublisher {
+  return {
+    publishBatch: (items) =>
+      inner.publishBatch(
+        items.map((item) => {
+          const q = item.exchange === '' ? testQueueOf(item.envelope) : null;
+          return q === null ? item : { ...item, routingKey: q };
+        }),
+      ),
+    isOpen: () => inner.isOpen(),
+    close: () => inner.close(),
+  };
+}
 
 /** Mensagem do Postgres por trás do erro do Drizzle (`Failed query: …` embrulha a causa). */
 async function pgFailure(run: Promise<unknown>): Promise<string> {
@@ -99,10 +134,10 @@ describe.skipIf(!ready)('F70-S16 outbox transacional + relay', { timeout: 30_000
   }
   const got = (name: string) => received.get(name) ?? [];
 
-  /** Mensagem de job para uma fila privada (o CHECK aceita exchange '' + qualquer fila). */
+  /** Job gravado em `hm.q.media` e entregue (pelo {@link redirect}) na fila privada `queue`. */
   function testJob(queue: string, n: number): OutboxMessage {
-    const envelope = makeEnvelope('test.outbox', workspaceId, { n });
-    return { kind: 'job', eventId: envelope.id, exchange: '', routingKey: queue, envelope };
+    const envelope = makeEnvelope('test.outbox', workspaceId, { n, testQueue: queue });
+    return queueJobOutbox(TEST_ROUTE_QUEUE, envelope);
   }
 
   async function commit(messages: readonly OutboxMessage[]): Promise<void> {
@@ -116,6 +151,8 @@ describe.skipIf(!ready)('F70-S16 outbox transacional + relay', { timeout: 30_000
     log: ReturnType<typeof makeLogger>;
   } {
     const log = makeLogger();
+    const { connectPublisher, ...rest } = opts;
+    const connect = connectPublisher ?? (() => openConfirmPublisher());
     const r = new OutboxRelay({
       logger: log.logger,
       workspaceId,
@@ -123,7 +160,8 @@ describe.skipIf(!ready)('F70-S16 outbox transacional + relay', { timeout: 30_000
       pollIntervalMs: 50,
       cleanup: false,
       jitter: false,
-      ...opts,
+      ...rest,
+      connectPublisher: async () => redirect(await connect()),
     });
     relays.push(r);
     return { relay: r, log };
@@ -376,7 +414,7 @@ describe.skipIf(!ready)('F70-S16 outbox transacional + relay', { timeout: 30_000
     expect(rows[0]).toMatchObject({ status: 'dead', attempts: 2 });
     expect(log.error).toHaveBeenCalledWith(
       expect.stringContaining('MORTA'),
-      expect.objectContaining({ eventId: msg.eventId, attempts: 2, routingKey: q }),
+      expect.objectContaining({ eventId: msg.eventId, attempts: 2, routingKey: TEST_ROUTE_QUEUE }),
     );
     await sleep(300);
     expect((await rowsOf([msg.eventId]))[0]?.attempts).toBe(2);
@@ -533,11 +571,12 @@ describe.skipIf(!ready)('F70-S16 outbox transacional + relay', { timeout: 30_000
     expect(
       await pgFailure(withWorkspace(workspaceId, (tx) => tx.execute(sql`DELETE FROM outbox`))),
     ).toMatch(/permission denied/);
-    // O event_id que o ON CONFLICT precisa enxergar: só do próprio workspace.
-    const visiveis = await withWorkspace(otherWorkspaceId, (tx) =>
-      tx.execute(sql`SELECT event_id FROM outbox`),
-    );
-    expect(Array.from(visiveis)).toHaveLength(0);
+    // F70-S24: nem o event_id. O ON CONFLICT sem alvo dispensa SELECT (0091).
+    expect(
+      await pgFailure(
+        withWorkspace(otherWorkspaceId, (tx) => tx.execute(sql`SELECT event_id FROM outbox`)),
+      ),
+    ).toMatch(/permission denied/);
   });
 
   it('job de outbound pela outbox vai à fila hm.q.outbound pelo exchange padrão', () => {

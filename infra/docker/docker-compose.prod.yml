@@ -61,6 +61,19 @@ x-app-env: &app-env
   BILLING_DUNNING_GRACE_DAYS: ${BILLING_DUNNING_GRACE_DAYS:-}
   BILLING_DUNNING_PASTDUE_DAYS: ${BILLING_DUNNING_PASTDUE_DAYS:-}
   BILLING_PIX_EXPIRES_SECONDS: ${BILLING_PIX_EXPIRES_SECONDS:-}
+  # Relay da outbox transacional (F70-S16/S24) — só os workers leem. Vazio = default
+  # do código (lote 100, polling 1s, 12 tentativas). A outbox guarda o envelope inteiro
+  # (texto de mensagem, telefone): enviados e mortos saem em 7 dias (dado pessoal, LGPD).
+  OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-}
+  OUTBOX_POLL_MS: ${OUTBOX_POLL_MS:-}
+  OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-}
+  OUTBOX_SENT_RETENTION_DAYS: ${OUTBOX_SENT_RETENTION_DAYS:-7}
+  OUTBOX_DEAD_RETENTION_DAYS: ${OUTBOX_DEAD_RETENTION_DAYS:-7}
+  # Recuperação de execução de flow `running` parada (F70-S25), no scheduler dos
+  # workers. Vazio = default: reanima depois de 5 min parada (piso 1 min); mais velha
+  # que 24 h vira `failed` sem enviar nada.
+  FLOW_RUNNING_STALE_MS: ${FLOW_RUNNING_STALE_MS:-}
+  FLOW_RUNNING_MAX_AGE_MS: ${FLOW_RUNNING_MAX_AGE_MS:-}
 
 # --- Política de deploy dos serviços de APP (não das infras stateful) ---
 # `start-first`: o Swarm sobe a task nova e só derruba a antiga quando a nova
