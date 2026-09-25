@@ -1,6 +1,7 @@
 /**
  * F70-S09 — contrato dos eventos de domínio: catálogo, routing, schema estrito
- * (nada fora do contrato sai), eventId canônico e emissor que nunca lança.
+ * (nada fora do contrato sai) e eventId canônico. A publicação é só pela outbox
+ * (F70-S20): `outbox.test.ts`.
  */
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -14,12 +15,11 @@ import {
   DOMAIN_EVENTS,
   domainEventRoutingKey,
   domainEvents,
-  emitDomainEvent,
   parseDomainEnvelope,
   setDomainEventLogger,
-  setDomainEventTransport,
   type DomainEventDraft,
 } from './domain-events';
+import { domainEventsOutbox } from './outbox';
 import { makeEnvelope, type Envelope } from './envelope';
 import { NonRetryableError, isReliableQueue } from './retry';
 import { DOMAIN_EVENT_BINDING, QUEUES } from './topology';
@@ -27,7 +27,6 @@ import { DOMAIN_EVENT_BINDING, QUEUES } from './topology';
 const ws = randomUUID();
 
 afterEach(() => {
-  setDomainEventTransport(null);
   setDomainEventLogger(null);
 });
 
@@ -160,57 +159,14 @@ describe('conversation.opened — origem (F70-S14)', () => {
     expect(() => buildDomainEnvelope(semOrigem as unknown as DomainEventDraft)).toThrow();
   });
 
-  it('emitDomainEvent não publica origem inválida (devolve false, nunca lança)', async () => {
-    const sent: string[] = [];
-    setDomainEventTransport(async (rk) => {
-      sent.push(rk);
-    });
-    setDomainEventLogger({ error: () => undefined, warn: () => undefined });
+  it('origem inválida não vira linha da outbox (logada e descartada, nunca lança)', () => {
+    const errors: string[] = [];
+    setDomainEventLogger({ error: (msg) => errors.push(msg), warn: () => undefined });
     const draft = domainEvents.conversationOpened(ws, { ...base(), trigger: 'campaign' });
     const forged = { ...draft, data: { ...draft.data, trigger: 'webhook' } };
-    expect(await emitDomainEvent(forged as unknown as DomainEventDraft)).toBe(false);
-    expect(await emitDomainEvent(draft)).toBe(true);
-    expect(sent).toEqual(['domain.conversation.opened']);
-  });
-});
-
-describe('emitDomainEvent', () => {
-  it('publica na routing key do evento pelo transporte', async () => {
-    const sent: Array<{ rk: string; env: Envelope }> = [];
-    setDomainEventTransport(async (rk, env) => {
-      sent.push({ rk, env });
-    });
-    const ok = await emitDomainEvent(
-      domainEvents.dealCreated(ws, {
-        dealId: randomUUID(),
-        pipelineId: randomUUID(),
-        stageId: randomUUID(),
-        contactId: randomUUID(),
-        conversationId: null,
-        valueCents: 0,
-        currency: 'BRL',
-      }),
-    );
-    expect(ok).toBe(true);
-    expect(sent).toHaveLength(1);
-    expect(sent[0]?.rk).toBe('domain.deal.created');
-  });
-
-  it('nunca lança: falha do transporte vira false + log', async () => {
-    const errors: string[] = [];
-    setDomainEventLogger({ warn: () => undefined, error: (msg) => errors.push(msg) });
-    setDomainEventTransport(async () => {
-      throw new Error('broker fora');
-    });
-    const ok = await emitDomainEvent(
-      domainEvents.conversationResolved(ws, {
-        conversationId: randomUUID(),
-        resolvedBy: 'agent',
-        memberId: null,
-        agentId: randomUUID(),
-      }),
-    );
-    expect(ok).toBe(false);
+    const out = domainEventsOutbox([forged as unknown as DomainEventDraft, draft]);
+    expect(out.map((m) => m.routingKey)).toEqual(['domain.conversation.opened']);
+    expect(out[0]?.eventId).toBe(draft.eventId);
     expect(errors).toHaveLength(1);
   });
 });

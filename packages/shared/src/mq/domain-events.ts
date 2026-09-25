@@ -1,6 +1,5 @@
 /**
- * @hm/shared/mq/domain-events — catálogo, contrato e publicação dos eventos de
- * domínio (F70-S09).
+ * @hm/shared/mq/domain-events — catálogo e contrato dos eventos de domínio (F70-S09).
  *
  * ## O que é
  * Eventos de negócio que outros sistemas assinam por webhook (o Rogério OS em
@@ -9,12 +8,13 @@
  *
  * ## Fluxo
  * ```
- * produtor (API/worker), DEPOIS do commit
- *   └─ emitDomainEvent(draft) ─► hm.events  rk = domain.<evento>
- *                                   └─► hm.q.webhooks (bind domain.#)
- *                                         └─► consumer webhooks → fanoutEvent
- *                                               └─► outbound_webhook_deliveries
- *                                                     └─► dispatcher (HMAC + retry)
+ * produtor (API/worker), NA transação do dado
+ *   └─ enqueueOutbox(tx, domainEventsOutbox([draft]))  (tabela outbox)
+ *        └─ relay dos workers (confirms) ─► hm.events  rk = domain.<evento>
+ *                                             └─► hm.q.webhooks (bind domain.#)
+ *                                                   └─► consumer webhooks → fanoutEvent
+ *                                                         └─► outbound_webhook_deliveries
+ *                                                               └─► dispatcher (HMAC + retry)
  * ```
  *
  * ## Contrato
@@ -35,15 +35,12 @@
  * `enqueueOutbox` de `@hm/db`), e o relay dos workers publica com publisher
  * confirms, pelo menos uma vez. O `eventId` deduplica a republicação no fan-out.
  *
- * {@link emitDomainEvent} (publicação direta, depois do commit, nunca lança) segue
- * aqui só para os produtores da API que a F70-S17 migra para a outbox.
+ * A outbox é o ÚNICO caminho de publicação: o emissor direto pós-commit
+ * (`emitDomainEvent`) saiu na F70-S20, quando o último produtor migrou.
  */
 import { randomUUID } from 'node:crypto';
-import type { Channel } from 'amqplib';
 import { z } from 'zod';
 import { makeEnvelope, type Envelope } from './envelope';
-import { connectMq, type MqHandle } from './connection';
-import { publishWithBackpressure } from './publish';
 import { NonRetryableError, type RetryLogger } from './retry';
 import { DOMAIN_EVENT_ROUTING_PREFIX } from './topology';
 
@@ -349,11 +346,6 @@ function toContractIssue(issue: z.ZodIssue): DomainEventContractIssue {
   return { path, code: issue.code };
 }
 
-/** Publica um evento de domínio num canal já aberto (respeita backpressure). */
-export async function publishDomainEvent(channel: Channel, draft: DomainEventDraft): Promise<void> {
-  await publishWithBackpressure(channel, domainEventRoutingKey(draft.event), buildDomainEnvelope(draft));
-}
-
 // ─── Construtores (um por evento: eventId canônico num lugar só) ──────────────
 
 function nowIso(): string {
@@ -566,36 +558,16 @@ export function conversionRegisteredFromRow(
   });
 }
 
-// ─── Emissor do processo (conexão preguiçosa, nunca lança) ────────────────────
+// ─── Log de evento descartado ─────────────────────────────────────────────────
 
-/** Transporte substituível (teste): recebe a routing key e o envelope pronto. */
-export type DomainEventTransport = (routingKey: string, envelope: Envelope) => Promise<void>;
-
-let transportOverride: DomainEventTransport | null = null;
-let handlePromise: Promise<MqHandle> | null = null;
 let emitterLogger: RetryLogger | null = null;
 
-/** Troca o transporte (testes). `null` volta ao RabbitMQ real. */
-export function setDomainEventTransport(transport: DomainEventTransport | null): void {
-  transportOverride = transport;
-}
-
-/** Logger estruturado do emissor (o processo configura no boot). */
+/** Logger estruturado dos eventos descartados (o processo configura no boot). */
 export function setDomainEventLogger(logger: RetryLogger | null): void {
   emitterLogger = logger;
 }
 
-async function getHandle(): Promise<MqHandle> {
-  handlePromise ??= connectMq();
-  try {
-    return await handlePromise;
-  } catch (err) {
-    handlePromise = null;
-    throw err;
-  }
-}
-
-/** Loga um evento que não saiu (contrato violado, broker fora). Nunca lança. */
+/** Loga um evento descartado antes da outbox (contrato violado). Nunca lança. */
 export function reportDomainEventFailure(draft: DomainEventDraft, err: unknown): void {
   const fields = {
     event: draft.event,
@@ -611,40 +583,11 @@ export function reportDomainEventFailure(draft: DomainEventDraft, err: unknown):
 }
 
 /**
- * Publica um evento de domínio. Chame DEPOIS do commit. Nunca lança: devolve
- * `false` e loga quando não conseguiu (broker fora, contrato violado).
+ * Nada a fechar: o emissor direto saiu na F70-S20 e o módulo não abre conexão.
+ *
+ * @deprecated No-op mantido só para o shutdown de `apps/workers/src/bootstrap`, que
+ * ainda o chama. Sai quando o bootstrap for tocado.
  */
-export async function emitDomainEvent(draft: DomainEventDraft): Promise<boolean> {
-  try {
-    const envelope = buildDomainEnvelope(draft);
-    const routingKey = domainEventRoutingKey(draft.event);
-    if (transportOverride) {
-      await transportOverride(routingKey, envelope);
-      return true;
-    }
-    const { channel } = await getHandle();
-    await publishWithBackpressure(channel, routingKey, envelope);
-    return true;
-  } catch (err: unknown) {
-    reportDomainEventFailure(draft, err);
-    return false;
-  }
-}
-
-/** Publica vários em ordem (cada um isolado: um que falha não derruba os outros). */
-export async function emitDomainEvents(drafts: readonly DomainEventDraft[]): Promise<void> {
-  for (const draft of drafts) await emitDomainEvent(draft);
-}
-
-/** Fecha a conexão do emissor (shutdown/testes). */
 export async function closeDomainEventEmitter(): Promise<void> {
-  if (!handlePromise) return;
-  const pending = handlePromise;
-  handlePromise = null;
-  try {
-    const { connection } = await pending;
-    await connection.close();
-  } catch {
-    // já caiu — nada a fazer
-  }
+  await Promise.resolve();
 }
