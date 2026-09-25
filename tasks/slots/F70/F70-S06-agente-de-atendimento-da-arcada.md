@@ -5,7 +5,7 @@ phase: F70
 status: blocked
 priority: high
 estimated_size: M
-depends_on: [F70-S04, F70-S05]
+depends_on: [F70-S04, F70-S05, F70-S07]
 blocks: []
 source_docs:
   - rogerio-os/tasks/central-operacao/CO-10-agente-de-atendimento-da-arcada.md
