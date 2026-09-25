@@ -2,13 +2,16 @@
 id: F70-S06
 title: Agente de atendimento da Arcada
 phase: F70
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F70-S04, F70-S05, F70-S07]
 blocks: []
 source_docs:
   - rogerio-os/tasks/central-operacao/CO-10-agente-de-atendimento-da-arcada.md
+agent_id: backend-engineer
+claimed_at: 2026-09-25T03:49:20Z
+
 ---
 # F70-S06 — Agente de atendimento da Arcada
 
