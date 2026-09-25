@@ -7,6 +7,8 @@
  *    payload mínimo (sem o `reason` escrito pelo modelo) e ocorrência = execução.
  *  - `mark_resolved` publica `conversation.resolved` (autor = agente).
  *  - tool que falha (conversa inexistente) não publica nada.
+ *  - a auditoria em `tool_logs` é best-effort de verdade: uma falha no INSERT do log
+ *    (FK violada) não desfaz a ação nem vira 500.
  *
  * O transporte do emissor é trocado por um coletor (sem RabbitMQ). Skip automático
  * se o Postgres dev não estiver acessível.
@@ -17,7 +19,7 @@
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import request from 'supertest';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb, schema } from '@hm/db';
 import { setDomainEventTransport, type Envelope } from '@hm/shared/mq';
@@ -36,6 +38,22 @@ const published: Array<{ rk: string; env: Envelope }> = [];
 const app = express();
 app.use(express.json());
 app.use(createInternalToolsRouter({ registry: buildWorkflowRegistry(), token: TOKEN }));
+
+/**
+ * App cuja barreira libera a chamada apontando para um `tools.id` inexistente: a ação
+ * roda e commita, e o INSERT do log viola a FK `tool_id` (23503). Depois da F70-S15 é
+ * o jeito determinístico de quebrar SÓ a auditoria — agente, execução e conversa já
+ * são garantidos pela barreira real.
+ */
+const appWithBrokenAudit = express();
+appWithBrokenAudit.use(express.json());
+appWithBrokenAudit.use(
+  createInternalToolsRouter({
+    registry: buildWorkflowRegistry(),
+    token: TOKEN,
+    authorize: async () => ({ allowed: true, toolId: randomUUID() }),
+  }),
+);
 
 /** Execução `running` do agente na conversa (o que o worker cria antes do /run). */
 async function freshExecution(conversationId: string): Promise<string> {
@@ -56,15 +74,17 @@ async function freshExecution(conversationId: string): Promise<string> {
 
 async function freshConversation(): Promise<string> {
   const id = randomUUID();
-  await getDb().insert(schema.conversations).values({
-    id,
-    workspaceId: WS,
-    channelId: CHANNEL,
-    contactId: CONTACT,
-    remoteId: `r-${id.slice(0, 12)}`,
-    aiMode: 'on',
-    status: 'open',
-  });
+  await getDb()
+    .insert(schema.conversations)
+    .values({
+      id,
+      workspaceId: WS,
+      channelId: CHANNEL,
+      contactId: CONTACT,
+      remoteId: `r-${id.slice(0, 12)}`,
+      aiMode: 'on',
+      status: 'open',
+    });
   return id;
 }
 
@@ -73,8 +93,9 @@ function callTool(
   conversationId: string,
   executionId: string,
   args: Record<string, unknown>,
+  target: express.Express = app,
 ) {
-  return request(app)
+  return request(target)
     .post(`/internal/tools/${toolKey}`)
     .set('authorization', `Bearer ${TOKEN}`)
     .send({
@@ -92,7 +113,9 @@ beforeAll(async () => {
   });
   try {
     const db = getDb();
-    await db.insert(schema.workspaces).values({ id: WS, name: 'F70S09 tools', slug: `f70s09-${WS.slice(0, 8)}` });
+    await db
+      .insert(schema.workspaces)
+      .values({ id: WS, name: 'F70S09 tools', slug: `f70s09-${WS.slice(0, 8)}` });
     await db.insert(schema.contacts).values({
       id: CONTACT,
       workspaceId: WS,
@@ -178,6 +201,15 @@ describe('F70-S09 — eventos de domínio das tools da IA', () => {
       .from(schema.conversations)
       .where(eq(schema.conversations.id, conv));
     expect(row).toEqual({ aiMode: 'off', status: 'pending' });
+
+    // A trilha de auditoria foi gravada (transação própria, depois da ação).
+    const logs = await getDb()
+      .select({ action: schema.toolLogs.action, error: schema.toolLogs.error })
+      .from(schema.toolLogs)
+      .where(
+        and(eq(schema.toolLogs.workspaceId, WS), eq(schema.toolLogs.executionId, executionId)),
+      );
+    expect(logs).toEqual([{ action: 'transfer_to_human', error: null }]);
   });
 
   maybe('mark_resolved publica conversation.resolved com autor agente', async () => {
@@ -206,5 +238,32 @@ describe('F70-S09 — eventos de domínio das tools da IA', () => {
     });
     expect(res.status).toBe(422);
     expect(published).toHaveLength(0);
+  });
+
+  maybe('falha ao gravar tool_logs não desfaz a ação nem vira 500', async () => {
+    const conv = await freshConversation();
+    const executionId = await freshExecution(conv);
+    // `tool_id` inexistente → o INSERT do log viola a FK (23503), já fora da ação.
+    const res = await callTool(
+      'mark_resolved',
+      conv,
+      executionId,
+      { resolution: 'ok' },
+      appWithBrokenAudit,
+    );
+    expect(res.status).toBe(200);
+    expect(published).toHaveLength(1);
+
+    const [row] = await getDb()
+      .select({ status: schema.conversations.status })
+      .from(schema.conversations)
+      .where(eq(schema.conversations.id, conv));
+    expect(row?.status).toBe('resolved');
+
+    const logs = await getDb()
+      .select({ id: schema.toolLogs.id })
+      .from(schema.toolLogs)
+      .where(eq(schema.toolLogs.executionId, executionId));
+    expect(logs).toHaveLength(0);
   });
 });

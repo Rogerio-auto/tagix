@@ -14,7 +14,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { assertRefsInWorkspace, schema, uniqueViolationConstraint } from '@hm/db';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { automationRuleSchema, param, transitionRulesSchema } from './pipelines';
 
@@ -43,6 +43,15 @@ const updateStageSchema = z.object({
   automationRules: z.array(automationRuleSchema).optional(),
   transitionRules: transitionRulesSchema.optional(),
 });
+
+/** Posição já ocupada no pipeline (`stages_pipeline_position_uq`): 409, não 500. */
+const POSITION_TAKEN = {
+  error: 'stage_position_taken',
+  message:
+    'Não foi possível salvar o estágio nesta posição. ' +
+    'Já existe outro estágio do mesmo pipeline nela. ' +
+    'Escolha outra posição ou reordene os estágios antes.',
+} as const;
 
 const reorderSchema = z.object({
   pipelineId: z.string().uuid(),
@@ -103,24 +112,45 @@ export function createStagesRouter(): Router {
       }
       const pipelineId = param(req, 'pipelineId');
       const workspaceId = req.auth!.workspace.id;
-      const [created] = await req.scoped!((tx) =>
-        tx
-          .insert(stages)
-          .values({
-            workspaceId,
-            pipelineId,
-            name: parsed.data.name,
-            color: parsed.data.color ?? '#1FFF13',
-            icon: parsed.data.icon ?? null,
-            position: parsed.data.position,
-            isWon: parsed.data.isWon ?? false,
-            isLost: parsed.data.isLost ?? false,
-            probability: parsed.data.probability == null ? null : String(parsed.data.probability),
-            automationRules: parsed.data.automationRules ?? [],
-            transitionRules: parsed.data.transitionRules ?? {},
-          })
-          .returning(),
-      );
+      let created: typeof stages.$inferSelect | undefined | null;
+      try {
+        created = await req.scoped!(async (tx) => {
+          // F70-S11: o pipeline da URL precisa ser DESTE workspace. A FK ignora RLS e
+          // `stages_pipeline_position_uq` é global: sem isto, A ocupava posições no
+          // pipeline de B. Inexistente e alheio respondem o mesmo 404.
+          const missing = await assertRefsInWorkspace(tx, [
+            { kind: 'pipeline', id: pipelineId, field: 'pipelineId' },
+          ]);
+          if (missing.length > 0) return null;
+          const [row] = await tx
+            .insert(stages)
+            .values({
+              workspaceId,
+              pipelineId,
+              name: parsed.data.name,
+              color: parsed.data.color ?? '#1FFF13',
+              icon: parsed.data.icon ?? null,
+              position: parsed.data.position,
+              isWon: parsed.data.isWon ?? false,
+              isLost: parsed.data.isLost ?? false,
+              probability: parsed.data.probability == null ? null : String(parsed.data.probability),
+              automationRules: parsed.data.automationRules ?? [],
+              transitionRules: parsed.data.transitionRules ?? {},
+            })
+            .returning();
+          return row;
+        });
+      } catch (err: unknown) {
+        if (uniqueViolationConstraint(err) === 'stages_pipeline_position_uq') {
+          res.status(409).json(POSITION_TAKEN);
+          return;
+        }
+        throw err;
+      }
+      if (created === null) {
+        res.status(404).json({ error: 'pipeline_not_found' });
+        return;
+      }
       res.status(201).json({ stage: created });
     },
   );
@@ -138,9 +168,18 @@ export function createStagesRouter(): Router {
       if (v === undefined) continue;
       patch[k] = k === 'probability' && v !== null ? String(v) : v;
     }
-    const [updated] = await req.scoped!((tx) =>
-      tx.update(stages).set(patch).where(eq(stages.id, id)).returning(),
-    );
+    let updated: typeof stages.$inferSelect | undefined;
+    try {
+      [updated] = await req.scoped!((tx) =>
+        tx.update(stages).set(patch).where(eq(stages.id, id)).returning(),
+      );
+    } catch (err: unknown) {
+      if (uniqueViolationConstraint(err) === 'stages_pipeline_position_uq') {
+        res.status(409).json(POSITION_TAKEN);
+        return;
+      }
+      throw err;
+    }
     if (!updated) {
       res.sendStatus(404);
       return;

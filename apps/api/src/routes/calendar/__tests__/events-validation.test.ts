@@ -191,6 +191,9 @@ vi.mock('@hm/db', () => {
   return {
     schema: { calendars, events, eventParticipants },
     CalendarNotFoundError,
+    // F70-S11: a trava de referências tem teste próprio contra o Postgres dev
+    // (calendar/cross-tenant.test.ts); aqui toda referência é do workspace.
+    assertRefsInWorkspace: async () => [],
     calendarRepo: {
       ensurePersonalCalendar: async () => calendarsStore[0],
       ensureWorkspaceCalendar: async () => calendarsStore[0],

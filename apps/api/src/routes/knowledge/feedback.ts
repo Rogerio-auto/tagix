@@ -18,7 +18,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { assertRefsInWorkspace, schema, TenantRefError } from '@hm/db';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
 const feedbackSchema = z.object({
@@ -57,6 +57,28 @@ export function createKnowledgeFeedbackRouter(): Router {
         .where(eq(schema.kbDocuments.id, input.documentId))
         .limit(1);
       if (!doc) return { notFound: true as const };
+
+      // F70-S11: chunk, agente e conversa precisam ser DESTE workspace (a FK ignora RLS);
+      // o chunk, além disso, precisa ser DESTE documento.
+      const missing = await assertRefsInWorkspace(tx, [
+        { kind: 'kbChunk', id: input.chunkId, field: 'chunkId' },
+        { kind: 'agent', id: input.agentId, field: 'agentId' },
+        { kind: 'conversation', id: input.conversationId, field: 'conversationId' },
+      ]);
+      if (input.chunkId && !missing.some((m) => m.field === 'chunkId')) {
+        const [chunk] = await tx
+          .select({ id: schema.kbChunks.id })
+          .from(schema.kbChunks)
+          .where(
+            and(
+              eq(schema.kbChunks.id, input.chunkId),
+              eq(schema.kbChunks.documentId, input.documentId),
+            ),
+          )
+          .limit(1);
+        if (!chunk) missing.push({ kind: 'kbChunk', id: input.chunkId, field: 'chunkId' });
+      }
+      if (missing.length > 0) return { invalidRefs: new TenantRefError(missing) };
 
       // Dedup razoavel: mesmo (doc, chunk, conversation, helpful) -> no-op.
       const chunkCond = input.chunkId
@@ -97,6 +119,10 @@ export function createKnowledgeFeedbackRouter(): Router {
 
     if ('notFound' in created) {
       res.status(404).json({ message: 'Documento nao encontrado.' });
+      return;
+    }
+    if ('invalidRefs' in created && created.invalidRefs) {
+      res.status(422).json(created.invalidRefs.body);
       return;
     }
     res.status(201).json({ id: created.id, deduped: 'duplicate' in created });
