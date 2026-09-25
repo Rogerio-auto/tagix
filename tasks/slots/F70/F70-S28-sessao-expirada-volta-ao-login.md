@@ -2,7 +2,7 @@
 id: F70-S28
 title: Sessão expirada volta ao login, no navegador e no PWA
 phase: F70
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F70-S01]
@@ -11,6 +11,7 @@ source_docs:
   - tasks/slots/F61/F61-S01-service-worker.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T19:49:22Z
+completed_at: 2026-09-25T20:21:24Z
 
 ---
 # F70-S28 — Sessão expirada volta ao login, no navegador e no PWA
