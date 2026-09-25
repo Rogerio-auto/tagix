@@ -2,7 +2,7 @@
 id: F70-S01
 title: Restaurar o working tree e corrigir o worktree-clean que atravessa junctions
 phase: F70
-status: review
+status: done
 priority: critical
 estimated_size: XS
 depends_on: []
