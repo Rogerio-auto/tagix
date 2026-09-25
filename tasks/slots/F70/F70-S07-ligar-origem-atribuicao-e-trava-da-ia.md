@@ -2,7 +2,7 @@
 id: F70-S07
 title: Ligar origem, atribuição e eco do IG no pipeline; IA só com origem comprovada
 phase: F70
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F70-S04, F70-S05]
@@ -12,6 +12,7 @@ source_docs:
   - tasks/slots/F70/F70-S05-atribuicao-de-anuncio-no-contato-e-no-deal.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T02:42:27Z
+completed_at: 2026-09-25T03:42:03Z
 
 ---
 # F70-S07 — Ligar origem, atribuição e eco do IG no pipeline; IA só com origem comprovada
