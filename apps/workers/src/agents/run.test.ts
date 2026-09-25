@@ -13,7 +13,7 @@
  * sem `DATABASE_URL` (rode com `node --env-file=.env`).
  */
 import { randomUUID } from 'node:crypto';
-import { and, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeDb, getDb, schema } from '@hm/db';
 import {
@@ -183,6 +183,15 @@ describe('buildRunRequest', () => {
     expect(AgentRunRequestSchema.safeParse(req).success).toBe(true);
   });
 
+  it('leva o agent_executions.id em metadata.execution_id e passa no contrato (F70-S15)', () => {
+    const exec = '00000000-0000-0000-0000-0000000000e1';
+    const req = buildRunRequest('ws', ctx, resolved, [], exec);
+    expect(req.metadata).toEqual({ execution_id: exec });
+    // O Zod do cliente preserva `metadata` (o topo descartaria um campo desconhecido).
+    expect(AgentRunRequestSchema.parse(req).metadata).toEqual({ execution_id: exec });
+    expect(buildRunRequest('ws', ctx, resolved, [])).not.toHaveProperty('metadata');
+  });
+
   it('sem contato não manda contact_id; sem tools manda lista vazia', () => {
     const req = buildRunRequest('ws', { ...ctx, contactId: null }, resolved, []);
     expect(req).not.toHaveProperty('contact_id');
@@ -333,6 +342,14 @@ describe.skipIf(!url)('runAgent entrega as tools habilitadas ao runtime (DB, F70
     expect(outcome.status).toBe('replied');
     expect(captured).toHaveLength(1);
     const req = AgentRunRequestSchema.parse(captured[0]);
+    // F70-S15: o runtime recebe o id da linha de agent_executions criada pelo worker.
+    if (outcome.status !== 'replied') throw new Error('unreachable');
+    expect(req.metadata).toEqual({ execution_id: outcome.executionId });
+    const [exec] = await getDb()
+      .select({ agentId: schema.agentExecutions.agentId })
+      .from(schema.agentExecutions)
+      .where(eq(schema.agentExecutions.id, outcome.executionId));
+    expect(exec?.agentId).toBe(AGENT);
     // Ordem estável (categoria, key): knowledge < workflow.
     expect(req.tools.map((t) => t.key)).toEqual(['search_knowledge_base', 'transfer_to_human']);
     expect(req.tools[1]).toMatchObject({

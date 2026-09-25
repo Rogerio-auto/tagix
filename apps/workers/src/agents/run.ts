@@ -207,12 +207,20 @@ function estimateTurnCostUsd(resolved: ResolvedPolicy, ctx: AgentRunContext): nu
 /**
  * Monta o `AgentRunRequest` (snake_case no wire) a partir do contexto + snapshot +
  * tools já filtradas pela policy. Sem tools, o runtime não oferece nenhuma ao modelo.
+ *
+ * `executionId` (F70-S15) é o `agent_executions.id` criado aqui ANTES do `/run`. O
+ * runtime o adota como id da execução: é o que vai no envelope dos callbacks de tool
+ * (o endpoint interno confere que a execução é deste agente e está em curso), em
+ * `tool_logs.execution_id` e no upsert de `agent_executions` do `finalize` — uma linha
+ * só por turno. Viaja em `metadata` porque o contrato Zod de `@hm/agents-client`
+ * descarta campos desconhecidos no topo do request.
  */
 export function buildRunRequest(
   workspaceId: string,
   ctx: AgentRunContext,
   resolved: ResolvedPolicy,
   tools: readonly ToolDescriptor[],
+  executionId?: string,
 ): AgentRunRequest {
   return {
     workspace_id: workspaceId,
@@ -225,6 +233,7 @@ export function buildRunRequest(
     tools: [...tools],
     // `thread_id` derivado da conversa: um thread de checkpoint estável por conversa.
     thread_id: ctx.conversationId,
+    ...(executionId ? { metadata: { execution_id: executionId } } : {}),
   };
 }
 
@@ -378,7 +387,7 @@ export async function runAgent(
     });
   }
 
-  const request = buildRunRequest(workspaceId, ctx, resolved, tools);
+  const request = buildRunRequest(workspaceId, ctx, resolved, tools, executionId);
 
   let stream: StreamOutcome;
   try {

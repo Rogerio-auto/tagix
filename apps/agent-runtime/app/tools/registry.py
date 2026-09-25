@@ -28,7 +28,10 @@ from app.tools.base import Tool, ToolContext, ToolResult
 
 logger = get_logger()
 
-__all__ = ["ToolRegistry", "build_default_registry"]
+__all__ = ["TOOL_CONFIG_CTX_KEY", "ToolRegistry", "build_default_registry"]
+
+# Chave do `ctx` de dispatch que carrega o `ToolDescriptor.config` da tool chamada.
+TOOL_CONFIG_CTX_KEY = "tool_config"
 
 
 class ToolRegistry:
@@ -89,6 +92,15 @@ class ToolRegistry:
         if tool is None:
             logger.warning("dispatch: tool desconhecida '{key}'", key=str(key))
             return _err(f"Ferramenta desconhecida: '{key}'.")
+
+        # F70-S15: config efetiva da tool (catálogo + `agent_tools.overrides`, vinda
+        # do Node no `ToolDescriptor.config`). Aplicada num clone — a instância
+        # registrada segue com o default. Tools `database` não ampliam a ACL de
+        # coluna com ela (`DatabaseTool.with_config`).
+        ctx = dict(ctx or {})
+        tool_config = ctx.pop(TOOL_CONFIG_CTX_KEY, None)
+        if isinstance(tool_config, dict) and tool_config:
+            tool = tool.with_config(tool_config)
 
         try:
             tool_ctx = ToolContext.model_validate(ctx)

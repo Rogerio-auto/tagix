@@ -23,6 +23,7 @@ por `type`. O cliente Node valida via Zod.
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
@@ -67,6 +68,10 @@ class AgentRunRequest(BaseModel):
     # "live" e o default de producao. Aceito alem de is_playground por compat.
     mode: str = "live"
     metadata: dict[str, Any] | None = None
+    # F70-S15: id da linha de `agent_executions` que o worker criou antes do /run.
+    # Aceito no topo (contrato futuro) ou em `metadata.execution_id` (o Zod atual do
+    # cliente descarta campos desconhecidos no topo). Ver `_execution_id`.
+    execution_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +100,33 @@ def _thread_id(req: AgentRunRequest) -> str:
     if req.conversation_id:
         return f"conv:{req.conversation_id}"
     return f"agent:{req.agent_id}:adhoc"
+
+
+def _as_uuid(value: object) -> str | None:
+    """UUID canônico (minúsculo) ou `None` se `value` não for um UUID válido."""
+    if not isinstance(value, str):
+        return None
+    try:
+        return str(uuid.UUID(value))
+    except ValueError:
+        return None
+
+
+def _execution_id(req: AgentRunRequest) -> str:
+    """Id da execução deste /run.
+
+    O worker (F70-S15) cria a linha de `agent_executions` antes de chamar o runtime e
+    manda o id; o runtime o ADOTA: é o que sai no envelope dos callbacks de tool (o
+    Node confere que a execução é do agente e está em curso), em `tool_logs` e no
+    upsert do `finalize` — uma linha por turno, não duas. Sem id válido (playground,
+    avaliação, chamadores antigos), gera um novo como antes.
+    """
+    meta = req.metadata or {}
+    return (
+        _as_uuid(req.execution_id)
+        or _as_uuid(meta.get("execution_id"))
+        or str(uuid.uuid4())
+    )
 
 
 def _initial_state(req: AgentRunRequest, *, execution_id: str, thread_id: str) -> AgentState:
@@ -141,9 +173,7 @@ async def run_agent(
             detail="agent graph not initialized",
         )
 
-    import uuid
-
-    execution_id = str(uuid.uuid4())
+    execution_id = _execution_id(req)
     thread_id = _thread_id(req)
     initial = _initial_state(req, execution_id=execution_id, thread_id=thread_id)
     config = {

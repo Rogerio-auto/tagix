@@ -23,7 +23,13 @@ import asyncpg
 
 from app.db import with_workspace
 from app.logging import get_logger
-from app.tools.access_control import ColumnAccessError, ColumnPolicy, project, safe_columns
+from app.tools.access_control import (
+    ColumnAccessError,
+    ColumnPolicy,
+    clamp_column_config,
+    project,
+    safe_columns,
+)
 from app.tools.base import Tool, ToolContext
 
 logger = get_logger()
@@ -47,12 +53,17 @@ class DatabaseTool(Tool):
         self._pool = pool
 
     def with_config(self, handler_config: dict[str, Any]) -> DatabaseTool:
+        """Clone com a config efetiva, sem ampliar a ACL de coluna (F70-S15).
+
+        A config vem do Node (`tools.handler_config` + `agent_tools.overrides`). O
+        `default_handler_config` da classe é o TETO: a config só pode restringir
+        colunas (`clamp_column_config`); a tabela-alvo nunca muda.
+        """
         clone = type(self).__new__(type(self))
         clone.__dict__.update(self.__dict__)
-        clone._handler_config = {
-            **type(self).default_handler_config,
-            **handler_config,
-        }
+        clone._handler_config = clamp_column_config(
+            type(self).default_handler_config, handler_config
+        )
         return clone
 
     async def _query_one(

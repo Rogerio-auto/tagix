@@ -46,6 +46,7 @@ __all__ = [
     "ColumnAccessError",
     "ColumnPolicy",
     "allowed_columns",
+    "clamp_column_config",
     "policy_from_config",
     "project",
     "ensure_required",
@@ -223,6 +224,80 @@ def policy_from_config(
         restricted=_as_str_set(cfg.get("restricted_columns")),
         required=_as_str_set(cfg.get("required_columns")),
     )
+
+
+# Chaves de ACL de coluna na `handler_config` (as demais são config livre da tool).
+_ACL_KEYS: Final[frozenset[str]] = frozenset(
+    {"table", "allowed_columns", "restricted_columns", "required_columns"}
+)
+
+
+def clamp_column_config(
+    ceiling: Mapping[str, Any], override: Mapping[str, Any] | None
+) -> dict[str, Any]:
+    """Aplica a config efetiva (catálogo + `agent_tools.overrides`) SEM ampliar o teto.
+
+    `ceiling` é o `default_handler_config` da classe da tool (código, revisado); a
+    config vinda do Node pode só **restringir** o acesso a colunas, nunca ampliar:
+
+      - `table` é sempre a do teto (override não troca a tabela-alvo);
+      - `allowed_columns.read/write` = interseção do override com o teto (override
+        ausente/torto em um modo → mantém o teto daquele modo);
+      - `restricted_columns` / `required_columns` = união (só apertam);
+      - demais chaves (não-ACL) do override passam como estão.
+
+    Deny-by-default continua valendo: coluna fora do teto nunca entra, mesmo que
+    um override (ou um catálogo adulterado) a liste.
+    """
+    base = dict(ceiling)
+    cfg: Mapping[str, Any] = override or {}
+    out: dict[str, Any] = {**base}
+    for key, value in cfg.items():
+        if key not in _ACL_KEYS:
+            out[key] = value
+
+    ceiling_allowed = base.get("allowed_columns")
+    ceiling_map: Mapping[str, Any] = (
+        ceiling_allowed if isinstance(ceiling_allowed, Mapping) else {}
+    )
+    override_allowed = cfg.get("allowed_columns")
+    override_map: Mapping[str, Any] = (
+        override_allowed if isinstance(override_allowed, Mapping) else {}
+    )
+    clamped: dict[str, list[str]] = {}
+    for mode in ("read", "write"):
+        top = _as_str_set(ceiling_map.get(mode))
+        if mode in override_map:
+            wanted = set(_as_str_set(override_map.get(mode)))
+            clamped[mode] = [c for c in top if c in wanted]
+        else:
+            clamped[mode] = list(top)
+    out["allowed_columns"] = clamped
+
+    for key in ("restricted_columns", "required_columns"):
+        merged = list(_as_str_set(base.get(key)))
+        for column in _as_str_set(cfg.get(key)):
+            if column not in merged:
+                merged.append(column)
+        out[key] = merged
+
+    if "table" in base:
+        out["table"] = base["table"]
+
+    widened = {
+        mode: sorted(set(_as_str_set(override_map.get(mode))) - set(clamped[mode]))
+        for mode in ("read", "write")
+        if mode in override_map
+    }
+    widened = {m: cols for m, cols in widened.items() if cols}
+    if widened or ("table" in cfg and cfg.get("table") != base.get("table")):
+        logger.warning(
+            "column-acl: override tentou ampliar o teto de {table}: {widened}",
+            table=str(base.get("table")),
+            widened=";".join(f"{m}={','.join(c)}" for m, c in widened.items()) or "table",
+        )
+    return out
+
 
 
 def allowed_columns(
