@@ -60,6 +60,9 @@ function makeTx() {
 
 vi.mock('drizzle-orm', () => ({
   eq: (_col: unknown, val: unknown) => ({ key: val }),
+  and: (...parts: unknown[]) => ({ and: parts }),
+  or: (...parts: unknown[]) => ({ or: parts }),
+  inArray: (_col: unknown, vals: unknown) => ({ in: vals }),
 }));
 
 vi.mock('@hm/db', () => ({
@@ -198,5 +201,23 @@ describe('transfer_to_agent — args inválidos', () => {
     expect(res.ok).toBe(false);
     expect(updates).toHaveLength(0);
     expect(reengage).not.toHaveBeenCalled();
+  });
+});
+
+describe('transfer_to_agent — trava de origem (F70-S08)', () => {
+  it('UPDATE barrado pela trava → { ok:false }, sem re-engaje, loga warn', async () => {
+    conversationUpdated = false;
+    const reengage = vi.fn(async () => {});
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), child: vi.fn() };
+    const handler = makeTransferToAgentHandler({ reengage, logger });
+    const res = await handler(envelope(), makeTx() as never);
+
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/origem comprovada/);
+    expect(reengage).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('trava de origem'),
+      expect.objectContaining({ conversationId: CONV, reason: 'origin_not_eligible' }),
+    );
   });
 });
