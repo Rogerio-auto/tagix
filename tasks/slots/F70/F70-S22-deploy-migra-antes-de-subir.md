@@ -2,7 +2,7 @@
 id: F70-S22
 title: deploy.sh migra antes de subir o código novo
 phase: F70
-status: available
+status: review
 priority: critical
 estimated_size: S
 depends_on: [F70-S20]
@@ -10,6 +10,10 @@ blocks: []
 source_docs:
   - scripts/deploy.sh
   - docs/runbooks/deploy-production.md
+agent_id: backend-engineer
+claimed_at: 2026-09-25T12:33:39Z
+completed_at: 2026-09-25T12:46:39Z
+
 ---
 # F70-S22 — deploy.sh migra antes de subir o código novo
 
@@ -45,13 +49,21 @@ Se a migração falhar (pré-voo da 0085/0086, `lock_timeout`), o código novo f
 
 ## Definition of Done
 
-- [ ] teste de fumaça do script: `bash -n` e ShellCheck limpo (se disponível)
-- [ ] teste que prova a ordem: script executado com `docker`/`git` falsos no PATH registra a sequência de chamadas; `migrate` vem antes de `stack deploy`; falha no migrate → nenhum `stack deploy`
-- [ ] runbook atualizado (ordem, primeira instalação, expand/contract)
+- [x] teste de fumaça do script: `bash -n` e ShellCheck limpo (se disponível)
+- [x] teste que prova a ordem: script executado com `docker`/`git` falsos no PATH registra a sequência de chamadas; `migrate` vem antes de `stack deploy`; falha no migrate → nenhum `stack deploy`
+- [x] runbook atualizado (ordem, primeira instalação, expand/contract)
 
 ## Validação
 
+O `bash -n` roda dentro do teste Python (`DeployScriptLintTest`), que acha o bash do Git for
+Windows explicitamente; o `validate` executa cada linha no `cmd.exe`, onde `bash` pode ser o do WSL.
+O teste de ordem roda o `deploy.sh` real com `docker`, `git` e `sleep` falsos no PATH.
+
 ```bash
-bash -n scripts/deploy.sh
 python -m pytest -q scripts/tests
+npx --yes shellcheck scripts/deploy.sh
 ```
+
+Controle: os mesmos testes contra o `deploy.sh` anterior (só com `APP_DIR` configurável) falham,
+entre eles `test_migracao_falhou_nenhum_stack_deploy`, que encontra o `stack deploy --prune` rodando
+com a migração falhando: o HIGH-1.

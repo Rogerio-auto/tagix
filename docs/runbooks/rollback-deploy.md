@@ -88,7 +88,7 @@ Reconstrói e redeploya o stack inteiro no commit bom conhecido. É o rollback a
    >
    > **Gotcha do Swarm (crítico):** com tag fixa (`:latest`) o `stack deploy` **não recria** o serviço (compara a string da tag). É por isso que tagueamos por `<sha>` — o alvo do rollback tem uma tag diferente da versão ruim, então o Swarm detecta e recria. Se a imagem `<sha>` alvo ainda estiver no nó, o build é instantâneo (cache); senão, ele rebuilda daquele código.
 
-3. O `deploy.sh` também roda migrations (passo 6). Se o commit alvo tem um schema **anterior**, o `@hm/db migrate` não desfaz nada (forward-only) — apenas não há migration nova a aplicar. Se ele **falhar** por incompatibilidade, é sinal de que há uma migration destrutiva no meio → §4.
+3. O `deploy.sh` roda as migrations **antes** do `stack deploy` (F70-S22: backup → migrate → stack deploy). Se o commit alvo tem um schema **anterior**, o `@hm/db migrate` não desfaz nada (forward-only): apenas não há migration nova a aplicar, e o código alvo sobe contra o schema mais novo, o que é seguro enquanto as migrations respeitarem a regra aditiva / expand-contract ([`deploy-production.md`](./deploy-production.md) §3.1). Se a migração **falhar**, o deploy aborta antes do `stack deploy`: o stack continua exatamente como estava (a versão ruim, se foi ela que você tentou reverter), e o próximo passo é o §4, não repetir o deploy.
 
 Pule para o §5.
 
@@ -110,6 +110,8 @@ Se entre a versão ruim e o alvo existe **qualquer migration**, decida antes de 
    |---|---|---|
    | **Aditiva** (nova tabela/coluna nullable, novo índice) | Código antigo ignora o que sobra — seguro | Reverta código normalmente (§2/§3); deixe o schema à frente |
    | **Destrutiva** (drop/rename de coluna, `NOT NULL` novo, backfill que apaga) | Código antigo pode quebrar **ou** o dado já se perdeu | **Não** basta reverter código → §4.3 |
+
+   Com a regra de expand/contract ([`deploy-production.md`](./deploy-production.md) §3.1), a migration destrutiva (contract) só entra quando nenhum código em produção depende do que ela remove, então reverter um único deploy continua seguro. Se a linha "Destrutiva" bateu, a regra foi furada: registre isso no pós-incidente (§6).
 
 3. Para migration destrutiva, o rollback real é de **dados**:
    - Se dados foram perdidos/alterados irreversivelmente → [`restore-from-backup.md`](./restore-from-backup.md) (restaura do dump; o §3 daquele runbook captura o estado atual antes de sobrescrever).

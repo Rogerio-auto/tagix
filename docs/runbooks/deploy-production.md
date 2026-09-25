@@ -103,6 +103,31 @@ sudo bash /opt/leadium/scripts/deploy.sh main
 O Traefik emite o certificado SSL automaticamente no primeiro acesso a cada
 domínio (HTTP-01 challenge). Aguarde ~30s e acesse `https://app.leadium.com.br`.
 
+**Como o primeiro deploy funciona (F70-S22).** As migrations rodam antes de qualquer código de
+app subir, e para isso precisam de um Postgres e da rede interna do stack. Na primeira instalação
+nenhum dos dois existe. O `deploy.sh` detecta a ausência do serviço `leadium_postgres` e:
+
+1. recorta do `docker-compose.prod.yml` só o bloco `postgres:` + `networks:` + `volumes:` e faz
+   `docker stack deploy` desse recorte, **sem `--prune`**. Nascem o serviço `leadium_postgres`, a
+   rede `leadium_leadium_internal` e o volume `leadium_leadium_pgdata`: os mesmos nomes do stack
+   completo, então o deploy completo depois reconhece tudo e não reinicia o banco;
+2. espera o healthcheck do Postgres ficar `healthy`;
+3. conta as tabelas do banco: **zero tabelas** → não há dado a proteger, o backup é pulado (o dump
+   de um banco vazio tem menos de 1 KB e cairia na trava de "dump suspeito"). Com qualquer tabela,
+   o backup fail-closed roda normalmente, inclusive depois de um `docker stack rm` que preservou o
+   volume;
+4. migra com a imagem nova;
+5. só então faz o `stack deploy` completo (`--prune`), que sobe api, workers, web, agent-runtime,
+   landing, redis, rabbitmq e observabilidade.
+
+Por que o recorte e não `docker service create`: o recorte vem do compose de produção, então não
+existe uma segunda definição do Postgres para divergir (env, healthcheck, limites, placement,
+rede, volume). E `docker compose config` não serve para recortar: ele prefixa volumes e redes com
+o nome do projeto compose, e o Postgres montaria um volume vazio.
+
+Se a migração falhar na primeira instalação, só o Postgres fica no ar. Corrija e rode o deploy de
+novo: o serviço já existe, então o script segue o caminho de rotina.
+
 ---
 
 ## 3. Deploy de rotina ("atualizou → deploy")
@@ -116,13 +141,57 @@ Ou direto no servidor:
 sudo bash /opt/leadium/scripts/deploy.sh main
 ```
 
-O `deploy.sh` é **idempotente** e faz, em ordem:
-1. `git reset --hard origin/<branch>` (código exato do remoto)
-2. `docker compose build` (rebuilda só o que mudou — cache de layers)
-3. `docker stack deploy --prune` (rolling update; remove serviços órfãos do stack)
-4. Espera Postgres saudável
-5. Migrations (`@hm/db migrate` — drizzle versionado)
-6. Imprime o status dos serviços
+O `deploy.sh` é **idempotente** e faz, em ordem (desde F70-S22 o schema anda **antes** do código):
+
+1. Pré-checagens (Swarm, `network_public`, `.env`)
+2. `git reset --hard origin/<branch>` (código exato do remoto). Se o próprio `deploy.sh` mudou
+   no pull, ele se re-executa uma vez na versão nova (procure "Re-executando" na saída)
+3. `docker compose build` com a tag `:<sha>` (rebuilda só o que mudou — cache de layers). Nada sobe
+4. Garante o Postgres do stack no ar (primeira instalação: sobe **só** ele, ver §2.6) e espera o
+   healthcheck ficar `healthy`
+5. Backup `pg_dump` **fail-closed** (ver "Backup pré-migration" no fim)
+6. Migrations (`@hm/db migrate`) com a imagem **nova** da api, num container efêmero na rede
+   interna. Até aqui o stack continua 100% na versão anterior
+7. `docker stack deploy --prune` (rolling update start-first; remove serviços órfãos do stack)
+8. Verifica que cada serviço de app convergiu para `:<sha>` e falha alto se algum ficou para trás
+
+**Se a migração falhar, o deploy aborta antes do passo 7:** nenhum código novo sobe, os serviços
+seguem na versão anterior contra o schema atual, e a saída imprime o que fazer e o comando de
+restore do backup daquele deploy. Por que a ordem importa: com start-first, a api e os workers
+novos entram no ar assim que passam no healthcheck, e o healthcheck não olha o schema. Na ordem
+antiga (stack deploy → migrate), o código novo rodava contra o schema velho até a migração
+terminar (toda gravação com `enqueueOutbox` falhando, por exemplo), ou para sempre se ela
+falhasse.
+
+### 3.1. Regra permanente: migração aditiva primeiro; destrutiva exige expand/contract
+
+Migrar antes de subir o código só é seguro porque, durante a janela entre o passo 6 e o fim do
+passo 7, **o código anterior roda contra o schema novo**. Toda migration precisa, portanto, ser
+compatível com o código que já está em produção:
+
+- **Aditiva — pode ir no mesmo deploy do código que a usa:** tabela nova, coluna nova nullable ou
+  com default, índice novo (`CONCURRENTLY` em tabela grande), CHECK relaxado, função/trigger nova
+  que o código velho não percebe.
+- **Destrutiva — nunca no mesmo deploy do código:** `DROP` de tabela/coluna, `RENAME`, mudança de
+  tipo, `NOT NULL` novo em coluna que o código velho não preenche, CHECK mais restrito, backfill
+  que apaga ou reescreve dado.
+
+Destrutiva segue **expand/contract**, em deploys separados:
+
+1. **Expand** (deploy N): migration aditiva (coluna/tabela nova) + código que escreve nos dois
+   lugares e lê do novo com fallback no velho. Backfill idempotente, em lotes.
+2. **Migrate** (deploy N, ou N+1): o backfill termina; o código passa a ler só do novo. Verifique
+   com uma consulta que nenhuma linha depende mais do velho.
+3. **Contract** (deploy N+2, depois de o N+1 estar estável em produção): migration que remove o
+   velho (`DROP`/`NOT NULL`). Nesse ponto nenhum código em produção lê ou escreve o que está sendo
+   removido, então rodar a migration antes do código continua seguro.
+
+Exemplo, renomear `contacts.phone` → `contacts.phone_e164`: N adiciona `phone_e164` e escreve nas
+duas; N+1 lê só `phone_e164`; N+2 faz `DROP COLUMN phone`. Um `RENAME` direto quebraria o código
+antigo no instante da migração.
+
+Revisão de PR: migration destrutiva sem o deploy de expand já em produção é bloqueio. Rollback
+de código com migration no meio: [`rollback-deploy.md`](./rollback-deploy.md) §4.
 
 ---
 
@@ -171,7 +240,9 @@ docker exec $(docker ps -qf name=leadium_postgres) \
 | api `degraded` (503 em /health)           | Postgres/Redis fora: `docker service ps leadium_postgres leadium_redis`. |
 | Socket.io não conecta                     | Confirme o router `leadium_app_api` (prio 20) cobrindo `/socket.io`. |
 | Build OOM no `web`                        | Falta swap (§2.2) — Next build é pesado em 2 vCPU.                  |
-| `migration falhou`                        | Postgres ainda acordando: o script já tem retry; rode migration manual (§4). |
+| `Migrations FALHARAM ... ANTES do stack deploy` | Nada do código novo subiu (os serviços seguem na versão anterior). O script já tenta 6 vezes. Leia o erro (pré-voo da migration, `lock_timeout`, dado violando constraint nova), rode a migration manual (§4) para reproduzir, corrija e rode o deploy de novo. Restore só se o banco ficou inconsistente: o comando sai impresso. |
+| `Postgres ... não ficou saudável`         | Deploy abortado antes de migrar e de subir código. `docker service ps leadium_postgres --no-trunc` e `docker service logs leadium_postgres`. |
+| `Não consegui recortar o bloco do Postgres` | Só na primeira instalação: o layout do `docker-compose.prod.yml` mudou (chaves de topo na coluna 0, serviços com 2 espaços). Nada subiu. |
 
 ---
 
@@ -193,7 +264,11 @@ docker exec $(docker ps -qf name=leadium_postgres) \
 ## Backup pré-migration (F57-S07)
 
 Desde 2026-09-09, `deploy.sh` faz `pg_dump` **antes** de rodar migrations, em
-`/opt/leadium/backups`, nomeado por timestamp UTC + sha do commit implantado.
+`/opt/leadium/backups`, nomeado por timestamp UTC + sha do commit implantado. Desde a F70-S22 o
+backup e as migrations acontecem com o stack ainda na versão anterior, antes do `stack deploy`.
+
+Única exceção ao backup: banco sem nenhuma tabela (primeira instalação, §2.6). Se a consulta que
+conta as tabelas falhar, o deploy aborta, como qualquer outra falha de backup.
 
 **É fail-closed:** se o dump falhar — ou sair suspeito de vazio (< 1 KB) — o deploy **aborta antes
 de tocar no banco**. Um deploy que não roda é problema de minutos; uma migration sobre dado sem
