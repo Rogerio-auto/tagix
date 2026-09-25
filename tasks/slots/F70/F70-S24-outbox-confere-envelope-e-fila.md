@@ -2,7 +2,7 @@
 id: F70-S24
 title: Outbox confere envelope e fila contra o workspace, retenção configurável e event_id por workspace
 phase: F70
-status: blocked
+status: available
 priority: medium
 estimated_size: S
 depends_on: [F70-S25]
@@ -40,6 +40,9 @@ source_docs:
 - O relay repete as duas checagens antes de publicar; a linha que viola vai para `dead`, com log.
 - Unicidade por `(workspace_id, event_id)`.
 - `OUTBOX_*` no bloco `x-app-env` do compose, e `OUTBOX_DEAD_RETENTION_DAYS` alinhado à retenção de dado pessoal (documentar a escolha).
+- A lista de filas aceitas vem de `OUTBOX_JOB_QUEUES` (a F70-S25 acrescentou `hm.q.flows`, `hm.q.flow.execution` e `hm.q.campaigns`); o CHECK do banco e a checagem do relay derivam da mesma fonte, com teste que falha se divergirem.
+- `FLOW_RUNNING_STALE_MS` e `FLOW_RUNNING_MAX_AGE_MS` (F70-S25) também entram no compose e no `.env.production.example`.
+- Runbook: consulta de pré-deploy das execuções `running` paradas (a recuperação da S25 retoma as de até 24 h e marca `failed` as mais velhas no primeiro tick).
 - Runbook: backlog dos papéis de login separados (MEDIUM-3b), com o plano.
 
 ## Definition of Done

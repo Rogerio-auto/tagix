@@ -2,7 +2,7 @@
 id: F70-S25
 title: Gatilhos da IA e passos de flow pela outbox, lembrete da agenda com conversa real
 phase: F70
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F70-S21]
