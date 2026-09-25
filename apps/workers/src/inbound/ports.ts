@@ -28,6 +28,7 @@
 import type { ChannelProvider } from '@hm/shared';
 import type { InboundEvent, MediaRef } from '@hm/channels';
 import type { RevocationPort } from './revocation';
+import type { InstagramEchoPort } from './instagram-echoes';
 
 /**
  * Porta de parsing por provider. A impl. default roteia para os parsers de
@@ -141,4 +142,10 @@ export interface InboundDeps {
    * que nao o exercitam; a composicao de producao injeta `createRevocationStep`.
    */
   readonly revocation?: RevocationPort;
+  /**
+   * F70-S07 — ecos do Instagram (`is_echo`) do mesmo payload: o que o dono
+   * respondeu pelo app vira mensagem humana e pausa a IA. Opcional pelo mesmo
+   * motivo da revogação; a composição de produção injeta `createInstagramEchoStep`.
+   */
+  readonly instagramEchoes?: InstagramEchoPort;
 }

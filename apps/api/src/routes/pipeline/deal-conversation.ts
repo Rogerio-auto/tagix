@@ -30,17 +30,57 @@
  */
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { assertConversationVisible, schema } from '@hm/db';
 import type { DbTx } from '@hm/db';
+import { readAdReferral, toAdAttributionColumns, type AdAttributionColumns } from '@hm/channels';
 import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
-const { conversations, contacts, deals, pipelines, stages } = schema;
+const { conversations, contacts, deals, messages, pipelines, stages } = schema;
 
 function param(req: Request, key: string): string {
   const raw = req.params[key];
   return typeof raw === 'string' ? raw : '';
+}
+
+/**
+ * Quantas mensagens com referral inspecionar. A primeira válida vence; o teto só
+ * cobre metadata antigo/corrompido na frente sem varrer a conversa inteira.
+ */
+const AD_REFERRAL_SCAN_LIMIT = 5;
+
+/**
+ * Atribuição de anúncio da conversa (F70-S07): o referral da PRIMEIRA mensagem
+ * inbound que trouxe um (`metadata.adReferral`, gravado pelos parsers WA/IG da
+ * F70-S05), nas colunas `ad_*` do deal. `null` quando a conversa não veio de
+ * anúncio. O `ctwa_clid` do deal alimenta a devolução de conversão (F69-S06).
+ *
+ * Ordem = horário do provider (`coalesce(provider_timestamp, created_at)`, a mesma
+ * da timeline). Revalida o jsonb com `readAdReferral` em vez de confiar no cast.
+ * Roda DENTRO de `req.scoped` (RLS).
+ */
+export async function loadConversationAdAttribution(
+  tx: DbTx,
+  conversationId: string,
+): Promise<AdAttributionColumns | null> {
+  const rows = await tx
+    .select({ metadata: messages.metadata })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.conversationId, conversationId),
+        eq(messages.direction, 'inbound'),
+        sql`${messages.metadata} ? 'adReferral'`,
+      ),
+    )
+    .orderBy(sql`coalesce(${messages.providerTimestamp}, ${messages.createdAt}) asc`, asc(messages.id))
+    .limit(AD_REFERRAL_SCAN_LIMIT);
+  for (const row of rows) {
+    const ref = readAdReferral(row.metadata['adReferral']);
+    if (ref !== undefined) return toAdAttributionColumns(ref);
+  }
+  return null;
 }
 
 /** Linha de deal retornada pelo ensure/detalhe (campos estáveis p/ o frontend). */
@@ -140,6 +180,8 @@ export async function ensureDealForConversation(
   if (!stage) return null;
 
   const title = contact?.displayName?.trim() || contact?.phone?.trim() || 'Negócio';
+  // F70-S07: o card nasce com o anúncio que trouxe a conversa (se houver).
+  const adAttribution = await loadConversationAdAttribution(tx, conversationId);
 
   // 4. INSERT do card. Sob concorrência (duplo-clique / auto-enrich + criação
   //    manual) duas requisições podem ambas passar pelo check do passo 1 e tentar
@@ -164,6 +206,7 @@ export async function ensureDealForConversation(
       valueCents: 0,
       currency: 'BRL',
       source: 'conversation',
+      ...(adAttribution ?? {}),
     })
     // `uq_deals_conversation` é PARCIAL (WHERE conversation_id IS NOT NULL); o
     // `where` (predicado do target) precisa espelhar o predicado do índice, senão o

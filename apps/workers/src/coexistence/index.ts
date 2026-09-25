@@ -39,10 +39,12 @@ export type {
 } from './ports';
 
 export { instagramEchoSchema, type InstagramEchoInput } from './instagram-echo';
+// F70-S07: a regra de resposta humana mora em `@hm/shared` (uma só para a API e
+// o worker). Re-exportada aqui para não quebrar quem importava do worker.
 export {
   planHumanReply,
   type ConversationHumanState,
   type HumanReplyInput,
   type HumanReplyPatch,
   type HumanReplyPlan,
-} from './human-takeover';
+} from '@hm/shared';

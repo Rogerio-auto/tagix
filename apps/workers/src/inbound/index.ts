@@ -60,3 +60,14 @@ export {
   type InboundFlowEnqueuePort,
   type InboundFlowTrigger,
 } from './db-ports';
+
+// F70-S07 — origem/atribuição, ecos do Instagram e trava da IA no handoff de campanha.
+export {
+  applyOriginTag,
+  classifyInboundConversation,
+  firstAdReferral,
+  loadOriginPrefillMarkers,
+  recordFirstTouchAttribution,
+} from './origin';
+export { createInstagramEchoStep, type InstagramEchoPort } from './instagram-echoes';
+export { gateCampaignAiHandoff, type AiActivationPort } from './ai-gate';

@@ -26,7 +26,10 @@ import {
   type DealActor,
 } from '../../services/deal-move';
 import { emitDealCreated, emitDealUpdated } from '../../services/deal-events';
-import { loadContactReadThrough } from '../pipeline/deal-conversation';
+import {
+  loadContactReadThrough,
+  loadConversationAdAttribution,
+} from '../pipeline/deal-conversation';
 
 const { deals, dealHistory } = schema;
 
@@ -103,6 +106,10 @@ export function createDealsCrudRouter(): Router {
     const workspaceId = req.auth!.workspace.id;
     const d = parsed.data;
     const result = await req.scoped!(async (tx) => {
+      // F70-S07: deal ligado a uma conversa herda o anúncio que a trouxe.
+      const adAttribution = d.conversationId
+        ? await loadConversationAdAttribution(tx, d.conversationId)
+        : null;
       const [created] = await tx
         .insert(deals)
         .values({
@@ -118,6 +125,7 @@ export function createDealsCrudRouter(): Router {
           ownerId: d.ownerId ?? null,
           customFields: d.customFields ?? {},
           notes: d.notes ?? null,
+          ...(adAttribution ?? {}),
         })
         .returning();
       if (created) {

@@ -1,13 +1,13 @@
 /**
  * Contrato de entrada do eco do Instagram no worker (F70-S04).
  *
- * O eco chega normalizado por `parseInstagramEchoes` (`@hm/channels`,
- * `meta/instagram/echo.parser.ts`), mas cruza fronteira de processo (fila) antes
- * de chegar aqui — então é revalidado com Zod, como toda entrada externa. A forma
- * espelha `InstagramEchoEvent` campo a campo (o parser não é exportado pela raiz
- * de `@hm/channels` ainda — ver o relatório do slot).
+ * O eco chega normalizado por `parseInstagramEchoes` (`@hm/channels`) e é
+ * revalidado com Zod, como toda entrada externa (a forma pode cruzar fronteira
+ * de processo). O schema espelha `InstagramEchoEvent` campo a campo — a checagem
+ * de tipo no fim do arquivo quebra o build se os dois divergirem.
  */
 import { z } from 'zod';
+import type { InstagramEchoEvent } from '@hm/channels';
 
 export const instagramEchoSchema = z.object({
   provider: z.literal('meta_instagram'),
@@ -22,3 +22,7 @@ export const instagramEchoSchema = z.object({
 });
 
 export type InstagramEchoInput = z.infer<typeof instagramEchoSchema>;
+
+/** Compile-time: todo `InstagramEchoEvent` do parser é uma entrada válida aqui. */
+const echoEventFitsInput: InstagramEchoEvent extends InstagramEchoInput ? true : false = true;
+void echoEventFitsInput;

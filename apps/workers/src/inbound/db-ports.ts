@@ -15,6 +15,8 @@
  *   withWorkspace(workspaceId):
  *     ensure contact   (upsert por workspace+remoteId)
  *     ensure conversation (upsert por uq_conversations_channel_remote)
+ *       └ se criou: origin (classifyConversationOrigin) + etiqueta no contato (F70-S07)
+ *     primeiro toque: contacts.ad_* só se ad_referred_at IS NULL     (F70-S07)
  *     para cada message event:
  *       insert message  (onConflictDoNothing em uq_messages_external → dedup)
  *       se inserida: acumula em last_message/unread
@@ -39,6 +41,7 @@ import type {
   ChannelProvider,
   ContactPresence,
   ConversationAssignedPayload,
+  ConversationOriginValue,
   ServerToClientEvent,
   TypingFromContactPayload,
 } from '@hm/shared';
@@ -48,6 +51,12 @@ import type { DbTx } from '@hm/db';
 import type { Logger } from '@hm/logger';
 import { handleStatusEvent, type InboundStatusEvent, type StatusDeps } from './status';
 import { emitContactPresence, type ContactPresenceEmitPort } from '../outbound/presence';
+import {
+  applyOriginTag,
+  classifyInboundConversation,
+  loadOriginPrefillMarkers,
+  recordFirstTouchAttribution,
+} from './origin';
 import type {
   AutoAssignAutomatic,
   AutoAssignPick,
@@ -300,6 +309,11 @@ export class DbInboundAutoAssign implements InboundAutoAssignPort {
 interface ResolvedConversation {
   readonly contactId: string;
   readonly conversationId: string;
+  /**
+   * Origem gravada nesta chamada, quando ELA criou a conversa (F70-S07). `null` =
+   * conversa já existia (a origem dela foi decidida na criação e não muda).
+   */
+  readonly createdWithOrigin: ConversationOriginValue | null;
   readonly aiMode: string;
   /** `assigned_to` no momento do upsert; null se não atribuída. */
   readonly assignedTo: string | null;
@@ -430,7 +444,19 @@ export class DbInboundPersistence implements InboundPersistencePort {
 
     const autoAssignPort = this.autoAssign;
     const outcome = await withWorkspace(workspaceId, async (tx) => {
-      const resolved = await ensureConversation(tx, workspaceId, channelId, remoteId);
+      const resolved = await ensureConversation(tx, workspaceId, channelId, remoteId, async () =>
+        classifyInboundConversation({
+          provider,
+          events: messageEvents,
+          markers: await loadOriginPrefillMarkers(tx, workspaceId),
+        }),
+      );
+      // F70-S07: a etiqueta de origem acompanha a criação da conversa (uma vez só).
+      if (resolved.createdWithOrigin !== null) {
+        await applyOriginTag(tx, workspaceId, resolved.contactId, resolved.createdWithOrigin, null);
+      }
+      // F70-S07: primeiro toque de anúncio no contato (nunca sobrescreve).
+      await recordFirstTouchAttribution(tx, resolved.contactId, messageEvents);
       await fillContactName(tx, resolved.contactId, messageEvents);
       const inserted = await insertMessages(
         tx,
@@ -595,6 +621,12 @@ export class DbInboundPersistence implements InboundPersistencePort {
       if (existingConv !== undefined) {
         conversationId = existingConv.id;
       } else {
+        // F70-S07: comentário num post do próprio perfil — o canal prova a origem.
+        const origin = classifyInboundConversation({
+          provider: 'meta_instagram',
+          events: [comment],
+          markers: { site: [], instagram: [] },
+        });
         const [created] = await tx
           .insert(conversations)
           .values({
@@ -605,11 +637,13 @@ export class DbInboundPersistence implements InboundPersistencePort {
             kind: 'comment_thread',
             status: 'open',
             aiMode: 'off',
+            origin,
           })
           .onConflictDoNothing({ target: [conversations.channelId, conversations.remoteId] })
           .returning({ id: conversations.id });
         if (created !== undefined) {
           conversationId = created.id;
+          await applyOriginTag(tx, workspaceId, contactId, origin, null);
         } else {
           const [row] = await tx
             .select({ id: conversations.id })
@@ -721,12 +755,18 @@ export class DbInboundPersistence implements InboundPersistencePort {
  * Garante contato + conversa do par (canal, remoteId). Upsert idempotente: o
  * contato é casado por (workspace, phone) quando há telefone, senão criado; a
  * conversa por `uq_conversations_channel_remote (channel_id, remote_id)`.
+ *
+ * `classifyOrigin` só roda no caminho de CRIAÇÃO (F70-S07): a origem é decidida
+ * uma vez, com a primeira mensagem, e gravada no próprio INSERT — a trava da IA
+ * vale desde o primeiro instante. O caminho quente (conversa existente) não paga
+ * a leitura dos marcadores do workspace.
  */
 async function ensureConversation(
   tx: DbTx,
   workspaceId: string,
   channelId: string,
   remoteId: string,
+  classifyOrigin: () => Promise<ConversationOriginValue>,
 ): Promise<ResolvedConversation> {
   const { conversations } = schema;
 
@@ -751,6 +791,7 @@ async function ensureConversation(
     return {
       contactId,
       conversationId: existing.id,
+      createdWithOrigin: null,
       aiMode: existing.aiMode,
       assignedTo: existing.assignedTo ?? null,
       teamId: existing.teamId ?? null,
@@ -760,6 +801,7 @@ async function ensureConversation(
   // 2) Cria contato + conversa. Race entre dois consumidores do mesmo envelope é
   //    coberta pelo `onConflictDoNothing` na conversa (índice único) + reselect.
   const contactId = await ensureContact(tx, workspaceId, remoteId);
+  const origin = await classifyOrigin();
 
   const [created] = await tx
     .insert(conversations)
@@ -771,6 +813,7 @@ async function ensureConversation(
       kind: 'direct',
       status: 'open',
       aiMode: 'off',
+      origin,
     })
     .onConflictDoNothing({ target: [conversations.channelId, conversations.remoteId] })
     .returning({
@@ -784,6 +827,7 @@ async function ensureConversation(
     return {
       contactId,
       conversationId: created.id,
+      createdWithOrigin: origin,
       aiMode: created.aiMode,
       assignedTo: created.assignedTo ?? null,
       teamId: created.teamId ?? null,
@@ -809,6 +853,7 @@ async function ensureConversation(
   return {
     contactId: row.contactId ?? contactId,
     conversationId: row.id,
+    createdWithOrigin: null,
     aiMode: row.aiMode,
     assignedTo: row.assignedTo ?? null,
     teamId: row.teamId ?? null,
