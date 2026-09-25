@@ -11,8 +11,14 @@ telefone, e-mail, dono, workspace, consentimento/opt-in, documento ou endereço 
 esses mudam identidade de canal, deduplicação ou base legal de contato, e não são
 decisão do modelo.
 
+F70-S23: cada chave de `custom_fields` tem de estar liberada para o agente
+(`custom_fields_write_keys` em `agent_tools.overrides`; vazio por padrão = nenhuma), e
+`display_name` é uma linha só, sem colchetes/sinais de delimitação, até 80 caracteres
+(ele volta ao prompt em todo turno). As duas regras são do Node.
+
 Contrato Node (`POST /internal/tools/update_contact`):
-  - envelope `args`: só os campos que o modelo informou (`exclude_unset`);
+  - envelope `args`: só os campos que o modelo informou com valor (`exclude_unset` e
+    sem `null`: `null` significa "não informado" dos dois lados);
   - mutação: `contacts` (merge em `custom_fields`), grava `tool_logs`;
   - resposta: `{ ok, content, payload?: { updated: [...] } }`; campo fora da
     allowlist → `ok: false`, nada escrito.
@@ -38,9 +44,12 @@ class UpdateContactArgs(BaseModel):
 
     display_name: str | None = Field(
         default=None,
-        description="Nome pelo qual o contato quer ser chamado.",
+        description=(
+            "Nome pelo qual o contato quer ser chamado: uma linha, sem colchetes, "
+            "até 80 caracteres."
+        ),
         min_length=1,
-        max_length=200,
+        max_length=80,
     )
     language: str | None = Field(
         default=None,
@@ -57,6 +66,7 @@ class UpdateContactArgs(BaseModel):
         default=None,
         description=(
             "Campos personalizados a gravar (merge: só as chaves informadas mudam). "
+            "Só chaves liberadas para você; as demais são recusadas. "
             "Chaves em snake_case minúsculo; valores texto, número, booleano ou null."
         ),
         max_length=20,
@@ -68,14 +78,22 @@ class UpdateContactTool(CallbackTool):
     name = "Atualizar contato"
     description = (
         "Atualiza dados do contato desta conversa: nome de exibição, idioma, fuso "
-        "horário e campos personalizados. Telefone, e-mail e consentimento NÃO podem "
-        "ser alterados por aqui."
+        "horário e os campos personalizados liberados para você. Telefone, e-mail e "
+        "consentimento NÃO podem ser alterados por aqui."
     )
     category = "workflow"
     Args = UpdateContactArgs
 
     def _envelope(self, args: BaseModel, ctx: ToolContext) -> dict[str, Any]:
-        """Só os campos que o modelo informou: `None` de default não vira escrita."""
+        """Só os campos que o modelo informou com valor: `None` nunca vira escrita.
+
+        `null` explícito do modelo (o schema aceita) é "não informado", como no Node.
+        Dentro de `custom_fields`, `null` é valor e segue (limpa a chave).
+        """
         envelope = super()._envelope(args, ctx)
-        envelope["args"] = args.model_dump(mode="json", exclude_unset=True)
+        envelope["args"] = {
+            key: value
+            for key, value in args.model_dump(mode="json", exclude_unset=True).items()
+            if value is not None
+        }
         return envelope
