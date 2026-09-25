@@ -529,7 +529,7 @@ export async function seedArcadaAttendance(
         model: content.model,
         modelParams: { ...content.modelParams },
         label: `Seed F70-S06 (v${next}) — rascunho`,
-        note: 'Conteúdo do seed mudou; rascunho para revisão. O live não foi alterado.',
+        note: `Conteúdo do seed mudou (modelo ${content.model}); rascunho para revisão. O live não foi alterado.`,
       });
       draftPromptVersion = next;
       created.push(`prompt_version:${next}:draft`);

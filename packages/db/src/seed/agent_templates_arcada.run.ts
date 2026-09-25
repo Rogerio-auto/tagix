@@ -131,7 +131,7 @@ async function main(): Promise<void> {
   );
   if (report.draftPromptVersion !== null) {
     console.log(
-      `[arcada] prompt mudou: v${report.draftPromptVersion} gravada como RASCUNHO (live intacto).`,
+      `[arcada] prompt ou modelo mudou: v${report.draftPromptVersion} gravada como RASCUNHO (live intacto).`,
     );
   }
   console.log(
