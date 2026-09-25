@@ -2,13 +2,16 @@
 id: F70-S14
 title: Origem real no conversation.opened, eventos de lead ads e outbound da campanha depois do commit
 phase: F70
-status: available
+status: in-progress
 priority: medium
 estimated_size: S
 depends_on: [F70-S13]
 blocks: []
 source_docs:
   - tasks/slots/F70/F70-S13-conversation-opened-em-todos-os-caminhos.md
+agent_id: backend-engineer
+claimed_at: 2026-09-25T04:44:19Z
+
 ---
 # F70-S14 — Origem real no conversation.opened, eventos de lead ads e outbound da campanha depois do commit
 
