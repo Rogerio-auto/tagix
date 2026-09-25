@@ -26,7 +26,7 @@ import type {
   CoexistencePersistencePort,
   CoexistenceSocketPort,
 } from './ports';
-import type { InboundMediaJob, MediaEnqueuePort } from '../inbound/ports';
+import { INBOUND_MEDIA_TYPE } from '../inbound/mq-ports';
 import type { InstagramEchoInput } from './instagram-echo';
 
 const logger = {
@@ -64,6 +64,8 @@ const db = vi.hoisted(() => {
     members: Row[];
     tags: Row[];
     contactTags: Row[];
+    /** F70-S20: o que a persistência gravou na outbox (routingKey + envelope). */
+    outbox: Row[];
     seq: number;
   } = {
     channels: [],
@@ -73,6 +75,7 @@ const db = vi.hoisted(() => {
     members: [],
     tags: [],
     contactTags: [],
+    outbox: [],
     seq: 0,
   };
 
@@ -80,7 +83,7 @@ const db = vi.hoisted(() => {
     store.channels = [
       {
         id: 'chan-1',
-        workspaceId: 'ws-1',
+        workspaceId: '9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f',
         provider: 'meta_whatsapp',
         phoneNumberId: 'PN123',
         isActive: true,
@@ -88,7 +91,7 @@ const db = vi.hoisted(() => {
       },
       {
         id: 'chan-ig',
-        workspaceId: 'ws-1',
+        workspaceId: '9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f',
         provider: 'meta_instagram',
         igUserId: 'IG_ACCOUNT',
         isActive: true,
@@ -100,28 +103,28 @@ const db = vi.hoisted(() => {
     store.members = [
       {
         id: 'm-owner-old-inactive',
-        workspaceId: 'ws-1',
+        workspaceId: '9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f',
         role: 'OWNER',
         status: 'inactive',
         createdAt: new Date('2024-01-01'),
       },
       {
         id: 'm-owner',
-        workspaceId: 'ws-1',
+        workspaceId: '9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f',
         role: 'OWNER',
         status: 'active',
         createdAt: new Date('2025-01-01'),
       },
       {
         id: 'm-owner-2',
-        workspaceId: 'ws-1',
+        workspaceId: '9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f',
         role: 'OWNER',
         status: 'active',
         createdAt: new Date('2025-06-01'),
       },
       {
         id: '11111111-1111-4111-8111-111111111111',
-        workspaceId: 'ws-1',
+        workspaceId: '9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f',
         role: 'AGENT',
         status: 'active',
         createdAt: new Date('2025-03-01'),
@@ -136,6 +139,7 @@ const db = vi.hoisted(() => {
     ];
     store.tags = [];
     store.contactTags = [];
+    store.outbox = [];
     store.contacts = [];
     store.conversations = [];
     store.messages = [];
@@ -341,8 +345,12 @@ vi.mock('@hm/db', () => ({
   schema: db.schema,
   getDb: db.getDb,
   withWorkspace: db.withWorkspace,
-  // F70-S16: a outbox real é coberta em conversation-opened.test.ts (Postgres dev).
-  enqueueOutbox: async (_tx: unknown, messages: readonly unknown[]) => messages.length,
+  // F70-S16/S20: a outbox real é coberta em conversation-opened.test.ts (Postgres dev);
+  // aqui só registra o que a transação gravaria.
+  enqueueOutbox: async (_tx: unknown, messages: readonly Record<string, unknown>[]) => {
+    db.store.outbox.push(...messages);
+    return messages.length;
+  },
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -657,15 +665,19 @@ describe('DbCoexistencePersistence — history import idempotente', () => {
 
 // ─── 4. Download de mídia (echo + history) ────────────────────────────────────
 
-/** Spy de enqueue de mídia: captura os jobs publicados (sem RabbitMQ). */
-function makeMediaSpy(): MediaEnqueuePort & { jobs: InboundMediaJob[] } {
-  const jobs: InboundMediaJob[] = [];
-  return {
-    jobs,
-    async enqueue(job) {
-      jobs.push(job);
-    },
-  };
+/**
+ * Jobs de download de mídia que a transação gravou na outbox (F70-S20), no shape do
+ * payload que o media-worker consome.
+ */
+function mediaJobs(): Record<string, unknown>[] {
+  return db.store.outbox
+    .filter((m) => m['routingKey'] === 'hm.q.media')
+    .map((m) => {
+      const env = m['envelope'] as { type: string; workspaceId: string; payload: Record<string, unknown> };
+      expect(env.type).toBe(INBOUND_MEDIA_TYPE);
+      expect(m).toMatchObject({ kind: 'job', exchange: '' });
+      return env.payload;
+    });
 }
 
 describe('DbCoexistencePersistence — download de mídia', () => {
@@ -681,8 +693,7 @@ describe('DbCoexistencePersistence — download de mídia', () => {
   };
 
   it('echo de mídia → persiste media_status=pending e enfileira o job de download', async () => {
-    const media = makeMediaSpy();
-    const p = new DbCoexistencePersistence(logger, undefined, undefined, media);
+    const p = new DbCoexistencePersistence(logger);
 
     const r = await p.persistEcho(audioEcho);
     expect(r.inserted).toBe(true);
@@ -690,8 +701,8 @@ describe('DbCoexistencePersistence — download de mídia', () => {
     const [msg] = store.messages.filter((m) => m['direction'] === 'outbound');
     expect(msg).toMatchObject({ type: 'audio', mediaStatus: 'pending' });
 
-    expect(media.jobs).toHaveLength(1);
-    expect(media.jobs[0]).toMatchObject({
+    expect(mediaJobs()).toHaveLength(1);
+    expect(mediaJobs()[0]).toMatchObject({
       provider: 'meta_whatsapp',
       externalId: 'wamid.audio.1',
       mediaRef: { refOrUrl: 'MEDIA-OGG-1', mimeType: 'audio/ogg', sha256: 'abc' },
@@ -700,38 +711,34 @@ describe('DbCoexistencePersistence — download de mídia', () => {
   });
 
   it('echo de texto → não marca pending nem enfileira', async () => {
-    const media = makeMediaSpy();
-    const p = new DbCoexistencePersistence(logger, undefined, undefined, media);
+    const p = new DbCoexistencePersistence(logger);
     await p.persistEcho(echoPayload); // type 'text'
-    expect(media.jobs).toHaveLength(0);
+    expect(mediaJobs()).toHaveLength(0);
     const [msg] = store.messages.filter((m) => m['direction'] === 'outbound');
     expect(msg?.['mediaStatus']).toBeUndefined();
   });
 
   it('reentrega de echo de mídia → dedup, NÃO reenfileira', async () => {
-    const media = makeMediaSpy();
-    const p = new DbCoexistencePersistence(logger, undefined, undefined, media);
+    const p = new DbCoexistencePersistence(logger);
     await p.persistEcho(audioEcho);
     await p.persistEcho(audioEcho);
-    expect(media.jobs).toHaveLength(1);
+    expect(mediaJobs()).toHaveLength(1);
   });
 
   it('echo de mídia sem id no raw → persiste sem pending e não enfileira', async () => {
-    const media = makeMediaSpy();
-    const p = new DbCoexistencePersistence(logger, undefined, undefined, media);
+    const p = new DbCoexistencePersistence(logger);
     await p.persistEcho({
       ...audioEcho,
       externalId: 'wamid.audio.noid',
       raw: { type: 'audio', audio: { mime_type: 'audio/ogg' } },
     });
-    expect(media.jobs).toHaveLength(0);
+    expect(mediaJobs()).toHaveLength(0);
     const [msg] = store.messages.filter((m) => m['direction'] === 'outbound');
     expect(msg?.['mediaStatus']).toBeUndefined();
   });
 
   it('history com mídia → marca pending e enfileira só as mensagens inseridas', async () => {
-    const media = makeMediaSpy();
-    const p = new DbCoexistencePersistence(logger, undefined, undefined, media);
+    const p = new DbCoexistencePersistence(logger);
     const batch: CoexistenceHistoryBatchPayload = {
       phoneNumberId: 'PN123',
       contacts: [{ waId: '5511999', raw: {} }],
@@ -756,13 +763,13 @@ describe('DbCoexistencePersistence — download de mídia', () => {
     };
 
     await p.importHistory(batch);
-    expect(media.jobs).toHaveLength(1);
-    expect(media.jobs[0]).toMatchObject({ externalId: 'h.img.1', mediaRef: { refOrUrl: 'IMG-1' } });
+    expect(mediaJobs()).toHaveLength(1);
+    expect(mediaJobs()[0]).toMatchObject({ externalId: 'h.img.1', mediaRef: { refOrUrl: 'IMG-1' } });
 
     // Reprocesso: tudo dedup → nada reenfileirado.
-    media.jobs.length = 0;
+    db.store.outbox.length = 0;
     await p.importHistory(batch);
-    expect(media.jobs).toHaveLength(0);
+    expect(mediaJobs()).toHaveLength(0);
   });
 });
 
@@ -797,7 +804,7 @@ const ECHO_AT = new Date(echoPayload.timestamp! * 1000);
 function seedConversation(extra: Record<string, unknown>): Record<string, unknown> {
   const row: Record<string, unknown> = {
     id: 'conv-existing',
-    workspaceId: 'ws-1',
+    workspaceId: '9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f',
     channelId: 'chan-1',
     remoteId: '5511999',
     contactId: null,
@@ -876,7 +883,7 @@ describe('F70-S04 — pausa da IA (mesma regra da UI)', () => {
       aiLastHumanAt: ECHO_AT,
     });
     expect(socket.aiModeChanged).toEqual([
-      { workspaceId: 'ws-1', conversationId: 'conv-existing', aiMode: 'paused' },
+      { workspaceId: '9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f', conversationId: 'conv-existing', aiMode: 'paused' },
     ]);
     // Estado lido sob lock de linha (serializa ecos concorrentes).
     expect(db.locks).toContain('conversations:update');
@@ -964,13 +971,13 @@ describe('F70-S04 — conversa iniciada pelo app (prospecção)', () => {
     expect(conv?.['firstResponseAt']).toBeUndefined();
 
     expect(store.tags).toHaveLength(1);
-    expect(store.tags[0]).toMatchObject({ workspaceId: 'ws-1', name: 'origem:prospeccao' });
+    expect(store.tags[0]).toMatchObject({ workspaceId: '9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f', name: 'origem:prospeccao' });
     const [contact] = store.contacts;
     expect(store.contactTags).toEqual([
       expect.objectContaining({
         contactId: contact?.['id'],
         tagId: store.tags[0]?.['id'],
-        workspaceId: 'ws-1',
+        workspaceId: '9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f',
         taggedBy: 'm-owner',
       }),
     ]);
@@ -987,7 +994,7 @@ describe('F70-S04 — conversa iniciada pelo app (prospecção)', () => {
   });
 
   it('reusa a etiqueta já existente no workspace', async () => {
-    store.tags.push({ id: 'tag-existing', workspaceId: 'ws-1', name: 'origem:prospeccao' });
+    store.tags.push({ id: 'tag-existing', workspaceId: '9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f', name: 'origem:prospeccao' });
     const p = new DbCoexistencePersistence(logger);
     await p.persistEcho(echoPayload);
     expect(store.tags).toHaveLength(1);
@@ -1044,7 +1051,7 @@ describe('F70-S04 — eco do Instagram', () => {
   it('pausa a IA de conversa IG com ai_mode=on', async () => {
     store.conversations.push({
       id: 'conv-ig',
-      workspaceId: 'ws-1',
+      workspaceId: '9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f',
       channelId: 'chan-ig',
       remoteId: 'IGSID_1',
       contactId: null,
@@ -1063,13 +1070,7 @@ describe('F70-S04 — eco do Instagram', () => {
   });
 
   it('eco do próprio app (app_id do Leadium) → ignorado, nada gravado', async () => {
-    const p = new DbCoexistencePersistence(
-      logger,
-      undefined,
-      undefined,
-      undefined,
-      new Set(['999']),
-    );
+    const p = new DbCoexistencePersistence(logger, undefined, undefined, new Set(['999']));
     const r = await p.persistInstagramEcho({ ...igEcho, appId: '999' });
     expect(r).toMatchObject({ resolved: true, inserted: false, skipped: 'own_app' });
     expect(store.messages).toHaveLength(0);
@@ -1077,13 +1078,7 @@ describe('F70-S04 — eco do Instagram', () => {
   });
 
   it('eco de outro app (ex.: app do Instagram) → persistido normalmente', async () => {
-    const p = new DbCoexistencePersistence(
-      logger,
-      undefined,
-      undefined,
-      undefined,
-      new Set(['999']),
-    );
+    const p = new DbCoexistencePersistence(logger, undefined, undefined, new Set(['999']));
     const r = await p.persistInstagramEcho({ ...igEcho, appId: '124024574287414' });
     expect(r.inserted).toBe(true);
   });
@@ -1104,8 +1099,7 @@ describe('F70-S04 — eco do Instagram', () => {
   });
 
   it('eco de mídia → pending + job de download roteado pelo igUserId', async () => {
-    const media = makeMediaSpy();
-    const p = new DbCoexistencePersistence(logger, undefined, undefined, media);
+    const p = new DbCoexistencePersistence(logger);
     await p.persistInstagramEcho({
       ...igEcho,
       externalId: 'mid.img',
@@ -1114,7 +1108,7 @@ describe('F70-S04 — eco do Instagram', () => {
       mediaRef: { refOrUrl: 'https://cdn.example/x.jpg' },
     });
     expect(store.messages[0]).toMatchObject({ type: 'image', mediaStatus: 'pending' });
-    expect(media.jobs).toEqual([
+    expect(mediaJobs()).toEqual([
       {
         provider: 'meta_instagram',
         externalId: 'mid.img',
@@ -1176,7 +1170,7 @@ describe('F70-S04 — MqCoexistenceSocketEmit', () => {
       ch as unknown as ConstructorParameters<typeof MqCoexistenceSocketEmit>[0],
     );
     await emit.emitMessageNew({
-      workspaceId: 'ws-1',
+      workspaceId: '9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f',
       conversationId: 'c-1',
       messageId: 'msg-1',
       externalId: 'e-1',
@@ -1185,7 +1179,7 @@ describe('F70-S04 — MqCoexistenceSocketEmit', () => {
       direction: 'outbound',
       senderType: 'member',
     });
-    await emit.emitAiModeChanged('ws-1', 'c-1', 'paused');
+    await emit.emitAiModeChanged('9c2b1f7e-5d34-4c1a-8e6f-2a7b3c4d5e6f', 'c-1', 'paused');
 
     expect(ch.sent).toHaveLength(2);
     expect(ch.sent[0]?.body).toMatchObject({

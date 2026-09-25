@@ -32,7 +32,6 @@ import {
   MqCoexistenceSocketEmit,
   NoopCoexistenceSocketEmit,
 } from './db-ports';
-import { MqMediaEnqueue } from '../inbound/mq-ports';
 import type { CoexistenceDeps } from './ports';
 import { instagramEchoSchema } from './instagram-echo';
 
@@ -60,13 +59,11 @@ export interface CoexistenceWorkerHandle {
  */
 export function createCoexistenceDeps(logger: Logger, channel?: MqChannel): CoexistenceDeps {
   const socket = channel ? new MqCoexistenceSocketEmit(channel) : new NoopCoexistenceSocketEmit();
-  // Enfileiramento de mídia: reusa o MESMO publisher/fila (`hm.q.media`) do inbound.
-  // Sem canal (testes/sem broker) fica undefined → echo persiste sem enfileirar.
-  const media = channel ? new MqMediaEnqueue(channel) : undefined;
+  // Download de mídia (`hm.q.media`): pela outbox, na transação da mensagem (F70-S20).
   const ownMetaAppIds = ownMetaAppIdsFromEnv(process.env);
   warnIfOwnMetaAppIdsMissing(ownMetaAppIds, logger);
   return {
-    persistence: new DbCoexistencePersistence(logger, undefined, socket, media, ownMetaAppIds),
+    persistence: new DbCoexistencePersistence(logger, undefined, socket, ownMetaAppIds),
   };
 }
 
