@@ -56,7 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 9     | 2   | 3   | 0   | 0   | 0   | 4   |
+| F70   | 9     | 2   | 2   | 0   | 0   | 1   | 4   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -770,7 +770,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70-S03 | Canal de teste agora; número real em coexistência quando tudo estiver pronto   | ⏸️ blocked  | critical   | F70-S02                   |
 | F70-S04 | Eco do app vira mensagem humana e pausa a IA                                   | ✅ done      | high       | F70-S03                   |
 | F70-S05 | Atribuição de anúncio no contato e no deal                                     | ✅ done      | high       | F70-S03                   |
-| F70-S06 | Agente de atendimento da Arcada                                                | ⏸️ blocked  | high       | F70-S04, F70-S05, F70-S07 |
+| F70-S06 | Agente de atendimento da Arcada                                                | 🟣 review    | high       | F70-S04, F70-S05, F70-S07 |
 | F70-S07 | Ligar origem, atribuição e eco do IG no pipeline; IA só com origem comprovada  | ✅ done      | critical   | F70-S04, F70-S05          |
 | F70-S08 | Defesa em profundidade da trava da IA e teste permanente da atribuição no deal | 🟢 available | high       | F70-S07                   |
 | F70-S09 | Ligar os webhooks de saída                                                     | 🟢 available | high       | F70-S01                   |

@@ -842,3 +842,14 @@ prova que o Git ainda atravessa a junction sem a correção.
 **Regra:** nunca rodar `git worktree remove` direto num worktree criado pelo `slot.py`; usar
 `python scripts/slot.py worktree-clean`. O mesmo `slot.py` existe no Elemento e no projeto28, com o
 mesmo defeito.
+
+## F70-S06 → dono de `apps/workers/src/agents/run.ts` (2026-09-25) — agentes rodam sem tools
+
+**Achado:** `buildRunRequest` (`apps/workers/src/agents/run.ts`) não envia `tools` no `POST /run`; o
+runtime usa `req.tools` (default `[]`) e `_tool_specs` devolve `None`. Nenhum agente em produção consegue
+chamar `transfer_to_human`, `search_knowledge_base`, `add_contact_tag` etc. Além disso, o catálogo
+`tools` só tem as tools de calendar (`calendar_tools.ts`); as de workflow/KB não existem na tabela.
+
+**Pedido:** slot para (1) semear as tools de workflow/KB/database no catálogo `tools` e (2) carregar
+`agent_tools` habilitadas → `ToolDescriptor[]` no request do worker. Pré-requisito do DoD da F70-S06
+("handoff testado nos 4 gatilhos"). O seed da Arcada vincula as tools quando existirem (re-rodar).
