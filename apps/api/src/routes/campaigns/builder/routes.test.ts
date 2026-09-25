@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTableName } from 'drizzle-orm';
 import { can, type Permission, type Role } from '@hm/shared';
 import type { DbTx } from '@hm/db';
+import type * as HmDbModule from '@hm/db';
 import type * as BuilderServiceModule from './service';
 
 type BuilderService = typeof BuilderServiceModule;
@@ -52,6 +53,14 @@ const serviceSpies = vi.hoisted(() => ({
 vi.mock('./service', async () => {
   const actual = await vi.importActual<BuilderService>('./service');
   return { ...actual, ...serviceSpies };
+});
+
+// F70-S18: o CRUD confere `channelId`/`aiHandoffAgentId` contra o workspace. Essa checagem
+// roda contra o Postgres real em `../cross-tenant.test.ts`; aqui o tx é falso, então todo id
+// conta como do tenant.
+vi.mock('@hm/db', async () => {
+  const actual = await vi.importActual<typeof HmDbModule>('@hm/db');
+  return { ...actual, requireRefsInWorkspace: vi.fn(async () => {}) };
 });
 
 const { createCampaignBuilderRouter, prepareTestSend } = await import('./index');
