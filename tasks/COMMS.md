@@ -874,3 +874,25 @@ link `wa.me?text=` COMEÇA com o marcador. Formato recomendado: token `[ref:<fon
 começo do texto (detalhes no slot F70-S18).
 
 **Resolvido (2026-09-25):** `origin-gate.test.ts` ajustado para o marcador como prefixo (F70-S18), com um caso novo, contra o banco, de marcador no meio da mensagem → `sem-origem`. Branch `fix/f70-origin-gate-prefix`.
+
+## F70-S23 → dono de `packages/db/src/seed/agent_templates_arcada.ts` (F70-S06) (2026-09-25) — liberar `atendimento-humano` no agente da Arcada
+
+**Mudança:** `add_contact_tag` e `update_contact` passaram a negar a escrita por padrão. A
+etiqueta só é aplicada se estiver em `allowed_tags`, e o campo personalizado só é gravado se
+estiver em `custom_fields_write_keys`, as duas listas em `agent_tools.overrides` do vínculo
+agente ↔ tool.
+
+**Impacto fora do meu `files_allowed`:** o seed da Arcada vincula `add_contact_tag` com
+`overrides` vazio. Por isso, o agente não consegue aplicar `atendimento-humano`, que é o que o
+prompt dele manda fazer quando uma pessoa precisa assumir.
+
+**Pedido:**
+- no insert de `agent_tools`, trocar os valores por
+  `{ agentId, toolId: t.id, isEnabled: true, overrides: seededToolOverrides(ARCADA_AGENT_TOOL_OVERRIDES, t.key) }`
+  (`./tools_agent_grants`);
+- atualizar os vínculos que já existem, hoje `onConflictDoNothing`, só no campo `overrides`.
+
+A liberação é só `atendimento-humano`. Etiqueta de conversão não entra nunca.
+
+**Operação:** até isso entrar, no workspace real:
+`UPDATE agent_tools at SET overrides = at.overrides || '{"allowed_tags":["atendimento-humano"]}' FROM tools t WHERE t.id = at.tool_id AND t.key = 'add_contact_tag' AND at.agent_id = '<agente da Arcada>';`
