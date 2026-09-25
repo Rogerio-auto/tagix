@@ -16,6 +16,7 @@ import type {
   CoexistenceEchoPayload,
   CoexistenceHistoryBatchPayload,
 } from '@hm/shared/mq';
+import type { InstagramEchoInput } from './instagram-echo';
 
 /** Dados de um `message:new` emitido pela coexistência (espelha o inbound). */
 export interface CoexistenceMessageNewEmit {
@@ -27,6 +28,11 @@ export interface CoexistenceMessageNewEmit {
   readonly content: string | null;
   /** `outbound` para echoes (enviadas pelo app); histórico varia por `fromMe`. */
   readonly direction: 'inbound' | 'outbound';
+  /**
+   * Autoria (F70-S04): eco do app é resposta HUMANA (`member`) — o dono do número
+   * respondeu pelo celular. Gravado igual na linha `messages`.
+   */
+  readonly senderType: 'contact' | 'member' | 'system';
 }
 
 /**
@@ -49,6 +55,12 @@ export interface CoexistenceSocketPort {
    * message/contadores) sem floodar a thread aberta.
    */
   emitConversationUpdated(workspaceId: string, conversationId: string): Promise<void>;
+  /**
+   * `conversation:ai_mode_changed` quando um eco do app pausou a IA
+   * (`human_takeover`) — mesmo evento que a rota de envio da API emite, para o
+   * cockpit trocar o estado da IA ao vivo.
+   */
+  emitAiModeChanged(workspaceId: string, conversationId: string, aiMode: 'paused'): Promise<void>;
 }
 
 /** Resultado da materialização de um echo (observável em log/teste). */
@@ -57,6 +69,18 @@ export interface CoexistenceEchoResult {
   readonly resolved: boolean;
   /** `true` quando uma nova mensagem outbound foi inserida (não-dedup). */
   readonly inserted: boolean;
+  /** `true` quando este eco pausou a IA da conversa (`on` → `paused`). */
+  readonly aiPaused: boolean;
+  /**
+   * `true` quando este eco ABRIU a conversa (o dono chamou primeiro: prospecção).
+   * A conversa nasce com IA desligada e o contato ganha `origem:prospeccao`.
+   */
+  readonly startedByApp: boolean;
+  /**
+   * Motivo de descarte sem persistir, quando houver. `own_app`: eco de uma
+   * mensagem que o próprio Leadium enviou pela API (não é resposta humana).
+   */
+  readonly skipped?: 'own_app';
 }
 
 /** Resultado da importação de um batch de histórico. */
@@ -87,6 +111,12 @@ export interface CoexistencePersistencePort {
    * `externalId` (reentrega não duplica).
    */
   persistEcho(payload: CoexistenceEchoPayload): Promise<CoexistenceEchoResult>;
+  /**
+   * Eco do Instagram (F70-S04): mesma semântica do eco do WhatsApp — mensagem
+   * humana do dono da conta, pausa a IA, marca primeira resposta, prospecção.
+   * Resolve o canal por `igUserId`. Idempotente por `externalId` (mid).
+   */
+  persistInstagramEcho(echo: InstagramEchoInput): Promise<CoexistenceEchoResult>;
   /**
    * History: batch de contatos/mensagens históricas de uma WABA. Upsert
    * idempotente de contatos (por `waId`) + mensagens (por `externalId`); rodar 2x

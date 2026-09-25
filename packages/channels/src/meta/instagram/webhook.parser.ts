@@ -1,7 +1,8 @@
 /**
  * Parser do webhook Instagram Messaging -> InboundEvent[] (INSTAGRAM.md 5.2).
  * Cobre DM (text/attachments), story_mention, story_reply, share, postback,
- * reaction, seen (read), referral e comments/mentions. Echoes/deletes ignorados.
+ * reaction, seen (read), referral e comments/mentions. Echoes/deletes ignorados
+ * aqui (eco NÃO é inbound): os ecos têm parser próprio, `echo.parser.ts` (F70-S04).
  * Narrowing por colchetes, sem any.
  */
 

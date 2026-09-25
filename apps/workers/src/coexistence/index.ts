@@ -9,7 +9,9 @@
 export {
   startCoexistenceWorker,
   handleCoexistenceEnvelope,
+  handleInstagramEchoes,
   createCoexistenceDeps,
+  ownMetaAppIdsFromEnv,
   COEXISTENCE_QUEUE,
   type CoexistenceWorkerOptions,
   type CoexistenceWorkerHandle,
@@ -20,6 +22,8 @@ export {
   DbCoexistenceChannelResolver,
   MqCoexistenceSocketEmit,
   NoopCoexistenceSocketEmit,
+  PROSPECTION_TAG_NAME,
+  CHANNEL_OWNER_METADATA_KEY,
   type CoexistenceChannelResolver,
   type ResolvedCoexistenceChannel,
 } from './db-ports';
@@ -33,3 +37,12 @@ export type {
   CoexistenceHistoryResult,
   CoexistenceAppStateResult,
 } from './ports';
+
+export { instagramEchoSchema, type InstagramEchoInput } from './instagram-echo';
+export {
+  planHumanReply,
+  type ConversationHumanState,
+  type HumanReplyInput,
+  type HumanReplyPatch,
+  type HumanReplyPlan,
+} from './human-takeover';

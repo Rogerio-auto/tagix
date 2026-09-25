@@ -34,6 +34,7 @@ import {
 } from './db-ports';
 import { MqMediaEnqueue } from '../inbound/mq-ports';
 import type { CoexistenceDeps } from './ports';
+import { instagramEchoSchema } from './instagram-echo';
 
 /** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
 type MqChannel = MqHandle['channel'];
@@ -62,7 +63,60 @@ export function createCoexistenceDeps(logger: Logger, channel?: MqChannel): Coex
   // Enfileiramento de mídia: reusa o MESMO publisher/fila (`hm.q.media`) do inbound.
   // Sem canal (testes/sem broker) fica undefined → echo persiste sem enfileirar.
   const media = channel ? new MqMediaEnqueue(channel) : undefined;
-  return { persistence: new DbCoexistencePersistence(logger, undefined, socket, media) };
+  return {
+    persistence: new DbCoexistencePersistence(
+      logger,
+      undefined,
+      socket,
+      media,
+      ownMetaAppIdsFromEnv(process.env),
+    ),
+  };
+}
+
+/**
+ * IDs do(s) app(s) Meta do próprio Leadium (`META_APP_ID`, aceita lista separada
+ * por vírgula). Usado para descartar o eco do IG de mensagens que nós mesmos
+ * enviamos pela API (F70-S04).
+ */
+export function ownMetaAppIdsFromEnv(env: NodeJS.ProcessEnv): ReadonlySet<string> {
+  const raw = env['META_APP_ID'] ?? '';
+  return new Set(
+    raw
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0),
+  );
+}
+
+/**
+ * Materializa ecos do Instagram (F70-S04). Recebe os eventos produzidos por
+ * `parseInstagramEchoes` (`@hm/channels`) — `unknown` porque cruzam fronteira de
+ * processo — e revalida cada um com Zod. Mesmo contrato de erro do envelope:
+ * conteúdo inválido loga-warn e segue; só erro de infra (DB) lança.
+ */
+export async function handleInstagramEchoes(
+  events: readonly unknown[],
+  options: CoexistenceWorkerOptions,
+): Promise<void> {
+  const { deps, logger } = options;
+  for (const raw of events) {
+    const parsed = instagramEchoSchema.safeParse(raw);
+    if (!parsed.success) {
+      logger.warn('coexistence: eco IG inválido — descartado');
+      continue;
+    }
+    const result = await deps.persistence.persistInstagramEcho(parsed.data);
+    logger.info('coexistence: eco IG processado', {
+      igUserId: parsed.data.igUserId,
+      externalId: parsed.data.externalId,
+      resolved: result.resolved,
+      inserted: result.inserted,
+      aiPaused: result.aiPaused,
+      startedByApp: result.startedByApp,
+      ...(result.skipped !== undefined ? { skipped: result.skipped } : {}),
+    });
+  }
 }
 
 /**
@@ -89,6 +143,8 @@ export async function handleCoexistenceEnvelope(
         externalId: parsed.data.externalId,
         resolved: result.resolved,
         inserted: result.inserted,
+        aiPaused: result.aiPaused,
+        startedByApp: result.startedByApp,
       });
       return;
     }
