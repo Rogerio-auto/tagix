@@ -2,13 +2,16 @@
 id: F70-S12
 title: FKs compostas por workspace nas referências de deals e stages
 phase: F70
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F70-S10, F70-S11]
 blocks: []
 source_docs:
   - tasks/slots/F70/F70-S11-referencias-cruzadas-entre-workspaces.md
+agent_id: backend-engineer
+claimed_at: 2026-09-25T04:46:30Z
+
 ---
 # F70-S12 — FKs compostas por workspace nas referências de deals e stages
 

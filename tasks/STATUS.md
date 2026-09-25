@@ -56,7 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 14     | 3   | 2   | 0   | 0   | 1   | 8   |
+| F70   | 14     | 2   | 2   | 0   | 1   | 1   | 8   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -763,22 +763,22 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 70 — Central de Operação — Atendimento da Arcada no Leadium
 
-| ID      | Titulo                                                                                          | Status      | Prioridade | Depende de                |
-| ------- | ----------------------------------------------------------------------------------------------- | ----------- | ---------- | ------------------------- |
-| F70-S01 | Restaurar o working tree e corrigir o worktree-clean que atravessa junctions                    | ✅ done      | critical   | —                         |
-| F70-S02 | Backup e limpeza da conta do Rogério                                                            | ⏸️ blocked  | high       | F70-S01                   |
-| F70-S03 | Canal de teste agora; número real em coexistência quando tudo estiver pronto                    | ⏸️ blocked  | critical   | F70-S02                   |
-| F70-S04 | Eco do app vira mensagem humana e pausa a IA                                                    | ✅ done      | high       | F70-S03                   |
-| F70-S05 | Atribuição de anúncio no contato e no deal                                                      | ✅ done      | high       | F70-S03                   |
-| F70-S06 | Agente de atendimento da Arcada                                                                 | 🟣 review    | high       | F70-S04, F70-S05, F70-S07 |
-| F70-S07 | Ligar origem, atribuição e eco do IG no pipeline; IA só com origem comprovada                   | ✅ done      | critical   | F70-S04, F70-S05          |
-| F70-S08 | Defesa em profundidade da trava da IA e teste permanente da atribuição no deal                  | ✅ done      | high       | F70-S07                   |
-| F70-S09 | Ligar os webhooks de saída                                                                      | ✅ done      | high       | F70-S01                   |
-| F70-S10 | Agentes recebem as tools (transfer_to_human, base de conhecimento e workflow)                   | ✅ done      | critical   | F70-S08                   |
-| F70-S11 | Bloquear referências cruzadas entre workspaces nas rotas de escrita                             | 🟢 available | critical   | F70-S08                   |
-| F70-S12 | FKs compostas por workspace nas referências de deals e stages                                   | 🟢 available | high       | F70-S10, F70-S11          |
-| F70-S13 | conversation.opened em todos os caminhos de criação e handoff de campanha honesto               | ✅ done      | medium     | F70-S09                   |
-| F70-S14 | Origem real no conversation.opened, eventos de lead ads e outbound da campanha depois do commit | 🟢 available | medium     | F70-S13                   |
+| ID      | Titulo                                                                                          | Status        | Prioridade | Depende de                |
+| ------- | ----------------------------------------------------------------------------------------------- | ------------- | ---------- | ------------------------- |
+| F70-S01 | Restaurar o working tree e corrigir o worktree-clean que atravessa junctions                    | ✅ done        | critical   | —                         |
+| F70-S02 | Backup e limpeza da conta do Rogério                                                            | ⏸️ blocked    | high       | F70-S01                   |
+| F70-S03 | Canal de teste agora; número real em coexistência quando tudo estiver pronto                    | ⏸️ blocked    | critical   | F70-S02                   |
+| F70-S04 | Eco do app vira mensagem humana e pausa a IA                                                    | ✅ done        | high       | F70-S03                   |
+| F70-S05 | Atribuição de anúncio no contato e no deal                                                      | ✅ done        | high       | F70-S03                   |
+| F70-S06 | Agente de atendimento da Arcada                                                                 | 🟣 review      | high       | F70-S04, F70-S05, F70-S07 |
+| F70-S07 | Ligar origem, atribuição e eco do IG no pipeline; IA só com origem comprovada                   | ✅ done        | critical   | F70-S04, F70-S05          |
+| F70-S08 | Defesa em profundidade da trava da IA e teste permanente da atribuição no deal                  | ✅ done        | high       | F70-S07                   |
+| F70-S09 | Ligar os webhooks de saída                                                                      | ✅ done        | high       | F70-S01                   |
+| F70-S10 | Agentes recebem as tools (transfer_to_human, base de conhecimento e workflow)                   | ✅ done        | critical   | F70-S08                   |
+| F70-S11 | Bloquear referências cruzadas entre workspaces nas rotas de escrita                             | 🟢 available   | critical   | F70-S08                   |
+| F70-S12 | FKs compostas por workspace nas referências de deals e stages                                   | 🔵 in-progress | high       | F70-S10, F70-S11          |
+| F70-S13 | conversation.opened em todos os caminhos de criação e handoff de campanha honesto               | ✅ done        | medium     | F70-S09                   |
+| F70-S14 | Origem real no conversation.opened, eventos de lead ads e outbound da campanha depois do commit | 🟢 available   | medium     | F70-S13                   |
 
 ## Fase 8 — Permissions & Settings
 
