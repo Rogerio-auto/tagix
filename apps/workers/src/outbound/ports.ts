@@ -9,6 +9,7 @@
  */
 import type { Channel, IChannelAdapter, SendResult } from '@hm/channels';
 import type { MessagePurpose, OutboundDecision, ChannelProvider, ViewStatus } from '@hm/shared';
+import type { OutboxMessage } from '@hm/shared/mq';
 import type { OutboundJob } from './job';
 
 /**
@@ -36,12 +37,19 @@ export interface PersistOutboundInput {
   readonly errorCode?: string;
   readonly errorMessage?: string;
   readonly job: OutboundJob;
+  /**
+   * Mensagens da outbox que descrevem ESTA mudança de status (hoje: `message.sent`,
+   * F70-S20). A implementação grava na MESMA transação do status: ou os dois
+   * commitam, ou nenhum. Implementação que não consegue garantir isso deve recusar
+   * (lançar), nunca descartar em silêncio.
+   */
+  readonly outbox?: readonly OutboxMessage[];
 }
 
 /**
- * Porta de persistência. A implementação publica num barramento (ou escreve no
- * DB através de um consumer dedicado) o novo `view_status` da mensagem e o
- * `external_id`, além de atualizar `conversation.last_*`.
+ * Porta de persistência. A implementação grava o novo `view_status` da mensagem e
+ * o `external_id`, atualiza `conversation.last_*` e, na mesma transação, as
+ * mensagens da outbox que acompanham a mudança (`PersistOutboundInput.outbox`).
  */
 export interface OutboundPersistencePort {
   persist(input: PersistOutboundInput): Promise<void>;

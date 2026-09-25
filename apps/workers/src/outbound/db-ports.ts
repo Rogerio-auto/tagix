@@ -13,7 +13,7 @@
  */
 import { and, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import type { Channel, IChannelAdapter } from '@hm/channels';
-import { decryptSecret, schema, withWorkspace } from '@hm/db';
+import { decryptSecret, enqueueOutbox, schema, withWorkspace, type DbTx } from '@hm/db';
 import type { ChannelProvider } from '@hm/shared';
 import { previewFor } from '@hm/shared';
 import { nextViewStatus } from '../inbound/status';
@@ -196,77 +196,95 @@ function readSendAttempts(metadata: Record<string, unknown> | undefined): number
 export const defaultSendAttemptStore: SendAttemptStore = new DbSendAttemptStore();
 
 /**
- * Persistência default do outbound via `@hm/db`. Sob `withWorkspace` (RLS):
- * UPDATE `messages.view_status`/`external_id`/`failed_reason` casando por id e
- * carimba `updated_at`. `typing_indicator` nunca chega aqui (filtrado em
- * `finalize.ts`).
+ * Persistência default do outbound via `@hm/db`. Sob `withWorkspace` (RLS), numa
+ * transação só:
+ *  - UPDATE `messages.view_status`/`external_id`/`failed_reason` casando por id e
+ *    carimba `updated_at`;
+ *  - no `sent`, bumpa `conversation.last_message_*`;
+ *  - grava `input.outbox` (o `message.sent`, F70-S20). Commit leva os três; qualquer
+ *    falha desfaz os três. A policy `outbox_tenant_insert` exige que o evento seja do
+ *    workspace da transação: evento de outro tenant derruba a gravação (fail-closed).
+ *
+ * O evento é gravado mesmo se a linha da mensagem não estiver visível (apagada entre
+ * o envio e o finalize): o provider aceitou o envio, e é isso que o evento afirma.
+ * `typing_indicator` nunca chega aqui (filtrado em `finalize.ts`).
  */
 export class DbOutboundPersistence implements OutboundPersistencePort {
   async persist(input: PersistOutboundInput): Promise<void> {
-    const { messages, conversations } = schema;
     const reason = failedReason(input);
 
     await withWorkspace(input.workspaceId, async (tx) => {
-      const [current] = await tx
-        .select({
-          id: messages.id,
-          viewStatus: messages.viewStatus,
-          content: messages.content,
-          type: messages.type,
-          senderType: messages.senderType,
-          createdAt: messages.createdAt,
-        })
-        .from(messages)
-        .where(eq(messages.id, input.messageId))
-        .limit(1);
-      if (current === undefined) return;
-
-      // Monotônico (F52-S04): só avança o view_status (sent<delivered<read;
-      // failed vence). Garante que redelivery de job e reconciliação de órfão
-      // NUNCA regridem o status (ex.: re-gravar `sent` numa msg já `read`).
-      const advanced = nextViewStatus(current.viewStatus, input.status);
-
-      await tx
-        .update(messages)
-        .set({
-          // SEMPRE grava o external_id quando presente, mesmo sem avanço de
-          // status — assim o callback de status passa a casar a mensagem (fecha
-          // a janela do órfão na origem).
-          ...(input.externalId !== undefined ? { externalId: input.externalId } : {}),
-          ...(advanced !== null
-            ? { viewStatus: advanced, ...(reason !== null ? { failedReason: reason } : {}) }
-            : {}),
-          updatedAt: new Date(),
-        })
-        .where(eq(messages.id, current.id));
-
-      // Realtime da ChatList (paridade com o inbound `bumpConversation`): ao ENVIAR
-      // (status 'sent'), bumpa `conversation.last_message_*` para a lista reordenar
-      // e atualizar o preview ao vivo. Antes, NENHUM caminho outbound (operador/IA/
-      // sistema/flow) bumpava → a conversa não subia e o preview ficava no último
-      // inbound. Outbound NÃO mexe em `unread_count`. Monotônico: o `or(isNull, lte)`
-      // evita regredir a ordenação se uma mensagem mais nova já bumpou a conversa
-      // (redelivery / corrida de finalize). `senderType` ∈ domínio de `last_message_from`.
-      if (input.status === 'sent') {
-        await tx
-          .update(conversations)
-          .set({
-            lastMessageId: current.id,
-            lastMessagePreview: outboundPreview(current.content, current.type),
-            lastMessageAt: current.createdAt,
-            lastMessageFrom: current.senderType,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(conversations.id, input.conversationId),
-              or(
-                isNull(conversations.lastMessageAt),
-                lte(conversations.lastMessageAt, current.createdAt),
-              ),
-            ),
-          );
-      }
+      await applyStatus(tx, input, reason);
+      if (input.outbox !== undefined) await enqueueOutbox(tx, input.outbox);
     });
+  }
+}
+
+/** O UPDATE do status (e o bump da conversa) dentro da transação do `persist`. */
+async function applyStatus(
+  tx: DbTx,
+  input: PersistOutboundInput,
+  reason: string | null,
+): Promise<void> {
+  const { messages, conversations } = schema;
+  const [current] = await tx
+    .select({
+      id: messages.id,
+      viewStatus: messages.viewStatus,
+      content: messages.content,
+      type: messages.type,
+      senderType: messages.senderType,
+      createdAt: messages.createdAt,
+    })
+    .from(messages)
+    .where(eq(messages.id, input.messageId))
+    .limit(1);
+  if (current === undefined) return;
+
+  // Monotônico (F52-S04): só avança o view_status (sent<delivered<read;
+  // failed vence). Garante que redelivery de job e reconciliação de órfão
+  // NUNCA regridem o status (ex.: re-gravar `sent` numa msg já `read`).
+  const advanced = nextViewStatus(current.viewStatus, input.status);
+
+  await tx
+    .update(messages)
+    .set({
+      // SEMPRE grava o external_id quando presente, mesmo sem avanço de
+      // status — assim o callback de status passa a casar a mensagem (fecha
+      // a janela do órfão na origem).
+      ...(input.externalId !== undefined ? { externalId: input.externalId } : {}),
+      ...(advanced !== null
+        ? { viewStatus: advanced, ...(reason !== null ? { failedReason: reason } : {}) }
+        : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(messages.id, current.id));
+
+  // Realtime da ChatList (paridade com o inbound `bumpConversation`): ao ENVIAR
+  // (status 'sent'), bumpa `conversation.last_message_*` para a lista reordenar
+  // e atualizar o preview ao vivo. Antes, NENHUM caminho outbound (operador/IA/
+  // sistema/flow) bumpava → a conversa não subia e o preview ficava no último
+  // inbound. Outbound NÃO mexe em `unread_count`. Monotônico: o `or(isNull, lte)`
+  // evita regredir a ordenação se uma mensagem mais nova já bumpou a conversa
+  // (redelivery / corrida de finalize). `senderType` ∈ domínio de `last_message_from`.
+  if (input.status === 'sent') {
+    await tx
+      .update(conversations)
+      .set({
+        lastMessageId: current.id,
+        lastMessagePreview: outboundPreview(current.content, current.type),
+        lastMessageAt: current.createdAt,
+        lastMessageFrom: current.senderType,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(conversations.id, input.conversationId),
+          or(
+            isNull(conversations.lastMessageAt),
+            lte(conversations.lastMessageAt, current.createdAt),
+          ),
+        ),
+      );
   }
 }
