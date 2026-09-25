@@ -2,7 +2,7 @@
 id: F70-S20
 title: Restos da outbox — envios da API v1, message.sent atômico, mídia da coexistência e emissor morto
 phase: F70
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F70-S17, F70-S19]
