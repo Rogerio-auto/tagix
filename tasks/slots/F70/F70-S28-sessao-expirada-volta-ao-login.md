@@ -44,11 +44,11 @@ Quando a sessão termina, o Leadium leva a pessoa para o login com uma mensagem 
 - `apps/api/src/middlewares/auth.ts`
 - `apps/api/src/routes/auth/**`
 - `apps/api/src/socket/**`
-- `apps/web/shared/auth/**`, `apps/web/shared/lib/api-client.ts`, `apps/web/shared/lib/public-routes.ts` *(correção 2026-09-25: o handler central de 401 (F46-S01), o cliente HTTP e a guarda de rota já moram em `shared/`, não em `lib/` — `apps/web/lib/` nem existe)*
-- `apps/web/shared/stores/auth.store.ts` *(correção: a hidratação de `/api/me` é o primeiro 401 de quem abre o app com cookie morto)*
+- `apps/web/shared/auth/**`, `apps/web/shared/lib/api-client.ts`, `apps/web/shared/lib/query-client.ts`, `apps/web/shared/lib/public-routes.ts` *(correção 2026-09-25: o handler central de 401 (F46-S01), o cliente HTTP, o QueryClient que liga os dois e a guarda de rota já moram em `shared/`, não em `lib/`. `apps/web/lib/` nem existe)*
 - `apps/web/shared/realtime/**` *(correção: o `SocketProvider` mora aqui, não em `features/`)*
+- `apps/web/playwright.config.ts` *(correção: a checagem de sessão do middleware roda no servidor, fora do `page.route`; o `webServer` do e2e passa a apontar `API_PROXY_TARGET` para uma porta própria, para o e2e continuar determinístico com a API de dev no ar)*
 - `apps/web/shared/pwa/**`, `apps/web/public/sw-strategy.js` *(correção: o registro do SW e a regra de cache testável da F61-S01 moram fora de `sw.js`)*
-- `apps/api/src/auth/session.ts`, `apps/api/src/auth/routes.ts`, `apps/api/src/auth/session.test.ts`, `apps/api/src/auth/routes.test.ts` *(correção: as rotas `/auth/*` e `/api/me` moram em `apps/api/src/auth/`, não em `routes/auth/`, que não existe)*
+- `apps/api/src/auth/session.ts`, `apps/api/src/auth/index.ts`, `apps/api/src/auth/routes.ts`, `apps/api/src/auth/session.test.ts`, `apps/api/src/auth/routes.test.ts` *(correção: as rotas `/auth/*` e `/api/me` moram em `apps/api/src/auth/`, não em `routes/auth/`, que não existe)*
 
 *(Antes de editar fora da lista, nota de correção no slot, no padrão da F69-S03.)*
 
@@ -70,13 +70,13 @@ Quando a sessão termina, o Leadium leva a pessoa para o login com uma mensagem 
 
 ## Definition of Done
 
-- [ ] teste: rota protegida com cookie inválido → redirect para `/login?next=…`
-- [ ] teste: 401 numa chamada de API → vai ao login uma vez, sem laço
-- [ ] teste: socket não autorizado → sem reconexão infinita, vai ao login
-- [ ] teste do SW: navegação e `/auth/*` nunca do cache; `POST /auth/login` passa direto
-- [ ] teste: login com cookie inválido presente funciona na primeira tentativa
-- [ ] `next` só aceita caminho interno (teste de open redirect)
-- [ ] e2e (Playwright) do fluxo de sessão expirada, se o ambiente permitir; senão, o roteiro manual no slot
+- [x] teste: rota protegida com cookie inválido → redirect para `/login?next=…` *(route-guard.test: `decideRoute`, com motivo e cookie apagado)*
+- [x] teste: 401 numa chamada de API → vai ao login uma vez, sem laço *(session-expiry.test: hidratação, rajada de 4 chamadas → 1 redirect, 401 no `/login` → nenhum)*
+- [x] teste: socket não autorizado → sem reconexão infinita, vai ao login *(session-guard.test + handshake.test da API)*
+- [x] teste do SW: navegação e `/auth/*` nunca do cache; `POST /auth/login` passa direto *(strategy.test: navegação/RSC/`/auth`/`/api/me` `network-only`; `isCacheable` recusa redirect)*
+- [x] teste: login com cookie inválido presente funciona na primeira tentativa *(routes.test da API: 200 + `Set-Cookie` novo substitui o morto)*
+- [x] `next` só aceita caminho interno (teste de open redirect) *(route-guard.test: 11 vetores + `next` para tela pública vira `/`)*
+- [x] e2e (Playwright) do fluxo de sessão expirada, se o ambiente permitir; senão, o roteiro manual no slot *(spec escrita em `e2e/specs/session-expired.spec.ts`; a execução estourou a memória da máquina (OOM do worker com o `next dev` no ar, 8 GB). Roteiro manual abaixo)*
 
 ## Diagnóstico (2026-09-25, reproduzido no dev antes de qualquer correção)
 
@@ -156,3 +156,110 @@ URL. No PWA, só apagar os dados do app resolve.
 senha atual numa sessão válida dispara o handler central e desloga a pessoa. Também: na indisponibilidade
 do Supabase, sem cache, `resolveSession` devolve `null` e a API responde 401. Uma instabilidade do
 provedor vira "sessão terminou" em massa.
+
+## Correção (o que mudou)
+
+### Servidor web: `middleware.ts` → `shared/auth/route-guard.ts`
+
+- A decisão saiu do middleware para uma função pura e testada (`decideRoute`). O middleware virou um adaptador.
+- Sem cookie: redirect para `/login?next=<rota + query>`, como antes, agora com a query preservada.
+- Com cookie, **só na carga de documento** (`Sec-Fetch-Dest: document`; o fallback é o `Accept`), o middleware consulta `GET <API_PROXY_TARGET>/api/me`, com teto de 2,5s:
+  - `401` → redirect de servidor para `/login?next=…&motivo=sessao-expirada`, com o `hm_session` morto **apagado na mesma resposta** e `Cache-Control: no-store`;
+  - `200` → segue;
+  - rede, timeout, 5xx ou 503 → segue (fail-open).
+- Pedidos RSC e prefetch não são checados. Uma checagem por abertura, nenhuma por clique.
+- `PUBLIC_PREFIXES` saiu para `shared/lib/public-routes.ts`, com casamento por segmento: `/loginx` deixou de ser público.
+
+### API
+
+- `resolveSessionStatus` (em `auth/session.ts`) separa `invalid` (o provider disse `null`, ou o member está inativo ou sem workspace) de `unavailable` (o provider lançou erro e não havia cache).
+- `requireAuth` e `/api/me` respondem `401 {error:'session_invalid'}` e `503 {error:'auth_unavailable'}`. Instabilidade do Supabase deixa de deslogar todo mundo.
+- `/auth/login` só emite o cookie **depois** de confirmar member e workspace. Antes, um 403 plantava um cookie inútil. O cookie novo substitui o morto (mesmo nome e mesmo path).
+- Socket: o handshake recusa com `unauthorized` (sessão morta) ou `auth_unavailable`, e o log ganha `reason`.
+
+### Fetch (cliente)
+
+- `api-client` lê o `error` do corpo para `ApiError.code` e avisa um listener único em todo 401 (`setUnauthorizedListener`). O `makeQueryClient` registra o handler central. Os `onError` dos caches continuam como segunda entrada, e o latch garante um único redirect.
+- `session-expiry`: o guard deixa de ser "havia `auth` no store" e passa a ser "401 de sessão numa tela protegida". Tela pública nunca redireciona, e é isso que impede o laço. O 401 `invalid_current_password` não desloga. O redirect leva `motivo=sessao-expirada`.
+- O login mostra "Sua sessão terminou. Entre de novo." (lido no servidor, sem piscar, com tokens `info`). O `next` passa por `postLoginPath`, que é o `safeNextPath` mais a regra de trocar tela pública por `/`.
+
+### Socket (cliente)
+
+- O `SocketProvider` só conecta em tela protegida (`enabled` por rota). O `/login` deixa de gerar `handshake unauthorized`, e o socket nasce de novo, com o cookie novo, quando o login leva à primeira tela.
+- `shared/realtime/session-guard.ts`:
+  - `unauthorized` → `disconnect` e o mesmo `handleSessionExpired`, uma vez, sem reconectar;
+  - outra recusa, com `active=false` → nova tentativa com backoff de 2s a 60s, sem empilhar;
+  - erro de transporte → fica com o socket.io.
+
+### Service worker
+
+- Navegação passa a ser `network-only`, sem `respondWith`: o redirect de sessão é sempre do navegador.
+- `isCacheable` só aceita `basic`, 2xx e sem `redirected`. `opaqueredirect` nunca entra no cache.
+- `VERSAO` passa a `leadium-v2`: o `activate` apaga o cache da v1, que tinha HTML autenticado.
+- A página manda `skip-waiting` ao worker em espera num momento seguro: tela pública ou app em segundo plano (`shared/pwa/sw-update.ts`). A v1 já tinha o handler de mensagem, e quem recebe a mensagem é o worker novo. O kill switch não mudou.
+
+### UX aplicada (UX_PRINCIPLES)
+
+- **§2.7, feedback imediato:** o redirect é de servidor, sem o shell vazio piscar. O botão "Entrar" segue com `loading`.
+- **§2.11, mensagem que explica:** o aviso diz o que houve ("Sua sessão terminou. Entre de novo.") e o que acontece depois ("Você volta para onde estava"). Usa `role="status"` e o tom `info`, não o de erro, porque não é culpa de quem está usando.
+- **§8, paridade mobile/PWA:** o fluxo não depende de barra de endereço nem do menu "Sair", que sumia com `auth=null`.
+
+## Depois do deploy: PWA do Rogério
+
+Não há passo manual. Na primeira abertura com rede, a v1 ainda busca o documento pela rede (é `network-first`), e a navegação cai no middleware novo:
+
+1. o redirect vai para `/login?...&motivo=sessao-expirada` e o cookie morto é apagado;
+2. o JS novo registra o `sw.js` v2;
+3. como a página está numa tela pública, ela manda `skip-waiting`;
+4. a v2 assume e apaga o cache da v1.
+
+Só se o app abrir **sem rede** a v1 pode servir o HTML de ontem. Nesse caso, basta abrir de novo com rede. O kill switch (`sw-kill.json` → `disabled: true`) segue disponível e não é necessário.
+
+## Roteiro e2e manual
+
+A spec automatizada `apps/web/e2e/specs/session-expired.spec.ts` sobe uma "API de sessão" na porta `3199`, que o `webServer` do Playwright usa como `API_PROXY_TARGET`. Rodar numa máquina com memória: `pnpm --filter @hm/web e2e -- e2e/specs/session-expired.spec.ts e2e/specs/auth.spec.ts`.
+
+Roteiro manual equivalente (API e web de dev no ar):
+
+1. **Cookie morto.** No DevTools → Application → Cookies, troque o valor de `hm_session` por `lixo` e abra `/hoje`.
+   - Esperado: um 307 para `/login?next=%2Fhoje&motivo=sessao-expirada`, sem o shell piscar.
+   - Esperado: o aviso "Sua sessão terminou. Entre de novo." e o cookie `hm_session` sumiu.
+2. **Login com o cookie morto.** Repita o passo 1 sem apagar nada e entre com a senha certa.
+   - Esperado: entra na 1ª tentativa e volta para `/hoje`.
+   - Esperado: o socket conecta (Network → WS `101`) e o log da API mostra `socket conectado`, sem nenhum `handshake unauthorized`.
+3. **Sessão revogada com o app aberto.** Com o app em `/conversations`, faça logout em outra aba (`POST /auth/logout`) ou revogue a sessão no Supabase, e navegue ou espere o refetch.
+   - Esperado: um único redirect para `/login?next=%2Fconversations&motivo=sessao-expirada`, sem laço.
+4. **Socket.** Com a sessão revogada, force a reconexão do socket (derrube a API por 5s e suba de novo).
+   - Esperado: um único `handshake unauthorized` com `reason: invalid` no log, e depois o login. Nenhuma tentativa repetida.
+5. **Open redirect.** Abra `/login?next=%2F%2Fevil.example` e entre.
+   - Esperado: cai em `/`, nunca em `evil.example`.
+6. **PWA.** Em `next build && next start` sob HTTPS (ou `localhost`), com o SW registrado:
+   - Application → Service Workers mostra a `leadium-v2` ativa;
+   - com o cookie morto, abrir o app instalado leva ao login e o login funciona;
+   - Network mostra a navegação sem "(ServiceWorker)" e o `POST /auth/login` sem passar pelo worker.
+
+## Validação
+
+Rodado localmente: typecheck do web e da API, ESLint e Prettier nos arquivos tocados, e os vitest abaixo.
+
+- Web: 139 testes em 10 arquivos.
+- API: 48 testes em 4 arquivos, mais os 15 do `socket/relay.test`, rodados à parte. As rotas de auth usam o Postgres de dev.
+- `python scripts/slot.py validate F70-S28`: os 4 comandos abaixo passaram.
+- `next dev` compilou o `middleware` e o `/login` (`GET /login 200`) antes de o worker do Playwright estourar a memória. `next build` não foi rodado, pelo mesmo limite de RAM.
+
+```bash
+pnpm --filter @hm/api typecheck
+pnpm --filter @hm/web typecheck
+node --env-file=.env apps/api/node_modules/vitest/vitest.mjs run --root apps/api src/auth/session.test.ts src/auth/routes.test.ts src/middlewares/impersonation.test.ts src/socket/handshake.test.ts --maxWorkers=1
+node apps/web/node_modules/vitest/vitest.mjs run --root apps/web shared/auth shared/realtime shared/pwa shared/lib --maxWorkers=1
+```
+
+## Pendências e riscos
+
+- **O middleware passa a depender de `API_PROXY_TARGET` em runtime** (`http://api:3001` no compose de produção). Se a variável faltar, a checagem falha aberta: nada quebra, só volta o comportamento antigo na carga a frio, e o handler do cliente ainda leva ao login.
+- **Custo:** um `GET /api/me` interno por carga de documento com cookie. A API tem cache de identidade de 5 min, mas o resto são duas consultas ao banco.
+- **Corrida rara:** uma navegação com o cookie morto numa aba, ao mesmo tempo que o login em outra, pode apagar o cookie novo. A janela é de milissegundos, e o efeito é pedir o login de novo.
+- **Fail-open com o `auth.status === 'error'`** (API fora na abertura): o shell abre sem o menu "Sair", como antes. Fica fora deste slot.
+- **`hm_impersonation` não é apagado** quando a sessão morre. A API valida o claim contra a sessão, então não há risco, só um banner que pode aparecer até o próximo login.
+- **Guarda de plataforma:** `features/platform-admin/lib/guard.ts` usa `NEXT_PUBLIC_API_URL ?? API_INTERNAL_URL ?? localhost:3001`, e nenhuma das duas variáveis existe no compose de produção. Parece apontar para `localhost` em produção. Não é deste slot; vale conferir.
+- **e2e `auth.spec` "credenciais inválidas"** espera "Não foi possível entrar", mas o `LoginForm` mostra "Email ou senha incorretos" no 401. A spec parece já estar desatualizada e não foi mexida aqui. Só a asserção de URL de "deslogado → /login" foi ajustada ao `next`.

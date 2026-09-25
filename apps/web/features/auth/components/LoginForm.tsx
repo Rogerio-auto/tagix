@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Clock } from 'lucide-react';
 import { Button, Input, useToast } from '@hm/ui';
 import { ApiError } from '@/shared/lib/api-client';
-import { safeNextPath } from '@/shared/lib/safe-redirect';
+import { postLoginPath } from '@/shared/auth/route-guard';
 import { loginSchema, type LoginInput } from '../schema';
 import { useLogin } from '../queries';
 
@@ -18,7 +18,15 @@ interface SubmitError {
   description: string;
 }
 
-export function LoginForm() {
+export interface LoginFormProps {
+  /**
+   * A pessoa chegou aqui porque a sessão terminou (`?motivo=sessao-expirada`, F70-S28).
+   * Mostra o aviso ANTES do formulário: sem ele, cair no login do nada parece bug.
+   */
+  sessionExpired?: boolean;
+}
+
+export function LoginForm({ sessionExpired = false }: LoginFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const login = useLogin();
@@ -41,12 +49,12 @@ export function LoginForm() {
         return;
       }
       // Open-redirect guard (T11): lê ?next= do location (client-only, sem Suspense)
-      // e só permite caminho interno same-origin.
+      // e só permite caminho interno same-origin que não seja outra tela pública.
       const rawNext =
         typeof window !== 'undefined'
           ? new URLSearchParams(window.location.search).get('next')
           : null;
-      router.push(safeNextPath(rawNext));
+      router.push(postLoginPath(rawNext));
       router.refresh();
     } catch (err) {
       // UX §2.11: erro com o quê / por quê / o que fazer. Mostrado inline (no
@@ -72,6 +80,19 @@ export function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+      {sessionExpired && !submitError && (
+        <div role="status" className="flex gap-3 rounded-md border border-info/40 bg-info/10 p-3">
+          <Clock className="mt-0.5 size-5 shrink-0 text-info" aria-hidden />
+          <div className="flex flex-col gap-0.5">
+            <p className="font-head text-sm font-semibold text-text">
+              Sua sessão terminou. Entre de novo.
+            </p>
+            <p className="font-body text-sm text-text-mid">
+              Por segurança, o acesso expira depois de um tempo. Você volta para onde estava.
+            </p>
+          </div>
+        </div>
+      )}
       {submitError && (
         <div
           role="alert"

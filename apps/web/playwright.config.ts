@@ -61,6 +61,11 @@ export default defineConfig({
     // `next dev` na porta de teste. O proxy de /api é irrelevante: as fixtures
     // interceptam tudo antes de sair do browser, então a API pode estar offline.
     command: `pnpm --filter @hm/web exec next dev -p ${PORT}`,
+    // F70-S28: o middleware valida a sessão no SERVIDOR (`<API_PROXY_TARGET>/api/me`),
+    // fora do alcance do `page.route`. Apontar para uma porta própria mantém o e2e
+    // determinístico mesmo com a API de dev no ar: sem ninguém ouvindo, a checagem
+    // falha aberta; `specs/session-expired.spec.ts` sobe ali uma API de sessão mínima.
+    env: { API_PROXY_TARGET: process.env['E2E_API_PROXY_TARGET'] ?? 'http://127.0.0.1:3199' },
     url: BASE_URL,
     reuseExistingServer: REUSE_SERVER,
     timeout: 120_000,

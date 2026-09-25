@@ -13,7 +13,9 @@ test.use({ storageState: { cookies: [], origins: [] } });
 test.describe('Autenticação', () => {
   test('deslogado é redirecionado para /login', async ({ page }) => {
     await page.goto('/conversations');
-    await expect(page).toHaveURL(/\/login$/);
+    // O destino volta como `next` (validado no login). Sem cookie não há motivo:
+    // quem nunca entrou não "teve a sessão encerrada".
+    await expect(page).toHaveURL(/\/login\?next=%2Fconversations$/);
     await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   });
 

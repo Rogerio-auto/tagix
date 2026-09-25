@@ -1,6 +1,15 @@
 import { LoginForm } from '@/features/auth/components/LoginForm';
+import { SESSION_EXPIRED_REASON } from '@/shared/auth/route-guard';
 
-export default function LoginPage() {
+interface LoginPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  // F70-S28: `?motivo=sessao-expirada` vem do middleware (cookie morto) ou do handler
+  // central de 401. Lido no servidor para o aviso já vir no HTML, sem piscar.
+  const { motivo } = await searchParams;
+  const sessionExpired = motivo === SESSION_EXPIRED_REASON;
   return (
     // Mobile: card full-width com paddings generosos. md+: largura travada,
     // sem chrome de card (visual original preservado).
@@ -13,7 +22,7 @@ export default function LoginPage() {
       </div>
       <h1 className="mb-1 font-head text-3xl font-semibold text-text">Entrar</h1>
       <p className="mb-6 font-body text-text-mid">Acesse o seu workspace.</p>
-      <LoginForm />
+      <LoginForm sessionExpired={sessionExpired} />
     </div>
   );
 }
