@@ -31,7 +31,11 @@ let workspaceSettings: unknown[] = [{ settings: {} }];
 
 const txExecute = vi.fn(async () => eligibleRows);
 const txSelect = vi.fn();
-const txUpdate = vi.fn(() => ({ set: () => ({ where: () => Promise.resolve() }) }));
+/** Linhas que o UPDATE condicional (trava de origem, F70-S08) devolve. */
+let resumedRows: unknown[] = [{ id: 'conv' }];
+const txUpdate = vi.fn(() => ({
+  set: () => ({ where: () => ({ returning: async () => resumedRows }) }),
+}));
 
 let withWorkspaceImpl: (id: string, fn: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
 
@@ -49,6 +53,7 @@ vi.mock('@hm/db', () => ({
       aiPausedBy: 'ai_paused_by',
       aiResumeAt: 'ai_resume_at',
       updatedAt: 'updated_at',
+      origin: 'origin',
     },
   },
 }));
@@ -156,6 +161,7 @@ beforeEach(() => {
   txExecute.mockClear();
   txSelect.mockClear();
   txUpdate.mockClear();
+  resumedRows = [{ id: 'conv' }];
 
   // Implementação padrão: retorna settings do workspace e depois os elegíveis.
   withWorkspaceImpl = (_id, fn) => {
@@ -175,11 +181,7 @@ beforeEach(() => {
           }),
         }),
       }),
-      update: () => ({
-        set: () => ({
-          where: () => Promise.resolve(),
-        }),
-      }),
+      update: txUpdate,
     };
     return fn(tx);
   };
@@ -325,11 +327,7 @@ describe('runReengagementTick — descoberta cross-tenant', () => {
             }),
           }),
         }),
-        update: () => ({
-          set: () => ({
-            where: () => Promise.resolve(),
-          }),
-        }),
+        update: txUpdate,
       };
       return fn(tx);
     };
@@ -472,5 +470,26 @@ describe('env helpers', () => {
 
   it('reengagementTickMsFromEnv lê REENGAGEMENT_TICK_MS', () => {
     expect(reengagementTickMsFromEnv({ REENGAGEMENT_TICK_MS: '30000' })).toBe(30_000);
+  });
+});
+
+describe('runReengagementTick — trava de origem (F70-S08)', () => {
+  it('UPDATE barrado (origem não elegível) → não publica, conta blockedByOrigin, loga warn', async () => {
+    eligibleRows = [makeEligibleRow({ reason: 'idle' })];
+    resumedRows = [];
+    const d = deps();
+
+    const res = await runReengagementTick(asDeps(d), { workspaceId: WS });
+
+    expect(res.ran).toBe(true);
+    expect(res.enqueued).toBe(0);
+    expect(res.blockedByOrigin).toBe(1);
+    expect(d.channel.published).toHaveLength(0);
+    expect(d.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('trava de origem'),
+      expect.objectContaining({ conversationId: CONV, workspaceId: WS }),
+    );
+    // A marca fica gravada: o próximo tick na mesma janela não repete o log.
+    expect(d.redis.store.has(reengagementMarkKey(CONV, BUCKET))).toBe(true);
   });
 });

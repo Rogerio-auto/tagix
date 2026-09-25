@@ -17,6 +17,14 @@
  * Idempotência: transferir para o agente já atual é no-op gracioso (`ok:true`, sem
  * mutação e sem enqueue).
  *
+ * Trava de origem (F70-S08): a transferência é AUTOMÁTICA (decidida pela IA), então
+ * não pode LIGAR a IA numa conversa sem origem comprovada. O UPDATE é condicional e
+ * atômico: aplica se a origem é elegível (`AI_ELIGIBLE_CONVERSATION_ORIGINS`, a regra
+ * do flow `ai_action`) OU se a IA já está `on` (a transferência só troca o agente —
+ * a conversa já foi ligada por caminho travado ou à mão por um humano). Uma conversa
+ * `off`/`paused` sem origem nunca volta a `on` por aqui: nada muda, nada é
+ * enfileirado, o agente recebe a recusa e o evento é logado.
+ *
  * Cross-dept / escalonamento (D3): ainda não há flag de config de departamento-destino
  * de escalonamento. Por ora restringimos a same-dept; o gancho cross-dept fica como
  * TODO honesto abaixo, para casar com a evolução do plano sem afrouxar a authz agora.
@@ -26,9 +34,11 @@
  */
 import { Buffer } from 'node:buffer';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import { agentDepartmentsRepo, schema } from '@hm/db';
 import type { DbTx } from '@hm/db';
+import { AI_ELIGIBLE_CONVERSATION_ORIGINS } from '@hm/flow-engine';
+import { createLogger, type Logger } from '@hm/logger';
 import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import { CHANNEL_PROVIDERS, type ChannelProvider } from '@hm/shared';
 import type { ToolCallEnvelope, ToolHandler, ToolHandlerResult } from './registry';
@@ -48,6 +58,8 @@ export const transferToAgentArgs = z.object({
 });
 
 export type TransferToAgentArgs = z.infer<typeof transferToAgentArgs>;
+
+const defaultLogger: Logger = createLogger('info', { svc: '@hm/api', tool: 'transfer_to_agent' });
 
 function fail(error: string): ToolHandlerResult {
   return { ok: false, error };
@@ -101,8 +113,10 @@ async function enqueueReengage(
  */
 export function makeTransferToAgentHandler(deps?: {
   reengage?: typeof enqueueReengage;
+  logger?: Logger;
 }): ToolHandler {
   const reengage = deps?.reengage ?? enqueueReengage;
+  const logger = deps?.logger ?? defaultLogger;
 
   return async (env: ToolCallEnvelope, tx: DbTx): Promise<ToolHandlerResult> => {
     const parsed = transferToAgentArgs.safeParse(env.args);
@@ -169,9 +183,30 @@ export function makeTransferToAgentHandler(deps?: {
         aiResumeAt: null,
         updatedAt: new Date(),
       })
-      .where(eq(schema.conversations.id, env.conversationId))
+      .where(
+        and(
+          eq(schema.conversations.id, env.conversationId),
+          // F70-S08 — trava de origem (ver cabeçalho): nunca LIGA a IA sem origem.
+          or(
+            inArray(schema.conversations.origin, [...AI_ELIGIBLE_CONVERSATION_ORIGINS]),
+            eq(schema.conversations.aiMode, 'on'),
+          ),
+        ),
+      )
       .returning({ id: schema.conversations.id });
-    if (updated.length === 0) return fail('Conversa não encontrada.');
+    if (updated.length === 0) {
+      // A conversa existe (lida acima na mesma tx): quem barrou foi a trava.
+      logger.warn('transfer_to_agent recusado pela trava de origem da IA', {
+        workspaceId: env.workspaceId,
+        conversationId: env.conversationId,
+        fromAgentId: env.agentId,
+        targetAgentId,
+        reason: 'origin_not_eligible',
+      });
+      return fail(
+        'Transferência recusada: esta conversa não tem origem comprovada para atendimento automático.',
+      );
+    }
 
     // Re-engaje só dispara com gatilho válido (contato + provider conhecidos).
     const provider = channel?.provider ?? null;

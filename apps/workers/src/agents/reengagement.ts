@@ -45,11 +45,19 @@
  * Aqui apenas limpamos `ai_paused_reason`/`ai_paused_at`/`ai_paused_by` DEPOIS de
  * publicar o envelope (a ordem garante que o runtime ainda lê o motivo antes do
  * update). UPDATE e publish acontecem na mesma transação de workspace.
+ *
+ * **Trava de origem (F70-S08):** retomar é LIGAR a IA automaticamente, então passa
+ * pela mesma regra do flow `ai_action` (`AI_ELIGIBLE_CONVERSATION_ORIGINS`, derivado
+ * de `isAiEligibleOrigin`): o UPDATE é condicional na `origin` da conversa (atômico,
+ * fail-closed — NULL não está no IN). Conversa sem origem comprovada fica `paused`,
+ * o run NÃO é publicado e a recusa é logada uma vez por janela (a marca de
+ * idempotência já foi gravada, então o tick seguinte não repete o log). Um humano
+ * ainda pode religar a IA à mão.
  */
 import { Buffer } from 'node:buffer';
-import { sql } from 'drizzle-orm';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { getDb, schema, withWorkspace } from '@hm/db';
+import { AI_ELIGIBLE_CONVERSATION_ORIGINS } from '@hm/flow-engine';
 import type { DbTx } from '@hm/db';
 import { makeEnvelope, QUEUES, type MqHandle } from '@hm/shared/mq';
 import { CHANNEL_PROVIDERS, type ChannelProvider } from '@hm/shared';
@@ -421,6 +429,7 @@ async function markReengagement(
 /**
  * Retoma a IA na conversa: atualiza `ai_mode='on'` e limpa o estado de pausa.
  * Executado dentro de `withWorkspace` (RLS), antes de publicar o envelope.
+ * Devolve `false` quando a trava de origem barrou (nada mudou).
  *
  * Nota sobre a ordem: o runtime Python (S05) lê `ai_paused_reason` para injetar
  * a diretriz de handoff. Limpamos esses campos APÓS o worker ler — mas como o
@@ -431,8 +440,8 @@ async function resumeAiMode(
   tx: DbTx,
   conversationId: string,
   now: Date,
-): Promise<void> {
-  await tx
+): Promise<boolean> {
+  const resumed = await tx
     .update(schema.conversations)
     .set({
       aiMode: 'on',
@@ -442,7 +451,15 @@ async function resumeAiMode(
       aiResumeAt: null,
       updatedAt: now,
     })
-    .where(eq(schema.conversations.id, conversationId));
+    .where(
+      and(
+        eq(schema.conversations.id, conversationId),
+        // F70-S08 — trava de origem: só retoma conversa com origem comprovada.
+        inArray(schema.conversations.origin, [...AI_ELIGIBLE_CONVERSATION_ORIGINS]),
+      ),
+    )
+    .returning({ id: schema.conversations.id });
+  return resumed.length > 0;
 }
 
 /**
@@ -497,6 +514,8 @@ export interface ReengagementTickResult {
   readonly enqueued: number;
   /** Elegíveis puladas por idempotência (já reengajadas nesta janela). */
   readonly skippedDuplicate: number;
+  /** Elegíveis recusadas pela trava de origem (IA continua pausada) — F70-S08. */
+  readonly blockedByOrigin: number;
 }
 
 /**
@@ -508,7 +527,7 @@ async function tickWorkspace(
   deps: ReengagementDeps,
   now: Date,
   idleMinutes: number,
-): Promise<{ enqueued: number; skipped: number }> {
+): Promise<{ enqueued: number; skipped: number; blocked: number }> {
   return withWorkspace(workspaceId, async (tx) => {
     // Lê as configurações do workspace (business_hours) sob RLS.
     const [ws] = await tx
@@ -524,6 +543,7 @@ async function tickWorkspace(
 
     let enqueued = 0;
     let skipped = 0;
+    let blocked = 0;
     for (const conv of eligible) {
       // Idempotência: SET NX antes de qualquer side-effect.
       const fresh = await markReengagement(deps.redis, conv.conversationId, conv.windowBucket);
@@ -532,8 +552,17 @@ async function tickWorkspace(
         continue;
       }
 
-      // Retoma ai_mode no DB.
-      await resumeAiMode(tx, conv.conversationId, now);
+      // Retoma ai_mode no DB — só com origem comprovada (F70-S08).
+      const resumed = await resumeAiMode(tx, conv.conversationId, now);
+      if (!resumed) {
+        deps.logger.warn('reengajamento: retomada recusada pela trava de origem', {
+          conversationId: conv.conversationId,
+          reason: conv.reason,
+          workspaceId,
+        });
+        blocked += 1;
+        continue;
+      }
 
       // Publica o run (o worker de agentes consome e roda o LangGraph).
       publishReengagementRun(deps.channel, workspaceId, conv);
@@ -545,7 +574,7 @@ async function tickWorkspace(
       });
       enqueued += 1;
     }
-    return { enqueued, skipped };
+    return { enqueued, skipped, blocked };
   });
 }
 
@@ -568,7 +597,7 @@ export async function runReengagementTick(
   );
   if (release === null) {
     deps.logger.debug('reengajamento: tick pulado — lock detido por outra instância');
-    return { ran: false, workspaces: 0, enqueued: 0, skippedDuplicate: 0 };
+    return { ran: false, workspaces: 0, enqueued: 0, skippedDuplicate: 0, blockedByOrigin: 0 };
   }
 
   try {
@@ -579,11 +608,13 @@ export async function runReengagementTick(
 
     let enqueued = 0;
     let skippedDuplicate = 0;
+    let blockedByOrigin = 0;
     for (const workspaceId of targets) {
       try {
         const res = await tickWorkspace(workspaceId, deps, now, idleMinutes);
         enqueued += res.enqueued;
         skippedDuplicate += res.skipped;
+        blockedByOrigin += res.blocked;
       } catch (err: unknown) {
         // Um workspace falho não derruba os demais; o próximo tick recomputa.
         deps.logger.error('reengajamento: tick de workspace falhou', {
@@ -598,11 +629,13 @@ export async function runReengagementTick(
       workspaces: targets.length,
       enqueued,
       skippedDuplicate,
+      blockedByOrigin,
     };
     deps.logger.info('reengajamento: tick concluído', {
       workspaces: result.workspaces,
       enqueued: result.enqueued,
       skippedDuplicate: result.skippedDuplicate,
+      blockedByOrigin: result.blockedByOrigin,
     });
     return result;
   } finally {
