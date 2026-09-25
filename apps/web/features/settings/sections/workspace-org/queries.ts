@@ -304,3 +304,43 @@ export function useSetTeamPeerVisibility() {
     },
   );
 }
+
+// ─── Trava de origem da IA (F70-S30) ──────────────────────────────────────────
+export interface AiOriginLockLastChange {
+  at: string;
+  byName: string | null;
+  byEmail: string | null;
+  previous: boolean;
+  next: boolean;
+}
+
+export interface AiOriginLock {
+  aiRequiresProvenOrigin: boolean;
+  lastChange: AiOriginLockLastChange | null;
+}
+
+export interface AiOriginLockUpdate {
+  aiRequiresProvenOrigin: boolean;
+  changed: boolean;
+  previous: boolean;
+}
+
+export const aiOriginLockKey = ['workspace', 'ai-origin-lock'] as const;
+
+/** GET /api/workspace/ai-origin-lock — estado da trava + última alteração (OWNER/ADMIN). */
+export function useAiOriginLock() {
+  return useQuery({
+    queryKey: aiOriginLockKey,
+    queryFn: () => api.get<AiOriginLock>('/api/workspace/ai-origin-lock'),
+  });
+}
+
+/** PATCH /api/workspace/ai-origin-lock — liga/desliga a trava (auditado no servidor). */
+export function useSetAiOriginLock() {
+  const qc = useQueryClient();
+  return useMutation<AiOriginLockUpdate, Error, boolean>({
+    mutationFn: (aiRequiresProvenOrigin) =>
+      api.patch<AiOriginLockUpdate>('/api/workspace/ai-origin-lock', { aiRequiresProvenOrigin }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: aiOriginLockKey }),
+  });
+}

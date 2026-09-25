@@ -76,6 +76,15 @@ export const workspaces = pgTable(
     locales: jsonb('locales').$type<string[] | null>(),
     logoUrl: text('logo_url'),
     settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
+    /**
+     * Trava de origem da IA (F70-S30). `true` = a IA automática só atende conversa com
+     * origem comprovada (anúncio, site, Instagram) ou ligada por um humano; `false` = a
+     * origem deixa de importar. Coluna própria, NOT NULL DEFAULT true: todo workspace
+     * nasce travado (fail-closed) e os UPDATEs condicionais leem por PK, sem parse de
+     * jsonb. Só é lida pelos predicados de `@hm/flow-engine` (`ai-origin-gate.ts`) e só
+     * muda por `PATCH /api/workspace/ai-origin-lock` (OWNER/ADMIN, auditado).
+     */
+    aiRequiresProvenOrigin: boolean('ai_requires_proven_origin').notNull().default(true),
     // Estado de onboarding/verticalização (F43-S01: ONBOARDING.md §3.1). Coluna
     // dedicada (não dentro de `settings`) para query/observabilidade clara do
     // first-run. niche_key=null → onboarding ainda não aplicado.

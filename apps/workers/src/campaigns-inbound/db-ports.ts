@@ -12,8 +12,9 @@
  *   com a marca de resposta do recipient.
  *
  * F70-S08 — handoffToAgent NAO tem mais UPDATE proprio: liga a IA pelo port de
- * outbound da flow-engine (`setConversationAi`), cujo UPDATE e condicional na
- * `origin` da conversa (trava atomica, fail-closed). Nao existe caminho cru para
+ * outbound da flow-engine (`setConversationAi`), cujo UPDATE e condicional no
+ * predicado unico da trava (`aiOriginGateSql`: configuracao do workspace, F70-S30, e
+ * `origin` da conversa; atomico, fail-closed). Nao existe caminho cru para
  * religar por engano, nem se alguem montar estes ports sem o `gateCampaignAiHandoff`.
  */
 import { and, desc, eq, gte, inArray } from 'drizzle-orm';
@@ -201,8 +202,9 @@ export function createCampaignInboundPorts(
     },
 
     async handoffToAgent(message: InboundMessage, agentId: string): Promise<HandoffResult> {
-      // F70-S08: mesma trava do flow `ai_action` — conversa sem origem comprovada
-      // continua com a IA desligada; a recusa e registrada, o processor segue.
+      // F70-S08/S30: mesma trava do flow `ai_action` — com a trava do workspace ligada,
+      // conversa sem origem comprovada continua com a IA desligada; a recusa e
+      // registrada, o processor segue. Trava desligada: liga.
       const result = await ai.setConversationAi(message.workspaceId, {
         conversationId: message.conversationId,
         aiMode: 'on',

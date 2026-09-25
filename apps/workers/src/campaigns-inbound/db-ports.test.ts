@@ -137,4 +137,22 @@ describe.skipIf(!url)('campaigns-inbound handoffToAgent — port default contra 
   it('origem:anuncio → IA on com o agente da campanha', async () => {
     expect(await handoff('origem:anuncio')).toEqual({ aiMode: 'on', agentId: AGENT, applied: true });
   });
+
+  it('F70-S30: trava do workspace desligada → sem-origem e NULL também ligam', async () => {
+    await getDb()
+      .update(schema.workspaces)
+      .set({ aiRequiresProvenOrigin: false })
+      .where(eq(schema.workspaces.id, WS));
+    try {
+      expect(await handoff('sem-origem')).toEqual({ aiMode: 'on', agentId: AGENT, applied: true });
+      expect(await handoff(null)).toEqual({ aiMode: 'on', agentId: AGENT, applied: true });
+    } finally {
+      await getDb()
+        .update(schema.workspaces)
+        .set({ aiRequiresProvenOrigin: true })
+        .where(eq(schema.workspaces.id, WS));
+    }
+    // Religada, volta a barrar.
+    expect(await handoff('sem-origem')).toEqual({ aiMode: 'off', agentId: null, applied: false });
+  });
 });

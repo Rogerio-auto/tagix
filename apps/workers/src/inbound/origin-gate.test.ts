@@ -548,4 +548,63 @@ describe.skipIf(!url)('F70-S07 origem + atribuição + eco IG + trava da IA (DB)
     expect(paused.aiPausedReason).toBe('human_takeover');
     expect(paused.firstResponseAt).toBeInstanceOf(Date);
   });
+
+  it('F70-S30: trava do workspace desligada → flow ACTIVATE e handoff de campanha ligam a IA sem origem', async () => {
+    await getDb()
+      .update(schema.workspaces)
+      .set({ aiRequiresProvenOrigin: false })
+      .where(eq(schema.workspaces.id, workspaceId));
+    try {
+      // Flow `ai_action`: a classificação da origem não muda, só a trava deixa de barrar.
+      const fromFlow = '5511' + digits.slice(0, 7) + '5';
+      await runInboundPipeline(
+        'meta_whatsapp',
+        waPayload(fromFlow, 'wamid.unlocked.flow.' + sfx, 'oi, quero saber mais'),
+        deps,
+        logger,
+      );
+      const flowConv = await conversationFor(fromFlow);
+      expect(flowConv.origin).toBe('sem-origem');
+      const { result } = await flowActivate(flowConv.id);
+      expect(result.status).toBe('SUCCESS');
+      expect(result).not.toMatchObject({ variables: { ai_activation_blocked: expect.anything() } });
+      expect((await conversationFor(fromFlow)).aiMode).toBe('on');
+
+      // Handoff de campanha: a composição real do inbound (wrapper + port real).
+      const fromCampaign = '5511' + digits.slice(0, 7) + '6';
+      await runInboundPipeline(
+        'meta_whatsapp',
+        waPayload(fromCampaign, 'wamid.unlocked.camp.' + sfx, 'SIM'),
+        deps,
+        logger,
+      );
+      const campConv = await conversationFor(fromCampaign);
+      expect(campConv.origin).toBe('sem-origem');
+      const base: CampaignInboundPorts = {
+        optOutContact: vi.fn(async () => undefined),
+        findRecentDelivery: vi.fn(async () => null),
+        markRecipientResponded: vi.fn(async () => undefined),
+        handoffToAgent: vi.fn(async () => ({ applied: false })),
+      };
+      const gated = gateCampaignAiHandoff(base, outbound, logger);
+      await expect(
+        gated.handoffToAgent(
+          {
+            workspaceId,
+            channelId: campConv.channelId,
+            contactId: campConv.contactId ?? '',
+            conversationId: campConv.id,
+            text: 'SIM',
+          },
+          agentId,
+        ),
+      ).resolves.toEqual({ applied: true });
+      expect(await conversationFor(fromCampaign)).toMatchObject({ aiMode: 'on', agentId });
+    } finally {
+      await getDb()
+        .update(schema.workspaces)
+        .set({ aiRequiresProvenOrigin: true })
+        .where(eq(schema.workspaces.id, workspaceId));
+    }
+  });
 });
