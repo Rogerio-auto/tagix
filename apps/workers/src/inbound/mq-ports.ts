@@ -1,55 +1,41 @@
 /**
- * Implementação default do enfileiramento de mídia do worker inbound via
- * RabbitMQ (F1-S26).
+ * Job de download da mídia recebida (F1-S26 → outbox em F70-S21).
  *
- * Diferente da persistência (que em F1-S26 passou a ser DIRETA via `@hm/db` —
- * ver `db-ports.ts`), a mídia continua saindo por MQ: o media-worker (F1-S10) é
- * um consumer independente. Publica no exchange de eventos (`hm.events`, topic)
- * com a routing key que cai na fila canônica pelo binding de `assertTopology`
- * (`<queue>.#`):
+ * A mensagem inbound com mídia nasce `media_status = pending`; o media-worker (F1-S10)
+ * baixa do provider, sobe pro storage e casa a URL pela `externalId`. O job vai para
+ * `hm.q.media` pela OUTBOX, gravado por `DbInboundPersistence` na MESMA transação que
+ * insere a mensagem:
  *
- * - **Mídia** → RK `hm.q.media.inbound` → cai em `hm.q.media`. O media-worker
- *   baixa do provider, sobe pro storage e casa a URL pela `externalId`. (A spec
- *   do slot chama essa fila de `hm.q.inbound.media`; a fila canônica em
- *   `topology.ts` é `hm.q.media`.)
+ * - commit grava os dois; rollback, nenhum;
+ * - o relay só publica depois do commit — a corrida antiga ("media: mensagem-alvo
+ *   inexistente", quando o job chegava antes da mensagem existir) deixa de ser possível
+ *   por construção;
+ * - mensagem deduplicada (reentrega do envelope) não regrava o job: ele já entrou com
+ *   a primeira inserção.
  *
- * Tudo Zod-friendly: o `Envelope` carrega `payload` estruturado, validado no
- * boundary do consumer (`media/job.ts`).
+ * Antes era publicado no exchange de eventos depois do commit, com o workspace
+ * `UNRESOLVED`; uma queda entre os dois deixava a mídia `pending` para sempre. O
+ * envelope agora leva o workspace real (a RLS `outbox_tenant_insert` exige); o
+ * media-worker não usa o campo.
  */
-import { Buffer } from 'node:buffer';
-import { makeEnvelope, EXCHANGES, QUEUES, type MqHandle } from '@hm/shared/mq';
-import { UNRESOLVED_WORKSPACE_ID } from './worker';
-import type { InboundMediaJob, MediaEnqueuePort } from './ports';
-
-/** Canal AMQP, derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
-type MqChannel = MqHandle['channel'];
+import { makeEnvelope, queueJobOutbox, QUEUES, type OutboxMessage } from '@hm/shared/mq';
+import type { InboundMediaJob } from './ports';
 
 /** Tipo do envelope de job de mídia inbound. */
 export const INBOUND_MEDIA_TYPE = 'inbound.media.requested' as const;
 
-/** Routing key do job de mídia (cai em `hm.q.media`). */
-export const INBOUND_MEDIA_RK = `${QUEUES.media}.inbound` as const;
-
-/** Publica `envelope` no exchange de eventos com a routing key dada. */
-function publishEvent(channel: MqChannel, routingKey: string, type: string, payload: unknown): void {
-  const envelope = makeEnvelope(type, UNRESOLVED_WORKSPACE_ID, payload);
-  channel.publish(EXCHANGES.events, routingKey, Buffer.from(JSON.stringify(envelope)), {
-    persistent: true,
-    contentType: 'application/json',
-  });
-}
-
-/** Enfileiramento de mídia via publish no exchange de eventos (cai em `hm.q.media`). */
-export class MqMediaEnqueue implements MediaEnqueuePort {
-  constructor(private readonly channel: MqChannel) {}
-
-  async enqueue(job: InboundMediaJob): Promise<void> {
-    publishEvent(this.channel, INBOUND_MEDIA_RK, INBOUND_MEDIA_TYPE, {
+/**
+ * Job de mídia → mensagem da outbox (`hm.q.media`, exchange padrão). Payload no shape de
+ * `parseMediaJob` (`media/job.ts`).
+ */
+export function inboundMediaJobOutbox(workspaceId: string, job: InboundMediaJob): OutboxMessage {
+  return queueJobOutbox(
+    QUEUES.media,
+    makeEnvelope(INBOUND_MEDIA_TYPE, workspaceId, {
       provider: job.provider,
       externalId: job.externalId,
       mediaRef: job.mediaRef,
       routing: job.routing,
-    });
-    await Promise.resolve();
-  }
+    }),
+  );
 }

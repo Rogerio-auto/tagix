@@ -33,9 +33,10 @@ vi.mock('@hm/shared/mq', () => ({
   makeEnvelope: (_type: string, _ws: string, payload: unknown) => payload,
 }));
 
-// Mock do publisher outbound (não queremos conectar ao broker real).
+// Mock da gravação do job na outbox (o `tx` daqui é falso; a gravação real é coberta
+// por `messages.outbox.integration.test.ts`).
 vi.mock('../../mq/outbound-publisher', () => ({
-  publishOutboundJob: vi.fn().mockResolvedValue(true),
+  enqueueOutboundJob: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ─── Estado mutável das conversas em memória ──────────────────────────────────

@@ -144,7 +144,6 @@ describe.skipIf(!url)('F70-S07 origem + atribuição + eco IG + trava da IA (DB)
       logger,
     ),
     persistence: new DbInboundPersistence(noopSocket, noopFlow, noopStatusDeps, logger),
-    media: { async enqueue() {} },
     instagramEchoes: createInstagramEchoStep(createCoexistenceDeps(logger)),
   };
 

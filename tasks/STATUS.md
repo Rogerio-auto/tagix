@@ -56,7 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 23     | 2   | 2   | 0   | 0   | 1   | 18   |
+| F70   | 23     | 1   | 2   | 0   | 0   | 1   | 19   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -785,7 +785,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70-S18 | Achados baixos da auditoria pré-deploy — marcadores de origem, referências restantes e guarda do seed           | ✅ done      | medium     | F70-S11                   |
 | F70-S19 | Achados da auditoria que dependem da S15 e da S16 — IA legada, eco, assinatura com timestamp e consumer estrito | ✅ done      | high       | F70-S15, F70-S16          |
 | F70-S20 | Restos da outbox — envios da API v1, message.sent atômico, mídia da coexistência e emissor morto                | ✅ done      | medium     | F70-S17, F70-S19          |
-| F70-S21 | Últimos publicadores pós-commit pela outbox e limpeza do emissor antigo                                         | 🟢 available | medium     | F70-S20                   |
+| F70-S21 | Últimos publicadores pós-commit pela outbox e limpeza do emissor antigo                                         | ✅ done      | medium     | F70-S20                   |
 | F70-S22 | deploy.sh migra antes de subir o código novo                                                                    | ✅ done      | critical   | F70-S20                   |
 | F70-S23 | Tools de contato com allowlist de escrita, auditoria sem PII e execução com prazo                               | 🟢 available | high       | F70-S15                   |
 

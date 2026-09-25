@@ -2,9 +2,14 @@
  * F31-S01 — testes do OutboundPublisher real do worker de flows.
  *
  * Unitarios, sem Postgres/RabbitMQ no loop: injeta storage fake, persistencia fake e
- * `publishJob` fake (captura os jobs). Alem de checar o shape, valida CADA job produzido
- * contra `parseOutboundJob` (a fonte da verdade do worker outbound) — prova que a bridge
- * monta exatamente o que o consumidor exige.
+ * `publishPresenceJob` fake (captura os jobs). Alem de checar o shape, valida CADA job
+ * produzido contra `parseOutboundJob` (a fonte da verdade do worker outbound) — prova que
+ * a bridge monta exatamente o que o consumidor exige.
+ *
+ * F70-S21: o job de envio e montado DENTRO da persistencia (que o grava na outbox, na
+ * transacao da mensagem); a persistencia fake o captura em `outboxJobs`. So a presenca
+ * sai pelo publish direto (`presenceJobs`). O caminho real contra o Postgres fica em
+ * `outbound-publisher.outbox.test.ts`.
  */
 import { describe, expect, it } from 'vitest';
 import { createLogger } from '@hm/logger';
@@ -37,48 +42,65 @@ class FakeStorage implements IStorageDriver {
 interface FakePersistence {
   readonly port: OutboundPersistencePort;
   readonly inserts: PersistOutboundMessageInput[];
+  /** Jobs que a persistencia gravaria na outbox (mesma transacao da mensagem). */
+  readonly outboxJobs: Record<string, unknown>[];
 }
 
-/** Persistencia fake: captura os inserts e devolve canal/remoteId/messageId fixos. */
-function makePersistence(opts?: {
-  conversationExists?: boolean;
-  targetExternalId?: string | null;
-}): FakePersistence {
+/** Persistencia fake: captura os inserts e os jobs; devolve canal/remoteId/messageId fixos. */
+function makePersistence(
+  opts?: {
+    conversationExists?: boolean;
+    targetExternalId?: string | null;
+  },
+  /** Recebe também cada job gravado (a lista combinada do harness). */
+  sink?: Record<string, unknown>[],
+): FakePersistence {
   const inserts: PersistOutboundMessageInput[] = [];
+  const outboxJobs: Record<string, unknown>[] = [];
   const exists = opts?.conversationExists ?? true;
-  const targetExternalId = opts?.targetExternalId === undefined ? 'wamid.IN1' : opts.targetExternalId;
+  const targetExternalId =
+    opts?.targetExternalId === undefined ? 'wamid.IN1' : opts.targetExternalId;
   const port: OutboundPersistencePort = {
-    async persistOutboundMessage(input) {
+    async persistOutboundMessage(input, buildJob) {
       inserts.push(input);
       if (!exists) return null;
-      return { channelId: 'ch-1', remoteId: '5511999990000', messageId: 'msg-1' };
+      const target = { channelId: 'ch-1', remoteId: '5511999990000', messageId: 'msg-1' };
+      const job = buildJob(target);
+      outboxJobs.push(job);
+      sink?.push(job);
+      return target;
     },
     async resolvePresenceTarget() {
       if (!exists) return null;
       return { channelId: 'ch-1', remoteId: '5511999990000', targetExternalId };
     },
   };
-  return { port, inserts };
+  return { port, inserts, outboxJobs };
 }
 
 interface Harness {
   readonly publisher: ReturnType<typeof createOutboundPublisher>;
+  /** Todos os jobs, pela outbox ou pelo publish direto, na ordem. */
   readonly jobs: Record<string, unknown>[];
+  /** Jobs publicados direto (so presenca). */
+  readonly presenceJobs: Record<string, unknown>[];
   readonly emits: OutboundMessageNewEmit[];
   readonly storage: FakeStorage;
   readonly persistence: FakePersistence;
 }
 
 function makeHarness(opts?: Parameters<typeof makePersistence>[0]): Harness {
-  const jobs: Record<string, unknown>[] = [];
+  const presenceJobs: Record<string, unknown>[] = [];
   const emits: OutboundMessageNewEmit[] = [];
   const storage = new FakeStorage();
-  const persistence = makePersistence(opts);
+  const jobs: Record<string, unknown>[] = [];
+  const persistence = makePersistence(opts, jobs);
   const publisher = createOutboundPublisher({
     logger,
     storage,
     persistence: persistence.port,
-    publishJob: async (_ws, job) => {
+    publishPresenceJob: async (_ws, job) => {
+      presenceJobs.push(job);
       jobs.push(job);
       return true;
     },
@@ -86,7 +108,7 @@ function makeHarness(opts?: Parameters<typeof makePersistence>[0]): Harness {
       emits.push(input);
     },
   });
-  return { publisher, jobs, emits, storage, persistence };
+  return { publisher, jobs, presenceJobs, emits, storage, persistence };
 }
 
 describe('createOutboundPublisher.publishMessage', () => {
@@ -105,6 +127,9 @@ describe('createOutboundPublisher.publishMessage', () => {
       text: 'Olá mundo',
     });
     expect(() => parseOutboundJob(job)).not.toThrow();
+    // F70-S21: o job de envio sai pela transacao da persistencia, nunca pelo publish direto.
+    expect(h.persistence.outboxJobs).toHaveLength(1);
+    expect(h.presenceJobs).toHaveLength(0);
     expect(h.persistence.inserts[0]).toMatchObject({ type: 'text', content: 'Olá mundo' });
     // LiveChat em tempo real: emite message:new (direction outbound) ao persistir.
     expect(h.emits).toHaveLength(1);
@@ -277,6 +302,9 @@ describe('createOutboundPublisher.publishPresence', () => {
     expect(typeof job['messageId']).toBe('string');
     expect((job['messageId'] as string).length).toBeGreaterThan(0);
     expect(() => parseOutboundJob(job)).not.toThrow();
+    // Presenca nao grava nada no banco: publish direto, fora da outbox.
+    expect(h.presenceJobs).toHaveLength(1);
+    expect(h.persistence.outboxJobs).toHaveLength(0);
   });
 
   it('recording → presence recording', async () => {

@@ -144,8 +144,9 @@ def hm_webhook():
 - **Relógio.** A janela vale para os dois lados (atrasado ou adiantado). Mantenha o
   relógio do seu servidor sincronizado (NTP).
 - **Implementação de referência:** `verifyWebhookSignature` em
-  `apps/workers/src/webhooks/signature.ts`. É o verificador usado no teste de
-  ponta a ponta.
+  `packages/shared/src/webhook-signature.ts` (reexportado por
+  `apps/workers/src/webhooks/signature.ts`). O mesmo módulo assina as entregas, e o
+  verificador é o usado no teste de ponta a ponta.
 
 <Warning>
   **Mudança de formato (25/09/2026).** Até esta data, `x-hm-signature-256` era o
@@ -153,10 +154,9 @@ def hm_webhook():
   `` `${timestamp}.${corpo}` ``. A troca foi direta, sem período com os dois
   formatos: ainda não havia consumidor em produção, e manter o formato antigo em
   paralelo manteria o replay que a mudança fecha. Um verificador escrito para o
-  formato antigo recusa todas as entregas até ser atualizado. A seção "Verificar a
-  assinatura" de [Webhooks](/guides/webhooks) e a entrega de teste de
-  **Settings → Dev** ainda descrevem e usam o formato antigo; a atualização delas
-  está pendente. Enquanto isso, vale o formato desta página para os eventos reais.
+  formato antigo recusa todas as entregas até ser atualizado. Os eventos reais, a
+  seção "Verificar a assinatura" de [Webhooks](/guides/webhooks) e a entrega de teste
+  de **Settings → Dev** usam o mesmo formato, o desta página.
 </Warning>
 
 ## Dados de cada evento
