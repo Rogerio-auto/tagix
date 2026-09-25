@@ -898,3 +898,11 @@ A liberação é só `atendimento-humano`. Etiqueta de conversão não entra nun
 `UPDATE agent_tools at SET overrides = at.overrides || '{"allowed_tags":["atendimento-humano"]}' FROM tools t WHERE t.id = at.tool_id AND t.key = 'add_contact_tag' AND at.agent_id = '<agente da Arcada>';`
 
 **Resolvido (2026-09-25):** o seed da Arcada (`agent_templates_arcada.ts`) grava as liberações de `tools_agent_grants.ts` (`add_contact_tag` só `atendimento-humano`; `update_contact` nenhum campo). Vínculo existente só recebe a liberação enquanto `overrides` estiver vazio; a edição do operador vence (teste em `agent_templates_arcada.test.ts`). Branch `fix/f70-arcada-seed-grants`.
+
+## Decisões do Rogério — 2026-09-25
+
+- **Direct do Instagram conta como origem comprovada** (achado L2 da auditoria): mantém o comportamento atual; a IA pode atender DM do Instagram.
+- **Trava de origem vira funcionalidade por workspace** (F70-S30): padrão ligado; cliente com número só comercial desliga.
+- **Sonnet 5 entra na lista de modelos** e passa a ser o modelo da Arcada (F70-S31).
+- **Toque de 30 dias da cadência conta a partir de `esfriou`** (dia 37 desde a última mensagem): já é o comportamento da F70-S06.
+- **CI:** o job `e2e` falha desde 22/09 e pula o `deploy`; o hotfix `d774835a` foi para `origin/main` mas não para produção. Correção na F70-S29.
