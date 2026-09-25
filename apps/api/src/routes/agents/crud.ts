@@ -28,7 +28,13 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm';
-import { agentDepartmentsRepo, schema, type DbTx } from '@hm/db';
+import {
+  agentDepartmentsRepo,
+  requireRefsInWorkspace,
+  schema,
+  TenantRefError,
+  type DbTx,
+} from '@hm/db';
 import type { AgentDepartmentItem, DepartmentLink } from '@hm/db';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { createAgentVersionsRouter, recordLivePromptVersion } from './versions';
@@ -111,9 +117,13 @@ const departmentsSchema = z
   });
 
 /**
- * Valida que todos os departamentos referenciados existem, são do workspace e
- * estão ATIVOS (`is_active = 'active'`, não arquivados). Roda dentro da `tx`
- * RLS-escopada, então só enxerga departamentos do tenant corrente.
+ * Valida os departamentos referenciados, em duas etapas:
+ *
+ * 1. Existem NESTE workspace (F70-S18): `requireRefsInWorkspace`, com filtro explícito
+ *    por `workspace_id` além da RLS. Inexistente e de outro workspace respondem igual —
+ *    `TenantRefError` → 422 `invalid_reference` (corpo da F70-S11).
+ * 2. Estão ATIVOS (`is_active = 'active'`). Arquivado é do próprio tenant, então dizer
+ *    "arquivado" não vaza nada: 400 com mensagem própria.
  */
 async function assertDepartmentsValid(
   tx: DbTx,
@@ -121,6 +131,10 @@ async function assertDepartmentsValid(
 ): Promise<void> {
   if (items.length === 0) return;
   const ids = items.map((i) => i.departmentId);
+  await requireRefsInWorkspace(
+    tx,
+    ids.map((id) => ({ kind: 'department' as const, id, field: 'departments' })),
+  );
   const rows = await tx
     .select({ id: schema.departments.id })
     .from(schema.departments)
@@ -130,12 +144,19 @@ async function assertDepartmentsValid(
         eq(schema.departments.isActive, 'active'),
       ),
     );
-  const valid = new Set(rows.map((r) => r.id));
+  const active = new Set(rows.map((r) => r.id.toLowerCase()));
   for (const id of ids) {
-    if (!valid.has(id)) {
-      throw new HttpError(400, 'Departamento inválido, arquivado ou de outro workspace.');
+    if (!active.has(id.toLowerCase())) {
+      throw new HttpError(400, 'Departamento arquivado. Reative-o antes de vincular o agente.');
     }
   }
+}
+
+/** 422 canônico da F70-S11 para referência fora do workspace; `false` = não era esse erro. */
+function sendInvalidReference(res: Response, err: unknown): boolean {
+  if (!(err instanceof TenantRefError)) return false;
+  res.status(422).json(err.body);
+  return true;
 }
 
 /**
@@ -465,6 +486,7 @@ export function createAgentsCrudRouter(): Router {
 
       res.status(201).json({ agent: created });
     } catch (err) {
+      if (sendInvalidReference(res, err)) return;
       if (err instanceof HttpError) {
         res.status(err.status).json({ message: err.message });
         return;
@@ -564,6 +586,7 @@ export function createAgentsCrudRouter(): Router {
       }
       res.json({ agent: result });
     } catch (err) {
+      if (sendInvalidReference(res, err)) return;
       if (err instanceof HttpError) {
         res.status(err.status).json({ message: err.message });
         return;

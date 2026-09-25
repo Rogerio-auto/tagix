@@ -11,11 +11,16 @@
  *
  * RLS por scoped em todas. DELETE é archive (is_active='archived') p/ departments/
  * teams — preserva FKs históricas em conversations/calendars.
+ *
+ * Referências (F70-S18): `departmentId` do time, `departmentIds` dos overrides de
+ * visibilidade e `scopeId` do SLA precisam ser DESTE workspace. A FK ignora RLS, então
+ * a checagem é explícita (`requireRefsInWorkspace`); id de outro workspace responde igual
+ * a id inexistente: 422 `invalid_reference` (corpo da F70-S11).
  */
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { and, asc, eq, inArray } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { and, asc, eq } from 'drizzle-orm';
+import { requireRefsInWorkspace, schema, TenantRefError, type TenantRef } from '@hm/db';
 import { TeamPeerVisibilitySchema, VisibilityPolicySchema } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { param } from '../conversions/types';
@@ -64,6 +69,13 @@ const slaSchema = z.object({
   firstResponseSecs: z.number().int().positive().nullish(),
   resolutionSecs: z.number().int().positive().nullish(),
 });
+
+/** 422 canônico da F70-S11 para referência fora do workspace; `false` = não era esse erro. */
+function sendInvalidReference(res: Response, err: unknown): boolean {
+  if (!(err instanceof TenantRefError)) return false;
+  res.status(422).json(err.body);
+  return true;
+}
 
 function pgErr(err: unknown): string | undefined {
   return typeof err === 'object' && err !== null ? (err as { code?: string }).code : undefined;
@@ -182,8 +194,11 @@ export function createOrgRouter(): Router {
     const workspaceId = req.auth!.workspace.id;
     const d = parsed.data;
     try {
-      const [created] = await req.scoped!((tx) =>
-        tx
+      const [created] = await req.scoped!(async (tx) => {
+        await requireRefsInWorkspace(tx, [
+          { kind: 'department', id: d.departmentId, field: 'departmentId' },
+        ]);
+        return tx
           .insert(teams)
           .values({
             workspaceId,
@@ -192,10 +207,11 @@ export function createOrgRouter(): Router {
             departmentId: d.departmentId ?? null,
             autoAssignStrategy: d.autoAssignStrategy ?? 'manual',
           })
-          .returning(),
-      );
+          .returning();
+      });
       res.status(201).json({ team: created });
     } catch (err) {
+      if (sendInvalidReference(res, err)) return;
       if (pgErr(err) === '23505') {
         res.status(409).json({ error: 'duplicate_name' });
         return;
@@ -214,15 +230,27 @@ export function createOrgRouter(): Router {
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     for (const [k, v] of Object.entries(parsed.data)) if (v !== undefined) patch[k] = v;
     try {
-      const [updated] = await req.scoped!((tx) =>
-        tx.update(teams).set(patch).where(eq(teams.id, id)).returning(),
-      );
+      const updated = await req.scoped!(async (tx) => {
+        // Time alheio/inexistente é 404 ANTES de olhar o payload.
+        const [current] = await tx
+          .select({ id: teams.id })
+          .from(teams)
+          .where(eq(teams.id, id))
+          .limit(1);
+        if (!current) return undefined;
+        await requireRefsInWorkspace(tx, [
+          { kind: 'department', id: parsed.data.departmentId, field: 'departmentId' },
+        ]);
+        const [row] = await tx.update(teams).set(patch).where(eq(teams.id, id)).returning();
+        return row;
+      });
       if (!updated) {
         res.sendStatus(404);
         return;
       }
       res.json({ team: updated });
     } catch (err) {
+      if (sendInvalidReference(res, err)) return;
       if (pgErr(err) === '23505') {
         res.status(409).json({ error: 'duplicate_name' });
         return;
@@ -314,27 +342,38 @@ export function createOrgRouter(): Router {
       return;
     }
     const workspaceId = req.auth!.workspace.id;
-    const [rule] = await req.scoped!((tx) =>
-      tx
-        .insert(slaRules)
-        .values({
-          workspaceId,
-          scopeType: d.scopeType,
-          scopeId: d.scopeId ?? null,
-          firstResponseSecs: d.firstResponseSecs ?? null,
-          resolutionSecs: d.resolutionSecs ?? null,
-        })
-        .onConflictDoUpdate({
-          target: [slaRules.workspaceId, slaRules.scopeType, slaRules.scopeId],
-          set: {
+    // scopeId não tem FK (é polimórfico), mas uma regra apontando para departamento/time de
+    // outro workspace seria lixo silencioso e oráculo de existência: confere pelo escopo.
+    const scopeRefs: TenantRef[] =
+      d.scopeType === 'workspace' ? [] : [{ kind: d.scopeType, id: d.scopeId, field: 'scopeId' }];
+    let rule: typeof slaRules.$inferSelect | undefined;
+    try {
+      [rule] = await req.scoped!(async (tx) => {
+        await requireRefsInWorkspace(tx, scopeRefs);
+        return tx
+          .insert(slaRules)
+          .values({
+            workspaceId,
+            scopeType: d.scopeType,
+            scopeId: d.scopeId ?? null,
             firstResponseSecs: d.firstResponseSecs ?? null,
             resolutionSecs: d.resolutionSecs ?? null,
-            isActive: 'active',
-            updatedAt: new Date(),
-          },
-        })
-        .returning(),
-    );
+          })
+          .onConflictDoUpdate({
+            target: [slaRules.workspaceId, slaRules.scopeType, slaRules.scopeId],
+            set: {
+              firstResponseSecs: d.firstResponseSecs ?? null,
+              resolutionSecs: d.resolutionSecs ?? null,
+              isActive: 'active',
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
+      });
+    } catch (err: unknown) {
+      if (sendInvalidReference(res, err)) return;
+      throw err;
+    }
     res.json({ rule });
   });
 
@@ -445,55 +484,55 @@ export function createOrgRouter(): Router {
       const memberId = param(req, 'id');
       const workspaceId = req.auth!.workspace.id;
       const actorMemberId = req.auth!.member.id;
-      const desired = Array.from(new Set(parsed.data.departmentIds));
+      // Dedup em minúsculas: o mesmo UUID em caixas diferentes é o mesmo departamento.
+      const desired = Array.from(new Set(parsed.data.departmentIds.map((d) => d.toLowerCase())));
 
-      const outcome = await req.scoped!(async (tx) => {
-        const [member] = await tx
-          .select({ id: members.id })
-          .from(members)
-          .where(eq(members.id, memberId))
-          .limit(1);
-        if (!member) return { ok: false as const, reason: 'not_found' as const };
-        // Departamentos têm de existir NESTE workspace (RLS filtra os de fora).
-        if (desired.length > 0) {
-          const found = await tx
-            .select({ id: departments.id })
-            .from(departments)
-            .where(inArray(departments.id, desired));
-          if (found.length !== desired.length)
-            return { ok: false as const, reason: 'invalid_department' as const };
-        }
-        const before = await tx
-          .select({ departmentId: memberVisibilityOverrides.departmentId })
-          .from(memberVisibilityOverrides)
-          .where(eq(memberVisibilityOverrides.memberId, memberId));
-        const oldIds = before.map((r) => r.departmentId);
+      let found: boolean;
+      try {
+        found = await req.scoped!(async (tx) => {
+          const [member] = await tx
+            .select({ id: members.id })
+            .from(members)
+            .where(eq(members.id, memberId))
+            .limit(1);
+          // Membro alheio/inexistente é 404 ANTES de olhar o payload.
+          if (!member) return false;
+          // F70-S18: departamentos DESTE workspace (filtro explícito além da RLS). Id de
+          // outro workspace = id inexistente = 422 `invalid_reference`.
+          await requireRefsInWorkspace(
+            tx,
+            desired.map((id) => ({ kind: 'department' as const, id, field: 'departmentIds' })),
+          );
+          const before = await tx
+            .select({ departmentId: memberVisibilityOverrides.departmentId })
+            .from(memberVisibilityOverrides)
+            .where(eq(memberVisibilityOverrides.memberId, memberId));
+          const oldIds = before.map((r) => r.departmentId);
 
-        await tx
-          .delete(memberVisibilityOverrides)
-          .where(eq(memberVisibilityOverrides.memberId, memberId));
-        if (desired.length > 0) {
           await tx
-            .insert(memberVisibilityOverrides)
-            .values(desired.map((departmentId) => ({ workspaceId, memberId, departmentId })));
-        }
-        await tx.insert(auditLogs).values({
-          workspaceId,
-          actorMemberId,
-          actorType: 'member',
-          action: VISIBILITY_AUDIT_ACTION,
-          resourceType: 'member_visibility_overrides',
-          resourceId: memberId,
-          metadata: { scope: 'member', memberId, old: oldIds, new: desired },
+            .delete(memberVisibilityOverrides)
+            .where(eq(memberVisibilityOverrides.memberId, memberId));
+          if (desired.length > 0) {
+            await tx
+              .insert(memberVisibilityOverrides)
+              .values(desired.map((departmentId) => ({ workspaceId, memberId, departmentId })));
+          }
+          await tx.insert(auditLogs).values({
+            workspaceId,
+            actorMemberId,
+            actorType: 'member',
+            action: VISIBILITY_AUDIT_ACTION,
+            resourceType: 'member_visibility_overrides',
+            resourceId: memberId,
+            metadata: { scope: 'member', memberId, old: oldIds, new: desired },
+          });
+          return true;
         });
-        return { ok: true as const };
-      });
-
-      if (!outcome.ok) {
-        if (outcome.reason === 'invalid_department') {
-          res.status(400).json({ error: 'invalid_department' });
-          return;
-        }
+      } catch (err: unknown) {
+        if (sendInvalidReference(res, err)) return;
+        throw err;
+      }
+      if (!found) {
         res.sendStatus(404);
         return;
       }
