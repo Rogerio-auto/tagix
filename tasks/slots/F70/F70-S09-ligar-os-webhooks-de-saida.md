@@ -45,6 +45,7 @@ O Leadium avisar outros sistemas (o Rogério OS em primeiro lugar) quando algo a
 - `apps/workers/src/inbound/db-ports.ts` *(correção: `message.received` e `conversation.opened` depois do commit da persistência inbound)*
 - `apps/workers/src/outbound/finalize.ts` *(correção: `message.sent` — está no catálogo e hoje nunca dispara, mesmo defeito deste slot)*
 - `docs/api-reference/guides/webhook-events.mdx` *(correção: catálogo público com `conversation.handoff` e o formato de cada evento)*
+- `apps/api/src/routes/conversations/state.test.ts`, `apps/api/src/routes/conversations/__tests__/cycle-timestamps.integration.test.ts` *(correção: o mock de `@hm/shared/mq` desses testes não conhecia o emissor de eventos de domínio que `state.ts` passou a usar; o primeiro ganha os casos de `conversation.resolved`/reabertura)*
 
 ## Escopo (faz)
 

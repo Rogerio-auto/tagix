@@ -20,6 +20,7 @@ import { triggerFlow } from '@hm/flow-engine';
 import { moveDealToStage, TransitionError } from '../../services/deal-move';
 import { createEvent, EventServiceError } from '../../services/event-service';
 import { registerConversion } from '../conversions/register';
+import { conversionRegisteredFromRow, domainEvents, emitDomainEvent } from '@hm/shared/mq';
 import swaggerUi from 'swagger-ui-express';
 import { requireApiKey, requireScope } from '../../middlewares/api-key';
 import { publishOutboundJob } from '../../mq/outbound-publisher';
@@ -483,6 +484,18 @@ export function createV1Router(): Router {
         const out = await withWorkspace(workspaceId, (tx) =>
           moveDealToStage(tx, { dealId: id, newStageId: stageId, workspaceId, actor: { type: 'api' } }),
         );
+        // F70-S09: webhooks de saída, pós-commit; mover para o mesmo estágio é no-op.
+        if (out.fromStageId !== out.toStageId) {
+          void emitDomainEvent(
+            domainEvents.dealStageChanged(workspaceId, {
+              dealId: out.deal.id,
+              pipelineId: out.deal.pipelineId,
+              fromStageId: out.fromStageId,
+              toStageId: out.toStageId,
+              actorType: 'api',
+            }),
+          );
+        }
         res.json({ deal: withAdAttribution(out.deal), fromStageId: out.fromStageId, toStageId: out.toStageId });
       } catch (err: unknown) {
         if (err instanceof TransitionError) {
@@ -567,6 +580,8 @@ export function createV1Router(): Router {
         res.status(200).json({ status: 'deduped', conversion: null });
         return;
       }
+      // F70-S09: conversão nova vira evento de domínio, pós-commit.
+      void emitDomainEvent(conversionRegisteredFromRow(workspaceId, result.event));
       res.status(201).json({ status: 'created', conversion: result.event });
     },
   );

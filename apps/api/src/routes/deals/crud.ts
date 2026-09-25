@@ -27,6 +27,12 @@ import {
 } from '../../services/deal-move';
 import { emitDealCreated, emitDealUpdated } from '../../services/deal-events';
 import {
+  dealClosedFromRow,
+  dealCreatedFromRow,
+  domainEvents,
+  emitDomainEvent,
+} from '@hm/shared/mq';
+import {
   loadContactReadThrough,
   loadConversationAdAttribution,
 } from '../pipeline/deal-conversation';
@@ -139,7 +145,11 @@ export function createDealsCrudRouter(): Router {
       }
       return created;
     });
-    if (result) void emitDealCreated({ workspaceId, deal: result });
+    if (result) {
+      void emitDealCreated({ workspaceId, deal: result });
+      // F70-S09: webhooks de saída, pós-commit (o emissor nunca lança).
+      void emitDomainEvent(dealCreatedFromRow(workspaceId, result));
+    }
     res.status(201).json({ deal: result });
   });
 
@@ -204,6 +214,18 @@ export function createDealsCrudRouter(): Router {
           workspaceId,
         }),
       );
+      // F70-S09: movimento real (não o no-op para o mesmo estágio), pós-commit.
+      if (result.fromStageId !== result.toStageId) {
+        void emitDomainEvent(
+          domainEvents.dealStageChanged(workspaceId, {
+            dealId: result.deal.id,
+            pipelineId: result.deal.pipelineId,
+            fromStageId: result.fromStageId,
+            toStageId: result.toStageId,
+            actorType: 'member',
+          }),
+        );
+      }
       res.json({ deal: result.deal, fromStageId: result.fromStageId, toStageId: result.toStageId });
     } catch (err: unknown) {
       if (err instanceof TransitionError) {
@@ -303,5 +325,8 @@ async function closeDeal(
     res.sendStatus(404);
     return;
   }
+  // F70-S09: deal.won / deal.lost, pós-commit. A ocorrência é o `closed_at` gravado.
+  const closed = dealClosedFromRow(workspaceId, won, updated);
+  if (closed) void emitDomainEvent(closed);
   res.json({ deal: updated });
 }

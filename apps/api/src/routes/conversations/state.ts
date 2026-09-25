@@ -27,7 +27,13 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { eq, sql } from 'drizzle-orm';
 import { assertConversationVisible, schema } from '@hm/db';
-import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
+import {
+  connectMq,
+  domainEvents,
+  emitDomainEvent,
+  makeEnvelope,
+  type MqHandle,
+} from '@hm/shared/mq';
 import {
   AiModeSchema,
   AiPausedReasonSchema,
@@ -177,7 +183,12 @@ export function createConversationStateRouter(): Router {
           return { notFound: true } as const;
         }
         const [conversation] = await tx
-          .select({ assignedTo: schema.conversations.assignedTo })
+          .select({
+            assignedTo: schema.conversations.assignedTo,
+            status: schema.conversations.status,
+            contactId: schema.conversations.contactId,
+            channelId: schema.conversations.channelId,
+          })
           .from(schema.conversations)
           .where(eq(schema.conversations.id, conversationId))
           .limit(1);
@@ -197,7 +208,7 @@ export function createConversationStateRouter(): Router {
             updatedAt: new Date(),
           })
           .where(eq(schema.conversations.id, conversationId));
-        return { ok: true } as const;
+        return { ok: true, before: conversation } as const;
       });
 
       if ('notFound' in result) {
@@ -207,6 +218,30 @@ export function createConversationStateRouter(): Router {
       if ('forbidden' in result) {
         res.status(403).json({ message: 'Conversa não atribuída a você.' });
         return;
+      }
+
+      // F70-S09: eventos de domínio (webhooks de saída), pós-commit. Só transições
+      // reais: resolver o que já estava resolvido, ou "abrir" o que já estava
+      // aberto, não avisa ninguém. O emissor nunca lança.
+      const before = result.before;
+      if (status === 'resolved' && before.status !== 'resolved') {
+        void emitDomainEvent(
+          domainEvents.conversationResolved(workspaceId, {
+            conversationId,
+            resolvedBy: 'member',
+            memberId,
+            agentId: null,
+          }),
+        );
+      } else if (status === 'open' && (before.status === 'resolved' || before.status === 'closed')) {
+        void emitDomainEvent(
+          domainEvents.conversationOpened(workspaceId, {
+            conversationId,
+            contactId: before.contactId ?? null,
+            channelId: before.channelId ?? null,
+            trigger: 'reopened',
+          }),
+        );
       }
 
       const payload: ConversationStateChangedPayload = { conversationId, status };

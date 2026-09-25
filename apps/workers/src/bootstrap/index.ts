@@ -25,7 +25,7 @@ import {
   closeDomainEventEmitter,
   connectMq,
   consume,
-  domainEvents,
+  conversionRegisteredFromRow,
   emitDomainEvent,
   getMqHealth,
   QUEUES,
@@ -413,18 +413,7 @@ export async function startWorkers(
       });
       // F70-S09: conversão NOVA vira evento de domínio, depois do commit.
       if (created) {
-        await emitDomainEvent(
-          domainEvents.conversionRegistered(workspaceId, {
-            conversionId: created.id,
-            conversionTypeId: created.conversionTypeId,
-            contactId: created.contactId,
-            conversationId: created.conversationId ?? null,
-            dealId: created.dealId ?? null,
-            valueCents: created.valueCents ?? null,
-            currency: created.currency,
-            source: created.source,
-          }),
-        );
+        await emitDomainEvent(conversionRegisteredFromRow(workspaceId, created));
       }
     },
   };

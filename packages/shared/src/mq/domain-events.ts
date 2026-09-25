@@ -398,6 +398,77 @@ export const domainEvents = {
   },
 } as const;
 
+// ─── A partir das linhas do banco (um mapeamento, vários produtores) ──────────
+
+/** Recorte estrutural de `deals` que os eventos de deal usam. */
+export interface DealRowForEvent {
+  readonly id: string;
+  readonly pipelineId: string;
+  readonly stageId: string;
+  readonly contactId: string;
+  readonly conversationId: string | null;
+  readonly valueCents: number;
+  readonly currency: string;
+  readonly closedAt: Date | null;
+}
+
+/** Recorte estrutural de `conversion_events`. */
+export interface ConversionRowForEvent {
+  readonly id: string;
+  readonly conversionTypeId: string;
+  readonly contactId: string;
+  readonly conversationId: string | null;
+  readonly dealId: string | null;
+  readonly valueCents: number | null;
+  readonly currency: string;
+  readonly source: string;
+}
+
+export function dealCreatedFromRow(workspaceId: string, deal: DealRowForEvent): DomainEventDraft {
+  return domainEvents.dealCreated(workspaceId, {
+    dealId: deal.id,
+    pipelineId: deal.pipelineId,
+    stageId: deal.stageId,
+    contactId: deal.contactId,
+    conversationId: deal.conversationId,
+    valueCents: deal.valueCents,
+    currency: deal.currency,
+  });
+}
+
+/** Fechamento ganho/perdido. `null` se a linha não está fechada (defeito do caller). */
+export function dealClosedFromRow(
+  workspaceId: string,
+  won: boolean,
+  deal: DealRowForEvent,
+): DomainEventDraft | null {
+  if (deal.closedAt === null) return null;
+  return domainEvents.dealClosed(workspaceId, won, deal.closedAt, {
+    dealId: deal.id,
+    pipelineId: deal.pipelineId,
+    stageId: deal.stageId,
+    contactId: deal.contactId,
+    valueCents: deal.valueCents,
+    currency: deal.currency,
+  });
+}
+
+export function conversionRegisteredFromRow(
+  workspaceId: string,
+  row: ConversionRowForEvent,
+): DomainEventDraft {
+  return domainEvents.conversionRegistered(workspaceId, {
+    conversionId: row.id,
+    conversionTypeId: row.conversionTypeId,
+    contactId: row.contactId,
+    conversationId: row.conversationId,
+    dealId: row.dealId,
+    valueCents: row.valueCents,
+    currency: row.currency,
+    source: row.source,
+  });
+}
+
 // ─── Emissor do processo (conexão preguiçosa, nunca lança) ────────────────────
 
 /** Transporte substituível (teste): recebe a routing key e o envelope pronto. */

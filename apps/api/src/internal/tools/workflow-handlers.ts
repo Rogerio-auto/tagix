@@ -12,10 +12,19 @@
  *  - escalate → registrado em `tool_logs` (sem tabela de notificações ainda; auditável).
  *  - register_conversion → respeita `allow_agent_conversions`; registra de verdade via o
  *    serviço de conversões (F5-S12). Fecha o stub-até-F5 de F2-S20.
+ *
+ * Eventos de domínio (F70-S09): cada ação devolve `events` como dado; o router publica
+ * depois do commit (`conversation.handoff`, `conversation.resolved`,
+ * `conversion.registered`, `deal.stage_changed`).
  */
 import { z } from 'zod';
 import { eq, sql } from 'drizzle-orm';
 import { schema } from '@hm/db';
+import {
+  conversionRegisteredFromRow,
+  domainEvents,
+  type DomainEventDraft,
+} from '@hm/shared/mq';
 import {
   createDefaultRegistry,
   type ToolCallEnvelope,
@@ -32,6 +41,16 @@ import { transferToAgent } from './agent-transfer-handlers';
 
 function fail(error: string): ToolHandlerResult {
   return { ok: false, error };
+}
+
+/** `conversation.resolved` quando a IA resolve (autor = agente). */
+function resolvedByAgent(env: ToolCallEnvelope, conversationId: string): DomainEventDraft {
+  return domainEvents.conversationResolved(env.workspaceId, {
+    conversationId,
+    resolvedBy: 'agent',
+    memberId: null,
+    agentId: env.agentId,
+  });
 }
 
 /**
@@ -87,6 +106,20 @@ const transferToHuman: ToolHandler = async (env, tx) => {
     action: 'transfer_to_human',
     tableName: 'conversations',
     payload: { aiMode: 'off', status: 'pending' },
+    // F70-S09: a IA pediu humano. Payload mínimo — o `reason` (texto livre do
+    // modelo) fica só no tool_log. Ocorrência = execução: repetir a tool na mesma
+    // execução não avisa duas vezes.
+    events: [
+      domainEvents.conversationHandoff(
+        env.workspaceId,
+        {
+          conversationId: env.conversationId,
+          agentId: env.agentId,
+          departmentId: parsed.data.department_id ?? null,
+        },
+        env.executionId,
+      ),
+    ],
   };
 };
 
@@ -125,6 +158,7 @@ const markResolved: ToolHandler = async (env, tx) => {
     action: 'mark_resolved',
     tableName: 'conversations',
     payload: { status: 'resolved' },
+    events: [resolvedByAgent(env, env.conversationId)],
   };
 };
 
@@ -149,6 +183,9 @@ const changeConversationStatus: ToolHandler = async (env, tx) => {
     action: 'change_conversation_status',
     tableName: 'conversations',
     payload: { status: parsed.data.target_status },
+    ...(parsed.data.target_status === 'resolved'
+      ? { events: [resolvedByAgent(env, env.conversationId)] }
+      : {}),
   };
 };
 
@@ -205,6 +242,7 @@ const registerConversion: ToolHandler = async (env, tx) => {
         action: 'register_conversion',
         tableName: 'conversion_events',
         payload: { conversionEventId: result.event.id },
+        events: [conversionRegisteredFromRow(env.workspaceId, result.event)],
       };
     case 'deduped':
       return {
@@ -267,6 +305,20 @@ const moveDealStage: ToolHandler = async (env, tx) => {
         fromStageId: result.fromStageId,
         toStageId: result.toStageId,
       },
+      // Mover para o estágio onde o deal já está é no-op: sem evento.
+      ...(result.fromStageId !== result.toStageId
+        ? {
+            events: [
+              domainEvents.dealStageChanged(env.workspaceId, {
+                dealId: result.deal.id,
+                pipelineId: result.deal.pipelineId,
+                fromStageId: result.fromStageId,
+                toStageId: result.toStageId,
+                actorType: 'agent',
+              }),
+            ],
+          }
+        : {}),
     };
   } catch (err: unknown) {
     if (err instanceof TransitionError) return fail(err.message);
