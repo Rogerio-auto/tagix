@@ -2,7 +2,7 @@
 id: F70-S13
 title: conversation.opened em todos os caminhos de criação e handoff de campanha honesto
 phase: F70
-status: available
+status: in-progress
 priority: medium
 estimated_size: S
 depends_on: [F70-S09]
@@ -10,6 +10,9 @@ blocks: []
 source_docs:
   - tasks/slots/F70/F70-S09-ligar-os-webhooks-de-saida.md
   - tasks/slots/F70/F70-S08-defesa-em-profundidade-da-trava-da-ia.md
+agent_id: backend-engineer
+claimed_at: 2026-09-25T04:23:34Z
+
 ---
 # F70-S13 — conversation.opened em todos os caminhos de criação e handoff de campanha honesto
 
