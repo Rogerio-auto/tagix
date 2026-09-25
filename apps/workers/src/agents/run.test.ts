@@ -170,6 +170,9 @@ describe('buildRunRequest', () => {
     channelId: 'ch1',
     contactId: '00000000-0000-0000-0000-0000000000f1',
     aiMode: 'on',
+    origin: 'origem:anuncio',
+    aiEnabledAt: null,
+    aiAutoEnabledAt: null,
     agentId: '00000000-0000-0000-0000-0000000000a1',
     agentStatus: 'active',
     userInput: 'quero falar com alguém',
@@ -245,6 +248,8 @@ describe.skipIf(!url)('runAgent entrega as tools habilitadas ao runtime (DB, F70
       contactId: CONTACT,
       remoteId: `r-${CONV.slice(0, 12)}`,
       aiMode: 'on',
+      // F70-S19: o worker só responde com origem elegível (ou marca humana).
+      origin: 'origem:anuncio',
       agentId: AGENT,
     });
     await db.insert(schema.messages).values({

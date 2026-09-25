@@ -5,12 +5,16 @@
  *     → hm.q.webhooks → consumer (startWebhookFanoutWorker) → fanoutEvent (Postgres)
  *     → dispatchPending (ssrfSafeFetch real) → receptor HTTP local
  *
- * O receptor verifica `x-hm-signature-256` como um cliente de verdade: HMAC-SHA256
- * do CORPO CRU com o segredo do endpoint, comparação em tempo constante. Cobre:
+ * O receptor verifica a assinatura como um cliente de verdade, com o verificador de
+ * referência (`verifyWebhookSignature`, F70-S19): HMAC-SHA256 de
+ * `${x-hm-timestamp}.${corpo cru}` com o segredo do endpoint, janela de 5 minutos,
+ * comparação em tempo constante. Cobre:
  *   - entrega de evento real assinado (message.received, conversation.handoff);
  *   - retentativa HTTP: 500 → `retrying` → 200 → `sent`, mesma assinatura;
  *   - dedup: o mesmo evento publicado duas vezes vira UMA entrega;
- *   - retentativa na fila: fan-out que falha volta pela wait-queue e entrega.
+ *   - retentativa na fila: fan-out que falha volta pela wait-queue e entrega;
+ *   - replay: a entrega capturada é recusada fora da janela (F70-S19);
+ *   - contrato: evento com `data` fora do contrato vai para a DLQ, sem entrega (F70-S19).
  *
  * Requer Postgres/RabbitMQ de dev (`infra/docker/docker-compose.dev.yml`) e o .env
  * da raiz. O receptor escuta em 127.0.0.1, liberado só aqui pela allowlist do
@@ -19,7 +23,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -53,8 +57,12 @@ import {
   assertTopology,
   closeDomainEventEmitter,
   connectMq,
+  DLQ_QUEUE,
+  domainEventRoutingKey,
   domainEvents,
   emitDomainEvent,
+  EXCHANGES,
+  makeEnvelope,
   type DomainEventDraft,
 } from '@hm/shared/mq';
 import {
@@ -62,6 +70,9 @@ import {
   fanoutEvent,
   SIGNATURE_HEADER,
   startWebhookFanoutWorker,
+  TIMESTAMP_HEADER,
+  verifyWebhookSignature,
+  WEBHOOK_TOLERANCE_SECONDS,
   type WebhookEvent,
   type WebhookFanoutWorkerHandle,
 } from './index';
@@ -76,6 +87,10 @@ interface Received {
   readonly event: string | undefined;
   readonly signatureValid: boolean;
   readonly body: Record<string, unknown>;
+  /** Captura crua (para o teste de replay). */
+  readonly raw: Buffer;
+  readonly signature: string | undefined;
+  readonly timestamp: string | undefined;
 }
 
 const received: Received[] = [];
@@ -91,14 +106,8 @@ function readRaw(req: IncomingMessage): Promise<Buffer> {
   });
 }
 
-/** Verificação do lado do cliente: HMAC do corpo cru + comparação em tempo constante. */
-function verifySignature(raw: Buffer, header: string | undefined): boolean {
-  const expected = Buffer.from(
-    `sha256=${createHmac('sha256', SECRET).update(raw).digest('hex')}`,
-    'utf8',
-  );
-  const got = Buffer.from(header ?? '', 'utf8');
-  return got.length === expected.length && timingSafeEqual(got, expected);
+function headerValue(value: string | string[] | undefined): string | undefined {
+  return typeof value === 'string' ? value : undefined;
 }
 
 let server: Server;
@@ -108,12 +117,16 @@ function startReceiver(): Promise<void> {
   server = createServer((req, res) => {
     void (async () => {
       const raw = await readRaw(req);
-      const sigHeader = req.headers[SIGNATURE_HEADER];
-      const eventHeader = req.headers['x-hm-event'];
+      const signature = headerValue(req.headers[SIGNATURE_HEADER]);
+      const timestamp = headerValue(req.headers[TIMESTAMP_HEADER]);
       received.push({
-        event: typeof eventHeader === 'string' ? eventHeader : undefined,
-        signatureValid: verifySignature(raw, typeof sigHeader === 'string' ? sigHeader : undefined),
+        event: headerValue(req.headers['x-hm-event']),
+        // Verificação do lado do cliente, com o verificador de referência.
+        signatureValid: verifyWebhookSignature({ secret: SECRET, body: raw, signature, timestamp }).ok,
         body: JSON.parse(raw.toString('utf8')) as Record<string, unknown>,
+        raw,
+        signature,
+        timestamp,
       });
       res.statusCode = plannedStatuses.shift() ?? 200;
       res.end(res.statusCode >= 400 ? 'boom' : 'ok');
@@ -264,6 +277,7 @@ describe('webhooks de saída — ponta a ponta (F70-S09)', () => {
     expect(received).toHaveLength(2);
     for (const r of received) {
       expect(r.signatureValid).toBe(true);
+      expect(r.timestamp).toMatch(/^\d{10}$/);
       expect(r.event).toBe('message.received');
       expect(r.body['messageId']).toBe((draft.data as { messageId: string }).messageId);
       expect(r.body['text']).toBe('Oi, quero agendar');
@@ -370,5 +384,97 @@ describe('webhooks de saída — ponta a ponta (F70-S09)', () => {
     expect(received).toHaveLength(1);
     expect(received[0]?.event).toBe('deal.won');
     expect(received[0]?.signatureValid).toBe(true);
+  }, 30_000);
+
+  it('replay: a entrega capturada é recusada fora da janela de 5 minutos (F70-S19)', async () => {
+    const draft = messageReceived();
+    received.length = 0;
+
+    expect(await emitDomainEvent(draft)).toBe(true);
+    await waitFor(deliveriesOf(draft.eventId), (r) => r.length === 1, 10_000);
+    await dispatchPending({ logger, workspaceId: ws });
+    expect(received).toHaveLength(1);
+    const captured = received[0]!;
+    expect(captured.signatureValid).toBe(true);
+
+    // O atacante reenvia os mesmos bytes e headers depois da janela.
+    const sentAt = Number(captured.timestamp) * 1000;
+    const replay = verifyWebhookSignature({
+      secret: SECRET,
+      body: captured.raw,
+      signature: captured.signature,
+      timestamp: captured.timestamp,
+      now: new Date(sentAt + (WEBHOOK_TOLERANCE_SECONDS + 1) * 1000),
+    });
+    expect(replay).toEqual({ ok: false, reason: 'outside_tolerance' });
+
+    // E não adianta trocar o timestamp por um atual: ele está dentro da assinatura.
+    const forged = verifyWebhookSignature({
+      secret: SECRET,
+      body: captured.raw,
+      signature: captured.signature,
+      timestamp: String(Math.floor(Date.now() / 1000) + 3600),
+      now: new Date(Date.now() + 3600 * 1000),
+    });
+    expect(forged).toEqual({ ok: false, reason: 'mismatch' });
+  });
+
+  it('evento com `data` fora do contrato vai para a DLQ e não gera entrega (F70-S19)', async () => {
+    // Produtor com defeito (ou mensagem forjada na fila): campo extra com dado pessoal.
+    const messageId = randomUUID();
+    const eventId = `${messageId}:received`;
+    const envelope = makeEnvelope('message.received', ws, {
+      eventId,
+      occurredAt: new Date().toISOString(),
+      data: {
+        conversationId: randomUUID(),
+        messageId,
+        contactId: null,
+        channelId: randomUUID(),
+        type: 'text',
+        text: 'oi',
+        phone: '+5511999999999',
+      },
+    });
+
+    const mq = await connectMq();
+    try {
+      mq.channel.publish(
+        EXCHANGES.events,
+        domainEventRoutingKey('message.received'),
+        Buffer.from(JSON.stringify(envelope)),
+        { persistent: true, contentType: 'application/json' },
+      );
+
+      // Procura a cópia na DLQ (compartilhada no dev): segura as alheias sem ack até
+      // achar a nossa e devolve todas no fim.
+      const others: Parameters<typeof mq.channel.nack>[0][] = [];
+      let found: { reason: unknown; body: Record<string, unknown> } | null = null;
+      const deadline = Date.now() + 15_000;
+      try {
+        while (found === null && Date.now() < deadline) {
+          const msg = await mq.channel.get(DLQ_QUEUE, { noAck: false });
+          if (msg === false) {
+            await new Promise((r) => setTimeout(r, 100));
+            continue;
+          }
+          const body = JSON.parse(msg.content.toString('utf8')) as Record<string, unknown>;
+          if (body['id'] === envelope.id) {
+            mq.channel.ack(msg);
+            found = { reason: msg.properties.headers?.['x-hm-dlq-reason'], body };
+          } else {
+            others.push(msg);
+          }
+        }
+      } finally {
+        for (const msg of others) mq.channel.nack(msg, false, true);
+      }
+
+      expect(found, 'o evento fora do contrato deveria estar na DLQ').not.toBeNull();
+      expect(found?.reason).toBe('non_retryable');
+      expect(await deliveriesOf(eventId)()).toHaveLength(0);
+    } finally {
+      await mq.connection.close();
+    }
   }, 30_000);
 });

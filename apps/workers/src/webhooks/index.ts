@@ -90,13 +90,21 @@ export {
 } from './consumer';
 export {
   dispatchPending,
-  signWebhook,
   backoffSeconds,
   MAX_ATTEMPTS,
-  SIGNATURE_HEADER,
   type DispatchDeps,
   type DispatchTickResult,
 } from './dispatcher';
+export {
+  signatureHeaders,
+  signWebhook,
+  verifyWebhookSignature,
+  SIGNATURE_HEADER,
+  TIMESTAMP_HEADER,
+  WEBHOOK_TOLERANCE_SECONDS,
+  type VerifyWebhookInput,
+  type VerifyWebhookResult,
+} from './signature';
 export {
   WEBHOOK_DISPATCH_LOCK_KEY,
   WEBHOOK_DISPATCH_LOCK_TTL_MS,

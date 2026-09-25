@@ -2,7 +2,7 @@
 id: F70-S20
 title: Restos da outbox — envios da API v1, message.sent atômico, mídia da coexistência e emissor morto
 phase: F70
-status: blocked
+status: available
 priority: medium
 estimated_size: S
 depends_on: [F70-S17, F70-S19]
@@ -37,6 +37,14 @@ Pendências da F70-S16 e da F70-S17:
 - `apps/workers/src/coexistence/**`
 - `apps/workers/src/webhooks/e2e.test.ts`
 - `packages/shared/src/mq/**`
+- `packages/shared/src/webhook-signature*.ts`
+- `packages/shared/src/index.ts`
+- `apps/workers/src/webhooks/signature*.ts`
+- `apps/workers/src/webhooks/dispatcher.ts`
+- `apps/api/src/routes/dev/webhooks.ts`
+- `apps/api/src/routes/dev/*.test.ts`
+- `apps/web/**/WebhooksManager.tsx`
+- `docs/api-reference/guides/webhooks.mdx`
 
 ## Escopo (faz)
 
@@ -44,6 +52,7 @@ Pendências da F70-S16 e da F70-S17:
 - A porta de persistência do outbound aceita os eventos: `message.sent` fica na mesma transação do status.
 - Jobs de mídia da coexistência pela outbox.
 - `mark_resolved`: `event_id` derivado do `executionId`, como o do handoff.
+- **Assinatura única (pendência da F70-S19):** mover o signer/verificador de `apps/workers/src/webhooks/signature.ts` para `@hm/shared`; o ping de teste de Settings → Dev (`apps/api/src/routes/dev/webhooks.ts`) passa a assinar no formato novo (`x-hm-timestamp` + HMAC de `ts.body`); `docs/api-reference/guides/webhooks.mdx` e o texto do `WebhooksManager.tsx` descrevem o formato novo.
 - Remover `emitDomainEvent`/`emitDomainEvents` e ajustar docs e testes que ainda os citam.
 
 ## Definition of Done
@@ -52,3 +61,4 @@ Pendências da F70-S16 e da F70-S17:
 - [ ] teste: `message.sent` some junto quando a gravação do status falha
 - [ ] teste: `mark_resolved` repetido na mesma execução → um evento só
 - [ ] `git grep emitDomainEvent` sem resultado
+- [ ] teste: o ping de teste é aceito pelo verificador de referência

@@ -56,7 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 20     | 1   | 3   | 0   | 0   | 1   | 15   |
+| F70   | 20     | 1   | 2   | 0   | 0   | 1   | 16   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -783,8 +783,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70-S16 | Outbox transacional para eventos de domínio e jobs, com dedup indexado dos webhooks                             | ✅ done      | high       | F70-S14, F70-S12          |
 | F70-S17 | Produtores da API publicam pelo outbox                                                                          | ✅ done      | medium     | F70-S16, F70-S11          |
 | F70-S18 | Achados baixos da auditoria pré-deploy — marcadores de origem, referências restantes e guarda do seed           | ✅ done      | medium     | F70-S11                   |
-| F70-S19 | Achados da auditoria que dependem da S15 e da S16 — IA legada, eco, assinatura com timestamp e consumer estrito | 🟢 available | high       | F70-S15, F70-S16          |
-| F70-S20 | Restos da outbox — envios da API v1, message.sent atômico, mídia da coexistência e emissor morto                | ⏸️ blocked  | medium     | F70-S17, F70-S19          |
+| F70-S19 | Achados da auditoria que dependem da S15 e da S16 — IA legada, eco, assinatura com timestamp e consumer estrito | ✅ done      | high       | F70-S15, F70-S16          |
+| F70-S20 | Restos da outbox — envios da API v1, message.sent atômico, mídia da coexistência e emissor morto                | 🟢 available | medium     | F70-S17, F70-S19          |
 
 ## Fase 8 — Permissions & Settings
 

@@ -28,7 +28,7 @@
 import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { agentDepartmentsRepo, assertConversationVisible, schema, type DbTx } from '@hm/db';
 import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import {
@@ -293,6 +293,11 @@ export function createConversationAgentRouter(): Router {
             aiPausedAt: null,
             aiPausedBy: null,
             aiResumeAt: null,
+            // F70-S19 (M2): troca manual = um humano ligou a IA. Marca que autoriza o
+            // worker de agentes em conversa sem origem elegível (relógio do banco, o
+            // mesmo do trigger do `on` automático da migração 0088).
+            aiEnabledAt: sql`clock_timestamp()`,
+            aiEnabledBy: memberId,
             updatedAt: now,
           })
           .where(eq(schema.conversations.id, conversationId));

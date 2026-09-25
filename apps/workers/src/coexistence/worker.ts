@@ -63,15 +63,42 @@ export function createCoexistenceDeps(logger: Logger, channel?: MqChannel): Coex
   // Enfileiramento de mídia: reusa o MESMO publisher/fila (`hm.q.media`) do inbound.
   // Sem canal (testes/sem broker) fica undefined → echo persiste sem enfileirar.
   const media = channel ? new MqMediaEnqueue(channel) : undefined;
+  const ownMetaAppIds = ownMetaAppIdsFromEnv(process.env);
+  warnIfOwnMetaAppIdsMissing(ownMetaAppIds, logger);
   return {
-    persistence: new DbCoexistencePersistence(
-      logger,
-      undefined,
-      socket,
-      media,
-      ownMetaAppIdsFromEnv(process.env),
-    ),
+    persistence: new DbCoexistencePersistence(logger, undefined, socket, media, ownMetaAppIds),
   };
+}
+
+let ownMetaAppIdsWarned = false;
+
+/**
+ * F70-S19 (achado L3): sem `META_APP_ID` o eco do Instagram das mensagens que o
+ * próprio Leadium enviou pela API só é reconhecido pelo dedup do mid. Na corrida em
+ * que o eco chega antes de o worker outbound gravar o mid, a resposta da IA vira
+ * "mensagem humana pelo app" e pausa a IA (F70-S04). Não impede o boot (ambiente
+ * sem Instagram não precisa da variável), mas avisa uma vez por processo, no boot.
+ * `createCoexistenceDeps` é chamado pelo worker de coexistência e pelo inbound.
+ * Devolve se avisou (teste).
+ */
+export function warnIfOwnMetaAppIdsMissing(
+  ownMetaAppIds: ReadonlySet<string>,
+  logger: Pick<Logger, 'warn'>,
+): boolean {
+  if (ownMetaAppIds.size > 0 || ownMetaAppIdsWarned) return false;
+  ownMetaAppIdsWarned = true;
+  logger.warn(
+    'META_APP_ID vazio: o eco do Instagram de mensagens enviadas pelo Leadium só é ' +
+      'reconhecido pelo mid; se chegar antes do mid gravado, pausa a IA como resposta ' +
+      'humana. Defina META_APP_ID (id do app Meta; lista separada por vírgula).',
+    { env: 'META_APP_ID' },
+  );
+  return true;
+}
+
+/** Só testes: volta o aviso de `META_APP_ID` ao estado de boot. */
+export function resetOwnMetaAppIdsWarningForTests(): void {
+  ownMetaAppIdsWarned = false;
 }
 
 /**

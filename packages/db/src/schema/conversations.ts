@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   pgTable,
@@ -44,6 +45,16 @@ export const conversations = pgTable(
     // ou criada por caminho que não classifica: lido como `sem-origem` (fail-closed).
     // A IA só é ligada automaticamente com origem comprovada (anúncio/site/instagram).
     origin: text('origin').$type<ConversationOriginValue>(),
+    // F70-S19 (M2) — marca "IA ligada por um humano" (migração 0088). O worker de agentes
+    // só responde com origem elegível OU com `ai_enabled_at` posterior a
+    // `ai_auto_enabled_at`. As rotas humanas gravam `ai_enabled_at`/`ai_enabled_by` no
+    // mesmo UPDATE que liga a IA; `ai_auto_enabled_at` é gravado pelo trigger
+    // `trg_conversations_ai_enable_mark` em toda transição para `on` sem marca humana
+    // nova — a aplicação não escreve essa coluna.
+    // `ai_enabled_by`: FK composta (workspace_id, ai_enabled_by) → members, declarada abaixo.
+    aiEnabledBy: uuid('ai_enabled_by'),
+    aiEnabledAt: ts('ai_enabled_at'),
+    aiAutoEnabledAt: ts('ai_auto_enabled_at'),
     assignedTo: uuid('assigned_to').references(() => members.id, { onDelete: 'set null' }),
     // F56-S24 (DB-06): FKs antes pendentes, agora resolvidas. department_id/team_id
     // já tinham a constraint no banco desde a 0033 (backfill F8) — aqui o schema TS
@@ -75,6 +86,16 @@ export const conversations = pgTable(
   (t) => [
     // Alvo das FKs compostas por workspace (F70-S12, migração 0085).
     uniqueIndex('uq_conversations_workspace_id').on(t.workspaceId, t.id),
+    // F70-S19: quem ligou a IA é membro do MESMO workspace. A migração 0088 é a fonte da
+    // verdade: `ON DELETE SET NULL (ai_enabled_by)` (PG >= 15), que o Drizzle não expressa.
+    foreignKey({
+      name: 'conversations_workspace_ai_enabled_by_fk',
+      columns: [t.workspaceId, t.aiEnabledBy],
+      foreignColumns: [members.workspaceId, members.id],
+    }).onDelete('set null'),
+    index('idx_conversations_ai_enabled_by')
+      .on(t.aiEnabledBy)
+      .where(sql`${t.aiEnabledBy} is not null`),
     uniqueIndex('uq_conversations_channel_remote').on(t.channelId, t.remoteId),
     index('idx_conversations_ws_status_lastmsg').on(
       t.workspaceId,

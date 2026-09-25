@@ -79,6 +79,32 @@ const id = z.string().uuid();
 const currency = z.string().length(3);
 const cents = z.number().int().min(0);
 
+/**
+ * Teto do texto livre das mensagens nos eventos (F70-S19, achado L6), em unidades
+ * UTF-16 (`String.length`). Uma mensagem de 60 mil caracteres não vira um corpo de
+ * webhook de 60 kB para cada assinante, nem uma linha gigante na outbox e nas
+ * entregas. Quem precisa do texto inteiro lê a mensagem pela API.
+ */
+export const DOMAIN_EVENT_TEXT_MAX_LENGTH = 4096;
+
+/** Marca de corte: o assinante distingue texto truncado de texto que só é longo. */
+export const DOMAIN_EVENT_TEXT_TRUNCATION_MARK = '…';
+
+/**
+ * Corta o texto livre para caber em {@link DOMAIN_EVENT_TEXT_MAX_LENGTH}, terminando
+ * em {@link DOMAIN_EVENT_TEXT_TRUNCATION_MARK}. Não parte um par substituto (emoji):
+ * se o corte cair no meio de um, o par inteiro sai. Texto dentro do teto passa igual.
+ */
+export function truncateEventText(text: string | null): string | null {
+  if (text === null || text.length <= DOMAIN_EVENT_TEXT_MAX_LENGTH) return text;
+  let end = DOMAIN_EVENT_TEXT_MAX_LENGTH - DOMAIN_EVENT_TEXT_TRUNCATION_MARK.length;
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1; // metade alta de um par: fica de fora
+  return text.slice(0, end) + DOMAIN_EVENT_TEXT_TRUNCATION_MARK;
+}
+
+const eventText = z.string().max(DOMAIN_EVENT_TEXT_MAX_LENGTH).nullable();
+
 const messageReceivedData = z
   .object({
     conversationId: id,
@@ -86,7 +112,7 @@ const messageReceivedData = z
     contactId: id.nullable(),
     channelId: id,
     type: z.string().min(1).max(64),
-    text: z.string().nullable(),
+    text: eventText,
   })
   .strict();
 
@@ -95,7 +121,7 @@ const messageSentData = z
     conversationId: id,
     messageId: id,
     type: z.string().min(1).max(64),
-    text: z.string().nullable(),
+    text: eventText,
   })
   .strict();
 
@@ -269,15 +295,58 @@ export function parseDomainEnvelope(envelope: Envelope): ParsedDomainEvent {
   }
   const parsed = domainEventPayloadSchema.safeParse(envelope.payload);
   if (!parsed.success) {
-    throw new NonRetryableError(`payload inválido para ${envelope.type}`, parsed.error.issues);
+    throw new DomainEventContractError(envelope.type, 'payload', parsed.error.issues);
   }
+  // F70-S19 (achado L7): o `data` é revalidado com o contrato ESTRITO do evento no
+  // consumo, não só na publicação. Mensagem publicada por fora dos construtores
+  // (produtor com defeito, versão antiga, mensagem injetada na fila) com campo a mais
+  // (ex.: telefone) ou tipo errado não chega a nenhum assinante: vai para a DLQ.
+  const strict = DOMAIN_EVENT_DATA_SCHEMAS[envelope.type].safeParse(parsed.data.data);
+  if (!strict.success) {
+    throw new DomainEventContractError(envelope.type, 'data', strict.error.issues);
+  }
+  const data: Record<string, unknown> = { ...strict.data };
   return {
     event: envelope.type,
     workspaceId: envelope.workspaceId,
     eventId: parsed.data.eventId,
     occurredAt: parsed.data.occurredAt,
-    data: parsed.data.data,
+    data,
   };
+}
+
+/** Um problema de contrato, sem o VALOR recebido (pode ser dado pessoal). */
+export interface DomainEventContractIssue {
+  readonly path: string;
+  readonly code: string;
+  /** Chaves não previstas no contrato (`unrecognized_keys`): nomes, não valores. */
+  readonly keys?: readonly string[];
+}
+
+/**
+ * Evento fora do contrato no consumo. É {@link NonRetryableError}: vai direto à DLQ.
+ * `issues` traz só caminho, código e nomes de chave — seguro para log.
+ */
+export class DomainEventContractError extends NonRetryableError {
+  readonly issues: readonly DomainEventContractIssue[];
+
+  constructor(
+    readonly event: DomainEventName,
+    readonly part: 'payload' | 'data',
+    zodIssues: readonly z.ZodIssue[],
+  ) {
+    const issues = zodIssues.map(toContractIssue);
+    super(`${part} fora do contrato de ${event}`, issues);
+    this.issues = issues;
+  }
+}
+
+function toContractIssue(issue: z.ZodIssue): DomainEventContractIssue {
+  const path = issue.path.map(String).join('.') || '(raiz)';
+  if (issue.code === 'unrecognized_keys') {
+    return { path, code: issue.code, keys: issue.keys.slice(0, 20).map((k) => k.slice(0, 64)) };
+  }
+  return { path, code: issue.code };
 }
 
 /** Publica um evento de domínio num canal já aberto (respeita backpressure). */
@@ -301,7 +370,8 @@ export const domainEvents = {
       workspaceId,
       eventId: `${data.messageId}:received`,
       occurredAt: nowIso(),
-      data,
+      // L6: o teto vale no construtor, então nenhum produtor precisa lembrar dele.
+      data: { ...data, text: truncateEventText(data.text) },
     };
   },
 
@@ -311,7 +381,7 @@ export const domainEvents = {
       workspaceId,
       eventId: `${data.messageId}:sent`,
       occurredAt: nowIso(),
-      data,
+      data: { ...data, text: truncateEventText(data.text) },
     };
   },
 
