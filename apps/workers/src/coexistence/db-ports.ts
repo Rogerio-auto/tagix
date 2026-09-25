@@ -13,8 +13,13 @@
  *
  * - **echo** (`coexistence.echo`): mensagem enviada pelo número via app WhatsApp
  *   Business. Resolve a conversa pelo contato (`to`), insere uma mensagem
- *   **outbound** com `metadata.origin = 'coexistence_echo'`, deduplicada por
- *   `uq_messages_external (conversation_id, external_id)` (`onConflictDoNothing`).
+ *   **outbound**, deduplicada por `uq_messages_external (conversation_id,
+ *   external_id)` (`onConflictDoNothing`). F70-S04: o eco é resposta HUMANA —
+ *   `sender_type='member'` com o dono do canal como autor, `metadata.origin='app'`,
+ *   pausa a IA (`human_takeover`, mesma regra da UI), marca `first_response_at`
+ *   e, quando abre a conversa (prospecção), nasce com IA desligada e etiqueta o
+ *   contato com `origem:prospeccao`. O eco do Instagram (`persistInstagramEcho`)
+ *   passa pelo MESMO núcleo (`persistAppEcho`).
  *
  * - **history** (`coexistence.history`): batch de contatos + mensagens
  *   históricas. Upsert de contatos por `uq_contacts_workspace_phone`
@@ -29,11 +34,12 @@
  * garante zero duplicação de mensagens/contatos em reentrega/reprocesso.
  */
 import { Buffer } from 'node:buffer';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { getDb, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import { makeEnvelope, type MqHandle } from '@hm/shared/mq';
-import type { ServerToClientEvent } from '@hm/shared';
+import type { ConversationAiModeChangedPayload, ServerToClientEvent } from '@hm/shared';
 import { buildMessageNewPayload, previewFor } from '@hm/shared';
 import type {
   CoexistenceAppStatePayload,
@@ -51,7 +57,9 @@ import type {
   CoexistencePersistencePort,
   CoexistenceSocketPort,
 } from './ports';
-import type { InboundMediaJob, MediaEnqueuePort } from '../inbound/ports';
+import type { InboundMediaJob, MediaEnqueuePort, RoutingHints } from '../inbound/ports';
+import { planHumanReply } from './human-takeover';
+import type { InstagramEchoInput } from './instagram-echo';
 
 /** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
 type MqChannel = MqHandle['channel'];
@@ -62,9 +70,46 @@ export const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
 /** Provider dos canais de coexistência (WhatsApp Business / WABA). */
 const COEXISTENCE_PROVIDER = 'meta_whatsapp' as const;
 
-/** Origem gravada em `messages.metadata.origin` para distinguir o app de fora. */
-const ECHO_ORIGIN = 'coexistence_echo' as const;
+/**
+ * Origem gravada em `messages.metadata.origin`. `app` (F70-S04; antes
+ * `coexistence_echo`): a mensagem foi escrita por um humano no app do celular
+ * (WhatsApp Business ou Instagram), não pela UI do Leadium. `echoSource` diz qual.
+ */
+const APP_ORIGIN = 'app' as const;
 const HISTORY_ORIGIN = 'coexistence_history' as const;
+
+/** Etiqueta aplicada ao contato quando o dono abre a conversa pelo app (prospecção). */
+export const PROSPECTION_TAG_NAME = 'origem:prospeccao' as const;
+
+/**
+ * Chave opcional em `channels.metadata` que aponta o membro dono do número
+ * (quem responde pelo celular). Ver `resolveChannelOwner`.
+ */
+export const CHANNEL_OWNER_METADATA_KEY = 'ownerMemberId' as const;
+
+/** Resultado de eco que não chegou a ser persistido. */
+const UNRESOLVED_ECHO = {
+  resolved: false,
+  inserted: false,
+  aiPaused: false,
+  startedByApp: false,
+} as const satisfies CoexistenceEchoResult;
+
+/** Entrada normalizada do núcleo comum de ecos (WhatsApp + Instagram). */
+interface AppEchoInput {
+  readonly provider: 'meta_whatsapp' | 'meta_instagram';
+  readonly channel: ResolvedCoexistenceChannel;
+  /** `remote_id` da conversa: telefone (WA) ou IGSID (IG) do contato. */
+  readonly remoteId: string;
+  readonly contactSource: 'whatsapp' | 'instagram';
+  readonly echoSource: 'whatsapp_coexistence' | 'instagram_echo';
+  readonly externalId: string;
+  readonly type: string;
+  readonly content: string | null;
+  readonly occurredAt: Date;
+  readonly mediaRef: MediaRef | undefined;
+  readonly routing: RoutingHints;
+}
 
 /** Tipos de mensagem que carregam mídia baixável (`raw[type].id`). */
 const MEDIA_ECHO_TYPES = new Set(['image', 'video', 'audio', 'voice', 'document', 'sticker']);
@@ -110,6 +155,8 @@ export interface ResolvedCoexistenceChannel {
  */
 export interface CoexistenceChannelResolver {
   resolve(phoneNumberId: string): Promise<ResolvedCoexistenceChannel | null>;
+  /** Canal Instagram ativo pelo `ig_user_id` (`uq_channels_ig_user_id`). */
+  resolveInstagram(igUserId: string): Promise<ResolvedCoexistenceChannel | null>;
 }
 
 /** Resolver default DB-backed: índice único `uq_channels_phone_number_id`. */
@@ -124,6 +171,22 @@ export class DbCoexistenceChannelResolver implements CoexistenceChannelResolver 
           eq(channels.provider, COEXISTENCE_PROVIDER),
           eq(channels.isActive, true),
           eq(channels.phoneNumberId, phoneNumberId),
+        ),
+      )
+      .limit(1);
+    return row === undefined ? null : { channelId: row.id, workspaceId: row.workspaceId };
+  }
+
+  async resolveInstagram(igUserId: string): Promise<ResolvedCoexistenceChannel | null> {
+    const { channels } = schema;
+    const [row] = await getDb()
+      .select({ id: channels.id, workspaceId: channels.workspaceId })
+      .from(channels)
+      .where(
+        and(
+          eq(channels.provider, 'meta_instagram'),
+          eq(channels.isActive, true),
+          eq(channels.igUserId, igUserId),
         ),
       )
       .limit(1);
@@ -162,7 +225,7 @@ export class MqCoexistenceSocketEmit implements CoexistenceSocketPort {
 
   async emitMessageNew(input: CoexistenceMessageNewEmit): Promise<void> {
     // F61-S13: `origin: 'coexistence'` — sincronização não é lead chegando. O remetente
-    // espelha o que a coexistência grava (`system` para o que saiu do app do cliente).
+    // espelha o que a coexistência grava (F70-S04: `member` para o eco do app).
     relayEnvelope(
       this.channel,
       input.workspaceId,
@@ -177,11 +240,26 @@ export class MqCoexistenceSocketEmit implements CoexistenceSocketPort {
           type: input.type,
           content: input.content,
           direction: input.direction,
-          senderType: input.direction === 'inbound' ? 'contact' : 'system',
+          senderType: input.senderType,
           origin: 'coexistence',
         },
       }),
     );
+    await Promise.resolve();
+  }
+
+  async emitAiModeChanged(
+    workspaceId: string,
+    conversationId: string,
+    aiMode: 'paused',
+  ): Promise<void> {
+    // Mesmo payload da rota de envio da API (F30-S04) — o cockpit já reage a ele.
+    const data: ConversationAiModeChangedPayload = {
+      conversationId,
+      aiMode,
+      reason: 'human_takeover',
+    };
+    relayEnvelope(this.channel, workspaceId, 'conversation:ai_mode_changed', conversationId, data);
     await Promise.resolve();
   }
 
@@ -206,6 +284,10 @@ export class NoopCoexistenceSocketEmit implements CoexistenceSocketPort {
   async emitConversationUpdated(): Promise<void> {
     await Promise.resolve();
   }
+
+  async emitAiModeChanged(): Promise<void> {
+    await Promise.resolve();
+  }
 }
 
 function toDate(timestamp: number | undefined): Date {
@@ -213,6 +295,12 @@ function toDate(timestamp: number | undefined): Date {
   // Webhooks WhatsApp expõem epoch em segundos; tolera milissegundos.
   const ms = timestamp < 1e12 ? timestamp * 1000 : timestamp;
   const date = new Date(ms);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+/** ISO-8601 (horário do provider) → Date; inválido cai no relógio local. */
+function isoToDate(iso: string): Date {
+  const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
@@ -241,6 +329,12 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
      * quando há canal AMQP. A persistência da mensagem nunca depende disto.
      */
     private readonly media?: MediaEnqueuePort,
+    /**
+     * IDs dos apps Meta que são o próprio Leadium (env `META_APP_ID`). Eco do IG
+     * com `app_id` nesta lista é mensagem que nós mesmos enviamos pela API — não
+     * é resposta humana e é ignorado. Vazio = sem filtro (só o dedup por mid).
+     */
+    private readonly ownMetaAppIds: ReadonlySet<string> = new Set(),
   ) {}
 
   async persistEcho(payload: CoexistenceEchoPayload): Promise<CoexistenceEchoResult> {
@@ -249,34 +343,103 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
       this.logger.warn('coexistence: echo sem canal para phoneNumberId — descartado', {
         phoneNumberId: payload.phoneNumberId,
       });
-      return { resolved: false, inserted: false };
+      return UNRESOLVED_ECHO;
     }
-    const { channelId, workspaceId } = channel;
 
-    // Mídia ecoada: extrai a ref do raw p/ baixar igual ao inbound (senão a bolha
-    // fica sem media_url e o chat mostra "Não foi possível carregar").
-    const mediaRef = extractEchoMediaRef(payload.raw, payload.type);
+    return this.persistAppEcho({
+      provider: COEXISTENCE_PROVIDER,
+      channel,
+      remoteId: payload.to,
+      contactSource: 'whatsapp',
+      echoSource: 'whatsapp_coexistence',
+      externalId: payload.externalId,
+      type: payload.type,
+      content: payload.text ?? null,
+      occurredAt: toDate(payload.timestamp),
+      // Mídia ecoada: extrai a ref do raw p/ baixar igual ao inbound (senão a bolha
+      // fica sem media_url e o chat mostra "Não foi possível carregar").
+      mediaRef: extractEchoMediaRef(payload.raw, payload.type),
+      routing: { phoneNumberId: payload.phoneNumberId },
+    });
+  }
+
+  async persistInstagramEcho(echo: InstagramEchoInput): Promise<CoexistenceEchoResult> {
+    const channel = await this.channels.resolveInstagram(echo.igUserId);
+    if (channel === null) {
+      this.logger.warn('coexistence: eco IG sem canal para igUserId — descartado', {
+        igUserId: echo.igUserId,
+      });
+      return UNRESOLVED_ECHO;
+    }
+
+    // O IG ecoa TUDO que a conta envia, inclusive o que o próprio Leadium mandou
+    // pela API (resposta da IA, flow, atendente pela UI). Esse eco não é resposta
+    // humana pelo app: tratá-lo como tal pausaria a IA a cada mensagem dela. O
+    // dedup por mid cobre o caso comum (o outbound já gravou o mid), mas não a
+    // corrida em que o eco chega antes do worker outbound gravar o mid — o
+    // `app_id` do nosso app fecha essa janela.
+    if (echo.appId !== undefined && this.ownMetaAppIds.has(echo.appId)) {
+      this.logger.debug('coexistence: eco IG do próprio app — ignorado', {
+        externalId: echo.externalId,
+      });
+      return { ...UNRESOLVED_ECHO, resolved: true, skipped: 'own_app' };
+    }
+
+    return this.persistAppEcho({
+      provider: 'meta_instagram',
+      channel,
+      remoteId: echo.contactRemoteId,
+      contactSource: 'instagram',
+      echoSource: 'instagram_echo',
+      externalId: echo.externalId,
+      type: echo.messageType,
+      content: echo.content ?? null,
+      occurredAt: isoToDate(echo.rawTimestamp),
+      mediaRef: echo.mediaRef,
+      routing: { igUserId: echo.igUserId },
+    });
+  }
+
+  /**
+   * Núcleo comum dos ecos (WhatsApp coexistência + Instagram), F70-S04.
+   *
+   * Numa única transação RLS: contato → conversa → autor (dono do canal) →
+   * mensagem `member` (dedup por id externo) → e, só se inseriu de fato, a regra
+   * de resposta humana na conversa (pausa da IA / primeira resposta) e, se o eco
+   * abriu a conversa, a marca de prospecção. Reentrega do mesmo eco é no-op
+   * completo: não reinsere, não repausa, não reetiqueta, não reemite.
+   */
+  private async persistAppEcho(input: AppEchoInput): Promise<CoexistenceEchoResult> {
+    const { channelId, workspaceId } = input.channel;
 
     const result = await withWorkspace(workspaceId, async (tx) => {
-      const contactId = await ensureContact(tx, workspaceId, payload.to);
-      const conversationId = await ensureConversation(tx, workspaceId, channelId, payload.to, contactId);
+      const contactId = await ensureContact(tx, workspaceId, input.remoteId, input.contactSource);
+      const conversation = await ensureConversation(
+        tx,
+        workspaceId,
+        channelId,
+        input.remoteId,
+        contactId,
+      );
+      const ownerMemberId = await resolveChannelOwner(tx, workspaceId, channelId);
 
       const [inserted] = await tx
         .insert(schema.messages)
         .values({
           workspaceId,
-          conversationId,
-          externalId: payload.externalId,
+          conversationId: conversation.id,
+          externalId: input.externalId,
           direction: 'outbound',
-          senderType: 'system',
-          type: payload.type,
-          content: payload.text ?? null,
+          senderType: 'member',
+          senderMemberId: ownerMemberId,
+          type: input.type,
+          content: input.content,
           viewStatus: 'sent',
-          createdAt: toDate(payload.timestamp),
-          metadata: { origin: ECHO_ORIGIN },
+          createdAt: input.occurredAt,
+          metadata: { origin: APP_ORIGIN, echoSource: input.echoSource },
           // Mídia nasce 'pending' (espelha o inbound); o media-worker baixa e seta
           // media_url + 'ready'. Sem ref, fica null (mensagem de texto/sem mídia).
-          ...(mediaRef !== undefined ? { mediaStatus: 'pending' as const } : {}),
+          ...(input.mediaRef !== undefined ? { mediaStatus: 'pending' as const } : {}),
         })
         .onConflictDoNothing({
           target: [schema.messages.conversationId, schema.messages.externalId],
@@ -284,19 +447,65 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
         })
         .returning({ id: schema.messages.id });
 
-      if (inserted !== undefined) {
-        await tx
-          .update(schema.conversations)
-          .set({
-            lastMessagePreview: previewOf(payload.text, payload.type),
-            lastMessageAt: toDate(payload.timestamp),
-            lastMessageFrom: 'system',
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.conversations.id, conversationId));
+      if (inserted === undefined) {
+        return {
+          conversationId: conversation.id,
+          messageId: undefined,
+          aiPaused: false,
+          startedByApp: false,
+        };
       }
 
-      return { conversationId, messageId: inserted?.id };
+      // Estado atual sob lock de linha: serializa ecos concorrentes da mesma
+      // conversa (e a rota de envio da UI), para a transição on→paused acontecer
+      // uma vez só e `first_response_at` não ser disputado.
+      const { conversations } = schema;
+      const [state] = await tx
+        .select({
+          aiMode: conversations.aiMode,
+          firstResponseAt: conversations.firstResponseAt,
+          aiLastHumanAt: conversations.aiLastHumanAt,
+        })
+        .from(conversations)
+        .where(eq(conversations.id, conversation.id))
+        .for('update')
+        .limit(1);
+
+      // Conversa aberta por este eco = o dono chamou primeiro (prospecção). Ela
+      // já nasce com `ai_mode='off'` (ensureConversation) e não conta primeira
+      // resposta — ninguém perguntou nada ainda.
+      const startedByApp = conversation.created;
+      const plan = planHumanReply(
+        {
+          aiMode: state?.aiMode ?? 'off',
+          firstResponseAt: state?.firstResponseAt ?? null,
+          aiLastHumanAt: state?.aiLastHumanAt ?? null,
+        },
+        { memberId: ownerMemberId, at: input.occurredAt, countsAsResponse: !startedByApp },
+      );
+
+      await tx
+        .update(conversations)
+        .set({
+          ...plan.patch,
+          ...(startedByApp ? { aiMode: 'off' as const } : {}),
+          lastMessagePreview: previewOf(input.content ?? undefined, input.type),
+          lastMessageAt: input.occurredAt,
+          lastMessageFrom: 'member',
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, conversation.id));
+
+      if (startedByApp) {
+        await applyProspectionTag(tx, workspaceId, contactId, ownerMemberId);
+      }
+
+      return {
+        conversationId: conversation.id,
+        messageId: inserted.id,
+        aiPaused: plan.paused,
+        startedByApp,
+      };
     });
 
     // Pós-persist (fora da transação): empurra o echo ao vivo. Só quando inseriu
@@ -306,25 +515,42 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
         workspaceId,
         conversationId: result.conversationId,
         messageId: result.messageId,
-        externalId: payload.externalId,
-        type: payload.type,
-        content: payload.text ?? null,
+        externalId: input.externalId,
+        type: input.type,
+        content: input.content,
         direction: 'outbound',
+        senderType: 'member',
       });
+      this.logger.info('coexistence: eco do app materializado como resposta humana', {
+        workspaceId,
+        conversationId: result.conversationId,
+        echoSource: input.echoSource,
+        aiPaused: result.aiPaused,
+        startedByApp: result.startedByApp,
+      });
+    }
+
+    if (result.aiPaused) {
+      await this.socket.emitAiModeChanged(workspaceId, result.conversationId, 'paused');
     }
 
     // Enfileira o download DEPOIS de persistir (a linha precisa existir antes — o
     // media-worker casa por externalId). Só quando inseriu de fato + há mídia.
-    if (result.messageId !== undefined && mediaRef !== undefined) {
+    if (result.messageId !== undefined && input.mediaRef !== undefined) {
       await this.media?.enqueue({
-        provider: COEXISTENCE_PROVIDER,
-        externalId: payload.externalId,
-        mediaRef,
-        routing: { phoneNumberId: payload.phoneNumberId },
+        provider: input.provider,
+        externalId: input.externalId,
+        mediaRef: input.mediaRef,
+        routing: input.routing,
       });
     }
 
-    return { resolved: true, inserted: result.messageId !== undefined };
+    return {
+      resolved: true,
+      inserted: result.messageId !== undefined,
+      aiPaused: result.aiPaused,
+      startedByApp: result.startedByApp,
+    };
   }
 
   async importHistory(payload: CoexistenceHistoryBatchPayload): Promise<CoexistenceHistoryResult> {
@@ -376,8 +602,8 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
       let messagesInserted = 0;
       let messagesTotal = 0;
       for (const [counterpart, msgs] of byCounterpart) {
-        const contactId = await ensureContact(tx, workspaceId, counterpart);
-        const conversationId = await ensureConversation(
+        const contactId = await ensureContact(tx, workspaceId, counterpart, 'whatsapp');
+        const { id: conversationId } = await ensureConversation(
           tx,
           workspaceId,
           channelId,
@@ -524,10 +750,17 @@ function counterpartOf(msg: CoexistenceHistoryMessagePayload): string | null {
 // ─── Upsert helpers (rodam DENTRO de withWorkspace) ───────────────────────────
 
 /**
- * Garante o contato do `phone` (waId) dentro do workspace, casando por
- * `uq_contacts_workspace_phone`. Idempotente. Retorna o `contactId`.
+ * Garante o contato do `remoteId` (telefone WA ou IGSID do IG — a mesma
+ * convenção do inbound: `contacts.phone` guarda o id remoto) dentro do
+ * workspace, casando por `uq_contacts_workspace_phone`. Idempotente. Retorna o
+ * `contactId`. `source` só vale para o contato recém-criado.
  */
-async function ensureContact(tx: DbTx, workspaceId: string, phone: string): Promise<string> {
+async function ensureContact(
+  tx: DbTx,
+  workspaceId: string,
+  phone: string,
+  source: 'whatsapp' | 'instagram',
+): Promise<string> {
   const { contacts } = schema;
   const [existing] = await tx
     .select({ id: contacts.id })
@@ -544,7 +777,7 @@ async function ensureContact(tx: DbTx, workspaceId: string, phone: string): Prom
 
   const [created] = await tx
     .insert(contacts)
-    .values({ workspaceId, phone, source: 'whatsapp' })
+    .values({ workspaceId, phone, source })
     .onConflictDoNothing({ target: [contacts.workspaceId, contacts.phone] })
     .returning({ id: contacts.id });
   if (created !== undefined) return created.id;
@@ -567,10 +800,17 @@ async function ensureContact(tx: DbTx, workspaceId: string, phone: string): Prom
   return row.id;
 }
 
+/** Conversa garantida + se ESTA chamada a criou (base da regra de prospecção). */
+interface EnsuredConversation {
+  readonly id: string;
+  readonly created: boolean;
+}
+
 /**
- * Garante a conversa do par (canal, remoteId=phone). Upsert idempotente por
- * `uq_conversations_channel_remote (channel_id, remote_id)`. Retorna o
- * `conversationId`.
+ * Garante a conversa do par (canal, remoteId). Upsert idempotente por
+ * `uq_conversations_channel_remote (channel_id, remote_id)`. Nasce com
+ * `ai_mode='off'`. `created=true` só para quem de fato inseriu — o perdedor de
+ * uma corrida reseleciona e recebe `false`, então a "abertura" é única.
  */
 async function ensureConversation(
   tx: DbTx,
@@ -578,14 +818,14 @@ async function ensureConversation(
   channelId: string,
   remoteId: string,
   contactId: string,
-): Promise<string> {
+): Promise<EnsuredConversation> {
   const { conversations } = schema;
   const [existing] = await tx
     .select({ id: conversations.id })
     .from(conversations)
     .where(and(eq(conversations.channelId, channelId), eq(conversations.remoteId, remoteId)))
     .limit(1);
-  if (existing !== undefined) return existing.id;
+  if (existing !== undefined) return { id: existing.id, created: false };
 
   const [created] = await tx
     .insert(conversations)
@@ -600,7 +840,7 @@ async function ensureConversation(
     })
     .onConflictDoNothing({ target: [conversations.channelId, conversations.remoteId] })
     .returning({ id: conversations.id });
-  if (created !== undefined) return created.id;
+  if (created !== undefined) return { id: created.id, created: true };
 
   const [row] = await tx
     .select({ id: conversations.id })
@@ -610,5 +850,105 @@ async function ensureConversation(
   if (row === undefined) {
     throw new Error('coexistence: conversa não materializou após upsert.');
   }
-  return row.id;
+  return { id: row.id, created: false };
+}
+
+const uuidSchema = z.string().uuid();
+
+/**
+ * Resolve o membro "dono do canal" — a pessoa que responde pelo celular e,
+ * portanto, a autora (`sender_member_id`) do eco (F70-S04).
+ *
+ * O schema não liga canal a membro (não há `created_by`/`owner` em `channels`,
+ * e `meta_connections.connected_by` é por workspace+pessoa Meta, sem vínculo ao
+ * canal). A ordem, da mais específica para a mais geral:
+ *
+ * 1. `channels.metadata.ownerMemberId` — apontamento explícito, quando o número
+ *    é de alguém que não é o dono do workspace (ex.: um vendedor com o próprio
+ *    WhatsApp Business). Só vale se for um membro ATIVO do mesmo workspace;
+ *    valor inválido/órfão cai para o passo 2 (nunca atribui a um desconhecido).
+ * 2. O OWNER ativo mais antigo do workspace — na operação típica (o Rogério) é
+ *    quem tem o número no celular. Ordem estável (`created_at`, `id`) para que
+ *    ecos sucessivos tenham sempre o mesmo autor.
+ * 3. `null` — a mensagem continua `member` (é humana), só sem autor nomeado.
+ */
+async function resolveChannelOwner(
+  tx: DbTx,
+  workspaceId: string,
+  channelId: string,
+): Promise<string | null> {
+  const { channels, members } = schema;
+
+  const [channel] = await tx
+    .select({ metadata: channels.metadata })
+    .from(channels)
+    .where(eq(channels.id, channelId))
+    .limit(1);
+  const configured = uuidSchema.safeParse(channel?.metadata[CHANNEL_OWNER_METADATA_KEY]);
+  if (configured.success) {
+    const [member] = await tx
+      .select({ id: members.id })
+      .from(members)
+      .where(
+        and(
+          eq(members.id, configured.data),
+          eq(members.workspaceId, workspaceId),
+          eq(members.status, 'active'),
+        ),
+      )
+      .limit(1);
+    if (member !== undefined) return member.id;
+  }
+
+  const [owner] = await tx
+    .select({ id: members.id })
+    .from(members)
+    .where(
+      and(
+        eq(members.workspaceId, workspaceId),
+        eq(members.role, 'OWNER'),
+        eq(members.status, 'active'),
+      ),
+    )
+    .orderBy(asc(members.createdAt), asc(members.id))
+    .limit(1);
+  return owner?.id ?? null;
+}
+
+/**
+ * Etiqueta o contato com `origem:prospeccao` (conversa aberta pelo dono pelo
+ * app). Etiquetas no Leadium são do CONTATO (`contact_tags`) — não há etiqueta
+ * de conversa no schema. Idempotente: a tag é criada uma vez por workspace
+ * (`tags_workspace_name_uq`) e o vínculo é PK (contact, tag).
+ */
+async function applyProspectionTag(
+  tx: DbTx,
+  workspaceId: string,
+  contactId: string,
+  taggedBy: string | null,
+): Promise<void> {
+  const { tags, contactTags } = schema;
+
+  const [created] = await tx
+    .insert(tags)
+    .values({ workspaceId, name: PROSPECTION_TAG_NAME })
+    .onConflictDoNothing({ target: [tags.workspaceId, tags.name] })
+    .returning({ id: tags.id });
+  let tagId = created?.id;
+  if (tagId === undefined) {
+    const [existing] = await tx
+      .select({ id: tags.id })
+      .from(tags)
+      .where(and(eq(tags.workspaceId, workspaceId), eq(tags.name, PROSPECTION_TAG_NAME)))
+      .limit(1);
+    tagId = existing?.id;
+  }
+  if (tagId === undefined) {
+    throw new Error('coexistence: etiqueta de prospecção não materializou após upsert.');
+  }
+
+  await tx
+    .insert(contactTags)
+    .values({ contactId, tagId, workspaceId, taggedBy })
+    .onConflictDoNothing();
 }
