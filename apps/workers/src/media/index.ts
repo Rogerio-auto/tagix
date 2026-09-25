@@ -16,6 +16,11 @@ export {
   createMediaDeps,
   MEDIA_QUEUE,
   MEDIA_PREFETCH,
+  STORAGE_PARK_DELAY_MS,
+  STORAGE_PARK_MAX_AGE_MS,
+  STORAGE_PARKS_HEADER,
+  processMediaDelivery,
+  parkMediaJob,
   type MediaWorkerOptions,
   type MediaWorkerHandle,
 } from './worker';
@@ -43,10 +48,20 @@ export {
   StorageMediaPort,
   MqMediaSocketEmit,
   SOCKET_RELAY_QUEUE,
+  MEDIA_FAILURE_META,
+  MEDIA_JOB_META,
+  MEDIA_REPROCESS_META,
   type AdapterFactory,
 } from './adapters';
 
-export { defaultMediaRetry } from './ports';
+export { defaultMediaRetry, TERMINAL_MEDIA_FAILURES } from './ports';
+export { promMediaMetrics } from './metrics';
+export {
+  reprocessMedia,
+  providerRecoveryWindowDays,
+  type ReprocessOptions,
+  type ReprocessReport,
+} from './reprocess';
 
 export type {
   MediaDeps,
@@ -62,4 +77,8 @@ export type {
   MediaFailedEmit,
   MediaStatus,
   MediaRetryConfig,
+  MediaFailureInput,
+  MediaMetricsPort,
+  MediaAttemptContext,
+  StoredMediaJob,
 } from './ports';

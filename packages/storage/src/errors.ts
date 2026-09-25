@@ -40,6 +40,10 @@ const CONFIG_CODES: ReadonlySet<string> = new Set([
   'Forbidden',
   'Unauthorized',
   'CredentialsProviderError',
+  // LocalDriver (dev): diretório sem permissão é o equivalente local da credencial negada.
+  'EACCES',
+  'EPERM',
+  'EROFS',
 ]);
 
 /** Códigos que indicam soluço do provedor ou da rede. */

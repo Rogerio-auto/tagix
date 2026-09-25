@@ -66,6 +66,61 @@ export interface MediaMessageTarget {
   readonly conversationId: string;
   /** SHA-256 já persistido nesta mensagem (idempotência: skip se igual). */
   readonly existingSha256: string | null;
+  /**
+   * Motivo da falha já gravada (`metadata.mediaFailure.reason`), se houver. Evita
+   * reemitir `media_failed` a cada volta de um job estacionado por storage negado.
+   */
+  readonly currentFailureReason?: string | null;
+}
+
+/**
+ * Motivo curto da falha da mídia, gravado em `metadata.mediaFailure.reason` e mostrado
+ * (traduzido) na tela. Nunca carrega segredo nem texto do provedor.
+ *
+ * Terminais — o arquivo não existe mais na origem; tentar de novo não adianta:
+ *  - `media_expired`     — o provedor respondeu 404/410 (mídia expirada na Meta);
+ *  - `media_unavailable` — o provedor recusou de forma definitiva por outro motivo;
+ *  - `empty_media`       — o provedor devolveu zero bytes.
+ *
+ * Recuperáveis — o arquivo ainda existe; o job volta ou o reprocessamento recupera:
+ *  - `storage_unavailable` — o storage recusou a credencial (falha de configuração);
+ *  - `storage_error`       — o storage falhou de forma transitória e as tentativas acabaram;
+ *  - `download_error`      — o download falhou de forma transitória até o fim das tentativas;
+ *  - `processing_error`    — outra falha de infraestrutura (banco, fila) até o fim.
+ */
+export type MediaFailureReason =
+  | 'media_expired'
+  | 'media_unavailable'
+  | 'empty_media'
+  | 'storage_unavailable'
+  | 'storage_error'
+  | 'download_error'
+  | 'processing_error';
+
+/** Motivos em que o arquivo não existe mais na origem (sem reprocessamento). */
+export const TERMINAL_MEDIA_FAILURES: ReadonlySet<MediaFailureReason> = new Set<MediaFailureReason>([
+  'media_expired',
+  'media_unavailable',
+  'empty_media',
+]);
+
+/** Job de mídia guardado na mensagem em falha — é dele que o reprocessamento parte. */
+export interface StoredMediaJob {
+  readonly provider: MediaJob['provider'];
+  readonly externalId: string;
+  readonly mediaRef: MediaJob['mediaRef'];
+  readonly routing: MediaJob['routing'];
+}
+
+/** Falha a gravar na mensagem (`media_status = failed` + `metadata.mediaFailure`). */
+export interface MediaFailureInput {
+  readonly workspaceId: string;
+  readonly messageId: string;
+  readonly reason: MediaFailureReason;
+  /** Código seguro (ex.: `AccessDenied`, `Http503`) — nunca mensagem crua. */
+  readonly code?: string | undefined;
+  /** Job original, para o reprocessamento reconstruir o download sem adivinhar. */
+  readonly job: StoredMediaJob;
 }
 
 /** Campos `media_*` a gravar na mensagem. */
@@ -94,8 +149,14 @@ export interface MediaPersistencePort {
   findKeyBySha256(workspaceId: string, sha256: string): Promise<string | null>;
   /** Atualiza `messages.media_*` (inclui `media_status`). */
   update(input: MediaPersistInput): Promise<void>;
-  /** Transita apenas `messages.media_status` (in-flight `downloading` / `failed`). */
+  /** Transita apenas `messages.media_status` (in-flight `downloading` / restauro `ready`). */
   markStatus(workspaceId: string, messageId: string, status: MediaStatus): Promise<void>;
+  /**
+   * Grava a falha: `media_status = failed`, `metadata.mediaFailure = { reason, code, at }`
+   * e `metadata.mediaJob` (o job, para o reprocessamento). O sucesso posterior (`update`)
+   * limpa os dois.
+   */
+  markFailed(input: MediaFailureInput): Promise<void>;
 }
 
 /** Emissão do socket `message:media_ready` (room `conversation:{id}`). */
@@ -111,7 +172,7 @@ export interface MediaFailedEmit {
   readonly workspaceId: string;
   readonly conversationId: string;
   readonly messageId: string;
-  readonly reason: string;
+  readonly reason: MediaFailureReason;
 }
 
 /** Porta de socket: publica no `hm.q.socket.relay` (consumido por `relay.ts`). */
@@ -147,12 +208,38 @@ export const defaultMediaRetry: MediaRetryConfig = {
   sleep: (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms)),
 };
 
+/**
+ * Métricas do worker de mídia (F70-S27). Porta pequena para o teste contar sem o
+ * registry Prometheus; o default (`metrics.ts`) publica no `/metrics` dos workers.
+ */
+export interface MediaMetricsPort {
+  /** Uma falha de storage, por natureza (`config`/`transient`/`unknown`), código e operação. */
+  storageFailure(kind: string, code: string, operation: string): void;
+  /** Um job estacionado por storage negado (volta com backoff longo, sem gastar retentativa). */
+  jobParked(): void;
+  /** Uma mídia marcada `failed`, por motivo. */
+  mediaFailed(reason: MediaFailureReason): void;
+}
+
+/**
+ * Tentativa corrente do job na escada de retry da fila (`x-hm-retries`). O pipeline
+ * decide o nível do log e se a falha é definitiva a partir daqui.
+ */
+export interface MediaAttemptContext {
+  /** Retentativas já feitas pela fila (0 na primeira entrega). */
+  readonly attempt: number;
+  /** Teto de retentativas da fila (tamanho da escada). */
+  readonly maxRetries: number;
+}
+
 /** Dependências completas do worker de mídia. */
 export interface MediaDeps {
   readonly channels: MediaChannelResolver;
   readonly storage: MediaStoragePort;
   readonly persistence: MediaPersistencePort;
   readonly socket: MediaSocketPort;
+  /** Métricas (default: registry Prometheus dos workers). */
+  readonly metrics?: MediaMetricsPort;
   /** Override da política de retry de download (default {@link defaultMediaRetry}). */
   readonly retry?: MediaRetryConfig;
 }
