@@ -4,11 +4,16 @@
  * Dado um evento de domínio de um workspace, cria uma `outbound_webhook_deliveries`
  * (estado `pending`, `next_attempt_at = now()`) para cada `outbound_webhooks` ATIVO
  * desse workspace que assina o evento. O dispatcher (`./dispatcher`) drena e despacha.
+ * Quem chama em produção é o consumer de `hm.q.webhooks` (`./consumer`, F70-S09).
  *
  * Idempotência: cada chamada carrega um `eventId` estável (id da entidade de origem
  * + sufixo do tipo de evento). Guardamos `event_id` em `payload._meta.eventId` e
  * deduplicamos por (webhook_id, event_id) — um mesmo evento de domínio reentregue
  * (replay de fila, retry do produtor) não duplica deliveries.
+ *
+ * Corrida (F70-S09): o `INSERT … WHERE NOT EXISTS` sozinho deixa dois consumidores
+ * do MESMO evento passarem juntos pelo NOT EXISTS. Cada par (webhook, eventId) é
+ * serializado por um advisory lock de transação — sem índice único novo no schema.
  *
  * Roda como owner (`getDb()`): fan-out é operação de plataforma sobre um tenant
  * conhecido (workspaceId vem do evento); o isolamento já está embutido no filtro.
@@ -20,12 +25,14 @@ const { outboundWebhooks } = schema;
 
 export interface WebhookEvent {
   readonly workspaceId: string;
-  /** Nome do evento assinável (catálogo em apps/api .../dev/webhooks WEBHOOK_EVENTS). */
+  /** Nome do evento assinável (catálogo `DOMAIN_EVENTS` de `@hm/shared/mq`). */
   readonly event: string;
   /** Id estável da ocorrência (dedup por webhook). Ex.: `${messageId}:sent`. */
   readonly eventId: string;
   /** Corpo livre entregue ao cliente (será envelopado com _meta no dispatch). */
   readonly data: Record<string, unknown>;
+  /** Instante da ocorrência (ISO-8601), repassado ao cliente em `_meta.occurredAt`. */
+  readonly occurredAt?: string;
 }
 
 export interface FanoutResult {
@@ -59,21 +66,33 @@ export async function fanoutEvent(evt: WebhookEvent): Promise<FanoutResult> {
 
   let created = 0;
   let deduped = 0;
-  const payload = { ...evt.data, _meta: { eventId: evt.eventId, event: evt.event } };
+  const meta = {
+    eventId: evt.eventId,
+    event: evt.event,
+    ...(evt.occurredAt !== undefined ? { occurredAt: evt.occurredAt } : {}),
+  };
+  const payload = JSON.stringify({ ...evt.data, _meta: meta });
 
   for (const sub of subscribers) {
-    // Dedup por (webhook_id, _meta.eventId): só insere se ainda não existe.
-    const inserted = await db.execute(sql`
-      INSERT INTO outbound_webhook_deliveries
-        (webhook_id, workspace_id, event, payload, status, next_attempt_at)
-      SELECT ${sub.id}::uuid, ${evt.workspaceId}::uuid, ${evt.event}, ${JSON.stringify(payload)}::jsonb, 'pending', now()
-      WHERE NOT EXISTS (
-        SELECT 1 FROM outbound_webhook_deliveries d
-        WHERE d.webhook_id = ${sub.id}::uuid
-          AND d.payload #>> '{_meta,eventId}' = ${evt.eventId}
-      )
-      RETURNING id
-    `);
+    const inserted = await db.transaction(async (tx) => {
+      // Serializa o par (webhook, eventId) até o fim da transação: o segundo
+      // consumidor só avalia o NOT EXISTS depois que o primeiro gravou.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${sub.id}:${evt.eventId}`}, 0))`,
+      );
+      // Dedup por (webhook_id, _meta.eventId): só insere se ainda não existe.
+      return tx.execute(sql`
+        INSERT INTO outbound_webhook_deliveries
+          (webhook_id, workspace_id, event, payload, status, next_attempt_at)
+        SELECT ${sub.id}::uuid, ${evt.workspaceId}::uuid, ${evt.event}, ${payload}::jsonb, 'pending', now()
+        WHERE NOT EXISTS (
+          SELECT 1 FROM outbound_webhook_deliveries d
+          WHERE d.webhook_id = ${sub.id}::uuid
+            AND d.payload #>> '{_meta,eventId}' = ${evt.eventId}
+        )
+        RETURNING id
+      `);
+    });
     if (Array.from(inserted).length > 0) created += 1;
     else deduped += 1;
   }

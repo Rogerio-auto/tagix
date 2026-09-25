@@ -10,6 +10,7 @@
  */
 import type { ViewStatus } from '@hm/shared';
 import type { SendResult } from '@hm/channels';
+import { domainEvents, emitDomainEvent } from '@hm/shared/mq';
 import {
   STATUS_RANK,
   defaultOrphanStatusStore,
@@ -86,6 +87,16 @@ export async function finalizeOutbound(
       type: job.kind,
       content: outboundJobContent(job),
     });
+    // F70-S09: `message.sent` aos webhooks de saída. O status já está gravado;
+    // o emissor nunca lança, e o eventId `<messageId>:sent` deduplica o reenvio.
+    await emitDomainEvent(
+      domainEvents.messageSent(workspaceId, {
+        conversationId: job.conversationId,
+        messageId: job.messageId,
+        type: job.kind,
+        text: outboundJobContent(job),
+      }),
+    );
   }
 
   // F52-S04 — reconciliação de callback tardio: agora que o external_id está

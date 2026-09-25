@@ -19,7 +19,21 @@ export const QUEUES = {
   coexistence: 'hm.q.coexistence',
   /** Leads de formulário de anúncio da Meta (F69-S03): um envelope por `leadgen_id`. */
   leadgen: 'hm.q.leadgen',
+  /**
+   * Eventos de domínio → fan-out de webhooks de saída (F70-S09). Além do bind
+   * padrão `hm.q.webhooks.#`, recebe `domain.#` (ver {@link DOMAIN_EVENT_BINDING}).
+   */
+  webhooks: 'hm.q.webhooks',
 } as const;
+
+/**
+ * Eventos de domínio (F70-S09) usam routing key própria, `domain.<evento>`
+ * (ex.: `domain.message.received`), e não o prefixo de uma fila: o evento é do
+ * negócio, não de um consumidor. Quem quiser ouvir liga a própria fila em
+ * `domain.#`. Contrato e catálogo em `domain-events.ts`.
+ */
+export const DOMAIN_EVENT_ROUTING_PREFIX = 'domain' as const;
+export const DOMAIN_EVENT_BINDING = `${DOMAIN_EVENT_ROUTING_PREFIX}.#` as const;
 
 /** Tipo do envelope de lead de anúncio e a routing key que bate no bind `hm.q.leadgen.#`. */
 export const LEADGEN_EVENT_TYPE = 'leadgen.received' as const;
@@ -129,6 +143,8 @@ export async function assertTopology(channel: Channel): Promise<void> {
     await channel.assertQueue(queue, { durable: true });
     await channel.bindQueue(queue, EXCHANGES.events, `${queue}.#`);
   }
+  // F70-S09: a fila de webhooks recebe todos os eventos de domínio.
+  await channel.bindQueue(QUEUES.webhooks, EXCHANGES.events, DOMAIN_EVENT_BINDING);
 
   // DLQ final + retry ladder das filas cliente-facing (inbound/outbound/media).
   await assertDlq(channel);
