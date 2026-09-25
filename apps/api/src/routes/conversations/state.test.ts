@@ -26,10 +26,20 @@ const connectMqMock = vi.fn().mockResolvedValue({
   connection: {},
 });
 
-// F70-S09: eventos de domínio — construtores reais, emissor capturado.
-const { emitDomainEventMock } = vi.hoisted(() => ({
-  emitDomainEventMock: vi.fn().mockResolvedValue(true),
+// F70-S09/S17: eventos de domínio — construtores reais; a gravação na outbox da
+// transação (`enqueueOutbox`) é capturada. `domainEventsOutbox` vira identidade para o
+// teste ler os rascunhos (o workspace fake não é uuid; o envelope real o recusaria).
+const { enqueueOutboxMock } = vi.hoisted(() => ({
+  enqueueOutboxMock: vi.fn().mockResolvedValue(0),
 }));
+
+/** Rascunhos de evento gravados na outbox, na ordem. */
+function enqueuedDrafts(): unknown[] {
+  return enqueueOutboxMock.mock.calls.flatMap((call) => {
+    const drafts: unknown = call[1];
+    return Array.isArray(drafts) ? drafts : [drafts];
+  });
+}
 
 vi.mock('@hm/shared/mq', async () => {
   const actual = await vi.importActual<typeof MqModule>('@hm/shared/mq');
@@ -37,7 +47,7 @@ vi.mock('@hm/shared/mq', async () => {
     connectMq: (...args: unknown[]) => connectMqMock(...args),
     makeEnvelope: (_type: string, _ws: string, payload: unknown) => payload,
     domainEvents: actual.domainEvents,
-    emitDomainEvent: (...args: unknown[]) => emitDomainEventMock(...args),
+    domainEventsOutbox: (drafts: unknown) => drafts,
   };
 });
 
@@ -66,6 +76,7 @@ vi.mock('@hm/db', () => ({
     },
   },
   assertConversationVisible: assertVisibleMock,
+  enqueueOutbox: (...args: unknown[]) => enqueueOutboxMock(...args),
 }));
 
 // ─── Mock de auth ─────────────────────────────────────────────────────────────
@@ -263,40 +274,40 @@ describe('POST /api/conversations/:id/status', () => {
     expect(res.body).toMatchObject({ conversationId: CONV_ID, status: 'resolved' });
   });
 
-  it('F70-S09: resolver publica conversation.resolved (autor membro)', async () => {
+  it('F70-S09/S17: resolver grava conversation.resolved na outbox (autor membro)', async () => {
     convRow = { assignedTo: MEMBER_AGENT, status: 'open' };
     const res = await request(makeApp())
       .post(`/api/conversations/${CONV_ID}/status`)
       .set('x-test-auth', '1')
       .send({ status: 'resolved' });
     expect(res.status).toBe(200);
-    expect(emitDomainEventMock).toHaveBeenCalledTimes(1);
-    expect(emitDomainEventMock.mock.calls[0]?.[0]).toMatchObject({
+    expect(enqueuedDrafts()).toHaveLength(1);
+    expect(enqueuedDrafts()[0]).toMatchObject({
       event: 'conversation.resolved',
       workspaceId: 'ws-test',
       data: { conversationId: CONV_ID, resolvedBy: 'member', memberId: MEMBER_OWNER, agentId: null },
     });
   });
 
-  it('F70-S09: resolver o que já estava resolvido não publica de novo', async () => {
+  it('F70-S09/S17: resolver o que já estava resolvido não grava evento', async () => {
     convRow = { assignedTo: MEMBER_AGENT, status: 'resolved' };
     const res = await request(makeApp())
       .post(`/api/conversations/${CONV_ID}/status`)
       .set('x-test-auth', '1')
       .send({ status: 'resolved' });
     expect(res.status).toBe(200);
-    expect(emitDomainEventMock).not.toHaveBeenCalled();
+    expect(enqueuedDrafts()).toHaveLength(0);
   });
 
-  it('F70-S09: reabrir conversa resolvida publica conversation.opened (reopened)', async () => {
+  it('F70-S09/S17: reabrir conversa resolvida grava conversation.opened (reopened)', async () => {
     convRow = { assignedTo: MEMBER_AGENT, status: 'resolved' };
     const res = await request(makeApp())
       .post(`/api/conversations/${CONV_ID}/status`)
       .set('x-test-auth', '1')
       .send({ status: 'open' });
     expect(res.status).toBe(200);
-    expect(emitDomainEventMock).toHaveBeenCalledTimes(1);
-    expect(emitDomainEventMock.mock.calls[0]?.[0]).toMatchObject({
+    expect(enqueuedDrafts()).toHaveLength(1);
+    expect(enqueuedDrafts()[0]).toMatchObject({
       event: 'conversation.opened',
       data: { conversationId: CONV_ID, trigger: 'reopened' },
     });

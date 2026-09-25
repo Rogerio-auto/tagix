@@ -14,24 +14,25 @@
  *      execução tem de ser dele, da mesma conversa e estar em curso. Recusa → 403 e
  *      o handler nunca roda.
  *   5. Roda o handler DENTRO de `withWorkspace(workspace_id, …)` (RLS escopada) e
- *      cronometra a latência.
+ *      cronometra a latência. Se a ação deu certo, os eventos de domínio que o
+ *      handler declarou (`result.events`, F70-S09) vão para a outbox NA MESMA
+ *      transação (F70-S17): o relay dos workers publica depois, pelo menos uma vez.
+ *      Rollback da ação não deixa aviso; aviso não se perde depois do commit.
  *   6. Depois do commit, a auditoria em `tool_logs` (execução OU recusa) roda numa
  *      transação própria, best-effort: um erro no INSERT do log (ex.: FK 23503) não
  *      desfaz a ação nem vira 500. A linha aponta para o `tools.id` que a barreira
  *      resolveu (custom do workspace > global), nunca uma busca solta por `key`.
- *   7. Depois do commit, publica os eventos de domínio que o handler declarou
- *      (`result.events`, F70-S09) — webhooks de saída.
- *   8. Responde JSON tipado `{ ok, content?, error?, payload? }`.
+ *   7. Responde JSON tipado `{ ok, content?, error?, payload? }`.
  *
  * Boundary (F2-S07): este router é exportado por `createInternalToolsRouter` e
  * o orchestrator o monta em `app.ts` (vide nota no relatório). Ele NÃO entra
  * atrás de `requireAuth`/`withRLS`.
  */
 import { Router, type Request, type Response } from 'express';
-import { schema, withWorkspace } from '@hm/db';
+import { enqueueOutbox, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import { createLogger, type Logger } from '@hm/logger';
-import { emitDomainEvents } from '@hm/shared/mq';
+import { domainEventsOutbox } from '@hm/shared/mq';
 import {
   authorizeToolCall,
   writeDenialLog,
@@ -219,6 +220,12 @@ export function createInternalToolsRouter(options: InternalToolsRouterOptions = 
         // Recusa: o handler nunca é chamado.
         if (!decision.allowed) return { kind: 'denied', decision };
         const result = await handler(envelope, tx);
+        // F70-S17: os eventos da ação entram na outbox na transação dela. Contrato
+        // violado é logado e descartado (`domainEventsOutbox`); evento de outro
+        // workspace é recusado pela RLS da outbox e desfaz a ação (fail-closed).
+        if (result.ok && result.events && result.events.length > 0) {
+          await enqueueOutbox(tx, domainEventsOutbox(result.events));
+        }
         return { kind: 'executed', toolId: decision.toolId, result };
       });
     } catch (err) {
@@ -263,12 +270,6 @@ export function createInternalToolsRouter(options: InternalToolsRouterOptions = 
     await audit(toolKey, envelope, (tx) =>
       writeToolLog(tx, { toolId, envelope, result, durationMs }),
     );
-
-    // F70-S09: eventos de domínio da ação, só agora — a transação já commitou.
-    // O emissor nunca lança; a resposta ao runtime não espera o broker falhar.
-    if (result.ok && result.events && result.events.length > 0) {
-      await emitDomainEvents(result.events);
-    }
 
     res.status(result.ok ? 200 : 422).json({
       ok: result.ok,

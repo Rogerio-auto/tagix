@@ -22,7 +22,6 @@ import request from 'supertest';
 import { and, eq, isNull } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb, schema } from '@hm/db';
-import { setDomainEventTransport } from '@hm/shared/mq';
 import { createInternalToolsRouter } from './router';
 import { buildWorkflowRegistry } from './workflow-handlers';
 
@@ -200,7 +199,6 @@ async function contactRow() {
 }
 
 beforeAll(async () => {
-  setDomainEventTransport(async () => undefined);
   try {
     const db = getDb();
     await db.insert(schema.workspaces).values([
@@ -311,7 +309,6 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  setDomainEventTransport(null);
   if (dbAvailable) {
     await getDb().delete(schema.workspaces).where(eq(schema.workspaces.id, WS));
     await getDb().delete(schema.workspaces).where(eq(schema.workspaces.id, WS_OTHER));

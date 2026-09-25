@@ -26,12 +26,13 @@ import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { eq, sql } from 'drizzle-orm';
-import { assertConversationVisible, schema } from '@hm/db';
+import { assertConversationVisible, enqueueOutbox, schema } from '@hm/db';
 import {
   connectMq,
   domainEvents,
-  emitDomainEvent,
+  domainEventsOutbox,
   makeEnvelope,
+  type DomainEventDraft,
   type MqHandle,
 } from '@hm/shared/mq';
 import {
@@ -208,7 +209,36 @@ export function createConversationStateRouter(): Router {
             updatedAt: new Date(),
           })
           .where(eq(schema.conversations.id, conversationId));
-        return { ok: true, before: conversation } as const;
+
+        // F70-S09/S17: eventos de domínio (webhooks de saída) na outbox, NA transação
+        // da transição: rollback não avisa ninguém, commit não perde o aviso. Só
+        // transições reais: resolver o que já estava resolvido, ou "abrir" o que já
+        // estava aberto, não avisa ninguém.
+        const events: DomainEventDraft[] = [];
+        if (status === 'resolved' && conversation.status !== 'resolved') {
+          events.push(
+            domainEvents.conversationResolved(workspaceId, {
+              conversationId,
+              resolvedBy: 'member',
+              memberId,
+              agentId: null,
+            }),
+          );
+        } else if (
+          status === 'open' &&
+          (conversation.status === 'resolved' || conversation.status === 'closed')
+        ) {
+          events.push(
+            domainEvents.conversationOpened(workspaceId, {
+              conversationId,
+              contactId: conversation.contactId ?? null,
+              channelId: conversation.channelId ?? null,
+              trigger: 'reopened',
+            }),
+          );
+        }
+        await enqueueOutbox(tx, domainEventsOutbox(events));
+        return { ok: true } as const;
       });
 
       if ('notFound' in result) {
@@ -218,30 +248,6 @@ export function createConversationStateRouter(): Router {
       if ('forbidden' in result) {
         res.status(403).json({ message: 'Conversa não atribuída a você.' });
         return;
-      }
-
-      // F70-S09: eventos de domínio (webhooks de saída), pós-commit. Só transições
-      // reais: resolver o que já estava resolvido, ou "abrir" o que já estava
-      // aberto, não avisa ninguém. O emissor nunca lança.
-      const before = result.before;
-      if (status === 'resolved' && before.status !== 'resolved') {
-        void emitDomainEvent(
-          domainEvents.conversationResolved(workspaceId, {
-            conversationId,
-            resolvedBy: 'member',
-            memberId,
-            agentId: null,
-          }),
-        );
-      } else if (status === 'open' && (before.status === 'resolved' || before.status === 'closed')) {
-        void emitDomainEvent(
-          domainEvents.conversationOpened(workspaceId, {
-            conversationId,
-            contactId: before.contactId ?? null,
-            channelId: before.channelId ?? null,
-            trigger: 'reopened',
-          }),
-        );
       }
 
       const payload: ConversationStateChangedPayload = { conversationId, status };

@@ -36,8 +36,10 @@ export interface ToolHandlerResult {
   readonly tableName?: string;
   /**
    * Eventos de domínio da ação (F70-S09). Declarados como DADO, não publicados pelo
-   * handler: o handler roda dentro da transação e o router só publica depois do
-   * commit — rollback nunca vira aviso para um sistema de fora. Só saem se `ok`.
+   * handler: o router os grava na outbox (F70-S17) na MESMA transação do handler —
+   * rollback nunca vira aviso para um sistema de fora, e o commit não perde o aviso.
+   * Só saem se `ok`. O `workspaceId` de cada evento tem de ser o do envelope: a RLS
+   * da outbox recusa outro, e a recusa desfaz a ação inteira (fail-closed).
    */
   readonly events?: readonly DomainEventDraft[];
 }

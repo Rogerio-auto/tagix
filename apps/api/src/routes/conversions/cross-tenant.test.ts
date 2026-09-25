@@ -8,16 +8,11 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { closeDb, getDb, schema } from '@hm/db';
-import type * as Mq from '@hm/shared/mq';
+import { outboxEventsNamed } from '../deals/__tests__/outbox';
 
 vi.mock('../../middlewares/auth', async () =>
   (await import('../deals/__tests__/two-workspaces')).authMiddlewareMock(),
 );
-const { emitDomainEvent } = vi.hoisted(() => ({ emitDomainEvent: vi.fn(async () => true) }));
-vi.mock('@hm/shared/mq', async (importOriginal) => ({
-  ...(await importOriginal<typeof Mq>()),
-  emitDomainEvent,
-}));
 
 const { actAs, dropTenants, ghostId, seedTenant } =
   await import('../deals/__tests__/two-workspaces');
@@ -42,9 +37,13 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  emitDomainEvent.mockClear();
   actAs(A);
 });
+
+/** Eventos `conversion.registered` de um workspace na outbox (F70-S17). */
+async function registeredEvents(workspaceId: string): Promise<number> {
+  return (await outboxEventsNamed(workspaceId, 'conversion.registered')).length;
+}
 
 async function conversionsOf(workspaceId: string): Promise<number> {
   const rows = await getDb()
@@ -79,7 +78,7 @@ describe('POST /api/conversions (F70-S11)', () => {
       expect(ghost.body).toEqual(res.body);
 
       expect(await conversionsOf(A.ws)).toBe(0);
-      expect(emitDomainEvent).not.toHaveBeenCalled();
+      expect(await registeredEvents(A.ws)).toBe(0);
     });
   }
 
@@ -93,6 +92,6 @@ describe('POST /api/conversions (F70-S11)', () => {
     });
     expect(res.status).toBe(201);
     expect(res.body.conversion.workspaceId).toBe(A.ws);
-    expect(emitDomainEvent).toHaveBeenCalledTimes(1);
+    expect(await registeredEvents(A.ws)).toBe(1);
   });
 });

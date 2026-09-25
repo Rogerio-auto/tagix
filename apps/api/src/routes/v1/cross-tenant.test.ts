@@ -12,13 +12,11 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { closeDb, getDb, schema } from '@hm/db';
-import type * as Mq from '@hm/shared/mq';
 import type * as FlowEngine from '@hm/flow-engine';
 
-const { keyWorkspace, triggerFlow, emitDomainEvent } = vi.hoisted(() => ({
+const { keyWorkspace, triggerFlow } = vi.hoisted(() => ({
   keyWorkspace: { id: '' },
   triggerFlow: vi.fn(async () => ({ executionId: '00000000-0000-4000-8000-000000000002' })),
-  emitDomainEvent: vi.fn(async () => true),
 }));
 vi.mock('../../middlewares/api-key', () => ({
   requireApiKey: (req: Request, _res: Response, next: NextFunction) => {
@@ -32,12 +30,9 @@ vi.mock('@hm/flow-engine', async (importOriginal) => ({
   ...(await importOriginal<typeof FlowEngine>()),
   triggerFlow,
 }));
-vi.mock('@hm/shared/mq', async (importOriginal) => ({
-  ...(await importOriginal<typeof Mq>()),
-  emitDomainEvent,
-}));
 
 const { dropTenants, ghostId, seedTenant } = await import('../deals/__tests__/two-workspaces');
+const { outboxEventsNamed } = await import('../deals/__tests__/outbox');
 type TenantFixture = Awaited<ReturnType<typeof seedTenant>>;
 const { createV1Router } = await import('./index');
 
@@ -61,8 +56,12 @@ afterAll(async () => {
 beforeEach(() => {
   keyWorkspace.id = A.ws;
   triggerFlow.mockClear();
-  emitDomainEvent.mockClear();
 });
+
+/** Eventos `conversion.registered` de um workspace na outbox (F70-S17). */
+async function registeredEvents(workspaceId: string): Promise<number> {
+  return (await outboxEventsNamed(workspaceId, 'conversion.registered')).length;
+}
 
 describe('POST /api/v1/trigger_flow (F70-S11)', () => {
   for (const field of ['conversationId', 'contactId'] as const) {
@@ -114,7 +113,7 @@ describe('POST /api/v1/conversions (F70-S11)', () => {
         .from(schema.conversionEvents)
         .where(eq(schema.conversionEvents.workspaceId, A.ws));
       expect(rows).toHaveLength(0);
-      expect(emitDomainEvent).not.toHaveBeenCalled();
+      expect(await registeredEvents(A.ws)).toBe(0);
     });
   }
 
@@ -126,7 +125,7 @@ describe('POST /api/v1/conversions (F70-S11)', () => {
       dealId: A.deal,
     });
     expect(res.status).toBe(201);
-    expect(emitDomainEvent).toHaveBeenCalledTimes(1);
+    expect(await registeredEvents(A.ws)).toBe(1);
   });
 });
 
