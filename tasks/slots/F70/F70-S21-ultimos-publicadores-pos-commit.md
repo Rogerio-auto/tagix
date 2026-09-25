@@ -92,6 +92,154 @@ Ficam como estão (não nascem de uma escrita no banco, ou são outra família d
 
 ## Definition of Done
 
-- [ ] teste por publicador: rollback → nenhum job na outbox; commit → um job
-- [ ] `git grep` sem `closeDomainEventEmitter` e sem `publishOutboundJob` fora de testes (ou justificativa por chamada restante)
-- [ ] doc sem o aviso obsoleto
+- [x] teste por publicador: rollback → nenhum job na outbox; commit → um job
+- [x] `git grep` sem `closeDomainEventEmitter` e sem `publishOutboundJob` fora de testes (ou justificativa por chamada restante)
+- [x] doc sem o aviso obsoleto
+
+## Decisões
+
+### API
+
+- `apps/api/src/mq/outbound-publisher.ts` não publica mais. Ficam `OUTBOUND_JOB_TYPE`,
+  `outboundJobOutbox(workspaceId, job)` e `enqueueOutboundJob(tx, workspaceId, job)`.
+  Saíram `publishOutboundJob`, a conexão AMQP própria e `closeOutboundPublisher`, que não
+  tinha chamador.
+- A rota muda como na F70-S20: antes `hm.events` com rk `hm.q.outbound.send`; agora o
+  exchange padrão direto em `hm.q.outbound`. Mesmo tipo e mesmo payload.
+- **LiveChat** (`POST /api/conversations/:id/messages`): o job é gravado dentro do
+  `req.scoped` que insere a mensagem `pending` e aplica a auto-pausa da IA. O replay
+  idempotente (`Idempotency-Key`) devolve antes do insert e não grava job.
+- **Comentários do IG:**
+  - resposta: mensagem `pending` e job numa transação só (`createPendingReply`);
+  - ocultar: `hidden` e job numa transação só. Sem conversa associada, o `hidden`
+    continua gravado e a rota responde 409, como antes. Nenhum job sai, porque o worker
+    precisa da conversa.
+- **Teste do criador de campanhas** *(correção)*: `prepareTestSend` grava o job antes de
+  devolver `created`. A opção `publishOutbound` do router saiu. O teste unitário passou a
+  ler o insert na outbox pela transação falsa. Como o envelope exige workspace uuid, o
+  bloco do envio de teste usa um.
+
+### Workers
+
+- **Flows:** `OutboundPersistencePort.persistOutboundMessage(input, buildJob)` recebe o
+  construtor do job. O `messageId` só existe depois do INSERT, e o job é montado dentro
+  da transação. `publishJob` virou `publishPresenceJob`, usado só pelo `typing_indicator`.
+- **Agente:** `PersistAgentMessageInput` ganhou `channelId` e `chatId`.
+  `DbAgentRunStore.persistAgentMessage` grava a mensagem e o job `text`. Saíram
+  `AgentRunDeps.outbound`, `AgentOutboundEnqueuePort`, `AgentOutboundEnqueueInput` e
+  `MqAgentOutboundEnqueue`. `OUTBOUND_JOB_TYPE` passou a morar em `run.ts`: o
+  `worker.ts` o reexporta, porque `run.ts` não pode importar valor de `worker.ts` sem
+  ciclo.
+- **Lembretes da agenda:**
+  - o job nasce da marca de idempotência, não de uma linha nova;
+  - a transação reivindica a marca com um UPDATE condicional (`remindersSent` sem o
+    offset; `dueActionDone` diferente de `true`) e só então grava o job;
+  - quem não reivindica não envia. O lembrete ao contato devolve `false`; a ação devolve
+    `skipped` com `already_done`;
+  - `markReminded` e `markDueActionDone` continuam depois e são idempotentes.
+- **Bug corrigido na marca do tick** (achado pelo teste real): `withRemindersSent`
+  interpolava o array JS (`${offsets}::int[]`). O Drizzle expande array em lista de
+  parâmetros, e o driver recusava o número num parâmetro `int[]`. A marca nunca era
+  gravada, e o tick falhava no `markReminded`. Os unitários usam portas stub e não
+  pegavam. Agora os offsets vão como um parâmetro jsonb.
+- **Mídia do inbound:**
+  - o job vai na transação de `DbInboundPersistence.persist`, depois dos eventos de
+    domínio, um por mensagem NOVA com `mediaRef`. A mensagem deduplicada não regrava,
+    porque o job já entrou com a primeira inserção;
+  - `PersistInboundResult` ganhou `mediaJobs`, e o pipeline só repassa a contagem;
+  - saíram `InboundDeps.media`, `MediaEnqueuePort`, `MqMediaEnqueue` e
+    `INBOUND_MEDIA_RK`; entrou `inboundMediaJobOutbox`;
+  - o envelope leva o workspace real, porque a RLS exige. O media-worker não usa o
+    campo;
+  - o construtor duplica o de `coexistence/db-ports.ts` (`mediaJobOutbox`), fora da
+    fronteira. A igualdade do tipo continua travada pelo teste da coexistência.
+
+### Limpeza
+
+- Saíram `closeDomainEventEmitter` (`@hm/shared/mq`) e a chamada no shutdown do bootstrap.
+- Saiu `enqueueOutboxStandalone` (`@hm/db`), sem chamador.
+- `webhook-events.mdx`: o `<Warning>` mantém o aviso da troca de formato. Tirou-se a
+  frase que dizia que a verificação e o ping estavam no formato antigo. A referência
+  aponta `packages/shared/src/webhook-signature.ts`.
+- Três arquivos foram formatados inteiros pelo Prettier, que já apontava diferenças
+  antes deste slot: `flows/outbound-publisher.ts`, o teste dele e o teste de integração
+  novo. Nos demais arquivos tocados, as diferenças do Prettier já existiam e ficaram.
+
+### `git grep` final
+
+- `publishOutboundJob`, `closeDomainEventEmitter`, `enqueueOutboxStandalone` e
+  `MqAgentOutboundEnqueue`: nenhuma ocorrência fora de `tasks/`.
+- `MqMediaEnqueue`: só em comentários de `apps/workers/src/media/job.ts:4` e
+  `media/media.test.ts:150`, fora da fronteira. O shape que eles descrevem não mudou.
+
+## Riscos
+
+- **Lembrete da agenda ao contato continua quebrado (anterior a este slot):** o job leva
+  `conversationId: ''` e um `messageId` sintético sem linha em `messages`.
+  `parseOutboundJob` recusa `conversationId` vazio, então o job vai para a DLQ, agora
+  pela outbox. O caminho transacional está pronto; o payload precisa de conversa e
+  mensagem `pending` reais. Fica para um slot da agenda.
+- **Mensagens em voo no deploy:** os jobs publicados pelo código antigo seguem válidos,
+  porque o tipo e o payload não mudaram. A mídia antiga chega com workspace
+  `UNRESOLVED`, e o media-worker ignora o campo.
+- **Latência:** o job sai quando o relay acorda (LISTEN/NOTIFY no commit, polling de 1s
+  de segurança), não no mesmo tick. É o mesmo custo já aceito para campanhas e para a
+  API v1.
+
+## Pendências fora da fronteira
+
+- **Gatilhos da IA em `hm.q.flows`**, que nascem de escrita:
+  - `inbound/db-ports.ts:291`;
+  - `agents/reengagement.ts:481`;
+  - `apps/api/src/routes/conversations/agent.ts:110`;
+  - `apps/api/src/internal/tools/agent-transfer-handlers.ts:103`.
+  Exigem `QUEUES.flows` em `OUTBOX_JOB_QUEUES` e rever o buffer de agregação do agente.
+- **Passo de flow** (`hm.q.flow.execution`): `triggerFlow` grava a execução por uma porta
+  e publica o passo por outra. Uma execução `running` cujo publish se perde não é
+  reanimada: o scheduler só varre `waiting`.
+- **`campaigns-inbound/db-ports.ts`:** a confirmação de descadastro (`:104`, com
+  `messageId` sintético, como a agenda) e o followup `on_reply` (`:196`).
+- **Comentários obsoletos em `media/`:** `media/job.ts:4` e `media/media.test.ts:150`
+  ainda citam `MqMediaEnqueue`.
+- **`coexistence/db-ports.ts`:** pode usar `inboundMediaJobOutbox` e apagar a cópia
+  `mediaJobOutbox` e `COEXISTENCE_MEDIA_JOB_TYPE`, se o ciclo de import permitir.
+
+## Validação
+
+```bash
+pnpm --filter @hm/shared typecheck
+pnpm --filter @hm/db typecheck
+pnpm --filter @hm/api typecheck
+pnpm --filter @hm/workers typecheck
+node packages/shared/node_modules/vitest/vitest.mjs run --root packages/shared src/mq/outbox.test.ts src/mq/domain-events.test.ts --maxWorkers=1
+node --env-file=.env apps/api/node_modules/vitest/vitest.mjs run --root apps/api src/routes/conversations/messages.outbox.integration.test.ts src/routes/conversations/messages.test.ts src/routes/conversations/messages.idempotency.test.ts src/routes/conversations/__tests__/cycle-timestamps.integration.test.ts --maxWorkers=1
+node --env-file=.env apps/api/node_modules/vitest/vitest.mjs run --root apps/api src/routes/instagram src/routes/campaigns/builder/routes.test.ts src/routes/campaigns/builder/outbox.integration.test.ts --maxWorkers=1
+node --env-file=.env apps/workers/node_modules/vitest/vitest.mjs run --root apps/workers src/flows/outbound-publisher.outbox.test.ts src/flows/outbound-publisher.test.ts --maxWorkers=1
+node --env-file=.env apps/workers/node_modules/vitest/vitest.mjs run --root apps/workers src/agents/persist-agent-message.outbox.test.ts src/agents/agents.test.ts src/agents/run.test.ts src/agents/run-origin-gate.test.ts --maxWorkers=1
+node --env-file=.env apps/workers/node_modules/vitest/vitest.mjs run --root apps/workers src/calendar-reminders --maxWorkers=1
+node --env-file=.env apps/workers/node_modules/vitest/vitest.mjs run --root apps/workers src/inbound/media-outbox.test.ts src/inbound/inbound.test.ts src/inbound/revocation.test.ts src/inbound/origin-gate.test.ts src/media/media.test.ts src/coexistence/coexistence.test.ts --maxWorkers=1
+```
+
+## Resumo
+
+- **API:** o LiveChat, as ações de comentário do IG e o envio de teste do criador de
+  campanhas gravam o job de envio na outbox, na transação do dado.
+  `publishOutboundJob` saiu.
+- **Workers:** entram na outbox, na transação do dado:
+  - o envio do flow;
+  - a resposta do agente;
+  - o lembrete ao contato e a ação `send_message` da agenda, junto da marca de
+    idempotência;
+  - o job de mídia do inbound.
+  A presença dos flows segue com publish direto.
+- **Limpeza:** saíram `closeDomainEventEmitter` e `enqueueOutboxStandalone`, e o aviso
+  obsoleto da doc.
+- **Bug corrigido:** a marca `remindersSent` do tick da agenda nunca era gravada.
+- **Testes novos contra o Postgres de dev** (commit, rollback e casos de borda):
+  - LiveChat: 4;
+  - IG: 7;
+  - teste de campanha: 3;
+  - flows: 4;
+  - agente: 2;
+  - agenda: 5;
+  - mídia do inbound: 4.
