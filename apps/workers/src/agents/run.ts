@@ -370,7 +370,8 @@ export async function runAgent(
   }
   const authorization = authorizeAiReply(ctx);
   if (!authorization.allowed) {
-    // Antes de qualquer efeito (execução, policy, runtime): nada é gravado nem enviado.
+    // Antes de policy, execução e runtime: nenhuma execução é gravada e nada é enviado
+    // (o único efeito anterior é o agent_id sticky do `loadContext`, inofensivo).
     // `warn` de propósito: IA `on` que não pode responder é estado a corrigir (um humano
     // religa a IA na conversa, se ela deve mesmo ser atendida pelo agente).
     logger.warn('agent-run: IA on sem origem elegível nem marca humana — não responde', {
