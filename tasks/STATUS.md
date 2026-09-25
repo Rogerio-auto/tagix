@@ -56,7 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 31     | 3   | 2   | 0   | 0   | 1   | 25   |
+| F70   | 31     | 2   | 2   | 0   | 0   | 2   | 25   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -795,7 +795,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70-S28 | Sessão expirada volta ao login, no navegador e no PWA                                                           | ✅ done      | critical   | F70-S01                   |
 | F70-S29 | e2e do CI verde de novo (gate do deploy)                                                                        | 🟢 available | critical   | F70-S28                   |
 | F70-S30 | Trava de origem da IA como configuração do workspace                                                            | 🟢 available | high       | F70-S28                   |
-| F70-S31 | Sonnet 5 na lista de modelos e no agente da Arcada                                                              | 🟢 available | medium     | F70-S06                   |
+| F70-S31 | Sonnet 5 na lista de modelos e no agente da Arcada                                                              | 🟣 review    | medium     | F70-S06                   |
 
 ## Fase 8 — Permissions & Settings
 

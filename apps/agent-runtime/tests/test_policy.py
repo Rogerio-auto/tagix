@@ -105,6 +105,17 @@ def test_model_allowed_returns_none() -> None:
     assert reason is None
 
 
+def test_sonnet_5_passes_when_in_workspace_whitelist() -> None:
+    # F70-S31: o runtime não tem catálogo próprio; o slug do OpenRouter passa
+    # quando a policy do workspace o inclui e é bloqueado quando não inclui.
+    slug = "anthropic/claude-sonnet-5"
+    allowed = _policy(allowed_models=["anthropic/claude-sonnet-4", slug])
+    assert model_block_reason(slug, allowed) is None
+    assert apply_policy([], slug, allowed).model_blocked_reason is None
+    blocked = _policy(allowed_models=["anthropic/claude-sonnet-4"])
+    assert model_block_reason(slug, blocked) == f"model not allowed by workspace policy: {slug}"
+
+
 def test_model_empty_whitelist_allows_everything() -> None:
     # Whitelist vazia = sem restrição → nunca bloqueia.
     assert model_block_reason("anything/at-all", _policy(allowed_models=[])) is None
