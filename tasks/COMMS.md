@@ -896,3 +896,5 @@ A liberação é só `atendimento-humano`. Etiqueta de conversão não entra nun
 
 **Operação:** até isso entrar, no workspace real:
 `UPDATE agent_tools at SET overrides = at.overrides || '{"allowed_tags":["atendimento-humano"]}' FROM tools t WHERE t.id = at.tool_id AND t.key = 'add_contact_tag' AND at.agent_id = '<agente da Arcada>';`
+
+**Resolvido (2026-09-25):** o seed da Arcada (`agent_templates_arcada.ts`) grava as liberações de `tools_agent_grants.ts` (`add_contact_tag` só `atendimento-humano`; `update_contact` nenhum campo). Vínculo existente só recebe a liberação enquanto `overrides` estiver vazio; a edição do operador vence (teste em `agent_templates_arcada.test.ts`). Branch `fix/f70-arcada-seed-grants`.

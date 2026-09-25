@@ -9,7 +9,7 @@
  * 3) Integração (Postgres dev): o seed roda sob RLS, não ativa nada e é idempotente.
  */
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb } from '../client';
 import { withWorkspace } from '../rls';
@@ -23,6 +23,7 @@ import {
   kbChunks,
   kbDocuments,
   tags,
+  tools,
   workspaces,
 } from '../schema';
 import {
@@ -399,6 +400,33 @@ describe('Arcada — seed no banco (dev)', () => {
       expect(b[k]).toHaveLength(a[k].length);
     }
     expect(second.agentId).toBe(first.agentId);
+  });
+
+  it('libera só atendimento-humano em add_contact_tag e não sobrescreve a edição do operador (F70-S23)', async () => {
+    const report = await withWorkspace(ws, (tx) => seedArcadaAttendance(tx, ws));
+    const db = getDb();
+    const links = await db
+      .select({ toolId: agentTools.toolId, overrides: agentTools.overrides, key: tools.key })
+      .from(agentTools)
+      .innerJoin(tools, eq(tools.id, agentTools.toolId))
+      .where(eq(agentTools.agentId, report.agentId));
+    const tagLink = links.find((l) => l.key === 'add_contact_tag');
+    // Sem a tool no catálogo do banco de teste, não há o que conferir.
+    if (!tagLink) return;
+    expect(tagLink.overrides).toEqual({ allowed_tags: ['atendimento-humano'] });
+
+    // O operador ajusta pela UI; uma nova rodada do seed não desfaz.
+    const edited = { allowed_tags: ['atendimento-humano', 'vip'] };
+    await db
+      .update(agentTools)
+      .set({ overrides: edited })
+      .where(and(eq(agentTools.agentId, report.agentId), eq(agentTools.toolId, tagLink.toolId)));
+    await withWorkspace(ws, (tx) => seedArcadaAttendance(tx, ws));
+    const [after] = await db
+      .select({ overrides: agentTools.overrides })
+      .from(agentTools)
+      .where(and(eq(agentTools.agentId, report.agentId), eq(agentTools.toolId, tagLink.toolId)));
+    expect(after?.overrides).toEqual(edited);
   });
 
   it('prompt novo no seed vira RASCUNHO; o live e o agente não mudam', async () => {
