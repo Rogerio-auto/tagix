@@ -2,7 +2,7 @@
 id: F70-S30
 title: Trava de origem da IA como configuração do workspace
 phase: F70
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F70-S28]
@@ -12,6 +12,7 @@ source_docs:
   - tasks/slots/F70/F70-S19-achados-da-auditoria-apos-s15-s16.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T20:45:07Z
+completed_at: 2026-09-25T21:38:01Z
 
 ---
 # F70-S30 — Trava de origem da IA como configuração do workspace
