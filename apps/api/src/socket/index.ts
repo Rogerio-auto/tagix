@@ -4,7 +4,7 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { eq } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
-import { SESSION_COOKIE, resolveSession, type SessionContext } from '../auth';
+import { SESSION_COOKIE, resolveSessionStatus, type SessionContext } from '../auth';
 import { loadConfig } from '../config';
 import { startSocketRelay } from './relay';
 import { wireSupportRealtime } from '../services/support-realtime';
@@ -28,6 +28,15 @@ function parseCookie(header: string, name: string): string | null {
     if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1).trim());
   }
   return null;
+}
+
+/**
+ * Mensagem do `connect_error` do handshake — contrato com o `SocketProvider` do web
+ * (F70-S28): `unauthorized` = sessão morta (vai ao login); `auth_unavailable` =
+ * provider de auth indisponível (retry com backoff, sem deslogar).
+ */
+export function handshakeErrorMessage(kind: 'invalid' | 'unavailable'): string {
+  return kind === 'invalid' ? 'unauthorized' : 'auth_unavailable';
 }
 
 /**
@@ -56,18 +65,22 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
   io.use((socket, next) => {
     void (async () => {
       const token = parseCookie(socket.handshake.headers.cookie ?? '', SESSION_COOKIE);
-      const session = token ? await resolveSession(token) : null;
-      if (!session) {
+      const result = token ? await resolveSessionStatus(token) : ({ kind: 'invalid' } as const);
+      if (result.kind !== 'ok') {
         socketLog.warn('handshake unauthorized', {
           hasCookieHeader: Boolean(socket.handshake.headers.cookie),
           hasSessionCookie: token !== null,
+          reason: result.kind,
           url: socket.handshake.url,
           transport: socket.conn.transport.name,
         });
-        next(new Error('unauthorized'));
+        // F70-S28: o cliente só volta ao login em `unauthorized` (sessão morta).
+        // `auth_unavailable` (provider fora do ar) ele trata como falha temporária e
+        // tenta de novo com backoff — nunca desloga por instabilidade de infra.
+        next(new Error(handshakeErrorMessage(result.kind)));
         return;
       }
-      socket.data.session = session;
+      socket.data.session = result.session;
       next();
     })();
   });

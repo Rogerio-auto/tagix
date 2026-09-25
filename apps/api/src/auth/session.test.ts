@@ -13,7 +13,8 @@ vi.mock('./provider', () => ({
   getAuthProvider: () => ({ verifyToken: verifyTokenMock }),
 }));
 
-const { verifyTokenResilient, __resetIdentityCache } = await import('./session');
+const { verifyTokenResilient, resolveSessionStatus, __resetIdentityCache } =
+  await import('./session');
 
 const ID: AuthIdentity = { authUserId: 'u1', email: 'a@b.com' };
 const netErr = () => new Error('fetch failed');
@@ -81,5 +82,21 @@ describe('verifyTokenResilient', () => {
   it('token nunca-visto: provider lança → null (indisponibilidade não autentica)', async () => {
     verifyTokenMock.mockRejectedValue(netErr());
     expect(await verifyTokenResilient('desconhecido')).toBeNull();
+  });
+});
+
+/**
+ * F70-S28: o motivo da recusa decide o destino do cliente. `invalid` → 401 e volta ao
+ * login; `unavailable` → 503 e ninguém é deslogado por instabilidade do provider.
+ */
+describe('resolveSessionStatus', () => {
+  it('token expirado/revogado (provider null) → invalid', async () => {
+    verifyTokenMock.mockResolvedValue(null);
+    expect(await resolveSessionStatus('morto')).toEqual({ kind: 'invalid' });
+  });
+
+  it('provider fora do ar sem cache → unavailable (não é sessão morta)', async () => {
+    verifyTokenMock.mockRejectedValue(netErr());
+    expect(await resolveSessionStatus('desconhecido')).toEqual({ kind: 'unavailable' });
   });
 });
