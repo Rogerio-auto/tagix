@@ -16,7 +16,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { requireRefsInWorkspace, schema, TenantRefError } from '@hm/db';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { param } from '../conversions/types';
 
@@ -314,8 +314,10 @@ export function createContactsCrudRouter(): Router {
     const workspaceId = req.auth!.workspace.id;
     const d = parsed.data;
     try {
-      const [created] = await req.scoped!((tx) =>
-        tx
+      const [created] = await req.scoped!(async (tx) => {
+        // F70-S11: dono precisa ser membro DESTE workspace (a FK ignora RLS).
+        await requireRefsInWorkspace(tx, [{ kind: 'member', id: d.ownerId, field: 'ownerId' }]);
+        return tx
           .insert(contacts)
           .values({
             workspaceId,
@@ -330,10 +332,14 @@ export function createContactsCrudRouter(): Router {
             address: d.address ?? {},
             document: d.document ?? null,
           })
-          .returning(),
-      );
+          .returning();
+      });
       res.status(201).json({ contact: created });
     } catch (err: unknown) {
+      if (err instanceof TenantRefError) {
+        res.status(422).json(err.body);
+        return;
+      }
       if (typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505') {
         res.status(409).json({ error: 'duplicate_phone', message: 'Já existe um contato com esse telefone.' });
         return;
@@ -354,20 +360,35 @@ export function createContactsCrudRouter(): Router {
     for (const [k, v] of Object.entries(parsed.data)) {
       if (v !== undefined) patch[k] = v;
     }
+    const ownerId = parsed.data.ownerId;
     try {
-      const [updated] = await req.scoped!((tx) =>
-        tx
+      const updated = await req.scoped!(async (tx) => {
+        // Contato alheio/inexistente é 404 ANTES de olhar o payload.
+        const [current] = await tx
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(and(eq(contacts.id, id), isNull(contacts.deletedAt)))
+          .limit(1);
+        if (!current) return undefined;
+        // F70-S11: dono precisa ser membro DESTE workspace (a FK ignora RLS).
+        await requireRefsInWorkspace(tx, [{ kind: 'member', id: ownerId, field: 'ownerId' }]);
+        const [row] = await tx
           .update(contacts)
           .set(patch)
           .where(and(eq(contacts.id, id), isNull(contacts.deletedAt)))
-          .returning(),
-      );
+          .returning();
+        return row;
+      });
       if (!updated) {
         res.sendStatus(404);
         return;
       }
       res.json({ contact: updated });
     } catch (err: unknown) {
+      if (err instanceof TenantRefError) {
+        res.status(422).json(err.body);
+        return;
+      }
       if (typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505') {
         res.status(409).json({ error: 'duplicate_phone', message: 'Já existe um contato com esse telefone.' });
         return;

@@ -15,7 +15,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, asc, desc, eq, gte, inArray, lte } from 'drizzle-orm';
-import { calendarRepo, schema } from '@hm/db';
+import { assertRefsInWorkspace, calendarRepo, schema, TenantRefError } from '@hm/db';
 import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { requireCalendarAccess } from '../../middlewares/calendar-access';
@@ -88,6 +88,13 @@ export function createCalendarsRouter(): Router {
     const d = parsed.data;
     const workspaceId = req.auth!.workspace.id;
     const result = await req.scoped!(async (tx) => {
+      // F70-S11: dono e time precisam ser DESTE workspace (a FK ignora RLS). Antes de
+      // qualquer escrita (inclusive do rebaixamento do default abaixo).
+      const missing = await assertRefsInWorkspace(tx, [
+        { kind: 'member', id: d.ownerId, field: 'ownerId' },
+        { kind: 'team', id: d.teamId, field: 'teamId' },
+      ]);
+      if (missing.length > 0) return new TenantRefError(missing);
       // Garante no maximo um calendar default por workspace.
       if (d.isDefault) {
         await tx
@@ -111,6 +118,10 @@ export function createCalendarsRouter(): Router {
         .returning();
       return created;
     });
+    if (result instanceof TenantRefError) {
+      res.status(422).json(result.body);
+      return;
+    }
     res.status(201).json({ calendar: result });
   });
 
@@ -145,6 +156,12 @@ export function createCalendarsRouter(): Router {
       if (d.isDefault !== undefined) patch['isDefault'] = d.isDefault;
 
       const updated = await req.scoped!(async (tx) => {
+        // F70-S11: mesma trava do POST, antes de qualquer escrita.
+        const missing = await assertRefsInWorkspace(tx, [
+          { kind: 'member', id: d.ownerId, field: 'ownerId' },
+          { kind: 'team', id: d.teamId, field: 'teamId' },
+        ]);
+        if (missing.length > 0) return new TenantRefError(missing);
         if (d.isDefault) {
           await tx
             .update(calendars)
@@ -158,6 +175,10 @@ export function createCalendarsRouter(): Router {
           .returning();
         return row;
       });
+      if (updated instanceof TenantRefError) {
+        res.status(422).json(updated.body);
+        return;
+      }
       if (!updated) {
         res.sendStatus(404);
         return;

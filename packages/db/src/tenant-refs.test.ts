@@ -75,7 +75,12 @@ async function seedWorkspace(label: string, planId: string | null): Promise<Fixt
   if (!member || !contact || !channel) throw new Error('fixture');
   const [conversation] = await db
     .insert(conversations)
-    .values({ workspaceId: ws.id, channelId: channel.id, contactId: contact.id, remoteId: `r-${sfx}` })
+    .values({
+      workspaceId: ws.id,
+      channelId: channel.id,
+      contactId: contact.id,
+      remoteId: `r-${sfx}`,
+    })
     .returning();
   const [pipeline] = await db
     .insert(pipelines)
@@ -225,7 +230,9 @@ describe('uniqueViolationConstraint', () => {
   it('lê o constraint no erro do driver e no embrulho do Drizzle', () => {
     const driver = { code: '23505', constraint_name: 'uq_deals_conversation' };
     expect(uniqueViolationConstraint(driver)).toBe('uq_deals_conversation');
-    expect(uniqueViolationConstraint({ message: 'x', cause: driver })).toBe('uq_deals_conversation');
+    expect(uniqueViolationConstraint({ message: 'x', cause: driver })).toBe(
+      'uq_deals_conversation',
+    );
     expect(uniqueViolationConstraint({ code: '23503' })).toBeNull();
     expect(uniqueViolationConstraint(new Error('x'))).toBeNull();
   });

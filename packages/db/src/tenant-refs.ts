@@ -247,10 +247,7 @@ export function invalidReferenceBody(fields: readonly string[]): InvalidReferenc
 }
 
 /** Como `assertRefsInWorkspace`, mas lança `TenantRefError` quando falta algo. */
-export async function requireRefsInWorkspace(
-  tx: DbTx,
-  refs: readonly TenantRef[],
-): Promise<void> {
+export async function requireRefsInWorkspace(tx: DbTx, refs: readonly TenantRef[]): Promise<void> {
   const missing = await assertRefsInWorkspace(tx, refs);
   if (missing.length > 0) throw new TenantRefError(missing);
 }
