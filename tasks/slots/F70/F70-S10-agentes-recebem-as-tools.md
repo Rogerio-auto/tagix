@@ -2,7 +2,7 @@
 id: F70-S10
 title: Agentes recebem as tools (transfer_to_human, base de conhecimento e workflow)
 phase: F70
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F70-S08]
@@ -12,6 +12,7 @@ source_docs:
   - tasks/COMMS.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T04:13:46Z
+completed_at: 2026-09-25T04:44:14Z
 
 ---
 # F70-S10 — Agentes recebem as tools
