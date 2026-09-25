@@ -2,7 +2,7 @@
 id: F70-S30
 title: Trava de origem da IA como configuração do workspace
 phase: F70
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F70-S28]
