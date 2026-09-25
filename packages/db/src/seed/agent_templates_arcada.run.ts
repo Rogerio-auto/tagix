@@ -3,11 +3,12 @@
  *
  *   pnpm --filter @hm/db exec tsx src/seed/agent_templates_arcada.run.ts --workspace <slug>
  *
- * Guarda de ambiente: só roda contra Postgres local (localhost/127.0.0.1) a menos que
- * `ARCADA_SEED_ALLOW_REMOTE=1` esteja setado de propósito (produção é decisão do Rogério).
+ * Guarda de ambiente (`assertSeedTargetAllowed`, F70-S18): ver a função. Em resumo, recusa
+ * `NODE_ENV=production` sempre e só roda sozinha contra banco LOCAL cujo NOME não é de
+ * produção. Fora disso exige dupla confirmação consciente (produção é decisão do Rogério).
  */
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { config } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { closeDb, getDb } from '../client';
@@ -31,20 +32,89 @@ function parseWorkspaceSlug(argv: readonly string[]): string {
   return slug;
 }
 
-function assertLocalDatabase(url: string | undefined): void {
-  if (!url) throw new Error('DATABASE_URL ausente.');
-  const host = new URL(url).hostname;
-  const local = host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  if (!local && process.env['ARCADA_SEED_ALLOW_REMOTE'] !== '1') {
+/** Variáveis de ambiente que a guarda lê (injetáveis no teste). */
+export interface SeedTargetEnv {
+  readonly NODE_ENV?: string | undefined;
+  readonly DATABASE_URL?: string | undefined;
+  readonly ARCADA_SEED_ALLOW_REMOTE?: string | undefined;
+  readonly ARCADA_SEED_CONFIRM_DATABASE?: string | undefined;
+}
+
+export interface SeedTarget {
+  readonly host: string;
+  readonly database: string;
+}
+
+const LOCAL_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+/**
+ * Nomes de banco de produção. `leadium` é o `PG_DB` de `.env.production.example`; qualquer
+ * nome com `prod` também conta. Hostname sozinho não basta: um túnel SSH para a VPS aparece
+ * como `localhost`, e é o nome do banco que denuncia o alvo.
+ */
+const PRODUCTION_DATABASE_NAMES: ReadonlySet<string> = new Set(['leadium']);
+const PRODUCTION_DATABASE_RE = /prod/i;
+
+export function isProductionDatabaseName(name: string): boolean {
+  const n = name.trim().toLowerCase();
+  return PRODUCTION_DATABASE_NAMES.has(n) || PRODUCTION_DATABASE_RE.test(n);
+}
+
+/**
+ * Guarda do seed (F70-S18). Lança com a razão; devolve o alvo quando pode rodar.
+ *
+ * 1. `NODE_ENV=production` → recusa SEMPRE (sem escape: o seed não é passo de deploy).
+ * 2. `DATABASE_URL` ausente, ilegível ou sem nome de banco → recusa (não dá para confirmar).
+ * 3. Banco local E nome que não é de produção → roda.
+ * 4. Qualquer outro caso (host remoto, OU nome de produção mesmo em `localhost`) exige as
+ *    DUAS confirmações: `ARCADA_SEED_ALLOW_REMOTE=1` e `ARCADA_SEED_CONFIRM_DATABASE=<nome
+ *    exato do banco>`. Digitar o nome do banco é a prova de que se sabe onde se está.
+ */
+export function assertSeedTargetAllowed(env: SeedTargetEnv): SeedTarget {
+  if ((env.NODE_ENV ?? '').trim().toLowerCase() === 'production') {
+    throw new Error('NODE_ENV=production: o seed da Arcada não roda em ambiente de produção.');
+  }
+  const raw = env.DATABASE_URL?.trim();
+  if (!raw) throw new Error('DATABASE_URL ausente.');
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error('DATABASE_URL ilegível.');
+  }
+  const host = url.hostname.toLowerCase();
+  let database: string;
+  try {
+    database = decodeURIComponent(url.pathname.replace(/^\/+/, '')).trim();
+  } catch {
+    throw new Error('DATABASE_URL com nome de banco ilegível.');
+  }
+  if (database === '') {
+    throw new Error('DATABASE_URL sem nome de banco: não dá para confirmar o alvo.');
+  }
+
+  const local = LOCAL_HOSTS.has(host);
+  const productionName = isProductionDatabaseName(database);
+  if (local && !productionName) return { host, database };
+
+  const why = productionName
+    ? `Banco "${database}" tem nome de produção`
+    : `Banco não-local (${host})`;
+  const allowed = env.ARCADA_SEED_ALLOW_REMOTE === '1';
+  const confirmed = env.ARCADA_SEED_CONFIRM_DATABASE === database;
+  if (!allowed || !confirmed) {
     throw new Error(
-      `Banco não-local (${host}). Para rodar fora do dev, defina ARCADA_SEED_ALLOW_REMOTE=1 conscientemente.`,
+      `${why}. Para rodar mesmo assim, defina ARCADA_SEED_ALLOW_REMOTE=1 e ` +
+        `ARCADA_SEED_CONFIRM_DATABASE=<nome exato do banco>, conscientemente.`,
     );
   }
+  return { host, database };
 }
 
 async function main(): Promise<void> {
   const slug = parseWorkspaceSlug(process.argv.slice(2));
-  assertLocalDatabase(process.env['DATABASE_URL']);
+  const target = assertSeedTargetAllowed(process.env);
+  console.log(`[arcada] alvo: banco "${target.database}" em ${target.host}`);
 
   const [ws] = await getDb()
     .select({ id: workspaces.id, name: workspaces.name })
@@ -74,9 +144,23 @@ async function main(): Promise<void> {
   );
 }
 
-main()
-  .catch((err: unknown) => {
-    console.error('[arcada] falhou:', err instanceof Error ? err.message : err);
-    process.exitCode = 1;
-  })
-  .finally(() => closeDb());
+/** Só executa como CLI; importar o módulo (teste da guarda) não semeia nada. */
+function isCliEntry(entry: string | undefined): boolean {
+  if (entry === undefined) return false;
+  const self = pathToFileURL(fileURLToPath(import.meta.url)).href;
+  const invoked = pathToFileURL(path.resolve(entry)).href;
+  // Windows: a letra do drive pode vir em caixas diferentes (c: vs C:).
+  return process.platform === 'win32'
+    ? self.toLowerCase() === invoked.toLowerCase()
+    : self === invoked;
+}
+const isCli = isCliEntry(process.argv[1]);
+
+if (isCli) {
+  main()
+    .catch((err: unknown) => {
+      console.error('[arcada] falhou:', err instanceof Error ? err.message : err);
+      process.exitCode = 1;
+    })
+    .finally(() => closeDb());
+}
