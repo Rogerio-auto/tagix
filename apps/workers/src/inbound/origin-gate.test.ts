@@ -439,13 +439,26 @@ describe.skipIf(!url)('F70-S07 origem + atribuição + eco IG + trava da IA (DB)
     const from = '5511' + digits.slice(0, 7) + '3';
     await runInboundPipeline(
       'meta_whatsapp',
-      waPayload(from, 'wamid.site.' + sfx, 'Olá! vim pelo site do leadium, quero um orçamento'),
+      waPayload(from, 'wamid.site.' + sfx, 'vim pelo site do leadium, quero um orçamento'),
       deps,
       logger,
     );
     const conv = await conversationFor(from);
     expect(conv.origin).toBe('origem:site');
     expect(await tagsOf((await contactFor(from)).id)).toEqual(['origem:site']);
+  });
+
+  it('marcador do site no meio da mensagem → sem-origem (F70-S18: só vale como prefixo)', async () => {
+    const from = '5511' + digits.slice(0, 7) + '4';
+    await runInboundPipeline(
+      'meta_whatsapp',
+      waPayload(from, 'wamid.site-mid.' + sfx, 'Olá! vim pelo site do leadium, quero um orçamento'),
+      deps,
+      logger,
+    );
+    const conv = await conversationFor(from);
+    expect(conv.origin).toBe('sem-origem');
+    expect(await tagsOf((await contactFor(from)).id)).toEqual(['sem-origem']);
   });
 
   it('Instagram: DM de anúncio → origem:anuncio + ad_* do IG; eco do app vira member e pausa a IA', async () => {

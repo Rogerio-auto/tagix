@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AdReferral } from './ad-referral';
 import {
   CONVERSATION_ORIGIN_TAGS as T,
+  MIN_PREFILL_MARKER_LENGTH,
   classifyConversationOrigin,
   isAiEligibleOrigin,
   type ConversationOrigin,
@@ -63,7 +64,7 @@ describe('classifyConversationOrigin', () => {
       classifyConversationOrigin({
         provider: 'meta_whatsapp',
         initiatedBy: 'contact',
-        firstInboundText: 'Olá!   vim PELO SÍTE da arcada e quero um orçamento',
+        firstInboundText: '  vim   PELO SÍTE da arcada e quero um orçamento',
         prefillMarkers: { site: ['Vim pelo sitê da Arcada'] },
       }),
     ).toBe(T.site);
@@ -108,6 +109,62 @@ describe('classifyConversationOrigin', () => {
         }),
       ).toBe(T.semOrigem);
     }
+  });
+
+  describe('F70-S18 — marcador casa só como prefixo', () => {
+    const wa = (firstInboundText: string, site: readonly string[] = MARKERS.site) =>
+      classifyConversationOrigin({
+        provider: 'meta_whatsapp',
+        initiatedBy: 'contact',
+        firstInboundText,
+        prefillMarkers: { site, instagram: MARKERS.instagram },
+      });
+
+    it('marcador no meio da mensagem NÃO classifica', () => {
+      expect(wa('Olá! Vim pelo site da Arcada, quero um orçamento')).toBe(T.semOrigem);
+      expect(wa('Minha tia falou: "vim pelo site da Arcada" kkk')).toBe(T.semOrigem);
+      expect(wa('oi\nVi o perfil no Instagram')).toBe(T.semOrigem);
+    });
+
+    it('marcador no início classifica (a mensagem pode continuar)', () => {
+      expect(wa('Vim pelo site da Arcada')).toBe(T.site);
+      expect(wa('Vim pelo site da Arcada, quero um orçamento')).toBe(T.site);
+      expect(wa('Vi o perfil no Instagram e quero saber mais')).toBe(T.instagram);
+    });
+
+    it('normaliza espaço, caixa, acento e invisíveis antes de comparar', () => {
+      expect(wa('\u200B\uFEFF  \n VIM  pelo\tSÍTE da arcada')).toBe(T.site);
+    });
+
+    it('o marcador precisa terminar numa fronteira de palavra', () => {
+      expect(wa('Vim pelo site da Arcadaria')).toBe(T.semOrigem);
+      expect(wa('Vim pelo site da Arcada2')).toBe(T.semOrigem);
+    });
+
+    it('token não natural funciona como prefixo, em qualquer caixa', () => {
+      const TOKEN = ['[ref:site-7f3a]'];
+      expect(wa('[ref:site-7f3a] Olá, vim pelo site', TOKEN)).toBe(T.site);
+      expect(wa('[REF:SITE-7F3A]Olá', TOKEN)).toBe(T.site);
+      expect(wa('[ref:site-7f3a]', TOKEN)).toBe(T.site);
+      // Colchetes de largura total (teclados asiáticos / copia-e-cola) dobram para ASCII.
+      expect(wa('\uFF3Bref:site-7f3a\uFF3D oi', TOKEN)).toBe(T.site);
+    });
+
+    it('token fora do início, ou diferente, NÃO classifica', () => {
+      const TOKEN = ['[ref:site-7f3a]'];
+      expect(wa('oi [ref:site-7f3a]', TOKEN)).toBe(T.semOrigem);
+      expect(wa('[ref:site-7f3b] oi', TOKEN)).toBe(T.semOrigem);
+      expect(wa('[ref:site-7f3] oi', TOKEN)).toBe(T.semOrigem);
+    });
+
+    it('mínimo de 8 caracteres continua valendo (depois de normalizar)', () => {
+      expect(MIN_PREFILL_MARKER_LENGTH).toBe(8);
+      // 7 caracteres normalizados: ignorado mesmo casando como prefixo.
+      expect(wa('[ref:7] oi', ['[ref:7]'])).toBe(T.semOrigem);
+      expect(wa('  Olá  Olá  tudo', ['  OLÁ  OLÁ '])).toBe(T.semOrigem);
+      // 8 caracteres: vale.
+      expect(wa('[ref:77] oi', ['[ref:77]'])).toBe(T.site);
+    });
   });
 
   it('sem texto e sem referral → sem-origem (ex.: primeira mensagem é áudio)', () => {

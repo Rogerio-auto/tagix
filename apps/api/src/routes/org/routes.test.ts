@@ -234,12 +234,13 @@ describe('F30-S08 visibility — overrides de membro', () => {
     expect(get.body.departmentIds).toEqual([deptAId]);
   });
 
-  it('PUT 400 quando departamento não pertence ao workspace', async () => {
+  it('PUT 422 invalid_reference quando departamento não existe no workspace (F70-S18)', async () => {
     const res = await asOwner('put', `/api/org/members/${agentMemberId}/visibility-overrides`).send({
       departmentIds: [randomUUID()],
     });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('invalid_department');
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('invalid_reference');
+    expect(res.body.fields).toEqual(['departmentIds']);
   });
 
   it('PUT 404 para membro inexistente', async () => {

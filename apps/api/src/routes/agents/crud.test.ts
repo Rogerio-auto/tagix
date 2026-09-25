@@ -53,6 +53,8 @@ vi.mock('@hm/db', () => {
       setAgentDepartments: vi.fn(async () => {}),
       listDepartmentsForAgent: vi.fn(async () => []),
     },
+    requireRefsInWorkspace: vi.fn(async () => {}),
+    TenantRefError: class TenantRefError extends Error {},
     closeDb: vi.fn(),
   };
 });
