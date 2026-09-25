@@ -63,7 +63,10 @@ function readOnlyAcl(
   };
 }
 
-const CONTACT_READ = ['display_name', 'email', 'phone', 'language', 'source', 'custom_fields'];
+// F70-S15 (M1): sem telefone/e-mail na leitura padrão — o runtime ainda os aceita
+// como teto, liberados por agente em `agent_tools.overrides`. `custom_fields` só sai
+// com as chaves de `custom_fields_keys` (default: nenhuma).
+const CONTACT_READ = ['display_name', 'language', 'source', 'custom_fields'];
 const DEAL_READ = [
   'id',
   'title',
@@ -286,7 +289,8 @@ export const AGENT_TOOLS: readonly AgentToolSeed[] = [
   {
     key: 'query_contact',
     name: 'Consultar contato',
-    description: 'Lê dados do contato atual da conversa (nome, e-mail, telefone, etc.).',
+    description:
+      'Lê dados do contato atual da conversa (nome, idioma, origem e os campos personalizados liberados para este agente).',
     category: 'database',
     schema: fn('query_contact', 'Lê dados do contato atual.', {
       type: 'object',
@@ -295,7 +299,7 @@ export const AGENT_TOOLS: readonly AgentToolSeed[] = [
       },
       additionalProperties: false,
     }),
-    handlerConfig: readOnlyAcl('contacts', CONTACT_READ, ['notes']),
+    handlerConfig: { ...readOnlyAcl('contacts', CONTACT_READ, ['notes']), custom_fields_keys: [] },
   },
   {
     key: 'query_deal',
@@ -357,12 +361,14 @@ export async function seedAgentTools(db: DB): Promise<void> {
 }
 
 /**
- * Migrations de catálogo e as keys que cada uma insere. Migration aplicada nunca
- * muda: tool nova entra numa migration nova, com o SQL gerado só das suas keys.
+ * Migrations de catálogo: as keys que cada uma insere (`keys`) e as globais que ela
+ * reescreve (`updates`). Migration aplicada nunca muda: tool nova ou mudança de
+ * conteúdo entra numa migration nova, com o SQL gerado só do que ela toca.
  */
 export const AGENT_TOOL_MIGRATIONS: ReadonlyArray<{
   readonly file: string;
   readonly keys: readonly string[];
+  readonly updates?: readonly string[];
 }> = [
   {
     file: '0084_f70_agent_tools_catalog.sql',
@@ -380,8 +386,37 @@ export const AGENT_TOOL_MIGRATIONS: ReadonlyArray<{
       'query_conversation',
     ],
   },
-  { file: '0087_f70_agent_contact_tools.sql', keys: ['add_contact_tag', 'update_contact'] },
+  {
+    file: '0087_f70_agent_contact_tools.sql',
+    keys: ['add_contact_tag', 'update_contact'],
+    // M1: leitura padrão sem telefone/e-mail + `custom_fields_keys` vazio.
+    updates: ['query_contact'],
+  },
 ];
+
+const sqlLiteral = (s: string): string => `'${s.replace(/'/g, "''")}'`;
+
+/**
+ * SQL que reescreve o conteúdo de tools GLOBAIS já existentes (nome, descrição,
+ * schema e `handler_config`) a partir de `AGENT_TOOLS`. As globais são da plataforma
+ * (o `seedAgentTools` já as sobrescreve); overrides por agente ficam em `agent_tools`.
+ */
+export function renderAgentToolsUpdateSql(keys: readonly string[]): string {
+  return AGENT_TOOLS.filter((t) => keys.includes(t.key))
+    .map(
+      (t) =>
+        `UPDATE "tools" SET "name" = ${sqlLiteral(t.name)}, "description" = ${sqlLiteral(t.description)}, "schema" = ${sqlLiteral(JSON.stringify(t.schema))}::jsonb, "handler_config" = ${sqlLiteral(JSON.stringify(t.handlerConfig))}::jsonb, "updated_at" = now()\n` +
+        `WHERE "key" = ${sqlLiteral(t.key)} AND "workspace_id" IS NULL;`,
+    )
+    .join('\n--> statement-breakpoint\n');
+}
+
+/** Corpo SQL de uma migration de catálogo (inserts e depois updates). */
+export function renderAgentToolMigrationSql(m: (typeof AGENT_TOOL_MIGRATIONS)[number]): string {
+  return [renderAgentToolsInsertSql(m.keys), renderAgentToolsUpdateSql(m.updates ?? [])]
+    .filter((part) => part.length > 0)
+    .join('\n--> statement-breakpoint\n');
+}
 
 /**
  * SQL de migration de catálogo, derivado de `AGENT_TOOLS` (todas, ou só `keys`, na

@@ -18,6 +18,7 @@ import { tools } from '../schema';
 import {
   AGENT_TOOLS,
   AGENT_TOOL_MIGRATIONS,
+  renderAgentToolMigrationSql,
   renderAgentToolsInsertSql,
   seedAgentTools,
 } from './tools_agent';
@@ -86,12 +87,34 @@ describe('catálogo de tools de agente — contrato', () => {
     }
   });
 
-  it('cada migration de catálogo é exatamente o SQL gerado das suas keys', () => {
-    for (const m of AGENT_TOOL_MIGRATIONS) {
+  it('cada migration de catálogo bate com o catálogo atual no que ninguém depois mudou', () => {
+    AGENT_TOOL_MIGRATIONS.forEach((m, i) => {
       const sql = readFileSync(path.resolve(here, '../../drizzle', m.file), 'utf8');
-      expect(sql, m.file).toContain(renderAgentToolsInsertSql(m.keys));
+      const rewrittenLater = new Set(
+        AGENT_TOOL_MIGRATIONS.slice(i + 1).flatMap((later) => later.updates ?? []),
+      );
       expect(sql.match(/INSERT INTO "tools"/g), m.file).toHaveLength(m.keys.length);
-    }
+      for (const key of m.keys) {
+        // Conteúdo reescrito por migration posterior é histórico: só a presença conta.
+        if (rewrittenLater.has(key)) {
+          expect(sql, `${m.file}:${key}`).toContain(`WHERE "key" = '${key}' AND "workspace_id"`);
+        } else {
+          expect(sql, `${m.file}:${key}`).toContain(renderAgentToolsInsertSql([key]));
+        }
+      }
+    });
+    // A migration mais nova é exatamente o SQL gerado (inserts + updates).
+    const last = AGENT_TOOL_MIGRATIONS[AGENT_TOOL_MIGRATIONS.length - 1]!;
+    const lastSql = readFileSync(path.resolve(here, '../../drizzle', last.file), 'utf8');
+    expect(lastSql).toContain(renderAgentToolMigrationSql(last));
+  });
+
+  it('query_contact não lê telefone nem e-mail por padrão e fecha custom_fields (M1)', () => {
+    const tool = AGENT_TOOLS.find((t) => t.key === 'query_contact');
+    const acl = tool?.handlerConfig['allowed_columns'] as { read: string[] };
+    expect(acl.read).not.toContain('phone');
+    expect(acl.read).not.toContain('email');
+    expect(tool?.handlerConfig['custom_fields_keys']).toEqual([]);
   });
 
   it('as migrations cobrem o catálogo inteiro, sem key repetida', () => {
