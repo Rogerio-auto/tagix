@@ -81,11 +81,15 @@ export const contacts = pgTable(
     deletedAt: ts('deleted_at'),
   },
   (t) => [
+    // Alvo das FKs compostas por workspace (F70-S12, migração 0085).
+    uniqueIndex('uq_contacts_workspace_id').on(t.workspaceId, t.id),
     uniqueIndex('uq_contacts_workspace_phone')
       .on(t.workspaceId, t.phone)
       .where(sql`${t.phone} is not null and ${t.deletedAt} is null`),
     index('idx_contacts_workspace_name').on(t.workspaceId, t.displayName),
-    index('idx_contacts_owner').on(t.ownerId).where(sql`${t.ownerId} is not null`),
+    index('idx_contacts_owner')
+      .on(t.ownerId)
+      .where(sql`${t.ownerId} is not null`),
     index('idx_contacts_opt_in').on(t.workspaceId, t.marketingOptIn),
     // Parcial: o agendador varre só quem tem fuso próprio para agrupar por janela
     // horária. Contato sem fuso resolve pelo market pack e não precisa do índice.

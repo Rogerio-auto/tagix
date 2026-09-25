@@ -73,19 +73,27 @@ export const conversations = pgTable(
     updatedAt: ts('updated_at'),
   },
   (t) => [
+    // Alvo das FKs compostas por workspace (F70-S12, migração 0085).
+    uniqueIndex('uq_conversations_workspace_id').on(t.workspaceId, t.id),
     uniqueIndex('uq_conversations_channel_remote').on(t.channelId, t.remoteId),
     index('idx_conversations_ws_status_lastmsg').on(
       t.workspaceId,
       t.status,
       t.lastMessageAt.desc(),
     ),
-    index('idx_conversations_assigned').on(t.assignedTo).where(sql`${t.assignedTo} is not null`),
-    index('idx_conversations_contact').on(t.contactId).where(sql`${t.contactId} is not null`),
+    index('idx_conversations_assigned')
+      .on(t.assignedTo)
+      .where(sql`${t.assignedTo} is not null`),
+    index('idx_conversations_contact')
+      .on(t.contactId)
+      .where(sql`${t.contactId} is not null`),
     // NB: idx_conversations_team / idx_conversations_department já existem (compostos
     // com workspace_id, criados na migration 0033) — hot-path da list query escopada
     // por dept/time (F30 / LIVECHAT_OPS §1). Não recriados aqui.
     // Varredura do cron de reengajamento de IA (F30 / LIVECHAT_OPS §2).
-    index('idx_conversations_ai_resume').on(t.aiResumeAt).where(sql`${t.aiResumeAt} is not null`),
+    index('idx_conversations_ai_resume')
+      .on(t.aiResumeAt)
+      .where(sql`${t.aiResumeAt} is not null`),
     // F56-S24 (ESC-04): reengagement scheduler varre conversas com IA pausada —
     // parcial em ai_mode='paused' (fração pequena da tabela) elimina o seq scan.
     index('idx_conversations_ws_ai_paused')
@@ -93,7 +101,9 @@ export const conversations = pgTable(
       .where(sql`${t.aiMode} = 'paused'`),
     // F56-S24 (DB-06): suporte à FK agent_id (ON DELETE SET NULL varre por igualdade;
     // parcial NOT NULL espelha idx_conversations_department/team da 0033).
-    index('idx_conversations_agent').on(t.agentId).where(sql`${t.agentId} is not null`),
+    index('idx_conversations_agent')
+      .on(t.agentId)
+      .where(sql`${t.agentId} is not null`),
     // F55-S01 — Métricas de ciclo: parciais (só linhas com o marco) e escopados por
     // workspace (toda consulta de SLA filtra workspace_id), DESC p/ recência primeiro.
     index('idx_conversations_ws_resolved_at')
@@ -102,8 +112,14 @@ export const conversations = pgTable(
     index('idx_conversations_ws_first_response_at')
       .on(t.workspaceId, t.firstResponseAt.desc())
       .where(sql`${t.firstResponseAt} is not null`),
-    check('conversations_kind_chk', sql`${t.kind} in ('direct','group','story_thread','comment_thread')`),
-    check('conversations_status_chk', sql`${t.status} in ('open','pending','closed','resolved','snoozed')`),
+    check(
+      'conversations_kind_chk',
+      sql`${t.kind} in ('direct','group','story_thread','comment_thread')`,
+    ),
+    check(
+      'conversations_status_chk',
+      sql`${t.status} in ('open','pending','closed','resolved','snoozed')`,
+    ),
     check('conversations_ai_mode_chk', sql`${t.aiMode} in ('off','on','paused')`),
     check(
       'conversations_origin_chk',

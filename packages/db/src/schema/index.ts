@@ -18,6 +18,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
@@ -119,7 +120,10 @@ export const members = pgTable(
     status: text('status').notNull().default('invited'),
     isPlatformAdmin: boolean('is_platform_admin').notNull().default(false),
     themePreference: text('theme_preference').default('dark'),
-    dashboardLayout: jsonb('dashboard_layout').$type<Record<string, unknown>>().notNull().default({}),
+    dashboardLayout: jsonb('dashboard_layout')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     notificationPrefs: jsonb('notification_prefs')
       .$type<{ in_app: boolean; email: boolean; push: boolean }>()
       .notNull()
@@ -141,7 +145,9 @@ export const members = pgTable(
     timezone: text('timezone'),
     isOnline: boolean('is_online').notNull().default(false),
     lastSeenAt: ts('last_seen_at'),
-    invitedBy: uuid('invited_by').references((): AnyPgColumn => members.id, { onDelete: 'set null' }),
+    invitedBy: uuid('invited_by').references((): AnyPgColumn => members.id, {
+      onDelete: 'set null',
+    }),
     invitedAt: ts('invited_at'),
     joinedAt: ts('joined_at'),
     createdAt: ts('created_at').notNull().defaultNow(),
@@ -149,6 +155,8 @@ export const members = pgTable(
   },
   (t) => [
     index('idx_members_workspace').on(t.workspaceId),
+    // Alvo das FKs compostas por workspace (F70-S12, migração 0085).
+    uniqueIndex('uq_members_workspace_id').on(t.workspaceId, t.id),
     index('idx_members_auth_user').on(t.authUserId),
     index('idx_members_role').on(t.workspaceId, t.role),
     unique('members_workspace_auth_user_uq').on(t.workspaceId, t.authUserId),
@@ -170,7 +178,10 @@ export const apiKeys = pgTable(
     name: text('name').notNull(),
     keyHash: text('key_hash').notNull().unique(),
     keyPrefix: text('key_prefix').notNull(),
-    scopes: text('scopes').array().notNull().default(sql`'{}'`),
+    scopes: text('scopes')
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
     rateLimitPerMinute: integer('rate_limit_per_minute').notNull().default(60),
     isActive: boolean('is_active').notNull().default(true),
     lastUsedAt: ts('last_used_at'),
@@ -181,7 +192,9 @@ export const apiKeys = pgTable(
   },
   (t) => [
     // §3.3: índice parcial só de chaves ativas (lookup/listagem ignora revogadas).
-    index('idx_api_keys_workspace').on(t.workspaceId).where(sql`${t.isActive} = true`),
+    index('idx_api_keys_workspace')
+      .on(t.workspaceId)
+      .where(sql`${t.isActive} = true`),
   ],
 );
 
@@ -224,9 +237,15 @@ export const subscriptions = pgTable(
   },
   (t) => [
     index('idx_subscriptions_status').on(t.status),
-    check('subscriptions_status_chk', sql`${t.status} in ('trial','active','past_due','canceled','expired')`),
+    check(
+      'subscriptions_status_chk',
+      sql`${t.status} in ('trial','active','past_due','canceled','expired')`,
+    ),
     check('subscriptions_cycle_chk', sql`${t.billingCycle} in ('monthly','yearly')`),
-    check('subscriptions_payment_method_chk', sql`${t.paymentMethod} is null or ${t.paymentMethod} in ('card','pix')`),
+    check(
+      'subscriptions_payment_method_chk',
+      sql`${t.paymentMethod} is null or ${t.paymentMethod} in ('card','pix')`,
+    ),
   ],
 );
 
