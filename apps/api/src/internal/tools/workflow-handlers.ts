@@ -20,7 +20,7 @@
  */
 import { z } from 'zod';
 import { eq, sql } from 'drizzle-orm';
-import { schema } from '@hm/db';
+import { schema, TenantRefError, requireRefsInWorkspace } from '@hm/db';
 import { conversionRegisteredFromRow, domainEvents, type DomainEventDraft } from '@hm/shared/mq';
 import {
   createDefaultRegistry,
@@ -34,8 +34,13 @@ import { registerConversion as registerConversionEvent } from '../../routes/conv
 import { emitConversationResolvedMetrics } from '../../services/dashboard/emit';
 import { moveDealToStage, TransitionError } from '../../routes/deals';
 import { and, desc, isNull, or } from 'drizzle-orm';
-import { transferToAgent } from './agent-transfer-handlers';
-import { addContactTag, updateContact } from './contact-handlers';
+import { transferToAgent, transferToAgentArgs } from './agent-transfer-handlers';
+import {
+  addContactTag,
+  addContactTagArgs,
+  updateContact,
+  updateContactArgs,
+} from './contact-handlers';
 
 function fail(error: string): ToolHandlerResult {
   return { ok: false, error };
@@ -97,10 +102,28 @@ const transferArgs = z.object({
   department_id: z.string().uuid().nullish(),
 });
 
+/**
+ * Mesma resposta para departamento que não existe e para o de outro workspace (F70-S23,
+ * L-a): o modelo não ganha um oráculo de UUIDs de outros tenants.
+ */
+const DEPARTMENT_NOT_FOUND = 'Departamento não encontrado.';
+
 const transferToHuman: ToolHandler = async (env, tx) => {
   const parsed = transferArgs.safeParse(env.args);
   if (!parsed.success) return fail('Argumentos inválidos para transfer_to_human.');
   if (!env.conversationId) return fail('Conversa ausente no contexto.');
+  // F70-S23 (L-a): a FK de `conversations.department_id` roda fora da RLS; sem esta
+  // checagem, o id de um departamento de OUTRO workspace seria gravado na conversa.
+  if (parsed.data.department_id) {
+    try {
+      await requireRefsInWorkspace(tx, [
+        { kind: 'department', id: parsed.data.department_id, field: 'department_id' },
+      ]);
+    } catch (err) {
+      if (err instanceof TenantRefError) return fail(DEPARTMENT_NOT_FOUND);
+      throw err;
+    }
+  }
   const ok = await patchConversation(tx, env, {
     aiMode: 'off',
     status: 'pending',
@@ -369,6 +392,23 @@ const moveDealStage: ToolHandler = async (env, tx) => {
     }
     throw err;
   }
+};
+
+/**
+ * Zod dos args de cada tool de workflow, por key. É o contrato que o teste
+ * `catalog-contract.integration.test.ts` confronta com o `schema` do catálogo `tools`
+ * (F70-S23, L-g): o que o catálogo diz aceitar (inclusive `null`), o Node aceita.
+ */
+export const WORKFLOW_TOOL_ARG_SCHEMAS: Readonly<Record<string, z.ZodType<unknown>>> = {
+  transfer_to_human: transferArgs,
+  transfer_to_agent: transferToAgentArgs,
+  escalate: escalateArgs,
+  mark_resolved: markResolvedArgs,
+  change_conversation_status: changeStatusArgs,
+  register_conversion: registerConversionArgs,
+  move_deal_stage: moveDealStageArgs,
+  add_contact_tag: addContactTagArgs,
+  update_contact: updateContactArgs,
 };
 
 /**

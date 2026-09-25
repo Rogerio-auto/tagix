@@ -12,6 +12,7 @@ import express from 'express';
 import request from 'supertest';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ToolCallAuthorizer } from './access';
+import { EMPTY_TOOL_CONTEXT } from './registry';
 
 // ─── Mock de @hm/db ───────────────────────────────────────────────────────────
 
@@ -64,7 +65,7 @@ vi.mock('@hm/db', () => ({
 
 const fakeAuthorize: ToolCallAuthorizer = async (_tx, toolKey) => {
   const enabled = toolCatalog[toolKey];
-  if (enabled) return { allowed: true, toolId: enabled };
+  if (enabled) return { allowed: true, toolId: enabled, toolConfig: EMPTY_TOOL_CONTEXT.toolConfig };
   const disabled = disabledCatalog[toolKey];
   return disabled
     ? { allowed: false, reason: 'tool_not_enabled', toolId: disabled }
@@ -264,14 +265,14 @@ describe('POST /internal/tools/:toolKey — tool_logs', () => {
   });
 
   it('texto livre do modelo vai ao log mascarado e truncado (L8)', async () => {
-    toolCatalog['note_thing'] = 'tool-uuid-9';
-    const registry = new ToolHandlerRegistry().register('note_thing', async () => ({
+    toolCatalog['escalate'] = 'tool-uuid-9';
+    const registry = new ToolHandlerRegistry().register('escalate', async () => ({
       ok: true,
       content: 'ok',
     }));
 
     const res = await request(makeApp(TOKEN, registry))
-      .post('/internal/tools/note_thing')
+      .post('/internal/tools/escalate')
       .set('Authorization', `Bearer ${TOKEN}`)
       .send(
         envelope({
@@ -289,9 +290,95 @@ describe('POST /internal/tools/:toolKey — tool_logs', () => {
     expect(params['reason']).not.toContain('maria@x.com');
     expect(params['reason']).toContain('[email]');
     expect(params['reason']!.length).toBeLessThanOrEqual(121);
-    // Campos que não são texto livre ficam intactos (ids, enums).
+    // O que a política da tool declara fica (enum); o que ela não conhece é mascarado.
     expect(params['severity']).toBe('high');
-    expect(params['stage_id']).toBe('11111111-1111-1111-1111-111111111111');
+    expect(params['stage_id']).toBe('[redacted:string]');
+  });
+
+  it('update_contact: tool_logs.params sem display_name nem valores de custom_fields (L-b)', async () => {
+    toolCatalog['update_contact'] = 'tool-uuid-10';
+    const registry = new ToolHandlerRegistry().register('update_contact', async (env) => ({
+      ok: true,
+      content: 'ok',
+      payload: { updated: ['display_name', 'custom_fields'], echo: env.args },
+    }));
+
+    const res = await request(makeApp(TOKEN, registry))
+      .post('/internal/tools/update_contact')
+      .set('Authorization', `Bearer ${TOKEN}`)
+      .send(
+        envelope({
+          args: {
+            display_name: 'Maria Souza',
+            language: 'pt-BR',
+            custom_fields: { cpf: '123.456.789-00', endereco: { rua: 'Rua A, 10' }, vip: true },
+          },
+        }),
+      );
+
+    expect(res.status).toBe(200);
+    const v = toolLogInserts[0]!.values;
+    const logged = JSON.stringify([v['params'], v['result']]);
+    for (const secret of ['Maria', 'Souza', '123.456.789-00', 'Rua A']) {
+      expect(logged).not.toContain(secret);
+    }
+    expect(v['params']).toEqual({
+      display_name: '[redacted:string]',
+      language: 'pt-BR',
+      custom_fields: {
+        cpf: '[redacted:string]',
+        endereco: { rua: '[redacted:string]' },
+        vip: '[redacted:boolean]',
+      },
+    });
+    // O resultado segue a política dele: `updated` fica; o eco dos args, não.
+    expect((v['result'] as Record<string, unknown>)['updated']).toEqual([
+      'display_name',
+      'custom_fields',
+    ]);
+  });
+
+  it('tool sem política declarada: args e resultado inteiramente mascarados', async () => {
+    toolCatalog['do_thing'] = 'tool-uuid-11';
+    const registry = new ToolHandlerRegistry().register('do_thing', async () => ({
+      ok: true,
+      payload: { name: 'Maria', n: 5 },
+    }));
+
+    await request(makeApp(TOKEN, registry))
+      .post('/internal/tools/do_thing')
+      .set('Authorization', `Bearer ${TOKEN}`)
+      .send(envelope({ args: { name: 'Maria', phone: '+5511999990000' } }));
+
+    const v = toolLogInserts[0]!.values;
+    expect(v['params']).toEqual({ name: '[redacted:string]', phone: '[redacted:string]' });
+    expect(v['result']).toEqual({ name: '[redacted:string]', n: '[redacted:number]' });
+  });
+
+  it('a config que a barreira leu chega ao handler (nunca a do request)', async () => {
+    const seen: unknown[] = [];
+    const registry = new ToolHandlerRegistry().register('cfg_thing', async (_env, _tx, ctx) => {
+      seen.push(ctx.toolConfig);
+      return { ok: true, content: 'ok' };
+    });
+    const toolConfig = { base: { allowed_tags: ['a'] }, overrides: { allowed_tags: ['a'] } };
+    const app = express();
+    app.use(express.json());
+    app.use(
+      createInternalToolsRouter({
+        registry,
+        token: TOKEN,
+        authorize: async () => ({ allowed: true, toolId: 'tool-uuid-12', toolConfig }),
+      }),
+    );
+
+    const res = await request(app)
+      .post('/internal/tools/cfg_thing')
+      .set('Authorization', `Bearer ${TOKEN}`)
+      .send(envelope({ args: { tool_config: { allowed_tags: ['tudo'] } } }));
+
+    expect(res.status).toBe(200);
+    expect(seen).toEqual([toolConfig]);
   });
 
   it('handler com ok=false → 422 e tool_logs com erro', async () => {
@@ -310,6 +397,24 @@ describe('POST /internal/tools/:toolKey — tool_logs', () => {
     expect(res.body.ok).toBe(false);
     expect(toolLogInserts).toHaveLength(1);
     expect(toolLogInserts[0]!.values['error']).toBe('business rule rejected');
+    expect(toolLogInserts[0]!.values['result']).toBeNull();
+  });
+
+  it('erro do handler vai ao log sem dígitos nem e-mail', async () => {
+    toolCatalog['fail_pii'] = 'tool-uuid-13';
+    const registry = new ToolHandlerRegistry().register('fail_pii', async () => ({
+      ok: false,
+      error: "Tipo de conversão 'cpf 12345678900 ana@x.com' não existe.",
+    }));
+
+    await request(makeApp(TOKEN, registry))
+      .post('/internal/tools/fail_pii')
+      .set('Authorization', `Bearer ${TOKEN}`)
+      .send(envelope());
+
+    expect(toolLogInserts[0]!.values['error']).toBe(
+      "Tipo de conversão 'cpf ########### [email] não existe.",
+    );
     expect(toolLogInserts[0]!.values['result']).toBeNull();
   });
 

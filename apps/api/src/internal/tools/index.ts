@@ -12,10 +12,13 @@ export {
   ToolHandlerRegistry,
   createDefaultRegistry,
   pingHandler,
+  EMPTY_TOOL_CONTEXT,
 } from './registry';
 export type {
   ToolCallEnvelope,
+  ToolConfigSnapshot,
   ToolHandler,
+  ToolHandlerContext,
   ToolHandlerResult,
 } from './registry';
 export { toolCallEnvelopeSchema } from './schema';

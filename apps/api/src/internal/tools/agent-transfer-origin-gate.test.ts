@@ -19,6 +19,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeDb, getDb, schema, withWorkspace } from '@hm/db';
 import type { ConversationOriginValue } from '@hm/shared';
 import { makeTransferToAgentHandler } from './agent-transfer-handlers';
+import { EMPTY_TOOL_CONTEXT } from './registry';
 
 const url = process.env['DATABASE_URL'];
 
@@ -101,6 +102,7 @@ describe.skipIf(!url)('transfer_to_agent — trava de origem (DB, F70-S08)', () 
           args: { targetAgentId: TO_AGENT, reason: 'teste' },
         },
         tx,
+        EMPTY_TOOL_CONTEXT,
       ),
     );
     const [row] = await getDb()

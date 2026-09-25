@@ -14,7 +14,7 @@ import {
   listCalendars,
   scheduleEvent,
 } from './calendar-handlers';
-import type { ToolCallEnvelope } from './registry';
+import { EMPTY_TOOL_CONTEXT, type ToolCallEnvelope } from './registry';
 
 const { workspaces, members, contacts, calendars, availabilityRules, events, agents, plans } =
   schema;
@@ -94,7 +94,7 @@ afterAll(async () => {
 
 describe('calendar-handlers (integração)', () => {
   it('list_calendars lista o calendar default sob RLS', async () => {
-    const res = await withWorkspace(ws, (tx) => listCalendars(env({}), tx));
+    const res = await withWorkspace(ws, (tx) => listCalendars(env({}), tx, EMPTY_TOOL_CONTEXT));
     expect(res.ok).toBe(true);
     const payload = res.payload as { calendars: Array<{ id: string; is_default: boolean }> };
     expect(payload.calendars.some((c) => c.id === calendarId && c.is_default)).toBe(true);
@@ -103,7 +103,7 @@ describe('calendar-handlers (integração)', () => {
   it('get_available_slots retorna slots reais (resolve member do calendar default)', async () => {
     // 2099-01-05 é segunda (DOW=1). Sem member_id → resolve via calendar default.
     const res = await withWorkspace(ws, (tx) =>
-      getAvailableSlots(env({ date: '2099-01-05', interval_minutes: 60 }), tx),
+      getAvailableSlots(env({ date: '2099-01-05', interval_minutes: 60 }), tx, EMPTY_TOOL_CONTEXT),
     );
     expect(res.ok).toBe(true);
     const payload = res.payload as { slots: Array<{ start_at: string }> };
@@ -120,6 +120,7 @@ describe('calendar-handlers (integração)', () => {
           contact_id: contactId,
         }),
         tx,
+        EMPTY_TOOL_CONTEXT,
       ),
     );
     expect(res.ok).toBe(true);
@@ -158,6 +159,7 @@ describe('calendar-handlers (integração)', () => {
             },
           },
           tx,
+          EMPTY_TOOL_CONTEXT,
         ),
       );
       expect(res.ok).toBe(false);

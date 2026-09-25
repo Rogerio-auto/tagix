@@ -7,7 +7,7 @@
  * `makeTransferToAgentHandler({ reengage })` — sem AMQP real. Sem Postgres.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ToolCallEnvelope } from './registry';
+import { EMPTY_TOOL_CONTEXT, type ToolCallEnvelope } from './registry';
 
 // ─── Estado controlável do mock de @hm/db ───────────────────────────────────────
 
@@ -122,7 +122,7 @@ describe('transfer_to_agent — same-dept válido', () => {
   it('grava agent_id no alvo + reativa IA + enfileira re-engaje', async () => {
     const reengage = vi.fn(async () => {});
     const handler = makeTransferToAgentHandler({ reengage });
-    const res = await handler(envelope(), makeTx() as never);
+    const res = await handler(envelope(), makeTx() as never, EMPTY_TOOL_CONTEXT);
 
     expect(res.ok).toBe(true);
     expect(res.action).toBe('transfer_to_agent');
@@ -146,7 +146,7 @@ describe('transfer_to_agent — same-dept válido', () => {
     conversationRow = { contactId: null, channelId: 'channel-uuid' };
     const reengage = vi.fn(async () => {});
     const handler = makeTransferToAgentHandler({ reengage });
-    const res = await handler(envelope(), makeTx() as never);
+    const res = await handler(envelope(), makeTx() as never, EMPTY_TOOL_CONTEXT);
 
     expect(res.ok).toBe(true);
     expect(updates).toHaveLength(1);
@@ -159,7 +159,7 @@ describe('transfer_to_agent — authz de alvo (outro dept)', () => {
     sameDept = false;
     const reengage = vi.fn(async () => {});
     const handler = makeTransferToAgentHandler({ reengage });
-    const res = await handler(envelope(), makeTx() as never);
+    const res = await handler(envelope(), makeTx() as never, EMPTY_TOOL_CONTEXT);
 
     expect(res.ok).toBe(false);
     expect(res.error).toBeDefined();
@@ -172,7 +172,7 @@ describe('transfer_to_agent — idempotência', () => {
   it('alvo == agente atual → no-op gracioso (ok:true, sem update/enqueue)', async () => {
     const reengage = vi.fn(async () => {});
     const handler = makeTransferToAgentHandler({ reengage });
-    const res = await handler(envelope({ args: { targetAgentId: AGENT } }), makeTx() as never);
+    const res = await handler(envelope({ args: { targetAgentId: AGENT } }), makeTx() as never, EMPTY_TOOL_CONTEXT);
 
     expect(res.ok).toBe(true);
     expect(res.payload).toMatchObject({ noop: true });
@@ -185,7 +185,7 @@ describe('transfer_to_agent — args inválidos', () => {
   it('targetAgentId ausente → { ok:false } estável sem efeito', async () => {
     const reengage = vi.fn(async () => {});
     const handler = makeTransferToAgentHandler({ reengage });
-    const res = await handler(envelope({ args: {} }), makeTx() as never);
+    const res = await handler(envelope({ args: {} }), makeTx() as never, EMPTY_TOOL_CONTEXT);
 
     expect(res.ok).toBe(false);
     expect(res.error).toBe('Argumentos inválidos para transfer_to_agent.');
@@ -196,7 +196,7 @@ describe('transfer_to_agent — args inválidos', () => {
   it('conversa ausente no contexto → { ok:false } sem efeito', async () => {
     const reengage = vi.fn(async () => {});
     const handler = makeTransferToAgentHandler({ reengage });
-    const res = await handler(envelope({ conversationId: null }), makeTx() as never);
+    const res = await handler(envelope({ conversationId: null }), makeTx() as never, EMPTY_TOOL_CONTEXT);
 
     expect(res.ok).toBe(false);
     expect(updates).toHaveLength(0);
@@ -210,7 +210,7 @@ describe('transfer_to_agent — trava de origem (F70-S08)', () => {
     const reengage = vi.fn(async () => {});
     const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), child: vi.fn() };
     const handler = makeTransferToAgentHandler({ reengage, logger });
-    const res = await handler(envelope(), makeTx() as never);
+    const res = await handler(envelope(), makeTx() as never, EMPTY_TOOL_CONTEXT);
 
     expect(res.ok).toBe(false);
     expect(res.error).toMatch(/origem comprovada/);

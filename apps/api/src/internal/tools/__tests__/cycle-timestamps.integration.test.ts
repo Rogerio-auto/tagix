@@ -16,7 +16,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb, schema, withWorkspace } from '@hm/db';
 import { buildWorkflowRegistry } from '../workflow-handlers';
-import type { ToolCallEnvelope } from '../registry';
+import { EMPTY_TOOL_CONTEXT, type ToolCallEnvelope } from '../registry';
 
 const registry = buildWorkflowRegistry();
 
@@ -40,7 +40,7 @@ async function runTool(
 ): Promise<{ ok: boolean }> {
   const handler = registry.resolve(toolKey);
   if (!handler) throw new Error(`tool não registrada: ${toolKey}`);
-  return withWorkspace(WS, (tx) => handler(env(conversationId, args), tx));
+  return withWorkspace(WS, (tx) => handler(env(conversationId, args), tx, EMPTY_TOOL_CONTEXT));
 }
 
 async function readCycle(
