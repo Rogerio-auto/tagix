@@ -33,22 +33,23 @@
  * Idempotência: reprocessar qualquer evento é seguro. O dedup por id externo
  * garante zero duplicação de mensagens/contatos em reentrega/reprocesso.
  *
- * Webhooks de saída (F70-S13): conversa que o eco ou o histórico ABRIU publica
- * `conversation.opened` depois do commit (construtor do catálogo, eventId canônico
- * `<conversa>:opened`; F70-S14: `trigger` `app_echo` ou `history`). `created` só é verdadeiro para quem inseriu a linha, então
- * reentrega e o perdedor de uma corrida não republicam; rollback não publica.
+ * Webhooks de saída (F70-S13): conversa que o eco ou o histórico ABRIU anuncia
+ * `conversation.opened` (construtor do catálogo, eventId canônico `<conversa>:opened`;
+ * F70-S14: `trigger` `app_echo` ou `history`). F70-S16: o aviso entra na OUTBOX na
+ * MESMA transação que criou a conversa; o relay publica depois do commit, com
+ * confirms. `created` só é verdadeiro para quem inseriu a linha, então reentrega e o
+ * perdedor de uma corrida não regravam; rollback não grava nada.
  */
 import { Buffer } from 'node:buffer';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { getDb, schema, withWorkspace } from '@hm/db';
+import { enqueueOutbox, getDb, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import {
   domainEvents,
-  emitDomainEvent,
+  domainEventsOutbox,
   makeEnvelope,
   type ConversationOpenedTrigger,
-  type DomainEventDraft,
   type MqHandle,
 } from '@hm/shared/mq';
 import type {
@@ -359,23 +360,24 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
      * é resposta humana e é ignorado. Vazio = sem filtro (só o dedup por mid).
      */
     private readonly ownMetaAppIds: ReadonlySet<string> = new Set(),
-    /** F70-S13: publicação de eventos de domínio (webhooks de saída). Nunca lança. */
-    private readonly emitEvent: (draft: DomainEventDraft) => Promise<boolean> = emitDomainEvent,
   ) {}
 
   /**
-   * `conversation.opened` de cada conversa aberta — chamar SÓ depois do commit.
-   * F70-S14: `trigger` diz a origem real (`app_echo` = o dono escreveu primeiro pelo
-   * app; `history` = a importação do histórico trouxe a conversa).
+   * Transação RLS que, antes do commit, grava na outbox o `conversation.opened` de
+   * cada conversa que ELA abriu (F70-S16). F70-S14: `trigger` diz a origem real
+   * (`app_echo` = o dono escreveu primeiro pelo app; `history` = a importação do
+   * histórico trouxe a conversa).
    */
-  private async emitOpened(
+  private inTxAnnouncingOpened<T>(
     workspaceId: string,
     channelId: string,
-    opened: readonly OpenedConversation[],
     trigger: Extract<ConversationOpenedTrigger, 'app_echo' | 'history'>,
-  ): Promise<void> {
-    for (const conv of opened) {
-      await this.emitEvent(
+    fn: (tx: DbTx) => Promise<T>,
+    opened: (result: T) => readonly OpenedConversation[],
+  ): Promise<T> {
+    return withWorkspace(workspaceId, async (tx) => {
+      const result = await fn(tx);
+      const drafts = opened(result).map((conv) =>
         domainEvents.conversationOpened(workspaceId, {
           conversationId: conv.conversationId,
           contactId: conv.contactId,
@@ -383,7 +385,9 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
           trigger,
         }),
       );
-    }
+      await enqueueOutbox(tx, domainEventsOutbox(drafts));
+      return result;
+    });
   }
 
   async persistEcho(payload: CoexistenceEchoPayload): Promise<CoexistenceEchoResult> {
@@ -461,115 +465,118 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
   private async persistAppEcho(input: AppEchoInput): Promise<CoexistenceEchoResult> {
     const { channelId, workspaceId } = input.channel;
 
-    const result = await withWorkspace(workspaceId, async (tx) => {
-      const contactId = await ensureContact(tx, workspaceId, input.remoteId, input.contactSource);
-      // Se este eco abrir a conversa, o dono chamou primeiro: prospecção (F70-S04).
-      // A origem é gravada no INSERT (F70-S07), então a trava da IA vale desde já.
-      const conversation = await ensureConversation(
-        tx,
-        workspaceId,
-        channelId,
-        input.remoteId,
-        contactId,
-        PROSPECTION_TAG_NAME,
-      );
-      const ownerMemberId = await resolveChannelOwner(tx, workspaceId, channelId);
-
-      const [inserted] = await tx
-        .insert(schema.messages)
-        .values({
+    const result = await this.inTxAnnouncingOpened(
+      workspaceId,
+      channelId,
+      'app_echo',
+      async (tx) => {
+        const contactId = await ensureContact(tx, workspaceId, input.remoteId, input.contactSource);
+        // Se este eco abrir a conversa, o dono chamou primeiro: prospecção (F70-S04).
+        // A origem é gravada no INSERT (F70-S07), então a trava da IA vale desde já.
+        const conversation = await ensureConversation(
+          tx,
           workspaceId,
-          conversationId: conversation.id,
-          externalId: input.externalId,
-          direction: 'outbound',
-          senderType: 'member',
-          senderMemberId: ownerMemberId,
-          type: input.type,
-          content: input.content,
-          viewStatus: 'sent',
-          createdAt: input.occurredAt,
-          metadata: { origin: APP_ORIGIN, echoSource: input.echoSource },
-          // Mídia nasce 'pending' (espelha o inbound); o media-worker baixa e seta
-          // media_url + 'ready'. Sem ref, fica null (mensagem de texto/sem mídia).
-          ...(input.mediaRef !== undefined ? { mediaStatus: 'pending' as const } : {}),
-        })
-        .onConflictDoNothing({
-          target: [schema.messages.conversationId, schema.messages.externalId],
-          where: sql`${schema.messages.externalId} is not null`,
-        })
-        .returning({ id: schema.messages.id });
+          channelId,
+          input.remoteId,
+          contactId,
+          PROSPECTION_TAG_NAME,
+        );
+        const ownerMemberId = await resolveChannelOwner(tx, workspaceId, channelId);
 
-      // A conversa criada nesta transação é aberta mesmo que a mensagem dedupe (não
-      // acontece na prática: conversa nova não tem mensagem para colidir).
-      const opened: OpenedConversation[] = conversation.created
-        ? [{ conversationId: conversation.id, contactId }]
-        : [];
+        const [inserted] = await tx
+          .insert(schema.messages)
+          .values({
+            workspaceId,
+            conversationId: conversation.id,
+            externalId: input.externalId,
+            direction: 'outbound',
+            senderType: 'member',
+            senderMemberId: ownerMemberId,
+            type: input.type,
+            content: input.content,
+            viewStatus: 'sent',
+            createdAt: input.occurredAt,
+            metadata: { origin: APP_ORIGIN, echoSource: input.echoSource },
+            // Mídia nasce 'pending' (espelha o inbound); o media-worker baixa e seta
+            // media_url + 'ready'. Sem ref, fica null (mensagem de texto/sem mídia).
+            ...(input.mediaRef !== undefined ? { mediaStatus: 'pending' as const } : {}),
+          })
+          .onConflictDoNothing({
+            target: [schema.messages.conversationId, schema.messages.externalId],
+            where: sql`${schema.messages.externalId} is not null`,
+          })
+          .returning({ id: schema.messages.id });
 
-      if (inserted === undefined) {
+        // A conversa criada nesta transação é aberta mesmo que a mensagem dedupe (não
+        // acontece na prática: conversa nova não tem mensagem para colidir).
+        const opened: OpenedConversation[] = conversation.created
+          ? [{ conversationId: conversation.id, contactId }]
+          : [];
+
+        if (inserted === undefined) {
+          return {
+            conversationId: conversation.id,
+            messageId: undefined,
+            aiPaused: false,
+            startedByApp: false,
+            opened,
+          };
+        }
+
+        // Estado atual sob lock de linha: serializa ecos concorrentes da mesma
+        // conversa (e a rota de envio da UI), para a transição on→paused acontecer
+        // uma vez só e `first_response_at` não ser disputado.
+        const { conversations } = schema;
+        const [state] = await tx
+          .select({
+            aiMode: conversations.aiMode,
+            firstResponseAt: conversations.firstResponseAt,
+            aiLastHumanAt: conversations.aiLastHumanAt,
+          })
+          .from(conversations)
+          .where(eq(conversations.id, conversation.id))
+          .for('update')
+          .limit(1);
+
+        // Conversa aberta por este eco = o dono chamou primeiro (prospecção). Ela
+        // já nasce com `ai_mode='off'` (ensureConversation) e não conta primeira
+        // resposta — ninguém perguntou nada ainda.
+        const startedByApp = conversation.created;
+        const plan = planHumanReply(
+          {
+            aiMode: state?.aiMode ?? 'off',
+            firstResponseAt: state?.firstResponseAt ?? null,
+            aiLastHumanAt: state?.aiLastHumanAt ?? null,
+          },
+          { memberId: ownerMemberId, at: input.occurredAt, countsAsResponse: !startedByApp },
+        );
+
+        await tx
+          .update(conversations)
+          .set({
+            ...plan.patch,
+            ...(startedByApp ? { aiMode: 'off' as const } : {}),
+            lastMessagePreview: previewOf(input.content ?? undefined, input.type),
+            lastMessageAt: input.occurredAt,
+            lastMessageFrom: 'member',
+            updatedAt: new Date(),
+          })
+          .where(eq(conversations.id, conversation.id));
+
+        if (startedByApp) {
+          await applyOriginTag(tx, workspaceId, contactId, PROSPECTION_TAG_NAME, ownerMemberId);
+        }
+
         return {
           conversationId: conversation.id,
-          messageId: undefined,
-          aiPaused: false,
-          startedByApp: false,
+          messageId: inserted.id,
+          aiPaused: plan.paused,
+          startedByApp,
           opened,
         };
-      }
-
-      // Estado atual sob lock de linha: serializa ecos concorrentes da mesma
-      // conversa (e a rota de envio da UI), para a transição on→paused acontecer
-      // uma vez só e `first_response_at` não ser disputado.
-      const { conversations } = schema;
-      const [state] = await tx
-        .select({
-          aiMode: conversations.aiMode,
-          firstResponseAt: conversations.firstResponseAt,
-          aiLastHumanAt: conversations.aiLastHumanAt,
-        })
-        .from(conversations)
-        .where(eq(conversations.id, conversation.id))
-        .for('update')
-        .limit(1);
-
-      // Conversa aberta por este eco = o dono chamou primeiro (prospecção). Ela
-      // já nasce com `ai_mode='off'` (ensureConversation) e não conta primeira
-      // resposta — ninguém perguntou nada ainda.
-      const startedByApp = conversation.created;
-      const plan = planHumanReply(
-        {
-          aiMode: state?.aiMode ?? 'off',
-          firstResponseAt: state?.firstResponseAt ?? null,
-          aiLastHumanAt: state?.aiLastHumanAt ?? null,
-        },
-        { memberId: ownerMemberId, at: input.occurredAt, countsAsResponse: !startedByApp },
-      );
-
-      await tx
-        .update(conversations)
-        .set({
-          ...plan.patch,
-          ...(startedByApp ? { aiMode: 'off' as const } : {}),
-          lastMessagePreview: previewOf(input.content ?? undefined, input.type),
-          lastMessageAt: input.occurredAt,
-          lastMessageFrom: 'member',
-          updatedAt: new Date(),
-        })
-        .where(eq(conversations.id, conversation.id));
-
-      if (startedByApp) {
-        await applyOriginTag(tx, workspaceId, contactId, PROSPECTION_TAG_NAME, ownerMemberId);
-      }
-
-      return {
-        conversationId: conversation.id,
-        messageId: inserted.id,
-        aiPaused: plan.paused,
-        startedByApp,
-        opened,
-      };
-    });
-
-    // F70-S13: a conversa aberta pelo eco avisa antes da mensagem (espelha o inbound).
-    await this.emitOpened(workspaceId, channelId, result.opened, 'app_echo');
+      },
+      (r) => r.opened,
+    );
 
     // Pós-persist (fora da transação): empurra o echo ao vivo. Só quando inseriu
     // de fato (dedup não reemite — espelha `insertMessages` do inbound).
@@ -626,140 +633,144 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
     }
     const { channelId, workspaceId } = channel;
 
-    const outcome = await withWorkspace(workspaceId, async (tx) => {
-      // Conversas que receberam pelo menos uma mensagem nova (para sinalizar a
-      // ChatList uma vez por conversa, fora da transação — sem floodar threads).
-      const touchedConversations = new Set<string>();
-      // F70-S13: conversas criadas por este lote (publicadas após o commit).
-      const openedConversations: OpenedConversation[] = [];
-      // Jobs de download de mídia das mensagens inseridas (publicados após o commit).
-      const mediaJobs: InboundMediaJob[] = [];
-      // 1) Upsert idempotente de contatos por (workspace, phone=waId). Insert em
-      //    lote com onConflictDoNothing → reprocesso não duplica nem N+1.
-      const contactRows = payload.contacts.map((c) => ({
-        workspaceId,
-        phone: c.waId,
-        ...(c.name !== undefined ? { displayName: c.name } : {}),
-        source: 'whatsapp',
-      }));
-      let contactsInserted = 0;
-      if (contactRows.length > 0) {
-        const created = await tx
-          .insert(schema.contacts)
-          .values(contactRows)
-          .onConflictDoNothing({
-            target: [schema.contacts.workspaceId, schema.contacts.phone],
-            where: contactPhoneArbiterWhere(),
-          })
-          .returning({ id: schema.contacts.id });
-        contactsInserted = created.length;
-      }
-
-      // 2) Mensagens: agrupa por contraparte (waId) → conversa, insere em lote
-      //    deduplicando por uq_messages_external. A contraparte é `from` quando o
-      //    histórico é recebido (fromMe=false) e `to` quando enviado (fromMe=true).
-      const byCounterpart = new Map<string, CoexistenceHistoryMessagePayload[]>();
-      for (const msg of payload.messages) {
-        const counterpart = counterpartOf(msg);
-        if (counterpart === null) continue;
-        const list = byCounterpart.get(counterpart) ?? [];
-        list.push(msg);
-        byCounterpart.set(counterpart, list);
-      }
-
-      let messagesInserted = 0;
-      let messagesTotal = 0;
-      for (const [counterpart, msgs] of byCounterpart) {
-        const contactId = await ensureContact(tx, workspaceId, counterpart, 'whatsapp');
-        const { id: conversationId, created: conversationCreated } = await ensureConversation(
-          tx,
+    const outcome = await this.inTxAnnouncingOpened(
+      workspaceId,
+      channelId,
+      'history',
+      async (tx) => {
+        // Conversas que receberam pelo menos uma mensagem nova (para sinalizar a
+        // ChatList uma vez por conversa, fora da transação — sem floodar threads).
+        const touchedConversations = new Set<string>();
+        // F70-S13: conversas criadas por este lote (publicadas após o commit).
+        const openedConversations: OpenedConversation[] = [];
+        // Jobs de download de mídia das mensagens inseridas (publicados após o commit).
+        const mediaJobs: InboundMediaJob[] = [];
+        // 1) Upsert idempotente de contatos por (workspace, phone=waId). Insert em
+        //    lote com onConflictDoNothing → reprocesso não duplica nem N+1.
+        const contactRows = payload.contacts.map((c) => ({
           workspaceId,
-          channelId,
-          counterpart,
-          contactId,
-          HISTORY_CONVERSATION_ORIGIN,
-        );
-        if (conversationCreated) {
-          await applyOriginTag(tx, workspaceId, contactId, HISTORY_CONVERSATION_ORIGIN, null);
-          openedConversations.push({ conversationId, contactId });
+          phone: c.waId,
+          ...(c.name !== undefined ? { displayName: c.name } : {}),
+          source: 'whatsapp',
+        }));
+        let contactsInserted = 0;
+        if (contactRows.length > 0) {
+          const created = await tx
+            .insert(schema.contacts)
+            .values(contactRows)
+            .onConflictDoNothing({
+              target: [schema.contacts.workspaceId, schema.contacts.phone],
+              where: contactPhoneArbiterWhere(),
+            })
+            .returning({ id: schema.contacts.id });
+          contactsInserted = created.length;
         }
 
-        const mediaByExternal = new Map<string, MediaRef>();
-        const rows = msgs.map((m) => {
-          const mediaRef = extractEchoMediaRef(m.raw, m.type ?? 'text');
-          if (mediaRef !== undefined) mediaByExternal.set(m.externalId, mediaRef);
-          return {
+        // 2) Mensagens: agrupa por contraparte (waId) → conversa, insere em lote
+        //    deduplicando por uq_messages_external. A contraparte é `from` quando o
+        //    histórico é recebido (fromMe=false) e `to` quando enviado (fromMe=true).
+        const byCounterpart = new Map<string, CoexistenceHistoryMessagePayload[]>();
+        for (const msg of payload.messages) {
+          const counterpart = counterpartOf(msg);
+          if (counterpart === null) continue;
+          const list = byCounterpart.get(counterpart) ?? [];
+          list.push(msg);
+          byCounterpart.set(counterpart, list);
+        }
+
+        let messagesInserted = 0;
+        let messagesTotal = 0;
+        for (const [counterpart, msgs] of byCounterpart) {
+          const contactId = await ensureContact(tx, workspaceId, counterpart, 'whatsapp');
+          const { id: conversationId, created: conversationCreated } = await ensureConversation(
+            tx,
             workspaceId,
-            conversationId,
-            externalId: m.externalId,
-            direction: (m.fromMe === true ? 'outbound' : 'inbound') as 'inbound' | 'outbound',
-            senderType: (m.fromMe === true ? 'system' : 'contact') as 'system' | 'contact',
-            type: m.type ?? 'text',
-            content: m.text ?? null,
-            viewStatus: (m.fromMe === true ? 'sent' : 'delivered') as 'sent' | 'delivered',
-            createdAt: toDate(m.timestamp),
-            metadata: { origin: HISTORY_ORIGIN },
-            ...(mediaRef !== undefined ? { mediaStatus: 'pending' as const } : {}),
-          };
-        });
-        messagesTotal += rows.length;
+            channelId,
+            counterpart,
+            contactId,
+            HISTORY_CONVERSATION_ORIGIN,
+          );
+          if (conversationCreated) {
+            await applyOriginTag(tx, workspaceId, contactId, HISTORY_CONVERSATION_ORIGIN, null);
+            openedConversations.push({ conversationId, contactId });
+          }
 
-        const inserted = await tx
-          .insert(schema.messages)
-          .values(rows)
-          .onConflictDoNothing({
-            target: [schema.messages.conversationId, schema.messages.externalId],
-            // Índice parcial uq_messages_external (WHERE external_id IS NOT NULL):
-            // o ON CONFLICT precisa repetir o predicado, senão a Graph nega o match.
-            where: sql`${schema.messages.externalId} is not null`,
-          })
-          .returning({ id: schema.messages.id, externalId: schema.messages.externalId });
-        messagesInserted += inserted.length;
+          const mediaByExternal = new Map<string, MediaRef>();
+          const rows = msgs.map((m) => {
+            const mediaRef = extractEchoMediaRef(m.raw, m.type ?? 'text');
+            if (mediaRef !== undefined) mediaByExternal.set(m.externalId, mediaRef);
+            return {
+              workspaceId,
+              conversationId,
+              externalId: m.externalId,
+              direction: (m.fromMe === true ? 'outbound' : 'inbound') as 'inbound' | 'outbound',
+              senderType: (m.fromMe === true ? 'system' : 'contact') as 'system' | 'contact',
+              type: m.type ?? 'text',
+              content: m.text ?? null,
+              viewStatus: (m.fromMe === true ? 'sent' : 'delivered') as 'sent' | 'delivered',
+              createdAt: toDate(m.timestamp),
+              metadata: { origin: HISTORY_ORIGIN },
+              ...(mediaRef !== undefined ? { mediaStatus: 'pending' as const } : {}),
+            };
+          });
+          messagesTotal += rows.length;
 
-        // Mídia: enfileira download só p/ as mensagens efetivamente inseridas (dedup
-        // não reenfileira). Coletado aqui; publicado após o commit (igual ao echo).
-        for (const ins of inserted) {
-          if (ins.externalId === null) continue;
-          const mediaRef = mediaByExternal.get(ins.externalId);
-          if (mediaRef !== undefined) {
-            mediaJobs.push({
-              provider: COEXISTENCE_PROVIDER,
-              externalId: ins.externalId,
-              mediaRef,
-              routing: { phoneNumberId: payload.phoneNumberId },
-            });
+          const inserted = await tx
+            .insert(schema.messages)
+            .values(rows)
+            .onConflictDoNothing({
+              target: [schema.messages.conversationId, schema.messages.externalId],
+              // Índice parcial uq_messages_external (WHERE external_id IS NOT NULL):
+              // o ON CONFLICT precisa repetir o predicado, senão a Graph nega o match.
+              where: sql`${schema.messages.externalId} is not null`,
+            })
+            .returning({ id: schema.messages.id, externalId: schema.messages.externalId });
+          messagesInserted += inserted.length;
+
+          // Mídia: enfileira download só p/ as mensagens efetivamente inseridas (dedup
+          // não reenfileira). Coletado aqui; publicado após o commit (igual ao echo).
+          for (const ins of inserted) {
+            if (ins.externalId === null) continue;
+            const mediaRef = mediaByExternal.get(ins.externalId);
+            if (mediaRef !== undefined) {
+              mediaJobs.push({
+                provider: COEXISTENCE_PROVIDER,
+                externalId: ins.externalId,
+                mediaRef,
+                routing: { phoneNumberId: payload.phoneNumberId },
+              });
+            }
+          }
+
+          if (inserted.length > 0) {
+            touchedConversations.add(conversationId);
+            const last = msgs[msgs.length - 1];
+            if (last !== undefined) {
+              await tx
+                .update(schema.conversations)
+                .set({
+                  lastMessagePreview: previewOf(last.text, last.type ?? 'text'),
+                  lastMessageAt: toDate(last.timestamp),
+                  lastMessageFrom: last.fromMe === true ? 'system' : 'contact',
+                  updatedAt: new Date(),
+                })
+                .where(eq(schema.conversations.id, conversationId));
+            }
           }
         }
 
-        if (inserted.length > 0) {
-          touchedConversations.add(conversationId);
-          const last = msgs[msgs.length - 1];
-          if (last !== undefined) {
-            await tx
-              .update(schema.conversations)
-              .set({
-                lastMessagePreview: previewOf(last.text, last.type ?? 'text'),
-                lastMessageAt: toDate(last.timestamp),
-                lastMessageFrom: last.fromMe === true ? 'system' : 'contact',
-                updatedAt: new Date(),
-              })
-              .where(eq(schema.conversations.id, conversationId));
-          }
-        }
-      }
-
-      return {
-        resolved: true as const,
-        contactsInserted,
-        messagesInserted,
-        messagesDeduped: messagesTotal - messagesInserted,
-        touchedConversations: [...touchedConversations],
-        mediaJobs,
-        openedConversations,
-      };
-    });
-
-    await this.emitOpened(workspaceId, channelId, outcome.openedConversations, 'history');
+        return {
+          resolved: true as const,
+          contactsInserted,
+          messagesInserted,
+          messagesDeduped: messagesTotal - messagesInserted,
+          touchedConversations: [...touchedConversations],
+          mediaJobs,
+          openedConversations,
+        };
+      },
+      (r) => r.openedConversations,
+    );
 
     // Pós-persist: um sinal por conversa afetada → a ChatList revalida a projeção
     // (last message/contadores) sem reordenar/floodar a thread com timestamps antigos.
@@ -888,7 +899,7 @@ async function ensureContact(
   return row.id;
 }
 
-/** Conversa criada numa transação, a anunciar como `conversation.opened` após o commit. */
+/** Conversa criada numa transação, anunciada como `conversation.opened` pela outbox. */
 interface OpenedConversation {
   readonly conversationId: string;
   readonly contactId: string;

@@ -1,11 +1,14 @@
 /**
  * Followup processor DURAVEL (CAMPAIGNS.md 8.4 + 14). Substitui o setTimeout do v1:
  * o agendamento vive em scheduled_followups (tabela) e SOBREVIVE a crash.
+ *
+ * F70-S16: o job de outbound do followup vai pela OUTBOX, na transacao que marca o
+ * followup `sent` — antes era publicado DENTRO da transacao (um rollback depois
+ * deixava o job na fila e o followup de volta a `scheduled`: envio em dobro).
  */
-import { Buffer } from 'node:buffer';
 import { and, asc, eq, lte } from 'drizzle-orm';
-import { getDb, schema, withWorkspace } from '@hm/db';
-import { makeEnvelope, QUEUES } from '@hm/shared/mq';
+import { enqueueOutbox, getDb, schema, withWorkspace } from '@hm/db';
+import { makeEnvelope, queueJobOutbox, QUEUES } from '@hm/shared/mq';
 import type { MqHandle } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
 
@@ -186,10 +189,7 @@ export function createFollowupPorts(deps: FollowupDbDeps): FollowupPorts {
               components: followup.templateComponents ?? [],
             };
             const envelope = makeEnvelope(OUTBOUND_JOB_TYPE, item.workspaceId, job);
-            deps.channel.sendToQueue(OUTBOUND_QUEUE, Buffer.from(JSON.stringify(envelope)), {
-              persistent: true,
-              contentType: 'application/json',
-            });
+            await enqueueOutbox(tx, queueJobOutbox(OUTBOUND_QUEUE, envelope));
 
             await tx
               .update(scheduledFollowups)

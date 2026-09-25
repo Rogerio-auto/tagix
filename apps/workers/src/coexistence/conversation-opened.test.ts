@@ -5,9 +5,11 @@
  * F70-S14: cada caminho manda a sua origem — eco do WhatsApp e do Instagram
  * `app_echo`, importação de histórico `history` — com o mesmo eventId canônico.
  *
- * Protege: publica uma vez e só depois do commit (outra conexão já enxerga a
- * conversa no instante da publicação); reentrega e conversa existente não
- * republicam; rollback da transação não publica nada.
+ * Protege: anuncia uma vez; reentrega e conversa existente não regravam; rollback
+ * da transação não deixa nada.
+ *
+ * F70-S16: o anúncio é uma linha da OUTBOX gravada na transação que criou a conversa.
+ * Lida por outra conexão (commitada), a conversa que ela anuncia já é visível.
  *
  * O rollback é forçado pela etiqueta de origem (`applyOriginTag`), que roda DENTRO
  * da transação logo depois da conversa nascer — o spy delega ao real fora do teste
@@ -20,8 +22,8 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeDb, getDb, schema } from '@hm/db';
 import { createLogger } from '@hm/logger';
-import type { DomainEventDraft } from '@hm/shared/mq';
 import type * as OriginModule from '../inbound/origin';
+import { outboxEventsOf, type OutboxTestEvent } from '../outbox/testing';
 
 const origin = vi.hoisted(() => ({ falhar: false }));
 vi.mock('../inbound/origin', async (importOriginal) => {
@@ -51,24 +53,28 @@ describe.skipIf(!url)('F70-S13 coexistência abre conversa → conversation.open
   let igChannelId = '';
   const igUserId = `IG_F70S14_${sfx}`;
 
-  /** Cada publicação + se a conversa já estava commitada (visível por outra conexão). */
-  const publicados: Array<{ draft: DomainEventDraft; commitada: boolean }> = [];
   const persistence = new DbCoexistencePersistence(
     createLogger('error'),
     undefined,
     undefined,
     undefined,
     new Set(),
-    async (draft) => {
-      const id = draft.event === 'conversation.opened' ? draft.data.conversationId : '';
-      const visiveis = await getDb()
-        .select({ id: schema.conversations.id })
-        .from(schema.conversations)
-        .where(eq(schema.conversations.id, id));
-      publicados.push({ draft, commitada: visiveis.length === 1 });
-      return true;
-    },
   );
+
+  /** A outbox do workspace, na ordem + se a conversa anunciada já é visível. */
+  const publicados = async (): Promise<Array<{ draft: OutboxTestEvent; commitada: boolean }>> => {
+    const eventos = await outboxEventsOf(workspaceId);
+    return Promise.all(
+      eventos.map(async (draft) => {
+        const id = draft.event === 'conversation.opened' ? String(draft.data['conversationId']) : '';
+        const visiveis = await getDb()
+          .select({ id: schema.conversations.id })
+          .from(schema.conversations)
+          .where(eq(schema.conversations.id, id));
+        return { draft, commitada: visiveis.length === 1 };
+      }),
+    );
+  };
 
   const conversaDe = async (remoteId: string) => {
     const rows = await getDb()
@@ -121,16 +127,16 @@ describe.skipIf(!url)('F70-S13 coexistência abre conversa → conversation.open
     await closeDb();
   });
 
-  it('eco que abre a conversa → um evento depois do commit; reentrega não republica', async () => {
+  it('eco que abre a conversa → um evento na outbox; reentrega não regrava', async () => {
     const remoteId = `55119${digitos}1`;
-    const antes = publicados.length;
+    const antes = (await publicados()).length;
 
     const r = await persistence.persistEcho(eco(remoteId, `wamid.f70s13.${sfx}.1`));
     expect(r).toMatchObject({ resolved: true, inserted: true, startedByApp: true });
 
     const [conversa] = await conversaDe(remoteId);
     expect(conversa).toBeDefined();
-    const novos = publicados.slice(antes);
+    const novos = (await publicados()).slice(antes);
     expect(novos).toHaveLength(1);
     expect(novos[0]?.commitada).toBe(true);
     expect(novos[0]?.draft).toMatchObject({
@@ -148,12 +154,12 @@ describe.skipIf(!url)('F70-S13 coexistência abre conversa → conversation.open
     // Reentrega do mesmo eco e um segundo eco na mesma conversa: nada novo.
     await persistence.persistEcho(eco(remoteId, `wamid.f70s13.${sfx}.1`));
     await persistence.persistEcho(eco(remoteId, `wamid.f70s13.${sfx}.2`));
-    expect(publicados.length).toBe(antes + 1);
+    expect((await publicados()).length).toBe(antes + 1);
   });
 
   it('eco do Instagram que abre a conversa → trigger app_echo, uma vez', async () => {
     const remoteId = `IGSID_F70S14_${sfx}`;
-    const antes = publicados.length;
+    const antes = (await publicados()).length;
     const ecoIg = (externalId: string) => ({
       provider: 'meta_instagram' as const,
       igUserId,
@@ -169,7 +175,7 @@ describe.skipIf(!url)('F70-S13 coexistência abre conversa → conversation.open
 
     const [conversa] = await conversaDe(remoteId);
     expect(conversa).toBeDefined();
-    const novos = publicados.slice(antes);
+    const novos = (await publicados()).slice(antes);
     expect(novos).toHaveLength(1);
     expect(novos[0]?.commitada).toBe(true);
     expect(novos[0]?.draft).toMatchObject({
@@ -179,23 +185,23 @@ describe.skipIf(!url)('F70-S13 coexistência abre conversa → conversation.open
     });
 
     await persistence.persistInstagramEcho(ecoIg(`mid.f70s14.${sfx}.1`));
-    expect(publicados.length).toBe(antes + 1);
+    expect((await publicados()).length).toBe(antes + 1);
   });
 
   it('eco com rollback → nenhum evento, nenhuma conversa', async () => {
     const remoteId = `55119${digitos}2`;
-    const antes = publicados.length;
+    const antes = (await publicados()).length;
     origin.falhar = true;
 
     await expect(persistence.persistEcho(eco(remoteId, `wamid.f70s13.${sfx}.3`))).rejects.toThrow(
       'falha simulada',
     );
 
-    expect(publicados.length).toBe(antes);
+    expect((await publicados()).length).toBe(antes);
     expect(await conversaDe(remoteId)).toHaveLength(0);
   });
 
-  it('histórico → um evento por conversa aberta; reprocesso não republica', async () => {
+  it('histórico → um evento por conversa aberta; reprocesso não regrava', async () => {
     const a = `55119${digitos}3`;
     const b = `55119${digitos}4`;
     const lote = {
@@ -208,13 +214,13 @@ describe.skipIf(!url)('F70-S13 coexistência abre conversa → conversation.open
       ],
       raw: {},
     };
-    const antes = publicados.length;
+    const antes = (await publicados()).length;
 
     await persistence.importHistory(lote);
 
     const [convA] = await conversaDe(a);
     const [convB] = await conversaDe(b);
-    const novos = publicados.slice(antes);
+    const novos = (await publicados()).slice(antes);
     expect(novos).toHaveLength(2);
     expect(novos.every((p) => p.commitada)).toBe(true);
     expect(novos.map((p) => p.draft.eventId).sort()).toEqual(
@@ -225,12 +231,12 @@ describe.skipIf(!url)('F70-S13 coexistência abre conversa → conversation.open
     }
 
     await persistence.importHistory(lote);
-    expect(publicados.length).toBe(antes + 2);
+    expect((await publicados()).length).toBe(antes + 2);
   });
 
   it('histórico com rollback → nenhum evento, nenhuma conversa', async () => {
     const c = `55119${digitos}5`;
-    const antes = publicados.length;
+    const antes = (await publicados()).length;
     origin.falhar = true;
 
     await expect(
@@ -242,7 +248,7 @@ describe.skipIf(!url)('F70-S13 coexistência abre conversa → conversation.open
       }),
     ).rejects.toThrow('falha simulada');
 
-    expect(publicados.length).toBe(antes);
+    expect((await publicados()).length).toBe(antes);
     expect(await conversaDe(c)).toHaveLength(0);
   });
 });

@@ -19,14 +19,14 @@
  */
 import Redis from 'ioredis';
 import { and, eq } from 'drizzle-orm';
-import { schema, withWorkspace } from '@hm/db';
+import { enqueueOutbox, schema, withWorkspace } from '@hm/db';
 import {
   assertTopology,
   closeDomainEventEmitter,
   connectMq,
   consume,
   conversionRegisteredFromRow,
-  emitDomainEvent,
+  domainEventsOutbox,
   getMqHealth,
   QUEUES,
   setDomainEventLogger,
@@ -110,6 +110,7 @@ import {
 /** Intervalo do rollup de métricas de agentes (F2-S13); idempotente. */
 const METRICS_ROLLUP_INTERVAL_MS = 10 * 60_000;
 import { startWebhookDispatcher, startWebhookFanoutWorker } from '../webhooks/index';
+import { startOutboxRelayFromEnv } from '../outbox/index';
 import {
   initSentry,
   startMetricsServer,
@@ -373,13 +374,13 @@ export async function startWorkers(
       });
     },
     async registerConversion({ workspaceId, dealId }, config) {
-      const created = await withWorkspace(workspaceId, async (tx) => {
+      await withWorkspace(workspaceId, async (tx) => {
         const [deal] = await tx
           .select({ contactId: schema.deals.contactId })
           .from(schema.deals)
           .where(eq(schema.deals.id, dealId))
           .limit(1);
-        if (!deal) return null;
+        if (!deal) return;
         const [type] = await tx
           .select()
           .from(schema.conversionTypes)
@@ -409,12 +410,15 @@ export async function startWorkers(
           })
           .onConflictDoNothing()
           .returning();
-        return row ?? null;
+        // F70-S09/S16: conversão NOVA vira evento de domínio, pela outbox, nesta
+        // transação (sem linha = já registrada hoje → nada a anunciar).
+        if (row) {
+          await enqueueOutbox(
+            tx,
+            domainEventsOutbox([conversionRegisteredFromRow(workspaceId, row)]),
+          );
+        }
       });
-      // F70-S09: conversão NOVA vira evento de domínio, depois do commit.
-      if (created) {
-        await emitDomainEvent(conversionRegisteredFromRow(workspaceId, created));
-      }
     },
   };
   const automationExecutor = createActionExecutor(automationPorts);
@@ -438,6 +442,11 @@ export async function startWorkers(
   // hm.q.webhooks) e grava as deliveries que o dispatcher acima entrega. Ack só
   // depois de gravar; retry/DLQ pela política de filas confiáveis.
   const webhookFanout = await startWebhookFanoutWorker({ logger });
+  // Relay da outbox transacional (F70-S16): leva ao RabbitMQ, com publisher confirms,
+  // os eventos de domínio e jobs que os produtores gravaram na transação do dado.
+  // Acorda por LISTEN/NOTIFY + polling de segurança; uma instância por processo
+  // (SKIP LOCKED reparte o trabalho). Sem ele, nada gravado na outbox sai.
+  const outboxRelay = await startOutboxRelayFromEnv(logger);
   // Processor de export LGPD (F10-S02): drena data_export_jobs pendentes, reúne PII
   // sob RLS e grava o artefato via @hm/storage. Singleton via lock Redis.
   const privacyExport = startPrivacyExportProcessor({ redis, logger });
@@ -495,6 +504,7 @@ export async function startWorkers(
       'dashboard-mv-scheduler',
       'webhook-dispatcher',
       'webhook-fanout',
+      'outbox-relay',
       'privacy-export-processor',
       'evaluation-scheduler',
       'billing-recurrence-scheduler',
@@ -563,6 +573,9 @@ export async function startWorkers(
       await media.stop();
       await outbound.stop();
       await inbound.stop();
+      // Por último entre os produtores: o que eles gravaram até aqui ainda sai. O que
+      // ficar pendente espera o próximo boot (ou outra instância) — nada se perde.
+      await outboxRelay.stop();
       await redis.quit();
       await closeDomainEventEmitter();
       await boot.connection.close();

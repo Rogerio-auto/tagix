@@ -294,7 +294,7 @@ describe('webhooks de saída — ponta a ponta (F70-S09)', () => {
     expect(received[0]?.signatureValid).toBe(true);
   });
 
-  it('fan-out concorrente do mesmo evento não duplica (advisory lock)', async () => {
+  it('fan-out concorrente do mesmo evento não duplica (índice único, F70-S16)', async () => {
     const draft = messageReceived();
     const evt: WebhookEvent = {
       workspaceId: ws,
