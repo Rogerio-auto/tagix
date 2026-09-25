@@ -20,6 +20,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { agents, conversations, workspaces } from './index';
@@ -51,6 +52,29 @@ export const agentExecutions = pgTable(
     updatedAt: ts('updated_at'),
     completedAt: ts('completed_at'),
     error: text('error'),
+    /**
+     * Id estável do gatilho que motivou o turno (F70-S26, `agentRunTriggerId` de
+     * `@hm/shared/mq`). Único por workspace: é a reivindicação do turno. NULL = execução
+     * sem gatilho de fila (flush do buffer de agregação, linhas anteriores à 0092).
+     */
+    triggerId: text('trigger_id'),
+    /**
+     * Estado de entrega do turno, independente de `status` (que o runtime também escreve):
+     * `claimed` → `running` → `responded` → `completed`; `failed_before_runtime` libera a
+     * retentativa. Ver `apps/workers/src/agents/run.ts` (máquina de estados).
+     */
+    turnState: text('turn_state'),
+    /** Dono da reivindicação atual; toda transição confere o token. */
+    turnToken: uuid('turn_token'),
+    /** Quantas vezes o turno foi reivindicado (1 + retentativas antes do runtime). */
+    turnAttempts: integer('turn_attempts'),
+    /** Início da reivindicação atual (lease de `claimed`). */
+    turnClaimedAt: ts('turn_claimed_at'),
+    /**
+     * Resposta do runtime guardada entre o `final` e a gravação da mensagem. Uma retentativa
+     * em `responded` grava ESTA resposta sem chamar o runtime de novo. Limpa ao concluir.
+     */
+    turnReply: text('turn_reply'),
   },
   (t) => [
     index('idx_agent_executions_thread').on(t.threadId),
@@ -69,6 +93,18 @@ export const agentExecutions = pgTable(
     check(
       'agent_executions_status_chk',
       sql`${t.status} in ('running','interrupted','completed','failed')`,
+    ),
+    // F70-S26 (0092): reivindicação do turno pelo id do gatilho, uma por workspace.
+    uniqueIndex('uq_agent_executions_trigger')
+      .on(t.workspaceId, t.triggerId)
+      .where(sql`${t.triggerId} is not null`),
+    check(
+      'agent_executions_turn_state_chk',
+      sql`${t.turnState} is null or ${t.turnState} in ('claimed','running','responded','completed','failed_before_runtime')`,
+    ),
+    check(
+      'agent_executions_turn_claim_chk',
+      sql`(${t.triggerId} is null) = (${t.turnState} is null) and (${t.triggerId} is null or length(${t.triggerId}) <= 256)`,
     ),
   ],
 );

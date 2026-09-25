@@ -41,7 +41,7 @@ import { agentDepartmentsRepo, enqueueOutbox, schema } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import { AI_ELIGIBLE_CONVERSATION_ORIGINS } from '@hm/flow-engine';
 import { createLogger, type Logger } from '@hm/logger';
-import { agentRunJobOutbox } from '@hm/shared/mq';
+import { agentRunJobOutbox, agentRunTriggerId } from '@hm/shared/mq';
 import { CHANNEL_PROVIDERS, type ChannelProvider } from '@hm/shared';
 import type { ToolCallEnvelope, ToolHandler, ToolHandlerResult } from './registry';
 
@@ -74,6 +74,12 @@ export interface ReengageTrigger {
   readonly contactId: string;
   readonly channelId: string;
   readonly provider: ChannelProvider;
+  /**
+   * Id estável do gatilho (F70-S26): `agentRunTriggerId.transfer(execução, destino)`. A
+   * mesma transferência repetida na mesma execução (retry HTTP do runtime) não vira dois
+   * turnos do agente de destino.
+   */
+  readonly triggerId: string;
 }
 
 /**
@@ -93,6 +99,7 @@ export async function enqueueReengage(
       contactId: trigger.contactId,
       channelId: trigger.channelId,
       provider: trigger.provider,
+      triggerId: trigger.triggerId,
     }),
   );
 }
@@ -208,6 +215,7 @@ export function makeTransferToAgentHandler(deps?: {
         contactId,
         channelId: conversation.channelId,
         provider,
+        triggerId: agentRunTriggerId.transfer(env.executionId, targetAgentId),
       });
     }
 

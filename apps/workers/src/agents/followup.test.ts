@@ -166,6 +166,8 @@ describe('runFollowupTick', () => {
       contactId: CONTACT,
       channelId: CHANNEL,
       provider: 'meta_whatsapp',
+      // F70-S26: id estável do gatilho = conversa + janela.
+      triggerId: `followup:${CONV}:${BUCKET}`,
     });
 
     // Gravou a marca de idempotência da janela.

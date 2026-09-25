@@ -201,7 +201,24 @@ function makeStore(context: AgentRunContext | null): {
       completeExecution,
       failExecution,
       persistAgentMessage,
+      // Estes testes rodam sem `triggerId` (execução avulsa): a reivindicação da F70-S26
+      // nunca pode ser tocada. `run-idempotency.test.ts` cobre o caminho com gatilho.
+      ...unusedTurnPorts(),
     },
+  };
+}
+
+function unusedTurnPorts(): Pick<
+  AgentRunStore,
+  'claimTurn' | 'markTurnRunning' | 'releaseTurn' | 'saveTurnReply' | 'deliverTurnReply'
+> {
+  const never = (name: string) => () => Promise.reject(new Error(`${name} fora do caminho`));
+  return {
+    claimTurn: never('claimTurn'),
+    markTurnRunning: never('markTurnRunning'),
+    releaseTurn: never('releaseTurn'),
+    saveTurnReply: never('saveTurnReply'),
+    deliverTurnReply: never('deliverTurnReply'),
   };
 }
 
