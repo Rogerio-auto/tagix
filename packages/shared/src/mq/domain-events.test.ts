@@ -6,6 +6,10 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildDomainEnvelope,
+  DOMAIN_EVENT_TEXT_MAX_LENGTH,
+  DOMAIN_EVENT_TEXT_TRUNCATION_MARK,
+  DomainEventContractError,
+  truncateEventText,
   CONVERSATION_OPENED_TRIGGERS,
   DOMAIN_EVENTS,
   domainEventRoutingKey,
@@ -208,5 +212,107 @@ describe('emitDomainEvent', () => {
     );
     expect(ok).toBe(false);
     expect(errors).toHaveLength(1);
+  });
+});
+
+describe('teto do texto livre (F70-S19, L6)', () => {
+  const base = () => ({
+    conversationId: randomUUID(),
+    messageId: randomUUID(),
+    contactId: null,
+    channelId: randomUUID(),
+    type: 'text',
+  });
+
+  it('texto dentro do teto passa igual (inclusive no limite exato e null)', () => {
+    const exact = 'a'.repeat(DOMAIN_EVENT_TEXT_MAX_LENGTH);
+    expect(truncateEventText(exact)).toBe(exact);
+    expect(truncateEventText(null)).toBeNull();
+    expect(truncateEventText('')).toBe('');
+  });
+
+  it('message.received e message.sent truncam no construtor, com a marca de corte', () => {
+    const huge = 'x'.repeat(60_000);
+    const received = domainEvents.messageReceived(ws, { ...base(), text: huge });
+    const sent = domainEvents.messageSent(ws, {
+      conversationId: randomUUID(),
+      messageId: randomUUID(),
+      type: 'text',
+      text: huge,
+    });
+    for (const draft of [received, sent]) {
+      const text = (draft.data as { text: string }).text;
+      expect(text).toHaveLength(DOMAIN_EVENT_TEXT_MAX_LENGTH);
+      expect(text.endsWith(DOMAIN_EVENT_TEXT_TRUNCATION_MARK)).toBe(true);
+      // O contrato aceita o texto truncado na publicação e no consumo.
+      expect(parseDomainEnvelope(buildDomainEnvelope(draft)).data['text']).toBe(text);
+    }
+  });
+
+  it('não parte um emoji (par substituto) no corte', () => {
+    // O corte cai exatamente entre as metades do par: o par inteiro sai.
+    const cut = DOMAIN_EVENT_TEXT_MAX_LENGTH - DOMAIN_EVENT_TEXT_TRUNCATION_MARK.length;
+    const text = 'a'.repeat(cut - 1) + '😀'.repeat(10);
+    const out = truncateEventText(text)!;
+    expect(out.length).toBeLessThanOrEqual(DOMAIN_EVENT_TEXT_MAX_LENGTH);
+    // Sem metade alta solta antes da marca.
+    expect(out).toBe('a'.repeat(cut - 1) + DOMAIN_EVENT_TEXT_TRUNCATION_MARK);
+  });
+
+  it('o contrato recusa texto acima do teto que não passou pelo construtor', () => {
+    const draft = domainEvents.messageReceived(ws, { ...base(), text: 'oi' });
+    const bypass = { ...draft, data: { ...draft.data, text: 'y'.repeat(DOMAIN_EVENT_TEXT_MAX_LENGTH + 1) } };
+    expect(() => buildDomainEnvelope(bypass as DomainEventDraft)).toThrow();
+  });
+});
+
+describe('contrato estrito no consumo (F70-S19, L7)', () => {
+  function forged(data: Record<string, unknown>): Envelope {
+    return makeEnvelope('message.received', ws, {
+      eventId: `${randomUUID()}:received`,
+      occurredAt: new Date().toISOString(),
+      data,
+    });
+  }
+  const valid = () => ({
+    conversationId: randomUUID(),
+    messageId: randomUUID(),
+    contactId: null,
+    channelId: randomUUID(),
+    type: 'text',
+    text: 'oi',
+  });
+
+  it('campo a mais é recusado com erro não retentável, sem o valor no erro', () => {
+    let error: unknown;
+    try {
+      parseDomainEnvelope(forged({ ...valid(), phone: '+5511999999999' }));
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(DomainEventContractError);
+    expect(error).toBeInstanceOf(NonRetryableError);
+    const contract = error as DomainEventContractError;
+    expect(contract.part).toBe('data');
+    expect(contract.issues).toEqual([{ path: '(raiz)', code: 'unrecognized_keys', keys: ['phone'] }]);
+    expect(JSON.stringify(contract.issues)).not.toContain('5511999999999');
+    expect(contract.message).not.toContain('5511999999999');
+  });
+
+  it('tipo errado, campo faltando e texto acima do teto são recusados', () => {
+    const missing: Record<string, unknown> = valid();
+    delete missing['messageId'];
+    for (const data of [
+      { ...valid(), conversationId: 'não-é-uuid' },
+      missing,
+      { ...valid(), text: 'z'.repeat(DOMAIN_EVENT_TEXT_MAX_LENGTH + 1) },
+    ]) {
+      expect(() => parseDomainEnvelope(forged(data))).toThrow(DomainEventContractError);
+    }
+  });
+
+  it('dado dentro do contrato passa', () => {
+    const data = valid();
+    expect(parseDomainEnvelope(forged(data)).data).toEqual(data);
   });
 });

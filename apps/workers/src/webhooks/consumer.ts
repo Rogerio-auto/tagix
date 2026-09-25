@@ -17,8 +17,19 @@
  *  - **retentativa e DLQ.** `hm.q.webhooks` está em `reliableQueues()`: falha de
  *    banco retenta com backoff (5s → 30min); esgotada, cai na DLQ monitorada.
  *    Evento fora do catálogo/contrato é erro de conteúdo → DLQ direto.
+ *  - **contrato estrito no consumo (F70-S19).** O `data` é revalidado com
+ *    `DOMAIN_EVENT_DATA_SCHEMAS[evento]` (`parseDomainEnvelope`): campo a mais ou tipo
+ *    errado não chega a assinante nenhum; vai à DLQ com log do que falhou.
  */
-import { connectMq, consume, parseDomainEnvelope, QUEUES, type Envelope } from '@hm/shared/mq';
+import {
+  connectMq,
+  consume,
+  DomainEventContractError,
+  parseDomainEnvelope,
+  QUEUES,
+  type Envelope,
+  type ParsedDomainEvent,
+} from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
 import { fanoutEvent, type FanoutResult, type WebhookEvent } from './fanout';
 
@@ -38,7 +49,23 @@ export async function handleDomainEventEnvelope(
   envelope: Envelope,
   deps: WebhookFanoutDeps,
 ): Promise<FanoutResult> {
-  const evt = parseDomainEnvelope(envelope);
+  let evt: ParsedDomainEvent;
+  try {
+    evt = parseDomainEnvelope(envelope);
+  } catch (err: unknown) {
+    // F70-S19 (L7): fora do catálogo ou do contrato estrito → nenhum assinante recebe;
+    // relança (NonRetryableError) e o `consume` manda direto à DLQ. O log diz o QUÊ
+    // (evento, caminho, código, chave a mais), nunca o valor recebido.
+    deps.logger.warn('webhook: evento fora do contrato — DLQ, sem entrega', {
+      envelopeId: envelope.id,
+      type: envelope.type,
+      workspaceId: envelope.workspaceId,
+      ...(err instanceof DomainEventContractError
+        ? { part: err.part, issues: err.issues }
+        : { error: err instanceof Error ? err.message : String(err) }),
+    });
+    throw err;
+  }
   const fanout = deps.fanout ?? fanoutEvent;
   const result = await fanout({
     workspaceId: evt.workspaceId,

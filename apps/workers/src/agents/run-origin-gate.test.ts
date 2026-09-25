@@ -62,16 +62,22 @@ describe('authorizeAiReply (F70-S19)', () => {
   });
 
   it('marca humana posterior ao `on` automático → responde; anterior ou empatada → não', () => {
-    expect(authorizeAiReply({ origin: null, aiEnabledAt: t1, aiAutoEnabledAt: t0 }).allowed).toBe(true);
-    expect(authorizeAiReply({ origin: null, aiEnabledAt: t0, aiAutoEnabledAt: t1 }).allowed).toBe(false);
-    expect(authorizeAiReply({ origin: null, aiEnabledAt: t0, aiAutoEnabledAt: t0 }).allowed).toBe(false);
+    expect(authorizeAiReply({ origin: null, aiEnabledAt: t1, aiAutoEnabledAt: t0 }).allowed).toBe(
+      true,
+    );
+    expect(authorizeAiReply({ origin: null, aiEnabledAt: t0, aiAutoEnabledAt: t1 }).allowed).toBe(
+      false,
+    );
+    expect(authorizeAiReply({ origin: null, aiEnabledAt: t0, aiAutoEnabledAt: t0 }).allowed).toBe(
+      false,
+    );
   });
 
   it('data inválida conta como ausente (fail-closed)', () => {
     const invalid = new Date(Number.NaN);
-    expect(authorizeAiReply({ origin: null, aiEnabledAt: invalid, aiAutoEnabledAt: null }).allowed).toBe(
-      false,
-    );
+    expect(
+      authorizeAiReply({ origin: null, aiEnabledAt: invalid, aiAutoEnabledAt: null }).allowed,
+    ).toBe(false);
   });
 });
 
@@ -104,7 +110,11 @@ describe.skipIf(!url)('worker de agentes — trava de origem e marca humana (DB,
   const deps: AgentRunDeps = {
     store: new DbAgentRunStore(),
     socket: { emitStarted: vi.fn(async () => {}), emitCompleted: vi.fn(async () => {}) },
-    client: { run: fakeRuntime, health: vi.fn(), cancel: vi.fn() } as unknown as AgentRunDeps['client'],
+    client: {
+      run: fakeRuntime,
+      health: vi.fn(),
+      cancel: vi.fn(),
+    } as unknown as AgentRunDeps['client'],
     outbound: { enqueueText },
     logger: logger as unknown as AgentRunDeps['logger'],
   };
@@ -114,16 +124,18 @@ describe.skipIf(!url)('worker de agentes — trava de origem e marca humana (DB,
     aiMode: 'on' | 'off',
   ): Promise<string> {
     const id = randomUUID();
-    await getDb().insert(schema.conversations).values({
-      id,
-      workspaceId: WS,
-      channelId: CHANNEL,
-      contactId: CONTACT,
-      remoteId: `r-${id.slice(0, 12)}`,
-      aiMode,
-      origin,
-      agentId: AGENT,
-    });
+    await getDb()
+      .insert(schema.conversations)
+      .values({
+        id,
+        workspaceId: WS,
+        channelId: CHANNEL,
+        contactId: CONTACT,
+        remoteId: `r-${id.slice(0, 12)}`,
+        aiMode,
+        origin,
+        agentId: AGENT,
+      });
     await getDb().insert(schema.messages).values({
       workspaceId: WS,
       conversationId: id,
@@ -153,7 +165,10 @@ describe.skipIf(!url)('worker de agentes — trava de origem e marca humana (DB,
   }
 
   /** Um caminho automático qualquer (sem marca humana), como os UPDATEs da F70-S07/S08. */
-  async function automationSets(conversationId: string, aiMode: 'on' | 'off' | 'paused'): Promise<void> {
+  async function automationSets(
+    conversationId: string,
+    aiMode: 'on' | 'off' | 'paused',
+  ): Promise<void> {
     await getDb()
       .update(schema.conversations)
       .set({ aiMode, updatedAt: new Date() })
@@ -182,7 +197,10 @@ describe.skipIf(!url)('worker de agentes — trava de origem e marca humana (DB,
       .select({ id: schema.messages.id })
       .from(schema.messages)
       .where(
-        and(eq(schema.messages.conversationId, conversationId), eq(schema.messages.senderType, 'agent')),
+        and(
+          eq(schema.messages.conversationId, conversationId),
+          eq(schema.messages.senderType, 'agent'),
+        ),
       );
     return { executions: executions.length, agentMessages: agentMessages.length };
   }
@@ -242,7 +260,9 @@ describe.skipIf(!url)('worker de agentes — trava de origem e marca humana (DB,
   });
 
   afterAll(async () => {
-    await getDb().delete(schema.workspaces).where(inArray(schema.workspaces.id, [WS, OTHER_WS]));
+    await getDb()
+      .delete(schema.workspaces)
+      .where(inArray(schema.workspaces.id, [WS, OTHER_WS]));
     await closeDb();
   });
 
@@ -323,14 +343,16 @@ describe.skipIf(!url)('worker de agentes — trava de origem e marca humana (DB,
 
   it('membro removido: a autoria vira NULL e a marca continua valendo', async () => {
     const leaving = randomUUID();
-    await getDb().insert(schema.members).values({
-      id: leaving,
-      workspaceId: WS,
-      authUserId: randomUUID(),
-      email: `f70s19-lv-${sfx}@example.test`,
-      role: 'AGENT',
-      status: 'active',
-    });
+    await getDb()
+      .insert(schema.members)
+      .values({
+        id: leaving,
+        workspaceId: WS,
+        authUserId: randomUUID(),
+        email: `f70s19-lv-${sfx}@example.test`,
+        role: 'AGENT',
+        status: 'active',
+      });
     const conv = await newConversation(null, 'off');
     await humanTurnsOn(conv, leaving);
     await getDb().delete(schema.members).where(eq(schema.members.id, leaving));
