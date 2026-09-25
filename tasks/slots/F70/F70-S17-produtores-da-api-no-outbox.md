@@ -2,7 +2,7 @@
 id: F70-S17
 title: Produtores da API publicam pelo outbox
 phase: F70
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F70-S16, F70-S11]
