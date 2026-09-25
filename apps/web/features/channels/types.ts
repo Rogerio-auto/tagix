@@ -60,8 +60,12 @@ export type WaConnectMode = 'cloud_api' | 'coexistence';
  * o `pin` e inscreve a WABA no app. Nenhum segredo transita de volta ao client.
  */
 export interface WaConnectInput {
-  code: string;
-  phoneNumberId: string;
+  /** `code` do Embedded Signup. Exatamente um entre `code` e `accessToken`. */
+  code?: string;
+  /** Conector manual: token de acesso já emitido (usuário do sistema). */
+  accessToken?: string;
+  /** Opcional: a coexistência não o devolve; o servidor resolve pela WABA. */
+  phoneNumberId?: string;
   wabaId: string;
   /**
    * PIN de verificação em duas etapas do número (6 dígitos). Obrigatório SÓ na

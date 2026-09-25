@@ -140,13 +140,113 @@ export async function subscribeWabaApp(
   }
 }
 
+/** Numero da WABA como a Graph devolve em `GET /{waba_id}/phone_numbers`. */
+export interface WabaPhoneNumber {
+  id: string;
+  displayPhoneNumber?: string;
+  verifiedName?: string;
+}
+
+/** So digitos — para comparar `+55 11 9…` com `5511 9…`. */
+function digitsOnly(v: string): string {
+  return v.replace(/\D/g, '');
+}
+
+/**
+ * Lista os numeros da WABA com o token do cliente. Serve a dois propositos:
+ * provar que o token enxerga a WABA informada e descobrir o `phone_number_id`,
+ * que a Meta NAO devolve no `postMessage` da coexistencia
+ * (`FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING` so traz `waba_id`).
+ */
+export async function listWabaPhoneNumbers(
+  graph: GraphClient,
+  wabaId: string,
+  token: string,
+): Promise<WabaPhoneNumber[]> {
+  const res = await graph.get(
+    wabaId + '/phone_numbers?fields=id,display_phone_number,verified_name',
+    token,
+  );
+  const data = isRecord(res) && Array.isArray(res['data']) ? res['data'] : [];
+  const out: WabaPhoneNumber[] = [];
+  for (const item of data) {
+    if (!isRecord(item)) continue;
+    const id = asString(item['id']);
+    if (id === undefined || id.length === 0) continue;
+    out.push({
+      id,
+      displayPhoneNumber: asString(item['display_phone_number']),
+      verifiedName: asString(item['verified_name']),
+    });
+  }
+  return out;
+}
+
+/**
+ * Decide o numero do canal entre os numeros da WABA.
+ *
+ * - `phoneNumberId` informado: precisa pertencer a WABA (senao o cliente poderia
+ *   amarrar ao canal um numero que o token nao controla).
+ * - Nao informado: um numero so → ele; varios → o que casa com `phoneNumberHint`
+ *   por digitos; sem como decidir → erro pedindo o numero.
+ */
+export function pickWabaPhoneNumber(
+  numbers: readonly WabaPhoneNumber[],
+  phoneNumberId: string | undefined,
+  phoneNumberHint: string | undefined,
+): WabaPhoneNumber {
+  if (numbers.length === 0) {
+    throw new WaConnectError(
+      'WA_CONNECT_NO_PHONE_NUMBER',
+      'A conta do WhatsApp (WABA) nao tem nenhum numero visivel para este acesso.',
+    );
+  }
+  if (phoneNumberId !== undefined) {
+    const found = numbers.find((n) => n.id === phoneNumberId);
+    if (!found) {
+      throw new WaConnectError(
+        'WA_CONNECT_PHONE_NOT_IN_WABA',
+        'O Phone Number ID informado nao pertence a esta conta do WhatsApp (WABA).',
+      );
+    }
+    return found;
+  }
+  if (numbers.length === 1) return numbers[0] as WabaPhoneNumber;
+  const hint = phoneNumberHint !== undefined ? digitsOnly(phoneNumberHint) : '';
+  if (hint.length > 0) {
+    const matches = numbers.filter(
+      (n) => n.displayPhoneNumber !== undefined && digitsOnly(n.displayPhoneNumber) === hint,
+    );
+    if (matches.length === 1) return matches[0] as WabaPhoneNumber;
+  }
+  throw new WaConnectError(
+    'WA_CONNECT_PHONE_AMBIGUOUS',
+    'A conta do WhatsApp tem mais de um numero. Informe o Phone Number ID do numero que deseja conectar.',
+  );
+}
+
+/**
+ * Credencial do cliente: o `code` do Embedded Signup (trocado aqui por token) ou
+ * um token de acesso ja emitido (ex.: usuario do sistema do Business Manager),
+ * para o conector manual. Nos dois casos o token so vive no servidor.
+ */
+export type WaConnectCredential = { code: string } | { accessToken: string };
+
 export interface WaConnectParams {
-  code: string;
-  phoneNumberId: string;
+  credential: WaConnectCredential;
+  /** Opcional: a coexistencia nao o devolve; resolvido pela WABA. */
+  phoneNumberId?: string;
   wabaId: string;
-  /** 2FA de 6 digitos — obrigatorio SO na coexistencia (numero existente). */
+  /** Numero (E.164 ou exibicao) para desempatar WABA com varios numeros. */
+  phoneNumberHint?: string;
+  /** 2FA de 6 digitos — aceito e ignorado (ver runWhatsAppConnect). */
   pin?: string;
   mode: WaConnectMode;
+}
+
+export interface WaConnectResult {
+  token: string;
+  phoneNumber: WabaPhoneNumber;
 }
 
 export interface WaConnectAppCreds {
@@ -165,15 +265,23 @@ export interface WaConnectAppCreds {
  * (`cloud_api`) o proprio Embedded Signup provisiona. Em ambos, so o
  * `subscribed_apps` e necessario para a WABA entregar webhooks (com os campos de
  * coexistencia quando aplicavel). `params.pin` e aceito mas ignorado (compat).
- * Retorna o token long-lived (a rota cifra e persiste).
+ *
+ * Antes de inscrever, lista os numeros da WABA com o token: prova que o token
+ * enxerga a WABA e resolve o `phone_number_id` (a coexistencia nao o devolve no
+ * Embedded Signup). Retorna o token long-lived e o numero (a rota cifra e persiste).
  */
 export async function runWhatsAppConnect(
   graph: GraphClient,
   params: WaConnectParams,
   creds: WaConnectAppCreds,
-): Promise<string> {
-  const token = await exchangeCodeForToken(graph, params.code, creds.appId, creds.appSecret);
+): Promise<WaConnectResult> {
+  const token =
+    'code' in params.credential
+      ? await exchangeCodeForToken(graph, params.credential.code, creds.appId, creds.appSecret)
+      : params.credential.accessToken;
+  const numbers = await listWabaPhoneNumbers(graph, params.wabaId, token);
+  const phoneNumber = pickWabaPhoneNumber(numbers, params.phoneNumberId, params.phoneNumberHint);
   const coexistence = params.mode === 'coexistence';
   await subscribeWabaApp(graph, params.wabaId, token, { coexistence });
-  return token;
+  return { token, phoneNumber };
 }
