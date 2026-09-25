@@ -22,7 +22,7 @@ function makeCtx(over: Partial<FlowExecutionContext> = {}): FlowExecutionContext
     variables: {},
     sendMessage: vi.fn(async () => {}),
     sendPresence: vi.fn(async () => {}),
-    setConversationAi: vi.fn(async () => {}),
+    setConversationAi: vi.fn(async () => ({ applied: true as const })),
     setConversationStatus: vi.fn(async () => {}),
     httpRequest: vi.fn(async () => ({ status: 200, ok: true, body: { ok: 1 }, headers: {} })),
     log: vi.fn(),
@@ -219,6 +219,46 @@ describe('ai_action / change_status', () => {
       ctx,
     );
     expect(ctx.setConversationAi).toHaveBeenCalledWith(expect.objectContaining({ aiMode: 'on' }));
+  });
+  it('F70-S07: ACTIVATE recusado pela trava de origem → SUCCESS sem erro, log warn + variável', async () => {
+    const ctx = makeCtx({
+      setConversationAi: vi.fn(async () => ({
+        applied: false as const,
+        reason: 'origin_not_eligible' as const,
+      })),
+    });
+    const r = await aiActionHandler.execute(
+      node({ action: 'ACTIVATE', agentId: '00000000-0000-0000-0000-000000000001' }),
+      ctx,
+    );
+    expect(r).toEqual({
+      status: 'SUCCESS',
+      variables: { ai_activation_blocked: 'origin_not_eligible' },
+    });
+    expect(ctx.log).toHaveBeenCalledWith(
+      'warn',
+      expect.stringContaining('recusado'),
+      expect.objectContaining({ reason: 'origin_not_eligible', conversationId: 'c1' }),
+    );
+  });
+  it('F70-S07: TRANSFER também passa pela trava (liga a IA)', async () => {
+    const ctx = makeCtx({
+      setConversationAi: vi.fn(async () => ({
+        applied: false as const,
+        reason: 'origin_not_eligible' as const,
+      })),
+    });
+    const r = await aiActionHandler.execute(
+      node({ action: 'TRANSFER', agentId: '00000000-0000-0000-0000-000000000002' }),
+      ctx,
+    );
+    expect(r).toMatchObject({ status: 'SUCCESS', variables: { ai_activation_blocked: 'origin_not_eligible' } });
+  });
+  it('DEACTIVATE nunca é travado', async () => {
+    const ctx = makeCtx();
+    const r = await aiActionHandler.execute(node({ action: 'DEACTIVATE' }), ctx);
+    expect(r).toEqual({ status: 'SUCCESS' });
+    expect(ctx.setConversationAi).toHaveBeenCalledWith({ aiMode: 'off', agentId: null });
   });
   it('change_status atualiza status', async () => {
     const ctx = makeCtx();

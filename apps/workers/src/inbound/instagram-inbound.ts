@@ -11,7 +11,7 @@
  *
  * Puro e sem any — testavel sem DB.
  */
-import type { InboundEvent, MediaRef, MessageType } from '@hm/channels';
+import { parseInstagramReferral, type InboundEvent, type MediaRef, type MessageType } from '@hm/channels';
 
 /** Evento `message` canonico (o que vira linha em `messages`). */
 export type NormalizedMessageEvent = Extract<InboundEvent, { type: 'message' }>;
@@ -99,16 +99,26 @@ function toMessageEvent(event: InboundEvent): NormalizedMessageEvent | undefined
         rawTimestamp: eventTimestamp(event.rawTimestamp),
         metadata: { payload: event.payload, ...(event.title !== undefined ? { title: event.title } : {}) },
       };
-    case 'referral':
+    case 'referral': {
+      // F70-S07: além do cru (`referral`), o referral NORMALIZADO vai em
+      // `metadata.adReferral` — mesmo formato do Click-to-WhatsApp. É dele que saem
+      // a origem da conversa, o primeiro toque do contato e a atribuição do deal.
+      const rawTimestamp = eventTimestamp(event.rawTimestamp);
+      const adReferral = parseInstagramReferral(event.referralData, rawTimestamp);
       return {
         type: 'message',
         provider: event.provider,
         contactRemoteId: event.contactRemoteId,
         externalId: 'ref_' + event.contactRemoteId + '_' + event.source,
         messageType: 'referral' as MessageType,
-        rawTimestamp: eventTimestamp(event.rawTimestamp),
-        metadata: { source: event.source, referral: event.referralData },
+        rawTimestamp,
+        metadata: {
+          source: event.source,
+          referral: event.referralData,
+          ...(adReferral !== undefined ? { adReferral } : {}),
+        },
       };
+    }
     default:
       // status, reaction, comment, story_mention já tratados acima ou a parte.
       return undefined;

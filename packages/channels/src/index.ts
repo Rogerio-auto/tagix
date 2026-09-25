@@ -50,6 +50,37 @@ export { parseWhatsAppWebhook } from './meta/whatsapp/webhook.parser';
 export { parseWahaWebhook } from './waha/webhook.parser';
 export { parseInstagramWebhook } from './meta/instagram/webhook.parser';
 
+// --- Eco do app do Instagram (F70-S04): mensagem humana do dono da conta ---
+export { parseInstagramEchoes } from './meta/instagram/echo.parser';
+export type { InstagramEchoEvent, InstagramEchoMessageType } from './meta/instagram/echo.parser';
+
+// --- Atribuição de anúncio + origem da conversa (F70-S05; ligado na F70-S07) ---
+export {
+  parseWhatsAppReferral,
+  parseInstagramReferral,
+  readAdReferral,
+  isPaidAdReferral,
+  toAdAttributionColumns,
+} from './meta/whatsapp/ad-referral';
+export type {
+  AdReferral,
+  AdReferralChannel,
+  AdReferralSourceType,
+  AdAttributionColumns,
+} from './meta/whatsapp/ad-referral';
+export {
+  classifyConversationOrigin,
+  isAiEligibleOrigin,
+  adReferralFromInboundEvent,
+  CONVERSATION_ORIGIN_TAGS,
+  MIN_PREFILL_MARKER_LENGTH,
+} from './meta/whatsapp/origin';
+export type {
+  ConversationOrigin,
+  ConversationOriginInput,
+  OriginPrefillMarkers,
+} from './meta/whatsapp/origin';
+
 // --- Coexistência WhatsApp Business (F39-S03): parser + contrato p/ F39-S04 ---
 export {
   parseCoexistence,

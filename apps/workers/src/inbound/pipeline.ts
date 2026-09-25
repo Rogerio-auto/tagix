@@ -79,6 +79,23 @@ export async function runInboundPipeline(
   deps: InboundDeps,
   logger: Logger,
 ): Promise<InboundPipelineResult> {
+  // F70-S07 — ecos do Instagram PRIMEIRO. O eco é o dono respondendo pelo app: se
+  // ele e uma mensagem do contato chegam no mesmo payload, a pausa da IA precisa
+  // valer antes de o inbound decidir se enfileira a IA. Um payload só de ecos não
+  // tem eventos de inbound, então isto também precisa vir antes do early-return.
+  // Falha aqui NÃO derruba o inbound (mesma política da revogação): perder a
+  // mensagem do cliente é pior; o erro fica no log.
+  if (provider === 'meta_instagram' && deps.instagramEchoes !== undefined) {
+    try {
+      await deps.instagramEchoes.handle(raw, logger);
+    } catch (err: unknown) {
+      logger.error('inbound: passo de ecos do Instagram falhou (inbound segue)', {
+        provider,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   const rawEvents = deps.parser.parse(provider, raw);
 
   // F15-S03: para Instagram, normaliza variantes (story/share/postback/referral)

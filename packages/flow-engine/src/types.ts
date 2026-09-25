@@ -108,11 +108,15 @@ export interface FlowExecutionContext {
   sendMessage(message: FlowOutboundMessage): Promise<void>;
   /** dispara presenca (typing/recording). */
   sendPresence(action: FlowPresenceAction): Promise<void>;
-  /** muda ai_mode/agent_id da conversa (ai_action handler). */
+  /**
+   * muda ai_mode/agent_id da conversa (ai_action handler). Ligar (`on`) passa pela
+   * trava de origem (F70-S07): conversa sem origem comprovada NAO liga — o port
+   * devolve `applied:false` em vez de lancar.
+   */
   setConversationAi(input: {
     aiMode: 'on' | 'off' | 'paused';
     agentId?: string | null;
-  }): Promise<void>;
+  }): Promise<SetConversationAiResult>;
   /** muda status da conversa (change_status handler). */
   setConversationStatus(status: string): Promise<void>;
   /** HTTP externo (http_request/external_notify) com timeout/retry resolvido pelo port. */
@@ -124,6 +128,16 @@ export interface FlowExecutionContext {
   /** espera N ms antes de prosseguir (simula digitacao/gravacao). Injetavel p/ testes. */
   sleep(ms: number): Promise<void>;
 }
+
+/**
+ * Resultado de `setConversationAi` (F70-S07). `origin_not_eligible`: a conversa nao
+ * tem origem comprovada (anuncio/site/instagram) e a IA nao foi ligada — recusa
+ * esperada, nao erro. `conversation_not_found`: a conversa sumiu (ou nao ha conversa
+ * na execucao).
+ */
+export type SetConversationAiResult =
+  | { readonly applied: true }
+  | { readonly applied: false; readonly reason: 'origin_not_eligible' | 'conversation_not_found' };
 
 export type FlowLogLevel = 'debug' | 'info' | 'warn' | 'error';
 

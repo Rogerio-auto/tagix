@@ -1,9 +1,9 @@
 /**
- * Regra de resposta humana (F70-S04) — espelho da rota de envio da API
+ * Regra de resposta humana (F70-S04) — regra única de UI e eco do app
  * (F30-S04 + F55-S02). Pura: sem DB, sem mocks.
  */
 import { describe, expect, it } from 'vitest';
-import { planHumanReply } from './human-takeover';
+import { planHumanReply } from './human-reply';
 
 const at = new Date('2026-09-24T12:00:00Z');
 const earlier = new Date('2026-09-24T11:00:00Z');

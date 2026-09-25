@@ -10,10 +10,11 @@
  * (engine pura / testes / API sem worker): mantem o contrato estavel sem acoplar a engine
  * ao transporte de mensagens.
  */
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
+import { AI_ELIGIBLE_CONVERSATION_ORIGINS } from '../ai-origin-gate';
 import type { FlowOutboundPort } from '../deps';
-import type { FlowOutboundMessage, FlowPresenceAction } from '../types';
+import type { FlowOutboundMessage, FlowPresenceAction, SetConversationAiResult } from '../types';
 
 const { conversations } = schema;
 
@@ -39,12 +40,33 @@ export function createOutboundPort(publisher: OutboundPublisher = noopPublisher)
     async sendPresence(workspaceId, action) {
       await publisher.publishPresence(workspaceId, action);
     },
-    async setConversationAi(workspaceId, input) {
-      await withWorkspace(workspaceId, async (tx) => {
-        await tx
+    async setConversationAi(workspaceId, input): Promise<SetConversationAiResult> {
+      return withWorkspace(workspaceId, async (tx) => {
+        const byId = eq(conversations.id, input.conversationId);
+        // F70-S07 — trava de origem. Ligar a IA é um UPDATE CONDICIONAL na própria
+        // origem: atômico (sem janela entre ler e ligar) e fail-closed (NULL não está
+        // no IN, então conversa sem origem gravada nunca liga). Desligar/pausar não
+        // tem trava — tirar a IA é sempre seguro.
+        const where =
+          input.aiMode === 'on'
+            ? and(byId, inArray(conversations.origin, [...AI_ELIGIBLE_CONVERSATION_ORIGINS]))
+            : byId;
+        const updated = await tx
           .update(conversations)
           .set({ aiMode: input.aiMode, agentId: input.agentId ?? null, updatedAt: new Date() })
-          .where(eq(conversations.id, input.conversationId));
+          .where(where)
+          .returning({ id: conversations.id });
+        if (updated.length > 0) return { applied: true };
+
+        // Nada atualizado: a conversa não existe (no escopo RLS) ou a origem barrou.
+        const [exists] = await tx
+          .select({ id: conversations.id })
+          .from(conversations)
+          .where(byId)
+          .limit(1);
+        return exists === undefined
+          ? { applied: false, reason: 'conversation_not_found' }
+          : { applied: false, reason: 'origin_not_eligible' };
       });
     },
     async setConversationStatus(workspaceId, input) {

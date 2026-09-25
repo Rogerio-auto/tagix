@@ -141,4 +141,27 @@ export type {
 //     bundler do browser resolve o import dinâmico em build-time, quebrando todo
 //     client component que toque este barrel. Consuma pelo leaf: `@hm/shared/net`.
 
+// --- Resposta humana: pausa da IA + primeira resposta (F70-S07 — regra única UI/eco). ---
+export { planHumanReply } from './human-reply';
+export type {
+  ConversationHumanState,
+  HumanReplyInput,
+  HumanReplyPatch,
+  HumanReplyPlan,
+} from './human-reply';
+
+// --- Origem da conversa persistida + marcadores de botão (F70-S07). ---
+export {
+  CONVERSATION_ORIGINS,
+  UNPROVEN_CONVERSATION_ORIGIN,
+  ORIGIN_PREFILL_MARKERS_SETTINGS_KEY,
+  normalizeConversationOrigin,
+  originPrefillMarkersFromSettings,
+  originPrefillMarkersSchema,
+} from './conversation-origin';
+export type {
+  ConversationOriginValue,
+  OriginPrefillMarkersConfig,
+} from './conversation-origin';
+
 export const SHARED_PKG = '@hm/shared' as const;

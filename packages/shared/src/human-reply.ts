@@ -1,9 +1,11 @@
 /**
- * Regra de "humano respondeu" aplicada ao eco do app (F70-S04).
+ * Regra de "humano respondeu" (F30-S04 + F55-S02; unificada na F70-S07).
  *
- * Quando o dono do número responde pelo celular (WhatsApp Business em
- * coexistência, ou o app do Instagram), o Leadium precisa tratar essa mensagem
- * exatamente como trata a resposta de um atendente pela UI:
+ * Toda resposta humana numa conversa — o atendente pela UI (`POST
+ * /conversations/:id/messages`) ou o dono do número pelo celular (eco do
+ * WhatsApp Business em coexistência / eco do app do Instagram, F70-S04) — aplica
+ * a MESMA regra. Antes da F70-S07 ela vivia duplicada na API e no worker; agora
+ * as duas pontas chamam esta função, então não há como divergir.
  *
  * - `ai_mode='on'`  → `paused`, `ai_paused_reason='human_takeover'`,
  *   `ai_paused_at`, `ai_paused_by=<membro>`, `ai_last_human_at`.
@@ -12,40 +14,37 @@
  * - `first_response_at` só é gravado se ainda for nulo (nunca vira "última
  *   resposta").
  *
- * É a MESMA regra de `apps/api/src/routes/conversations/messages.ts` (F30-S04 +
- * F55-S02). Ela vive duplicada aqui porque o worker não pode importar o grafo da
- * API (builds separados) e o pacote comum (`@hm/shared`) está fora da fronteira
- * deste slot — a extração para lá é o próximo passo natural (ver relatório do
- * slot). Enquanto isso, esta função é pura e coberta por teste, para que a
- * divergência apareça no diff e não em produção.
+ * `ai_last_human_at` só avança: um eco atrasado/reentregue não pode puxar a
+ * última atividade humana para trás (a ociosidade da IA é calculada a partir
+ * dela). Para a UI, `at = now()`, então a regra coincide com o "sempre grava".
  *
- * Duas diferenças deliberadas em relação à rota da API, ambas por o eco ser
- * assíncrono (pode chegar atrasado ou ser reentregue):
- *
- * 1. O instante usado é o do eco (`at`, horário do provider), não `now()` do
- *    servidor — é quando o humano de fato respondeu.
- * 2. `ai_last_human_at` só avança: um eco atrasado não pode puxar a última
- *    atividade humana para trás (a ociosidade da IA é calculada a partir dela).
+ * Pura e determinística: quem chama lê o estado (de preferência sob `FOR
+ * UPDATE`) e aplica o `patch` na mesma transação.
  */
 
-/** Estado da conversa lido (sob lock) antes de aplicar a regra. */
+/** Estado da conversa lido antes de aplicar a regra. */
 export interface ConversationHumanState {
   /** `text` no banco; o check constraint garante `'off'|'on'|'paused'`. */
   readonly aiMode: string;
+  /**
+   * `first_response_at` atual. Quem NÃO leu a coluna passa `null` e protege a
+   * escrita no SQL (`coalesce(first_response_at, …)`), como faz a rota da API.
+   */
   readonly firstResponseAt: Date | null;
+  /** `ai_last_human_at` atual (`null` = não lido ou nunca houve humano). */
   readonly aiLastHumanAt: Date | null;
 }
 
 export interface HumanReplyInput {
-  /** Membro autor da resposta (dono do canal). `null` quando não resolvido. */
+  /** Membro autor da resposta. `null` quando não resolvido. */
   readonly memberId: string | null;
-  /** Instante da resposta (horário do provider). */
+  /** Instante da resposta (UI: agora; eco: horário do provider). */
   readonly at: Date;
   /**
    * Se esta mensagem conta como "primeira resposta". Falso quando a conversa foi
-   * aberta por este próprio eco (prospecção): ninguém perguntou nada ainda, então
-   * não há o que "responder" — gravar aqui zeraria artificialmente o tempo de
-   * primeira resposta das métricas de SLA.
+   * aberta por esta própria mensagem do negócio (prospecção): ninguém perguntou
+   * nada ainda — gravar aqui zeraria artificialmente o tempo de primeira
+   * resposta das métricas de SLA.
    */
   readonly countsAsResponse: boolean;
 }

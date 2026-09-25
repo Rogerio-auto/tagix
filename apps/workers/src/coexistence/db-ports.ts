@@ -39,8 +39,12 @@ import { z } from 'zod';
 import { getDb, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import { makeEnvelope, type MqHandle } from '@hm/shared/mq';
-import type { ConversationAiModeChangedPayload, ServerToClientEvent } from '@hm/shared';
-import { buildMessageNewPayload, previewFor } from '@hm/shared';
+import type {
+  ConversationAiModeChangedPayload,
+  ConversationOriginValue,
+  ServerToClientEvent,
+} from '@hm/shared';
+import { buildMessageNewPayload, planHumanReply, previewFor } from '@hm/shared';
 import type {
   CoexistenceAppStatePayload,
   CoexistenceEchoPayload,
@@ -58,7 +62,7 @@ import type {
   CoexistenceSocketPort,
 } from './ports';
 import type { InboundMediaJob, MediaEnqueuePort, RoutingHints } from '../inbound/ports';
-import { planHumanReply } from './human-takeover';
+import { applyOriginTag } from '../inbound/origin';
 import type { InstagramEchoInput } from './instagram-echo';
 
 /** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
@@ -79,7 +83,15 @@ const APP_ORIGIN = 'app' as const;
 const HISTORY_ORIGIN = 'coexistence_history' as const;
 
 /** Etiqueta aplicada ao contato quando o dono abre a conversa pelo app (prospecção). */
-export const PROSPECTION_TAG_NAME = 'origem:prospeccao' as const;
+export const PROSPECTION_TAG_NAME = 'origem:prospeccao' as const satisfies ConversationOriginValue;
+
+/**
+ * Origem das conversas criadas pelo import de HISTÓRICO (F70-S07): são exatamente
+ * os contatos antigos do número (família, clientes de antes do Leadium). Nada
+ * comprova de onde vieram, então nascem `sem-origem` — e a IA nunca os atende
+ * sozinha. Um humano ainda pode ligar a IA manualmente numa delas.
+ */
+const HISTORY_CONVERSATION_ORIGIN = 'sem-origem' as const satisfies ConversationOriginValue;
 
 /**
  * Chave opcional em `channels.metadata` que aponta o membro dono do número
@@ -414,12 +426,15 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
 
     const result = await withWorkspace(workspaceId, async (tx) => {
       const contactId = await ensureContact(tx, workspaceId, input.remoteId, input.contactSource);
+      // Se este eco abrir a conversa, o dono chamou primeiro: prospecção (F70-S04).
+      // A origem é gravada no INSERT (F70-S07), então a trava da IA vale desde já.
       const conversation = await ensureConversation(
         tx,
         workspaceId,
         channelId,
         input.remoteId,
         contactId,
+        PROSPECTION_TAG_NAME,
       );
       const ownerMemberId = await resolveChannelOwner(tx, workspaceId, channelId);
 
@@ -497,7 +512,7 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
         .where(eq(conversations.id, conversation.id));
 
       if (startedByApp) {
-        await applyProspectionTag(tx, workspaceId, contactId, ownerMemberId);
+        await applyOriginTag(tx, workspaceId, contactId, PROSPECTION_TAG_NAME, ownerMemberId);
       }
 
       return {
@@ -603,13 +618,17 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
       let messagesTotal = 0;
       for (const [counterpart, msgs] of byCounterpart) {
         const contactId = await ensureContact(tx, workspaceId, counterpart, 'whatsapp');
-        const { id: conversationId } = await ensureConversation(
+        const { id: conversationId, created: conversationCreated } = await ensureConversation(
           tx,
           workspaceId,
           channelId,
           counterpart,
           contactId,
+          HISTORY_CONVERSATION_ORIGIN,
         );
+        if (conversationCreated) {
+          await applyOriginTag(tx, workspaceId, contactId, HISTORY_CONVERSATION_ORIGIN, null);
+        }
 
         const mediaByExternal = new Map<string, MediaRef>();
         const rows = msgs.map((m) => {
@@ -809,8 +828,10 @@ interface EnsuredConversation {
 /**
  * Garante a conversa do par (canal, remoteId). Upsert idempotente por
  * `uq_conversations_channel_remote (channel_id, remote_id)`. Nasce com
- * `ai_mode='off'`. `created=true` só para quem de fato inseriu — o perdedor de
- * uma corrida reseleciona e recebe `false`, então a "abertura" é única.
+ * `ai_mode='off'` e com a `origin` dada (F70-S07; conversa existente mantém a
+ * dela — origem é decidida uma vez, na criação). `created=true` só para quem de
+ * fato inseriu — o perdedor de uma corrida reseleciona e recebe `false`, então
+ * a "abertura" é única.
  */
 async function ensureConversation(
   tx: DbTx,
@@ -818,6 +839,7 @@ async function ensureConversation(
   channelId: string,
   remoteId: string,
   contactId: string,
+  origin: ConversationOriginValue,
 ): Promise<EnsuredConversation> {
   const { conversations } = schema;
   const [existing] = await tx
@@ -837,6 +859,7 @@ async function ensureConversation(
       kind: 'direct',
       status: 'open',
       aiMode: 'off',
+      origin,
     })
     .onConflictDoNothing({ target: [conversations.channelId, conversations.remoteId] })
     .returning({ id: conversations.id });
@@ -913,42 +936,4 @@ async function resolveChannelOwner(
     .orderBy(asc(members.createdAt), asc(members.id))
     .limit(1);
   return owner?.id ?? null;
-}
-
-/**
- * Etiqueta o contato com `origem:prospeccao` (conversa aberta pelo dono pelo
- * app). Etiquetas no Leadium são do CONTATO (`contact_tags`) — não há etiqueta
- * de conversa no schema. Idempotente: a tag é criada uma vez por workspace
- * (`tags_workspace_name_uq`) e o vínculo é PK (contact, tag).
- */
-async function applyProspectionTag(
-  tx: DbTx,
-  workspaceId: string,
-  contactId: string,
-  taggedBy: string | null,
-): Promise<void> {
-  const { tags, contactTags } = schema;
-
-  const [created] = await tx
-    .insert(tags)
-    .values({ workspaceId, name: PROSPECTION_TAG_NAME })
-    .onConflictDoNothing({ target: [tags.workspaceId, tags.name] })
-    .returning({ id: tags.id });
-  let tagId = created?.id;
-  if (tagId === undefined) {
-    const [existing] = await tx
-      .select({ id: tags.id })
-      .from(tags)
-      .where(and(eq(tags.workspaceId, workspaceId), eq(tags.name, PROSPECTION_TAG_NAME)))
-      .limit(1);
-    tagId = existing?.id;
-  }
-  if (tagId === undefined) {
-    throw new Error('coexistence: etiqueta de prospecção não materializou após upsert.');
-  }
-
-  await tx
-    .insert(contactTags)
-    .values({ contactId, tagId, workspaceId, taggedBy })
-    .onConflictDoNothing();
 }

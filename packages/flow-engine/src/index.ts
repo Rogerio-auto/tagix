@@ -78,6 +78,8 @@ export const cancelAllForConversation = defaultEngine.cancelAllForConversation;
 export * from './types';
 export * from './deps';
 export { handlerRegistry, getHandler, FLOW_NODE_TYPES, type FlowNodeType } from './registry';
+// F70-S07 — trava de origem da IA (a mesma usada pelo port de outbound).
+export { AI_ELIGIBLE_CONVERSATION_ORIGINS, isConversationAiEligible } from './ai-origin-gate';
 export {
   validateFlow,
   type FlowValidationInput,

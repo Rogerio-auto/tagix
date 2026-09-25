@@ -14,6 +14,7 @@ import type {
   FlowNode,
   FlowOutboundMessage,
   FlowPresenceAction,
+  SetConversationAiResult,
 } from './types';
 
 /**
@@ -150,10 +151,14 @@ export interface FlowQueuePort {
 export interface FlowOutboundPort {
   sendMessage(workspaceId: string, message: FlowOutboundMessage): Promise<void>;
   sendPresence(workspaceId: string, action: FlowPresenceAction): Promise<void>;
+  /**
+   * Muda ai_mode/agent_id. `on` so e aplicado com origem comprovada (F70-S07): a
+   * impl. real faz o UPDATE condicional na propria origem (atomico, fail-closed).
+   */
   setConversationAi(
     workspaceId: string,
     input: { conversationId: string; aiMode: 'on' | 'off' | 'paused'; agentId?: string | null },
-  ): Promise<void>;
+  ): Promise<SetConversationAiResult>;
   setConversationStatus(
     workspaceId: string,
     input: { conversationId: string; status: string },

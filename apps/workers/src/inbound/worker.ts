@@ -30,6 +30,10 @@ import { createStatusDeps } from './status';
 import { DbInboundChannelResolver, DbInboundPersistence, MqInboundFlowEnqueue, MqInboundSocketEmit } from './db-ports';
 import { MqMediaEnqueue } from './mq-ports';
 import { createRevocationStep } from './revocation';
+import { createInstagramEchoStep } from './instagram-echoes';
+import { gateCampaignAiHandoff } from './ai-gate';
+import { createCoexistenceDeps } from '../coexistence/worker';
+import { createOutboundPort } from '@hm/flow-engine';
 import {
   createCampaignInboundPorts,
   processCampaignInbound,
@@ -87,7 +91,13 @@ export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDe
   // Hook de trigger dispatch de flows (F4-S13): avalia/dispara flows + resume waiting.
   const triggerDeps = createTriggerDispatchDeps(logger);
   // Campaigns-inbound (F6-S07): opt-out por keyword + reply handling/handoff/followup.
-  const campaignInboundPorts = createCampaignInboundPorts({ channel, logger });
+  // F70-S07: o handoff para a IA passa pela trava de origem (mesmo port do flow
+  // `ai_action`) — só a mutação de IA é usada, então o publisher default basta.
+  const campaignInboundPorts = gateCampaignAiHandoff(
+    createCampaignInboundPorts({ channel, logger }),
+    createOutboundPort(),
+    logger,
+  );
   const contactMessageHook = {
     async onContactMessage(input: {
       workspaceId: string;
@@ -139,7 +149,10 @@ export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDe
     contactMessageHook,
   );
   const media = new MqMediaEnqueue(channel);
-  return { parser, persistence, media, revocation };
+  // F70-S07: ecos do Instagram no mesmo payload → núcleo de ecos da coexistência
+  // (mensagem humana + pausa da IA), com socket e mídia no MESMO canal AMQP.
+  const instagramEchoes = createInstagramEchoStep(createCoexistenceDeps(logger, channel));
+  return { parser, persistence, media, revocation, instagramEchoes };
 }
 
 /**
