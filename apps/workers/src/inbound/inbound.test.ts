@@ -1,8 +1,11 @@
 /**
  * Testes do worker inbound (F1-S04): parse por provider (WA real, IG
- * placeholder), extração de routing hints, enfileiramento de mídia e publicação
- * da requisição de persistência. A lógica não depende de RabbitMQ:
+ * placeholder), extração de routing hints e publicação da requisição de
+ * persistência. A lógica não depende de RabbitMQ:
  * `handleInboundEnvelope`/`runInboundPipeline` são testados com portas fake.
+ *
+ * F70-S21: o job de mídia é gravado na outbox pela persistência (coberto contra o
+ * Postgres em `media-outbox.test.ts`); aqui o pipeline só repassa a contagem.
  *
  * F30-S09: auto-assign engine — testa `InboundAutoAssignPort` e a guarda de
  * idempotência (conversa já atribuída / sem time / strategy=manual).
@@ -18,7 +21,6 @@ import type {
   AutoAssignPick,
   InboundAutoAssignPort,
   InboundDeps,
-  InboundMediaJob,
   PersistInboundRequest,
   PersistInboundResult,
 } from './ports';
@@ -36,26 +38,24 @@ const logger = {
 function makeDeps(events: InboundEvent[]): {
   deps: InboundDeps;
   persist: ReturnType<typeof vi.fn>;
-  enqueue: ReturnType<typeof vi.fn>;
   parse: ReturnType<typeof vi.fn>;
 } {
+  const messages = events.filter((e) => e.type === 'message');
   const persistResult: PersistInboundResult = {
-    inserted: events.filter((e) => e.type === 'message').length,
+    inserted: messages.length,
     deduped: 0,
     statuses: events.filter((e) => e.type === 'status').length,
     resolved: true,
+    mediaJobs: messages.filter((e) => e.mediaRef !== undefined).length,
   };
   const persist = vi.fn(async (_req: PersistInboundRequest) => persistResult);
-  const enqueue = vi.fn(async (_job: InboundMediaJob) => undefined);
   const parse = vi.fn((_provider: ChannelProvider, _raw: unknown) => events);
   return {
     persist,
-    enqueue,
     parse,
     deps: {
       parser: { parse },
       persistence: { persist },
-      media: { enqueue },
     },
   };
 }
@@ -114,12 +114,11 @@ const imageEvent: InboundEvent = {
 };
 
 describe('handleInboundEnvelope — WA texto', () => {
-  it('parseia, não enfileira mídia e publica persist', async () => {
+  it('parseia e publica persist', async () => {
     const d = makeDeps([textEvent]);
     await handleInboundEnvelope(waTextEnvelope(), { deps: d.deps, logger });
 
     expect(d.parse).toHaveBeenCalledWith('meta_whatsapp', expect.any(Object));
-    expect(d.enqueue).not.toHaveBeenCalled();
     expect(d.persist).toHaveBeenCalledOnce();
     const req = d.persist.mock.calls[0]?.[0] as PersistInboundRequest;
     expect(req.provider).toBe('meta_whatsapp');
@@ -143,25 +142,28 @@ describe('handleInboundEnvelope — WA texto', () => {
 });
 
 describe('runInboundPipeline — mídia', () => {
-  it('enfileira um media job por evento com mediaRef', async () => {
+  it('a mídia vai com a persistência (o mediaRef chega nela) e o pipeline reporta os jobs', async () => {
     const d = makeDeps([textEvent, imageEvent]);
     const result = await runInboundPipeline('meta_whatsapp', {}, d.deps, logger);
 
     expect(result.events).toBe(2);
     expect(result.mediaJobs).toBe(1);
     expect(result.persisted).toBe(true);
-    expect(d.enqueue).toHaveBeenCalledOnce();
-    const job = d.enqueue.mock.calls[0]?.[0] as InboundMediaJob;
-    expect(job.externalId).toBe('wamid.B');
-    expect(job.mediaRef.refOrUrl).toBe('media-id-1');
+    const req = d.persist.mock.calls[0]?.[0] as PersistInboundRequest;
+    const withMedia = req.events.filter((e) => e.type === 'message' && e.mediaRef !== undefined);
+    expect(withMedia).toHaveLength(1);
+    expect(withMedia[0]).toMatchObject({
+      externalId: 'wamid.B',
+      mediaRef: { refOrUrl: 'media-id-1' },
+    });
   });
 
   it('não persiste quando não há eventos (raw vazio / IG placeholder)', async () => {
     const d = makeDeps([]);
     const result = await runInboundPipeline('meta_whatsapp', {}, d.deps, logger);
     expect(result.persisted).toBe(false);
+    expect(result.mediaJobs).toBe(0);
     expect(d.persist).not.toHaveBeenCalled();
-    expect(d.enqueue).not.toHaveBeenCalled();
   });
 });
 
