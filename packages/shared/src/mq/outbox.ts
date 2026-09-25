@@ -76,8 +76,11 @@ export function domainEventsOutbox(drafts: readonly DomainEventDraft[]): OutboxM
 
 /**
  * Filas de trabalho que aceitam job pela outbox (as que têm produtor transacional):
- * `outbound` (envios da API v1, campanhas, followups) e `media` (download da mídia
- * dos ecos e do histórico da coexistência, F70-S20).
+ * - `outbound`: envios da API v1, do LiveChat, das ações de comentário do Instagram e
+ *   do teste do criador de campanhas; campanhas e followups; envio dos flows; resposta
+ *   do agente de IA; lembretes da agenda (F70-S16/S20/S21);
+ * - `media`: download da mídia recebida (inbound) e dos ecos e do histórico da
+ *   coexistência (F70-S20/S21).
  */
 export const OUTBOX_JOB_QUEUES = [
   QUEUES.outbound,

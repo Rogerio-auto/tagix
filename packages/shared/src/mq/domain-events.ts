@@ -581,13 +581,3 @@ export function reportDomainEventFailure(draft: DomainEventDraft, err: unknown):
   }
   console.error(JSON.stringify({ level: 'error', msg: 'domain event não publicado', ...fields }));
 }
-
-/**
- * Nada a fechar: o emissor direto saiu na F70-S20 e o módulo não abre conexão.
- *
- * @deprecated No-op mantido só para o shutdown de `apps/workers/src/bootstrap`, que
- * ainda o chama. Sai quando o bootstrap for tocado.
- */
-export async function closeDomainEventEmitter(): Promise<void> {
-  await Promise.resolve();
-}

@@ -22,7 +22,6 @@ import { and, eq } from 'drizzle-orm';
 import { enqueueOutbox, schema, withWorkspace } from '@hm/db';
 import {
   assertTopology,
-  closeDomainEventEmitter,
   connectMq,
   consume,
   conversionRegisteredFromRow,
@@ -577,7 +576,6 @@ export async function startWorkers(
       // ficar pendente espera o próximo boot (ou outra instância) — nada se perde.
       await outboxRelay.stop();
       await redis.quit();
-      await closeDomainEventEmitter();
       await boot.connection.close();
       // Observabilidade (F10-S01/F56-S17): desregistra probes/heartbeats, para o
       // /metrics + /healthz e dá flush no Sentry por último.
