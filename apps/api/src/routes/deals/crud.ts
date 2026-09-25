@@ -20,6 +20,7 @@ import { and, asc, desc, eq, type SQL } from 'drizzle-orm';
 import {
   assertConversationVisible,
   assertRefsInWorkspace,
+  enqueueOutbox,
   schema,
   TenantRefError,
   uniqueViolationConstraint,
@@ -40,7 +41,7 @@ import {
   dealClosedFromRow,
   dealCreatedFromRow,
   domainEvents,
-  emitDomainEvent,
+  domainEventsOutbox,
 } from '@hm/shared/mq';
 import {
   loadContactReadThrough,
@@ -215,6 +216,8 @@ export function createDealsCrudRouter(): Router {
             actorMemberId: req.auth!.member.id,
             actorType: 'member',
           });
+          // F70-S09/S17: webhooks de saída na outbox, na transação da criação.
+          await enqueueOutbox(tx, domainEventsOutbox([dealCreatedFromRow(workspaceId, created)]));
         }
         return created;
       });
@@ -223,11 +226,7 @@ export function createDealsCrudRouter(): Router {
       throw err;
     }
     // Só chega aqui com o commit feito: referência recusada nunca publica evento.
-    if (result) {
-      void emitDealCreated({ workspaceId, deal: result });
-      // F70-S09: webhooks de saída, pós-commit (o emissor nunca lança).
-      void emitDomainEvent(dealCreatedFromRow(workspaceId, result));
-    }
+    if (result) void emitDealCreated({ workspaceId, deal: result });
     res.status(201).json({ deal: result });
   });
 
@@ -306,26 +305,31 @@ export function createDealsCrudRouter(): Router {
     const id = param(req, 'id');
     const workspaceId = req.auth!.workspace.id;
     try {
-      const result = await req.scoped!((tx) =>
-        moveDealToStage(tx, {
+      const result = await req.scoped!(async (tx) => {
+        const moved = await moveDealToStage(tx, {
           dealId: id,
           newStageId: parsed.data.stageId,
           actor: memberActor(req),
           workspaceId,
-        }),
-      );
-      // F70-S09: movimento real (não o no-op para o mesmo estágio), pós-commit.
-      if (result.fromStageId !== result.toStageId) {
-        void emitDomainEvent(
-          domainEvents.dealStageChanged(workspaceId, {
-            dealId: result.deal.id,
-            pipelineId: result.deal.pipelineId,
-            fromStageId: result.fromStageId,
-            toStageId: result.toStageId,
-            actorType: 'member',
-          }),
-        );
-      }
+        });
+        // F70-S09/S17: movimento real (não o no-op para o mesmo estágio), na outbox
+        // da mesma transação.
+        if (moved.fromStageId !== moved.toStageId) {
+          await enqueueOutbox(
+            tx,
+            domainEventsOutbox([
+              domainEvents.dealStageChanged(workspaceId, {
+                dealId: moved.deal.id,
+                pipelineId: moved.deal.pipelineId,
+                fromStageId: moved.fromStageId,
+                toStageId: moved.toStageId,
+                actorType: 'member',
+              }),
+            ]),
+          );
+        }
+        return moved;
+      });
       res.json({ deal: result.deal, fromStageId: result.fromStageId, toStageId: result.toStageId });
     } catch (err: unknown) {
       if (err instanceof TransitionError) {
@@ -418,6 +422,10 @@ async function closeDeal(
         actorMemberId: req.auth!.member.id,
         actorType: 'member',
       });
+      // F70-S09/S17: deal.won / deal.lost na outbox, na transação do fechamento. A
+      // ocorrência é o `closed_at` gravado.
+      const closed = dealClosedFromRow(workspaceId, won, row);
+      if (closed) await enqueueOutbox(tx, domainEventsOutbox([closed]));
     }
     return row;
   });
@@ -425,8 +433,5 @@ async function closeDeal(
     res.sendStatus(404);
     return;
   }
-  // F70-S09: deal.won / deal.lost, pós-commit. A ocorrência é o `closed_at` gravado.
-  const closed = dealClosedFromRow(workspaceId, won, updated);
-  if (closed) void emitDomainEvent(closed);
   res.json({ deal: updated });
 }

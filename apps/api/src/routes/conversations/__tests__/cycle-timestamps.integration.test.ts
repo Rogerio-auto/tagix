@@ -70,9 +70,9 @@ vi.mock('@hm/shared/mq', async () => {
   return {
     connectMq: vi.fn().mockResolvedValue({ channel: { sendToQueue: vi.fn() }, connection: {} }),
     makeEnvelope: (_type: string, _ws: string, payload: unknown) => payload,
-    // F70-S09: a rota de status publica eventos de domínio pós-commit (sem broker aqui).
+    // F70-S09/S17: a rota de status grava os eventos de domínio na outbox (reais).
     domainEvents: actual.domainEvents,
-    emitDomainEvent: vi.fn().mockResolvedValue(true),
+    domainEventsOutbox: actual.domainEventsOutbox,
   };
 });
 vi.mock('../../../mq/outbound-publisher', () => ({

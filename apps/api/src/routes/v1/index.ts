@@ -15,12 +15,19 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { and, asc, desc, eq, gte, ilike, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
-import { assertRefsInWorkspace, schema, TenantRefError, withWorkspace, type DbTx } from '@hm/db';
+import {
+  assertRefsInWorkspace,
+  enqueueOutbox,
+  schema,
+  TenantRefError,
+  withWorkspace,
+  type DbTx,
+} from '@hm/db';
 import { triggerFlow } from '@hm/flow-engine';
 import { moveDealToStage, TransitionError } from '../../services/deal-move';
 import { createEvent, EventServiceError } from '../../services/event-service';
 import { registerConversion } from '../conversions/register';
-import { conversionRegisteredFromRow, domainEvents, emitDomainEvent } from '@hm/shared/mq';
+import { conversionRegisteredFromRow, domainEvents, domainEventsOutbox } from '@hm/shared/mq';
 import swaggerUi from 'swagger-ui-express';
 import { requireApiKey, requireScope } from '../../middlewares/api-key';
 import { publishOutboundJob } from '../../mq/outbound-publisher';
@@ -494,21 +501,31 @@ export function createV1Router(): Router {
       const workspaceId = req.apiAuth!.workspaceId;
 
       try {
-        const out = await withWorkspace(workspaceId, (tx) =>
-          moveDealToStage(tx, { dealId: id, newStageId: stageId, workspaceId, actor: { type: 'api' } }),
-        );
-        // F70-S09: webhooks de saída, pós-commit; mover para o mesmo estágio é no-op.
-        if (out.fromStageId !== out.toStageId) {
-          void emitDomainEvent(
-            domainEvents.dealStageChanged(workspaceId, {
-              dealId: out.deal.id,
-              pipelineId: out.deal.pipelineId,
-              fromStageId: out.fromStageId,
-              toStageId: out.toStageId,
-              actorType: 'api',
-            }),
-          );
-        }
+        const out = await withWorkspace(workspaceId, async (tx) => {
+          const moved = await moveDealToStage(tx, {
+            dealId: id,
+            newStageId: stageId,
+            workspaceId,
+            actor: { type: 'api' },
+          });
+          // F70-S09/S17: webhooks de saída na outbox, na transação do movimento;
+          // mover para o mesmo estágio é no-op.
+          if (moved.fromStageId !== moved.toStageId) {
+            await enqueueOutbox(
+              tx,
+              domainEventsOutbox([
+                domainEvents.dealStageChanged(workspaceId, {
+                  dealId: moved.deal.id,
+                  pipelineId: moved.deal.pipelineId,
+                  fromStageId: moved.fromStageId,
+                  toStageId: moved.toStageId,
+                  actorType: 'api',
+                }),
+              ]),
+            );
+          }
+          return moved;
+        });
         res.json({ deal: withAdAttribution(out.deal), fromStageId: out.fromStageId, toStageId: out.toStageId });
       } catch (err: unknown) {
         if (err instanceof TransitionError) {
@@ -570,7 +587,7 @@ export function createV1Router(): Router {
             .limit(1);
           if (dup) return { kind: 'deduped' as const };
 
-          return registerConversion(tx, {
+          const registered = await registerConversion(tx, {
             workspaceId,
             conversionTypeId: type.id,
             contactId: body.contactId,
@@ -581,6 +598,14 @@ export function createV1Router(): Router {
             note: body.note ?? null,
             source: 'api',
           });
+          // F70-S09/S17: conversão nova vira evento de domínio na outbox, na mesma transação.
+          if (registered.kind === 'created') {
+            await enqueueOutbox(
+              tx,
+              domainEventsOutbox([conversionRegisteredFromRow(workspaceId, registered.event)]),
+            );
+          }
+          return registered;
         });
       } catch (err: unknown) {
         // F70-S11: contato/conversa/deal de outro workspace (ou inexistente) → 422.
@@ -603,8 +628,6 @@ export function createV1Router(): Router {
         res.status(200).json({ status: 'deduped', conversion: null });
         return;
       }
-      // F70-S09: conversão nova vira evento de domínio, pós-commit.
-      void emitDomainEvent(conversionRegisteredFromRow(workspaceId, result.event));
       res.status(201).json({ status: 'created', conversion: result.event });
     },
   );

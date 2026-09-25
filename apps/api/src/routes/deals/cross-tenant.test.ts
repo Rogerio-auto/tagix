@@ -7,7 +7,7 @@
  *  - B continua criando o card da própria conversa depois da tentativa de A;
  *  - estágio de outro pipeline (mesmo workspace) é recusado;
  *  - conversa que já tem card → 409 (antes: 500 pelo `uq_deals_conversation`);
- *  - referência recusada NÃO publica evento de domínio (F70-S09);
+ *  - referência recusada NÃO grava evento de domínio na outbox (F70-S09/S17);
  *  - o caminho feliz segue funcionando.
  */
 import express from 'express';
@@ -15,16 +15,11 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { closeDb, getDb, schema } from '@hm/db';
-import type * as Mq from '@hm/shared/mq';
+import { outboxEventsNamed } from './__tests__/outbox';
 
 vi.mock('../../middlewares/auth', async () =>
   (await import('./__tests__/two-workspaces')).authMiddlewareMock(),
 );
-const { emitDomainEvent } = vi.hoisted(() => ({ emitDomainEvent: vi.fn(async () => true) }));
-vi.mock('@hm/shared/mq', async (importOriginal) => ({
-  ...(await importOriginal<typeof Mq>()),
-  emitDomainEvent,
-}));
 
 const { actAs, dropTenants, ghostId, seedTenant } = await import('./__tests__/two-workspaces');
 type TenantFixture = Awaited<ReturnType<typeof seedTenant>>;
@@ -50,9 +45,13 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  emitDomainEvent.mockClear();
   actAs(A);
 });
+
+/** Eventos `deal.created` de um workspace na outbox (F70-S17). */
+async function dealCreatedEvents(workspaceId: string): Promise<number> {
+  return (await outboxEventsNamed(workspaceId, 'deal.created')).length;
+}
 
 function validDeal(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -95,7 +94,7 @@ describe('POST /api/deals — referências de outro workspace (F70-S11)', () => 
       expect(ghost.status).toBe(res.status);
       expect(ghost.body).toEqual(res.body);
 
-      expect(emitDomainEvent).not.toHaveBeenCalled();
+      expect(await dealCreatedEvents(A.ws)).toBe(0);
     });
   }
 
@@ -127,15 +126,14 @@ describe('POST /api/deals — referências de outro workspace (F70-S11)', () => 
       .send(validDeal({ conversationId: A.conversation, ownerId: A.otherMember }));
     expect(res.status).toBe(201);
     expect(res.body.deal.workspaceId).toBe(A.ws);
-    expect(emitDomainEvent).toHaveBeenCalledTimes(1);
+    expect(await dealCreatedEvents(A.ws)).toBe(1);
 
-    emitDomainEvent.mockClear();
     const dup = await request(app)
       .post('/api/deals')
       .send(validDeal({ conversationId: A.conversation, title: 'Outro' }));
     expect(dup.status).toBe(409);
     expect(dup.body.error).toBe('conversation_already_has_deal');
-    expect(emitDomainEvent).not.toHaveBeenCalled();
+    expect(await dealCreatedEvents(A.ws)).toBe(1);
   });
 });
 
