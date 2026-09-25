@@ -56,7 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 14     | 3   | 2   | 0   | 0   | 1   | 8   |
+| F70   | 15     | 4   | 2   | 0   | 0   | 1   | 8   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -779,6 +779,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70-S12 | FKs compostas por workspace nas referências de deals e stages                                   | 🟢 available | high       | F70-S10, F70-S11          |
 | F70-S13 | conversation.opened em todos os caminhos de criação e handoff de campanha honesto               | ✅ done      | medium     | F70-S09                   |
 | F70-S14 | Origem real no conversation.opened, eventos de lead ads e outbound da campanha depois do commit | 🟢 available | medium     | F70-S13                   |
+| F70-S15 | Tools dos agentes — endpoint confere habilitação, log correto e tools de contato                | 🟢 available | high       | F70-S10                   |
 
 ## Fase 8 — Permissions & Settings
 
