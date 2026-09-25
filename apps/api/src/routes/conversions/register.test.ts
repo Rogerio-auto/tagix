@@ -15,7 +15,10 @@
 import { describe, it, expect, vi } from 'vitest';
 
 // Stub de colunas usado nos `target`/`targetWhere` do onConflictDoNothing.
+// A trava de referencias (F70-S11) tem cobertura propria contra o Postgres dev
+// (cross-tenant.test.ts); aqui ela passa, para isolar o dedup.
 vi.mock('@hm/db', () => ({
+  requireRefsInWorkspace: async () => undefined,
   schema: {
     conversionTypes: {
       id: 'id',
