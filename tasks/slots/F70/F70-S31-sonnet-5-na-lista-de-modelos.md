@@ -2,7 +2,7 @@
 id: F70-S31
 title: Sonnet 5 na lista de modelos e no agente da Arcada
 phase: F70
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F70-S06]
