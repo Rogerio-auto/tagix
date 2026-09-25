@@ -90,3 +90,54 @@ groups:
         annotations:
           summary: 'Dead-letter queue com mensagens'
           description: 'Há mensagens na DLQ há 5m — investigar falhas de processamento.'
+
+  # F70-S27 — storage de objetos (R2). Em 09/09 e 25/09 o token foi recusado e a
+  # mídia parou em silêncio por horas. Dois sinais independentes, de propósito:
+  #   - a sonda do /health da API (`hm_storage_state`, HeadBucket a cada 60s);
+  #   - as recusas reais de upload no worker de mídia (`hm_media_storage_failures_total`)
+  #     — pega também o token só de leitura, que passa no HeadBucket e falha no PUT.
+  # Runbook: docs/runbooks/storage-recusou-midia.md
+  - name: leadium-storage
+    rules:
+      # A sonda recebeu 403/credencial inválida/bucket inexistente. Só uma pessoa
+      # resolve (token novo no painel da Cloudflare) — acorda o plantão.
+      - alert: LeadiumStorageDenied
+        expr: max(hm_storage_state{job="leadium-api",state="denied"}) == 1
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: 'Storage recusando a credencial'
+          description: 'A sonda do /health recebe recusa do bucket há 5m: mídia recebida não é guardada e links de mídia não abrem. Trocar a credencial e rodar o reprocessamento (runbook storage-recusou-midia).'
+
+      # O worker de mídia recebeu recusa de configuração ao guardar um arquivo.
+      # Dispara mesmo que a sonda passe (token só de leitura) e mesmo sem a API.
+      - alert: LeadiumMediaStorageDenied
+        expr: sum(increase(hm_media_storage_failures_total{job="leadium-workers",kind="config"}[10m])) > 0
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: 'Worker de mídia sem permissão no storage'
+          description: 'Uploads de mídia recusados por credencial/bucket nos últimos 10m. Os jobs estão estacionados (não se perdem); trocar a credencial e rodar o reprocessamento.'
+
+      # Storage sem resposta (rede/5xx) por muito tempo. Transitório costuma se
+      # resolver sozinho; persistindo, vira ticket.
+      - alert: LeadiumStorageUnreachable
+        expr: max(hm_storage_state{job="leadium-api",state="unreachable"}) == 1
+        for: 15m
+        labels:
+          severity: ticket
+        annotations:
+          summary: 'Storage sem responder'
+          description: 'A sonda do /health não obtém resposta do storage há 15m.'
+
+      # Mídias caindo em falha recuperável (fim das tentativas) acima do normal.
+      - alert: LeadiumMediaFailing
+        expr: sum(increase(hm_media_failed_total{job="leadium-workers",reason=~"storage_error|download_error|processing_error"}[30m])) > 5
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: 'Mídias recebidas falhando'
+          description: 'Mais de 5 mídias esgotaram as tentativas em 30m. Ver logs "media:" dos workers; depois de corrigir, rodar o reprocessamento.'

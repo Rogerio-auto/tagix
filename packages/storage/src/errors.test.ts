@@ -67,7 +67,12 @@ function driver(): R2Driver {
 
 describe('classifyStorageError', () => {
   it('AccessDenied / InvalidAccessKeyId / SignatureDoesNotMatch / NoSuchBucket são configuração', () => {
-    for (const name of ['AccessDenied', 'InvalidAccessKeyId', 'SignatureDoesNotMatch', 'NoSuchBucket']) {
+    for (const name of [
+      'AccessDenied',
+      'InvalidAccessKeyId',
+      'SignatureDoesNotMatch',
+      'NoSuchBucket',
+    ]) {
       const err = Object.assign(new Error('x'), { name, $metadata: { httpStatusCode: 403 } });
       expect(classifyStorageError(err)).toMatchObject({ kind: 'config', code: name });
     }
@@ -79,7 +84,10 @@ describe('classifyStorageError', () => {
       $metadata: { httpStatusCode: 403 },
     });
     expect(classifyStorageError(err).kind).toBe('config');
-    const generic = Object.assign(new Error(''), { name: '403', $metadata: { httpStatusCode: 403 } });
+    const generic = Object.assign(new Error(''), {
+      name: '403',
+      $metadata: { httpStatusCode: 403 },
+    });
     expect(classifyStorageError(generic)).toMatchObject({ kind: 'config', code: 'AccessDenied' });
   });
 
@@ -87,10 +95,13 @@ describe('classifyStorageError', () => {
     expect(classifyStorageError(Object.assign(new Error('x'), { code: 'ECONNRESET' })).kind).toBe(
       'transient',
     );
-    expect(
-      classifyStorageError(Object.assign(new Error('x'), { name: 'TimeoutError' })).kind,
-    ).toBe('transient');
-    const e503 = Object.assign(new Error('x'), { name: 'Error', $metadata: { httpStatusCode: 503 } });
+    expect(classifyStorageError(Object.assign(new Error('x'), { name: 'TimeoutError' })).kind).toBe(
+      'transient',
+    );
+    const e503 = Object.assign(new Error('x'), {
+      name: 'Error',
+      $metadata: { httpStatusCode: 503 },
+    });
     expect(classifyStorageError(e503)).toMatchObject({ kind: 'transient', code: 'Http503' });
   });
 
@@ -132,7 +143,12 @@ describe('R2Driver contra S3 falso', () => {
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(StorageError);
     const se = err as StorageError;
-    expect(se).toMatchObject({ kind: 'config', code: 'AccessDenied', operation: 'put', bucket: 'leadium-test' });
+    expect(se).toMatchObject({
+      kind: 'config',
+      code: 'AccessDenied',
+      operation: 'put',
+      bucket: 'leadium-test',
+    });
     const serialized = `${se.message} ${JSON.stringify(se.toLogFields())}`;
     expect(serialized).not.toContain(ACCESS_KEY);
     expect(serialized).not.toContain(SECRET);

@@ -7,7 +7,12 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl as presign } from '@aws-sdk/s3-request-presigner';
 import type { IStorageDriver, PutObjectInput, SignedUrl, SignedUrlOptions } from './types';
-import { StorageError, probeStateFromError, type IStorageProbe, type StorageProbeResult } from './errors';
+import {
+  StorageError,
+  probeStateFromError,
+  type IStorageProbe,
+  type StorageProbeResult,
+} from './errors';
 import { toBuffer } from './stream';
 
 export interface R2DriverOptions {
@@ -53,11 +58,7 @@ export class R2Driver implements IStorageDriver, IStorageProbe {
     }
   }
 
-  async getSignedUrl(
-    key: string,
-    ttlSeconds: number,
-    opts?: SignedUrlOptions,
-  ): Promise<SignedUrl> {
+  async getSignedUrl(key: string, ttlSeconds: number, opts?: SignedUrlOptions): Promise<SignedUrl> {
     try {
       const url = await presign(
         this.client,

@@ -1,0 +1,64 @@
+# F70-S27 — testes de unidade das regras de storage (promtool).
+#
+#   docker run --rm -v "<repo>/infra/prometheus:/p" --entrypoint promtool \
+#     prom/prometheus:v2.53.1 test rules /p/alerts.storage.test.yml
+#
+# Prova que o alerta toca no cenário do incidente de 25/09 (sonda recusada e upload
+# recusado) e fica quieto com o storage saudável.
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # Sonda do /health recusada por 6 minutos → LeadiumStorageDenied (page).
+  - interval: 1m
+    input_series:
+      - series: 'hm_storage_state{job="leadium-api",instance="api-1",state="denied"}'
+        values: '0 1 1 1 1 1 1 1 1'
+      - series: 'hm_storage_state{job="leadium-api",instance="api-1",state="ok"}'
+        values: '1 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: LeadiumStorageDenied
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: LeadiumStorageDenied
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: 'Storage recusando a credencial'
+              description: 'A sonda do /health recebe recusa do bucket há 5m: mídia recebida não é guardada e links de mídia não abrem. Trocar a credencial e rodar o reprocessamento (runbook storage-recusou-midia).'
+
+  # Uploads recusados no worker de mídia → LeadiumMediaStorageDenied (page).
+  - interval: 1m
+    input_series:
+      - series: 'hm_media_storage_failures_total{job="leadium-workers",instance="w-1",kind="config",code="AccessDenied",operation="put"}'
+        values: '0 1 2 3 4 5 6 7'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: LeadiumMediaStorageDenied
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: 'Worker de mídia sem permissão no storage'
+              description: 'Uploads de mídia recusados por credencial/bucket nos últimos 10m. Os jobs estão estacionados (não se perdem); trocar a credencial e rodar o reprocessamento.'
+
+  # Storage saudável: nada toca.
+  - interval: 1m
+    input_series:
+      - series: 'hm_storage_state{job="leadium-api",instance="api-1",state="ok"}'
+        values: '1 1 1 1 1 1 1 1 1 1'
+      - series: 'hm_storage_state{job="leadium-api",instance="api-1",state="denied"}'
+        values: '0 0 0 0 0 0 0 0 0 0'
+      - series: 'hm_media_storage_failures_total{job="leadium-workers",instance="w-1",kind="transient",code="Http503",operation="put"}'
+        values: '0 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: LeadiumStorageDenied
+        exp_alerts: []
+      - eval_time: 9m
+        alertname: LeadiumMediaStorageDenied
+        exp_alerts: []

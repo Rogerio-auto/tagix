@@ -105,7 +105,8 @@ function printSummary(report: ReprocessReport): void {
         `  ${item.action.padEnd(16)} ${item.messageId}  ws=${item.workspaceId}  ${item.provider ?? '-'}  ${item.createdAt}  origem=${item.source ?? '-'}`,
       );
     }
-    if (report.items.length > 200) lines.push(`  … e mais ${report.items.length - 200} (use --json)`);
+    if (report.items.length > 200)
+      lines.push(`  … e mais ${report.items.length - 200} (use --json)`);
   }
   process.stdout.write(`${lines.join('\n')}\n`);
 }
@@ -167,7 +168,8 @@ async function main(): Promise<void> {
 main().catch((err: unknown) => {
   // Só o nome e a mensagem: nada de stack com URL de conexão.
   const name = err instanceof Error ? err.name : 'Error';
-  const message = err instanceof Error ? err.message.replace(/postgres(ql)?:\/\/\S+/g, '<db-url>') : String(err);
+  const message =
+    err instanceof Error ? err.message.replace(/postgres(ql)?:\/\/\S+/g, '<db-url>') : String(err);
   process.stderr.write(`falhou: ${name}: ${message}\n`);
   process.exit(1);
 });

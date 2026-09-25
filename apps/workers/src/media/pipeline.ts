@@ -126,7 +126,11 @@ async function storageStep<T>(operation: StorageOperation, fn: () => Promise<T>)
  */
 type DownloadOutcome =
   | { readonly kind: 'ok'; readonly bytes: Buffer }
-  | { readonly kind: 'dead'; readonly reason: 'media_expired' | 'media_unavailable'; readonly httpStatus: number | undefined };
+  | {
+      readonly kind: 'dead';
+      readonly reason: 'media_expired' | 'media_unavailable';
+      readonly httpStatus: number | undefined;
+    };
 
 /** Falha do download que esgotou as tentativas in-process (re-lançada à fila). */
 class DownloadStepError extends Error {

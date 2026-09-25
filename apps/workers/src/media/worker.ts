@@ -155,12 +155,15 @@ export function parkMediaJob(
   const parks = readCount(msg, STORAGE_PARKS_HEADER);
   const ageMs = now - envelope.ts;
   if (ageMs > STORAGE_PARK_MAX_AGE_MS) {
-    logger.error('media: storage segue recusando há dias — job enviado à DLQ para reprocessamento', {
-      envelopeId: envelope.id,
-      storageCode: code,
-      parks,
-      ageHours: Math.round(ageMs / 3_600_000),
-    });
+    logger.error(
+      'media: storage segue recusando há dias — job enviado à DLQ para reprocessamento',
+      {
+        envelopeId: envelope.id,
+        storageCode: code,
+        parks,
+        ageHours: Math.round(ageMs / 3_600_000),
+      },
+    );
     handleConsumeFailure({
       channel,
       queue: MEDIA_QUEUE,

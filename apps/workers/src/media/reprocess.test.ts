@@ -17,13 +17,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeDb, getDb, schema } from '@hm/db';
-import {
-  DLQ_QUEUE,
-  ORIGIN_QUEUE_HEADER,
-  QUEUES,
-  makeEnvelope,
-  type MqHandle,
-} from '@hm/shared/mq';
+import { DLQ_QUEUE, ORIGIN_QUEUE_HEADER, QUEUES, makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import { outboxRowsOf } from '../outbox/testing';
 import { DbMediaPersistence } from './adapters';
 import { parseMediaJob, type MediaJob } from './job';
@@ -107,7 +101,9 @@ const E = {
 beforeAll(async () => {
   if (!ready) return;
   const db = getDb();
-  await db.insert(schema.workspaces).values({ id: WS, name: 'F70-S27', slug: `f70s27-${WS.slice(0, 8)}` });
+  await db
+    .insert(schema.workspaces)
+    .values({ id: WS, name: 'F70-S27', slug: `f70s27-${WS.slice(0, 8)}` });
   await db.insert(schema.channels).values({
     id: CHANNEL,
     workspaceId: WS,
@@ -123,7 +119,11 @@ beforeAll(async () => {
     remoteId: '5511900002727',
   });
 
-  const failure = (reason: string, at: Date) => ({ reason, code: 'AccessDenied', at: at.toISOString() });
+  const failure = (reason: string, at: Date) => ({
+    reason,
+    code: 'AccessDenied',
+    at: at.toISOString(),
+  });
   // Falhou por storage negado há 2h, com o job guardado pelo worker.
   await seed({
     externalId: E.failedStorage,
@@ -154,7 +154,12 @@ beforeAll(async () => {
   // Sem job em lugar nenhum.
   await seed({ externalId: E.noRef, ageMs: 5 * HOUR, status: 'pending' });
   // Recém-chegada: o job ainda está a caminho.
-  await seed({ externalId: E.fresh, ageMs: 60_000, status: 'pending', metadata: { mediaJob: jobFor(E.fresh) } });
+  await seed({
+    externalId: E.fresh,
+    ageMs: 60_000,
+    status: 'pending',
+    metadata: { mediaJob: jobFor(E.fresh) },
+  });
   // Já ingerida.
   await seed({ externalId: E.ingested, ageMs: 2 * HOUR, status: 'ready', sha: 'abc' });
   // Job morreu na DLQ; a mensagem ficou em downloading, sem metadata.
@@ -164,16 +169,18 @@ beforeAll(async () => {
 /** Um job de mídia já enviado, ainda retido na outbox. */
 async function withOutboxJob(externalId: string): Promise<void> {
   const env = makeEnvelope('inbound.media.requested', WS, jobFor(externalId));
-  await getDb().insert(schema.outbox).values({
-    eventId: env.id,
-    kind: 'job',
-    workspaceId: WS,
-    exchange: '',
-    routingKey: QUEUES.media,
-    envelope: { ...env },
-    status: 'sent',
-    sentAt: new Date(),
-  });
+  await getDb()
+    .insert(schema.outbox)
+    .values({
+      eventId: env.id,
+      kind: 'job',
+      workspaceId: WS,
+      exchange: '',
+      routingKey: QUEUES.media,
+      envelope: { ...env },
+      status: 'sent',
+      sentAt: new Date(),
+    });
 }
 
 afterAll(async () => {
@@ -186,9 +193,14 @@ type MqChannel = MqHandle['channel'];
 /** DLQ falsa: uma mensagem de mídia e uma de outra fila. */
 function fakeDlq() {
   const media = {
-    content: Buffer.from(JSON.stringify(makeEnvelope('inbound.media.requested', WS, jobFor(E.dlq)))),
+    content: Buffer.from(
+      JSON.stringify(makeEnvelope('inbound.media.requested', WS, jobFor(E.dlq))),
+    ),
     fields: {},
-    properties: { headers: { [ORIGIN_QUEUE_HEADER]: QUEUES.media }, contentType: 'application/json' },
+    properties: {
+      headers: { [ORIGIN_QUEUE_HEADER]: QUEUES.media },
+      contentType: 'application/json',
+    },
   };
   const other = {
     content: Buffer.from('{}'),
@@ -227,9 +239,18 @@ describe.skipIf(!ready)('reprocessMedia (F70-S27)', () => {
     });
 
     const byId = new Map(report.items.map((i) => [i.messageId, i]));
-    expect(byId.get(ids.get(E.failedStorage) ?? '')).toMatchObject({ action: 'would_enqueue', source: 'message' });
-    expect(byId.get(ids.get(E.pendingOutbox) ?? '')).toMatchObject({ action: 'would_enqueue', source: 'outbox' });
-    expect(byId.get(ids.get(E.dlq) ?? '')).toMatchObject({ action: 'would_enqueue', source: 'dlq' });
+    expect(byId.get(ids.get(E.failedStorage) ?? '')).toMatchObject({
+      action: 'would_enqueue',
+      source: 'message',
+    });
+    expect(byId.get(ids.get(E.pendingOutbox) ?? '')).toMatchObject({
+      action: 'would_enqueue',
+      source: 'outbox',
+    });
+    expect(byId.get(ids.get(E.dlq) ?? '')).toMatchObject({
+      action: 'would_enqueue',
+      source: 'dlq',
+    });
     expect(byId.get(ids.get(E.expired) ?? '')?.action).toBe('terminal');
     expect(byId.get(ids.get(E.tooOld) ?? '')?.action).toBe('too_old');
     expect(byId.get(ids.get(E.noRef) ?? '')?.action).toBe('no_reference');
@@ -247,7 +268,13 @@ describe.skipIf(!ready)('reprocessMedia (F70-S27)', () => {
 
   it('execução reenfileira uma vez por mensagem, com o workspace real; rodar de novo não duplica', async () => {
     const dlq = fakeDlq();
-    const first = await reprocessMedia({ workspaceId: WS, since, now: NOW, dryRun: false, mqChannel: dlq.ch });
+    const first = await reprocessMedia({
+      workspaceId: WS,
+      since,
+      now: NOW,
+      dryRun: false,
+      mqChannel: dlq.ch,
+    });
     expect(first.counts.enqueued).toBe(3);
     expect(first.dlq).toMatchObject({ read: 2, media: 1, removed: 1, returned: 1 });
     expect(dlq.ack).toHaveBeenCalledWith(dlq.media);
@@ -313,9 +340,14 @@ describe.skipIf(!ready)('DbMediaPersistence — falha registrada e limpa (F70-S2
     });
     const failed = await messageRow(externalId);
     expect(failed?.status).toBe('failed');
-    expect(failed?.metadata['mediaFailure']).toMatchObject({ reason: 'storage_unavailable', code: 'AccessDenied' });
+    expect(failed?.metadata['mediaFailure']).toMatchObject({
+      reason: 'storage_unavailable',
+      code: 'AccessDenied',
+    });
     expect(failed?.metadata['mediaJob']).toEqual(jobFor(externalId));
-    expect((await persistence.findMessage(WS, externalId))?.currentFailureReason).toBe('storage_unavailable');
+    expect((await persistence.findMessage(WS, externalId))?.currentFailureReason).toBe(
+      'storage_unavailable',
+    );
 
     await persistence.update({
       workspaceId: WS,

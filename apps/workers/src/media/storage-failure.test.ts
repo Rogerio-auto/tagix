@@ -196,9 +196,9 @@ describe('pipeline — storage transitório', () => {
   it('tentativa intermediária: warn e lança para a escada, sem marcar failed', async () => {
     const d = deps({ upload: unavailable });
     const logger = makeLogger();
-    await expect(
-      runMediaPipeline(job, d, logger, { attempt: 1, maxRetries: 5 }),
-    ).rejects.toThrow('Service Unavailable');
+    await expect(runMediaPipeline(job, d, logger, { attempt: 1, maxRetries: 5 })).rejects.toThrow(
+      'Service Unavailable',
+    );
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('nova tentativa'),
       expect.objectContaining({ storageKind: 'transient', attempt: 2, maxAttempts: 6 }),
@@ -263,11 +263,10 @@ describe('worker — storage negado estaciona o job', () => {
     const mq = fakeMq();
     const logger = makeLogger();
 
-    await processMediaDelivery(
-      mq.ch,
-      delivery(envelope(Date.now()), { [RETRY_COUNT_HEADER]: 2 }),
-      { deps: d, logger },
-    );
+    await processMediaDelivery(mq.ch, delivery(envelope(Date.now()), { [RETRY_COUNT_HEADER]: 2 }), {
+      deps: d,
+      logger,
+    });
 
     expect(mq.sendToQueue).toHaveBeenCalledOnce();
     const [queue, , options] = mq.sendToQueue.mock.calls[0] ?? [];
@@ -311,8 +310,7 @@ describe('worker — storage negado estaciona o job', () => {
 
   it('transitório na última tentativa → DLQ (escada normal), com a mensagem já failed', async () => {
     const d = deps({
-      upload: async () =>
-        Promise.reject(Object.assign(new Error('x'), { code: 'ECONNRESET' })),
+      upload: async () => Promise.reject(Object.assign(new Error('x'), { code: 'ECONNRESET' })),
     });
     const mq = fakeMq();
     await processMediaDelivery(
@@ -329,15 +327,13 @@ describe('worker — storage negado estaciona o job', () => {
 
   it('transitório no meio da escada → próximo degrau, contador incrementado', async () => {
     const d = deps({
-      upload: async () =>
-        Promise.reject(Object.assign(new Error('x'), { code: 'ETIMEDOUT' })),
+      upload: async () => Promise.reject(Object.assign(new Error('x'), { code: 'ETIMEDOUT' })),
     });
     const mq = fakeMq();
-    await processMediaDelivery(
-      mq.ch,
-      delivery(envelope(Date.now()), { [RETRY_COUNT_HEADER]: 1 }),
-      { deps: d, logger: makeLogger() },
-    );
+    await processMediaDelivery(mq.ch, delivery(envelope(Date.now()), { [RETRY_COUNT_HEADER]: 1 }), {
+      deps: d,
+      logger: makeLogger(),
+    });
     const [queue, , options] = mq.sendToQueue.mock.calls[0] ?? [];
     expect(queue).toBe(`${MEDIA_QUEUE}.retry.${RETRY_BACKOFF_MS[1]}`);
     expect(optionHeaders(options)[RETRY_COUNT_HEADER]).toBe(2);

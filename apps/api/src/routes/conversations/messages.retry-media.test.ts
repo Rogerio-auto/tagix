@@ -99,7 +99,11 @@ beforeEach(() => {
 describe.skipIf(!ready)('POST …/retry-media (F70-S27)', () => {
   it('falha recuperável: 202, pending e UM job de mídia com o workspace real; 2º clique não duplica', async () => {
     const externalId = `wamid.s27.ok.${randomUUID()}`;
-    const failure = { reason: 'storage_unavailable', code: 'AccessDenied', at: new Date(Date.now() - 60_000).toISOString() };
+    const failure = {
+      reason: 'storage_unavailable',
+      code: 'AccessDenied',
+      at: new Date(Date.now() - 60_000).toISOString(),
+    };
     const id = await seedMessage(A, { mediaFailure: failure, mediaJob: jobFor(externalId) });
     const before = (await mediaJobs(A.ws)).length;
 
@@ -184,13 +188,22 @@ describe('decideMediaRetry', () => {
 
   it('pendente recente ainda está carregando', () => {
     expect(
-      decideMediaRetry({ ...base, mediaStatus: 'pending', metadata: {}, createdAt: new Date('2026-09-25T11:59:30Z') }).kind,
+      decideMediaRetry({
+        ...base,
+        mediaStatus: 'pending',
+        metadata: {},
+        createdAt: new Date('2026-09-25T11:59:30Z'),
+      }).kind,
     ).toBe('in_progress');
   });
 
   it('já pronta / outbound não retentam', () => {
-    expect(decideMediaRetry({ ...base, mediaSha256: 'abc', metadata: {} }).kind).toBe('already_ready');
-    expect(decideMediaRetry({ ...base, direction: 'outbound', metadata: {} }).kind).toBe('not_retryable');
+    expect(decideMediaRetry({ ...base, mediaSha256: 'abc', metadata: {} }).kind).toBe(
+      'already_ready',
+    );
+    expect(decideMediaRetry({ ...base, direction: 'outbound', metadata: {} }).kind).toBe(
+      'not_retryable',
+    );
   });
 
   it('pedido em voo depois da última falha segura por 10 minutos, e libera depois', () => {
@@ -215,6 +228,8 @@ describe('decideMediaRetry', () => {
   });
 
   it('job malformado não é reenfileirado', () => {
-    expect(decideMediaRetry({ ...base, metadata: { mediaJob: { provider: 'x' } } }).kind).toBe('no_reference');
+    expect(decideMediaRetry({ ...base, metadata: { mediaJob: { provider: 'x' } } }).kind).toBe(
+      'no_reference',
+    );
   });
 });

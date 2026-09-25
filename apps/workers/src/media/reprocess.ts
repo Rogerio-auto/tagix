@@ -194,9 +194,7 @@ export function reprocessInFlight(failureRaw: unknown, reprocessRaw: unknown): b
 
 function terminalReason(failureRaw: unknown): boolean {
   const failure = failureSchema.safeParse(failureRaw);
-  return (
-    failure.success && TERMINAL_MEDIA_FAILURES.has(failure.data.reason as MediaFailureReason)
-  );
+  return failure.success && TERMINAL_MEDIA_FAILURES.has(failure.data.reason as MediaFailureReason);
 }
 
 /** Candidatas (papel de conexão dos workers: leitura entre workspaces, como o resolver). */
@@ -316,7 +314,13 @@ function evaluate(
   const fromOutbox = fromMessage === null ? parseJob(row.outboxJob) : null;
   const job = fromMessage ?? fromOutbox ?? dlqJob;
   const source: ReprocessItem['source'] =
-    fromMessage !== null ? 'message' : fromOutbox !== null ? 'outbox' : dlqJob !== null ? 'dlq' : null;
+    fromMessage !== null
+      ? 'message'
+      : fromOutbox !== null
+        ? 'outbox'
+        : dlqJob !== null
+          ? 'dlq'
+          : null;
   const provider = job?.provider ?? row.channelProvider;
 
   if (terminalReason(row.failure)) return { action: 'terminal', source, provider, job };
@@ -452,7 +456,8 @@ export async function reprocessMedia(opts: ReprocessOptions): Promise<ReprocessR
   // 1) DLQ de mídia primeiro: o job de lá é a referência mais fiel do que morreu.
   let dlqReport: ReprocessReport['dlq'] = null;
   if (opts.includeDlq ?? true) {
-    const handleMq = opts.mqChannel === undefined ? await connectMq(undefined, { reconnect: false }) : null;
+    const handleMq =
+      opts.mqChannel === undefined ? await connectMq(undefined, { reconnect: false }) : null;
     const channel = opts.mqChannel ?? handleMq?.channel;
     if (channel === undefined) throw new Error('canal AMQP indisponível');
     const entries = await drainDlq(channel, Math.max(1, Math.trunc(opts.dlqMax ?? 1_000)));
