@@ -2,7 +2,7 @@
 id: F70-S17
 title: Produtores da API publicam pelo outbox
 phase: F70
-status: in-progress
+status: review
 priority: medium
 estimated_size: S
 depends_on: [F70-S16, F70-S11]
@@ -11,6 +11,7 @@ source_docs:
   - tasks/slots/F70/F70-S16-outbox-transacional.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T06:21:42Z
+completed_at: 2026-09-25T06:42:53Z
 
 ---
 # F70-S17 — Produtores da API publicam pelo outbox
