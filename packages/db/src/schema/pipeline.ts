@@ -10,6 +10,7 @@ import {
   bigint,
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -47,10 +48,21 @@ export type AutomationRuleConfig =
   | { kind: 'trigger_flow'; flowId: string }
   | { kind: 'send_message'; templateName: string; languageCode: string; channelId: string }
   | { kind: 'notify_members'; memberIds: string[]; title: string; body: string }
-  | { kind: 'create_event'; calendarId: string; title: string; durationMinutes: number; offsetDays: number }
+  | {
+      kind: 'create_event';
+      calendarId: string;
+      title: string;
+      durationMinutes: number;
+      offsetDays: number;
+    }
   | { kind: 'add_tag'; tagId: string }
   | { kind: 'remove_tag'; tagId: string }
-  | { kind: 'register_conversion'; conversionTypeKey: string; valueFrom: ConversionValueFrom; valueCents?: number };
+  | {
+      kind: 'register_conversion';
+      conversionTypeKey: string;
+      valueFrom: ConversionValueFrom;
+      valueCents?: number;
+    };
 
 export type AutomationRule = {
   id: string;
@@ -92,7 +104,11 @@ export const pipelines = pgTable(
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at'),
   },
-  (t) => [index('idx_pipelines_workspace').on(t.workspaceId)],
+  (t) => [
+    index('idx_pipelines_workspace').on(t.workspaceId),
+    // Alvo das FKs compostas por workspace (F70-S12, migração 0085).
+    uniqueIndex('uq_pipelines_workspace_id').on(t.workspaceId, t.id),
+  ],
 );
 
 export const stages = pgTable(
@@ -102,9 +118,8 @@ export const stages = pgTable(
     workspaceId: uuid('workspace_id')
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
-    pipelineId: uuid('pipeline_id')
-      .notNull()
-      .references(() => pipelines.id, { onDelete: 'cascade' }),
+    // FK composta (workspace_id, pipeline_id) no bloco de constraints (F70-S12).
+    pipelineId: uuid('pipeline_id').notNull(),
     name: text('name').notNull(),
     color: text('color').notNull().default('#1FFF13'),
     icon: text('icon'),
@@ -118,6 +133,13 @@ export const stages = pgTable(
     updatedAt: ts('updated_at'),
   },
   (t) => [
+    foreignKey({
+      name: 'stages_workspace_pipeline_fk',
+      columns: [t.workspaceId, t.pipelineId],
+      foreignColumns: [pipelines.workspaceId, pipelines.id],
+    }).onDelete('cascade'),
+    // Alvo das FKs compostas por workspace (F70-S12, migração 0085).
+    uniqueIndex('uq_stages_workspace_id').on(t.workspaceId, t.id),
     unique('stages_pipeline_position_uq').on(t.pipelineId, t.position),
     index('idx_stages_pipeline').on(t.pipelineId, t.position),
   ],
@@ -130,23 +152,17 @@ export const deals = pgTable(
     workspaceId: uuid('workspace_id')
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
-    pipelineId: uuid('pipeline_id')
-      .notNull()
-      .references(() => pipelines.id, { onDelete: 'cascade' }),
-    stageId: uuid('stage_id')
-      .notNull()
-      .references(() => stages.id, { onDelete: 'restrict' }),
-    contactId: uuid('contact_id')
-      .notNull()
-      .references(() => contacts.id, { onDelete: 'cascade' }),
-    conversationId: uuid('conversation_id').references(() => conversations.id, {
-      onDelete: 'set null',
-    }),
+    // pipeline/stage/contact/conversation/owner: FKs compostas com workspace_id
+    // (F70-S12), declaradas no bloco de constraints.
+    pipelineId: uuid('pipeline_id').notNull(),
+    stageId: uuid('stage_id').notNull(),
+    contactId: uuid('contact_id').notNull(),
+    conversationId: uuid('conversation_id'),
     title: text('title').notNull(),
     valueCents: bigint('value_cents', { mode: 'number' }).notNull().default(0),
     currency: text('currency').notNull().default('BRL'),
     source: text('source'),
-    ownerId: uuid('owner_id').references(() => members.id, { onDelete: 'set null' }),
+    ownerId: uuid('owner_id'),
     customFields: jsonb('custom_fields').$type<Record<string, unknown>>().notNull().default({}),
     notes: text('notes'),
     position: integer('position').notNull().default(0),
@@ -158,6 +174,36 @@ export const deals = pgTable(
     updatedAt: ts('updated_at'),
   },
   (t) => [
+    // FKs compostas (F70-S12, migração 0085): o banco recusa (23503) referência a um
+    // registro de outro workspace mesmo que o handler esqueça de validar — a checagem
+    // de FK roda fora da RLS. A migração é a fonte da verdade: nas anuláveis ela usa
+    // `ON DELETE SET NULL (coluna)` (PG >= 15), que o Drizzle não expressa; um SET NULL
+    // sem a lista anularia também workspace_id (NOT NULL) e a exclusão falharia.
+    foreignKey({
+      name: 'deals_workspace_pipeline_fk',
+      columns: [t.workspaceId, t.pipelineId],
+      foreignColumns: [pipelines.workspaceId, pipelines.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'deals_workspace_stage_fk',
+      columns: [t.workspaceId, t.stageId],
+      foreignColumns: [stages.workspaceId, stages.id],
+    }).onDelete('restrict'),
+    foreignKey({
+      name: 'deals_workspace_contact_fk',
+      columns: [t.workspaceId, t.contactId],
+      foreignColumns: [contacts.workspaceId, contacts.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'deals_workspace_conversation_fk',
+      columns: [t.workspaceId, t.conversationId],
+      foreignColumns: [conversations.workspaceId, conversations.id],
+    }).onDelete('set null'),
+    foreignKey({
+      name: 'deals_workspace_owner_fk',
+      columns: [t.workspaceId, t.ownerId],
+      foreignColumns: [members.workspaceId, members.id],
+    }).onDelete('set null'),
     index('idx_deals_workspace_pipeline_stage').on(
       t.workspaceId,
       t.pipelineId,
@@ -165,9 +211,14 @@ export const deals = pgTable(
       t.position,
     ),
     index('idx_deals_contact').on(t.contactId),
-    index('idx_deals_owner').on(t.ownerId).where(sql`${t.ownerId} is not null`),
+    index('idx_deals_owner')
+      .on(t.ownerId)
+      .where(sql`${t.ownerId} is not null`),
     // Idempotência de ensureDealForConversation (F47-S12): no máximo 1 deal por
     // conversa. Parcial — deals sem conversa (conversation_id NULL) coexistem.
+    // Global de propósito (F70-S12): com a FK composta da conversa, unicidade global
+    // equivale a (workspace_id, conversation_id), e o ON CONFLICT (conversation_id)
+    // dos chamadores continua casando.
     uniqueIndex('uq_deals_conversation')
       .on(t.conversationId)
       .where(sql`${t.conversationId} is not null`),
