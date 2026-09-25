@@ -56,7 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 27     | 1   | 2   | 0   | 0   | 2   | 22   |
+| F70   | 27     | 1   | 2   | 0   | 0   | 1   | 23   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -790,7 +790,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70-S23 | Tools de contato com allowlist de escrita, auditoria sem PII e execução com prazo                               | ✅ done      | high       | F70-S15                   |
 | F70-S24 | Outbox confere envelope e fila contra o workspace, retenção configurável e event_id por workspace               | ✅ done      | medium     | F70-S25                   |
 | F70-S25 | Gatilhos da IA e passos de flow pela outbox, lembrete da agenda com conversa real                               | ✅ done      | high       | F70-S21                   |
-| F70-S26 | Turno da IA idempotente por envelope                                                                            | 🟣 review    | high       | F70-S25                   |
+| F70-S26 | Turno da IA idempotente por envelope                                                                            | ✅ done      | high       | F70-S25                   |
 | F70-S27 | Falha de storage visível e mídia reprocessável depois de corrigida                                              | 🟢 available | critical   | F70-S25                   |
 
 ## Fase 8 — Permissions & Settings

@@ -2,7 +2,7 @@
 id: F70-S26
 title: Turno da IA idempotente por envelope
 phase: F70
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F70-S25]
