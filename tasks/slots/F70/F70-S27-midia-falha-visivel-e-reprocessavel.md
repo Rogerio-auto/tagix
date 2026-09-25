@@ -2,7 +2,7 @@
 id: F70-S27
 title: Falha de storage visível e mídia reprocessável depois de corrigida
 phase: F70
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F70-S25]
