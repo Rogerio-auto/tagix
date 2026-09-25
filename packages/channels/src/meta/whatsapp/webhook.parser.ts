@@ -12,6 +12,7 @@
  */
 
 import type { InboundEvent, MediaRef, MessageType } from '../../types';
+import { parseWhatsAppReferral } from './ad-referral';
 import { isCoexistenceField } from './coexistence';
 
 // Re-export do contrato/parser de coexistência (F39-S03) para que callers do
@@ -29,6 +30,29 @@ export type {
   CoexistenceHistoryMessage,
   CoexistenceAppState,
 } from './coexistence';
+
+// F70-S05: atribuição de anúncio e origem da conversa — mesmo ponto de entrada.
+export {
+  parseWhatsAppReferral,
+  parseInstagramReferral,
+  readAdReferral,
+  isPaidAdReferral,
+  toAdAttributionColumns,
+} from './ad-referral';
+export type {
+  AdReferral,
+  AdReferralChannel,
+  AdReferralSourceType,
+  AdAttributionColumns,
+} from './ad-referral';
+export {
+  classifyConversationOrigin,
+  isAiEligibleOrigin,
+  adReferralFromInboundEvent,
+  CONVERSATION_ORIGIN_TAGS,
+  MIN_PREFILL_MARKER_LENGTH,
+} from './origin';
+export type { ConversationOrigin, ConversationOriginInput, OriginPrefillMarkers } from './origin';
 
 const PROVIDER = 'meta_whatsapp' as const;
 
@@ -132,7 +156,11 @@ function extractContent(waType: string | undefined, msg: JsonRecord): string | u
  * Extrai metadados extra que o worker inbound usa (contexto de reply, payload
  * interativo, localização, contatos). Mantém `undefined` quando vazio.
  */
-function extractMetadata(waType: string | undefined, msg: JsonRecord): Record<string, unknown> | undefined {
+function extractMetadata(
+  waType: string | undefined,
+  msg: JsonRecord,
+  rawTimestamp: string,
+): Record<string, unknown> | undefined {
   const meta: Record<string, unknown> = {};
 
   // Contexto de reply (mensagem citada).
@@ -154,6 +182,11 @@ function extractMetadata(waType: string | undefined, msg: JsonRecord): Record<st
     const contacts = msg['contacts'];
     if (Array.isArray(contacts)) meta['contacts'] = contacts;
   }
+
+  // F70-S05: Click-to-WhatsApp. Vem em QUALQUER tipo de mensagem (texto, mídia,
+  // botão) — é a primeira mensagem depois do clique no anúncio.
+  const adReferral = parseWhatsAppReferral(msg['referral'], rawTimestamp);
+  if (adReferral !== undefined) meta['adReferral'] = adReferral;
 
   return Object.keys(meta).length > 0 ? meta : undefined;
 }
@@ -224,7 +257,7 @@ function parseMessage(msg: JsonRecord, profileNames?: ProfileNames): InboundEven
 
   const mediaRef =
     waType !== undefined ? extractMediaRef(msg[waType]) : undefined;
-  const baseMeta = extractMetadata(waType, msg);
+  const baseMeta = extractMetadata(waType, msg, rawTimestamp);
   // Diagnóstico: se o tipo continua desconhecido (cai em `system`), preserva o
   // `type` cru da Meta em metadata — permite investigar sem depender do raw
   // webhook (que não é persistido).

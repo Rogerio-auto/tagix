@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { adAttributionColumns, adAttributionConstraints } from './ad-attribution';
 import { members, workspaces } from './index';
 
 const citext = customType<{ data: string }>({
@@ -73,6 +74,8 @@ export const contacts = pgTable(
     // Cadastro estruturado (F47-S01): endereço tipado + documento (CPF/CNPJ).
     address: jsonb('address').$type<ContactAddress>().notNull().default({}),
     document: text('document'),
+    // Atribuição de anúncio — PRIMEIRO TOQUE (F70-S05). Ver `./ad-attribution`.
+    ...adAttributionColumns(),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at'),
     deletedAt: ts('deleted_at'),
@@ -93,5 +96,6 @@ export const contacts = pgTable(
       'contacts_opt_in_method_chk',
       sql`${t.optInMethod} in ('whatsapp','website','checkout','import','manual','api') or ${t.optInMethod} is null`,
     ),
+    ...adAttributionConstraints('contacts', t),
   ],
 );

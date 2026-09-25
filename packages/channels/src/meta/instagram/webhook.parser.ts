@@ -7,6 +7,7 @@
  */
 
 import type { InboundEvent, MediaRef } from '../../types';
+import { parseInstagramReferral } from '../whatsapp/ad-referral';
 
 const PROVIDER = 'meta_instagram' as const;
 
@@ -61,6 +62,19 @@ function attachmentMediaRef(att: JsonRecord): MediaRef | undefined {
   const url = payload ? asString(payload['url']) : undefined;
   if (url === undefined) return undefined;
   return { refOrUrl: url };
+}
+
+/**
+ * F70-S05: a primeira DM vinda de anúncio (Click-to-Instagram-Direct) traz
+ * `message.referral`. Antes se perdia; agora vai normalizado (mesmo formato do
+ * Click-to-WhatsApp) em `metadata.adReferral`.
+ */
+function adReferralMetadata(
+  message: JsonRecord,
+  ts: string,
+): { metadata: Record<string, unknown> } | Record<string, never> {
+  const adReferral = parseInstagramReferral(message['referral'], ts);
+  return adReferral !== undefined ? { metadata: { adReferral } } : {};
 }
 
 export function parseInstagramWebhook(payload: unknown): InboundEvent[] {
@@ -172,6 +186,7 @@ function parseMessagingItem(m: JsonRecord): InboundEvent | undefined {
         content: asString(message['text']),
         ...(mediaRef ? { mediaRef } : {}),
         rawTimestamp: ts,
+        ...adReferralMetadata(message, ts),
       };
     }
 
@@ -185,6 +200,7 @@ function parseMessagingItem(m: JsonRecord): InboundEvent | undefined {
         messageType: 'text',
         content: text,
         rawTimestamp: ts,
+        ...adReferralMetadata(message, ts),
       };
     }
     return undefined;
