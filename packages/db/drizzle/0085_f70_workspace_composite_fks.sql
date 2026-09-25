@@ -17,7 +17,10 @@
 -- `workspace_id` (NOT NULL) e a exclusão da conversa/membro falharia com 23502.
 -- MATCH SIMPLE (padrão): referência NULL não é checada, então deal sem conversa/dono segue válido.
 --
--- `uq_deals_conversation` passa a (workspace_id, conversation_id), parcial como antes.
+-- `uq_deals_conversation (conversation_id)` continua GLOBAL, de propósito: com a FK composta da
+-- conversa, o deal só aponta para conversa do próprio workspace, então unicidade global de
+-- conversation_id equivale a (workspace_id, conversation_id). Trocar o índice não fecharia brecha
+-- e quebraria o ON CONFLICT (conversation_id) de ensureDealForConversation e do leadgen (42P10).
 --
 -- Pré-voo: aborta com RAISE EXCEPTION (contagem por coluna) se existir QUALQUER referência
 -- cruzada. Nunca apaga nem anula dado em silêncio — a limpeza é decisão humana.
@@ -132,15 +135,6 @@ ALTER TABLE deals
   ADD CONSTRAINT deals_workspace_owner_fk
     FOREIGN KEY (workspace_id, owner_id) REFERENCES members (workspace_id, id)
     ON DELETE SET NULL (owner_id);
---> statement-breakpoint
-
--- ─── uq_deals_conversation por workspace ────────────────────────────────────────
--- ATENÇÃO: ON CONFLICT (conversation_id) WHERE conversation_id IS NOT NULL deixa de achar
--- índice (42P10). Os chamadores passam a usar o alvo (workspace_id, conversation_id).
-DROP INDEX IF EXISTS uq_deals_conversation;
---> statement-breakpoint
-CREATE UNIQUE INDEX uq_deals_conversation ON deals (workspace_id, conversation_id)
-  WHERE conversation_id IS NOT NULL;
 --> statement-breakpoint
 
 SET LOCAL lock_timeout TO DEFAULT;

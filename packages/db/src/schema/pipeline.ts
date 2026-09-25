@@ -216,10 +216,11 @@ export const deals = pgTable(
       .where(sql`${t.ownerId} is not null`),
     // Idempotência de ensureDealForConversation (F47-S12): no máximo 1 deal por
     // conversa. Parcial — deals sem conversa (conversation_id NULL) coexistem.
-    // Por workspace desde a F70-S12: o alvo de ON CONFLICT passa a ser
-    // (workspace_id, conversation_id) WHERE conversation_id IS NOT NULL.
+    // Global de propósito (F70-S12): com a FK composta da conversa, unicidade global
+    // equivale a (workspace_id, conversation_id), e o ON CONFLICT (conversation_id)
+    // dos chamadores continua casando.
     uniqueIndex('uq_deals_conversation')
-      .on(t.workspaceId, t.conversationId)
+      .on(t.conversationId)
       .where(sql`${t.conversationId} is not null`),
     ...adAttributionConstraints('deals', t),
   ],

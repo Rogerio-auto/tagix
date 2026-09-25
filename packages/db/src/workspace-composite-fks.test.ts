@@ -183,19 +183,16 @@ describe('schema Drizzle × migração 0085', () => {
     );
   });
 
-  it('uq_deals_conversation passa a (workspace_id, conversation_id), parcial', () => {
+  it('uq_deals_conversation continua global (conversation_id), parcial, e a 0085 não mexe nele', () => {
     const idx = getTableConfig(deals).indexes.find(
       (i) => i.config.name === 'uq_deals_conversation',
     );
     expect(idx?.config.unique).toBe(true);
     expect(idx?.config.where).toBeDefined();
     expect(idx?.config.columns.map((c) => ('name' in c ? c.name : '?'))).toEqual([
-      'workspace_id',
       'conversation_id',
     ]);
-    expect(migration).toMatch(
-      /CREATE UNIQUE INDEX uq_deals_conversation ON deals \(workspace_id, conversation_id\)\s+WHERE conversation_id IS NOT NULL;/,
-    );
+    expect(migration).not.toMatch(/(CREATE|DROP)[^;]*INDEX[^;]*uq_deals_conversation/i);
   });
 
   it('migração não apaga nem anula dado (só aborta)', () => {
@@ -343,7 +340,7 @@ describe('Postgres dev: o que a 0085 deixou no catálogo', () => {
     }
   });
 
-  it('índices (workspace_id, id) e uq_deals_conversation por workspace', async () => {
+  it('índices (workspace_id, id) e uq_deals_conversation global como na 0053', async () => {
     const rows = await getDb().execute<{ indexname: string; indexdef: string }>(sql`
       select indexname, indexdef from pg_indexes
        where schemaname = 'public'
@@ -355,7 +352,7 @@ describe('Postgres dev: o que a 0085 deixou no catálogo', () => {
       );
     }
     expect(defs.get('uq_deals_conversation')).toBe(
-      'CREATE UNIQUE INDEX uq_deals_conversation ON public.deals USING btree (workspace_id, conversation_id) WHERE (conversation_id IS NOT NULL)',
+      'CREATE UNIQUE INDEX uq_deals_conversation ON public.deals USING btree (conversation_id) WHERE (conversation_id IS NOT NULL)',
     );
   });
 });
@@ -443,40 +440,27 @@ describe('caminho feliz', () => {
     await getDb().delete(stages).where(eq(stages.id, st2.id));
   });
 
-  it('ON CONFLICT (workspace_id, conversation_id) mantém 1 deal por conversa', async () => {
-    const db = getDb();
-    const inserir = () =>
-      db
-        .insert(deals)
-        .values(dealValues(A, { conversationId: A.conversation }))
-        .onConflictDoNothing({
-          target: [deals.workspaceId, deals.conversationId],
-          where: sql`${deals.conversationId} is not null`,
-        })
-        .returning({ id: deals.id });
-    const primeiro = await inserir();
-    const segundo = await inserir();
-    expect(primeiro).toHaveLength(1);
-    expect(segundo).toHaveLength(0);
-
-    // Deals sem conversa seguem coexistindo.
-    await db.insert(deals).values([dealValues(A), dealValues(A)]);
-    await db.delete(deals).where(eq(deals.workspaceId, A.ws));
-  });
-
-  it('o alvo antigo ON CONFLICT (conversation_id) deixa de ser inferível (42P10)', async () => {
-    // Documenta a quebra que os chamadores (deal-conversation.ts, leadgen/db-store.ts)
-    // precisam acompanhar: o alvo passa a ser [workspaceId, conversationId].
-    const e = await falhaCom(
-      getDb()
+  it('ON CONFLICT (conversation_id) dos chamadores segue casando: 1 deal por conversa', async () => {
+    // Mesmo alvo de ensureDealForConversation e do insert de deal do leadgen.
+    const inserir = (tx: Pick<ReturnType<typeof getDb>, 'insert'>) =>
+      tx
         .insert(deals)
         .values(dealValues(A, { conversationId: A.conversation }))
         .onConflictDoNothing({
           target: deals.conversationId,
           where: sql`${deals.conversationId} is not null`,
-        }),
-    );
-    expect(e.code).toBe('42P10');
+        })
+        .returning({ id: deals.id });
+    const primeiro = await inserir(getDb());
+    // Sob hm_app + RLS, como na API: o perdedor da corrida não aborta a transação.
+    const segundo = await withWorkspace(A.ws, (tx) => inserir(tx));
+    expect(primeiro).toHaveLength(1);
+    expect(segundo).toHaveLength(0);
+
+    // Deals sem conversa seguem coexistindo.
+    const db = getDb();
+    await db.insert(deals).values([dealValues(A), dealValues(A)]);
+    await db.delete(deals).where(eq(deals.workspaceId, A.ws));
   });
 });
 
