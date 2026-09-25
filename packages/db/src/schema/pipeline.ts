@@ -21,6 +21,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { adAttributionColumns, adAttributionConstraints } from './ad-attribution';
 import { contacts, conversations, members, products, workspaces } from './index';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -151,6 +152,8 @@ export const deals = pgTable(
     position: integer('position').notNull().default(0),
     closedAt: ts('closed_at'),
     closedWon: boolean('closed_won'),
+    // Anúncio que originou ESTA oportunidade (F70-S05). Ver `./ad-attribution`.
+    ...adAttributionColumns(),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at'),
   },
@@ -168,6 +171,7 @@ export const deals = pgTable(
     uniqueIndex('uq_deals_conversation')
       .on(t.conversationId)
       .where(sql`${t.conversationId} is not null`),
+    ...adAttributionConstraints('deals', t),
   ],
 );
 
