@@ -263,6 +263,37 @@ describe('POST /internal/tools/:toolKey — tool_logs', () => {
     expect(typeof v['durationMs']).toBe('number');
   });
 
+  it('texto livre do modelo vai ao log mascarado e truncado (L8)', async () => {
+    toolCatalog['note_thing'] = 'tool-uuid-9';
+    const registry = new ToolHandlerRegistry().register('note_thing', async () => ({
+      ok: true,
+      content: 'ok',
+    }));
+
+    const res = await request(makeApp(TOKEN, registry))
+      .post('/internal/tools/note_thing')
+      .set('Authorization', `Bearer ${TOKEN}`)
+      .send(
+        envelope({
+          args: {
+            reason: `Maria, CPF 123.456.789-00, maria@x.com, fone 11 99999-0000 ${'x'.repeat(200)}`,
+            severity: 'high',
+            stage_id: '11111111-1111-1111-1111-111111111111',
+          },
+        }),
+      );
+
+    expect(res.status).toBe(200);
+    const params = toolLogInserts[0]!.values['params'] as Record<string, string>;
+    expect(params['reason']).not.toMatch(/\d/);
+    expect(params['reason']).not.toContain('maria@x.com');
+    expect(params['reason']).toContain('[email]');
+    expect(params['reason']!.length).toBeLessThanOrEqual(121);
+    // Campos que não são texto livre ficam intactos (ids, enums).
+    expect(params['severity']).toBe('high');
+    expect(params['stage_id']).toBe('11111111-1111-1111-1111-111111111111');
+  });
+
   it('handler com ok=false → 422 e tool_logs com erro', async () => {
     toolCatalog['fail_thing'] = 'tool-uuid-2';
     const registry = new ToolHandlerRegistry().register('fail_thing', async () => ({

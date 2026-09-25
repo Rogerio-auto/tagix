@@ -10,7 +10,9 @@
  *  - tool custom de OUTRO workspace com a mesma key não é usada nem logada (nem
  *    vinculada por engano ao agente via `agent_tools`);
  *  - `add_contact_tag` aplica etiqueta existente (idempotente) e não cria etiqueta;
- *  - `update_contact` edita só a allowlist e recusa telefone/e-mail/opt-in sem escrever.
+ *  - `update_contact` edita só a allowlist e recusa telefone/e-mail/opt-in sem escrever;
+ *  - `move_deal_stage` só move deal do contato/conversa do contexto (H1);
+ *  - `register_conversion` credita o contato da conversa, nunca o `contact_id` do modelo (H1).
  *
  * Skip automático se o Postgres dev não estiver acessível.
  */
@@ -33,6 +35,12 @@ const AGENT = randomUUID();
 const AGENT_PEER = randomUUID();
 const AGENT_OTHER_WS = randomUUID();
 const TAG_HUMAN = randomUUID();
+const OTHER_CONTACT = randomUUID();
+const PIPELINE = randomUUID();
+const STAGE_NEW = randomUUID();
+const STAGE_NEXT = randomUUID();
+const DEAL_OWN = randomUUID();
+const DEAL_FOREIGN = randomUUID();
 
 const silentLogger = {
   debug: () => undefined,
@@ -222,7 +230,55 @@ beforeAll(async () => {
       .insert(schema.tags)
       .values({ id: TAG_HUMAN, workspaceId: WS, name: 'atendimento-humano' });
 
-    for (const key of ['mark_resolved', 'escalate', 'transfer_to_human']) {
+    await db.insert(schema.contacts).values({
+      id: OTHER_CONTACT,
+      workspaceId: WS,
+      displayName: 'Outro contato',
+      phone: `+55118${WS.slice(0, 8)}`,
+    });
+    await db
+      .insert(schema.pipelines)
+      .values({ id: PIPELINE, workspaceId: WS, name: 'Funil', isDefault: true });
+    await db.insert(schema.stages).values([
+      { id: STAGE_NEW, workspaceId: WS, pipelineId: PIPELINE, name: 'Novo', position: 0 },
+      { id: STAGE_NEXT, workspaceId: WS, pipelineId: PIPELINE, name: 'Proposta', position: 1 },
+    ]);
+    await db.insert(schema.deals).values([
+      {
+        id: DEAL_OWN,
+        workspaceId: WS,
+        pipelineId: PIPELINE,
+        stageId: STAGE_NEW,
+        contactId: CONTACT,
+        title: 'Meu',
+      },
+      {
+        id: DEAL_FOREIGN,
+        workspaceId: WS,
+        pipelineId: PIPELINE,
+        stageId: STAGE_NEW,
+        contactId: OTHER_CONTACT,
+        title: 'Alheio',
+      },
+    ]);
+    await db
+      .insert(schema.conversionTypes)
+      .values({ workspaceId: WS, key: 'venda', label: 'Venda', valueRequired: false });
+    await db
+      .insert(schema.workspaceAgentPolicies)
+      .values({ workspaceId: WS, allowAgentConversions: true })
+      .onConflictDoUpdate({
+        target: schema.workspaceAgentPolicies.workspaceId,
+        set: { allowAgentConversions: true },
+      });
+
+    for (const key of [
+      'mark_resolved',
+      'escalate',
+      'transfer_to_human',
+      'move_deal_stage',
+      'register_conversion',
+    ]) {
       globalTool[key] = await ensureGlobalTool(key);
     }
     // Contato: tools do próprio workspace (somem no cascade) — o catálogo global delas
@@ -239,6 +295,8 @@ beforeAll(async () => {
     });
     await db.insert(schema.agentTools).values([
       link(AGENT, globalTool['mark_resolved']!),
+      link(AGENT, globalTool['move_deal_stage']!),
+      link(AGENT, globalTool['register_conversion']!),
       link(AGENT, globalTool['transfer_to_human']!, false),
       link(AGENT, addTag),
       link(AGENT, updContact),
@@ -511,4 +569,59 @@ describe('F70-S15 — tools de contato', () => {
     const logs = await logsOf(exec1);
     expect(logs[0]).toMatchObject({ action: 'update_contact', error: null });
   });
+});
+
+describe('F70-S15 — H1: handlers só agem no contexto da conversa', () => {
+  async function dealStage(id: string): Promise<string | undefined> {
+    const [row] = await getDb()
+      .select({ stageId: schema.deals.stageId })
+      .from(schema.deals)
+      .where(eq(schema.deals.id, id));
+    return row?.stageId;
+  }
+
+  maybe('move_deal_stage recusa deal de outro contato e move o do contexto', async () => {
+    const conv = await freshConversation();
+
+    const foreign = await callTool('move_deal_stage', {
+      conversationId: conv,
+      executionId: await freshExecution(conv),
+      args: { stage_id: STAGE_NEXT, deal_id: DEAL_FOREIGN },
+    });
+    expect(foreign.status).toBe(422);
+    expect(await dealStage(DEAL_FOREIGN)).toBe(STAGE_NEW);
+
+    const own = await callTool('move_deal_stage', {
+      conversationId: conv,
+      executionId: await freshExecution(conv),
+      args: { stage_id: STAGE_NEXT, deal_id: DEAL_OWN },
+    });
+    expect(own.status).toBe(200);
+    expect(await dealStage(DEAL_OWN)).toBe(STAGE_NEXT);
+  });
+
+  maybe(
+    'register_conversion ignora o contact_id do modelo e usa o contato da conversa',
+    async () => {
+      const conv = await freshConversation();
+
+      const res = await callTool('register_conversion', {
+        conversationId: conv,
+        executionId: await freshExecution(conv),
+        args: { type_key: 'venda', contact_id: OTHER_CONTACT, note: 'fechou' },
+      });
+      expect(res.status).toBe(200);
+
+      const events = await getDb()
+        .select({ contactId: schema.conversionEvents.contactId })
+        .from(schema.conversionEvents)
+        .where(eq(schema.conversionEvents.conversationId, conv));
+      expect(events).toEqual([{ contactId: CONTACT }]);
+      const foreign = await getDb()
+        .select({ id: schema.conversionEvents.id })
+        .from(schema.conversionEvents)
+        .where(eq(schema.conversionEvents.contactId, OTHER_CONTACT));
+      expect(foreign).toHaveLength(0);
+    },
+  );
 });

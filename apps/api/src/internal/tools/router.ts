@@ -67,6 +67,36 @@ function summarize(value: unknown): Record<string, unknown> {
 }
 
 /**
+ * Campos de texto livre que o modelo escreve (motivo, nota, resolução…). Costumam
+ * repetir o que o cliente disse — CPF, telefone, e-mail. No log ficam curtos e sem
+ * dígitos nem e-mail: dá para auditar a intenção sem guardar o dado (F70-S15, L8).
+ */
+const FREE_TEXT_KEYS: ReadonlySet<string> = new Set([
+  'reason',
+  'note',
+  'resolution',
+  'message',
+  'text',
+  'summary',
+  'comment',
+]);
+const FREE_TEXT_MAX = 120;
+
+function maskFreeText(value: string): string {
+  const masked = value.replace(/[^\s@]+@[^\s@]+/g, '[email]').replace(/\d/g, '#');
+  return masked.length > FREE_TEXT_MAX ? `${masked.slice(0, FREE_TEXT_MAX)}…` : masked;
+}
+
+/** Args para o log: texto livre mascarado e truncado; o resto como veio. */
+export function redactLogArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    out[key] = FREE_TEXT_KEYS.has(key) && typeof value === 'string' ? maskFreeText(value) : value;
+  }
+  return out;
+}
+
+/**
  * Grava a trilha em `tool_logs`. `toolId` é a linha que a barreira de habilitação
  * resolveu (custom do workspace > global) — nunca uma busca solta por `key`, que
  * podia cair na tool custom de outro workspace (`tools` não tem RLS).
@@ -89,7 +119,7 @@ async function writeToolLog(
     executionId: envelope.executionId,
     action: result.action ?? 'workflow',
     tableName: result.tableName ?? null,
-    params: summarize(envelope.args),
+    params: summarize(redactLogArgs(envelope.args)),
     result: result.ok ? summarize(result.payload ?? { content: result.content }) : null,
     error: result.ok ? null : (result.error ?? 'unknown error'),
     durationMs,
