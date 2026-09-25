@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildDomainEnvelope,
+  CONVERSATION_OPENED_TRIGGERS,
   DOMAIN_EVENTS,
   domainEventRoutingKey,
   domainEvents,
@@ -111,6 +112,61 @@ describe('eventId canônico', () => {
     const r1 = domainEvents.conversationOpened(ws, { ...base, trigger: 'reopened' });
     const r2 = domainEvents.conversationOpened(ws, { ...base, trigger: 'reopened' });
     expect(r1.eventId).not.toBe(r2.eventId);
+  });
+});
+
+describe('conversation.opened — origem (F70-S14)', () => {
+  const base = () => ({ conversationId: randomUUID(), contactId: null, channelId: randomUUID() });
+
+  it('catálogo de origens é exatamente o documentado', () => {
+    expect([...CONVERSATION_OPENED_TRIGGERS]).toEqual([
+      'inbound',
+      'lead_ad',
+      'app_echo',
+      'history',
+      'campaign',
+      'reopened',
+    ]);
+  });
+
+  it.each(['inbound', 'lead_ad', 'app_echo', 'history', 'campaign'] as const)(
+    'criação por %s: aceita no contrato e eventId <conversa>:opened (o mesmo de qualquer origem)',
+    (trigger) => {
+      const data = { ...base(), trigger };
+      const draft = domainEvents.conversationOpened(ws, data);
+      expect(draft.eventId).toBe(`${data.conversationId}:opened`);
+      const parsed = parseDomainEnvelope(buildDomainEnvelope(draft));
+      expect(parsed.data['trigger']).toBe(trigger);
+      expect(parsed.eventId).toBe(`${data.conversationId}:opened`);
+    },
+  );
+
+  it('reabertura continua por ocorrência (não colide com a criação)', () => {
+    const data = { ...base(), trigger: 'reopened' as const };
+    const draft = domainEvents.conversationOpened(ws, data, 'occ-1');
+    expect(draft.eventId).toBe(`${data.conversationId}:reopened:occ-1`);
+    expect(() => buildDomainEnvelope(draft)).not.toThrow();
+  });
+
+  it('origem fora do catálogo é rejeitada na publicação', () => {
+    const draft = domainEvents.conversationOpened(ws, { ...base(), trigger: 'inbound' });
+    const forged = { ...draft, data: { ...draft.data, trigger: 'outbound' } };
+    expect(() => buildDomainEnvelope(forged as unknown as DomainEventDraft)).toThrow();
+    const semOrigem = { ...draft, data: { ...draft.data, trigger: undefined } };
+    expect(() => buildDomainEnvelope(semOrigem as unknown as DomainEventDraft)).toThrow();
+  });
+
+  it('emitDomainEvent não publica origem inválida (devolve false, nunca lança)', async () => {
+    const sent: string[] = [];
+    setDomainEventTransport(async (rk) => {
+      sent.push(rk);
+    });
+    setDomainEventLogger({ error: () => undefined, warn: () => undefined });
+    const draft = domainEvents.conversationOpened(ws, { ...base(), trigger: 'campaign' });
+    const forged = { ...draft, data: { ...draft.data, trigger: 'webhook' } };
+    expect(await emitDomainEvent(forged as unknown as DomainEventDraft)).toBe(false);
+    expect(await emitDomainEvent(draft)).toBe(true);
+    expect(sent).toEqual(['domain.conversation.opened']);
   });
 });
 

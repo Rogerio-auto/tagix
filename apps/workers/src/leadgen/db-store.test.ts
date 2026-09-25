@@ -7,6 +7,9 @@
  * F70-S13: a conversa aberta pelo lead publica `conversation.opened` uma vez, só
  * depois do commit (outra conexão já a enxerga no momento da publicação); rollback
  * não publica.
+ * F70-S14: origem `lead_ad`; a mensagem-resumo publica `message.received` e o card
+ * novo `deal.created`, na ordem conversa → mensagem → card, todos depois do commit.
+ * Formulário que cai em conversa com card anuncia só a mensagem.
  *
  * Pula sem `DATABASE_URL`.
  */
@@ -25,21 +28,56 @@ const url = process.env['DATABASE_URL'];
 describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
   const sfx = randomUUID().slice(0, 8);
   const pageId = `9${Date.now()}`;
-  /** Cada publicação + se a conversa já estava commitada (visível por outra conexão). */
+  /** Cada publicação + se o que ela anuncia já estava commitado (visível por outra conexão). */
   const publicados: Array<{ draft: DomainEventDraft; commitada: boolean }> = [];
+  const visivel = async (draft: DomainEventDraft): Promise<boolean> => {
+    const db = getDb();
+    switch (draft.event) {
+      case 'conversation.opened':
+        return (
+          (
+            await db
+              .select({ id: schema.conversations.id })
+              .from(schema.conversations)
+              .where(eq(schema.conversations.id, draft.data.conversationId))
+          ).length === 1
+        );
+      case 'message.received':
+        return (
+          (
+            await db
+              .select({ id: schema.messages.id })
+              .from(schema.messages)
+              .where(eq(schema.messages.id, draft.data.messageId))
+          ).length === 1
+        );
+      case 'deal.created':
+        return (
+          (await db.select({ id: schema.deals.id }).from(schema.deals).where(eq(schema.deals.id, draft.data.dealId)))
+            .length === 1
+        );
+      default:
+        return false;
+    }
+  };
   const store = new DbLeadStore(async (draft) => {
-    const conversationId = draft.event === 'conversation.opened' ? draft.data.conversationId : '';
-    const visiveis = await getDb()
-      .select({ id: schema.conversations.id })
-      .from(schema.conversations)
-      .where(eq(schema.conversations.id, conversationId));
-    publicados.push({ draft, commitada: visiveis.length === 1 });
+    publicados.push({ draft, commitada: await visivel(draft) });
     return true;
   });
   const abertas = (conversationId: string) =>
     publicados.filter(
       (p) => p.draft.event === 'conversation.opened' && p.draft.data.conversationId === conversationId,
     );
+  /** Tudo o que foi publicado sobre a conversa (e o card dela), na ordem. */
+  const daConversa = (conversationId: string, dealId: string | null) =>
+    publicados.filter((p) => {
+      const d = p.draft;
+      if (d.event === 'deal.created') return d.data.dealId === dealId;
+      if (d.event === 'conversation.opened' || d.event === 'message.received') {
+        return d.data.conversationId === conversationId;
+      }
+      return false;
+    });
   let workspaceId = '';
   let outroWorkspaceId = '';
   let channelId = '';
@@ -171,10 +209,15 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
     expect(card?.currency).toBe('USD');
     expect(card?.customFields).toMatchObject({ tipo_de_obra: 'Cozinha' });
 
-    // F70-S13: uma publicação, depois do commit, com o eventId canônico e sem PII.
-    const eventos = abertas(gravado!.conversationId!);
-    expect(eventos).toHaveLength(1);
-    expect(eventos[0]?.commitada).toBe(true);
+    // F70-S13/S14: conversa → mensagem → card, cada um uma vez, depois do commit,
+    // com o eventId canônico do catálogo.
+    const eventos = daConversa(gravado!.conversationId!, gravado!.dealId);
+    expect(eventos.map((e) => e.draft.event)).toEqual([
+      'conversation.opened',
+      'message.received',
+      'deal.created',
+    ]);
+    expect(eventos.every((e) => e.commitada)).toBe(true);
     expect(eventos[0]?.draft).toMatchObject({
       event: 'conversation.opened',
       workspaceId,
@@ -183,7 +226,34 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
         conversationId: gravado!.conversationId!,
         contactId: gravado!.contactId!,
         channelId,
-        trigger: 'inbound',
+        trigger: 'lead_ad',
+      },
+    });
+    expect(eventos[1]?.draft).toMatchObject({
+      event: 'message.received',
+      workspaceId,
+      eventId: `${gravado!.message!.id}:received`,
+      data: {
+        conversationId: gravado!.conversationId!,
+        messageId: gravado!.message!.id,
+        contactId: gravado!.contactId!,
+        channelId,
+        type: 'text',
+        text: gravado!.message!.content,
+      },
+    });
+    expect(eventos[2]?.draft).toMatchObject({
+      event: 'deal.created',
+      workspaceId,
+      eventId: `${gravado!.dealId!}:created`,
+      data: {
+        dealId: gravado!.dealId!,
+        pipelineId: card!.pipelineId,
+        stageId: card!.stageId,
+        contactId: gravado!.contactId!,
+        conversationId: gravado!.conversationId!,
+        valueCents: 0,
+        currency: 'USD',
       },
     });
   });
@@ -198,6 +268,7 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
   });
 
   it('segundo formulário da mesma pessoa reaproveita contato, conversa e card', async () => {
+    const antes = publicados.length;
     const primeiro = await processar(`lg2-${sfx}`, '+13055550142');
     expect(primeiro.gravado?.created).toBe(true);
     const db = getDb();
@@ -210,6 +281,13 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
     expect(mensagens).toHaveLength(2);
     // F70-S13: conversa reaproveitada não é "aberta" de novo.
     expect(abertas(primeiro.gravado!.conversationId!)).toHaveLength(1);
+    // F70-S14: só a mensagem nova é anunciada; o card existente ganha nota, não `deal.created`.
+    const novos = publicados.slice(antes);
+    expect(novos.map((p) => p.draft.event)).toEqual(['message.received']);
+    expect(novos[0]?.commitada).toBe(true);
+    expect(novos[0]?.draft).toMatchObject({
+      eventId: `${primeiro.gravado!.message!.id}:received`,
+    });
   });
 
   it('persist concorrente: o segundo vê processed e não grava', async () => {
@@ -218,10 +296,17 @@ describe.skipIf(!url)('F69-S03 DbLeadStore', () => {
     const reserva = await store.claim(fonte, job);
     const l = lead(job.leadgenId, '+13055550199');
     const entrada = { source: fonte, submissionId: reserva.submissionId, job, lead: l, consent: consentEvidence(l, 'f1', null), now: new Date() };
+    const antes = publicados.length;
     const [a, b] = await Promise.all([store.persist(entrada), store.persist(entrada)]);
     expect([a.created, b.created].sort()).toEqual([false, true]);
     const vencedor = a.created ? a : b;
     expect(abertas(vencedor.conversationId!)).toHaveLength(1);
+    // Só o vencedor anuncia: um de cada, nada do perdedor.
+    expect(publicados.slice(antes).map((p) => p.draft.event)).toEqual([
+      'conversation.opened',
+      'message.received',
+      'deal.created',
+    ]);
   });
 
   describe('F70-S13: rollback', () => {

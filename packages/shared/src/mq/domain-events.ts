@@ -94,13 +94,33 @@ const messageSentData = z
   })
   .strict();
 
+/**
+ * Como a conversa passou a estar aberta (F70-S14). Todos, menos `reopened`, são a
+ * CRIAÇÃO da conversa — uma vez por conversa; `reopened` pode se repetir.
+ * - `inbound`  — a primeira mensagem do contato criou a conversa;
+ * - `lead_ad`  — um formulário de anúncio da Meta (lead ads) criou a conversa;
+ * - `app_echo` — a empresa escreveu primeiro pelo app do WhatsApp/Instagram (eco);
+ * - `history`  — a importação do histórico do app trouxe uma conversa nova;
+ * - `campaign` — o disparo de uma campanha criou a conversa;
+ * - `reopened` — conversa resolvida voltou a ficar aberta.
+ */
+export const CONVERSATION_OPENED_TRIGGERS = [
+  'inbound',
+  'lead_ad',
+  'app_echo',
+  'history',
+  'campaign',
+  'reopened',
+] as const;
+
+export type ConversationOpenedTrigger = (typeof CONVERSATION_OPENED_TRIGGERS)[number];
+
 const conversationOpenedData = z
   .object({
     conversationId: id,
     contactId: id.nullable(),
     channelId: id.nullable(),
-    /** `inbound` = primeira mensagem do contato criou a conversa; `reopened` = reaberta. */
-    trigger: z.enum(['inbound', 'reopened']),
+    trigger: z.enum(CONVERSATION_OPENED_TRIGGERS),
   })
   .strict();
 
@@ -291,8 +311,10 @@ export const domainEvents = {
   },
 
   /**
-   * Criação pelo inbound é única por conversa (`<id>:opened`). Reabertura pode se
-   * repetir, então cada uma ganha sua própria ocorrência.
+   * Criação é única por conversa, qualquer que seja a origem: eventId
+   * `<id>:opened` (o `trigger` diz a origem, não muda a identidade — se dois
+   * caminhos disputassem a criação, só um aviso sai). Reabertura pode se repetir,
+   * então cada uma ganha sua própria ocorrência.
    */
   conversationOpened(
     workspaceId: string,
@@ -303,7 +325,7 @@ export const domainEvents = {
       event: 'conversation.opened',
       workspaceId,
       eventId:
-        data.trigger === 'inbound'
+        data.trigger !== 'reopened'
           ? `${data.conversationId}:opened`
           : `${data.conversationId}:reopened:${occurrenceId}`,
       occurredAt: nowIso(),

@@ -35,7 +35,7 @@
  *
  * Webhooks de saída (F70-S13): conversa que o eco ou o histórico ABRIU publica
  * `conversation.opened` depois do commit (construtor do catálogo, eventId canônico
- * `<conversa>:opened`). `created` só é verdadeiro para quem inseriu a linha, então
+ * `<conversa>:opened`; F70-S14: `trigger` `app_echo` ou `history`). `created` só é verdadeiro para quem inseriu a linha, então
  * reentrega e o perdedor de uma corrida não republicam; rollback não publica.
  */
 import { Buffer } from 'node:buffer';
@@ -47,6 +47,7 @@ import {
   domainEvents,
   emitDomainEvent,
   makeEnvelope,
+  type ConversationOpenedTrigger,
   type DomainEventDraft,
   type MqHandle,
 } from '@hm/shared/mq';
@@ -362,11 +363,16 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
     private readonly emitEvent: (draft: DomainEventDraft) => Promise<boolean> = emitDomainEvent,
   ) {}
 
-  /** `conversation.opened` de cada conversa aberta — chamar SÓ depois do commit. */
+  /**
+   * `conversation.opened` de cada conversa aberta — chamar SÓ depois do commit.
+   * F70-S14: `trigger` diz a origem real (`app_echo` = o dono escreveu primeiro pelo
+   * app; `history` = a importação do histórico trouxe a conversa).
+   */
   private async emitOpened(
     workspaceId: string,
     channelId: string,
     opened: readonly OpenedConversation[],
+    trigger: Extract<ConversationOpenedTrigger, 'app_echo' | 'history'>,
   ): Promise<void> {
     for (const conv of opened) {
       await this.emitEvent(
@@ -374,7 +380,7 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
           conversationId: conv.conversationId,
           contactId: conv.contactId,
           channelId,
-          trigger: 'inbound',
+          trigger,
         }),
       );
     }
@@ -563,7 +569,7 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
     });
 
     // F70-S13: a conversa aberta pelo eco avisa antes da mensagem (espelha o inbound).
-    await this.emitOpened(workspaceId, channelId, result.opened);
+    await this.emitOpened(workspaceId, channelId, result.opened, 'app_echo');
 
     // Pós-persist (fora da transação): empurra o echo ao vivo. Só quando inseriu
     // de fato (dedup não reemite — espelha `insertMessages` do inbound).
@@ -753,7 +759,7 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
       };
     });
 
-    await this.emitOpened(workspaceId, channelId, outcome.openedConversations);
+    await this.emitOpened(workspaceId, channelId, outcome.openedConversations, 'history');
 
     // Pós-persist: um sinal por conversa afetada → a ChatList revalida a projeção
     // (last message/contadores) sem reordenar/floodar a thread com timestamps antigos.
