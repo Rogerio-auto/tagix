@@ -46,7 +46,10 @@ __all__ = [
     "ColumnAccessError",
     "ColumnPolicy",
     "allowed_columns",
+    "CUSTOM_FIELDS_KEYS_CONFIG",
     "clamp_column_config",
+    "custom_fields_keys",
+    "filter_custom_fields",
     "policy_from_config",
     "project",
     "ensure_required",
@@ -233,56 +236,62 @@ _ACL_KEYS: Final[frozenset[str]] = frozenset(
 
 
 def clamp_column_config(
-    ceiling: Mapping[str, Any], override: Mapping[str, Any] | None
+    ceiling: Mapping[str, Any],
+    override: Mapping[str, Any] | None,
+    *,
+    default: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Aplica a config efetiva (catálogo + `agent_tools.overrides`) SEM ampliar o teto.
 
-    `ceiling` é o `default_handler_config` da classe da tool (código, revisado); a
-    config vinda do Node pode só **restringir** o acesso a colunas, nunca ampliar:
+    `ceiling` é o teto de ACL declarado na classe da tool (código, revisado);
+    `default` é a config padrão da classe (subconjunto do teto; ausente = o teto).
+    A config vinda do Node pode escolher colunas DENTRO do teto, nunca fora dele:
 
       - `table` é sempre a do teto (override não troca a tabela-alvo);
-      - `allowed_columns.read/write` = interseção do override com o teto (override
-        ausente/torto em um modo → mantém o teto daquele modo);
+      - `allowed_columns.read/write` = interseção do override com o teto (modo
+        ausente/torto no override → o do `default`, também limitado ao teto);
       - `restricted_columns` / `required_columns` = união (só apertam);
       - demais chaves (não-ACL) do override passam como estão.
 
     Deny-by-default continua valendo: coluna fora do teto nunca entra, mesmo que
     um override (ou um catálogo adulterado) a liste.
     """
-    base = dict(ceiling)
+    top_cfg = dict(ceiling)
+    base = dict(default) if default is not None else top_cfg
     cfg: Mapping[str, Any] = override or {}
     out: dict[str, Any] = {**base}
     for key, value in cfg.items():
         if key not in _ACL_KEYS:
             out[key] = value
 
-    ceiling_allowed = base.get("allowed_columns")
-    ceiling_map: Mapping[str, Any] = (
-        ceiling_allowed if isinstance(ceiling_allowed, Mapping) else {}
-    )
-    override_allowed = cfg.get("allowed_columns")
-    override_map: Mapping[str, Any] = (
-        override_allowed if isinstance(override_allowed, Mapping) else {}
-    )
+    def _modes(source: Mapping[str, Any]) -> Mapping[str, Any]:
+        raw = source.get("allowed_columns")
+        return raw if isinstance(raw, Mapping) else {}
+
+    ceiling_map = _modes(top_cfg)
+    base_map = _modes(base)
+    override_map = _modes(cfg)
     clamped: dict[str, list[str]] = {}
     for mode in ("read", "write"):
         top = _as_str_set(ceiling_map.get(mode))
-        if mode in override_map:
-            wanted = set(_as_str_set(override_map.get(mode)))
-            clamped[mode] = [c for c in top if c in wanted]
-        else:
-            clamped[mode] = list(top)
+        source = override_map if mode in override_map else base_map
+        wanted = set(_as_str_set(source.get(mode)))
+        clamped[mode] = [c for c in top if c in wanted]
     out["allowed_columns"] = clamped
 
     for key in ("restricted_columns", "required_columns"):
-        merged = list(_as_str_set(base.get(key)))
-        for column in _as_str_set(cfg.get(key)):
+        merged: list[str] = []
+        for column in (
+            *_as_str_set(top_cfg.get(key)),
+            *_as_str_set(base.get(key)),
+            *_as_str_set(cfg.get(key)),
+        ):
             if column not in merged:
                 merged.append(column)
         out[key] = merged
 
-    if "table" in base:
-        out["table"] = base["table"]
+    if "table" in top_cfg:
+        out["table"] = top_cfg["table"]
 
     widened = {
         mode: sorted(set(_as_str_set(override_map.get(mode))) - set(clamped[mode]))
@@ -290,14 +299,55 @@ def clamp_column_config(
         if mode in override_map
     }
     widened = {m: cols for m, cols in widened.items() if cols}
-    if widened or ("table" in cfg and cfg.get("table") != base.get("table")):
+    if widened or ("table" in cfg and cfg.get("table") != top_cfg.get("table")):
         logger.warning(
             "column-acl: override tentou ampliar o teto de {table}: {widened}",
-            table=str(base.get("table")),
+            table=str(top_cfg.get("table")),
             widened=";".join(f"{m}={','.join(c)}" for m, c in widened.items()) or "table",
         )
     return out
 
+
+# ----------------------------------------------------------------------------
+# Campos personalizados (`custom_fields`): allowlist de CHAVES + teto de tamanho.
+#
+# `custom_fields` é um JSONB livre — ler a coluna inteira manda ao provedor de LLM o
+# que quer que esteja lá (documento, endereço, respostas de formulário). A coluna
+# pode estar liberada na ACL, mas só as chaves listadas em `custom_fields_keys` (config
+# da tool `query_contact`, por agente via `agent_tools.overrides`) saem. Default: nenhuma.
+# ----------------------------------------------------------------------------
+
+CUSTOM_FIELDS_KEYS_CONFIG: Final[str] = "custom_fields_keys"
+CUSTOM_FIELDS_MAX_KEYS: Final[int] = 20
+CUSTOM_FIELD_VALUE_MAX_CHARS: Final[int] = 200
+
+
+def custom_fields_keys(config: Mapping[str, Any] | None) -> list[str]:
+    """Chaves de `custom_fields` liberadas pela config (lista de strings; torto = [])."""
+    if not config:
+        return []
+    return _as_str_set(config.get(CUSTOM_FIELDS_KEYS_CONFIG))[:CUSTOM_FIELDS_MAX_KEYS]
+
+
+def filter_custom_fields(value: Any, allowed_keys: Iterable[str]) -> dict[str, Any]:
+    """Projeta `custom_fields` para as chaves liberadas, só com valores escalares.
+
+    Deny-by-default: sem chave liberada → `{}`. Texto é cortado em
+    `CUSTOM_FIELD_VALUE_MAX_CHARS`; objetos/listas aninhados não saem (não há como
+    saber o que carregam). Nunca levanta.
+    """
+    if not isinstance(value, Mapping):
+        return {}
+    out: dict[str, Any] = {}
+    for key in allowed_keys:
+        if key not in value or len(out) >= CUSTOM_FIELDS_MAX_KEYS:
+            continue
+        item = value[key]
+        if isinstance(item, str):
+            out[key] = item[:CUSTOM_FIELD_VALUE_MAX_CHARS]
+        elif item is None or isinstance(item, bool | int | float):
+            out[key] = item
+    return out
 
 
 def allowed_columns(

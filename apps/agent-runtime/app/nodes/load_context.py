@@ -24,6 +24,7 @@ import asyncpg
 from app.db import with_workspace
 from app.logging import get_logger
 from app.policy import apply_policy
+from app.tools.access_control import custom_fields_keys, filter_custom_fields
 from app.types import AgentState, PolicySnapshot, ToolDescriptor
 
 logger = get_logger()
@@ -195,6 +196,27 @@ async def _load_peers(conn: asyncpg.Connection, agent_id: str) -> list[dict[str,
     ]
 
 
+# Tool cuja config governa o que o agente vê do contato (F70-S15, M1).
+_QUERY_CONTACT_KEY = "query_contact"
+
+
+def _prompt_safe_contact(
+    contact: dict[str, Any] | None, tools: list[ToolDescriptor]
+) -> dict[str, Any] | None:
+    """Contato como entra no state (e no prompt, e no checkpoint): `custom_fields` só
+    com as chaves liberadas em `custom_fields_keys` da `query_contact` habilitada.
+
+    Sem `query_contact` habilitada, ou sem chaves liberadas, nenhum campo
+    personalizado sai para o provedor de LLM (deny-by-default). Valores escalares,
+    texto cortado (`filter_custom_fields`).
+    """
+    if contact is None:
+        return None
+    descriptor = next((t for t in tools if t.key == _QUERY_CONTACT_KEY), None)
+    keys = custom_fields_keys(descriptor.config if descriptor else None)
+    return {**contact, "custom_fields": filter_custom_fields(contact.get("custom_fields"), keys)}
+
+
 def _gate_transfer_to_agent(
     tools: list[ToolDescriptor], handoff_enabled: bool
 ) -> list[ToolDescriptor]:
@@ -267,7 +289,7 @@ def make_load_context_node(pool: asyncpg.Pool):
 
         patch: dict[str, Any] = {
             "agent": agent,
-            "contact": contact,
+            "contact": _prompt_safe_contact(contact, gated_tools),
             "conversation": conversation,
             "tools": gated_tools,
             "iteration": 0,

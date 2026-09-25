@@ -214,3 +214,12 @@ async def test_minimal_flow_structure_intact() -> None:
     assert messages[-1].role == "user"
     assert messages[-1].content == "Olá"
     assert "RETOMADA DE CONVERSA" not in _system_of(messages)
+
+
+@pytest.mark.asyncio
+async def test_contact_custom_fields_block_is_capped() -> None:
+    """F70-S15 (M1): nenhum caminho leva o JSONB inteiro de `custom_fields` ao LLM."""
+    contact = {"display_name": "Ana", "custom_fields": {"k": "y" * 5000}}
+    system = _system_of(await _build(_state(contact=contact)))
+    assert "y" * 1400 in system
+    assert "y" * 1600 not in system

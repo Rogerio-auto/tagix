@@ -410,3 +410,84 @@ def test_update_contact_schema_forbids_extra_properties() -> None:
         "timezone",
         "custom_fields",
     }
+
+
+# ---------------------------------------------------------------------------
+# M1: PII para o provedor de LLM — telefone/e-mail e custom_fields
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_query_contact_default_does_not_read_phone_or_email() -> None:
+    pool = FakePool({"display_name": "Ana"})
+    registry = ToolRegistry()
+    registry.register(QueryContactTool(pool))
+
+    await registry.dispatch(
+        "query_contact",
+        {"fields": ["display_name", "phone", "email"]},
+        _ctx(tool_config=dict(QueryContactTool.default_handler_config)),
+    )
+
+    sql = pool.conn.last_query or ""
+    assert sql.startswith("SELECT display_name FROM contacts")
+    assert "phone" not in sql and "email" not in sql
+
+
+def test_query_contact_override_can_enable_phone_within_ceiling_only() -> None:
+    tool = QueryContactTool(FakePool()).with_config(
+        {"allowed_columns": {"read": ["display_name", "phone", "notes", "owner_id"]}}
+    )
+    assert tool.policy().allowed("read") == frozenset({"display_name", "phone"})
+
+
+@pytest.mark.asyncio
+async def test_query_contact_custom_fields_only_allowed_keys() -> None:
+    row = {
+        "custom_fields": {
+            "interesse": "plano anual " + "x" * 400,
+            "cpf": "123.456.789-00",
+            "endereco": {"rua": "A"},
+        }
+    }
+    registry = ToolRegistry()
+    registry.register(QueryContactTool(FakePool(dict(row))))
+
+    closed = await registry.dispatch("query_contact", {"fields": ["custom_fields"]}, _ctx())
+    assert json.loads(closed["content"]) == {"custom_fields": {}}
+
+    opened = await registry.dispatch(
+        "query_contact",
+        {"fields": ["custom_fields"]},
+        _ctx(tool_config={"custom_fields_keys": ["interesse", "endereco"]}),
+    )
+    fields = json.loads(opened["content"])["custom_fields"]
+    assert set(fields) == {"interesse"}  # `cpf` não liberado; objeto aninhado não sai
+    assert len(fields["interesse"]) == 200
+
+
+def test_load_context_hides_custom_fields_unless_query_contact_allows() -> None:
+    from app.nodes.load_context import _prompt_safe_contact
+
+    contact = {
+        "id": "c1",
+        "display_name": "Maria",
+        "custom_fields": {"cpf": "123", "interesse": "anual"},
+    }
+    hidden = _prompt_safe_contact(contact, [])
+    assert hidden is not None and hidden["custom_fields"] == {}
+    no_keys = [ToolDescriptor(key="query_contact", category="database", config={})]
+    closed = _prompt_safe_contact(contact, no_keys)
+    assert closed is not None and closed["custom_fields"] == {}
+    with_keys = [
+        ToolDescriptor(
+            key="query_contact",
+            category="database",
+            config={"custom_fields_keys": ["interesse"]},
+        )
+    ]
+    safe = _prompt_safe_contact(contact, with_keys)
+    assert safe is not None
+    assert safe["custom_fields"] == {"interesse": "anual"}
+    assert safe["display_name"] == "Maria"
+    assert _prompt_safe_contact(None, with_keys) is None

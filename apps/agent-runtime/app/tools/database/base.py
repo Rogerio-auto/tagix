@@ -56,13 +56,17 @@ class DatabaseTool(Tool):
         """Clone com a config efetiva, sem ampliar a ACL de coluna (F70-S15).
 
         A config vem do Node (`tools.handler_config` + `agent_tools.overrides`). O
-        `default_handler_config` da classe é o TETO: a config só pode restringir
-        colunas (`clamp_column_config`); a tabela-alvo nunca muda.
+        teto é da classe (`max_handler_config`, ou o `default_handler_config`): a
+        config só escolhe colunas dentro dele (`clamp_column_config`); modo ausente
+        cai no default; a tabela-alvo nunca muda.
         """
-        clone = type(self).__new__(type(self))
+        cls = type(self)
+        clone = cls.__new__(cls)
         clone.__dict__.update(self.__dict__)
         clone._handler_config = clamp_column_config(
-            type(self).default_handler_config, handler_config
+            cls.max_handler_config or cls.default_handler_config,
+            handler_config,
+            default=cls.default_handler_config,
         )
         return clone
 
