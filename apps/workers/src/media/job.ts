@@ -1,9 +1,9 @@
 /**
  * Job de mídia inbound (F1-S10) — shape e parsing Zod.
  *
- * Espelha **exatamente** o que o worker inbound (`MqMediaEnqueue`, F1-S04)
- * publica no exchange de eventos com RK `hm.q.media.inbound` → cai na fila
- * canônica `hm.q.media`:
+ * Espelha **exatamente** o que `inboundMediaJobOutbox` (`inbound/mq-ports.ts`) grava na
+ * outbox — pelo inbound e pela coexistência, na transação que insere a mensagem
+ * (F70-S21/S25) — e o relay publica direto na fila `hm.q.media`:
  *
  * ```
  * { provider, externalId, mediaRef: { refOrUrl, mimeType?, sha256?, fileName? }, routing }

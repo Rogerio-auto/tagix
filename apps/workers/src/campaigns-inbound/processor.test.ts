@@ -24,11 +24,9 @@ const MSG: InboundMessage = {
 function makePorts(over: Partial<CampaignInboundPorts> = {}): CampaignInboundPorts {
   return {
     optOutContact: vi.fn(async () => undefined),
-    sendOptOutConfirmation: vi.fn(async () => undefined),
     findRecentDelivery: vi.fn(async (): Promise<RecentDelivery | null> => null),
     markRecipientResponded: vi.fn(async () => undefined),
     handoffToAgent: vi.fn(async () => ({ applied: true })),
-    publishFollowup: vi.fn(async () => undefined),
     ...over,
   };
 }
@@ -67,8 +65,9 @@ describe('processCampaignInbound', () => {
     const ports = makePorts({ findRecentDelivery: vi.fn(async () => delivery) });
     const out = await processCampaignInbound({ ...MSG, text: 'PARAR' }, { ports, logger: makeLogger() });
     expect(out.kind).toBe('opted_out');
-    expect(ports.optOutContact).toHaveBeenCalledWith('ws1', 'c1', 'KEYWORD_STOP');
-    expect(ports.sendOptOutConfirmation).toHaveBeenCalledOnce();
+    // F70-S25: opt-out e confirmacao numa porta so (uma transacao).
+    expect(ports.optOutContact).toHaveBeenCalledWith({ ...MSG, text: 'PARAR' }, 'KEYWORD_STOP');
+    expect(ports.optOutContact).toHaveBeenCalledOnce();
     // opt-out tem precedencia: NAO trata como reply.
     expect(ports.markRecipientResponded).not.toHaveBeenCalled();
   });
@@ -81,7 +80,7 @@ describe('processCampaignInbound', () => {
     );
     expect(ports.optOutContact).not.toHaveBeenCalled();
     expect(out.kind).toBe('reply_handled');
-    expect(ports.markRecipientResponded).toHaveBeenCalledWith('ws1', 'r1');
+    expect(ports.markRecipientResponded).toHaveBeenCalledWith('ws1', 'r1', null);
   });
 
   it('sem delivery recente -> no_op', async () => {
@@ -120,8 +119,9 @@ describe('processCampaignInbound', () => {
     expect(out).toEqual({ kind: 'reply_handled', campaignId: 'camp1', handedOff: false });
     expect(ports.handoffToAgent).toHaveBeenCalledWith(MSG, 'agent1');
     // A recusa nao interrompe o resto do reply: responded + followup seguem.
-    expect(ports.markRecipientResponded).toHaveBeenCalledWith('ws1', 'r1');
-    expect(ports.publishFollowup).toHaveBeenCalledOnce();
+    expect(ports.markRecipientResponded).toHaveBeenCalledWith('ws1', 'r1', {
+      campaignId: 'camp1',
+    });
     expect(logger.info).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ handedOff: false }),
@@ -137,22 +137,17 @@ describe('processCampaignInbound', () => {
     expect(ports.handoffToAgent).not.toHaveBeenCalled();
   });
 
-  it('reply com followup on_reply -> publica', async () => {
+  it('reply com followup on_reply -> grava o followup junto da marca de resposta', async () => {
     const ports = makePorts({
       findRecentDelivery: vi.fn(async () => ({ ...delivery, hasOnReplyFollowup: true })),
     });
     await processCampaignInbound(MSG, { ports, logger: makeLogger() });
-    expect(ports.publishFollowup).toHaveBeenCalledWith({
-      workspaceId: 'ws1',
-      campaignId: 'camp1',
-      recipientId: 'r1',
-      event: 'on_reply',
-    });
+    expect(ports.markRecipientResponded).toHaveBeenCalledWith('ws1', 'r1', { campaignId: 'camp1' });
   });
 
-  it('reply SEM followup on_reply -> nao publica', async () => {
+  it('reply SEM followup on_reply -> so a marca de resposta', async () => {
     const ports = makePorts({ findRecentDelivery: vi.fn(async () => delivery) });
     await processCampaignInbound(MSG, { ports, logger: makeLogger() });
-    expect(ports.publishFollowup).not.toHaveBeenCalled();
+    expect(ports.markRecipientResponded).toHaveBeenCalledWith('ws1', 'r1', null);
   });
 });

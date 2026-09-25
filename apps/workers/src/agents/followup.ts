@@ -19,7 +19,7 @@
  *       para cada conversa:
  *         markFollowup(redis, conv, windowBucket)  ← SET NX  (idempotência)
  *           se já marcada nesta janela → pula (não duplica)
- *         publish flow.run.requested → hm.q.flows
+ *         outbox ← flow.run.requested (hm.q.flows)          (F70-S25)
  *   release()
  * ```
  *
@@ -46,21 +46,26 @@
  * Lua check-and-del (só o titular libera). Se a vencedora travar, o TTL expira e
  * outra assume no próximo tick — sem deadlock global.
  *
- * **In-process (ARCHITECTURE §4.2):** lê o DB direto via `@hm/db` + RLS; publica no
- * MQ via o `channel` AMQP injetado (mesmo transporte das deps dos demais workers).
- * Self-contained: o bootstrap só injeta `{ redis, channel, logger }` e chama
- * `startFollowupScheduler` (ver REPORT para a linha exata de wiring).
+ * **In-process (ARCHITECTURE §4.2):** lê o DB direto via `@hm/db` + RLS. Self-contained:
+ * o bootstrap só injeta `{ redis, logger }` e chama `startFollowupScheduler`.
+ *
+ * **Outbox (F70-S25):** os gatilhos do workspace entram na OUTBOX numa transação só, a
+ * mesma que lê as elegíveis; o relay publica depois do commit, com confirms. Antes o
+ * envelope ia direto pelo canal AMQP, sem confirmação — um broker que o perdesse perdia
+ * o follow-up da janela, já marcada. Se a transação falhar, as marcas gravadas nela são
+ * desfeitas (best-effort) para o próximo tick tentar de novo.
  */
-import { Buffer } from 'node:buffer';
 import { sql } from 'drizzle-orm';
-import { getDb, withWorkspace } from '@hm/db';
+import { enqueueOutbox, getDb, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
-import { makeEnvelope, QUEUES, type MqHandle } from '@hm/shared/mq';
+import {
+  AGENT_RUN_REQUESTED_TYPE,
+  agentRunJobOutbox,
+  QUEUES,
+  type OutboxMessage,
+} from '@hm/shared/mq';
 import { CHANNEL_PROVIDERS, type ChannelProvider } from '@hm/shared';
 import type { Logger } from '@hm/logger';
-
-/** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
-type MqChannel = MqHandle['channel'];
 
 /** Fila canônica de flows/agentes (`QUEUES.flows`, mesma do worker de F2-S11). */
 export const FLOWS_QUEUE = QUEUES.flows;
@@ -69,7 +74,7 @@ export const FLOWS_QUEUE = QUEUES.flows;
  * Tipo do envelope de disparo — espelha `AGENT_RUN_TYPE` de `worker.ts` /
  * `INBOUND_FLOW_TYPE` de F1-S26. O worker de agentes filtra por este `type`.
  */
-export const FOLLOWUP_RUN_TYPE = 'flow.run.requested' as const;
+export const FOLLOWUP_RUN_TYPE = AGENT_RUN_REQUESTED_TYPE;
 
 /** Chave do lock de scheduler (singleton — só uma instância roda o tick). */
 export const FOLLOWUP_LOCK_KEY = 'hm:lock:scheduler:followup' as const;
@@ -122,6 +127,9 @@ export interface RedisLike {
 /** Libera o lock só se ainda for do titular (token). Evita liberar o de outro. */
 const UNLOCK_LUA =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+
+/** Desfaz uma marca de idempotência (DEL da própria chave). */
+const RELEASE_MARK_LUA = "return redis.call('del', KEYS[1])";
 
 /** Função liberadora do lock de scheduler. Idempotente. */
 export type ReleaseLock = () => Promise<void>;
@@ -282,27 +290,25 @@ async function markFollowup(
 }
 
 /**
- * Publica o envelope `flow.run.requested` em `hm.q.flows` — shape EXATO de
- * F1-S26 / `agentRunTriggerSchema` de `worker.ts`:
- * `{ conversationId, contactId, channelId, provider }`. `workspaceId` vai no
- * Envelope, não no payload. Sem `triggerExternalId`: o follow-up não tem uma
- * mensagem inbound de gatilho (é proativo) — o campo é opcional no schema.
+ * Gatilho `flow.run.requested` (`hm.q.flows`) para a outbox — contrato do worker de
+ * agentes: `{ conversationId, contactId, channelId, provider }`. `workspaceId` vai no
+ * Envelope, não no payload. Sem `triggerExternalId`: o follow-up não tem uma mensagem
+ * inbound de gatilho (é proativo) — o campo é opcional no contrato.
  */
-function publishFollowupRun(
-  channel: MqChannel,
-  workspaceId: string,
-  conv: EligibleConversation,
-): void {
-  const envelope = makeEnvelope(FOLLOWUP_RUN_TYPE, workspaceId, {
+function followupRunJob(workspaceId: string, conv: EligibleConversation): OutboxMessage {
+  return agentRunJobOutbox(workspaceId, {
     conversationId: conv.conversationId,
     contactId: conv.contactId,
     channelId: conv.channelId,
     provider: conv.provider,
   });
-  channel.sendToQueue(FLOWS_QUEUE, Buffer.from(JSON.stringify(envelope)), {
-    persistent: true,
-    contentType: 'application/json',
-  });
+}
+
+/** Desfaz as marcas de uma transação que não commitou (best-effort). */
+async function releaseMarks(redis: RedisLike, keys: readonly string[]): Promise<void> {
+  for (const key of keys) {
+    await redis.eval(RELEASE_MARK_LUA, 1, key).catch(() => undefined);
+  }
 }
 
 // ─── Tick ─────────────────────────────────────────────────────────────────────
@@ -311,8 +317,6 @@ function publishFollowupRun(
 export interface FollowupDeps {
   /** Cliente Redis (lock de scheduler + marca de idempotência). */
   readonly redis: RedisLike;
-  /** Canal AMQP para publicar em `hm.q.flows` (transporte das deps dos workers). */
-  readonly channel: MqChannel;
   readonly logger: Logger;
 }
 
@@ -337,30 +341,39 @@ export interface FollowupTickResult {
 }
 
 /**
- * Processa um único workspace sob RLS: seleciona elegíveis, marca idempotência e
- * publica o run de cada uma. Retorna a contagem de enfileiradas + puladas.
+ * Processa um único workspace sob RLS, numa transação: seleciona elegíveis, marca
+ * idempotência e grava o gatilho de cada uma na outbox. Retorna a contagem de
+ * enfileiradas + puladas.
  */
 async function tickWorkspace(
   workspaceId: string,
   deps: FollowupDeps,
   now: Date,
 ): Promise<{ enqueued: number; skipped: number }> {
-  const eligible = await withWorkspace(workspaceId, (tx) => selectEligible(tx, now));
-
-  let enqueued = 0;
-  let skipped = 0;
-  for (const conv of eligible) {
-    // Idempotência ANTES de publicar: o NX garante exatamente-um por (conv,
-    // janela), mesmo com múltiplas instâncias ou ticks sobrepostos.
-    const fresh = await markFollowup(deps.redis, conv.conversationId, conv.windowBucket);
-    if (!fresh) {
-      skipped += 1;
-      continue;
-    }
-    publishFollowupRun(deps.channel, workspaceId, conv);
-    enqueued += 1;
+  const marked: string[] = [];
+  try {
+    return await withWorkspace(workspaceId, async (tx) => {
+      const eligible = await selectEligible(tx, now);
+      const jobs: OutboxMessage[] = [];
+      let skipped = 0;
+      for (const conv of eligible) {
+        // Idempotência ANTES de gravar: o NX garante exatamente-um por (conv,
+        // janela), mesmo com múltiplas instâncias ou ticks sobrepostos.
+        const fresh = await markFollowup(deps.redis, conv.conversationId, conv.windowBucket);
+        if (!fresh) {
+          skipped += 1;
+          continue;
+        }
+        marked.push(followupMarkKey(conv.conversationId, conv.windowBucket));
+        jobs.push(followupRunJob(workspaceId, conv));
+      }
+      await enqueueOutbox(tx, jobs);
+      return { enqueued: jobs.length, skipped };
+    });
+  } catch (err: unknown) {
+    await releaseMarks(deps.redis, marked);
+    throw err;
   }
-  return { enqueued, skipped };
 }
 
 /**

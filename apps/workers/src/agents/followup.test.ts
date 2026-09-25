@@ -5,13 +5,15 @@
  * workspaces; dentro de `withWorkspace`, o `tx.execute` serve o SELECT de
  * elegibilidade. O Redis é um fake com semântica `SET NX` real (rastreia chaves
  * já gravadas) — é o coração da prova de idempotência e do lock de scheduler. O
- * `channel` AMQP é um spy que captura os envelopes publicados em `hm.q.flows`.
+ * `enqueueOutbox` mockado entrega as mensagens gravadas (F70-S25) à outbox fake do
+ * teste, que as expõe como `{ queue, envelope }`.
  *
  * Cobre: seleção+publish de elegíveis, idempotência (2º tick na mesma janela não
  * duplica), guarda de lock (instância sem lock não toca no DB), e tolerância a
  * falha por-workspace.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { OutboxMessage } from '@hm/shared/mq';
 import type { FollowupDeps } from './followup';
 
 // ─── Mock de @hm/db ───────────────────────────────────────────────────────────
@@ -26,9 +28,17 @@ const txExecute = vi.fn(async () => eligibleRows);
 
 let withWorkspaceImpl: (id: string, fn: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
 
+/** Outbox fake corrente: recebe o que o SUT grava com `enqueueOutbox` (F70-S25). */
+let currentOutbox: { record(msgs: readonly OutboxMessage[]): void } | null = null;
+
 vi.mock('@hm/db', () => ({
   getDb: () => ({ execute: discoverExecute }),
   withWorkspace: (id: string, fn: (tx: unknown) => Promise<unknown>) => withWorkspaceImpl(id, fn),
+  enqueueOutbox: async (_tx: unknown, msgs: OutboxMessage | readonly OutboxMessage[]) => {
+    const list = Array.isArray(msgs) ? (msgs as readonly OutboxMessage[]) : [msgs as OutboxMessage];
+    currentOutbox?.record(list);
+    return list.length;
+  },
 }));
 
 const followup = await import('./followup');
@@ -54,6 +64,8 @@ function makeRedis() {
       evalCalls.push(args);
       // Honra o check-and-del do titular (KEYS[1]=args[0], ARGV[1]=args[1]).
       const [key, token] = args;
+      // Só KEYS[1], sem token: é o DEL da marca desfeita (F70-S25).
+      if (key !== undefined && args.length === 1) return store.delete(key) ? 1 : 0;
       if (key !== undefined && store.get(key) === token) {
         store.delete(key);
         return 1;
@@ -63,16 +75,24 @@ function makeRedis() {
   };
 }
 
-/** Canal AMQP fake: captura os envelopes publicados em cada fila. */
-function makeChannel() {
+/** Outbox fake: captura o que foi gravado (fila de destino + envelope). Vira a corrente. */
+function makeOutbox() {
   const published: { queue: string; envelope: Record<string, unknown> }[] = [];
-  return {
+  const outbox = {
     published,
-    sendToQueue: vi.fn((queue: string, buf: Buffer) => {
-      published.push({ queue, envelope: JSON.parse(buf.toString()) as Record<string, unknown> });
-      return true;
-    }),
+    enqueue: vi.fn(),
+    record(msgs: readonly OutboxMessage[]): void {
+      for (const m of msgs) {
+        outbox.enqueue(m);
+        published.push({
+          queue: m.routingKey,
+          envelope: m.envelope as unknown as Record<string, unknown>,
+        });
+      }
+    },
   };
+  currentOutbox = outbox;
+  return outbox;
 }
 
 function makeLogger() {
@@ -80,6 +100,9 @@ function makeLogger() {
 }
 
 const WS = '00000000-0000-0000-0000-0000000000aa';
+// F70-S25: o gatilho vai pela outbox, cujo envelope exige workspace uuid.
+const WS_BAD = '00000000-0000-0000-0000-0000000000a1';
+const WS_OK = '00000000-0000-0000-0000-0000000000a2';
 const CONV = '00000000-0000-0000-0000-00000000c001';
 const CONTACT = '00000000-0000-0000-0000-00000000d001';
 const CHANNEL = '00000000-0000-0000-0000-00000000e001';
@@ -95,12 +118,12 @@ const eligibleRow = {
 
 /** Tipos concretos dos fakes (preservados p/ asserções) + view tipada p/ o SUT. */
 type Redis = ReturnType<typeof makeRedis>;
-type Channel = ReturnType<typeof makeChannel>;
+type Outbox = ReturnType<typeof makeOutbox>;
 type Logger = ReturnType<typeof makeLogger>;
 
 interface Deps {
   redis: Redis;
-  channel: Channel;
+  outbox: Outbox;
   logger: Logger;
 }
 
@@ -110,7 +133,7 @@ function asDeps(d: Deps): FollowupDeps {
 }
 
 function deps(): Deps {
-  return { redis: makeRedis(), channel: makeChannel(), logger: makeLogger() };
+  return { redis: makeRedis(), outbox: makeOutbox(), logger: makeLogger() };
 }
 
 beforeEach(() => {
@@ -134,8 +157,8 @@ describe('runFollowupTick', () => {
     expect(res.skippedDuplicate).toBe(0);
 
     // Publicou no hm.q.flows com o shape EXATO do worker de F2-S11.
-    expect(d.channel.published).toHaveLength(1);
-    const pub = d.channel.published[0];
+    expect(d.outbox.published).toHaveLength(1);
+    const pub = d.outbox.published[0];
     expect(pub?.queue).toBe('hm.q.flows');
     expect(pub?.envelope).toMatchObject({ type: 'flow.run.requested', workspaceId: WS });
     expect(pub?.envelope['payload']).toEqual({
@@ -155,9 +178,9 @@ describe('runFollowupTick', () => {
   it('é idempotente: 2º tick na mesma janela não republica', async () => {
     eligibleRows = [eligibleRow];
     const redis = makeRedis();
-    const channel = makeChannel();
+    const outbox = makeOutbox();
     const logger = makeLogger();
-    const d = { redis, channel, logger };
+    const d = { redis, outbox, logger };
 
     const first = await runFollowupTick(asDeps(d), { workspaceId: WS });
     expect(first.enqueued).toBe(1);
@@ -169,13 +192,13 @@ describe('runFollowupTick', () => {
     expect(second.skippedDuplicate).toBe(1);
 
     // Só um envelope publicado no total (não duplicou).
-    expect(channel.published).toHaveLength(1);
+    expect(outbox.published).toHaveLength(1);
   });
 
   it('nova janela (novo last_message_epoch) permite novo follow-up', async () => {
     const redis = makeRedis();
-    const channel = makeChannel();
-    const d = { redis, channel, logger: makeLogger() };
+    const outbox = makeOutbox();
+    const d = { redis, outbox, logger: makeLogger() };
 
     eligibleRows = [eligibleRow];
     await runFollowupTick(asDeps(d), { workspaceId: WS });
@@ -185,22 +208,22 @@ describe('runFollowupTick', () => {
     const res = await runFollowupTick(asDeps(d), { workspaceId: WS });
 
     expect(res.enqueued).toBe(1);
-    expect(channel.published).toHaveLength(2);
+    expect(outbox.published).toHaveLength(2);
   });
 
   it('pula o tick sem tocar no DB quando o lock está detido por outra instância', async () => {
     const redis = makeRedis();
     // Outra instância já detém o lock.
     redis.store.set(FOLLOWUP_LOCK_KEY, 'other-instance-token');
-    const channel = makeChannel();
-    const d = { redis, channel, logger: makeLogger() };
+    const outbox = makeOutbox();
+    const d = { redis, outbox, logger: makeLogger() };
 
     eligibleRows = [eligibleRow];
     const res = await runFollowupTick(asDeps(d), { workspaceId: WS });
 
     expect(res.ran).toBe(false);
     expect(res.enqueued).toBe(0);
-    expect(channel.published).toHaveLength(0);
+    expect(outbox.published).toHaveLength(0);
     expect(txExecute).not.toHaveBeenCalled();
     expect(discoverExecute).not.toHaveBeenCalled();
     // Não liberou o lock de outra instância (token não bate).
@@ -226,15 +249,15 @@ describe('runFollowupTick', () => {
     const res = await runFollowupTick(asDeps(d), { workspaceId: WS });
 
     expect(res.enqueued).toBe(0);
-    expect(d.channel.published).toHaveLength(0);
+    expect(d.outbox.published).toHaveLength(0);
   });
 
   it('falha de um workspace não derruba os demais e libera o lock', async () => {
-    discoverQueue = [[{ workspace_id: 'ws-bad' }, { workspace_id: 'ws-ok' }]];
+    discoverQueue = [[{ workspace_id: WS_BAD }, { workspace_id: WS_OK }]];
     const d = deps();
     eligibleRows = [eligibleRow];
     withWorkspaceImpl = (id, fn) => {
-      if (id === 'ws-bad') return Promise.reject(new Error('boom'));
+      if (id === WS_BAD) return Promise.reject(new Error('boom'));
       return fn({ execute: txExecute });
     };
 
@@ -245,10 +268,32 @@ describe('runFollowupTick', () => {
     expect(res.enqueued).toBe(1); // só ws-ok
     expect(d.logger.error).toHaveBeenCalledWith(
       'followup: tick de workspace falhou',
-      expect.objectContaining({ workspaceId: 'ws-bad' }),
+      expect.objectContaining({ workspaceId: WS_BAD }),
     );
     // Lock liberado mesmo com falha parcial.
     expect(d.redis.store.has(FOLLOWUP_LOCK_KEY)).toBe(false);
+  });
+
+  it('F70-S25: transação que não commita desfaz a marca e o próximo tick tenta de novo', async () => {
+    eligibleRows = [eligibleRow];
+    const d = deps();
+    // Todo o trabalho acontece (marca + gravação na outbox) e o COMMIT falha.
+    withWorkspaceImpl = async (_id, fn) => {
+      await fn({ execute: txExecute });
+      throw new Error('commit falhou');
+    };
+
+    const failed = await runFollowupTick(asDeps(d), { workspaceId: WS });
+    expect(failed.enqueued).toBe(0);
+    expect(d.redis.store.has(followupMarkKey(CONV, BUCKET))).toBe(false);
+
+    // Banco de volta: a mesma janela é seguida (a marca não ficou órfã).
+    withWorkspaceImpl = (_id, fn) => fn({ execute: txExecute });
+    d.outbox.published.length = 0;
+    const retried = await runFollowupTick(asDeps(d), { workspaceId: WS });
+    expect(retried.enqueued).toBe(1);
+    expect(d.outbox.published).toHaveLength(1);
+    expect(d.redis.store.has(followupMarkKey(CONV, BUCKET))).toBe(true);
   });
 });
 
@@ -262,17 +307,17 @@ describe('startFollowupScheduler', () => {
 
     // Sem disparo imediato (primeiro tick é agendado, não roda no boot).
     const handle = startFollowupScheduler(asDeps(d), { intervalMs: 5 });
-    expect(d.channel.published).toHaveLength(0);
+    expect(d.outbox.published).toHaveLength(0);
 
     // Aguarda o primeiro tick real concluir (publica em hm.q.flows).
     await vi.waitFor(() => {
-      expect(d.channel.sendToQueue).toHaveBeenCalled();
+      expect(d.outbox.enqueue).toHaveBeenCalled();
     });
 
     // Após stop, nenhum novo tick dispara.
     await handle.stop();
-    const after = d.channel.sendToQueue.mock.calls.length;
+    const after = d.outbox.enqueue.mock.calls.length;
     await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(d.channel.sendToQueue.mock.calls.length).toBe(after);
+    expect(d.outbox.enqueue.mock.calls.length).toBe(after);
   });
 });

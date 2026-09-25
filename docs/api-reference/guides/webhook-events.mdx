@@ -192,14 +192,15 @@ na nossa fila de erros para análise e não é reenviado a você.
 
 O `conversation.opened` diz como a conversa passou a estar aberta:
 
-| `trigger`  | Significa                                                                                   |
-| ---------- | ------------------------------------------------------------------------------------------- |
-| `inbound`  | A primeira mensagem do contato criou a conversa.                                            |
-| `lead_ad`  | Um formulário de anúncio da Meta (lead ads) criou a conversa.                               |
-| `app_echo` | A empresa escreveu primeiro pelo app do WhatsApp Business ou do Instagram.                  |
-| `history`  | A importação do histórico do app do WhatsApp Business trouxe uma conversa nova.             |
-| `campaign` | O disparo de uma campanha criou a conversa.                                                 |
-| `reopened` | Uma conversa resolvida voltou a ficar aberta.                                               |
+| `trigger`           | Significa                                                                       |
+| ------------------- | ------------------------------------------------------------------------------- |
+| `inbound`           | A primeira mensagem do contato criou a conversa.                                |
+| `lead_ad`           | Um formulário de anúncio da Meta (lead ads) criou a conversa.                   |
+| `app_echo`          | A empresa escreveu primeiro pelo app do WhatsApp Business ou do Instagram.      |
+| `history`           | A importação do histórico do app do WhatsApp Business trouxe uma conversa nova. |
+| `campaign`          | O disparo de uma campanha criou a conversa.                                     |
+| `calendar_reminder` | O lembrete de um compromisso da agenda, enviado ao contato, criou a conversa.   |
+| `reopened`          | Uma conversa resolvida voltou a ficar aberta.                                   |
 
 A criação acontece uma vez por conversa, qualquer que seja a origem: o `eventId`
 é `<conversationId>:opened`. Cada reabertura é uma ocorrência nova, com `eventId`

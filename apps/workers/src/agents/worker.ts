@@ -28,6 +28,7 @@
 import { z } from 'zod';
 import { Buffer } from 'node:buffer';
 import {
+  AGENT_RUN_REQUESTED_TYPE,
   connectMq,
   consume,
   makeEnvelope,
@@ -75,8 +76,8 @@ export const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
 /** Fila canônica de outbound (reusa o pipeline de envio de F1). */
 export const OUTBOUND_QUEUE = QUEUES.outbound;
 
-/** Tipo do envelope de disparo (espelha `INBOUND_FLOW_TYPE` de F1-S26). */
-export const AGENT_RUN_TYPE = 'flow.run.requested' as const;
+/** Tipo do envelope de disparo (o contrato de `@hm/shared/mq`, `agent-run.ts`). */
+export const AGENT_RUN_TYPE = AGENT_RUN_REQUESTED_TYPE;
 
 /**
  * Tipo do envelope outbound (espelha `OUTBOUND_JOB_TYPE` de `apps/api`). O job da
@@ -85,10 +86,12 @@ export const AGENT_RUN_TYPE = 'flow.run.requested' as const;
 export { OUTBOUND_JOB_TYPE } from './run';
 
 /**
- * Envelope de gatilho publicado por F1-S26 (`MqInboundFlowEnqueue`). Espelha o
- * payload exato de `apps/workers/src/inbound/db-ports.ts`:
- * `{ conversationId, contactId, channelId, provider, triggerExternalId }`.
- * `workspaceId` vem do `Envelope`, não do payload.
+ * Gatilho de turno gravado na outbox pelos produtores (`agentRunJobOutbox`, F70-S25):
+ * inbound, troca manual de agente, `transfer_to_agent`, reengajamento e follow-up.
+ * `{ conversationId, contactId, channelId, provider, triggerExternalId? }`; `workspaceId`
+ * vem do `Envelope`. O produtor valida uuid e contrato estrito
+ * (`agentRunRequestedPayloadSchema`); aqui o consumo é tolerante, para não descartar
+ * envelopes antigos em voo.
  */
 export const agentRunTriggerSchema = z.object({
   conversationId: z.string().min(1),

@@ -17,7 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb, messagesRepo, schema } from '@hm/db';
 import { createLogger } from '@hm/logger';
 import type { Logger } from '@hm/logger';
-import { DbInboundPersistence, type InboundFlowEnqueuePort, type InboundSocketPort } from './db-ports';
+import { DbInboundPersistence, type InboundSocketPort } from './db-ports';
 import type { StatusDeps } from './status';
 import type { PersistInboundRequest } from './ports';
 import type { InboundEvent } from '@hm/channels';
@@ -30,10 +30,6 @@ const noopSocket: InboundSocketPort = {
   async emitMessageNew() {},
   async emitContactPresence() {},
   async emitConversationAssigned() {},
-};
-
-const noopFlow: InboundFlowEnqueuePort = {
-  async enqueue() {},
 };
 
 const noopStatusDeps: StatusDeps = {
@@ -118,7 +114,6 @@ describe.skipIf(!url)('F52-S08 inbound: provider_timestamp + dedup de flow + ord
     const hook = new CountingHook();
     const persistence = new DbInboundPersistence(
       noopSocket,
-      noopFlow,
       noopStatusDeps,
       logger,
       undefined,

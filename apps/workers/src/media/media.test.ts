@@ -147,7 +147,7 @@ function fakes(opts: {
 }
 
 describe('parseMediaJob', () => {
-  it('aceita um job válido (espelha MqMediaEnqueue)', () => {
+  it('aceita um job válido (espelha inboundMediaJobOutbox)', () => {
     const job = parseMediaJob({
       provider: 'meta_whatsapp',
       externalId: 'wamid.X',

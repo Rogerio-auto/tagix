@@ -1,8 +1,8 @@
 /**
  * Worker de execucao de flows (F4-S03). Consome `hm.q.flow.execution` (produzida pela
  * engine `@hm/flow-engine` ao disparar/continuar um flow) e processa UM step por mensagem
- * via `processFlowStepScoped`. Re-enqueue do proximo step e responsabilidade da propria
- * engine (queue port com publish real, injetado aqui) — mantendo um unico caminho.
+ * via `processFlowStepScoped`. O proximo step e gravado pela propria engine, na OUTBOX, na
+ * transacao que avanca a execucao (F70-S25) — o relay publica depois do commit.
  *
  * ```
  * consume hm.q.flow.execution → valida Envelope (Zod, em consume)
@@ -19,17 +19,11 @@ import {
   connectMq,
   consume,
   parseFlowExecutionStep,
-  publish,
   QUEUES,
   type Envelope,
   type MqHandle,
 } from '@hm/shared/mq';
-import {
-  createFlowEngine,
-  createOutboundPort,
-  createQueuePort,
-  type FlowEngineApi,
-} from '@hm/flow-engine';
+import { createFlowEngine, createOutboundPort, type FlowEngineApi } from '@hm/flow-engine';
 import type { Logger } from '@hm/logger';
 import { createOutboundPublisher } from './outbound-publisher';
 import { createFlowEventsPublisher } from './execution-events-publisher';
@@ -45,22 +39,16 @@ export interface FlowWorkerDeps {
 }
 
 /**
- * Liga uma engine cujo queue port publica de verdade em `hm.q.flow.execution` pelo
- * `channel` AMQP injetado (re-enqueue de steps) E cujo outbound port envia mensagem de
- * verdade (F31-S01): `createOutboundPublisher` persiste a message `pending` sob RLS,
- * resolve midia via storage e enfileira o `OutboundJob` em `hm.q.outbound`. Usado pelo
- * bootstrap.
+ * Liga a engine do worker: o outbound port envia mensagem de verdade (F31-S01) —
+ * `createOutboundPublisher` persiste a message `pending` sob RLS, resolve midia via storage
+ * e grava o `OutboundJob` na outbox na mesma transacao. O proximo step sai do port de banco
+ * da engine, tambem pela outbox (F70-S25). Usado pelo bootstrap.
  */
-export function createFlowWorkerDeps(channel: MqChannel, logger: Logger): FlowWorkerDeps {
-  const queue = createQueuePort({
-    publish(routingKey, envelope) {
-      publish(channel, routingKey, envelope);
-    },
-  });
+export function createFlowWorkerDeps(logger: Logger): FlowWorkerDeps {
   const outbound = createOutboundPort(createOutboundPublisher({ logger }));
   // F51: notifica o cockpit em tempo real publicando flow_execution:updated no socket relay.
   const events = createFlowEventsPublisher({ logger });
-  const engine = createFlowEngine({ queue, outbound, events });
+  const engine = createFlowEngine({ outbound, events });
   return { engine, logger };
 }
 

@@ -62,7 +62,7 @@ export {
   DbInboundPersistence,
   DbInboundChannelResolver,
   MqInboundSocketEmit,
-  MqInboundFlowEnqueue,
+  inboundAgentRunJob,
   INBOUND_QUEUE,
   INBOUND_MEDIA_TYPE,
   inboundMediaJobOutbox,
@@ -82,8 +82,6 @@ export {
   type InboundChannelResolver,
   type ResolvedInboundChannel,
   type InboundSocketPort,
-  type InboundFlowEnqueuePort,
-  type InboundFlowTrigger,
 } from './inbound/index';
 
 // --- Status (F1-S20) + presença (F1-S21) wiring ---

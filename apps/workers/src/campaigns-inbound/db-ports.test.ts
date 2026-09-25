@@ -21,7 +21,6 @@ const url = process.env['DATABASE_URL'];
 function makeLogger() {
   return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), child: vi.fn() };
 }
-const noChannel = { sendToQueue: vi.fn(() => true) } as unknown as CampaignInboundDbDeps['channel'];
 
 function message(workspaceId: string, conversationId: string): InboundMessage {
   return {
@@ -40,7 +39,6 @@ describe('campaigns-inbound handoffToAgent (F70-S08, sem DB)', () => {
     );
     const logger = makeLogger();
     const ports = createCampaignInboundPorts({
-      channel: noChannel,
       logger: logger as unknown as CampaignInboundDbDeps['logger'],
       ai: { setConversationAi },
     });
@@ -64,7 +62,6 @@ describe('campaigns-inbound handoffToAgent (F70-S08, sem DB)', () => {
   it('aplicado → sem warn', async () => {
     const logger = makeLogger();
     const ports = createCampaignInboundPorts({
-      channel: noChannel,
       logger: logger as unknown as CampaignInboundDbDeps['logger'],
       ai: { setConversationAi: async () => ({ applied: true }) },
     });
@@ -83,7 +80,6 @@ describe.skipIf(!url)('campaigns-inbound handoffToAgent — port default contra 
   const sfx = WS.slice(0, 8);
   const logger = makeLogger();
   const ports = createCampaignInboundPorts({
-    channel: noChannel,
     logger: logger as unknown as CampaignInboundDbDeps['logger'],
   });
 

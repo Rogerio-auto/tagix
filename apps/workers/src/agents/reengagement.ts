@@ -26,7 +26,7 @@
  *         markReengagement(redis, conv, bucket)  ← SET NX (idempotência)
  *           se já marcada → pula
  *         UPDATE conversations SET ai_mode='on', ai_paused_reason=null, ...
- *         publish flow.run.requested → hm.q.flows
+ *         outbox ← flow.run.requested (hm.q.flows), na MESMA transação   (F70-S25)
  *   release()
  * ```
  *
@@ -42,9 +42,15 @@
  * **Retomada consciente de contexto (S05):** ao publicar `flow.run.requested`, o
  * runtime Python (LangGraph) lê a coluna `ai_paused_reason` (gravada pelo S04) e
  * injeta a diretriz de handoff — a IA retoma ciente de que um humano atuou.
- * Aqui apenas limpamos `ai_paused_reason`/`ai_paused_at`/`ai_paused_by` DEPOIS de
- * publicar o envelope (a ordem garante que o runtime ainda lê o motivo antes do
- * update). UPDATE e publish acontecem na mesma transação de workspace.
+ * Aqui apenas limpamos `ai_paused_reason`/`ai_paused_at`/`ai_paused_by` junto da
+ * retomada. O gatilho entra na OUTBOX na mesma transação do UPDATE (F70-S25): commit
+ * grava a retomada e o gatilho; rollback, nenhum. Antes o envelope saía pelo canal AMQP
+ * de dentro da transação — um rollback depois dele deixava um gatilho sem retomada, e
+ * uma queda antes, uma retomada sem gatilho (IA `on` sem responder).
+ *
+ * **Marca de idempotência x rollback:** a marca Redis é gravada antes do UPDATE. Se a
+ * transação do workspace falhar, as marcas gravadas nela são desfeitas (best-effort),
+ * para o próximo tick tentar de novo em vez de perder a janela.
  *
  * **Trava de origem (F70-S08):** retomar é LIGAR a IA automaticamente, então passa
  * pela mesma regra do flow `ai_action` (`AI_ELIGIBLE_CONVERSATION_ORIGINS`, derivado
@@ -63,23 +69,19 @@
  *   pausa `human_takeover` + marca anterior à pausa + marca não vencida por um `on`
  *   automático. Fail-closed: qualquer campo NULL, pausa `manual` ou IA `off` não retoma.
  */
-import { Buffer } from 'node:buffer';
 import { and, eq, inArray, or, sql } from 'drizzle-orm';
-import { getDb, schema, withWorkspace } from '@hm/db';
+import { enqueueOutbox, getDb, schema, withWorkspace } from '@hm/db';
 import { AI_ELIGIBLE_CONVERSATION_ORIGINS } from '@hm/flow-engine';
 import type { DbTx } from '@hm/db';
-import { makeEnvelope, QUEUES, type MqHandle } from '@hm/shared/mq';
+import { AGENT_RUN_REQUESTED_TYPE, agentRunJobOutbox, QUEUES } from '@hm/shared/mq';
 import { CHANNEL_PROVIDERS, type ChannelProvider } from '@hm/shared';
 import type { Logger } from '@hm/logger';
-
-/** Canal AMQP derivado de `@hm/shared/mq`. */
-type MqChannel = MqHandle['channel'];
 
 /** Fila canônica de flows/agentes (mesma do followup.ts e do worker de F2-S11). */
 export const REENGAGEMENT_FLOWS_QUEUE = QUEUES.flows;
 
 /** Tipo do envelope de disparo — mesmo do worker de agentes e do followup.ts. */
-export const REENGAGEMENT_RUN_TYPE = 'flow.run.requested' as const;
+export const REENGAGEMENT_RUN_TYPE = AGENT_RUN_REQUESTED_TYPE;
 
 /** Chave do lock de scheduler (singleton — só uma instância roda o tick). */
 export const REENGAGEMENT_LOCK_KEY = 'hm:lock:scheduler:reengagement' as const;
@@ -124,6 +126,9 @@ export interface ReengagementRedis {
 /** Script Lua de unlock (check-and-del — só o titular libera o próprio lock). */
 const UNLOCK_LUA =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+
+/** Script Lua que desfaz uma marca de idempotência (DEL da própria chave). */
+const RELEASE_MARK_LUA = "return redis.call('del', KEYS[1])";
 
 /** Callback de liberação do lock. Idempotente (chama uma vez). */
 export type ReleaseLock = () => Promise<void>;
@@ -433,6 +438,17 @@ async function markReengagement(
   return ok === 'OK';
 }
 
+/**
+ * Desfaz as marcas gravadas por uma transação que não commitou: sem isso a janela
+ * inteira seria pulada pelos próximos ticks, com a IA ainda pausada. Best-effort — uma
+ * falha aqui só repete o comportamento anterior (janela perdida).
+ */
+async function releaseMarks(redis: ReengagementRedis, keys: readonly string[]): Promise<void> {
+  for (const key of keys) {
+    await redis.eval(RELEASE_MARK_LUA, 1, key).catch(() => undefined);
+  }
+}
+
 // ─── Resume + publish ─────────────────────────────────────────────────────────
 
 /**
@@ -477,25 +493,23 @@ async function resumeAiMode(
 }
 
 /**
- * Publica `flow.run.requested` em `hm.q.flows` — envelope EXATO do worker de
- * agentes (F2-S11) e do followup.ts: `{ conversationId, contactId, channelId,
+ * Grava `flow.run.requested` (`hm.q.flows`) na outbox, na transação `tx` da retomada —
+ * o contrato do worker de agentes (F2-S11): `{ conversationId, contactId, channelId,
  * provider }`. `workspaceId` vai no Envelope. Sem `triggerExternalId` (proativo).
  */
-function publishReengagementRun(
-  channel: MqChannel,
+async function enqueueReengagementRun(
+  tx: DbTx,
   workspaceId: string,
   conv: EligibleReengagementConversation,
-): void {
-  const envelope = makeEnvelope(REENGAGEMENT_RUN_TYPE, workspaceId, {
-    conversationId: conv.conversationId,
-    contactId: conv.contactId,
-    channelId: conv.channelId,
-    provider: conv.provider,
-  });
-  channel.sendToQueue(
-    REENGAGEMENT_FLOWS_QUEUE,
-    Buffer.from(JSON.stringify(envelope)),
-    { persistent: true, contentType: 'application/json' },
+): Promise<void> {
+  await enqueueOutbox(
+    tx,
+    agentRunJobOutbox(workspaceId, {
+      conversationId: conv.conversationId,
+      contactId: conv.contactId,
+      channelId: conv.channelId,
+      provider: conv.provider,
+    }),
   );
 }
 
@@ -504,7 +518,6 @@ function publishReengagementRun(
 /** Dependências do tick (injetadas pelo bootstrap; mockáveis no teste). */
 export interface ReengagementDeps {
   readonly redis: ReengagementRedis;
-  readonly channel: MqChannel;
   readonly logger: Logger;
 }
 
@@ -542,6 +555,22 @@ async function tickWorkspace(
   now: Date,
   idleMinutes: number,
 ): Promise<{ enqueued: number; skipped: number; blocked: number }> {
+  const marked: string[] = [];
+  try {
+    return await tickWorkspaceTx(workspaceId, deps, now, idleMinutes, marked);
+  } catch (err: unknown) {
+    await releaseMarks(deps.redis, marked);
+    throw err;
+  }
+}
+
+async function tickWorkspaceTx(
+  workspaceId: string,
+  deps: ReengagementDeps,
+  now: Date,
+  idleMinutes: number,
+  marked: string[],
+): Promise<{ enqueued: number; skipped: number; blocked: number }> {
   return withWorkspace(workspaceId, async (tx) => {
     // Lê as configurações do workspace (business_hours) sob RLS.
     const [ws] = await tx
@@ -565,6 +594,7 @@ async function tickWorkspace(
         skipped += 1;
         continue;
       }
+      marked.push(reengagementMarkKey(conv.conversationId, conv.windowBucket));
 
       // Retoma ai_mode no DB — só com origem comprovada (F70-S08).
       const resumed = await resumeAiMode(tx, conv.conversationId, now);
@@ -578,8 +608,8 @@ async function tickWorkspace(
         continue;
       }
 
-      // Publica o run (o worker de agentes consome e roda o LangGraph).
-      publishReengagementRun(deps.channel, workspaceId, conv);
+      // Gatilho do run na outbox, com a retomada (o worker de agentes roda o LangGraph).
+      await enqueueReengagementRun(tx, workspaceId, conv);
 
       deps.logger.info('reengajamento: conversa reengajada', {
         conversationId: conv.conversationId,

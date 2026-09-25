@@ -1,6 +1,6 @@
 /**
- * Ports de infraestrutura da engine (DB/MQ/relogio/outbound). Injetados no `index.ts`
- * com implementacao real (Drizzle sob RLS, RabbitMQ, fetch); mockados nos testes.
+ * Ports de infraestrutura da engine (DB/relogio/outbound/HTTP). Injetados no `index.ts`
+ * com implementacao real (Drizzle sob RLS + outbox, fetch); mockados nos testes.
  *
  * O dispatcher e os builders de contexto dependem SO desta interface — nunca de `@hm/db`
  * ou `amqplib` direto. Isso mantem o nucleo testavel sem Postgres/Rabbit no loop.
@@ -70,6 +70,12 @@ export interface ExecutionPatch {
  */
 export interface PatchExecutionOptions {
   readonly expectStatus?: readonly FlowExecutionStatus[];
+  /**
+   * Grava o job do PROXIMO step (`hm.q.flow.execution`) na MESMA transacao do patch, e
+   * so se o patch aplicou (F70-S25). A transicao e o passo que ela pede commitam juntos:
+   * nao existe mais execucao `running` cujo passo se perdeu entre o commit e a publicacao.
+   */
+  readonly enqueueStep?: boolean;
 }
 
 /** Motivo pelo qual um claim NAO reivindicou a linha (decide drop vs retry no dispatcher). */
@@ -112,7 +118,9 @@ export interface TriggerFlowDbInput {
 export interface FlowDbPort {
   /**
    * Cria a execucao a partir do flow ATIVO: resolve a `flow_version` corrente, persiste
-   * `flow_executions` (status=running, current_node=trigger) e retorna o id.
+   * `flow_executions` (status=running, current_node=trigger) e retorna o id. Na MESMA
+   * transacao grava o job do primeiro step (F70-S25): quem cria a execucao nao publica
+   * nada depois do commit.
    */
   createExecution(input: TriggerFlowDbInput): Promise<{ executionId: string }>;
   loadExecution(workspaceId: string, executionId: string): Promise<LoadedExecution | null>;
@@ -140,11 +148,6 @@ export interface FlowDbPort {
   insertLog(entry: FlowLogEntry): Promise<void>;
   /** Execucoes ativas (running|waiting|processing) de uma conversa — para resume/cancelAll. */
   findActiveByConversation(conversationId: string): Promise<LoadedExecution[]>;
-}
-
-/** Port de fila — re-enqueue do proximo step. */
-export interface FlowQueuePort {
-  enqueueStep(input: { workspaceId: string; executionId: string }): Promise<void>;
 }
 
 /** Port de outbound/conversa — efeitos dos handlers de output e system. */
@@ -197,8 +200,11 @@ export interface FlowEventsPort {
 
 /** Conjunto completo de dependencias da engine. */
 export interface FlowEngineDeps {
+  /**
+   * Banco da engine. Desde a F70-S25 e ele quem grava o proximo step, na transacao da
+   * transicao (`createExecution`, `patchExecution` com `enqueueStep`): nao ha port de fila.
+   */
   readonly db: FlowDbPort;
-  readonly queue: FlowQueuePort;
   readonly outbound: FlowOutboundPort;
   readonly http: FlowHttpPort;
   readonly logger: FlowLoggerPort;

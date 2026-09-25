@@ -7,16 +7,18 @@
  *      aborta com ERROR (anti-loop).
  *   2. Cria a nova execucao do flow alvo (withWorkspace + schema, igual a
  *      register_conversion e outros handlers system-authoritative), propagando
- *      conversationId/contactId e incrementando `_flow_depth`.
+ *      conversationId/contactId e incrementando `_flow_depth`. O primeiro step do
+ *      filho entra na OUTBOX na mesma transacao (F70-S25): o filho nunca existe sem o
+ *      proprio passo.
  *   3. Grava `_goto_flow_execution_id` + `_goto_flow_initiated` nas variables da
  *      execucao corrente.
  *   4. Retorna SUCCESS sem edge — o dispatcher extrai os marcadores, os remove das
- *      vars persistidas (idempotencia) e enfileira o primeiro step do flow filho
- *      apos completar o step atual.
+ *      vars persistidas e registra o filho no log.
  */
 import { z } from 'zod';
 import { and, desc, eq } from 'drizzle-orm';
-import { schema, withWorkspace } from '@hm/db';
+import { enqueueOutbox, schema, withWorkspace } from '@hm/db';
+import { flowExecutionStepOutbox } from '@hm/shared/mq';
 import type { FlowHandler } from '../types';
 
 const MAX_DEPTH = 5;
@@ -101,6 +103,7 @@ export const goToFlowHandler: FlowHandler<GoToFlowData> = {
         .returning({ id: flowExecutions.id });
 
       if (!exec) return { kind: 'creation_failed' as const };
+      await enqueueOutbox(tx, flowExecutionStepOutbox(ctx.workspaceId, exec.id));
       return { kind: 'created' as const, executionId: exec.id };
     });
 
@@ -127,7 +130,7 @@ export const goToFlowHandler: FlowHandler<GoToFlowData> = {
       depth: depth + 1,
     });
 
-    // Expoe o ID da nova execucao para o dispatcher enfileirar apos completar o step atual.
+    // Expoe o ID da nova execucao para o rastro do dispatcher (o passo ja foi gravado).
     return {
       status: 'SUCCESS',
       variables: {

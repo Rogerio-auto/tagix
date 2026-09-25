@@ -10,9 +10,12 @@
  * `conversation.assign_agent` (troca manual via cockpit — F34-S04, matriz de roles).
  *
  * Efeito (só se elegível): fixa `conversations.agent_id = targetAgentId` (sticky) na
- * tx RLS e re-engaja a IA enfileirando `flow.run.requested` em `hm.q.flows` (mesmo
- * contrato do inbound). O worker de agentes (F2-S11) resolve o `agent_id` já fixado —
- * o envelope só carrega o gatilho `{ conversationId, contactId, channelId, provider }`.
+ * tx RLS e re-engaja a IA gravando `flow.run.requested` (`hm.q.flows`, mesmo contrato do
+ * inbound) na OUTBOX, na MESMA tx (F70-S25): a transferência e o gatilho commitam juntos.
+ * Antes o gatilho era publicado de dentro da tx por um canal AMQP próprio — um rollback
+ * depois dele deixava um turno disparado sem transferência. O worker de agentes (F2-S11)
+ * resolve o `agent_id` já fixado — o envelope só carrega o gatilho
+ * `{ conversationId, contactId, channelId, provider }`.
  *
  * Idempotência: transferir para o agente já atual é no-op gracioso (`ok:true`, sem
  * mutação e sem enqueue).
@@ -32,21 +35,15 @@
  * CONTRATO DE ARGS (fonte da verdade para a tool Python da S06):
  *   { targetAgentId: string (uuid), reason?: string (1..500) }
  */
-import { Buffer } from 'node:buffer';
 import { z } from 'zod';
 import { and, eq, inArray, or } from 'drizzle-orm';
-import { agentDepartmentsRepo, schema } from '@hm/db';
+import { agentDepartmentsRepo, enqueueOutbox, schema } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import { AI_ELIGIBLE_CONVERSATION_ORIGINS } from '@hm/flow-engine';
 import { createLogger, type Logger } from '@hm/logger';
-import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
+import { agentRunJobOutbox } from '@hm/shared/mq';
 import { CHANNEL_PROVIDERS, type ChannelProvider } from '@hm/shared';
 import type { ToolCallEnvelope, ToolHandler, ToolHandlerResult } from './registry';
-
-/** Fila de gatilho de flow/agente (mesma de `apps/api/src/routes/conversations/agent.ts`). */
-const FLOWS_QUEUE = 'hm.q.flows' as const;
-/** Tipo do envelope de disparo (espelha `INBOUND_FLOW_TYPE` de F1-S26). */
-const INBOUND_FLOW_TYPE = 'flow.run.requested' as const;
 
 /**
  * Args da tool `transfer_to_agent`. ESTE SHAPE É A FONTE DA VERDADE para a tool
@@ -66,51 +63,43 @@ function fail(error: string): ToolHandlerResult {
   return { ok: false, error };
 }
 
-// ── Publisher MQ (canal AMQP lazy, compartilhado por processo) ──────────────────
-let handlePromise: Promise<MqHandle> | null = null;
+/** Provider do canal conhecido pelo worker de agentes? (o gatilho exige). */
+function isChannelProvider(value: string | null): value is ChannelProvider {
+  return value !== null && (CHANNEL_PROVIDERS as readonly string[]).includes(value);
+}
 
-async function getMqHandle(): Promise<MqHandle> {
-  handlePromise ??= connectMq();
-  try {
-    return await handlePromise;
-  } catch (err) {
-    handlePromise = null;
-    throw err;
-  }
+/** Gatilho de re-engaje (o mesmo contrato do inbound). */
+export interface ReengageTrigger {
+  readonly conversationId: string;
+  readonly contactId: string;
+  readonly channelId: string;
+  readonly provider: ChannelProvider;
 }
 
 /**
- * Re-engaja a IA enfileirando `flow.run.requested` em `hm.q.flows` — mesmo contrato
- * do inbound (`{ conversationId, contactId, channelId, provider }`). O worker de
- * agentes resolve o `agent_id` já fixado. Best-effort: a transferência já está
- * persistida (commit da tx RLS) quando o gatilho é publicado.
+ * Re-engaja a IA gravando `flow.run.requested` (`hm.q.flows`) na outbox, na tx `tx` da
+ * transferência — mesmo contrato do inbound. O worker de agentes resolve o `agent_id` já
+ * fixado. Commit grava a transferência e o gatilho; rollback, nenhum.
  */
-async function enqueueReengage(
+export async function enqueueReengage(
+  tx: DbTx,
   workspaceId: string,
-  trigger: {
-    conversationId: string;
-    contactId: string;
-    channelId: string;
-    provider: ChannelProvider;
-  },
+  trigger: ReengageTrigger,
 ): Promise<void> {
-  const { channel } = await getMqHandle();
-  const envelope = makeEnvelope(INBOUND_FLOW_TYPE, workspaceId, {
-    conversationId: trigger.conversationId,
-    contactId: trigger.contactId,
-    channelId: trigger.channelId,
-    provider: trigger.provider,
-  });
-  channel.sendToQueue(FLOWS_QUEUE, Buffer.from(JSON.stringify(envelope)), {
-    persistent: true,
-    contentType: 'application/json',
-  });
-  await Promise.resolve();
+  await enqueueOutbox(
+    tx,
+    agentRunJobOutbox(workspaceId, {
+      conversationId: trigger.conversationId,
+      contactId: trigger.contactId,
+      channelId: trigger.channelId,
+      provider: trigger.provider,
+    }),
+  );
 }
 
 /**
- * Handler da tool `transfer_to_agent`. Override do publisher de re-engaje via
- * `deps.reengage` para testes (sem AMQP real).
+ * Handler da tool `transfer_to_agent`. Override do re-engaje via `deps.reengage` para
+ * testes sem banco.
  */
 export function makeTransferToAgentHandler(deps?: {
   reengage?: typeof enqueueReengage;
@@ -209,19 +198,16 @@ export function makeTransferToAgentHandler(deps?: {
       );
     }
 
-    // Re-engaje só dispara com gatilho válido (contato + provider conhecidos).
+    // Re-engaje só com gatilho válido (contato + provider conhecidos), na MESMA tx.
     const provider = channel?.provider ?? null;
-    const canReengage =
-      conversation.contactId !== null &&
-      provider !== null &&
-      (CHANNEL_PROVIDERS as readonly string[]).includes(provider);
-
-    if (canReengage) {
-      await reengage(env.workspaceId, {
+    const contactId = conversation.contactId;
+    const canReengage = contactId !== null && isChannelProvider(provider);
+    if (contactId !== null && isChannelProvider(provider)) {
+      await reengage(tx, env.workspaceId, {
         conversationId: env.conversationId,
-        contactId: conversation.contactId!,
+        contactId,
         channelId: conversation.channelId,
-        provider: provider as ChannelProvider,
+        provider,
       });
     }
 
@@ -235,5 +221,5 @@ export function makeTransferToAgentHandler(deps?: {
   };
 }
 
-/** Handler default (publisher AMQP real) registrado no registry de produção. */
+/** Handler default (gatilho na outbox) registrado no registry de produção. */
 export const transferToAgent: ToolHandler = makeTransferToAgentHandler();

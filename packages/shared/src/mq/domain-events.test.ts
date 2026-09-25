@@ -128,11 +128,12 @@ describe('conversation.opened — origem (F70-S14)', () => {
       'app_echo',
       'history',
       'campaign',
+      'calendar_reminder',
       'reopened',
     ]);
   });
 
-  it.each(['inbound', 'lead_ad', 'app_echo', 'history', 'campaign'] as const)(
+  it.each(['inbound', 'lead_ad', 'app_echo', 'history', 'campaign', 'calendar_reminder'] as const)(
     'criação por %s: aceita no contrato e eventId <conversa>:opened (o mesmo de qualquer origem)',
     (trigger) => {
       const data = { ...base(), trigger };

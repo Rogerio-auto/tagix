@@ -10,9 +10,16 @@
  * UPDATE condicional atomico (status → `processing` + step_count++); `patchExecution`
  * ganha fencing opcional (`expectStatus`) para o patch final do step so aplicar se o
  * claim ainda for nosso.
+ *
+ * F70-S25: o job do step vai para a OUTBOX na transacao que o motiva — `createExecution`
+ * grava o primeiro, `patchExecution({ enqueueStep })` grava o proximo quando a transicao
+ * aplica. Antes a engine publicava por um port de fila DEPOIS do commit: um processo que
+ * caia entre os dois deixava a execucao `running` para sempre, e os chamadores da engine
+ * default (triggers do inbound, API v1) usavam um sink em memoria que nunca publicava.
  */
 import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
-import { getDb, schema, withWorkspace } from '@hm/db';
+import { enqueueOutbox, getDb, schema, withWorkspace } from '@hm/db';
+import { flowExecutionStepOutbox } from '@hm/shared/mq';
 import type {
   ExecutionPatch,
   FlowClaimResult,
@@ -82,6 +89,8 @@ async function createExecution(input: TriggerFlowDbInput): Promise<{ executionId
       })
       .returning({ id: flowExecutions.id });
     if (!row) throw new Error('falha ao criar flow_execution');
+    // F70-S25: o primeiro step entra com a execucao (commit grava os dois; rollback, nenhum).
+    await enqueueOutbox(tx, flowExecutionStepOutbox(input.workspaceId, row.id));
     return { executionId: row.id };
   });
 }
@@ -231,7 +240,13 @@ async function patchExecution(
       .set(set)
       .where(where)
       .returning({ id: flowExecutions.id });
-    return rows.length > 0;
+    const applied = rows.length > 0;
+    // F70-S25: o proximo step so entra se a transicao aplicou — um patch recusado pelo
+    // fencing (claim perdido, cancel concorrente) nao ressuscita a execucao.
+    if (applied && options?.enqueueStep === true) {
+      await enqueueOutbox(tx, flowExecutionStepOutbox(workspaceId, executionId));
+    }
+    return applied;
   });
 }
 

@@ -130,6 +130,7 @@ const messageSentData = z
  * - `app_echo` — a empresa escreveu primeiro pelo app do WhatsApp/Instagram (eco);
  * - `history`  — a importação do histórico do app trouxe uma conversa nova;
  * - `campaign` — o disparo de uma campanha criou a conversa;
+ * - `calendar_reminder` — o lembrete da agenda ao contato criou a conversa (F70-S25);
  * - `reopened` — conversa resolvida voltou a ficar aberta.
  */
 export const CONVERSATION_OPENED_TRIGGERS = [
@@ -138,6 +139,7 @@ export const CONVERSATION_OPENED_TRIGGERS = [
   'app_echo',
   'history',
   'campaign',
+  'calendar_reminder',
   'reopened',
 ] as const;
 

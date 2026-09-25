@@ -16,6 +16,12 @@
  * Os patches de fim de step sao FENCED (`expectStatus: ['processing']`): um step que
  * perdeu o claim (cancel concorrente / takeover) tem a transicao recusada e NAO re-enfileira.
  *
+ * ## Passo seguinte pela outbox (F70-S25)
+ * O dispatcher nao publica. O job do step nasce na transacao que o motiva, pelo port de
+ * banco: `createExecution` grava o primeiro; `patchExecution(..., { enqueueStep: true })`
+ * grava o proximo quando a transicao aplica (avanco `processing → running`, retomada
+ * `waiting → running`). O flow filho do `go_to_flow` nasce com o proprio job, no handler.
+ *
  * ## Anti-loop (F56-S13 / INF-05)
  * O claim incrementa `step_count`; acima de {@link FLOW_MAX_STEPS} a execucao falha com
  * "loop suspeito" — um flow ciclico deixa de flodar a fila indefinidamente.
@@ -119,7 +125,6 @@ export async function triggerFlow(
     status: 'running',
     nextStepAt: null,
   });
-  await deps.queue.enqueueStep({ workspaceId: input.workspaceId, executionId });
   return { executionId };
 }
 
@@ -348,15 +353,13 @@ async function runStep(deps: FlowEngineDeps, exec: LoadedExecution): Promise<voi
   const target = nextNodeId(exec.edges, node.id, result.edgeHandle);
   await advance(deps, exec, target, mergedVars);
 
-  // Apos completar (ou transicionar) o step do flow atual, enfileira o primeiro step
-  // do flow filho criado pelo handler go_to_flow.  A flag foi removida das vars
-  // persistidas acima — re-entrega do job outbound nao dispara o filho novamente.
+  // O flow filho do go_to_flow nasceu com o proprio primeiro step, na transacao que o
+  // criou (F70-S25). Os marcadores sairam das vars persistidas acima; aqui so o rastro.
   if (gotoFlowExecutionId !== undefined) {
-    deps.logger.log('info', 'dispatcher: enfileirando step do flow filho (go_to_flow)', {
+    deps.logger.log('info', 'dispatcher: flow filho iniciado (go_to_flow)', {
       parentExecutionId: exec.executionId,
       childExecutionId: gotoFlowExecutionId,
     });
-    await deps.queue.enqueueStep({ workspaceId: exec.workspaceId, executionId: gotoFlowExecutionId });
   }
 }
 
@@ -394,19 +397,16 @@ async function advance(
     else logLostClaim(deps, exec, 'completed');
     return;
   }
-  // running→running (avança para o próximo node): NÃO emite (anti-ruído).
+  // running→running (avança para o próximo node): NÃO emite (anti-ruído). O próximo step
+  // entra na transação do patch (F70-S25) e só se ele aplicar: sem o claim, re-enfileirar
+  // duplicaria/ressuscitaria a execução (ex.: cancelada em voo).
   const applied = await deps.db.patchExecution(
     exec.workspaceId,
     exec.executionId,
     { status: 'running', currentNodeId: target, variables },
-    { expectStatus: ['processing'] },
+    { expectStatus: ['processing'], enqueueStep: true },
   );
-  if (!applied) {
-    // Sem o claim, re-enfileirar duplicaria/ressuscitaria a execucao (ex.: cancelada em voo).
-    logLostClaim(deps, exec, 'running');
-    return;
-  }
-  await deps.queue.enqueueStep({ workspaceId: exec.workspaceId, executionId: exec.executionId });
+  if (!applied) logLostClaim(deps, exec, 'running');
 }
 
 async function persistFailure(
@@ -455,16 +455,16 @@ export async function resumeFlowWithResponse(
       response_edge: input.responseType,
     };
     // Fenced em `waiting`: se um step reivindicou a execucao neste meio-tempo (timeout em
-    // voo), o resume nao sobrescreve o estado — evita fork execução dupla (INF-04).
+    // voo), o resume nao sobrescreve o estado — evita fork execução dupla (INF-04). O step
+    // entra na transacao da retomada (F70-S25).
     const applied = await deps.db.patchExecution(
       exec.workspaceId,
       exec.executionId,
       { status: 'running', variables },
-      { expectStatus: ['waiting'] },
+      { expectStatus: ['waiting'], enqueueStep: true },
     );
     if (!applied) continue;
     await emitEvent(deps, execEvent(exec, 'running', null));
-    await deps.queue.enqueueStep({ workspaceId: exec.workspaceId, executionId: exec.executionId });
   }
 }
 

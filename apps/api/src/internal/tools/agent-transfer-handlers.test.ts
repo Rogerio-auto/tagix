@@ -4,7 +4,8 @@
  * `@hm/db` é mockado: `agentDepartmentsRepo.areAgentsInSameDepartment` é controlável
  * por teste, e o `tx` fake (a) responde às leituras de `conversations`/`channels` e
  * (b) captura o update em `conversations`. O publisher de re-engaje é injetado via
- * `makeTransferToAgentHandler({ reengage })` — sem AMQP real. Sem Postgres.
+ * `makeTransferToAgentHandler({ reengage })` — sem banco. Commit/rollback reais do gatilho
+ * na outbox: `agent-transfer.outbox.integration.test.ts`.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EMPTY_TOOL_CONTEXT, type ToolCallEnvelope } from './registry';
@@ -134,7 +135,8 @@ describe('transfer_to_agent — same-dept válido', () => {
     expect(updates[0]!.set['aiPausedReason']).toBeNull();
 
     expect(reengage).toHaveBeenCalledTimes(1);
-    expect(reengage).toHaveBeenCalledWith(WS, {
+    // F70-S25: na MESMA tx da transferência (o gatilho vai para a outbox).
+    expect(reengage).toHaveBeenCalledWith(expect.anything(), WS, {
       conversationId: CONV,
       contactId: 'contact-uuid',
       channelId: 'channel-uuid',
