@@ -2,7 +2,7 @@
 id: F70-S23
 title: Tools de contato com allowlist de escrita, auditoria sem PII e execução com prazo
 phase: F70
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 depends_on: [F70-S15]
@@ -11,6 +11,7 @@ source_docs:
   - tasks/slots/F70/F70-S15-tools-dos-agentes-endurecidas.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T12:33:56Z
+completed_at: 2026-09-25T13:16:38Z
 
 ---
 # F70-S23 — Tools de contato com allowlist de escrita, auditoria sem PII e execução com prazo
