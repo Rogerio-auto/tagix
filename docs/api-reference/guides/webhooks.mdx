@@ -1,6 +1,6 @@
 ---
 title: "Webhooks"
-description: "Receba eventos de domínio no seu endpoint, assinados com HMAC-SHA256, com retry automático."
+description: "Receba eventos de domínio no seu endpoint, assinados com HMAC-SHA256 e timestamp, com retry automático."
 ---
 
 Webhooks entregam eventos de domínio do seu workspace (mensagens, conversas,
@@ -34,7 +34,8 @@ Cada entrega é um `POST application/json` com estes headers:
 | --------------------- | ------------------------------------------------------------- |
 | `Content-Type`        | `application/json`                                            |
 | `x-hm-event`          | Nome do evento (ex.: `message.received`).                     |
-| `x-hm-signature-256`  | Assinatura HMAC-SHA256 do corpo cru: `sha256=<hex>`.          |
+| `x-hm-timestamp`      | Instante da tentativa em segundos Unix (ex.: `1790344991`).   |
+| `x-hm-signature-256`  | `sha256=<hex>` do HMAC-SHA256 de `` `${timestamp}.${corpo}` ``. |
 
 ### Corpo
 
@@ -47,7 +48,8 @@ O corpo é o `data` do evento, envelopado com um bloco `_meta`:
   "text": "Oi, tudo bem?",
   "_meta": {
     "eventId": "0b9a…:received",
-    "event": "message.received"
+    "event": "message.received",
+    "occurredAt": "2026-09-25T14:03:11.402Z"
   }
 }
 ```
@@ -58,10 +60,16 @@ O corpo é o `data` do evento, envelopado com um bloco `_meta`:
 
 ## Verificar a assinatura
 
-Compute o HMAC-SHA256 do **corpo bruto** (bytes exatos recebidos, antes de
-qualquer parse) usando o segredo da assinatura, e compare com o valor do header
-`x-hm-signature-256` no formato `sha256=<hex>`. Use comparação em **tempo
-constante**.
+O conteúdo assinado é o valor exato de `x-hm-timestamp`, um ponto (`.`) e os
+**bytes crus** do corpo (antes de qualquer parse). Para verificar:
+
+1. Leia `x-hm-timestamp` e `x-hm-signature-256`. Se faltar algum ou o formato não
+   bater, recuse.
+2. Recuse se `|agora − timestamp|` passar de **300 segundos (5 minutos)**. É a
+   proteção contra replay: uma entrega capturada não pode ser reenviada depois, e
+   como o timestamp está dentro da assinatura, trocá-lo invalida o HMAC.
+3. Calcule o HMAC-SHA256 de `` `${timestamp}.${corpo}` `` com o segredo da
+   assinatura e compare com o header em **tempo constante**.
 
 <CodeGroup>
 
@@ -69,21 +77,30 @@ constante**.
 import express from "express";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+const TOLERANCE_SECONDS = 300;
 const app = express();
 // IMPORTANTE: precisamos do corpo CRU para o HMAC bater.
 app.use("/webhooks/hm", express.raw({ type: "application/json" }));
 
 app.post("/webhooks/hm", (req, res) => {
+  const timestamp = req.header("x-hm-timestamp") ?? "";
   const signature = req.header("x-hm-signature-256") ?? "";
-  const expected =
+  if (!/^\d{1,12}$/.test(timestamp) || !/^sha256=[0-9a-f]{64}$/.test(signature)) {
+    return res.status(401).end();
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - Number(timestamp)) > TOLERANCE_SECONDS) {
+    return res.status(401).end(); // fora da janela: possível replay
+  }
+  const expected = Buffer.from(
     "sha256=" +
-    createHmac("sha256", process.env.HM_WEBHOOK_SECRET!)
-      .update(req.body) // Buffer cru
-      .digest("hex");
-
-  const a = Buffer.from(signature);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      createHmac("sha256", process.env.HM_WEBHOOK_SECRET!)
+        .update(`${timestamp}.`)
+        .update(req.body) // Buffer cru
+        .digest("hex"),
+  );
+  const received = Buffer.from(signature);
+  if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
     return res.status(401).end();
   }
 
@@ -94,21 +111,27 @@ app.post("/webhooks/hm", (req, res) => {
 ```
 
 ```python Python (Flask)
-import hmac, hashlib, os
-from flask import Flask, request, abort
+import hashlib, hmac, os, re, time
+from flask import Flask, abort, request
 
+TOLERANCE_SECONDS = 300
 app = Flask(__name__)
 
 @app.post("/webhooks/hm")
 def hm_webhook():
+    timestamp = request.headers.get("x-hm-timestamp", "")
+    signature = request.headers.get("x-hm-signature-256", "")
+    if not re.fullmatch(r"\d{1,12}", timestamp) or not re.fullmatch(r"sha256=[0-9a-f]{64}", signature):
+        abort(401)
+    if abs(int(time.time()) - int(timestamp)) > TOLERANCE_SECONDS:
+        abort(401)  # fora da janela: possível replay
     raw = request.get_data()  # corpo cru
     expected = "sha256=" + hmac.new(
         os.environ["HM_WEBHOOK_SECRET"].encode(),
-        raw,
+        timestamp.encode() + b"." + raw,
         hashlib.sha256,
     ).hexdigest()
-    received = request.headers.get("x-hm-signature-256", "")
-    if not hmac.compare_digest(expected, received):
+    if not hmac.compare_digest(expected, signature):
         abort(401)
     event = request.get_json()
     # ... processe event (idempotente por event["_meta"]["eventId"])
@@ -120,8 +143,23 @@ def hm_webhook():
 <Tip>
   Verifique o HMAC sobre os **bytes crus** do corpo. Se você reserializar o JSON
   (reordenando chaves, mudando espaçamento) antes de assinar, a assinatura **não**
-  vai bater.
+  vai bater. Mantenha o relógio do servidor sincronizado (NTP): a janela vale para
+  os dois lados.
 </Tip>
+
+- **Cada tentativa é assinada de novo** com o horário dela: um retry horas depois
+  chega com timestamp novo e passa na janela. A deduplicação segue por
+  `_meta.eventId`, que não muda entre tentativas.
+- **Implementação de referência:** `verifyWebhookSignature`
+  (`packages/shared/src/webhook-signature.ts`). É o mesmo módulo que assina as
+  entregas reais e a entrega de teste, e o verificador usado nos testes.
+
+<Warning>
+  **Mudança de formato (25/09/2026).** Até esta data, `x-hm-signature-256` era o
+  HMAC só do corpo, sem timestamp. A troca foi direta, sem período com os dois
+  formatos: um verificador escrito para o formato antigo recusa todas as entregas
+  (inclusive a de teste) até ser atualizado.
+</Warning>
 
 ## Responder
 
@@ -146,6 +184,19 @@ idempotente: a mesma `eventId` não deve produzir efeito duplicado.
 ## Teste de entrega
 
 Em **Settings → Dev** você pode disparar uma **entrega de teste** síncrona para
-validar URL e assinatura. Ela envia um corpo com `event: "webhook.test"`,
-assinado com o mesmo header `x-hm-signature-256` — útil para validar seu
-verificador antes de assinar eventos reais.
+validar URL e assinatura. Ela tem a mesma anatomia de uma entrega real e é
+assinada pelo mesmo código: headers `x-hm-event: webhook.test`, `x-hm-timestamp`
+e `x-hm-signature-256`, e o corpo abaixo. O verificador que você escreveu para os
+eventos reais deve aceitá-la sem mudança; depois de verificar, trate
+`webhook.test` como evento a ignorar.
+
+```json
+{
+  "message": "Entrega de teste do Highermind.",
+  "_meta": {
+    "eventId": "webhook.test:4c1d…",
+    "event": "webhook.test",
+    "occurredAt": "2026-09-25T14:03:11.402Z"
+  }
+}
+```

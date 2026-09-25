@@ -5,7 +5,8 @@
  * `next_attempt_at <= now()`, faz o POST HTTP assinado com HMAC-SHA256 sobre o
  * segredo (decifrado de `outbound_webhooks.secret_enc`, AES-256-GCM) e atualiza o
  * estado. A assinatura cobre `${x-hm-timestamp}.${corpo}` e é refeita a cada
- * tentativa com o horário dela (F70-S19, ver `./signature`):
+ * tentativa com o horário dela (F70-S19). O signer é o único do sistema, em
+ * `@hm/shared/mq` (F70-S20): a entrega de teste da API assina com a mesma função.
  *   - 2xx → `sent` (sent_at = now()).
  *   - falha (rede/timeout/≥400) → backoff exponencial: incrementa `attempt`, agenda
  *     `next_attempt_at` e marca `retrying`; ao exceder `MAX_ATTEMPTS`, marca `failed`.
@@ -16,9 +17,9 @@
  */
 import { sql } from 'drizzle-orm';
 import { decryptSecret, getDb } from '@hm/db';
+import { signatureHeaders } from '@hm/shared/mq';
 import { checkWebhookUrlSyntax, SsrfBlockedError, ssrfSafeFetch } from '@hm/shared/net';
 import type { Logger } from '@hm/logger';
-import { signatureHeaders } from './signature';
 
 /** Máximo de tentativas antes de `failed` (1 inicial + retries). */
 export const MAX_ATTEMPTS = 6;

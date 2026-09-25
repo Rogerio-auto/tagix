@@ -497,6 +497,39 @@ describe('finalizeOutbound — reconciliação de órfão (F52-S04)', () => {
     expect(persist).toHaveBeenCalledOnce();
   });
 
+  it('sent: o message.sent vai para a porta de persistência, junto do status (F70-S20)', async () => {
+    const { deps, persist } = fakeDeps();
+    const orphan: OrphanStatusStore = {
+      record: vi.fn(async () => undefined),
+      drain: vi.fn(async () => null),
+    };
+    const ws = '4f1e0c1a-7c55-4d8e-9a57-3f1b2b6f0a11';
+    const ids = {
+      conversationId: '0b8c7c0e-3a2d-4e61-8a0e-5f9f0d1c2b3a',
+      messageId: '9a7b6c5d-4e3f-4a1b-8c2d-1e0f9a8b7c6d',
+    };
+    const real = parseOutboundJob({ ...ids, kind: 'text', channelId: 'ch1', chatId: 'c', text: 'oi' });
+
+    await finalizeOutbound(real, { ok: true, externalId: 'wamid.Y' }, ws, deps, orphan);
+
+    const input = persist.mock.calls[0]?.[0] as { outbox?: readonly { eventId: string; routingKey: string }[] };
+    expect(input.outbox).toHaveLength(1);
+    expect(input.outbox?.[0]).toMatchObject({
+      eventId: `${ids.messageId}:sent`,
+      routingKey: 'domain.message.sent',
+    });
+  });
+
+  it('failed não leva evento para a porta', async () => {
+    const { deps, persist } = fakeDeps();
+    const orphan: OrphanStatusStore = {
+      record: vi.fn(async () => undefined),
+      drain: vi.fn(async () => null),
+    };
+    await finalizeOutbound(job, { ok: false, errorCode: 'X', errorMessage: 'y' }, 'ws1', deps, orphan);
+    expect(persist.mock.calls[0]?.[0]).not.toHaveProperty('outbox');
+  });
+
   it('falha definitiva → status failed + failedReason persistido, sem drenar órfão', async () => {
     const { deps, persist, emit } = fakeDeps();
     const orphan: OrphanStatusStore = {

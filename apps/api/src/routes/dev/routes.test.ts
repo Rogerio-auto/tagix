@@ -6,19 +6,29 @@
  *   Cobre show-once do token, listagem sem hash, revogação, CRUD de webhook com segredo
  *   cifrado (não exposto) e log de deliveries.
  *
- * O HMAC do test-delivery é validado por unidade (assinatura determinística); o POST
- * externo real precisa de URL de cliente — marcado e não exercido aqui.
+ * Entrega de teste (F70-S20): o POST real sai para um receptor HTTP local, que a
+ * verifica como um cliente de verdade, com o verificador de referência
+ * (`verifyWebhookSignature`). O receptor escuta em 127.0.0.1, liberado só aqui pela
+ * allowlist do operador (`HM_WEBHOOK_HTTP_ALLOWLIST`), como no e2e dos workers.
  */
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
+import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { eq } from 'drizzle-orm';
 import express from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { closeDb, getDb, schema } from '@hm/db';
+import { closeDb, encryptSecret, getDb, schema } from '@hm/db';
+import {
+  SIGNATURE_HEADER,
+  TIMESTAMP_HEADER,
+  verifyWebhookSignature,
+  WEBHOOK_TOLERANCE_SECONDS,
+} from '@hm/shared/mq';
 import { SESSION_COOKIE } from '../../auth/session';
 import { createDevApiKeysRouter } from './api-keys';
-import { createDevWebhooksRouter, __test } from './webhooks';
+import { buildTestDelivery, createDevWebhooksRouter, WEBHOOK_TEST_EVENT } from './webhooks';
 import { createDevRouter } from './index';
 
 const { workspaces, members, apiKeys, outboundWebhooks, outboundWebhookDeliveries } = schema;
@@ -199,13 +209,135 @@ describe('Webhooks CRUD', () => {
   });
 });
 
-describe('assinatura HMAC do test-delivery', () => {
-  it('signPayload é determinística e prefixada com sha256=', () => {
-    const a = __test.signPayload('s3cr3t-key-aaaaaaaa', '{"x":1}');
-    const b = __test.signPayload('s3cr3t-key-aaaaaaaa', '{"x":1}');
-    const c = __test.signPayload('outro-segredo-bbbbbb', '{"x":1}');
-    expect(a).toMatch(/^sha256=[0-9a-f]{64}$/);
-    expect(a).toBe(b);
-    expect(a).not.toBe(c);
+/** Uma requisição capturada pelo receptor local (bytes crus, como o cliente vê). */
+interface Captured {
+  readonly headers: IncomingHttpHeaders;
+  readonly raw: Buffer;
+}
+
+function header(h: IncomingHttpHeaders, name: string): string | undefined {
+  const v = h[name];
+  return typeof v === 'string' ? v : undefined;
+}
+
+describe('entrega de teste assinada no formato novo (F70-S20)', () => {
+  const SECRET = `ping-secret-${randomUUID()}`;
+  const captured: Captured[] = [];
+  let server: Server;
+  let hookId = '';
+  const previousAllowlist = process.env['HM_WEBHOOK_HTTP_ALLOWLIST'];
+
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        captured.push({ headers: req.headers, raw: Buffer.concat(chunks) });
+        res.statusCode = 200;
+        res.end('ok');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const { port } = server.address() as AddressInfo;
+    process.env['HM_WEBHOOK_HTTP_ALLOWLIST'] = '127.0.0.1';
+
+    // Semeado direto (a rota de criação exige https): o segredo é cifrado como na rota.
+    const [hook] = await getDb()
+      .insert(outboundWebhooks)
+      .values({
+        workspaceId: ws,
+        name: 'Receptor local',
+        url: `http://127.0.0.1:${port}/hook`,
+        events: ['message.sent'],
+        isActive: true,
+        secretEnc: encryptSecret(SECRET),
+      })
+      .returning({ id: outboundWebhooks.id });
+    if (!hook) throw new Error('webhook');
+    hookId = hook.id;
+  });
+
+  afterAll(async () => {
+    if (previousAllowlist === undefined) delete process.env['HM_WEBHOOK_HTTP_ALLOWLIST'];
+    else process.env['HM_WEBHOOK_HTTP_ALLOWLIST'] = previousAllowlist;
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it('o ping chega com a anatomia de uma entrega real e o verificador de referência aceita', async () => {
+    captured.length = 0;
+    const res = await authed('post', `/api/dev/webhooks/${hookId}/test`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ delivered: true, status: 200 });
+
+    expect(captured).toHaveLength(1);
+    const got = captured[0]!;
+    const signature = header(got.headers, SIGNATURE_HEADER);
+    const timestamp = header(got.headers, TIMESTAMP_HEADER);
+    expect(timestamp).toMatch(/^\d{10}$/);
+    expect(signature).toMatch(/^sha256=[0-9a-f]{64}$/);
+    expect(header(got.headers, 'x-hm-event')).toBe(WEBHOOK_TEST_EVENT);
+    expect(header(got.headers, 'content-type')).toBe('application/json');
+
+    const verdict = verifyWebhookSignature({ secret: SECRET, body: got.raw, signature, timestamp });
+    expect(verdict).toEqual({ ok: true, timestamp: Number(timestamp) });
+
+    const body = JSON.parse(got.raw.toString('utf8')) as Record<string, unknown>;
+    expect(body['_meta']).toMatchObject({ event: WEBHOOK_TEST_EVENT });
+    expect(String((body['_meta'] as { eventId: string }).eventId)).toMatch(/^webhook\.test:/);
+    // Nada do workspace sai no corpo do ping.
+    expect(got.raw.toString('utf8')).not.toContain(ws);
+  });
+
+  it('ping com timestamp adulterado é recusado; segredo errado e replay também', async () => {
+    captured.length = 0;
+    await authed('post', `/api/dev/webhooks/${hookId}/test`);
+    const got = captured[0]!;
+    const signature = header(got.headers, SIGNATURE_HEADER);
+    const timestamp = header(got.headers, TIMESTAMP_HEADER);
+    const ts = Number(timestamp);
+
+    // Timestamp trocado (dentro da janela): o HMAC não bate, porque o ts é assinado.
+    expect(
+      verifyWebhookSignature({ secret: SECRET, body: got.raw, signature, timestamp: String(ts - 1) }),
+    ).toEqual({ ok: false, reason: 'mismatch' });
+    // Corpo adulterado.
+    expect(
+      verifyWebhookSignature({
+        secret: SECRET,
+        body: Buffer.concat([got.raw, Buffer.from(' ')]),
+        signature,
+        timestamp,
+      }),
+    ).toEqual({ ok: false, reason: 'mismatch' });
+    // Segredo errado.
+    expect(
+      verifyWebhookSignature({ secret: `${SECRET}x`, body: got.raw, signature, timestamp }),
+    ).toEqual({ ok: false, reason: 'mismatch' });
+    // O mesmo ping reenviado depois da janela.
+    expect(
+      verifyWebhookSignature({
+        secret: SECRET,
+        body: got.raw,
+        signature,
+        timestamp,
+        now: new Date((ts + WEBHOOK_TOLERANCE_SECONDS + 1) * 1000),
+      }),
+    ).toEqual({ ok: false, reason: 'outside_tolerance' });
+  });
+
+  it('buildTestDelivery assina com o instante dado (mesmo signer do dispatcher)', () => {
+    const at = new Date('2026-09-25T12:00:00.000Z');
+    const d = buildTestDelivery(SECRET, at);
+    expect(d.headers[TIMESTAMP_HEADER]).toBe(String(Math.floor(at.getTime() / 1000)));
+    expect(
+      verifyWebhookSignature({
+        secret: SECRET,
+        body: d.body,
+        signature: d.headers[SIGNATURE_HEADER],
+        timestamp: d.headers[TIMESTAMP_HEADER],
+        now: at,
+      }).ok,
+    ).toBe(true);
+    expect(JSON.parse(d.body)).toMatchObject({ _meta: { occurredAt: at.toISOString() } });
   });
 });

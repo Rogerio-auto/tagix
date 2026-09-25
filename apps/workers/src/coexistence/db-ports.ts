@@ -39,6 +39,11 @@
  * MESMA transação que criou a conversa; o relay publica depois do commit, com
  * confirms. `created` só é verdadeiro para quem inseriu a linha, então reentrega e o
  * perdedor de uma corrida não regravam; rollback não grava nada.
+ *
+ * Mídia (F70-S20): o job de download (`hm.q.media`) de cada mensagem com mídia que a
+ * transação INSERIU também entra na outbox, na mesma transação. Antes era publicado
+ * depois do commit: uma queda entre os dois deixava a mensagem `media_status='pending'`
+ * para sempre. Dedup de mensagem não reenfileira.
  */
 import { Buffer } from 'node:buffer';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
@@ -49,8 +54,11 @@ import {
   domainEvents,
   domainEventsOutbox,
   makeEnvelope,
+  queueJobOutbox,
+  QUEUES,
   type ConversationOpenedTrigger,
   type MqHandle,
+  type OutboxMessage,
 } from '@hm/shared/mq';
 import type {
   ConversationAiModeChangedPayload,
@@ -74,7 +82,7 @@ import type {
   CoexistencePersistencePort,
   CoexistenceSocketPort,
 } from './ports';
-import type { InboundMediaJob, MediaEnqueuePort, RoutingHints } from '../inbound/ports';
+import type { InboundMediaJob, RoutingHints } from '../inbound/ports';
 import { applyOriginTag } from '../inbound/origin';
 import type { InstagramEchoInput } from './instagram-echo';
 
@@ -349,12 +357,6 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
      */
     private readonly socket: CoexistenceSocketPort = new NoopCoexistenceSocketEmit(),
     /**
-     * Enfileiramento de mídia (reusa `hm.q.media` do inbound). Default `undefined`
-     * (testes/sem broker) → não enfileira; o composition root injeta `MqMediaEnqueue`
-     * quando há canal AMQP. A persistência da mensagem nunca depende disto.
-     */
-    private readonly media?: MediaEnqueuePort,
-    /**
      * IDs dos apps Meta que são o próprio Leadium (env `META_APP_ID`). Eco do IG
      * com `app_id` nesta lista é mensagem que nós mesmos enviamos pela API — não
      * é resposta humana e é ignorado. Vazio = sem filtro (só o dedup por mid).
@@ -364,20 +366,20 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
 
   /**
    * Transação RLS que, antes do commit, grava na outbox o `conversation.opened` de
-   * cada conversa que ELA abriu (F70-S16). F70-S14: `trigger` diz a origem real
-   * (`app_echo` = o dono escreveu primeiro pelo app; `history` = a importação do
-   * histórico trouxe a conversa).
+   * cada conversa que ELA abriu (F70-S16) e, depois, o job de download de cada mídia
+   * que ELA inseriu (F70-S20). F70-S14: `trigger` diz a origem real (`app_echo` = o
+   * dono escreveu primeiro pelo app; `history` = a importação do histórico trouxe a
+   * conversa).
    */
-  private inTxAnnouncingOpened<T>(
+  private inTxWithOutbox<T extends TxOutboxEffects>(
     workspaceId: string,
     channelId: string,
     trigger: Extract<ConversationOpenedTrigger, 'app_echo' | 'history'>,
     fn: (tx: DbTx) => Promise<T>,
-    opened: (result: T) => readonly OpenedConversation[],
   ): Promise<T> {
     return withWorkspace(workspaceId, async (tx) => {
       const result = await fn(tx);
-      const drafts = opened(result).map((conv) =>
+      const drafts = result.opened.map((conv) =>
         domainEvents.conversationOpened(workspaceId, {
           conversationId: conv.conversationId,
           contactId: conv.contactId,
@@ -385,7 +387,10 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
           trigger,
         }),
       );
-      await enqueueOutbox(tx, domainEventsOutbox(drafts));
+      await enqueueOutbox(tx, [
+        ...domainEventsOutbox(drafts),
+        ...result.mediaJobs.map((job) => mediaJobOutbox(workspaceId, job)),
+      ]);
       return result;
     });
   }
@@ -465,7 +470,7 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
   private async persistAppEcho(input: AppEchoInput): Promise<CoexistenceEchoResult> {
     const { channelId, workspaceId } = input.channel;
 
-    const result = await this.inTxAnnouncingOpened(
+    const result = await this.inTxWithOutbox(
       workspaceId,
       channelId,
       'app_echo',
@@ -520,8 +525,23 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
             aiPaused: false,
             startedByApp: false,
             opened,
+            mediaJobs: [],
           };
         }
+
+        // Download da mídia (F70-S20): na outbox desta transação, só quando inseriu de
+        // fato (o media-worker casa por externalId, e a linha já existe no commit).
+        const mediaJobs: InboundMediaJob[] =
+          input.mediaRef !== undefined
+            ? [
+                {
+                  provider: input.provider,
+                  externalId: input.externalId,
+                  mediaRef: input.mediaRef,
+                  routing: input.routing,
+                },
+              ]
+            : [];
 
         // Estado atual sob lock de linha: serializa ecos concorrentes da mesma
         // conversa (e a rota de envio da UI), para a transição on→paused acontecer
@@ -573,9 +593,9 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
           aiPaused: plan.paused,
           startedByApp,
           opened,
+          mediaJobs,
         };
       },
-      (r) => r.opened,
     );
 
     // Pós-persist (fora da transação): empurra o echo ao vivo. Só quando inseriu
@@ -604,17 +624,6 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
       await this.socket.emitAiModeChanged(workspaceId, result.conversationId, 'paused');
     }
 
-    // Enfileira o download DEPOIS de persistir (a linha precisa existir antes — o
-    // media-worker casa por externalId). Só quando inseriu de fato + há mídia.
-    if (result.messageId !== undefined && input.mediaRef !== undefined) {
-      await this.media?.enqueue({
-        provider: input.provider,
-        externalId: input.externalId,
-        mediaRef: input.mediaRef,
-        routing: input.routing,
-      });
-    }
-
     return {
       resolved: true,
       inserted: result.messageId !== undefined,
@@ -633,7 +642,7 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
     }
     const { channelId, workspaceId } = channel;
 
-    const outcome = await this.inTxAnnouncingOpened(
+    const outcome = await this.inTxWithOutbox(
       workspaceId,
       channelId,
       'history',
@@ -641,9 +650,9 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
         // Conversas que receberam pelo menos uma mensagem nova (para sinalizar a
         // ChatList uma vez por conversa, fora da transação — sem floodar threads).
         const touchedConversations = new Set<string>();
-        // F70-S13: conversas criadas por este lote (publicadas após o commit).
+        // F70-S13: conversas criadas por este lote (na outbox desta transação).
         const openedConversations: OpenedConversation[] = [];
-        // Jobs de download de mídia das mensagens inseridas (publicados após o commit).
+        // F70-S20: download da mídia das mensagens inseridas (na outbox desta transação).
         const mediaJobs: InboundMediaJob[] = [];
         // 1) Upsert idempotente de contatos por (workspace, phone=waId). Insert em
         //    lote com onConflictDoNothing → reprocesso não duplica nem N+1.
@@ -728,7 +737,7 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
           messagesInserted += inserted.length;
 
           // Mídia: enfileira download só p/ as mensagens efetivamente inseridas (dedup
-          // não reenfileira). Coletado aqui; publicado após o commit (igual ao echo).
+          // não reenfileira). Coletado aqui; vai para a outbox antes do commit.
           for (const ins of inserted) {
             if (ins.externalId === null) continue;
             const mediaRef = mediaByExternal.get(ins.externalId);
@@ -766,22 +775,15 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
           messagesDeduped: messagesTotal - messagesInserted,
           touchedConversations: [...touchedConversations],
           mediaJobs,
-          openedConversations,
+          opened: openedConversations,
         };
       },
-      (r) => r.openedConversations,
     );
 
     // Pós-persist: um sinal por conversa afetada → a ChatList revalida a projeção
     // (last message/contadores) sem reordenar/floodar a thread com timestamps antigos.
     for (const conversationId of outcome.touchedConversations) {
       await this.socket.emitConversationUpdated(workspaceId, conversationId);
-    }
-
-    // Download das mídias históricas (best-effort). Media ids antigos do Meta podem
-    // já ter expirado → o media-worker marca 'failed' graciosamente (sem derrubar).
-    for (const job of outcome.mediaJobs) {
-      await this.media?.enqueue(job);
     }
 
     return {
@@ -903,6 +905,38 @@ async function ensureContact(
 interface OpenedConversation {
   readonly conversationId: string;
   readonly contactId: string;
+}
+
+/** O que uma transação da coexistência deixa na outbox junto com o dado. */
+interface TxOutboxEffects {
+  readonly opened: readonly OpenedConversation[];
+  readonly mediaJobs: readonly InboundMediaJob[];
+}
+
+/**
+ * Tipo do envelope do job de mídia. MESMO valor de `INBOUND_MEDIA_TYPE`
+ * (`inbound/mq-ports.ts`), repetido para não importar o grafo do worker inbound (que
+ * importa este módulo); o teste da coexistência trava a igualdade.
+ */
+export const COEXISTENCE_MEDIA_JOB_TYPE = 'inbound.media.requested' as const;
+
+/**
+ * Job de download de mídia -> mensagem da outbox (`hm.q.media`, exchange padrão).
+ * Payload no shape de `parseMediaJob` (`media/job.ts`). O envelope carrega o
+ * workspace real: a RLS `outbox_tenant_insert` exige, e o media-worker não o usa
+ * (casa pela `externalId`). Media ids antigos do histórico podem ter expirado: o
+ * media-worker marca `failed` sem derrubar.
+ */
+export function mediaJobOutbox(workspaceId: string, job: InboundMediaJob): OutboxMessage {
+  return queueJobOutbox(
+    QUEUES.media,
+    makeEnvelope(COEXISTENCE_MEDIA_JOB_TYPE, workspaceId, {
+      provider: job.provider,
+      externalId: job.externalId,
+      mediaRef: job.mediaRef,
+      routing: job.routing,
+    }),
+  );
 }
 
 /** Conversa garantida + se ESTA chamada a criou (base da regra de prospecção). */

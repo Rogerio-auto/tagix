@@ -45,6 +45,14 @@ export class MqOutboundPersistence implements OutboundPersistencePort {
   constructor(private readonly channel: MqChannel) {}
 
   async persist(input: PersistOutboundInput): Promise<void> {
+    // F70-S20: o `message.sent` tem de commitar junto do status. Um publish não tem
+    // transação com o banco, então esta porta recusa em vez de perder o evento.
+    // Produção usa `DbOutboundPersistence`.
+    if (input.outbox !== undefined && input.outbox.length > 0) {
+      throw new Error(
+        'MqOutboundPersistence não grava a outbox na transação do status; use DbOutboundPersistence.',
+      );
+    }
     const envelope = makeEnvelope(OUTBOUND_PERSIST_TYPE, input.workspaceId, {
       conversationId: input.conversationId,
       messageId: input.messageId,

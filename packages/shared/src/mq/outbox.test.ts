@@ -92,6 +92,16 @@ describe('queueJobOutbox', () => {
     });
   });
 
+  it('aceita a fila de mídia (coexistência, F70-S20)', () => {
+    const env = makeEnvelope('inbound.media.requested', ws, { externalId: 'wamid.1' });
+    expect(queueJobOutbox(QUEUES.media, env)).toMatchObject({
+      kind: 'job',
+      eventId: env.id,
+      exchange: '',
+      routingKey: QUEUES.media,
+    });
+  });
+
   it('envelope inválido lança (defeito do produtor, dentro da transação)', () => {
     const env = { ...makeEnvelope('outbound.request', ws, {}), workspaceId: 'x' };
     expect(() => queueJobOutbox(QUEUES.outbound, env)).toThrow();

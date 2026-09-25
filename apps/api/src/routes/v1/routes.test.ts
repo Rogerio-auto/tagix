@@ -1,18 +1,18 @@
 /**
  * F9-S03 — API pública v1. Integração real contra Postgres dev (RLS por chave) e o
- * publisher outbound (RabbitMQ dev). Cobre: gating por api-key/scope, isolamento de
+ * RabbitMQ dev (trigger_flow). Cobre: gating por api-key/scope, isolamento de
  * tenant, send_message/template persistindo `pending`, upsert_contact (create+update),
  * trigger_flow e conversations list/get. A spec OpenAPI é validada (3.1 + 6 paths).
  *
  * O envio real ao provider é do worker outbound (fora deste slot) — aqui validamos a
- * borda: a mensagem vira `pending` e o job é publicado (broker UP).
+ * borda: a mensagem vira `pending`. O job vai pela outbox na mesma transação
+ * (F70-S20), coberto em `outbox.integration.test.ts`.
  */
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb, schema } from '@hm/db';
 import { assertTopology, connectMq } from '@hm/shared/mq';
-import { closeOutboundPublisher } from '../../mq/outbound-publisher';
 import { closeApiKeyRateLimiter } from '../../middlewares/api-key';
 import { generateApiKey } from '../../services/api-keys';
 import { buildOpenApiDocument } from './openapi';
@@ -67,8 +67,8 @@ async function seedKey(workspaceId: string, scopes: string[]): Promise<string> {
 }
 
 beforeAll(async () => {
-  // Garante o exchange/queues `hm.events`/`hm.q.outbound` (o worker outbound também
-  // asserta na produção) para que o publisher da borda tenha onde publicar.
+  // Garante o exchange/queues `hm.events` (os workers também assertam na produção)
+  // para o trigger_flow ter onde publicar.
   const mq = await connectMq();
   await assertTopology(mq.channel);
   await mq.connection.close();
@@ -171,7 +171,6 @@ afterAll(async () => {
   const db = getDb();
   if (wsA) await db.delete(workspaces).where(eq(workspaces.id, wsA));
   if (wsB) await db.delete(workspaces).where(eq(workspaces.id, wsB));
-  await closeOutboundPublisher();
   await closeApiKeyRateLimiter();
   await closeDb();
 });

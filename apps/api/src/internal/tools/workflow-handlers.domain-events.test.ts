@@ -6,7 +6,9 @@
  *  - `transfer_to_human` grava `conversation.handoff` na outbox, na transação da
  *    ação, com o payload mínimo (sem o `reason` escrito pelo modelo) e ocorrência =
  *    execução.
- *  - `mark_resolved` grava `conversation.resolved` (autor = agente).
+ *  - `mark_resolved` grava `conversation.resolved` (autor = agente), com ocorrência =
+ *    execução: repetir a tool na mesma execução grava UM evento (F70-S20); outra
+ *    execução grava outro.
  *  - tool que falha (args inválidos) não grava nada.
  *  - rollback forçado depois da ação e do enqueue, antes do COMMIT: nem a ação nem o
  *    evento ficam (F70-S17).
@@ -282,16 +284,35 @@ describe('F70-S09/S17 — eventos de domínio das tools da IA na outbox', () => 
       event: 'conversation.resolved',
       routingKey: 'domain.conversation.resolved',
     });
-    // Ocorrência própria (uuid) — o handler não a amarra à execução.
-    expect(rows[0]?.eventId).toMatch(
-      new RegExp(`^${conv}:resolved:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
-    );
+    // F70-S20: ocorrência = execução, como o handoff.
+    expect(rows[0]?.eventId).toBe(`${conv}:resolved:${executionId}`);
     expect(rows[0]?.data).toEqual({
       conversationId: conv,
       resolvedBy: 'agent',
       memberId: null,
       agentId: AGENT_ID,
     });
+  });
+
+  maybe('mark_resolved repetido na mesma execução → um evento só (F70-S20)', async () => {
+    const conv = await freshConversation();
+    const executionId = await freshExecution(conv);
+    const first = await callTool('mark_resolved', conv, executionId, { resolution: 'ok' });
+    const again = await callTool('mark_resolved', conv, executionId, { resolution: 'de novo' });
+    expect(first.status).toBe(200);
+    expect(again.status).toBe(200);
+
+    const rows = await outboxOf(conv);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.eventId).toBe(`${conv}:resolved:${executionId}`);
+
+    // Outra execução que resolve a mesma conversa é outra ocorrência.
+    const next = await freshExecution(conv);
+    expect((await callTool('mark_resolved', conv, next, { resolution: 'ok' })).status).toBe(200);
+    expect((await outboxOf(conv)).map((r) => r.eventId)).toEqual([
+      `${conv}:resolved:${executionId}`,
+      `${conv}:resolved:${next}`,
+    ]);
   });
 
   maybe('tool que falha não grava evento', async () => {

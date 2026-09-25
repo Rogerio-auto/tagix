@@ -1,9 +1,13 @@
 /**
  * F70-S09 — webhooks de saída de ponta a ponta, com a infra real de dev:
  *
- *   emitDomainEvent (produtor real) → RabbitMQ hm.events (rk domain.<evento>)
+ *   enqueueOutbox na transação RLS (caminho real do produtor, F70-S16/S20)
+ *     → relay da outbox (confirms) → RabbitMQ hm.events (rk domain.<evento>)
  *     → hm.q.webhooks → consumer (startWebhookFanoutWorker) → fanoutEvent (Postgres)
  *     → dispatchPending (ssrfSafeFetch real) → receptor HTTP local
+ *
+ * O relay do teste drena SÓ o workspace do teste (`workspaceId`), para não levar ao
+ * broker as linhas de outros testes no mesmo banco.
  *
  * O receptor verifica a assinatura como um cliente de verdade, com o verificador de
  * referência (`verifyWebhookSignature`, F70-S19): HMAC-SHA256 de
@@ -11,7 +15,8 @@
  * comparação em tempo constante. Cobre:
  *   - entrega de evento real assinado (message.received, conversation.handoff);
  *   - retentativa HTTP: 500 → `retrying` → 200 → `sent`, mesma assinatura;
- *   - dedup: o mesmo evento publicado duas vezes vira UMA entrega;
+ *   - dedup: o mesmo evento gravado de novo não duplica na outbox, e a republicação
+ *     pelo relay (queda antes de marcar `sent`) vira UMA entrega;
  *   - retentativa na fila: fan-out que falha volta pela wait-queue e entrega;
  *   - replay: a entrega capturada é recusada fora da janela (F70-S19);
  *   - contrato: evento com `data` fora do contrato vai para a DLQ, sem entrega (F70-S19).
@@ -51,16 +56,15 @@ beforeAll(() => {
 
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { closeDb, encryptSecret, getDb, schema } from '@hm/db';
+import { closeDb, encryptSecret, enqueueOutbox, getDb, schema, withWorkspace } from '@hm/db';
 import { createLogger } from '@hm/logger';
 import {
   assertTopology,
-  closeDomainEventEmitter,
   connectMq,
   DLQ_QUEUE,
+  domainEventOutbox,
   domainEventRoutingKey,
   domainEvents,
-  emitDomainEvent,
   EXCHANGES,
   makeEnvelope,
   type DomainEventDraft,
@@ -76,6 +80,7 @@ import {
   type WebhookEvent,
   type WebhookFanoutWorkerHandle,
 } from './index';
+import { OutboxRelay } from '../outbox/relay';
 
 const { workspaces, outboundWebhooks, outboundWebhookDeliveries } = schema;
 const logger = createLogger('error');
@@ -146,6 +151,16 @@ function startReceiver(): Promise<void> {
 let ws = '';
 let webhookId = '';
 let worker: WebhookFanoutWorkerHandle | null = null;
+let relay: OutboxRelay | null = null;
+
+/**
+ * Publica como um produtor de verdade: grava o evento na outbox dentro de uma
+ * transação RLS do workspace; o relay leva ao broker depois do COMMIT. Devolve
+ * quantas linhas entraram (0 = o `event_id` já estava lá).
+ */
+function publishViaOutbox(draft: DomainEventDraft): Promise<number> {
+  return withWorkspace(ws, (tx) => enqueueOutbox(tx, domainEventOutbox(draft)));
+}
 /** eventIds cujo 1º fan-out deve falhar (exercita o retry da fila). */
 const failOnceEventIds = new Set<string>();
 let fanoutCalls = 0;
@@ -223,11 +238,14 @@ beforeAll(async () => {
       return fanoutEvent(evt);
     },
   });
+
+  relay = new OutboxRelay({ logger, workspaceId: ws, cleanup: false, pollIntervalMs: 100 });
+  await relay.start();
 });
 
 afterAll(async () => {
+  await relay?.stop();
   await worker?.stop();
-  await closeDomainEventEmitter();
   if (ws) await getDb().delete(workspaces).where(eq(workspaces.id, ws));
   await closeDb();
   await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -250,7 +268,7 @@ describe('webhooks de saída — ponta a ponta (F70-S09)', () => {
     received.length = 0;
     plannedStatuses.push(500); // 1ª tentativa falha no cliente
 
-    expect(await emitDomainEvent(draft)).toBe(true);
+    expect(await publishViaOutbox(draft)).toBe(1);
 
     const rows = await waitFor(deliveriesOf(draft.eventId), (r) => r.length === 1, 10_000);
     expect(rows).toHaveLength(1);
@@ -293,13 +311,21 @@ describe('webhooks de saída — ponta a ponta (F70-S09)', () => {
     const draft = messageReceived();
     received.length = 0;
 
-    expect(await emitDomainEvent(draft)).toBe(true);
-    expect(await emitDomainEvent(draft)).toBe(true); // republicação (retry do produtor)
-
-    // Espera o consumer processar as duas cópias: a 2ª é deduplicada.
     const callsBefore = fanoutCalls;
+    expect(await publishViaOutbox(draft)).toBe(1);
+    // Retentativa do produtor: o `event_id` já está na outbox (DO NOTHING).
+    expect(await publishViaOutbox(draft)).toBe(0);
+    await waitFor(deliveriesOf(draft.eventId), (r) => r.length >= 1, 10_000);
+
+    // Republicação do relay: ele publicou e caiu antes de marcar `sent`. A linha
+    // volta a `pending` e sai de novo, com o mesmo envelope.
+    await getDb().execute(sql`
+      UPDATE outbox SET status = 'pending', sent_at = NULL, available_at = now()
+      WHERE event_id = ${draft.eventId}
+    `);
     await waitFor(async () => fanoutCalls, (n) => n >= callsBefore + 2, 10_000);
-    const rows = await waitFor(deliveriesOf(draft.eventId), (r) => r.length >= 1, 10_000);
+    expect(fanoutCalls).toBeGreaterThanOrEqual(callsBefore + 2);
+    const rows = await deliveriesOf(draft.eventId)();
     expect(rows).toHaveLength(1);
 
     const tick = await dispatchPending({ logger, workspaceId: ws });
@@ -333,7 +359,7 @@ describe('webhooks de saída — ponta a ponta (F70-S09)', () => {
     );
     received.length = 0;
 
-    expect(await emitDomainEvent(draft)).toBe(true);
+    expect(await publishViaOutbox(draft)).toBe(1);
     await waitFor(deliveriesOf(draft.eventId), (r) => r.length === 1, 10_000);
     await dispatchPending({ logger, workspaceId: ws });
 
@@ -357,7 +383,7 @@ describe('webhooks de saída — ponta a ponta (F70-S09)', () => {
       currency: 'BRL',
     });
     const callsBefore = fanoutCalls;
-    expect(await emitDomainEvent(draft)).toBe(true);
+    expect(await publishViaOutbox(draft)).toBe(1);
     await waitFor(async () => fanoutCalls, (n) => n > callsBefore, 10_000);
     expect(await deliveriesOf(draft.eventId)()).toHaveLength(0);
   });
@@ -374,7 +400,7 @@ describe('webhooks de saída — ponta a ponta (F70-S09)', () => {
     failOnceEventIds.add(draft.eventId);
     received.length = 0;
 
-    expect(await emitDomainEvent(draft)).toBe(true);
+    expect(await publishViaOutbox(draft)).toBe(1);
     // 1ª tentativa lança → wait-queue de 5s → volta à hm.q.webhooks → grava.
     const rows = await waitFor(deliveriesOf(draft.eventId), (r) => r.length === 1, 20_000);
     expect(failOnceEventIds.has(draft.eventId)).toBe(false); // a falha aconteceu
@@ -390,7 +416,7 @@ describe('webhooks de saída — ponta a ponta (F70-S09)', () => {
     const draft = messageReceived();
     received.length = 0;
 
-    expect(await emitDomainEvent(draft)).toBe(true);
+    expect(await publishViaOutbox(draft)).toBe(1);
     await waitFor(deliveriesOf(draft.eventId), (r) => r.length === 1, 10_000);
     await dispatchPending({ logger, workspaceId: ws });
     expect(received).toHaveLength(1);

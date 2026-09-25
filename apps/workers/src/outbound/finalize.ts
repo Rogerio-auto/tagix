@@ -8,16 +8,16 @@
  *
  * `typing_indicator` não persiste status de mensagem (não é mensagem).
  *
- * `message.sent` (F70-S09) vai pela OUTBOX (F70-S16). O status é gravado pela porta de
- * persistência, numa transação que este módulo não enxerga; o evento entra logo
- * depois, numa transação própria, e o relay publica com confirms. Se a gravação do
- * evento falhar, o erro SOBE: o job volta pela fila, a guarda de idempotência vê o
- * external_id já gravado (`alreadySent`, sem reenviar ao provider) e o finalize roda
+ * `message.sent` (F70-S09) vai pela OUTBOX (F70-S16), ATÔMICO com o status desde a
+ * F70-S20: o evento segue para a porta de persistência junto do status `sent`
+ * (`PersistOutboundInput.outbox`) e é gravado na mesma transação. Status sem evento,
+ * ou evento sem status, não existem. Se a transação falhar, o erro SOBE e o job
+ * volta pela fila; num reprocessamento em que o `external_id` já está gravado, a
+ * guarda de idempotência (`alreadySent`) não reenvia ao provider e o finalize roda
  * de novo — o eventId `<messageId>:sent` deduplica na outbox e no fan-out.
  */
 import type { ViewStatus } from '@hm/shared';
 import type { SendResult } from '@hm/channels';
-import { enqueueOutboxStandalone } from '@hm/db';
 import { domainEvents, domainEventsOutbox, type OutboxMessage } from '@hm/shared/mq';
 import {
   STATUS_RANK,
@@ -51,7 +51,24 @@ function outboundJobContent(job: OutboundJob): string | null {
 }
 
 /**
- * Persiste o estado da mensagem e emite o socket de mudança de status.
+ * `message.sent` para os webhooks de saída (F70-S09), pronto para a outbox. Só no
+ * envio inicial (`sent`); delivered/read não são eventos de domínio.
+ */
+function sentEventOutbox(job: OutboundJob, workspaceId: string): OutboxMessage[] {
+  if (job.kind === 'typing_indicator') return [];
+  return domainEventsOutbox([
+    domainEvents.messageSent(workspaceId, {
+      conversationId: job.conversationId,
+      messageId: job.messageId,
+      type: job.kind,
+      text: outboundJobContent(job),
+    }),
+  ]);
+}
+
+/**
+ * Persiste o estado da mensagem (com o `message.sent` na mesma transação) e emite o
+ * socket de mudança de status.
  * Best-effort no socket: uma falha de emissão não derruba o ack do job (o
  * status já foi persistido e a UI reidrata via REST).
  */
@@ -61,7 +78,6 @@ export async function finalizeOutbound(
   workspaceId: string,
   deps: OutboundDeps,
   orphanStore: OrphanStatusStore = defaultOrphanStatusStore,
-  writeOutbox: (messages: readonly OutboxMessage[]) => Promise<number> = enqueueOutboxStandalone,
 ): Promise<void> {
   if (job.kind === 'typing_indicator') return;
 
@@ -75,6 +91,8 @@ export async function finalizeOutbound(
     ...(result.ok ? { externalId: result.externalId } : {}),
     ...(!result.ok ? { errorCode: result.errorCode, errorMessage: result.errorMessage } : {}),
     job,
+    // F70-S09/S20: `message.sent` aos webhooks de saída, na transação do status.
+    ...(status === 'sent' ? { outbox: sentEventOutbox(job, workspaceId) } : {}),
   });
 
   await deps.socket.emitStatusChanged({
@@ -96,17 +114,6 @@ export async function finalizeOutbound(
       type: job.kind,
       content: outboundJobContent(job),
     });
-    // F70-S09/S16: `message.sent` aos webhooks de saída, pela outbox.
-    await writeOutbox(
-      domainEventsOutbox([
-        domainEvents.messageSent(workspaceId, {
-          conversationId: job.conversationId,
-          messageId: job.messageId,
-          type: job.kind,
-          text: outboundJobContent(job),
-        }),
-      ]),
-    );
   }
 
   // F52-S04 — reconciliação de callback tardio: agora que o external_id está

@@ -15,6 +15,10 @@
  * da transação logo depois da conversa nascer — o spy delega ao real fora do teste
  * de falha.
  *
+ * F70-S20: o job de download da mídia (`hm.q.media`) também é uma linha da outbox na
+ * transação que inseriu a mensagem: commit deixa um job, reentrega não regrava,
+ * rollback não deixa nada.
+ *
  * Pula sem `DATABASE_URL`.
  */
 import { randomUUID } from 'node:crypto';
@@ -23,7 +27,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeDb, getDb, schema } from '@hm/db';
 import { createLogger } from '@hm/logger';
 import type * as OriginModule from '../inbound/origin';
-import { outboxEventsOf, type OutboxTestEvent } from '../outbox/testing';
+import { outboxEventsOf, outboxRowsOf, type OutboxTestEvent } from '../outbox/testing';
 
 const origin = vi.hoisted(() => ({ falhar: false }));
 vi.mock('../inbound/origin', async (importOriginal) => {
@@ -55,7 +59,6 @@ describe.skipIf(!url)('F70-S13 coexistência abre conversa → conversation.open
 
   const persistence = new DbCoexistencePersistence(
     createLogger('error'),
-    undefined,
     undefined,
     undefined,
     new Set(),
@@ -250,5 +253,93 @@ describe.skipIf(!url)('F70-S13 coexistência abre conversa → conversation.open
 
     expect((await publicados()).length).toBe(antes);
     expect(await conversaDe(c)).toHaveLength(0);
+  });
+
+  // ─── F70-S20: download de mídia pela outbox ────────────────────────────────
+
+  /** Jobs de mídia da outbox do workspace (payload do envelope), na ordem. */
+  const jobsDeMidia = async () =>
+    (await outboxRowsOf(workspaceId))
+      .filter((r) => r.kind === 'job' && r.routingKey === 'hm.q.media')
+      .map((r) => ({ row: r, payload: r.envelope.payload as Record<string, unknown> }));
+
+  const ecoAudio = (to: string, externalId: string) => ({
+    ...eco(to, externalId),
+    type: 'audio',
+    text: undefined,
+    raw: { type: 'audio', audio: { id: `MEDIA-${externalId}`, mime_type: 'audio/ogg' } },
+  });
+
+  it('eco com mídia → um job em hm.q.media na transação; reentrega não regrava', async () => {
+    const remoteId = `55119${digitos}6`;
+    const externalId = `wamid.f70s20.${sfx}.1`;
+    const antes = (await jobsDeMidia()).length;
+
+    const r = await persistence.persistEcho(ecoAudio(remoteId, externalId));
+    expect(r).toMatchObject({ resolved: true, inserted: true });
+
+    const novos = (await jobsDeMidia()).slice(antes);
+    expect(novos).toHaveLength(1);
+    expect(novos[0]?.row).toMatchObject({ exchange: '', routingKey: 'hm.q.media', status: 'pending' });
+    expect(novos[0]?.row.envelope).toMatchObject({ type: 'inbound.media.requested', workspaceId });
+    expect(novos[0]?.payload).toEqual({
+      provider: 'meta_whatsapp',
+      externalId,
+      mediaRef: { refOrUrl: `MEDIA-${externalId}`, mimeType: 'audio/ogg' },
+      routing: { phoneNumberId },
+    });
+    const [msg] = await getDb()
+      .select({ mediaStatus: schema.messages.mediaStatus })
+      .from(schema.messages)
+      .where(eq(schema.messages.externalId, externalId));
+    expect(msg?.mediaStatus).toBe('pending');
+
+    await persistence.persistEcho(ecoAudio(remoteId, externalId));
+    expect((await jobsDeMidia()).length).toBe(antes + 1);
+  });
+
+  it('eco com mídia e rollback → nem mensagem nem job', async () => {
+    const remoteId = `55119${digitos}7`;
+    const externalId = `wamid.f70s20.${sfx}.2`;
+    const antes = (await jobsDeMidia()).length;
+    origin.falhar = true;
+
+    await expect(persistence.persistEcho(ecoAudio(remoteId, externalId))).rejects.toThrow(
+      'falha simulada',
+    );
+
+    expect((await jobsDeMidia()).length).toBe(antes);
+    const msgs = await getDb()
+      .select({ id: schema.messages.id })
+      .from(schema.messages)
+      .where(eq(schema.messages.externalId, externalId));
+    expect(msgs).toHaveLength(0);
+  });
+
+  it('histórico com mídia → um job por mensagem inserida; reprocesso não regrava', async () => {
+    const d = `55119${digitos}8`;
+    const lote = {
+      phoneNumberId,
+      contacts: [{ waId: d, raw: {} }],
+      messages: [
+        {
+          externalId: `h.f70s20.${sfx}.img`,
+          from: d,
+          type: 'image',
+          fromMe: false,
+          raw: { type: 'image', image: { id: `IMG-${sfx}`, mime_type: 'image/jpeg' } },
+        },
+        { externalId: `h.f70s20.${sfx}.txt`, from: d, type: 'text', text: 'oi', fromMe: false, raw: {} },
+      ],
+      raw: {},
+    };
+    const antes = (await jobsDeMidia()).length;
+
+    await persistence.importHistory(lote);
+    const novos = (await jobsDeMidia()).slice(antes);
+    expect(novos.map((j) => j.payload['externalId'])).toEqual([`h.f70s20.${sfx}.img`]);
+
+    await persistence.importHistory(lote);
+    expect((await jobsDeMidia()).length).toBe(antes + 1);
   });
 });

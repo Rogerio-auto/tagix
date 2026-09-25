@@ -22,6 +22,8 @@ export * from './flows';
 export * from './domain-events';
 export * from './outbox';
 export * from './confirm';
+// Assinatura dos webhooks de saída (F70-S20): node-only, então sai por este subpath.
+export * from '../webhook-signature';
 export { connectMq, getMqHealth, isMqConnected, MqNotConnectedError } from './connection';
 export type {
   MqHandle,
