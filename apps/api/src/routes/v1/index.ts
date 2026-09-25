@@ -24,6 +24,7 @@ import swaggerUi from 'swagger-ui-express';
 import { requireApiKey, requireScope } from '../../middlewares/api-key';
 import { publishOutboundJob } from '../../mq/outbound-publisher';
 import { buildOpenApiDocument } from './openapi';
+import { withAdAttribution } from './ad-attribution';
 import {
   API_SCOPES,
   createConversionBody,
@@ -219,7 +220,8 @@ export function createV1Router(): Router {
         res.status(404).json({ error: 'not_found', message: 'Contato não encontrado.' });
         return;
       }
-      res.status(200).json({ contact: outcome.contact, created: outcome.created });
+      // Mesma forma do recurso em GET /contacts (adAttribution aninhado, F70-S05).
+      res.status(200).json({ contact: withAdAttribution(outcome.contact), created: outcome.created });
     },
   );
 
@@ -313,11 +315,13 @@ export function createV1Router(): Router {
     async (req: Request, res: Response): Promise<void> => {
       const parsed = listContactsQuery.safeParse(req.query);
       if (!parsed.success) return badRequest(res, 'Query inválida.');
-      const { q, limit } = parsed.data;
+      const { q, adSourceId, limit } = parsed.data;
       const workspaceId = req.apiAuth!.workspaceId;
 
       const rows = await withWorkspace(workspaceId, (tx) => {
         const conds: SQL[] = [isNull(schema.contacts.deletedAt)];
+        // F70-S05: usa idx_contacts_ad_source (parcial).
+        if (adSourceId) conds.push(eq(schema.contacts.adSourceId, adSourceId));
         if (q) {
           const term = `%${q}%`;
           const match = or(
@@ -334,7 +338,7 @@ export function createV1Router(): Router {
           .orderBy(desc(schema.contacts.createdAt))
           .limit(limit);
       });
-      res.json({ contacts: rows });
+      res.json({ contacts: rows.map(withAdAttribution) });
     },
   );
 
@@ -358,7 +362,7 @@ export function createV1Router(): Router {
         res.status(404).json({ error: 'not_found', message: 'Contato não encontrado.' });
         return;
       }
-      res.json({ contact });
+      res.json({ contact: withAdAttribution(contact) });
     },
   );
 
@@ -421,7 +425,7 @@ export function createV1Router(): Router {
     async (req: Request, res: Response): Promise<void> => {
       const parsed = listDealsQuery.safeParse(req.query);
       if (!parsed.success) return badRequest(res, 'Query inválida.');
-      const { pipelineId, stageId, contactId, limit } = parsed.data;
+      const { pipelineId, stageId, contactId, adSourceId, limit } = parsed.data;
       const workspaceId = req.apiAuth!.workspaceId;
 
       const rows = await withWorkspace(workspaceId, (tx) => {
@@ -429,6 +433,8 @@ export function createV1Router(): Router {
         if (pipelineId) conds.push(eq(schema.deals.pipelineId, pipelineId));
         if (stageId) conds.push(eq(schema.deals.stageId, stageId));
         if (contactId) conds.push(eq(schema.deals.contactId, contactId));
+        // F70-S05: usa idx_deals_ad_source (parcial).
+        if (adSourceId) conds.push(eq(schema.deals.adSourceId, adSourceId));
         return tx
           .select()
           .from(schema.deals)
@@ -436,7 +442,7 @@ export function createV1Router(): Router {
           .orderBy(desc(schema.deals.createdAt))
           .limit(limit);
       });
-      res.json({ deals: rows });
+      res.json({ deals: rows.map(withAdAttribution) });
     },
   );
 
@@ -456,7 +462,7 @@ export function createV1Router(): Router {
         res.status(404).json({ error: 'not_found', message: 'Deal não encontrado.' });
         return;
       }
-      res.json({ deal });
+      res.json({ deal: withAdAttribution(deal) });
     },
   );
 
@@ -477,7 +483,7 @@ export function createV1Router(): Router {
         const out = await withWorkspace(workspaceId, (tx) =>
           moveDealToStage(tx, { dealId: id, newStageId: stageId, workspaceId, actor: { type: 'api' } }),
         );
-        res.json({ deal: out.deal, fromStageId: out.fromStageId, toStageId: out.toStageId });
+        res.json({ deal: withAdAttribution(out.deal), fromStageId: out.fromStageId, toStageId: out.toStageId });
       } catch (err: unknown) {
         if (err instanceof TransitionError) {
           res.status(422).json({ error: err.code, message: err.message });

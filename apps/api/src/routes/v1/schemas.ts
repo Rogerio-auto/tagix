@@ -127,6 +127,36 @@ export const upsertContactBody = registry.register(
     .openapi('UpsertContactRequest'),
 );
 
+// ─── F70-S05: atribuição de anúncio (contato = primeiro toque; deal = origem do deal) ──
+const adSourceIdFilter = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9_-]+$/)
+  .optional()
+  .openapi({ description: 'Filtra pelo ID do anúncio de origem (Meta ad id).' });
+
+const adAttributionShape = registry.register(
+  'AdAttribution',
+  z
+    .object({
+      channel: z.enum(['meta_whatsapp', 'meta_instagram']),
+      sourceType: z.string().openapi({ description: '`ad`, `post` (post impulsionado) ou outro tipo da Meta.' }),
+      sourceId: z.string().nullable().openapi({ description: 'ID do anúncio (ou do post impulsionado).' }),
+      sourceUrl: z.string().nullable(),
+      headline: z.string().nullable(),
+      body: z.string().nullable(),
+      mediaType: z.string().nullable(),
+      ctwaClid: z.string().nullable().openapi({ description: 'Click ID do Click-to-WhatsApp.' }),
+      referredAt: z.string().datetime(),
+    })
+    .nullable()
+    .openapi('AdAttribution', {
+      description: 'Anúncio de origem. `null` quando não veio de anúncio.',
+    }),
+);
+
 export const contactResponse = registry.register(
   'ContactResponse',
   z
@@ -138,6 +168,7 @@ export const contactResponse = registry.register(
         email: z.string().nullable(),
         source: z.string().nullable(),
         createdAt: z.string().datetime().nullable(),
+        adAttribution: adAttributionShape,
       }),
       created: z.boolean().openapi({ description: 'true se um novo contato foi criado; false em update.' }),
     })
@@ -193,6 +224,7 @@ const listLimit = z.coerce.number().int().min(1).max(100).default(50);
 // ─── contacts (list + get) ───────────────────────────────────────────────────
 export const listContactsQuery = z.object({
   q: z.string().trim().min(1).max(200).optional().openapi({ description: 'Busca por nome/telefone/email.' }),
+  adSourceId: adSourceIdFilter,
   limit: listLimit,
 });
 
@@ -204,6 +236,7 @@ const contactShape = z.object({
   source: z.string().nullable(),
   language: z.string().nullable(),
   createdAt: z.string().datetime().nullable(),
+  adAttribution: adAttributionShape,
 });
 
 export const contactsListResponse = registry.register(
@@ -235,6 +268,7 @@ export const listDealsQuery = z.object({
   pipelineId: z.string().uuid().optional(),
   stageId: z.string().uuid().optional(),
   contactId: z.string().uuid().optional(),
+  adSourceId: adSourceIdFilter,
   limit: listLimit,
 });
 
@@ -250,6 +284,7 @@ const dealShape = z.object({
   closedAt: z.string().datetime().nullable(),
   closedWon: z.boolean().nullable(),
   createdAt: z.string().datetime().nullable(),
+  adAttribution: adAttributionShape,
 });
 
 export const dealsListResponse = registry.register(
