@@ -394,10 +394,12 @@ export function renderAgentToolsInsertSql(keys?: readonly string[]): string {
   const lit = (s: string): string => `'${s.replace(/'/g, "''")}'`;
   const selected =
     keys === undefined ? AGENT_TOOLS : AGENT_TOOLS.filter((t) => keys.includes(t.key));
-  return selected.map(
-    (t) =>
-      `INSERT INTO "tools" ("workspace_id", "key", "name", "description", "category", "schema", "handler_config", "is_global", "is_active")\n` +
-      `SELECT NULL, ${lit(t.key)}, ${lit(t.name)}, ${lit(t.description)}, ${lit(t.category)}, ${lit(JSON.stringify(t.schema))}::jsonb, ${lit(JSON.stringify(t.handlerConfig))}::jsonb, true, true\n` +
-      `WHERE NOT EXISTS (SELECT 1 FROM "tools" WHERE "key" = ${lit(t.key)} AND "workspace_id" IS NULL);`,
-  ).join('\n--> statement-breakpoint\n');
+  return selected
+    .map(
+      (t) =>
+        `INSERT INTO "tools" ("workspace_id", "key", "name", "description", "category", "schema", "handler_config", "is_global", "is_active")\n` +
+        `SELECT NULL, ${lit(t.key)}, ${lit(t.name)}, ${lit(t.description)}, ${lit(t.category)}, ${lit(JSON.stringify(t.schema))}::jsonb, ${lit(JSON.stringify(t.handlerConfig))}::jsonb, true, true\n` +
+        `WHERE NOT EXISTS (SELECT 1 FROM "tools" WHERE "key" = ${lit(t.key)} AND "workspace_id" IS NULL);`,
+    )
+    .join('\n--> statement-breakpoint\n');
 }

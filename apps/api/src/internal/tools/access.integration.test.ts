@@ -98,15 +98,17 @@ async function customTool(workspaceId: string, key: string): Promise<string> {
 
 async function freshConversation(): Promise<string> {
   const id = randomUUID();
-  await getDb().insert(schema.conversations).values({
-    id,
-    workspaceId: WS,
-    channelId: CHANNEL,
-    contactId: CONTACT,
-    remoteId: `r-${id.slice(0, 12)}`,
-    aiMode: 'on',
-    status: 'open',
-  });
+  await getDb()
+    .insert(schema.conversations)
+    .values({
+      id,
+      workspaceId: WS,
+      channelId: CHANNEL,
+      contactId: CONTACT,
+      remoteId: `r-${id.slice(0, 12)}`,
+      aiMode: 'on',
+      status: 'open',
+    });
   return id;
 }
 
@@ -253,21 +255,21 @@ beforeAll(async () => {
 afterAll(async () => {
   setDomainEventTransport(null);
   if (dbAvailable) {
-    await getDb()
-      .delete(schema.workspaces)
-      .where(eq(schema.workspaces.id, WS));
-    await getDb()
-      .delete(schema.workspaces)
-      .where(eq(schema.workspaces.id, WS_OTHER));
+    await getDb().delete(schema.workspaces).where(eq(schema.workspaces.id, WS));
+    await getDb().delete(schema.workspaces).where(eq(schema.workspaces.id, WS_OTHER));
   }
   await closeDb();
 });
 
 const maybe = (name: string, fn: () => Promise<void>) =>
-  it(name, async () => {
-    if (!dbAvailable) return;
-    await fn();
-  }, 30_000);
+  it(
+    name,
+    async () => {
+      if (!dbAvailable) return;
+      await fn();
+    },
+    30_000,
+  );
 
 describe('F70-S15 — barreira de habilitação do endpoint interno', () => {
   maybe('tool desabilitada no agente → 403, nada executa, recusa registrada', async () => {

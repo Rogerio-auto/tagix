@@ -222,7 +222,9 @@ export function createInternalToolsRouter(options: InternalToolsRouterOptions = 
         );
       }
       // Motivo detalhado fica no log; o runtime recebe só a recusa.
-      res.status(403).json({ ok: false, error: `Tool '${toolKey}' is not enabled for this agent.` });
+      res
+        .status(403)
+        .json({ ok: false, error: `Tool '${toolKey}' is not enabled for this agent.` });
       return;
     }
 
