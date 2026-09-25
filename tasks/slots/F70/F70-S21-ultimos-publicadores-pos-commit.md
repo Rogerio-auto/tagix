@@ -2,7 +2,7 @@
 id: F70-S21
 title: Últimos publicadores pós-commit pela outbox e limpeza do emissor antigo
 phase: F70
-status: in-progress
+status: review
 priority: medium
 estimated_size: M
 depends_on: [F70-S20]
@@ -11,6 +11,7 @@ source_docs:
   - tasks/slots/F70/F70-S20-restos-da-outbox.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T12:25:22Z
+completed_at: 2026-09-25T13:04:58Z
 
 ---
 # F70-S21 — Últimos publicadores pós-commit pela outbox e limpeza do emissor antigo
