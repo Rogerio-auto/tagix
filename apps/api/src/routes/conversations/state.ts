@@ -316,6 +316,12 @@ export function createConversationStateRouter(): Router {
             aiPausedAt: aiMode === 'paused' ? now : null,
             aiPausedBy: aiMode === 'paused' ? memberId : null,
             aiResumeAt: null,
+            // F70-S19 (M2): ligar à mão grava a marca humana que autoriza o worker de
+            // agentes a responder conversa sem origem elegível. Relógio do banco (o mesmo
+            // do trigger que marca o `on` automático, migração 0088).
+            ...(aiMode === 'on'
+              ? { aiEnabledAt: sql`clock_timestamp()`, aiEnabledBy: memberId }
+              : {}),
             updatedAt: now,
           })
           .where(eq(schema.conversations.id, conversationId));

@@ -617,6 +617,13 @@
       "when": 1781452848000,
       "tag": "0087_f70_agent_contact_tools",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1781452849000,
+      "tag": "0088_f70_ai_enabled_by_human",
+      "breakpoints": true
     }
   ]
 }

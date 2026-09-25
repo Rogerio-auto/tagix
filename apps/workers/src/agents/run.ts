@@ -8,6 +8,8 @@
  * ```
  * load (RLS): conversa + agente ativo + texto do gatilho + histórico
  *   ai_mode != 'on' | sem agente ativo  → skip (no-op, ack)
+ *   origem não elegível e sem marca humana posterior ao último `on` automático
+ *                                       → skip (F70-S19, fail-closed; ver authorizeAiReply)
  * resolvePolicy(ws, agentId)            → PolicySnapshot (wire) + cap/spend
  * estimateCostUsd (teto conservador)    → guardResolved
  *   deny → registra execução failed + agent_execution:completed → stop
@@ -31,6 +33,7 @@
  */
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { agentDepartmentsRepo, schema, withWorkspace } from '@hm/db';
+import { isConversationAiEligible } from '@hm/flow-engine';
 import type { DbTx } from '@hm/db';
 import type { Logger } from '@hm/logger';
 import {
@@ -68,6 +71,15 @@ export interface AgentRunContext {
   readonly chatId: string;
   readonly channelId: string;
   readonly aiMode: string;
+  /**
+   * `conversations.origin` cru (F70-S07). NULL/desconhecido = `sem-origem`. Junto com as
+   * duas marcas abaixo decide se o agente pode responder ({@link authorizeAiReply}).
+   */
+  readonly origin: string | null;
+  /** Última vez que um HUMANO ligou a IA (`conversations.ai_enabled_at`, F70-S19). */
+  readonly aiEnabledAt: Date | null;
+  /** Última transição automática para `on` (`conversations.ai_auto_enabled_at`, trigger). */
+  readonly aiAutoEnabledAt: Date | null;
   readonly agentId: string;
   readonly agentStatus: string;
   /**
@@ -177,11 +189,49 @@ export interface AgentRunDeps {
 
 /** Resultado observável de um run (log/teste). */
 export type AgentRunOutcome =
-  | { readonly status: 'skipped'; readonly reason: 'no_context' | 'ai_off' | 'agent_inactive' }
+  | {
+      readonly status: 'skipped';
+      readonly reason: 'no_context' | 'ai_off' | 'agent_inactive' | 'origin_not_eligible';
+    }
   | { readonly status: 'budget_denied'; readonly executionId: string }
   | { readonly status: 'runtime_blocked'; readonly executionId: string; readonly reason: string }
   | { readonly status: 'failed'; readonly executionId: string; readonly error: string }
   | { readonly status: 'replied'; readonly executionId: string; readonly messageId: string };
+
+/** Por que o agente pode responder a esta conversa (ou por que não). */
+export type AiReplyAuthorization =
+  | { readonly allowed: true; readonly basis: 'origin' | 'human' }
+  | { readonly allowed: false };
+
+/**
+ * Última barreira da trava de origem (F70-S19, achado M2). `ai_mode='on'` não basta:
+ * conversas ligadas antes da trava (legado, sem `origin`) ou por um caminho que a
+ * contorne continuariam recebendo resposta automática. O agente só responde se:
+ *
+ *  - a origem é elegível (mesma regra única da F70-S07: `isConversationAiEligible`,
+ *    NULL/desconhecida = `sem-origem`); **ou**
+ *  - um humano ligou a IA (`aiEnabledAt`) DEPOIS do último `on` automático
+ *    (`aiAutoEnabledAt`, gravado pelo trigger da migração 0088). Um `on` automático
+ *    posterior invalida a marca humana antiga.
+ *
+ * Fail-closed: sem marca, marca inválida ou empate → não responde.
+ */
+export function authorizeAiReply(
+  ctx: Pick<AgentRunContext, 'origin' | 'aiEnabledAt' | 'aiAutoEnabledAt'>,
+): AiReplyAuthorization {
+  if (isConversationAiEligible(ctx.origin)) return { allowed: true, basis: 'origin' };
+  const human = validTime(ctx.aiEnabledAt);
+  if (human === null) return { allowed: false };
+  const auto = validTime(ctx.aiAutoEnabledAt);
+  if (auto !== null && human <= auto) return { allowed: false };
+  return { allowed: true, basis: 'human' };
+}
+
+function validTime(value: Date | null | undefined): number | null {
+  if (!(value instanceof Date)) return null;
+  const ms = value.getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
 
 /**
  * Custo estimado (teto conservador) do turno: prompt assumido ~= histórico+input
@@ -317,6 +367,18 @@ export async function runAgent(
   }
   if (ctx.aiMode !== 'on') {
     return { status: 'skipped', reason: 'ai_off' };
+  }
+  const authorization = authorizeAiReply(ctx);
+  if (!authorization.allowed) {
+    // Antes de qualquer efeito (execução, policy, runtime): nada é gravado nem enviado.
+    // `warn` de propósito: IA `on` que não pode responder é estado a corrigir (um humano
+    // religa a IA na conversa, se ela deve mesmo ser atendida pelo agente).
+    logger.warn('agent-run: IA on sem origem elegível nem marca humana — não responde', {
+      conversationId: ctx.conversationId,
+      origin: ctx.origin ?? null,
+      hasHumanMark: ctx.aiEnabledAt !== null,
+    });
+    return { status: 'skipped', reason: 'origin_not_eligible' };
   }
   if (ctx.agentStatus !== 'active') {
     return { status: 'skipped', reason: 'agent_inactive' };
@@ -535,6 +597,9 @@ export class DbAgentRunStore implements AgentRunStore {
           channelId: conversations.channelId,
           contactId: conversations.contactId,
           aiMode: conversations.aiMode,
+          origin: conversations.origin,
+          aiEnabledAt: conversations.aiEnabledAt,
+          aiAutoEnabledAt: conversations.aiAutoEnabledAt,
           agentId: conversations.agentId,
           departmentId: conversations.departmentId,
         })
@@ -588,6 +653,11 @@ export class DbAgentRunStore implements AgentRunStore {
         channelId: conv.channelId,
         contactId: conv.contactId ?? null,
         aiMode: conv.aiMode,
+        // `?? null`: ausente (linha parcial, store de teste) vira "sem origem / sem marca",
+        // que a trava lê como não autorizado (fail-closed).
+        origin: conv.origin ?? null,
+        aiEnabledAt: conv.aiEnabledAt ?? null,
+        aiAutoEnabledAt: conv.aiAutoEnabledAt ?? null,
         agentId: agent.id,
         agentStatus: agent.status,
         userInput,
