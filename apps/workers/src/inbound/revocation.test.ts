@@ -43,13 +43,13 @@ function deps(over: Partial<InboundDeps> = {}): {
     deduped: 0,
     statuses: 0,
     resolved: true,
+    mediaJobs: 0,
   }));
   return {
     persist,
     deps: {
       parser: { parse: vi.fn(() => [mensagem('oi')]) },
       persistence: { persist },
-      media: { enqueue: vi.fn(async () => undefined) },
       revocation: noopRevocationStep,
       ...over,
     },
@@ -93,7 +93,7 @@ describe('o passo roda antes de persistir', () => {
     };
     const persist = vi.fn(async () => {
       ordem.push('persist');
-      return { inserted: 1, deduped: 0, statuses: 0, resolved: true };
+      return { inserted: 1, deduped: 0, statuses: 0, resolved: true, mediaJobs: 0 };
     });
     const d = deps({
       parser: { parse: vi.fn(() => [mensagem('pare')]) },

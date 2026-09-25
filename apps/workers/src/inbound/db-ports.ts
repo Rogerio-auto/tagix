@@ -63,6 +63,7 @@ import {
   loadOriginPrefillMarkers,
   recordFirstTouchAttribution,
 } from './origin';
+import { inboundMediaJobOutbox } from './mq-ports';
 import type {
   AutoAssignAutomatic,
   AutoAssignPick,
@@ -327,12 +328,14 @@ interface ResolvedConversation {
   readonly teamId: string | null;
 }
 
-/** Linha inserida em `messages` (para o socket pós-persist). */
+/** Linha inserida em `messages` (para o socket pós-persist e o job de mídia). */
 interface InsertedMessage {
   readonly messageId: string;
   readonly externalId: string;
   readonly type: string;
   readonly content: string | null;
+  /** Mídia a baixar (a linha nasceu `media_status = pending`). */
+  readonly mediaRef: InboundMessageEvent['mediaRef'];
 }
 
 /** Preview curto da última mensagem (texto ou rótulo do tipo de mídia). */
@@ -414,7 +417,7 @@ export class DbInboundPersistence implements InboundPersistencePort {
 
     // Sem mensagens, comments nem reações a persistir → só os status acima.
     if (messageEvents.length === 0 && reactionEvents.length === 0 && commentEvents.length === 0) {
-      return { inserted: 0, deduped: 0, statuses, resolved: true };
+      return { inserted: 0, deduped: 0, statuses, resolved: true, mediaJobs: 0 };
     }
 
     const channel = await this.channels.resolve(provider, routing);
@@ -422,7 +425,7 @@ export class DbInboundPersistence implements InboundPersistencePort {
       this.logger.warn('inbound: canal não resolvido pelas routing hints — descartado', {
         provider,
       });
-      return { inserted: 0, deduped: 0, statuses, resolved: false };
+      return { inserted: 0, deduped: 0, statuses, resolved: false, mediaJobs: 0 };
     }
 
     const { channelId, workspaceId } = channel;
@@ -435,7 +438,7 @@ export class DbInboundPersistence implements InboundPersistencePort {
       if (ok) commentsInserted += 1;
     }
     if (messageEvents.length === 0 && reactionEvents.length === 0) {
-      return { inserted: commentsInserted, deduped: 0, statuses, resolved: true };
+      return { inserted: commentsInserted, deduped: 0, statuses, resolved: true, mediaJobs: 0 };
     }
 
     // Remote id do contato/conversa (estável por canal). Toda mensagem de um
@@ -444,7 +447,7 @@ export class DbInboundPersistence implements InboundPersistencePort {
     if (anchor === undefined) {
       // Só reações (sem mensagem): nada a inserir nesta fase (F1 não persiste
       // reações como linha própria — ver REPORT). Ack silencioso.
-      return { inserted: 0, deduped: 0, statuses, resolved: true };
+      return { inserted: 0, deduped: 0, statuses, resolved: true, mediaJobs: 0 };
     }
     const remoteId = anchor.contactRemoteId;
 
@@ -535,7 +538,24 @@ export class DbInboundPersistence implements InboundPersistencePort {
       }
       await enqueueOutbox(tx, domainEventsOutbox(drafts));
 
-      return { resolved, inserted, autoAssignedTo };
+      // F70-S21: o job de download da mídia entra na outbox junto da mensagem que
+      // nasceu `media_status = pending`. Só mensagens NOVAS: a reentrega do envelope
+      // (dedup) não regrava — o job já entrou com a primeira inserção.
+      const mediaJobs = inserted.flatMap((msg) =>
+        msg.mediaRef === undefined
+          ? []
+          : [
+              inboundMediaJobOutbox(workspaceId, {
+                provider,
+                externalId: msg.externalId,
+                mediaRef: msg.mediaRef,
+                routing,
+              }),
+            ],
+      );
+      await enqueueOutbox(tx, mediaJobs);
+
+      return { resolved, inserted, autoAssignedTo, mediaJobs: mediaJobs.length };
     });
 
     // F30-S09: emite conversation:assigned ao workspace quando auto-assign ocorreu.
@@ -607,6 +627,7 @@ export class DbInboundPersistence implements InboundPersistencePort {
       deduped: messageEvents.length - outcome.inserted.length,
       statuses,
       resolved: true,
+      mediaJobs: outcome.mediaJobs,
     };
   }
 
@@ -988,7 +1009,7 @@ async function insertMessages(
         // ordenação fiel via coalesce(provider_timestamp, created_at).
         providerTimestamp: toProviderTimestamp(event.rawTimestamp),
         // F52-S05 follow-up: mensagem COM mídia nasce 'pending' (mesma condição
-        // que enfileira o media job em pipeline.ts) — o media-worker avança para
+        // que grava o job de mídia na outbox, em `persist`) — o media-worker avança para
         // downloading→ready|failed. Sem mídia fica NULL. Fecha o placeholder
         // eterno: a UI distingue "carregando" de "sem mídia".
         ...(event.mediaRef !== undefined ? { mediaStatus: 'pending' as const } : {}),
@@ -1009,6 +1030,7 @@ async function insertMessages(
         externalId: event.externalId,
         type: event.messageType,
         content: event.content ?? null,
+        mediaRef: event.mediaRef,
       });
     }
   }

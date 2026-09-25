@@ -38,6 +38,15 @@ import type {
 import { InlineNotice } from './InlineNotice';
 import { MetaSignupUnavailable } from './MetaSignupUnavailable';
 
+/**
+ * Token de acesso da Meta (usuário do sistema / usuário) começa com `EAA`. O code do
+ * Embedded Signup não. Distinguir aqui manda cada um para o campo certo da API.
+ */
+function isAccessToken(value: string): boolean {
+  return value.startsWith('EAA');
+}
+
+
 type Step = 'provider' | 'connect';
 
 /**
@@ -531,7 +540,7 @@ function WaSignupStep({
     }
   };
 
-  const manualValid = code.trim() !== '' && phoneNumberId.trim() !== '' && wabaId.trim() !== '';
+  const manualValid = code.trim() !== '' && wabaId.trim() !== '';
   const ctaLabel = mode === 'coexistence' ? 'Conectar número existente' : 'Conectar com a Meta';
 
   return (
@@ -604,26 +613,27 @@ function WaSignupStep({
           onSubmit={(e) => {
             e.preventDefault();
             if (!manualValid) return;
+            const credential = code.trim();
             onCaptured({
-              code: code.trim(),
-              phoneNumberId: phoneNumberId.trim(),
+              ...(isAccessToken(credential) ? { accessToken: credential } : { code: credential }),
+              phoneNumberId: phoneNumberId.trim() || undefined,
               wabaId: wabaId.trim(),
               phoneNumber: phoneNumber.trim() || undefined,
             });
           }}
         >
           <Input
-            label="Authorization code"
+            label="Token de acesso ou authorization code"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            hint="Sai da janela da Meta e vale por poucos minutos — cole logo após gerá-lo. É trocado por um token no servidor e nunca exibido de volta."
+            hint="Token de um usuário do sistema do Business Manager (começa com EAA), com acesso à conta do WhatsApp. Também aceita o code da janela da Meta, que vale por poucos minutos. Fica só no servidor, cifrado, e nunca é exibido de volta."
             required
           />
           <Input
-            label="Phone Number ID"
+            label="Phone Number ID (opcional)"
             value={phoneNumberId}
             onChange={(e) => setPhoneNumberId(e.target.value)}
-            required
+            hint="Deixe em branco se a conta tiver um número só: o servidor descobre pela WABA."
           />
           <Input label="WABA ID" value={wabaId} onChange={(e) => setWabaId(e.target.value)} required />
           <Input
@@ -670,7 +680,9 @@ function WaFinishStep({
         e.preventDefault();
         if (!signup || !valid) return;
         onSubmit({
-          code: signup.code,
+          ...(signup.accessToken !== undefined
+            ? { accessToken: signup.accessToken }
+            : { code: signup.code }),
           phoneNumberId: signup.phoneNumberId,
           wabaId: signup.wabaId,
           phoneNumber: signup.phoneNumber,

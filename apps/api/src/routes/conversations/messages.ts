@@ -47,7 +47,7 @@ import type {
   Role,
 } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
-import { publishOutboundJob } from '../../mq/outbound-publisher';
+import { enqueueOutboundJob } from '../../mq/outbound-publisher';
 
 /** Limite de corpo de texto (anti-abuso; alinhado a `MAX_NOTE_BODY`). */
 const MAX_TEXT_LEN = 5000;
@@ -180,8 +180,6 @@ type SendScopedResult =
       readonly conversation: ResolvedConversation;
       readonly message: MessageRow;
       readonly aiPausedByHandoff: boolean;
-      /** Payload rico resolvido (com `targetExternalId` da reação) ou `null`. */
-      readonly rich: RichPayload | null;
     }
   | null;
 
@@ -546,7 +544,24 @@ export function createMessagesRouter(): Router {
           .where(eq(schema.conversations.id, conversationId));
         const aiPausedByHandoff = plan.paused;
 
-        return { kind: 'created', conversation, message, aiPausedByHandoff, rich };
+        // F70-S21 — o job de envio entra na outbox NESTA transação: commit da mensagem
+        // `pending` e do job é o mesmo. Antes era publicado depois do commit; uma queda
+        // ou recusa do broker entre os dois deixava a mensagem `pending` para sempre.
+        // Shape EXATO de `parseOutboundJob` (o worker valida).
+        await enqueueOutboundJob(
+          tx,
+          workspaceId,
+          buildOutboundJob({
+            conv: conversation,
+            conversationId,
+            messageId: message.id,
+            body,
+            mediaKind,
+            rich,
+          }),
+        );
+
+        return { kind: 'created', conversation, message, aiPausedByHandoff };
       });
 
       if (!result) {
@@ -560,21 +575,7 @@ export function createMessagesRouter(): Router {
         return;
       }
 
-      const { conversation, message, aiPausedByHandoff, rich } = result;
-
-      // Enfileira o envio real. Shape EXATO de `parseOutboundJob` (worker valida).
-      // Best-effort em falha de broker: a mensagem já está `pending` e a UI já
-      // reconciliou; um erro de infra aqui propaga p/ o error handler (5xx) sem
-      // duplicar a persistência.
-      const job = buildOutboundJob({
-        conv: conversation,
-        conversationId,
-        messageId: message.id,
-        body,
-        mediaKind,
-        rich,
-      });
-      await publishOutboundJob(workspaceId, job);
+      const { message, aiPausedByHandoff } = result;
 
       // F30-S04: emite evento de handoff se a IA acabou de pausar (best-effort).
       if (aiPausedByHandoff) {

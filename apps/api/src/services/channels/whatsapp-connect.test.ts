@@ -102,26 +102,39 @@ describe('subscribeWabaApp', () => {
   });
 });
 
-describe('runWhatsAppConnect (regra do PIN)', () => {
+describe('runWhatsAppConnect', () => {
   const creds = { appId: 'APP_ID', appSecret: 'APP_SECRET' };
+  type Num = { id: string; display_phone_number?: string; verified_name?: string };
   const okPost = () =>
     vi.fn(async (_path: string, _body: Record<string, unknown>, _token: string) => ({
       success: true,
     }));
-  const graphWithToken = (post: ReturnType<typeof okPost>) =>
-    mockGraph({
-      get: vi.fn(async () => ({ access_token: 'LONG_LIVED' })) as unknown as GraphClient['get'],
-      post: post as unknown as GraphClient['post'],
+  /** Graph falso: troca de code → token; `/{waba}/phone_numbers` → `numbers`. */
+  const graphWith = (post: ReturnType<typeof okPost>, numbers: Num[] = [{ id: 'PNID' }]) => {
+    const get = vi.fn(async (path: string, _token: string) => {
+      if (path.startsWith('oauth/access_token')) return { access_token: 'LONG_LIVED' };
+      if (path.startsWith('WABA/phone_numbers')) return { data: numbers };
+      return {};
     });
+    return {
+      get,
+      graph: mockGraph({
+        get: get as unknown as GraphClient['get'],
+        post: post as unknown as GraphClient['post'],
+      }),
+    };
+  };
 
   it('cloud_api (numero novo): NAO registra nem pede PIN; subscribe so messages', async () => {
     const post = okPost();
-    const token = await runWhatsAppConnect(
-      graphWithToken(post),
-      { code: 'C', phoneNumberId: 'PNID', wabaId: 'WABA', mode: 'cloud_api' },
+    const { graph } = graphWith(post);
+    const out = await runWhatsAppConnect(
+      graph,
+      { credential: { code: 'C' }, phoneNumberId: 'PNID', wabaId: 'WABA', mode: 'cloud_api' },
       creds,
     );
-    expect(token).toBe('LONG_LIVED');
+    expect(out.token).toBe('LONG_LIVED');
+    expect(out.phoneNumber.id).toBe('PNID');
     expect(post.mock.calls.some((c) => c[0].endsWith('/register'))).toBe(false); // sem register
     const sub = post.mock.calls.find((c) => c[0] === 'WABA/subscribed_apps');
     const body = sub?.[1] as { subscribed_fields: string } | undefined;
@@ -130,9 +143,10 @@ describe('runWhatsAppConnect (regra do PIN)', () => {
 
   it('coexistence: NAO registra (Meta rejeita /register p/ SMB); subscribe com campos de coexistencia', async () => {
     const post = okPost();
+    const { graph } = graphWith(post);
     await runWhatsAppConnect(
-      graphWithToken(post),
-      { code: 'C', phoneNumberId: 'PNID', wabaId: 'WABA', mode: 'coexistence' },
+      graph,
+      { credential: { code: 'C' }, phoneNumberId: 'PNID', wabaId: 'WABA', mode: 'coexistence' },
       creds,
     );
     // Nunca chama /register: a Graph responde "Register endpoint is not available
@@ -145,12 +159,112 @@ describe('runWhatsAppConnect (regra do PIN)', () => {
 
   it('coexistence: PIN e ignorado (nao registra mesmo se enviado)', async () => {
     const post = okPost();
-    const token = await runWhatsAppConnect(
-      graphWithToken(post),
-      { code: 'C', phoneNumberId: 'PNID', wabaId: 'WABA', pin: '123456', mode: 'coexistence' },
+    const { graph } = graphWith(post);
+    const out = await runWhatsAppConnect(
+      graph,
+      {
+        credential: { code: 'C' },
+        phoneNumberId: 'PNID',
+        wabaId: 'WABA',
+        pin: '123456',
+        mode: 'coexistence',
+      },
       creds,
     );
-    expect(token).toBe('LONG_LIVED');
+    expect(out.token).toBe('LONG_LIVED');
     expect(post.mock.calls.some((c) => c[0] === 'PNID/register')).toBe(false);
+  });
+
+  it('coexistence sem phone_number_id (a Meta so devolve waba_id): resolve pela WABA', async () => {
+    const post = okPost();
+    const { graph } = graphWith(post, [
+      { id: 'PN_ONLY', display_phone_number: '+55 11 99999-0000', verified_name: 'Arcada' },
+    ]);
+    const out = await runWhatsAppConnect(
+      graph,
+      { credential: { code: 'C' }, wabaId: 'WABA', mode: 'coexistence' },
+      creds,
+    );
+    expect(out.phoneNumber).toEqual({
+      id: 'PN_ONLY',
+      displayPhoneNumber: '+55 11 99999-0000',
+      verifiedName: 'Arcada',
+    });
+    expect(post.mock.calls.some((c) => c[0] === 'WABA/subscribed_apps')).toBe(true);
+  });
+
+  it('WABA com varios numeros: o numero informado desempata por digitos', async () => {
+    const post = okPost();
+    const { graph } = graphWith(post, [
+      { id: 'PN_A', display_phone_number: '+55 11 90000-0001' },
+      { id: 'PN_B', display_phone_number: '+55 11 90000-0002' },
+    ]);
+    const out = await runWhatsAppConnect(
+      graph,
+      {
+        credential: { code: 'C' },
+        wabaId: 'WABA',
+        phoneNumberHint: '5511900000002',
+        mode: 'coexistence',
+      },
+      creds,
+    );
+    expect(out.phoneNumber.id).toBe('PN_B');
+  });
+
+  it('WABA com varios numeros e sem como decidir: erro claro, sem subscribe', async () => {
+    const post = okPost();
+    const { graph } = graphWith(post, [{ id: 'PN_A' }, { id: 'PN_B' }]);
+    await expect(
+      runWhatsAppConnect(
+        graph,
+        { credential: { code: 'C' }, wabaId: 'WABA', mode: 'coexistence' },
+        creds,
+      ),
+    ).rejects.toMatchObject({ code: 'WA_CONNECT_PHONE_AMBIGUOUS' });
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('phone_number_id que nao pertence a WABA: recusa, sem subscribe', async () => {
+    const post = okPost();
+    const { graph } = graphWith(post, [{ id: 'PN_REAL' }]);
+    await expect(
+      runWhatsAppConnect(
+        graph,
+        { credential: { code: 'C' }, phoneNumberId: 'PN_ALHEIO', wabaId: 'WABA', mode: 'cloud_api' },
+        creds,
+      ),
+    ).rejects.toMatchObject({ code: 'WA_CONNECT_PHONE_NOT_IN_WABA' });
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('WABA sem numero visivel ao token: erro claro', async () => {
+    const post = okPost();
+    const { graph } = graphWith(post, []);
+    await expect(
+      runWhatsAppConnect(
+        graph,
+        { credential: { code: 'C' }, wabaId: 'WABA', mode: 'coexistence' },
+        creds,
+      ),
+    ).rejects.toMatchObject({ code: 'WA_CONNECT_NO_PHONE_NUMBER' });
+  });
+
+  it('conector manual com token de acesso: nao troca code; usa o token na WABA', async () => {
+    const post = okPost();
+    const { graph, get } = graphWith(post);
+    const out = await runWhatsAppConnect(
+      graph,
+      { credential: { accessToken: 'EAA_SYSTEM_USER' }, wabaId: 'WABA', mode: 'coexistence' },
+      creds,
+    );
+    expect(out.token).toBe('EAA_SYSTEM_USER');
+    expect(get.mock.calls.some((c) => String(c[0]).startsWith('oauth/access_token'))).toBe(false);
+    expect(get.mock.calls.find((c) => String(c[0]).startsWith('WABA/phone_numbers'))?.[1]).toBe(
+      'EAA_SYSTEM_USER',
+    );
+    expect(post.mock.calls.find((c) => c[0] === 'WABA/subscribed_apps')?.[2]).toBe(
+      'EAA_SYSTEM_USER',
+    );
   });
 });

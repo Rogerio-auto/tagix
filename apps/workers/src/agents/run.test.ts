@@ -334,7 +334,6 @@ describe.skipIf(!url)('runAgent entrega as tools habilitadas ao runtime (DB, F70
         health: vi.fn(),
         cancel: vi.fn(),
       } as unknown as AgentRunDeps['client'],
-      outbound: { enqueueText: vi.fn(async () => {}) },
       logger: logger as unknown as AgentRunDeps['logger'],
     };
 

@@ -294,13 +294,22 @@ export type WaConnectMode = 'cloud_api' | 'coexistence';
  * (`display_phone_number` / `phone_number`).
  */
 export interface WaSignupResult {
-  /** Authorization `code` — o backend troca por token long-lived. */
-  code: string;
-  /** `phone_number_id` (Graph) do número selecionado. */
-  phoneNumberId: string;
+  /** Authorization `code` do popup — o backend troca por token long-lived. */
+  code?: string;
+  /**
+   * Conector manual: token de acesso já emitido (ex.: usuário do sistema do
+   * Business Manager). Vai direto ao servidor, que o valida contra a WABA e cifra.
+   */
+  accessToken?: string;
+  /**
+   * `phone_number_id` do número, quando conhecido. A coexistência NÃO o devolve
+   * (`FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING` só traz `waba_id`): o servidor o
+   * resolve pela WABA.
+   */
+  phoneNumberId?: string;
   /** `waba_id` (Graph) da conta WhatsApp Business. */
   wabaId: string;
-  /** Número em formato E.164, quando o Signup o expõe (coexistência). */
+  /** Número em formato E.164, quando conhecido. */
   phoneNumber?: string;
 }
 
@@ -425,11 +434,13 @@ export async function startWhatsAppSignup(mode: WaConnectMode): Promise<WaSignup
       }, SIGNUP_SILENCE_TIMEOUT_MS);
     };
 
-    // Só resolve com AMBOS: o `code` (callback do FB.login) e os ids (postMessage
+    // Só resolve com AMBOS: o `code` (callback do FB.login) e o `waba_id` (postMessage
     // FINISH). Os dois chegam por caminhos distintos e em ordem não-determinística.
+    // O `phone_number_id` é opcional: na coexistência a Meta só manda `waba_id`
+    // (doc "Onboarding WhatsApp Business app users"), e o servidor resolve o número.
     const resolveIfReady = (): void => {
       if (!authCode) return;
-      if (!captured.phoneNumberId || !captured.wabaId) return;
+      if (!captured.wabaId) return;
       finish({
         code: authCode,
         phoneNumberId: captured.phoneNumberId,
@@ -487,12 +498,12 @@ export async function startWhatsAppSignup(mode: WaConnectMode): Promise<WaSignup
         resolveIfReady();
         if (!settled) {
           settleTimer = setTimeout(() => {
-            if (captured.phoneNumberId && captured.wabaId) {
+            if (captured.wabaId) {
               resolveIfReady();
             } else {
               fail(
                 'incomplete',
-                'O Embedded Signup não retornou o número e a conta (phone_number_id / waba_id).',
+                'O Embedded Signup não retornou a conta do WhatsApp (waba_id).',
               );
             }
           }, SIGNUP_SETTLE_MS);

@@ -17,7 +17,7 @@
  * (`domainEventsOutbox`, `queueJobOutbox`), que já validaram o envelope.
  */
 import type { OutboxMessage } from '@hm/shared/mq';
-import { getDb, type DbTx } from './client';
+import type { DbTx } from './client';
 import { outbox } from './schema/outbox';
 
 /** Canal do LISTEN/NOTIFY que acorda o relay (disparado pelo trigger da 0086). */
@@ -47,20 +47,6 @@ export async function enqueueOutbox(
     )
     .onConflictDoNothing({ target: outbox.eventId });
   return result.count;
-}
-
-/**
- * Grava numa transação própria (papel de conexão). Para o produtor que não tem
- * transação a compartilhar — a mutação dele já está commitada (ex.: o status de envio
- * do outbound, gravado por uma porta de persistência). Ainda assim ganha o relay com
- * confirms e retentativa, e o `event_id` deduplica a regravação numa reentrega.
- */
-export async function enqueueOutboxStandalone(
-  messages: OutboxMessage | readonly OutboxMessage[],
-): Promise<number> {
-  const list = isMessageList(messages) ? messages : [messages];
-  if (list.length === 0) return 0;
-  return getDb().transaction((tx) => enqueueOutbox(tx, list));
 }
 
 function isMessageList(

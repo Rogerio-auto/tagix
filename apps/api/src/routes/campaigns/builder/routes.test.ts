@@ -198,7 +198,6 @@ function app() {
     createCampaignBuilderRouter({
       decrypt: () => 'token',
       fetchHealth: async () => ({ qualityRating: 'GREEN', tierLimit: 10_000 }) as never,
-      publishOutbound: publishSpy,
       now: () => new Date('2026-08-11T12:00:00.000Z'),
       healthTtlMs: 0,
     }),
@@ -206,7 +205,14 @@ function app() {
   return instance;
 }
 
-const publishSpy = vi.fn(async () => true);
+/** Jobs gravados na outbox pela transação falsa (F70-S21: o envio não publica mais direto). */
+function outboxJobs(state: TxState): { workspaceId: unknown; routingKey: unknown; payload: unknown }[] {
+  return (state.values['outbox'] ?? []).flatMap((rows) =>
+    (rows as { workspaceId: unknown; routingKey: unknown; envelope: { payload: unknown } }[]).map(
+      (r) => ({ workspaceId: r.workspaceId, routingKey: r.routingKey, payload: r.envelope.payload }),
+    ),
+  );
+}
 
 beforeEach(() => {
   authState.role = 'OWNER';
@@ -347,26 +353,32 @@ describe('contratos de entrada', () => {
 
 describe('envio de teste', () => {
   const payload = { templateId: TEMPLATE_ID, to: '+5511999998888', bindings: BINDINGS };
+  // O envelope da outbox exige workspace uuid (o mesmo contrato da fila).
+  const TEST_WS = '00000000-0000-0000-0000-0000000000a1';
+  beforeEach(() => {
+    authState.workspaceId = TEST_WS;
+  });
 
   it('sem Idempotency-Key não sai do lugar', async () => {
     const response = await request(app()).post(url('test')).send(payload);
     expect(response.status).toBe(400);
     expect(response.body.code).toBe('CAMPAIGN_TEST_IDEMPOTENCY_REQUIRED');
-    expect(publishSpy).not.toHaveBeenCalled();
     expect(authState.scopedCalls).toBe(0);
   });
 
-  it('enfileira no pipeline outbound real com o payload do modelo', async () => {
+  it('grava o job do pipeline outbound real na outbox, com o payload do modelo', async () => {
+    const state = txState();
+    authState.tx = fakeTx(state);
     const response = await request(app())
       .post(url('test'))
       .set('Idempotency-Key', 'test-1')
       .send(payload);
     expect(response.status).toBe(202);
     expect(response.body).toMatchObject({ queued: true, replayed: false });
-    expect(publishSpy).toHaveBeenCalledTimes(1);
-    const [workspaceId, job] = publishSpy.mock.calls[0] as unknown as [string, Record<string, unknown>];
-    expect(workspaceId).toBe('workspace-a');
-    expect(job).toMatchObject({
+    const jobs = outboxJobs(state);
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({ workspaceId: TEST_WS, routingKey: 'hm.q.outbound' });
+    expect(jobs[0]?.payload).toMatchObject({
       kind: 'template',
       templateName: 'oferta',
       languageCode: 'pt_BR',
@@ -379,29 +391,32 @@ describe('envio de teste', () => {
     const state = txState();
     authState.tx = fakeTx(state);
     await request(app()).post(url('test')).set('Idempotency-Key', 'test-1').send(payload);
-    expect(state.inserted).toEqual(['conversations', 'messages', 'audit_logs']);
+    expect(state.inserted).toEqual(['conversations', 'messages', 'audit_logs', 'outbox']);
   });
 
-  it('clique duplo devolve a mesma mensagem e não publica de novo', async () => {
-    authState.tx = fakeTx(txState({ rows: { messages: [{ id: 'message-1' }] } }));
+  it('clique duplo devolve a mesma mensagem e não enfileira de novo', async () => {
+    const state = txState({ rows: { messages: [{ id: 'message-1' }] } });
+    authState.tx = fakeTx(state);
     const response = await request(app())
       .post(url('test'))
       .set('Idempotency-Key', 'test-1')
       .send(payload);
     expect(response.status).toBe(202);
     expect(response.body.replayed).toBe(true);
-    expect(publishSpy).not.toHaveBeenCalled();
+    expect(outboxJobs(state)).toHaveLength(0);
   });
 
   it('campanha que já saiu do rascunho não aceita mais teste', async () => {
     serviceSpies.loadBuilderTemplateContext.mockResolvedValue(context({ status: 'running' }));
+    const state = txState();
+    authState.tx = fakeTx(state);
     const response = await request(app())
       .post(url('test'))
       .set('Idempotency-Key', 'test-1')
       .send(payload);
     expect(response.status).toBe(409);
     expect(response.body.code).toBe('CAMPAIGN_TEST_REQUIRES_DRAFT');
-    expect(publishSpy).not.toHaveBeenCalled();
+    expect(state.inserted).toEqual([]);
   });
 
   it('variável de botão é recusada com explicação enquanto o runtime não a preserva', async () => {
@@ -414,7 +429,7 @@ describe('envio de teste', () => {
       });
     expect(response.status).toBe(422);
     expect(response.body.code).toBe('CAMPAIGN_TEST_BUTTON_VARIABLE_UNSUPPORTED');
-    expect(publishSpy).not.toHaveBeenCalled();
+    expect(authState.scopedCalls).toBe(0);
   });
 });
 

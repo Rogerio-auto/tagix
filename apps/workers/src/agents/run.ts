@@ -22,17 +22,19 @@
  *   tool_call_completed→ (idem)
  *   model_blocked      → marca execução failed + completed → stop
  *   final              → reply + usage  (fonte da resposta do agente)
- * persist message (outbound, pending, sender_type='agent') + enqueue hm.q.outbound
+ * persist message (outbound, pending, sender_type='agent') + job em hm.q.outbound pela
+ *   OUTBOX, na mesma transação (F70-S21)
  * mark agent_executions completed (tokens/cost) + agent_execution:completed
  *   AgentRuntimeError (incl. evento `error` do runtime) → marca failed + completed
  * ```
  *
  * Tudo que toca DB roda sob `withWorkspace` (RLS). As portas (DB / socket /
- * agents-client / enqueue) são injetadas para o handler ser testável sem
- * RabbitMQ, sem Postgres e sem o runtime Python.
+ * agents-client) são injetadas para o handler ser testável sem RabbitMQ, sem
+ * Postgres e sem o runtime Python.
  */
 import { and, desc, eq, isNull } from 'drizzle-orm';
-import { agentDepartmentsRepo, schema, withWorkspace } from '@hm/db';
+import { agentDepartmentsRepo, enqueueOutbox, schema, withWorkspace } from '@hm/db';
+import { makeEnvelope, queueJobOutbox, QUEUES } from '@hm/shared/mq';
 import { isConversationAiEligible } from '@hm/flow-engine';
 import type { DbTx } from '@hm/db';
 import type { Logger } from '@hm/logger';
@@ -61,6 +63,9 @@ import type { AgentRunTrigger } from './worker';
 
 /** Quantas mensagens recentes carregar como histórico para o runtime. */
 export const HISTORY_LIMIT = 20;
+
+/** Tipo do envelope do job de envio (o mesmo da API e dos flows). */
+export const OUTBOUND_JOB_TYPE = 'outbound.job' as const;
 
 // ─── Portas injetáveis ────────────────────────────────────────────────────────
 
@@ -116,8 +121,9 @@ export interface AgentRunStore {
   /** Marca a execução como `failed` com o motivo. */
   failExecution(input: FailExecutionInput): Promise<void>;
   /**
-   * Persiste a mensagem do agente (outbound, `pending`, `sender_type='agent'`).
-   * Retorna o `messageId` para correlação do job outbound.
+   * Persiste a mensagem do agente (outbound, `pending`, `sender_type='agent'`) e grava
+   * o job de envio em `hm.q.outbound` (kind `text`) na MESMA transação (F70-S21):
+   * commit da mensagem e do job é o mesmo. Retorna o `messageId`.
    */
   persistAgentMessage(input: PersistAgentMessageInput): Promise<string>;
 }
@@ -147,6 +153,10 @@ export interface PersistAgentMessageInput {
   readonly conversationId: string;
   readonly agentId: string;
   readonly content: string;
+  /** Canal da conversa — `channelId` do job de envio. */
+  readonly channelId: string;
+  /** Id do contato no provider (`conversations.remote_id`) — `chatId` do job. */
+  readonly chatId: string;
 }
 
 /** Emite os eventos `agent_execution:*` (relay → room `conversation:{id}`). */
@@ -162,26 +172,11 @@ export interface AgentExecutionEmit {
   readonly executionId: string;
 }
 
-/** Enfileira o job outbound (reusa `hm.q.outbound`) com a resposta do agente. */
-export interface AgentOutboundEnqueuePort {
-  enqueueText(input: AgentOutboundEnqueueInput): Promise<void>;
-}
-
-export interface AgentOutboundEnqueueInput {
-  readonly workspaceId: string;
-  readonly conversationId: string;
-  readonly channelId: string;
-  readonly chatId: string;
-  readonly messageId: string;
-  readonly text: string;
-}
-
 /** Dependências de uma execução de agente. */
 export interface AgentRunDeps {
   readonly store: AgentRunStore;
   readonly socket: AgentRunSocketPort;
   readonly client: AgentsClient;
-  readonly outbound: AgentOutboundEnqueuePort;
   readonly logger: Logger;
 }
 
@@ -356,7 +351,7 @@ export async function runAgent(
   deps: AgentRunDeps,
   opts?: RunOptions,
 ): Promise<AgentRunOutcome> {
-  const { store, socket, client, outbound, logger } = deps;
+  const { store, socket, client, logger } = deps;
 
   const ctx = await store.loadContext(workspaceId, trigger);
   if (ctx === null) {
@@ -521,22 +516,17 @@ export async function runAgent(
     return { status: 'replied', executionId, messageId: '' };
   }
 
-  // Persiste a resposta do agente (outbound, pending) e enfileira o envio real —
-  // mesmo pipeline outbound de F1 (o worker outbound dispara ao provider).
+  // Persiste a resposta do agente (outbound, pending) e grava o envio real na outbox,
+  // na mesma transação — mesmo pipeline outbound de F1 (o worker outbound dispara ao
+  // provider). F70-S21: antes o job era publicado depois do commit; uma queda entre os
+  // dois deixava a resposta `pending` para sempre.
   const messageId = await store.persistAgentMessage({
     workspaceId,
     conversationId: ctx.conversationId,
     agentId: ctx.agentId,
     content: reply,
-  });
-
-  await outbound.enqueueText({
-    workspaceId,
-    conversationId: ctx.conversationId,
     channelId: ctx.channelId,
     chatId: ctx.chatId,
-    messageId,
-    text: reply,
   });
 
   await store.completeExecution({
@@ -742,6 +732,20 @@ export class DbAgentRunStore implements AgentRunStore {
       if (row === undefined) {
         throw new Error('agent-run: mensagem do agente não materializou após insert.');
       }
+      // F70-S21: o job de envio (shape EXATO de `parseOutboundJob`, kind `text`) entra
+      // na outbox NESTA transação. O relay publica depois do commit, com confirms.
+      const job = {
+        kind: 'text',
+        channelId: input.channelId,
+        conversationId: input.conversationId,
+        messageId: row.id,
+        chatId: input.chatId,
+        text: input.content,
+      };
+      await enqueueOutbox(
+        tx,
+        queueJobOutbox(QUEUES.outbound, makeEnvelope(OUTBOUND_JOB_TYPE, input.workspaceId, job)),
+      );
       return row.id;
     });
   }

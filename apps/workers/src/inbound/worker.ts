@@ -28,7 +28,6 @@ import { runInboundPipeline } from './pipeline';
 import { ChannelInboundParser } from './parse';
 import { createStatusDeps } from './status';
 import { DbInboundChannelResolver, DbInboundPersistence, MqInboundFlowEnqueue, MqInboundSocketEmit } from './db-ports';
-import { MqMediaEnqueue } from './mq-ports';
 import { createRevocationStep } from './revocation';
 import { createInstagramEchoStep } from './instagram-echoes';
 import { gateCampaignAiHandoff } from './ai-gate';
@@ -74,8 +73,9 @@ import { createTriggerDispatchDeps, dispatchTriggersForNewMessage } from '../flo
  * Monta as dependências default do worker inbound a partir da infra real
  * (F1-S26). Parser default (WA/WAHA reais de `@hm/channels`, IG placeholder),
  * persistência DIRETA `@hm/db`+RLS (`DbInboundPersistence`) com socket relay
- * (`message:new`/`typing:from_contact`), status (S20) e flow enqueue (STUB), e
- * enfileiramento de mídia via `hm.q.media`. O `channel` AMQP é o do consumer.
+ * (`message:new`/`typing:from_contact`), status (S20) e flow enqueue (STUB). O job de
+ * mídia vai pela outbox, na transação da persistência (F70-S21). O `channel` AMQP é o
+ * do consumer.
  */
 export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDeps {
   const parser = new ChannelInboundParser(
@@ -148,11 +148,10 @@ export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDe
     undefined,
     contactMessageHook,
   );
-  const media = new MqMediaEnqueue(channel);
   // F70-S07: ecos do Instagram no mesmo payload → núcleo de ecos da coexistência
   // (mensagem humana + pausa da IA), com socket e mídia no MESMO canal AMQP.
   const instagramEchoes = createInstagramEchoStep(createCoexistenceDeps(logger, channel));
-  return { parser, persistence, media, revocation, instagramEchoes };
+  return { parser, persistence, revocation, instagramEchoes };
 }
 
 /**

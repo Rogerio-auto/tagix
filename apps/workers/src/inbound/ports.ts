@@ -79,11 +79,6 @@ export interface PersistInboundRequest {
   readonly events: readonly InboundEvent[];
 }
 
-/** Porta de enfileiramento de mídia (publica em `hm.q.inbound.media`). */
-export interface MediaEnqueuePort {
-  enqueue(job: InboundMediaJob): Promise<void>;
-}
-
 /**
  * Estratégia de distribuição do time-alvo (espelha `teams.auto_assign_strategy`,
  * LIVECHAT_OPS.md §4). `manual` → conversa entra na fila sem owner.
@@ -120,6 +115,11 @@ export interface PersistInboundResult {
   readonly statuses: number;
   /** `false` quando nenhum canal casou as routing hints (mensagem órfã). */
   readonly resolved: boolean;
+  /**
+   * Jobs de download de mídia gravados na outbox (F70-S21), na transação que inseriu
+   * as mensagens: um por mensagem NOVA com mídia (as deduplicadas não regravam).
+   */
+  readonly mediaJobs: number;
 }
 
 /**
@@ -136,7 +136,6 @@ export interface InboundPersistencePort {
 export interface InboundDeps {
   readonly parser: InboundParserPort;
   readonly persistence: InboundPersistencePort;
-  readonly media: MediaEnqueuePort;
   /**
    * F59-S06 — passo de revogacao. Opcional para nao quebrar composicoes e testes
    * que nao o exercitam; a composicao de producao injeta `createRevocationStep`.

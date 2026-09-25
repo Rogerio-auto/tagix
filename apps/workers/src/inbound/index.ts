@@ -32,18 +32,13 @@ export type {
   InboundDeps,
   InboundParserPort,
   InboundPersistencePort,
-  MediaEnqueuePort,
   InboundMediaJob,
   PersistInboundRequest,
   PersistInboundResult,
   RoutingHints,
 } from './ports';
 
-export {
-  MqMediaEnqueue,
-  INBOUND_MEDIA_TYPE,
-  INBOUND_MEDIA_RK,
-} from './mq-ports';
+export { INBOUND_MEDIA_TYPE, inboundMediaJobOutbox } from './mq-ports';
 
 export {
   DbInboundPersistence,

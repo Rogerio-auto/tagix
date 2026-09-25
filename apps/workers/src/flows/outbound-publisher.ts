@@ -9,12 +9,18 @@
  * ```
  * publishMessage(ws, msg)
  *   → resolve midia: storage.getSignedUrl(key, ttl) → publicMediaUrl   [IO fora da tx]
- *   → persiste message `pending` sob RLS (senderType=system) + resolve channelId/remoteId
- *   → publishOutboundJob(ws, job)  (shape exato de parseOutboundJob; kind text|media)
+ *   → UMA transacao RLS: persiste message `pending` (senderType=system) + resolve
+ *     channelId/remoteId + grava o job na OUTBOX  (shape exato de parseOutboundJob)
  * publishPresence(ws, action)
  *   → resolve channelId/remoteId + externalId da ultima inbound (alvo do indicador)
- *   → publishOutboundJob(ws, { kind:'typing_indicator', ... })  (no-op se sem alvo)
+ *   → publishPresenceJob(ws, { kind:'typing_indicator', ... })  (no-op se sem alvo)
  * ```
+ *
+ * F70-S21: o job de envio nasce da mensagem `pending` e entra na outbox NA MESMA
+ * transacao (o relay publica depois do commit, com confirms). Antes era publicado
+ * depois do commit: uma queda ou recusa do broker entre os dois deixava a mensagem
+ * `pending` para sempre. A presenca continua publicada direto: nao grava nada no banco
+ * e o indicador e efemero — duravel ele perderia o sentido.
  *
  * O `OutboundJob` viaja como `Record<string, unknown>` de proposito: a fonte da verdade do
  * shape e o `parseOutboundJob` (Zod) do worker outbound — qualquer divergencia falharia la
@@ -26,9 +32,16 @@
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, isNotNull } from 'drizzle-orm';
-import { connectMq, makeEnvelope, publish, QUEUES, type MqHandle } from '@hm/shared/mq';
+import {
+  connectMq,
+  makeEnvelope,
+  publish,
+  queueJobOutbox,
+  QUEUES,
+  type MqHandle,
+} from '@hm/shared/mq';
 import { buildMessageNewPayload, previewFor } from '@hm/shared';
-import { schema, withWorkspace } from '@hm/db';
+import { enqueueOutbox, schema, withWorkspace } from '@hm/db';
 import { createStorage, type IStorageDriver } from '@hm/storage';
 import type {
   FlowOutboundMediaKind,
@@ -38,8 +51,9 @@ import type {
 } from '@hm/flow-engine';
 import type { Logger } from '@hm/logger';
 
-/** Tipo do envelope publicado (bind: `hm.q.outbound.#`), igual ao publisher da API. */
+/** Tipo do envelope do job de envio, igual ao da API. */
 const OUTBOUND_JOB_TYPE = 'outbound.job' as const;
+/** Routing key do job de presenca, publicado direto (bind: `hm.q.outbound.#`). */
 const OUTBOUND_ROUTING_KEY = `${QUEUES.outbound}.send`;
 /** Fila de relay de socket (mesma constante de `apps/api/src/socket/relay.ts`). */
 const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
@@ -61,8 +75,15 @@ async function getHandle(): Promise<MqHandle> {
   }
 }
 
-/** Publica um `OutboundJob` no exchange de eventos para `hm.q.outbound`. */
-async function publishOutboundJob(workspaceId: string, job: Record<string, unknown>): Promise<boolean> {
+/**
+ * Publica o job de PRESENCA (`typing_indicator`) no exchange de eventos para
+ * `hm.q.outbound`. So a presenca sai por aqui: nao nasce de escrita no banco. Os jobs
+ * de envio vao pela outbox (`createDbOutboundPersistence`).
+ */
+async function publishPresenceJobDirect(
+  workspaceId: string,
+  job: Record<string, unknown>,
+): Promise<boolean> {
   const { channel } = await getHandle();
   const envelope = makeEnvelope(OUTBOUND_JOB_TYPE, workspaceId, job);
   return publish(channel, OUTBOUND_ROUTING_KEY, envelope);
@@ -150,6 +171,12 @@ export interface ResolvedOutboundTarget {
   readonly messageId: string;
 }
 
+/**
+ * Monta o `OutboundJob` a partir do alvo resolvido na transacao (o `messageId` so existe
+ * depois do INSERT). Shape exato de `parseOutboundJob`.
+ */
+export type BuildOutboundJob = (target: ResolvedOutboundTarget) => Record<string, unknown>;
+
 /** Canal+remoteId + alvo (externalId da ultima inbound) para indicador de presenca. */
 export interface ResolvedPresenceTarget {
   readonly channelId: string;
@@ -163,10 +190,14 @@ export interface ResolvedPresenceTarget {
  */
 export interface OutboundPersistencePort {
   /**
-   * Persiste a message `pending` (senderType=system) e resolve channelId/remoteId da
-   * conversa, tudo na MESMA transacao RLS. `null` se a conversa nao existe no tenant.
+   * Persiste a message `pending` (senderType=system), resolve channelId/remoteId da
+   * conversa e grava o job de envio (`buildJob(target)`) na outbox, tudo na MESMA
+   * transacao RLS. `null` se a conversa nao existe no tenant (nada e gravado).
    */
-  persistOutboundMessage(input: PersistOutboundMessageInput): Promise<ResolvedOutboundTarget | null>;
+  persistOutboundMessage(
+    input: PersistOutboundMessageInput,
+    buildJob: BuildOutboundJob,
+  ): Promise<ResolvedOutboundTarget | null>;
   /** Resolve channelId/remoteId + externalId da ultima inbound (alvo do indicador). */
   resolvePresenceTarget(input: {
     workspaceId: string;
@@ -186,7 +217,7 @@ function previewForChatList(type: string, content: string | null): string {
 /** Implementacao real: espelha `messages.ts` (insert pending) sob RLS. */
 export function createDbOutboundPersistence(): OutboundPersistencePort {
   return {
-    async persistOutboundMessage(input) {
+    async persistOutboundMessage(input, buildJob) {
       return withWorkspace(input.workspaceId, async (tx) => {
         const [conv] = await tx
           .select({
@@ -240,7 +271,17 @@ export function createDbOutboundPersistence(): OutboundPersistencePort {
           })
           .where(eq(schema.conversations.id, input.conversationId));
 
-        return { channelId: conv.channelId, remoteId: conv.remoteId, messageId: row.id };
+        // F70-S21: o job de envio entra na outbox NESTA transacao — commit da message
+        // `pending` e do job e o mesmo; rollback leva os dois.
+        const target = { channelId: conv.channelId, remoteId: conv.remoteId, messageId: row.id };
+        await enqueueOutbox(
+          tx,
+          queueJobOutbox(
+            QUEUES.outbound,
+            makeEnvelope(OUTBOUND_JOB_TYPE, input.workspaceId, buildJob(target)),
+          ),
+        );
+        return target;
       });
     },
 
@@ -310,8 +351,14 @@ export interface OutboundPublisherDeps {
   readonly storage?: IStorageDriver;
   /** Persistencia RLS (default: Drizzle via `withWorkspace`). */
   readonly persistence?: OutboundPersistencePort;
-  /** Publicacao do envelope (default: RabbitMQ real). Injetavel nos testes. */
-  readonly publishJob?: (workspaceId: string, job: Record<string, unknown>) => Promise<boolean>;
+  /**
+   * Publicacao do job de PRESENCA (default: RabbitMQ real). Injetavel nos testes. Os
+   * jobs de envio nao passam por aqui: vao pela outbox, na transacao da persistencia.
+   */
+  readonly publishPresenceJob?: (
+    workspaceId: string,
+    job: Record<string, unknown>,
+  ) => Promise<boolean>;
   /** Emissao de `message:new` (default: socket relay real). Injetavel nos testes. */
   readonly emitMessageNew?: (input: OutboundMessageNewEmit) => Promise<void>;
   /** TTL (s) da URL assinada de midia (default 1h). */
@@ -327,7 +374,7 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
   const { logger } = deps;
   const storage = deps.storage ?? createStorage();
   const persistence = deps.persistence ?? createDbOutboundPersistence();
-  const publishJob = deps.publishJob ?? publishOutboundJob;
+  const publishPresenceJob = deps.publishPresenceJob ?? publishPresenceJobDirect;
   const emitMessageNew = deps.emitMessageNew ?? emitMessageNewRelay;
   const ttl = deps.mediaUrlTtlSeconds ?? DEFAULT_MEDIA_URL_TTL_SECONDS;
 
@@ -341,31 +388,34 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
         if (kind === 'buttons' || kind === 'list') {
           // Mensagem interativa (botoes / lista): persiste + publica kind='interactive'.
           if (!message.conversationId) return;
-          const target = await persistence.persistOutboundMessage({
-            workspaceId,
-            conversationId: message.conversationId,
-            type: 'interactive',
-            content: null,
-            mediaUrl: null,
-            mediaMime: null,
-            mediaCaption: null,
-          });
+          const conversationId = message.conversationId;
+          const target = await persistence.persistOutboundMessage(
+            {
+              workspaceId,
+              conversationId,
+              type: 'interactive',
+              content: null,
+              mediaUrl: null,
+              mediaMime: null,
+              mediaCaption: null,
+            },
+            (t) => ({
+              kind: 'interactive',
+              channelId: t.channelId,
+              conversationId,
+              messageId: t.messageId,
+              chatId: t.remoteId,
+              // O InteractivePayloadSchema usa o discriminador 'type'; o handler envia
+              // 'kind' como alias — normalizamos aqui para que o parseOutboundJob valide.
+              payload: { ...ip, type: kind },
+            }),
+          );
           if (!target) {
             logger.warn('flow-outbound: conversa inexistente/invisivel (interactive) — no-op', {
               conversationId: message.conversationId,
             });
             return;
           }
-          await publishJob(workspaceId, {
-            kind: 'interactive',
-            channelId: target.channelId,
-            conversationId: message.conversationId,
-            messageId: target.messageId,
-            chatId: target.remoteId,
-            // O InteractivePayloadSchema usa o discriminador 'type'; o handler envia
-            // 'kind' como alias — normalizamos aqui para que o parseOutboundJob valide.
-            payload: { ...ip, type: kind },
-          });
           await emitMessageNew({
             workspaceId,
             conversationId: message.conversationId,
@@ -378,13 +428,15 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
 
         if (kind === 'template') {
           // Template HSM: extrai campos do envelope montado pelo template.handler.
-          const tmpl = typeof ip['template'] === 'object' && ip['template'] !== null
-            ? (ip['template'] as Record<string, unknown>)
-            : undefined;
+          const tmpl =
+            typeof ip['template'] === 'object' && ip['template'] !== null
+              ? (ip['template'] as Record<string, unknown>)
+              : undefined;
           const templateName = typeof tmpl?.['name'] === 'string' ? tmpl['name'] : undefined;
-          const lang = typeof tmpl?.['language'] === 'object' && tmpl?.['language'] !== null
-            ? (tmpl['language'] as Record<string, unknown>)
-            : undefined;
+          const lang =
+            typeof tmpl?.['language'] === 'object' && tmpl?.['language'] !== null
+              ? (tmpl['language'] as Record<string, unknown>)
+              : undefined;
           const languageCode = typeof lang?.['code'] === 'string' ? lang['code'] : undefined;
           const components = Array.isArray(tmpl?.['components']) ? tmpl['components'] : [];
 
@@ -396,31 +448,34 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
             });
             return;
           }
-          const target = await persistence.persistOutboundMessage({
-            workspaceId,
-            conversationId: message.conversationId,
-            type: 'template',
-            content: templateName,
-            mediaUrl: null,
-            mediaMime: null,
-            mediaCaption: null,
-          });
+          const conversationId = message.conversationId;
+          const target = await persistence.persistOutboundMessage(
+            {
+              workspaceId,
+              conversationId,
+              type: 'template',
+              content: templateName,
+              mediaUrl: null,
+              mediaMime: null,
+              mediaCaption: null,
+            },
+            (t) => ({
+              kind: 'template',
+              channelId: t.channelId,
+              conversationId,
+              messageId: t.messageId,
+              chatId: t.remoteId,
+              templateName,
+              languageCode,
+              components,
+            }),
+          );
           if (!target) {
             logger.warn('flow-outbound: conversa inexistente/invisivel (template) — no-op', {
               conversationId: message.conversationId,
             });
             return;
           }
-          await publishJob(workspaceId, {
-            kind: 'template',
-            channelId: target.channelId,
-            conversationId: message.conversationId,
-            messageId: target.messageId,
-            chatId: target.remoteId,
-            templateName,
-            languageCode,
-            components,
-          });
           await emitMessageNew({
             workspaceId,
             conversationId: message.conversationId,
@@ -449,29 +504,32 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
           });
           return;
         }
-        const target = await persistence.persistOutboundMessage({
-          workspaceId,
-          conversationId: message.conversationId,
-          type: 'text',
-          content: text,
-          mediaUrl: null,
-          mediaMime: null,
-          mediaCaption: null,
-        });
+        const conversationId = message.conversationId;
+        const target = await persistence.persistOutboundMessage(
+          {
+            workspaceId,
+            conversationId,
+            type: 'text',
+            content: text,
+            mediaUrl: null,
+            mediaMime: null,
+            mediaCaption: null,
+          },
+          (t) => ({
+            kind: 'text',
+            channelId: t.channelId,
+            conversationId,
+            messageId: t.messageId,
+            chatId: t.remoteId,
+            text,
+          }),
+        );
         if (!target) {
           logger.warn('flow-outbound: conversa inexistente/invisivel — no-op', {
             conversationId: message.conversationId,
           });
           return;
         }
-        await publishJob(workspaceId, {
-          kind: 'text',
-          channelId: target.channelId,
-          conversationId: message.conversationId,
-          messageId: target.messageId,
-          chatId: target.remoteId,
-          text,
-        });
         await emitMessageNew({
           workspaceId,
           conversationId: message.conversationId,
@@ -513,17 +571,31 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
       const rawCaption = message.caption ?? message.text;
       const caption = rawCaption && rawCaption.trim().length > 0 ? rawCaption.trim() : undefined;
 
-      const target = await persistence.persistOutboundMessage({
-        workspaceId,
-        conversationId: message.conversationId,
-        type: kind,
-        content: caption ?? null,
-        mediaUrl: publicMediaUrl,
-        mediaMime: mime,
-        mediaCaption: caption ?? null,
-        // Key estável do R2 → reidratação da signed URL ao reabrir o chat.
-        mediaKey: message.mediaStorageKey,
-      });
+      const conversationId = message.conversationId;
+      const target = await persistence.persistOutboundMessage(
+        {
+          workspaceId,
+          conversationId,
+          type: kind,
+          content: caption ?? null,
+          mediaUrl: publicMediaUrl,
+          mediaMime: mime,
+          mediaCaption: caption ?? null,
+          // Key estável do R2 → reidratação da signed URL ao reabrir o chat.
+          mediaKey: message.mediaStorageKey,
+        },
+        (t) => ({
+          kind: 'media',
+          channelId: t.channelId,
+          conversationId,
+          messageId: t.messageId,
+          chatId: t.remoteId,
+          mediaKind: kind,
+          publicMediaUrl,
+          mime,
+          ...(caption ? { caption } : {}),
+        }),
+      );
       if (!target) {
         logger.warn('flow-outbound: conversa inexistente/invisivel — no-op', {
           conversationId: message.conversationId,
@@ -531,17 +603,6 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
         return;
       }
 
-      await publishJob(workspaceId, {
-        kind: 'media',
-        channelId: target.channelId,
-        conversationId: message.conversationId,
-        messageId: target.messageId,
-        chatId: target.remoteId,
-        mediaKind: kind,
-        publicMediaUrl,
-        mime,
-        ...(caption ? { caption } : {}),
-      });
       await emitMessageNew({
         workspaceId,
         conversationId: message.conversationId,
@@ -570,7 +631,7 @@ export function createOutboundPublisher(deps: OutboundPublisherDeps): OutboundPu
         });
         return;
       }
-      await publishJob(workspaceId, {
+      await publishPresenceJob(workspaceId, {
         kind: 'typing_indicator',
         channelId: target.channelId,
         conversationId: action.conversationId,

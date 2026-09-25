@@ -19,7 +19,7 @@ import { and, eq } from 'drizzle-orm';
 import { decryptSecret, schema, type DbTx } from '@hm/db';
 import type { ChannelHealth } from '@hm/channels';
 import { requireAuth, requireRole, withRLS } from '../../../middlewares/auth';
-import { publishOutboundJob } from '../../../mq/outbound-publisher';
+import { enqueueOutboundJob } from '../../../mq/outbound-publisher';
 import { param } from '../../conversions/types';
 import { loadCampaignChannel, makeGraphPorts, type CampaignChannelSnapshot } from '../service';
 import {
@@ -43,11 +43,9 @@ import {
   type TemplateContextLookup,
 } from './service';
 
-type PublishOutbound = typeof publishOutboundJob;
 type FetchHealth = (snapshot: CampaignChannelSnapshot) => Promise<ChannelHealth>;
 
 export interface CampaignBuilderRouterOptions {
-  readonly publishOutbound?: PublishOutbound;
   readonly fetchHealth?: FetchHealth;
   readonly decrypt?: typeof decryptSecret;
   readonly now?: () => Date;
@@ -155,9 +153,9 @@ type PreparedTestSend =
   | null;
 
 /**
- * Persiste a mensagem de teste `pending` e monta o job outbound — o MESMO
- * caminho de um envio normal (LIVECHAT.md §3.1), porque um teste que usa outro
- * caminho não prova nada sobre o envio real.
+ * Persiste a mensagem de teste `pending` e grava o job outbound na outbox, na
+ * mesma transação — o MESMO caminho de um envio normal (LIVECHAT.md §3.1), porque
+ * um teste que usa outro caminho não prova nada sobre o envio real.
  *
  * Idempotência: a chave do cliente vira `outbound_idempotency_key` (índice único
  * parcial). Clique duplo devolve a mesma mensagem em vez de mandar duas.
@@ -283,17 +281,19 @@ export async function prepareTestSend(
     },
   });
 
-  return {
-    kind: 'created',
-    message,
-    job: {
-      ...args.preview.outbound,
-      channelId: args.context.campaign.channelId,
-      conversationId: conversation.id,
-      messageId: message.id,
-      chatId: remoteId,
-    },
+  // F70-S21: o job entra na outbox NESTA transação — o commit da mensagem `pending`
+  // e o do envio são o mesmo. Antes era publicado depois do commit, e uma queda entre
+  // os dois deixava o teste `pending` para sempre (e o clique seguinte caía no replay).
+  const job: Record<string, unknown> = {
+    ...args.preview.outbound,
+    channelId: args.context.campaign.channelId,
+    conversationId: conversation.id,
+    messageId: message.id,
+    chatId: remoteId,
   };
+  await enqueueOutboundJob(tx, args.workspaceId, job);
+
+  return { kind: 'created', message, job };
 }
 
 export function createCampaignBuilderRouter(
@@ -302,7 +302,6 @@ export function createCampaignBuilderRouter(
   const router = Router();
   const guard = [requireAuth, withRLS, requireRole('campaign.edit')] as const;
   const decrypt = options.decrypt ?? decryptSecret;
-  const publishOutbound = options.publishOutbound ?? publishOutboundJob;
   const now = options.now ?? (() => new Date());
   const fetchHealth =
     options.fetchHealth ?? ((snapshot: CampaignChannelSnapshot) => makeGraphPorts(snapshot).fetchQuality());
@@ -491,7 +490,6 @@ export function createCampaignBuilderRouter(
       res.status(202).json({ messageId: prepared.message.id, queued: true, replayed: true });
       return;
     }
-    await publishOutbound(workspaceId, prepared.job);
     res.status(202).json({ messageId: prepared.message.id, queued: true, replayed: false });
   });
 
