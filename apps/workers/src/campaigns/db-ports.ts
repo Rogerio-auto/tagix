@@ -18,6 +18,11 @@
  * O que era o bug: o recipient virava `sending` e ninguem o tirava de la;
  * `delaySeconds` nunca era lido; a campanha nunca chegava a `completed`; e o
  * teto diario (`daily_limit`/`messages_sent_today`) existia so no schema.
+ *
+ * F70-S13: conversa que o disparo ABRIU publica `conversation.opened` depois do
+ * commit (construtor do catalogo, eventId canonico `<conversa>:opened`). A criacao
+ * e upsert por `(channel_id, remote_id)`: o perdedor de uma corrida com o inbound
+ * reusa a conversa vencedora e nao anuncia nada; rollback nao anuncia nada.
  */
 import { Buffer } from 'node:buffer';
 import { and, asc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
@@ -26,8 +31,8 @@ import type { DbTx } from '@hm/db';
 import { GraphClient, fetchChannelQuality, type ChannelHealth } from '@hm/channels';
 import { decideOutbound, isMarketCode } from '@hm/shared';
 import type { ChannelKind, MarketCode, OutboundDecision } from '@hm/shared';
-import { makeEnvelope, QUEUES } from '@hm/shared/mq';
-import type { MqHandle } from '@hm/shared/mq';
+import { domainEvents, emitDomainEvent, makeEnvelope, QUEUES } from '@hm/shared/mq';
+import type { DomainEventDraft, MqHandle } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
 import type { CampaignErrorAction } from '@hm/channels';
 import type {
@@ -71,7 +76,17 @@ export interface CampaignDbDeps {
   readonly channel: MqChannel;
   readonly logger: Logger;
   readonly graph?: GraphClient;
+  /** F70-S13: publicacao de eventos de dominio (webhooks de saida). Nunca lanca. */
+  readonly emitEvent?: (draft: DomainEventDraft) => Promise<boolean>;
 }
+
+/** Resultado da transacao de disparo + a conversa que ela abriu (anunciada apos o commit). */
+interface DispatchTx {
+  readonly outcome: DispatchOutcome;
+  readonly opened: { readonly conversationId: string; readonly contactId: string } | null;
+}
+
+const settled = (outcome: DispatchOutcome): DispatchTx => ({ outcome, opened: null });
 
 async function loadChannelToken(
   tx: DbTx,
@@ -139,6 +154,7 @@ function isDue(now: Date) {
 
 export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts {
   const graph = deps.graph ?? new GraphClient();
+  const emitEvent = deps.emitEvent ?? emitDomainEvent;
 
   return {
     async listDueCampaigns(now: Date): Promise<RunningCampaign[]> {
@@ -427,7 +443,7 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
       idempotencyKey: string,
       now: Date,
     ): Promise<DispatchOutcome> {
-      return withWorkspace(campaign.workspaceId, async (tx) => {
+      const done = await withWorkspace(campaign.workspaceId, async (tx): Promise<DispatchTx> => {
         // (1) Claim atomico: so avanca quem ainda esta pending E devido.
         const claimed = await tx
           .update(campaignRecipients)
@@ -444,7 +460,7 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           )
           .returning({ attempts: campaignRecipients.attempts });
         const claim = claimed[0];
-        if (!claim) return { kind: 'skipped' };
+        if (!claim) return settled({ kind: 'skipped' });
         const attempts = claim.attempts;
 
         const steps = await loadSteps(tx, campaign.id);
@@ -455,7 +471,7 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           .where(eq(campaignSteps.id, dispatch.stepId));
         if (!step) {
           await failRecipient(tx, dispatch.recipientId, 'step_missing');
-          return { kind: 'invalid', reason: 'step_missing' };
+          return settled({ kind: 'invalid', reason: 'step_missing' });
         }
 
         const [contact] = await tx
@@ -464,7 +480,7 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           .where(eq(contacts.id, dispatch.contactId));
         if (!contact || !contact.phone) {
           await failRecipient(tx, dispatch.recipientId, 'missing_phone');
-          return { kind: 'invalid', reason: 'missing_phone' };
+          return settled({ kind: 'invalid', reason: 'missing_phone' });
         }
         const phone = contact.phone;
 
@@ -490,7 +506,7 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
             dispatch.recipientId,
             advanceAfterDispatch(steps, dispatch.stepIndex, now),
           );
-          return { kind: 'duplicate' };
+          return settled({ kind: 'duplicate' });
         }
         const deliveryId = insertedRow.id;
 
@@ -504,9 +520,12 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
             ),
           );
         let conversationId: string;
+        let opened: DispatchTx['opened'] = null;
         if (existingConv) {
           conversationId = existingConv.id;
         } else {
+          // Upsert: o inbound pode criar a mesma conversa ao mesmo tempo (o contato
+          // escreveu). Sem o ON CONFLICT a UNIQUE derrubaria o disparo inteiro.
           const convRows = await tx
             .insert(conversations)
             .values({
@@ -516,13 +535,28 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
               remoteId: phone,
               status: 'open',
             })
+            .onConflictDoNothing({ target: [conversations.channelId, conversations.remoteId] })
             .returning({ id: conversations.id });
           const conv = convRows[0];
-          if (!conv) {
-            await applyFailure(tx, dispatch.recipientId, attempts, now, 'conversation_failed');
-            return { kind: 'error', errorCode: '131008' };
+          if (conv) {
+            conversationId = conv.id;
+            opened = { conversationId: conv.id, contactId: dispatch.contactId };
+          } else {
+            const [winner] = await tx
+              .select({ id: conversations.id })
+              .from(conversations)
+              .where(
+                and(
+                  eq(conversations.channelId, campaign.channelId),
+                  eq(conversations.remoteId, phone),
+                ),
+              );
+            if (!winner) {
+              await applyFailure(tx, dispatch.recipientId, attempts, now, 'conversation_failed');
+              return settled({ kind: 'error', errorCode: '131008' });
+            }
+            conversationId = winner.id;
           }
-          conversationId = conv.id;
         }
 
         const messageRows = await tx
@@ -541,7 +575,8 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
         const message = messageRows[0];
         if (!message) {
           await applyFailure(tx, dispatch.recipientId, attempts, now, 'message_failed');
-          return { kind: 'error', errorCode: '131008' };
+          // A conversa criada acima commita junto com a falha: continua anunciada.
+          return { outcome: { kind: 'error', errorCode: '131008' }, opened };
         }
         const messageId = message.id;
 
@@ -573,8 +608,21 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           contentType: 'application/json',
         });
 
-        return { kind: 'enqueued' };
+        return { outcome: { kind: 'enqueued' }, opened };
       });
+
+      // F70-S13: fora da transacao — o commit aconteceu.
+      if (done.opened !== null) {
+        await emitEvent(
+          domainEvents.conversationOpened(campaign.workspaceId, {
+            conversationId: done.opened.conversationId,
+            contactId: done.opened.contactId,
+            channelId: campaign.channelId,
+            trigger: 'inbound',
+          }),
+        );
+      }
+      return done.outcome;
     },
 
     async settleCampaign(campaign: RunningCampaign, now: Date): Promise<boolean> {

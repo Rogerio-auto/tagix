@@ -44,6 +44,9 @@ def _build_ctx(state: AgentState) -> dict[str, Any]:
     return {
         "workspace_id": state["workspace_id"],
         "conversation_id": state.get("conversation_id"),
+        # F70-S10: as tools `database` (query_contact/query_deal) operam sobre o
+        # contato da conversa; sem ele no ctx elas sempre respondiam "sem contato".
+        "contact_id": state.get("contact_id"),
         "agent_id": state["agent_id"],
         "execution_id": state.get("execution_id") or state.get("thread_id", ""),
         "is_playground": bool(state.get("is_playground", False)),
