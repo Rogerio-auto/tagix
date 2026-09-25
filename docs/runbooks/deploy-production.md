@@ -193,6 +193,12 @@ antigo no instante da migração.
 Revisão de PR: migration destrutiva sem o deploy de expand já em produção é bloqueio. Rollback
 de código com migration no meio: [`rollback-deploy.md`](./rollback-deploy.md) §4.
 
+**Exceção registrada — 0091 (F70-S24):** troca o índice único da outbox e tira o
+`SELECT(event_id)` do `hm_app`, o que o `enqueueOutbox` anterior à F70-S24 não suporta. Só é
+destrutiva se a 0086 já estiver em produção. Checagem e pré-voos antes de subir (incluindo as
+execuções de flow `running` que a F70-S25 reanima no primeiro tick):
+[`outbox-operations.md`](./outbox-operations.md) §3 e §4.
+
 ---
 
 ## 4. Operação
@@ -258,6 +264,8 @@ docker exec $(docker ps -qf name=leadium_postgres) \
   - CI (GitHub Actions) buildando/pushando imagens p/ registry em vez de buildar no nó.
   - `pgAdmin`/RabbitMQ UI atrás do Traefik com auth, se necessário.
   - Backups automáticos (cron) do Postgres da Leadium.
+  - Papéis de login separados por serviço (hoje api/workers/agent-runtime conectam como o
+    superuser `PG_USER`): plano em [`database-login-roles.md`](./database-login-roles.md).
 
 ---
 
