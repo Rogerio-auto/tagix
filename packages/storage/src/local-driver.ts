@@ -1,7 +1,9 @@
 import { createHmac } from 'node:crypto';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { access, mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { IStorageDriver, PutObjectInput, SignedUrl, SignedUrlOptions } from './types';
+import type { IStorageProbe, StorageProbeResult } from './errors';
 import { toBuffer } from './stream';
 
 export interface LocalDriverOptions {
@@ -14,7 +16,7 @@ export interface LocalDriverOptions {
 }
 
 /** Driver de dev: grava no filesystem; signed URL = link com HMAC + expiração. */
-export class LocalDriver implements IStorageDriver {
+export class LocalDriver implements IStorageDriver, IStorageProbe {
   constructor(private readonly opts: LocalDriverOptions) {}
 
   private filePath(key: string): string {
@@ -45,5 +47,24 @@ export class LocalDriver implements IStorageDriver {
 
   async delete(key: string): Promise<void> {
     await rm(this.filePath(key), { force: true });
+  }
+
+  /**
+   * Sonda do dev: o diretório base existe (ou pode ser criado) e aceita escrita.
+   * Permissão negada vira `denied`, igual a uma credencial recusada no R2.
+   */
+  async probe(_timeoutMs: number): Promise<StorageProbeResult> {
+    const started = Date.now();
+    try {
+      await mkdir(this.opts.basePath, { recursive: true });
+      await access(this.opts.basePath, constants.W_OK);
+      return { state: 'ok', durationMs: Date.now() - started };
+    } catch (err: unknown) {
+      const raw: unknown =
+        typeof err === 'object' && err !== null ? Reflect.get(err, 'code') : undefined;
+      const code = typeof raw === 'string' ? raw : 'Unknown';
+      const denied = code === 'EACCES' || code === 'EPERM' || code === 'EROFS';
+      return { state: denied ? 'denied' : 'unreachable', code, durationMs: Date.now() - started };
+    }
   }
 }
