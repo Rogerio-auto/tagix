@@ -59,6 +59,37 @@ O Leadium avisar outros sistemas (o Rogério OS em primeiro lugar) quando algo a
 
 ## Definition of Done
 
-- [ ] evento real entregue num receptor de teste (local)
-- [ ] retentativa e dedup testadas
-- [ ] assinatura `x-hm-signature-256` verificada no teste
+- [x] evento real entregue num receptor de teste (local)
+- [x] retentativa e dedup testadas
+- [x] assinatura `x-hm-signature-256` verificada no teste
+
+## Validação
+
+```bash
+pnpm --filter @hm/shared exec vitest run src/mq --maxWorkers=2
+pnpm --filter @hm/workers exec vitest run src/webhooks --maxWorkers=2
+pnpm --filter @hm/api exec vitest run src/internal/tools src/routes/conversations/state.test.ts src/routes/conversations/__tests__/cycle-timestamps.integration.test.ts src/routes/deals src/routes/conversions src/routes/v1/routes.test.ts src/routes/dev --maxWorkers=2
+pnpm --filter @hm/shared typecheck
+pnpm --filter @hm/workers typecheck
+pnpm --filter @hm/api typecheck
+```
+
+## Resumo
+
+- **Fluxo:** produtor, depois do commit → `emitDomainEvent` → `hm.events` com routing key
+  `domain.<evento>` → fila `hm.q.webhooks` (bind `domain.#`, confiável: retry 5s→30min + DLQ)
+  → consumer (`apps/workers/src/webhooks/consumer.ts`) → `fanoutEvent` → deliveries → dispatcher
+  (HMAC `x-hm-signature-256`, backoff, SSRF-safe).
+- **Catálogo único:** `DOMAIN_EVENTS` em `packages/shared/src/mq/domain-events.ts`; a API de
+  gestão (`WEBHOOK_EVENTS`) deriva dele. Contrato Zod **estrito** por evento: campo fora do
+  contrato não sai. `eventId` canônico por construtor; `_meta.occurredAt` novo.
+- **Onde publica:** inbound (`message.received`, `conversation.opened` na criação), outbound
+  (`message.sent`), status da conversa (`conversation.resolved`, `conversation.opened` na
+  reabertura), deals (`created`, `stage_changed`, `won`, `lost`), conversões (manual, API
+  pública, tool da IA, automação), tools da IA (`conversation.handoff` em `transfer_to_human`,
+  `conversation.resolved`, `deal.stage_changed`). Tools declaram `events` como dado e o router
+  interno publica só depois do commit.
+- **Dedup sem corrida:** advisory lock de transação por (webhook, eventId) no fan-out.
+- **Pendências:** índice único `(webhook_id, payload->_meta->eventId)` (migração) para o dedup
+  deixar de varrer as entregas do webhook; `conversation.opened` de leadgen/coexistência/
+  campanhas; outbox transacional (queda do processo entre commit e publicação perde o aviso).
