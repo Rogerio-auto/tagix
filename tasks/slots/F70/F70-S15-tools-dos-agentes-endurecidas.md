@@ -2,7 +2,7 @@
 id: F70-S15
 title: Tools dos agentes — endpoint confere habilitação, log correto e tools de contato
 phase: F70
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F70-S10]
