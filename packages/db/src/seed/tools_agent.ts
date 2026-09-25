@@ -25,6 +25,13 @@
  *
  * `add_contact_tag` / `update_contact` (F70-S15) são `workflow`: o efeito roda no Node
  * (`apps/api/src/internal/tools/contact-handlers.ts`) sobre o contato da conversa.
+ *
+ * Allowlists de escrita das tools de contato (F70-S23): `allowed_tags` (etiquetas que o
+ * agente pode aplicar) e `custom_fields_write_keys` (chaves de `custom_fields` que ele pode
+ * gravar). O catálogo global NÃO as declara, de propósito: ausência = nada liberado. O
+ * operador libera por agente em `agent_tools.overrides`; uma tool custom do workspace com
+ * a mesma key pode fixar a lista em `handler_config`, e aí ela vira teto do override.
+ * Regra completa em `contact-handlers.ts#resolveWriteAllowlist`.
  */
 import { and, eq, isNull } from 'drizzle-orm';
 import type { DB } from '../client';
@@ -217,9 +224,9 @@ export const AGENT_TOOLS: readonly AgentToolSeed[] = [
     key: 'add_contact_tag',
     name: 'Etiquetar contato',
     description:
-      "Aplica uma etiqueta já existente ao contato desta conversa (ex.: 'atendimento-humano' quando uma pessoa da equipe precisa assumir). Não cria etiquetas novas: se a etiqueta não existir, a ação é recusada.",
+      "Aplica ao contato desta conversa uma etiqueta que o operador liberou para você (ex.: 'atendimento-humano' quando uma pessoa da equipe precisa assumir). Não cria etiquetas: etiqueta inexistente ou não liberada é recusada.",
     category: 'workflow',
-    schema: fn('add_contact_tag', 'Aplica uma etiqueta existente ao contato da conversa.', {
+    schema: fn('add_contact_tag', 'Aplica uma etiqueta liberada ao contato da conversa.', {
       type: 'object',
       required: ['tag'],
       properties: {
@@ -227,7 +234,7 @@ export const AGENT_TOOLS: readonly AgentToolSeed[] = [
           type: 'string',
           minLength: 1,
           maxLength: 80,
-          description: 'Nome exato de uma etiqueta que já existe no workspace.',
+          description: "Nome exato de uma etiqueta liberada para você (ex.: 'atendimento-humano').",
         },
       },
       additionalProperties: false,
@@ -238,12 +245,19 @@ export const AGENT_TOOLS: readonly AgentToolSeed[] = [
     key: 'update_contact',
     name: 'Atualizar contato',
     description:
-      'Atualiza dados do contato desta conversa: nome de exibição, idioma, fuso horário e campos personalizados. Telefone, e-mail e consentimento NÃO podem ser alterados por aqui.',
+      'Atualiza dados do contato desta conversa: nome de exibição, idioma, fuso horário e os campos personalizados liberados para você. Telefone, e-mail e consentimento NÃO podem ser alterados por aqui.',
     category: 'workflow',
     schema: fn('update_contact', 'Atualiza campos permitidos do contato da conversa.', {
       type: 'object',
       properties: {
-        display_name: { type: ['string', 'null'], minLength: 1, maxLength: 200 },
+        // F70-S23 (L-f/L-g): volta ao prompt em todo turno; `null` = não informado.
+        display_name: {
+          type: ['string', 'null'],
+          minLength: 1,
+          maxLength: 80,
+          description:
+            'Nome pelo qual o contato quer ser chamado: uma linha, sem colchetes, até 80 caracteres.',
+        },
         language: {
           type: ['string', 'null'],
           pattern: '^[a-z]{2,3}(-([A-Z]{2}|[0-9]{3}))?$',
@@ -260,7 +274,8 @@ export const AGENT_TOOLS: readonly AgentToolSeed[] = [
           maxProperties: 20,
           propertyNames: { pattern: '^[a-z][a-z0-9_]{0,63}$' },
           additionalProperties: { type: ['string', 'number', 'boolean', 'null'] },
-          description: 'Campos personalizados (merge: só as chaves informadas mudam).',
+          description:
+            'Campos personalizados (merge: só as chaves informadas mudam). Só chaves liberadas para você; as demais são recusadas.',
         },
       },
       additionalProperties: false,
@@ -391,6 +406,13 @@ export const AGENT_TOOL_MIGRATIONS: ReadonlyArray<{
     keys: ['add_contact_tag', 'update_contact'],
     // M1: leitura padrão sem telefone/e-mail + `custom_fields_keys` vazio.
     updates: ['query_contact'],
+  },
+  {
+    // F70-S23: descrições das allowlists de escrita e `display_name` até 80. A mesma
+    // migration troca a função do trigger da marca humana (retomada automática).
+    file: '0089_f70_contact_tool_allowlists.sql',
+    keys: [],
+    updates: ['add_contact_tag', 'update_contact'],
   },
 ];
 

@@ -624,6 +624,13 @@
       "when": 1781452849000,
       "tag": "0088_f70_ai_enabled_by_human",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1781452850000,
+      "tag": "0089_f70_contact_tool_allowlists",
+      "breakpoints": true
     }
   ]
 }
