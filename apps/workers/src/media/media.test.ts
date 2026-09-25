@@ -95,6 +95,12 @@ interface Fakes {
   emit: ReturnType<typeof vi.fn>;
   emitFailed: ReturnType<typeof vi.fn>;
   markStatus: ReturnType<typeof vi.fn>;
+  markFailed: ReturnType<typeof vi.fn>;
+  metrics: {
+    storageFailure: ReturnType<typeof vi.fn>;
+    jobParked: ReturnType<typeof vi.fn>;
+    mediaFailed: ReturnType<typeof vi.fn>;
+  };
   download: IChannelAdapter['downloadMedia'];
 }
 
@@ -120,6 +126,8 @@ function fakes(opts: {
   const emit = vi.fn(async () => undefined);
   const emitFailed = vi.fn(async () => undefined);
   const markStatus = vi.fn(async () => undefined);
+  const markFailed = vi.fn(async () => undefined);
+  const metrics = { storageFailure: vi.fn(), jobParked: vi.fn(), mediaFailed: vi.fn() };
 
   const channels: MediaChannelResolver = { resolve: vi.fn(async () => resolved) };
   const storage: MediaStoragePort = {
@@ -132,16 +140,19 @@ function fakes(opts: {
     findKeyBySha256: vi.fn(async () => opts.keyBySha ?? null),
     update,
     markStatus,
+    markFailed,
   };
   const socket: MediaSocketPort = { emitMediaReady: emit, emitMediaFailed: emitFailed };
 
   return {
-    deps: { channels, storage, persistence, socket, retry: fastRetry },
+    deps: { channels, storage, persistence, socket, retry: fastRetry, metrics },
     upload,
     update,
     emit,
     emitFailed,
     markStatus,
+    markFailed,
+    metrics,
     download: adapter.downloadMedia,
   };
 }
@@ -286,16 +297,19 @@ describe('runMediaPipeline — retry de download', () => {
 
     const res = await runMediaPipeline(makeJob(), f.deps, logger);
 
-    expect(res).toEqual({ outcome: 'failed', reason: 'media_unavailable' });
-    // Esgotou as 3 tentativas in-process.
+    // 404 na Meta = mídia expirada: falha definitiva na hora, com esse motivo.
+    expect(res).toEqual({ outcome: 'failed', reason: 'media_expired' });
+    // Esgotou as 3 tentativas in-process (re-resolução), sem passar pela fila.
     expect((f.deps.channels.resolve as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
     expect(f.download).toHaveBeenCalledTimes(3);
-    expect(f.markStatus).toHaveBeenCalledWith(WS, 'm1', 'failed');
+    expect(f.markFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: WS, messageId: 'm1', reason: 'media_expired', code: 'Http404' }),
+    );
     expect(f.emitFailed).toHaveBeenCalledOnce();
     expect(f.emitFailed.mock.calls[0]?.[0]).toMatchObject({
       conversationId: 'cv1',
       messageId: 'm1',
-      reason: 'media_unavailable',
+      reason: 'media_expired',
     });
     expect(f.update).not.toHaveBeenCalled();
   });
@@ -362,7 +376,7 @@ describe('runMediaPipeline — falhas terminais (failed + media_failed)', () => 
     const f = fakes({ bytes: Buffer.alloc(0) });
     const res = await runMediaPipeline(makeJob(), f.deps, logger);
     expect(res).toEqual({ outcome: 'failed', reason: 'empty_media' });
-    expect(f.markStatus).toHaveBeenCalledWith(WS, 'm1', 'failed');
+    expect(f.markFailed).toHaveBeenCalledWith(expect.objectContaining({ reason: 'empty_media' }));
     expect(f.emitFailed).toHaveBeenCalledOnce();
   });
 });
@@ -379,7 +393,7 @@ describe('runMediaPipeline — infra propaga (nack→DLX)', () => {
     expect(f.download).toHaveBeenCalledTimes(3);
     // Erro transitório NÃO marca failed (status fica downloading; MQ reprocessa).
     expect(f.emitFailed).not.toHaveBeenCalled();
-    expect(f.markStatus).not.toHaveBeenCalledWith(WS, 'm1', 'failed');
+    expect(f.markFailed).not.toHaveBeenCalled();
   });
 
   it('falha de storage propaga', async () => {

@@ -17,6 +17,8 @@ export function createStorage(): IStorageDriver {
       accessKeyId: requireEnv('R2_ACCESS_KEY_ID'),
       secretAccessKey: requireEnv('R2_SECRET_ACCESS_KEY'),
       bucket: requireEnv('R2_BUCKET'),
+      // Opcional: endpoint S3 alternativo (S3 local em dev/teste). Sem ele, o do R2.
+      ...(process.env['R2_ENDPOINT'] ? { endpoint: process.env['R2_ENDPOINT'] } : {}),
     });
   }
   return new LocalDriver({

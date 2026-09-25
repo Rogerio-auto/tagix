@@ -22,6 +22,7 @@ import type { MediaJobRoutingHints } from './job';
 import type {
   MediaChannelResolver,
   MediaFailedEmit,
+  MediaFailureInput,
   MediaMessageTarget,
   MediaPersistencePort,
   MediaPersistInput,
@@ -159,6 +160,12 @@ export class StorageMediaPort implements MediaStoragePort {
 
 /** Chave em `messages.metadata` onde guardamos a key estável do objeto (dedup). */
 const MEDIA_KEY_META = 'mediaKey' as const;
+/** `metadata.mediaFailure = { reason, code?, at }` — motivo curto da falha (F70-S27). */
+export const MEDIA_FAILURE_META = 'mediaFailure' as const;
+/** `metadata.mediaJob` — o job de download, para o reprocessamento (F70-S27). */
+export const MEDIA_JOB_META = 'mediaJob' as const;
+/** `metadata.mediaReprocess = { requestedAt, source }` — pedido em voo (F70-S27). */
+export const MEDIA_REPROCESS_META = 'mediaReprocess' as const;
 
 /**
  * Persistência default via `@hm/db`. Toda query roda dentro de
@@ -177,6 +184,7 @@ export class DbMediaPersistence implements MediaPersistencePort {
           messageId: messages.id,
           conversationId: messages.conversationId,
           mediaSha256: messages.mediaSha256,
+          failureReason: sql<string | null>`${messages.metadata} #>> '{mediaFailure,reason}'`,
         })
         .from(messages)
         .where(and(eq(messages.externalId, externalId), isNull(messages.deletedAt)))
@@ -186,6 +194,7 @@ export class DbMediaPersistence implements MediaPersistencePort {
         messageId: row.messageId,
         conversationId: row.conversationId,
         existingSha256: row.mediaSha256,
+        currentFailureReason: row.failureReason,
       };
     });
   }
@@ -214,10 +223,36 @@ export class DbMediaPersistence implements MediaPersistencePort {
           mediaSizeBytes: input.mediaSizeBytes,
           mediaSha256: input.mediaSha256,
           mediaStatus: input.mediaStatus,
-          metadata: sql`${messages.metadata} || ${JSON.stringify({ [MEDIA_KEY_META]: input.mediaKey })}::jsonb`,
+          // Sucesso limpa o rastro da falha anterior (motivo, job guardado e pedido de
+          // reprocessamento) — a mensagem volta a ser só mídia pronta.
+          metadata: sql`(${messages.metadata} - ${MEDIA_FAILURE_META}::text - ${MEDIA_JOB_META}::text - ${MEDIA_REPROCESS_META}::text) || ${JSON.stringify({ [MEDIA_KEY_META]: input.mediaKey })}::jsonb`,
           updatedAt: new Date(),
         })
         .where(eq(messages.id, input.messageId));
+    });
+  }
+
+  async markFailed(input: MediaFailureInput): Promise<void> {
+    const { messages } = schema;
+    const patch = {
+      [MEDIA_FAILURE_META]: {
+        reason: input.reason,
+        ...(input.code !== undefined ? { code: input.code } : {}),
+        at: new Date().toISOString(),
+      },
+      [MEDIA_JOB_META]: input.job,
+    };
+    await withWorkspace(input.workspaceId, async (tx) => {
+      await tx
+        .update(messages)
+        .set({
+          mediaStatus: 'failed',
+          metadata: sql`${messages.metadata} || ${JSON.stringify(patch)}::jsonb`,
+          updatedAt: new Date(),
+        })
+        // Nunca rebaixa mídia pronta: um job atrasado que falha depois de outro ter
+        // ingerido o arquivo não pode apagar o sucesso.
+        .where(and(eq(messages.id, input.messageId), isNull(messages.mediaSha256)));
     });
   }
 
