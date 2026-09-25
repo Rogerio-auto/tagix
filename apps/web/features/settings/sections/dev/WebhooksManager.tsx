@@ -126,8 +126,11 @@ export default function WebhooksManager(): React.JSX.Element {
         <div>
           <h3 className="text-sm font-medium text-text">Webhooks outbound</h3>
           <p className="text-xs text-text-low">
-            Recebem eventos do workspace em uma URL sua, assinados com HMAC (header
-            `x-hm-signature-256`).
+            Recebem eventos do workspace em uma URL sua. Cada entrega é assinada com
+            HMAC-SHA256 de <code className="font-mono text-text">timestamp.corpo</code>{' '}
+            (headers <code className="font-mono text-text">x-hm-timestamp</code> e{' '}
+            <code className="font-mono text-text">x-hm-signature-256</code>); recuse
+            entregas com mais de 5 minutos.
           </p>
         </div>
         <Button variant="primary" onClick={openCreate}>
@@ -222,7 +225,7 @@ export default function WebhooksManager(): React.JSX.Element {
         open={createdSecret !== null}
         onClose={() => setCreatedSecret(null)}
         title="Guarde o segredo do webhook"
-        description="Use-o para verificar a assinatura HMAC das entregas. Só será exibido uma vez."
+        description="Use-o para verificar a assinatura das entregas (HMAC-SHA256 de timestamp.corpo). Só será exibido uma vez."
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setCreatedSecret(null)}>
