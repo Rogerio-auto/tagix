@@ -1,49 +1,17 @@
 /**
- * Engine de flows do processo da API, com queue port REAL.
+ * Engine de flows do processo da API.
  *
- * A engine default exportada por `@hm/flow-engine` usa um sink in-memory (sem consumidor
- * no processo da API): qualquer `triggerFlow` criaria a `flow_execution` em `running` mas
- * NUNCA enfileiraria o primeiro step para o worker — o flow ficaria parado, sem enviar
- * mensagem. Aqui injetamos um `FlowQueuePort` que publica de verdade o step em
- * `hm.q.flow.execution` (exchange `hm.events`, mesma routing key da engine/worker/scheduler),
- * de modo que o worker de flows (F4-S03) processe e ENVIE.
+ * F70-S25: a engine não tem mais port de fila. O port de banco real grava o job de cada
+ * step (`hm.q.flow.execution`) na OUTBOX, na mesma transação que cria ou avança a execução;
+ * o relay dos workers publica depois do commit, com confirms. Antes a API injetava um
+ * publisher próprio que publicava DEPOIS do commit: uma queda entre os dois deixava a
+ * execução `running` sem passo, e um broker fora derrubava a rota com a execução já
+ * gravada.
  *
- * O canal AMQP é lazy e compartilhado por processo (mesmo padrão de `conversations/agent.ts`).
- * O publish é aguardado: uma falha sobe como erro (a rota responde 5xx) em vez de devolver
- * um 202 falso com a execução presa.
+ * Mantido como módulo próprio para ser o ponto único de composição da engine na API (as
+ * rotas de flows e de submissões importam daqui, e os testes o substituem por um fake).
  */
-import {
-  connectMq,
-  makeEnvelope,
-  publish,
-  FLOW_EXECUTION_ROUTING_KEY,
-  FLOW_EXECUTION_STEP_TYPE,
-  type MqHandle,
-} from '@hm/shared/mq';
-import { createFlowEngine, type FlowQueuePort } from '@hm/flow-engine';
+import { createFlowEngine } from '@hm/flow-engine';
 
-let mqHandlePromise: Promise<MqHandle> | null = null;
-
-async function getMqChannel() {
-  mqHandlePromise ??= connectMq();
-  try {
-    return (await mqHandlePromise).channel;
-  } catch (err) {
-    mqHandlePromise = null;
-    throw err;
-  }
-}
-
-const flowQueuePort: FlowQueuePort = {
-  async enqueueStep(input) {
-    const channel = await getMqChannel();
-    const envelope = makeEnvelope(FLOW_EXECUTION_STEP_TYPE, input.workspaceId, {
-      workspaceId: input.workspaceId,
-      executionId: input.executionId,
-    });
-    publish(channel, FLOW_EXECUTION_ROUTING_KEY, envelope);
-  },
-};
-
-/** Engine de flows da API: createExecution real (DB/RLS) + enqueue real (RabbitMQ). */
-export const flowEngine = createFlowEngine({ queue: flowQueuePort });
+/** Engine de flows da API: createExecution real (DB/RLS) com o primeiro step na outbox. */
+export const flowEngine = createFlowEngine();

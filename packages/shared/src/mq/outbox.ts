@@ -80,11 +80,18 @@ export function domainEventsOutbox(drafts: readonly DomainEventDraft[]): OutboxM
  *   do teste do criador de campanhas; campanhas e followups; envio dos flows; resposta
  *   do agente de IA; lembretes da agenda (F70-S16/S20/S21);
  * - `media`: download da mídia recebida (inbound) e dos ecos e do histórico da
- *   coexistência (F70-S20/S21).
+ *   coexistência (F70-S20/S21);
+ * - `flows`: gatilho de turno do agente de IA (inbound, troca de agente, transferência,
+ *   retomada, follow-up — F70-S25);
+ * - `flowExecution`: passo de flow, gravado com a transição da execução (F70-S25);
+ * - `campaigns`: followup `on_reply` de campanha, com a marca de resposta (F70-S25).
  */
 export const OUTBOX_JOB_QUEUES = [
   QUEUES.outbound,
   QUEUES.media,
+  QUEUES.flows,
+  QUEUES.flowExecution,
+  QUEUES.campaigns,
 ] as const satisfies readonly QueueName[];
 export type OutboxJobQueue = (typeof OUTBOX_JOB_QUEUES)[number];
 

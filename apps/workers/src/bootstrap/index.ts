@@ -278,7 +278,7 @@ export async function startWorkers(
 
   // Worker de execucao de flows (F4-S03): consome hm.q.flow.execution -> processFlowStep.
   const flow = await startFlowWorker({
-    deps: createFlowWorkerDeps(channel, logger),
+    deps: createFlowWorkerDeps(logger),
     logger,
   });
 
@@ -291,20 +291,21 @@ export async function startWorkers(
   });
 
   // Scheduler singleton (Redis lock): follow-up cron (F2-S21) + rollup de métricas
-  // (F2-S13, idempotente). Reusa o `channel` AMQP de boot como transporte de publish.
+  // (F2-S13, idempotente). Os gatilhos da IA vão pela outbox (F70-S25).
   const redis = new Redis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
     lazyConnect: true,
     maxRetriesPerRequest: 1,
   });
-  const followup = startFollowupScheduler({ redis, channel, logger });
+  const followup = startFollowupScheduler({ redis, logger });
   // Leads de anúncios da Meta (F69-S03): consumer de hm.q.leadgen + reconciliação
   // periódica (singleton via lock Redis) do que o webhook não entregou.
   const leadgen = await startLeadgenWorker({ deps: createLeadgenDeps(channel, logger), logger });
   const leadgenReconcile = startLeadgenReconcileScheduler({ redis, channel, logger });
   // Scheduler de reengajamento da IA (F30-S06): retoma conversas em handoff ociosas
   // ou quando a janela de horário comercial reabre; idempotente via Redis lock.
-  const reengagement = startReengagementScheduler({ redis, channel, logger });
-  // Scheduler de wakeup de flows (F4-S03): re-enfileira execucoes waiting vencidas.
+  const reengagement = startReengagementScheduler({ redis, logger });
+  // Scheduler de wakeup de flows (F4-S03): re-enfileira execucoes waiting vencidas e
+  // reanima (ou expira) as running paradas sem passo (F70-S25).
   const flowScheduler = startFlowWakeupScheduler({ redis, channel, logger });
   // Worker-campaigns (F6-S05): tick 1min que conduz o envio das campanhas RUNNING
   // (lock por campanha + dispatch idempotente + rate adaptativo + auto-pause RED).

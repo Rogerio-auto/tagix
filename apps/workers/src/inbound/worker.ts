@@ -27,7 +27,7 @@ import type { Logger } from '@hm/logger';
 import { runInboundPipeline } from './pipeline';
 import { ChannelInboundParser } from './parse';
 import { createStatusDeps } from './status';
-import { DbInboundChannelResolver, DbInboundPersistence, MqInboundFlowEnqueue, MqInboundSocketEmit } from './db-ports';
+import { DbInboundChannelResolver, DbInboundPersistence, MqInboundSocketEmit } from './db-ports';
 import { createRevocationStep } from './revocation';
 import { createInstagramEchoStep } from './instagram-echoes';
 import { gateCampaignAiHandoff } from './ai-gate';
@@ -86,7 +86,6 @@ export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDe
   // F59-S06: revogacao em linguagem natural, antes de persistir. Reusa o resolver
   // de canal para nao duplicar `routing hints -> canal -> workspace`.
   const revocation = createRevocationStep(new DbInboundChannelResolver());
-  const flow = new MqInboundFlowEnqueue(channel);
   const statusDeps = createStatusDeps(channel);
   // Hook de trigger dispatch de flows (F4-S13): avalia/dispara flows + resume waiting.
   const triggerDeps = createTriggerDispatchDeps(logger);
@@ -94,7 +93,7 @@ export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDe
   // F70-S07: o handoff para a IA passa pela trava de origem (mesmo port do flow
   // `ai_action`) — só a mutação de IA é usada, então o publisher default basta.
   const campaignInboundPorts = gateCampaignAiHandoff(
-    createCampaignInboundPorts({ channel, logger }),
+    createCampaignInboundPorts({ logger }),
     createOutboundPort(),
     logger,
   );
@@ -142,7 +141,6 @@ export function createInboundDeps(channel: MqChannel, logger: Logger): InboundDe
   };
   const persistence = new DbInboundPersistence(
     socket,
-    flow,
     statusDeps,
     logger,
     undefined,

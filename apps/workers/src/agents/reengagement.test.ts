@@ -12,9 +12,11 @@
  *
  * `@hm/db` é mockado (getDb().execute, withWorkspace).
  * Redis é um fake com semântica `SET NX` real.
- * Canal AMQP é um spy.
+ * `enqueueOutbox` é mockado: o gatilho gravado na outbox (F70-S25) chega à outbox fake
+ * do teste como `{ queue, envelope }`.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { OutboxMessage } from '@hm/shared/mq';
 import type { ReengagementDeps } from './reengagement';
 import { isWithinBusinessHours } from './reengagement';
 
@@ -39,10 +41,18 @@ const txUpdate = vi.fn(() => ({
 
 let withWorkspaceImpl: (id: string, fn: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
 
+/** Outbox fake corrente: recebe o que o SUT grava com `enqueueOutbox` (F70-S25). */
+let currentOutbox: { record(msgs: readonly OutboxMessage[]): void } | null = null;
+
 vi.mock('@hm/db', () => ({
   getDb: () => ({ execute: discoverExecute }),
   withWorkspace: (id: string, fn: (tx: unknown) => Promise<unknown>) =>
     withWorkspaceImpl(id, fn),
+  enqueueOutbox: async (_tx: unknown, msgs: OutboxMessage | readonly OutboxMessage[]) => {
+    const list = Array.isArray(msgs) ? (msgs as readonly OutboxMessage[]) : [msgs as OutboxMessage];
+    currentOutbox?.record(list);
+    return list.length;
+  },
   schema: {
     workspaces: { id: 'id', settings: 'settings' },
     conversations: {
@@ -99,16 +109,24 @@ function makeRedis() {
   };
 }
 
-/** Canal AMQP fake: captura envelopes publicados. */
-function makeChannel() {
+/** Outbox fake: captura o que foi gravado (fila de destino + envelope). Vira a corrente. */
+function makeOutbox() {
   const published: { queue: string; envelope: Record<string, unknown> }[] = [];
-  return {
+  const outbox = {
     published,
-    sendToQueue: vi.fn((queue: string, buf: Buffer) => {
-      published.push({ queue, envelope: JSON.parse(buf.toString()) as Record<string, unknown> });
-      return true;
-    }),
+    enqueue: vi.fn(),
+    record(msgs: readonly OutboxMessage[]): void {
+      for (const m of msgs) {
+        outbox.enqueue(m);
+        published.push({
+          queue: m.routingKey,
+          envelope: m.envelope as unknown as Record<string, unknown>,
+        });
+      }
+    },
   };
+  currentOutbox = outbox;
+  return outbox;
 }
 
 function makeLogger() {
@@ -118,6 +136,9 @@ function makeLogger() {
 // ─── Constantes de teste ──────────────────────────────────────────────────────
 
 const WS = '00000000-0000-0000-0000-0000000000bb';
+// F70-S25: o gatilho vai pela outbox, cujo envelope exige workspace uuid.
+const WS_BAD = '00000000-0000-0000-0000-0000000000b1';
+const WS_OK = '00000000-0000-0000-0000-0000000000b2';
 const CONV = '00000000-0000-0000-0000-00000000c002';
 const CONTACT = '00000000-0000-0000-0000-00000000d002';
 const CHANNEL_ID = '00000000-0000-0000-0000-00000000e002';
@@ -142,15 +163,15 @@ function makeEligibleRow(overrides: Partial<{
 // ─── Tipos auxiliares ─────────────────────────────────────────────────────────
 
 type Redis = ReturnType<typeof makeRedis>;
-type Channel = ReturnType<typeof makeChannel>;
+type Outbox = ReturnType<typeof makeOutbox>;
 type Logger = ReturnType<typeof makeLogger>;
-interface Deps { redis: Redis; channel: Channel; logger: Logger }
+interface Deps { redis: Redis; outbox: Outbox; logger: Logger }
 
 function asDeps(d: Deps): ReengagementDeps {
   return d as unknown as ReengagementDeps;
 }
 function deps(): Deps {
-  return { redis: makeRedis(), channel: makeChannel(), logger: makeLogger() };
+  return { redis: makeRedis(), outbox: makeOutbox(), logger: makeLogger() };
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -204,8 +225,8 @@ describe('runReengagementTick — gatilho idle', () => {
     expect(res.skippedDuplicate).toBe(0);
 
     // Publicou no hm.q.flows com shape correto.
-    expect(d.channel.published).toHaveLength(1);
-    const pub = d.channel.published[0];
+    expect(d.outbox.published).toHaveLength(1);
+    const pub = d.outbox.published[0];
     expect(pub?.queue).toBe('hm.q.flows');
     expect(pub?.envelope).toMatchObject({ type: 'flow.run.requested', workspaceId: WS });
     expect(pub?.envelope['payload']).toEqual({
@@ -225,9 +246,9 @@ describe('runReengagementTick — gatilho idle', () => {
   it('é idempotente: 2º tick no mesmo bucket não republica', async () => {
     eligibleRows = [makeEligibleRow()];
     const redis = makeRedis();
-    const channel = makeChannel();
+    const outbox = makeOutbox();
     const logger = makeLogger();
-    const d = { redis, channel, logger };
+    const d = { redis, outbox, logger };
 
     const first = await runReengagementTick(asDeps(d), { workspaceId: WS });
     expect(first.enqueued).toBe(1);
@@ -238,13 +259,13 @@ describe('runReengagementTick — gatilho idle', () => {
     expect(second.skippedDuplicate).toBe(1);
 
     // Só um envelope publicado no total.
-    expect(channel.published).toHaveLength(1);
+    expect(outbox.published).toHaveLength(1);
   });
 
   it('novo bucket permite novo reengajamento (ai_last_human_at resetou)', async () => {
     const redis = makeRedis();
-    const channel = makeChannel();
-    const d = { redis, channel, logger: makeLogger() };
+    const outbox = makeOutbox();
+    const d = { redis, outbox, logger: makeLogger() };
 
     eligibleRows = [makeEligibleRow({ bucket_epoch: BUCKET })];
     await runReengagementTick(asDeps(d), { workspaceId: WS });
@@ -254,7 +275,7 @@ describe('runReengagementTick — gatilho idle', () => {
     const res = await runReengagementTick(asDeps(d), { workspaceId: WS });
 
     expect(res.enqueued).toBe(1);
-    expect(channel.published).toHaveLength(2);
+    expect(outbox.published).toHaveLength(2);
   });
 });
 
@@ -266,7 +287,7 @@ describe('runReengagementTick — gatilho business_hours', () => {
     const res = await runReengagementTick(asDeps(d), { workspaceId: WS });
 
     expect(res.enqueued).toBe(1);
-    expect(d.channel.published).toHaveLength(1);
+    expect(d.outbox.published).toHaveLength(1);
   });
 });
 
@@ -274,15 +295,15 @@ describe('runReengagementTick — lock de scheduler', () => {
   it('pula tick sem tocar no DB quando o lock está detido por outra instância', async () => {
     const redis = makeRedis();
     redis.store.set(REENGAGEMENT_LOCK_KEY, 'other-instance-token');
-    const channel = makeChannel();
-    const d = { redis, channel, logger: makeLogger() };
+    const outbox = makeOutbox();
+    const d = { redis, outbox, logger: makeLogger() };
 
     eligibleRows = [makeEligibleRow()];
     const res = await runReengagementTick(asDeps(d), { workspaceId: WS });
 
     expect(res.ran).toBe(false);
     expect(res.enqueued).toBe(0);
-    expect(channel.published).toHaveLength(0);
+    expect(outbox.published).toHaveLength(0);
     expect(txExecute).not.toHaveBeenCalled();
     // Não removeu o lock da outra instância.
     expect(redis.store.get(REENGAGEMENT_LOCK_KEY)).toBe('other-instance-token');
@@ -309,16 +330,16 @@ describe('runReengagementTick — descoberta cross-tenant', () => {
     const res = await runReengagementTick(asDeps(d), { workspaceId: WS });
 
     expect(res.enqueued).toBe(0);
-    expect(d.channel.published).toHaveLength(0);
+    expect(d.outbox.published).toHaveLength(0);
   });
 
   it('falha de workspace não derruba os demais e libera o lock', async () => {
-    discoverQueue = [[{ workspace_id: 'ws-bad' }, { workspace_id: 'ws-ok' }]];
+    discoverQueue = [[{ workspace_id: WS_BAD }, { workspace_id: WS_OK }]];
     const d = deps();
     eligibleRows = [makeEligibleRow()];
 
     withWorkspaceImpl = (id, fn) => {
-      if (id === 'ws-bad') return Promise.reject(new Error('boom'));
+      if (id === WS_BAD) return Promise.reject(new Error('boom'));
       // ws-ok: implementação padrão simplificada.
       const tx = {
         execute: async () => eligibleRows,
@@ -341,7 +362,7 @@ describe('runReengagementTick — descoberta cross-tenant', () => {
     expect(res.enqueued).toBe(1); // só ws-ok
     expect(d.logger.error).toHaveBeenCalledWith(
       'reengajamento: tick de workspace falhou',
-      expect.objectContaining({ workspaceId: 'ws-bad' }),
+      expect.objectContaining({ workspaceId: WS_BAD }),
     );
     // Lock liberado mesmo com falha parcial.
     expect(d.redis.store.has(REENGAGEMENT_LOCK_KEY)).toBe(false);
@@ -356,17 +377,17 @@ describe('startReengagementScheduler', () => {
 
     const handle = startReengagementScheduler(asDeps(d), { intervalMs: 5 });
     // Sem disparo imediato.
-    expect(d.channel.published).toHaveLength(0);
+    expect(d.outbox.published).toHaveLength(0);
 
     // Aguarda o primeiro tick.
     await vi.waitFor(() => {
-      expect(d.channel.sendToQueue).toHaveBeenCalled();
+      expect(d.outbox.enqueue).toHaveBeenCalled();
     });
 
     await handle.stop();
-    const after = d.channel.sendToQueue.mock.calls.length;
+    const after = d.outbox.enqueue.mock.calls.length;
     await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(d.channel.sendToQueue.mock.calls.length).toBe(after);
+    expect(d.outbox.enqueue.mock.calls.length).toBe(after);
   });
 });
 
@@ -486,7 +507,7 @@ describe('runReengagementTick — trava de origem (F70-S08)', () => {
     expect(res.ran).toBe(true);
     expect(res.enqueued).toBe(0);
     expect(res.blockedByOrigin).toBe(1);
-    expect(d.channel.published).toHaveLength(0);
+    expect(d.outbox.published).toHaveLength(0);
     expect(d.logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('trava de origem'),
       expect.objectContaining({ conversationId: CONV, workspaceId: WS }),

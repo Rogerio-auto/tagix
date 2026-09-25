@@ -6,9 +6,9 @@
  *     1d / 1h / 0=vencimento) AINDA não enviado;
  *  2. para cada (evento, offset) due: NOTIFICA o organizer em tempo real (publica
  *     `appointment:due` no socket relay `hm.q.socket.relay` → member/ws, F53-S05) +
- *     auditLog (rastreável), e — se o evento tem contato com telefone + canal
- *     WhatsApp default ativo — grava um job outbound na OUTBOX (reusa o pipeline
- *     F1-S07);
+ *     auditLog (rastreável), e — se o evento tem contato e há WhatsApp elegível —
+ *     grava a conversa, a mensagem `pending` e o job outbound (reusa o pipeline
+ *     F1-S07; ver `contact-conversation.ts`);
  *  3. NO VENCIMENTO (`start_at <= now`), se `metadata.dueAction` presente e ainda
  *     não executada, ENFILEIRA a ação reusando os ports existentes
  *     (`triggerFlow`/outbound/`move_stage`/`add_tag`). Idempotente via
@@ -22,30 +22,35 @@
  * dois; rollback, nenhum. Antes o job era publicado e a marca gravada depois, em outra
  * transação: uma falha entre os dois reenviava o lembrete no próximo tick.
  *
+ * F70-S25 — o job leva conversa e mensagem REAIS (`contact-conversation.ts`): antes ia com
+ * `conversationId: ''` e um `messageId` sem linha, e o worker outbound o recusava (DLQ). A
+ * conversa criada pelo lembrete nasce com a IA desligada e `sem-origem`. Sem WhatsApp
+ * elegível, a marca é gravada com o motivo auditado (`event.reminder.contact_skipped`).
+ *
  * Lock distribuído (Redis): só um worker tica por vez. DB/MQ são injetados via
  * ports → testáveis sem Postgres/RabbitMQ reais.
  */
 import { Buffer } from 'node:buffer';
 import { z } from 'zod';
 import { and, desc, eq, isNull, ne, sql } from 'drizzle-orm';
-import { enqueueOutbox, getDb, schema, withWorkspace, type DbTx } from '@hm/db';
-import { makeEnvelope, publish, queueJobOutbox, QUEUES } from '@hm/shared/mq';
+import { getDb, schema, withWorkspace, type DbTx } from '@hm/db';
+import { makeEnvelope, QUEUES } from '@hm/shared/mq';
 import type { MqHandle } from '@hm/shared/mq';
 import type { AppointmentDuePayload } from '@hm/shared';
-import { createFlowEngine, createQueuePort, type FlowEngineApi } from '@hm/flow-engine';
+import { createFlowEngine, type FlowEngineApi } from '@hm/flow-engine';
 import type { Logger } from '@hm/logger';
 import { acquireSchedulerLock, type RedisLike } from '../flows/scheduler';
+import { queueContactTemplate, REMINDER_OUTBOUND_JOB_TYPE } from './contact-conversation';
 
 type MqChannel = MqHandle['channel'];
 
-const { events, eventParticipants, contacts, channels, auditLogs, deals, stages, dealHistory, contactTags } =
-  schema;
+const { events, eventParticipants, auditLogs, deals, stages, dealHistory, contactTags } = schema;
 
 export const CALENDAR_REMINDERS_LOCK_KEY = 'hm:lock:scheduler:calendar-reminders' as const;
 export const CALENDAR_REMINDERS_LOCK_TTL_MS = 60_000;
 export const DEFAULT_REMINDERS_TICK_MS = 5 * 60_000; // 5min
 export const OUTBOUND_QUEUE = QUEUES.outbound;
-export const OUTBOUND_JOB_TYPE = 'outbound.request';
+export const OUTBOUND_JOB_TYPE = REMINDER_OUTBOUND_JOB_TYPE;
 
 /** Fila do socket relay (F1-S11) — reusada, NÃO reescrita (consome o relay existente). */
 export const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
@@ -357,60 +362,9 @@ async function auditDueAction(
 
 /** Ports reais (DB + MQ + flow engine). Em teste, injete um stub de `ReminderPorts`. */
 export function createReminderPorts(deps: ReminderDbDeps): ReminderPorts {
-  // Engine de flows com queue port que publica de verdade em `hm.q.flow.execution`
-  // (mesmo contrato do flow worker, F4-S03) — reuso, não reimplementação.
-  const flowEngine: FlowEngineApi = createFlowEngine({
-    queue: createQueuePort({
-      publish(routingKey, envelope) {
-        publish(deps.channel, routingKey, envelope);
-      },
-    }),
-  });
-
-  /** Resolve o canal WhatsApp default ativo do workspace (RLS-escopado). */
-  async function defaultWhatsappChannel(tx: DbTx): Promise<string | null> {
-    const [channel] = await tx
-      .select({ id: channels.id })
-      .from(channels)
-      .where(
-        and(
-          eq(channels.provider, 'meta_whatsapp'),
-          eq(channels.isActive, true),
-          eq(channels.isDefault, true),
-        ),
-      )
-      .limit(1);
-    return channel?.id ?? null;
-  }
-
-  /**
-   * Grava um template outbound ao contato na outbox, na transação `tx` (reusa o pipeline
-   * F1-S07). Quem chama já reivindicou a marca de idempotência nesta mesma transação.
-   */
-  async function enqueueTemplate(
-    tx: DbTx,
-    workspaceId: string,
-    channelId: string,
-    chatId: string,
-    messageId: string,
-    templateName: string,
-    languageCode: string,
-  ): Promise<void> {
-    const job = {
-      kind: 'template' as const,
-      channelId,
-      conversationId: '',
-      messageId,
-      chatId,
-      templateName,
-      languageCode,
-      components: [],
-    };
-    await enqueueOutbox(
-      tx,
-      queueJobOutbox(OUTBOUND_QUEUE, makeEnvelope(OUTBOUND_JOB_TYPE, workspaceId, job)),
-    );
-  }
+  // Engine de flows real: o primeiro step entra na outbox com a execução (F70-S25), então
+  // não há publisher a injetar.
+  const flowEngine: FlowEngineApi = createFlowEngine();
 
   return {
     selectDue,
@@ -462,31 +416,42 @@ export function createReminderPorts(deps: ReminderDbDeps): ReminderPorts {
 
     async sendContactReminder(reminder, offsetMin) {
       if (!reminder.contactId) return false;
-      return withWorkspace(reminder.workspaceId, async (tx) => {
-        const [contact] = await tx
-          .select({ phone: contacts.phone })
-          .from(contacts)
-          .where(eq(contacts.id, reminder.contactId as string))
-          .limit(1);
-        const phone = contact?.phone ?? null;
-        if (!phone) return false;
-
-        const channelId = await defaultWhatsappChannel(tx);
-        if (!channelId) return false;
-
-        // Marca e job na mesma transação: outro tick que já enviou este offset não passa.
-        if (!(await claimReminderOffset(tx, reminder.eventId, offsetMin))) return false;
-        await enqueueTemplate(
-          tx,
-          reminder.workspaceId,
-          channelId,
-          phone,
-          `event-reminder-${reminder.eventId}-${offsetMin}`,
-          REMINDER_TEMPLATE_NAME,
-          REMINDER_TEMPLATE_LANG,
-        );
-        return true;
+      const contactId = reminder.contactId;
+      const outcome = await withWorkspace(reminder.workspaceId, async (tx) => {
+        // Marca, conversa, mensagem e job na mesma transação: outro tick que já tratou este
+        // offset não passa, e um rollback não deixa nenhum dos quatro.
+        if (!(await claimReminderOffset(tx, reminder.eventId, offsetMin))) {
+          return { queued: false as const, reason: 'already_sent' as const };
+        }
+        const queued = await queueContactTemplate(tx, {
+          workspaceId: reminder.workspaceId,
+          contactId,
+          eventConversationId: reminder.conversationId,
+          templateName: REMINDER_TEMPLATE_NAME,
+          languageCode: REMINDER_TEMPLATE_LANG,
+          metadata: { source: 'calendar_reminder', eventId: reminder.eventId, offsetMin },
+        });
+        if (!queued.queued) {
+          // Sem WhatsApp elegível: não envia e registra o motivo, junto da marca (uma vez).
+          await tx.insert(auditLogs).values({
+            workspaceId: reminder.workspaceId,
+            actorType: 'system',
+            action: 'event.reminder.contact_skipped',
+            resourceType: 'event',
+            resourceId: reminder.eventId,
+            metadata: { offsetMin, reason: queued.reason },
+          });
+        }
+        return queued;
       });
+      if (!outcome.queued && outcome.reason !== 'already_sent') {
+        deps.logger.warn('calendar-reminders: lembrete ao contato não enviado', {
+          eventId: reminder.eventId,
+          offsetMin,
+          reason: outcome.reason,
+        });
+      }
+      return outcome.queued;
     },
 
     async runDueAction(reminder) {
@@ -511,30 +476,25 @@ export function createReminderPorts(deps: ReminderDbDeps): ReminderPorts {
               await auditDueAction(reminder.workspaceId, reminder, 'skipped', { reason: 'no_contact' });
               return;
             }
+            const contactId = reminder.contactId;
             const handled = await withWorkspace(reminder.workspaceId, async (tx) => {
-              const [contact] = await tx
-                .select({ phone: contacts.phone })
-                .from(contacts)
-                .where(eq(contacts.id, reminder.contactId as string))
-                .limit(1);
-              const phone = contact?.phone ?? null;
-              if (!phone) return { ok: false as const, reason: 'no_phone' };
-              const channelId = action.channelId ?? (await defaultWhatsappChannel(tx));
-              if (!channelId) return { ok: false as const, reason: 'no_channel' };
-              // Marca e job na mesma transação (a marca do tick depois é idempotente).
+              // Marca, conversa, mensagem e job na mesma transação (a marca do tick depois
+              // é idempotente). Sem WhatsApp elegível, a marca fica e o motivo é auditado.
               if (!(await claimDueAction(tx, reminder.eventId))) {
                 return { ok: false as const, reason: 'already_done' };
               }
-              await enqueueTemplate(
-                tx,
-                reminder.workspaceId,
-                channelId,
-                phone,
-                `event-due-action-${reminder.eventId}`,
-                action.templateName,
-                action.languageCode,
-              );
-              return { ok: true as const };
+              const queued = await queueContactTemplate(tx, {
+                workspaceId: reminder.workspaceId,
+                contactId,
+                eventConversationId: reminder.conversationId,
+                ...(action.channelId !== undefined ? { channelId: action.channelId } : {}),
+                templateName: action.templateName,
+                languageCode: action.languageCode,
+                metadata: { source: 'calendar_due_action', eventId: reminder.eventId },
+              });
+              return queued.queued
+                ? { ok: true as const }
+                : { ok: false as const, reason: queued.reason };
             });
             await auditDueAction(
               reminder.workspaceId,

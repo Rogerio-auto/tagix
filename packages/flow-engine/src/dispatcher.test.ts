@@ -94,8 +94,14 @@ function makeDeps(exec: LoadedExecution, opts: MakeDepsOpts = {}) {
     return { claimed: true, execution: current };
   };
 
+  // F70-S25: o port de banco grava o proximo step na transacao da transicao. O fake
+  // registra em `enqueued` o que o real gravaria na outbox (criacao; patch aplicado com
+  // `enqueueStep`).
   const db: FlowDbPort = {
-    createExecution: vi.fn(async () => ({ executionId: EX })),
+    createExecution: vi.fn(async (input) => {
+      enqueued.push({ workspaceId: input.workspaceId, executionId: EX });
+      return { executionId: EX };
+    }),
     loadExecution: vi.fn(async () => current),
     loadExecutionByIdOnly: vi.fn(async () => current),
     claimExecution: vi.fn(doClaim),
@@ -109,6 +115,7 @@ function makeDeps(exec: LoadedExecution, opts: MakeDepsOpts = {}) {
       if (patch.status !== undefined) row.status = patch.status;
       if (patch.nextStepAt !== undefined) row.nextStepAt = patch.nextStepAt;
       current = { ...current, ...patch } as LoadedExecution;
+      if (options?.enqueueStep === true) enqueued.push({ workspaceId: WS, executionId: id });
       return true;
     }),
     insertLog: vi.fn(async (entry) => {
@@ -119,7 +126,6 @@ function makeDeps(exec: LoadedExecution, opts: MakeDepsOpts = {}) {
 
   const deps: FlowEngineDeps = {
     db,
-    queue: { enqueueStep: vi.fn(async (i) => void enqueued.push(i)) },
     outbound: {
       sendMessage: vi.fn(async () => {}),
       sendPresence: vi.fn(async () => {}),
@@ -313,10 +319,10 @@ describe('eventos de execução (F51-S02)', () => {
   });
 });
 
-describe('go_to_flow enqueue (F33-S01)', () => {
+describe('go_to_flow (F33-S01; passo do filho na transacao do handler desde a F70-S25)', () => {
   const CHILD_EX = '33333333-3333-3333-3333-333333333333';
 
-  it('enfileira o step do flow filho quando handler retorna _goto_flow_execution_id', async () => {
+  it('o dispatcher nao reenfileira o filho (o handler gravou o passo dele) e limpa os marcadores', async () => {
     const exec = makeExec();
     // O handler go_to_flow retorna SUCCESS com os marcadores nas variables.
     const { deps, enqueued, patches } = makeDeps(exec, {
@@ -330,9 +336,13 @@ describe('go_to_flow enqueue (F33-S01)', () => {
     });
     await processFlowStepScoped(deps, WS, EX);
 
-    // Deve ter enfileirado 2 vezes: o proximo step do flow pai + o primeiro step do filho.
-    expect(enqueued).toHaveLength(2);
-    expect(enqueued).toContainEqual({ workspaceId: WS, executionId: CHILD_EX });
+    // So o proximo step do pai: o primeiro step do filho entrou com a criacao dele.
+    expect(enqueued).toEqual([{ workspaceId: WS, executionId: EX }]);
+    expect(deps.logger.log).toHaveBeenCalledWith(
+      'info',
+      'dispatcher: flow filho iniciado (go_to_flow)',
+      { parentExecutionId: EX, childExecutionId: CHILD_EX },
+    );
 
     // As vars persistidas NAO devem conter as flags internas.
     const patch = patches.find((p) => p.patch.variables !== undefined);
@@ -340,7 +350,7 @@ describe('go_to_flow enqueue (F33-S01)', () => {
     expect(patch?.patch.variables).not.toHaveProperty('_goto_flow_initiated');
   });
 
-  it('nao enfileira flow filho quando handler nao retorna _goto_flow_execution_id (flowId ausente)', async () => {
+  it('sem _goto_flow_execution_id (flowId ausente) so o pai avanca', async () => {
     const exec = makeExec();
     // go_to_flow sem flowId retorna SUCCESS simples (no-op).
     const { deps, enqueued } = makeDeps(exec, {

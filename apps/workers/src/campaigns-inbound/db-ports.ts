@@ -1,21 +1,25 @@
 /**
- * Implementacao das CampaignInboundPorts contra @hm/db + RLS + MQ.
+ * Implementacao das CampaignInboundPorts contra @hm/db + RLS + outbox.
  * findRecentDelivery: ultima delivery do contato em ate 7d (join deliveries ->
  * recipients -> campaigns, filtrando pelo contato e canal). optOutContact espelha
  * a regra da API (F6-S04): marca opt-out + tira de campanhas MARKETING pendentes.
- * publishFollowup enfileira o evento que S06 materializa em scheduled_followups.
+ *
+ * F70-S25 — nada e publicado depois do commit:
+ * - a confirmacao de opt-out vira uma mensagem `pending` REAL na conversa + o job de
+ *   envio, na transacao do opt-out. Antes o job ia com `messageId: 'opt-out-confirm'`,
+ *   sem linha em `messages`: o worker outbound nao tinha o que atualizar;
+ * - o followup `on_reply` (que S06 materializa em scheduled_followups) entra na outbox
+ *   com a marca de resposta do recipient.
  *
  * F70-S08 — handoffToAgent NAO tem mais UPDATE proprio: liga a IA pelo port de
  * outbound da flow-engine (`setConversationAi`), cujo UPDATE e condicional na
  * `origin` da conversa (trava atomica, fail-closed). Nao existe caminho cru para
  * religar por engano, nem se alguem montar estes ports sem o `gateCampaignAiHandoff`.
  */
-import { Buffer } from 'node:buffer';
 import { and, desc, eq, gte, inArray } from 'drizzle-orm';
-import { schema, withWorkspace } from '@hm/db';
+import { enqueueOutbox, schema, withWorkspace } from '@hm/db';
 import { createOutboundPort, type FlowOutboundPort } from '@hm/flow-engine';
-import { makeEnvelope, QUEUES } from '@hm/shared/mq';
-import type { MqHandle } from '@hm/shared/mq';
+import { makeEnvelope, queueJobOutbox, QUEUES } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
 import type {
   CampaignInboundPorts,
@@ -24,8 +28,6 @@ import type {
   RecentDelivery,
 } from './processor';
 
-type MqChannel = MqHandle['channel'];
-
 const {
   campaigns,
   campaignRecipients,
@@ -33,6 +35,7 @@ const {
   campaignFollowups,
   contacts,
   conversations,
+  messages,
 } = schema;
 
 /** Fila de followups de campanha (consumida por F6-S06). */
@@ -44,8 +47,11 @@ export const OUTBOUND_JOB_TYPE = 'outbound.request';
 /** Janela de 7 dias para correlacionar reply com delivery (CAMPAIGNS.md 8.3/16). */
 const REPLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** Texto da confirmacao automatica de opt-out. */
+export const OPT_OUT_CONFIRMATION_TEXT =
+  'Voce foi removido das nossas comunicacoes de marketing. Para voltar a receber, responda QUERO RECEBER.';
+
 export interface CampaignInboundDbDeps {
-  readonly channel: MqChannel;
   readonly logger: Logger;
   /**
    * Mutacao de IA com a trava de origem. Default: o port real de outbound da
@@ -59,7 +65,8 @@ export function createCampaignInboundPorts(
 ): CampaignInboundPorts {
   const ai = deps.ai ?? createOutboundPort();
   return {
-    async optOutContact(workspaceId, contactId, reason): Promise<void> {
+    async optOutContact(message: InboundMessage, reason: string): Promise<void> {
+      const { workspaceId, contactId } = message;
       await withWorkspace(workspaceId, async (tx) => {
         await tx
           .update(contacts)
@@ -79,31 +86,43 @@ export function createCampaignInboundPorts(
               inArray(campaignRecipients.status, ['pending', 'sending']),
             ),
           );
-      });
-    },
 
-    async sendOptOutConfirmation(message: InboundMessage): Promise<void> {
-      // Reusa o pipeline outbound (kind text). chatId resolvido pelo remote_id da conversa.
-      const remote = await withWorkspace(message.workspaceId, async (tx) => {
+        // Confirmacao automatica (pipeline outbound, kind text): mensagem `pending` real
+        // e job, nesta transacao. chatId = remote_id da conversa. Sem a conversa (apagada
+        // no meio), o opt-out vale do mesmo jeito e nada e enviado.
         const [conv] = await tx
           .select({ remoteId: conversations.remoteId })
           .from(conversations)
           .where(eq(conversations.id, message.conversationId));
-        return conv?.remoteId ?? null;
-      });
-      if (!remote) return;
-      const job = {
-        kind: 'text',
-        channelId: message.channelId,
-        conversationId: message.conversationId,
-        messageId: 'opt-out-confirm',
-        chatId: remote,
-        text: 'Voce foi removido das nossas comunicacoes de marketing. Para voltar a receber, responda QUERO RECEBER.',
-      };
-      const envelope = makeEnvelope(OUTBOUND_JOB_TYPE, message.workspaceId, job);
-      deps.channel.sendToQueue(OUTBOUND_QUEUE, Buffer.from(JSON.stringify(envelope)), {
-        persistent: true,
-        contentType: 'application/json',
+        if (conv === undefined) return;
+        const [confirmation] = await tx
+          .insert(messages)
+          .values({
+            workspaceId,
+            conversationId: message.conversationId,
+            direction: 'outbound',
+            senderType: 'system',
+            type: 'text',
+            content: OPT_OUT_CONFIRMATION_TEXT,
+            viewStatus: 'pending',
+            metadata: { source: 'campaign_opt_out', reason },
+          })
+          .returning({ id: messages.id });
+        if (confirmation === undefined) {
+          throw new Error('campaigns-inbound: confirmacao de opt-out nao materializou.');
+        }
+        const job = {
+          kind: 'text',
+          channelId: message.channelId,
+          conversationId: message.conversationId,
+          messageId: confirmation.id,
+          chatId: conv.remoteId,
+          text: OPT_OUT_CONFIRMATION_TEXT,
+        };
+        await enqueueOutbox(
+          tx,
+          queueJobOutbox(OUTBOUND_QUEUE, makeEnvelope(OUTBOUND_JOB_TYPE, workspaceId, job)),
+        );
       });
     },
 
@@ -159,13 +178,26 @@ export function createCampaignInboundPorts(
       });
     },
 
-    async markRecipientResponded(workspaceId, recipientId): Promise<void> {
-      await withWorkspace(workspaceId, (tx) =>
-        tx
+    async markRecipientResponded(workspaceId, recipientId, onReplyFollowup): Promise<void> {
+      await withWorkspace(workspaceId, async (tx) => {
+        await tx
           .update(campaignRecipients)
           .set({ status: 'responded', responded: true, respondedAt: new Date() })
-          .where(eq(campaignRecipients.id, recipientId)),
-      );
+          .where(eq(campaignRecipients.id, recipientId));
+        if (onReplyFollowup === null) return;
+        // F70-S25: o followup on_reply entra com a marca de resposta (commit grava os dois).
+        await enqueueOutbox(
+          tx,
+          queueJobOutbox(
+            CAMPAIGN_FOLLOWUP_QUEUE,
+            makeEnvelope(CAMPAIGN_FOLLOWUP_TYPE, workspaceId, {
+              campaignId: onReplyFollowup.campaignId,
+              recipientId,
+              event: 'on_reply',
+            }),
+          ),
+        );
+      });
     },
 
     async handoffToAgent(message: InboundMessage, agentId: string): Promise<HandoffResult> {
@@ -185,19 +217,6 @@ export function createCampaignInboundPorts(
         });
       }
       return { applied: result.applied };
-    },
-
-    async publishFollowup(args): Promise<void> {
-      const envelope = makeEnvelope(CAMPAIGN_FOLLOWUP_TYPE, args.workspaceId, {
-        campaignId: args.campaignId,
-        recipientId: args.recipientId,
-        event: args.event,
-      });
-      deps.channel.sendToQueue(
-        CAMPAIGN_FOLLOWUP_QUEUE,
-        Buffer.from(JSON.stringify(envelope)),
-        { persistent: true, contentType: 'application/json' },
-      );
     },
   };
 }

@@ -25,7 +25,7 @@
  *   emit message:new por mensagem inserida   (room conversation:{id})
  * status events → handleStatusEvent (S20, fora do withWorkspace: resolve próprio)
  * presence (typing do contato) → emitContactPresence (S21)
- * ai_mode='on' → enqueue flow/agent (STUB — ver REPORT)
+ * ai_mode='on' + mensagem nova → gatilho do agente na outbox, na transação acima (F70-S25)
  * ```
  *
  * Idempotência: reprocessar o mesmo envelope é seguro. O dedup por
@@ -37,11 +37,15 @@ import { Buffer } from 'node:buffer';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { enqueueOutbox, getDb, pickAutoAssignee, schema, withWorkspace } from '@hm/db';
 import {
+  AGENT_RUN_REQUESTED_TYPE,
+  agentRunJobOutbox,
   domainEvents,
   domainEventsOutbox,
   makeEnvelope,
+  QUEUES,
   type DomainEventDraft,
   type MqHandle,
+  type OutboxMessage,
 } from '@hm/shared/mq';
 import type {
   ChannelProvider,
@@ -80,8 +84,8 @@ type MqChannel = MqHandle['channel'];
 /** Fila de relay de socket (mesma constante de `apps/api/src/socket/relay.ts`). */
 export const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
 
-/** Fila canônica de flows (`QUEUES.flows`). */
-export const FLOWS_QUEUE = 'hm.q.flows' as const;
+/** Fila canônica de flows (`QUEUES.flows`): gatilhos do agente de IA. */
+export const FLOWS_QUEUE = QUEUES.flows;
 
 /** Eventos `message` de uma requisição (o que vira linha em `messages`). */
 type InboundMessageEvent = Extract<InboundEvent, { type: 'message' }>;
@@ -248,53 +252,38 @@ export class MqInboundSocketEmit implements InboundSocketPort {
   }
 }
 
-// ─── Flow/agent enqueue (ai_mode='on') — STUB provisório ──────────────────────
+// ─── Gatilho do agente de IA (ai_mode='on') — outbox (F70-S25) ────────────────
 
-/** Contexto mínimo para disparar um agent/flow numa conversa com IA ligada. */
-export interface InboundFlowTrigger {
+/** Tipo do envelope de gatilho de turno do agente (`@hm/shared/mq`). */
+export const INBOUND_FLOW_TYPE = AGENT_RUN_REQUESTED_TYPE;
+
+/**
+ * Gatilho de turno do agente para a mensagem do contato recém-persistida, ou `null` quando
+ * não cabe: nada novo (reentrega deduplicada) ou IA não `on` no momento da leitura.
+ *
+ * Quem pode LIGAR a IA não muda aqui: o gatilho só nasce em conversa que já está `on`, e o
+ * worker de agentes ainda confere origem elegível ou marca humana antes de responder
+ * (`authorizeAiReply`, F70-S07/S08/S19). Uma conversa criada agora nasce `off`.
+ */
+export function inboundAgentRunJob(input: {
   readonly workspaceId: string;
   readonly conversationId: string;
   readonly contactId: string;
   readonly channelId: string;
   readonly provider: ChannelProvider;
-  /** `externalId` da última mensagem inbound desta requisição (gatilho). */
+  readonly aiMode: string;
+  readonly inserted: number;
+  /** `externalId` da última mensagem inbound desta requisição. */
   readonly lastInboundExternalId: string;
-}
-
-/**
- * Porta de disparo de agent/flow quando `conversations.ai_mode = 'on'`. O
- * contrato do consumer de `hm.q.flows` ainda NÃO existe (F2/flow-engine — ver
- * REPORT): a impl. default publica um envelope `flow.run.requested` provisório
- * e injetável; até o consumer existir, é efetivamente um no-op downstream.
- */
-export interface InboundFlowEnqueuePort {
-  enqueue(trigger: InboundFlowTrigger): Promise<void>;
-}
-
-/** Tipo do envelope provisório de disparo de flow (discriminado pelo consumer F2). */
-export const INBOUND_FLOW_TYPE = 'flow.run.requested' as const;
-
-/**
- * Enfileiramento default via `hm.q.flows`. **STUB**: o shape do payload é
- * provisório e será firmado quando o flow-worker (F2) definir seu contrato.
- */
-export class MqInboundFlowEnqueue implements InboundFlowEnqueuePort {
-  constructor(private readonly channel: MqChannel) {}
-
-  async enqueue(trigger: InboundFlowTrigger): Promise<void> {
-    const envelope = makeEnvelope(INBOUND_FLOW_TYPE, trigger.workspaceId, {
-      conversationId: trigger.conversationId,
-      contactId: trigger.contactId,
-      channelId: trigger.channelId,
-      provider: trigger.provider,
-      triggerExternalId: trigger.lastInboundExternalId,
-    });
-    this.channel.sendToQueue(FLOWS_QUEUE, Buffer.from(JSON.stringify(envelope)), {
-      persistent: true,
-      contentType: 'application/json',
-    });
-    await Promise.resolve();
-  }
+}): OutboxMessage | null {
+  if (input.inserted === 0 || input.aiMode !== 'on') return null;
+  return agentRunJobOutbox(input.workspaceId, {
+    conversationId: input.conversationId,
+    contactId: input.contactId,
+    channelId: input.channelId,
+    provider: input.provider,
+    triggerExternalId: input.lastInboundExternalId,
+  });
 }
 
 // ─── Auto-assign (F30-S09) ────────────────────────────────────────────────────
@@ -366,7 +355,7 @@ function toProviderTimestamp(rawTimestamp: string): Date | null {
 
 /**
  * Persistência default do inbound via `@hm/db`. Resolve channel→workspace e
- * aplica todo o trecho DB-bound sob RLS. Recebe as portas de socket/flow por
+ * aplica todo o trecho DB-bound sob RLS. Recebe a porta de socket por
  * injeção (composição em `createInboundDeps`).
  */
 /**
@@ -389,7 +378,6 @@ export interface InboundContactMessageHook {
 export class DbInboundPersistence implements InboundPersistencePort {
   constructor(
     private readonly socket: InboundSocketPort,
-    private readonly flow: InboundFlowEnqueuePort,
     private readonly statusDeps: StatusDeps,
     private readonly logger: Logger,
     private readonly channels: InboundChannelResolver = new DbInboundChannelResolver(),
@@ -555,7 +543,29 @@ export class DbInboundPersistence implements InboundPersistencePort {
       );
       await enqueueOutbox(tx, mediaJobs);
 
-      return { resolved, inserted, autoAssignedTo, mediaJobs: mediaJobs.length };
+      // F70-S25: o gatilho do agente de IA entra na outbox junto da mensagem do contato
+      // que o motiva. Antes era publicado depois do commit: uma queda entre os dois
+      // deixava a mensagem sem resposta. Reentrega deduplicada não regrava (`inserted`).
+      const lastEvent = messageEvents[messageEvents.length - 1];
+      const agentRun = inboundAgentRunJob({
+        workspaceId,
+        conversationId: resolved.conversationId,
+        contactId: resolved.contactId,
+        channelId,
+        provider,
+        aiMode: resolved.aiMode,
+        inserted: inserted.length,
+        lastInboundExternalId: lastEvent?.externalId ?? anchor.externalId,
+      });
+      if (agentRun !== null) await enqueueOutbox(tx, agentRun);
+
+      return {
+        resolved,
+        inserted,
+        autoAssignedTo,
+        mediaJobs: mediaJobs.length,
+        agentRunQueued: agentRun !== null,
+      };
     });
 
     // F30-S09: emite conversation:assigned ao workspace quando auto-assign ocorreu.
@@ -566,7 +576,8 @@ export class DbInboundPersistence implements InboundPersistencePort {
       });
     }
 
-    // Pós-persist (fora da transação): socket + flow conhecem os UUIDs.
+    // Pós-persist (fora da transação): o socket conhece os UUIDs. O gatilho do agente já
+    // foi para a outbox, na transação (F70-S25).
     for (const msg of outcome.inserted) {
       await this.socket.emitMessageNew({
         workspaceId,
@@ -610,15 +621,9 @@ export class DbInboundPersistence implements InboundPersistencePort {
       }
     }
 
-    if (outcome.inserted.length > 0 && outcome.resolved.aiMode === 'on') {
-      const last = messageEvents[messageEvents.length - 1];
-      await this.flow.enqueue({
-        workspaceId,
+    if (outcome.agentRunQueued) {
+      this.logger.debug('inbound: gatilho do agente gravado na outbox', {
         conversationId: outcome.resolved.conversationId,
-        contactId: outcome.resolved.contactId,
-        channelId,
-        provider,
-        lastInboundExternalId: last?.externalId ?? anchor.externalId,
       });
     }
 

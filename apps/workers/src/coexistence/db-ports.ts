@@ -54,11 +54,8 @@ import {
   domainEvents,
   domainEventsOutbox,
   makeEnvelope,
-  queueJobOutbox,
-  QUEUES,
   type ConversationOpenedTrigger,
   type MqHandle,
-  type OutboxMessage,
 } from '@hm/shared/mq';
 import type {
   ConversationAiModeChangedPayload,
@@ -84,6 +81,7 @@ import type {
 } from './ports';
 import type { InboundMediaJob, RoutingHints } from '../inbound/ports';
 import { applyOriginTag } from '../inbound/origin';
+import { inboundMediaJobOutbox } from '../inbound/mq-ports';
 import type { InstagramEchoInput } from './instagram-echo';
 
 /** Canal AMQP derivado de `@hm/shared/mq` (sem dep direta de `amqplib`). */
@@ -389,7 +387,10 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
       );
       await enqueueOutbox(tx, [
         ...domainEventsOutbox(drafts),
-        ...result.mediaJobs.map((job) => mediaJobOutbox(workspaceId, job)),
+        // F70-S25: o MESMO construtor do inbound (`inbound/mq-ports.ts`, sem ciclo de
+        // import). Media ids antigos do histórico podem ter expirado: o media-worker marca
+        // `failed` sem derrubar.
+        ...result.mediaJobs.map((job) => inboundMediaJobOutbox(workspaceId, job)),
       ]);
       return result;
     });
@@ -913,31 +914,6 @@ interface TxOutboxEffects {
   readonly mediaJobs: readonly InboundMediaJob[];
 }
 
-/**
- * Tipo do envelope do job de mídia. MESMO valor de `INBOUND_MEDIA_TYPE`
- * (`inbound/mq-ports.ts`), repetido para não importar o grafo do worker inbound (que
- * importa este módulo); o teste da coexistência trava a igualdade.
- */
-export const COEXISTENCE_MEDIA_JOB_TYPE = 'inbound.media.requested' as const;
-
-/**
- * Job de download de mídia -> mensagem da outbox (`hm.q.media`, exchange padrão).
- * Payload no shape de `parseMediaJob` (`media/job.ts`). O envelope carrega o
- * workspace real: a RLS `outbox_tenant_insert` exige, e o media-worker não o usa
- * (casa pela `externalId`). Media ids antigos do histórico podem ter expirado: o
- * media-worker marca `failed` sem derrubar.
- */
-export function mediaJobOutbox(workspaceId: string, job: InboundMediaJob): OutboxMessage {
-  return queueJobOutbox(
-    QUEUES.media,
-    makeEnvelope(COEXISTENCE_MEDIA_JOB_TYPE, workspaceId, {
-      provider: job.provider,
-      externalId: job.externalId,
-      mediaRef: job.mediaRef,
-      routing: job.routing,
-    }),
-  );
-}
 
 /** Conversa garantida + se ESTA chamada a criou (base da regra de prospecção). */
 interface EnsuredConversation {

@@ -8,13 +8,15 @@
  *  - `sem-origem` → continua `paused`, nada publicado;
  *  - origem NULL (legado) → continua `paused` (fail-closed).
  *
- * Redis e canal AMQP são fakes em memória. Skip automático sem `DATABASE_URL`.
+ * Redis é fake em memória; o gatilho é lido da outbox (F70-S25), gravado na transação da
+ * retomada. Skip automático sem `DATABASE_URL`.
  */
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeDb, getDb, schema } from '@hm/db';
 import type { ConversationOriginValue } from '@hm/shared';
+import { outboxRowsOf } from '../outbox/testing';
 import { runReengagementTick, type ReengagementDeps } from './reengagement';
 
 const url = process.env['DATABASE_URL'];
@@ -96,25 +98,18 @@ describe.skipIf(!url)('reengajamento — trava de origem (DB, F70-S08)', () => {
   });
 
   it('só a conversa com origem comprovada retoma; as demais seguem pausadas', async () => {
-    const published: { queue: string; payload: unknown }[] = [];
     const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), child: vi.fn() };
-    const deps = {
-      redis: makeRedis(),
-      channel: {
-        sendToQueue(queue: string, buf: Buffer) {
-          const env = JSON.parse(buf.toString()) as { payload: unknown };
-          published.push({ queue, payload: env.payload });
-          return true;
-        },
-      },
-      logger,
-    } as unknown as ReengagementDeps;
+    const deps = { redis: makeRedis(), logger } as unknown as ReengagementDeps;
 
     const res = await runReengagementTick(deps, { workspaceId: WS, now, idleMinutes: 60 });
 
     expect(res).toMatchObject({ ran: true, enqueued: 1, blockedByOrigin: 2, skippedDuplicate: 0 });
+    // F70-S25: o gatilho entrou na outbox (commitado), um só, e só para a conversa elegível.
+    const published = (await outboxRowsOf(WS)).filter((r) => r.routingKey === 'hm.q.flows');
     expect(published).toHaveLength(1);
-    expect(published[0]?.payload).toMatchObject({ conversationId: convs.anuncio });
+    expect(published[0]).toMatchObject({ kind: 'job', exchange: '' });
+    expect(published[0]?.envelope).toMatchObject({ type: 'flow.run.requested', workspaceId: WS });
+    expect(published[0]?.envelope.payload).toMatchObject({ conversationId: convs.anuncio });
 
     const rows = await getDb()
       .select({

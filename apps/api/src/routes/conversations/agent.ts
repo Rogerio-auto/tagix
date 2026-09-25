@@ -7,8 +7,9 @@
  *    departamento(s) da conversa. Mesma permissão `conversation.assign_agent`; alimenta
  *    o seletor do cockpit sem expandir o GET de detalhe (fora da fronteira do slot).
  *  - POST /api/conversations/:id/agent   — body `{ agentId }`. Fixa `agent_id`, garante
- *    `ai_mode='on'`, re-engaja (enfileira `flow.run.requested` em `hm.q.flows`) e emite
- *    `conversation:agent_changed`. AGENT só nas conversas atribuídas a ele.
+ *    `ai_mode='on'`, re-engaja (grava `flow.run.requested` para `hm.q.flows` na outbox, na
+ *    transação da troca — F70-S25) e emite `conversation:agent_changed`. AGENT só nas
+ *    conversas atribuídas a ele.
  *
  * Padrão espelhado de `state.ts`: guard de visibilidade por-conversa
  * (`assertConversationVisible`) → 404 antes do 403 de escopo do AGENT (S07.1);
@@ -21,7 +22,11 @@
  * Re-engajamento: o worker de agentes (F2-S11) consome `hm.q.flows` e resolve o
  * `agent_id` já fixado na conversa — não precisamos passar o agente no envelope,
  * só o gatilho com o mesmo shape do inbound (`{ conversationId, contactId,
- * channelId, provider, triggerExternalId? }`).
+ * channelId, provider, triggerExternalId? }`). F70-S25: o gatilho entra na OUTBOX na
+ * mesma transação do UPDATE que liga a IA — commit grava os dois, rollback nenhum. Antes
+ * era publicado depois do commit, best-effort: uma queda ou broker fora deixava a IA
+ * `on` sem nunca responder. A troca é humana (marca `ai_enabled_at`), e o worker ainda
+ * confere origem ou marca humana antes de responder.
  *
  * Router NÃO montado aqui — `app.ts` monta `createConversationAgentRouter()`.
  */
@@ -29,8 +34,14 @@ import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { eq, sql } from 'drizzle-orm';
-import { agentDepartmentsRepo, assertConversationVisible, schema, type DbTx } from '@hm/db';
-import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
+import {
+  agentDepartmentsRepo,
+  assertConversationVisible,
+  enqueueOutbox,
+  schema,
+  type DbTx,
+} from '@hm/db';
+import { agentRunJobOutbox, connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
 import {
   CHANNEL_PROVIDERS,
   type ChannelProvider,
@@ -42,10 +53,6 @@ import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 
 /** Fila de relay do socket (mesma constante de `apps/api/src/socket/relay.ts`). */
 const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
-/** Fila de gatilho de flow/agente (mesma de `apps/workers/src/inbound/db-ports.ts`). */
-const FLOWS_QUEUE = 'hm.q.flows' as const;
-/** Tipo do envelope de disparo (espelha `INBOUND_FLOW_TYPE` de F1-S26). */
-const INBOUND_FLOW_TYPE = 'flow.run.requested' as const;
 /** Permissão dedicada (D4). */
 const ASSIGN_AGENT_PERM: Permission = 'conversation.assign_agent';
 
@@ -91,27 +98,9 @@ async function emitAgentChanged(
   await Promise.resolve();
 }
 
-/**
- * Re-engaja a IA enfileirando `flow.run.requested` em `hm.q.flows` — mesmo contrato
- * do inbound. O worker de agentes resolve o `agent_id` já fixado. Best-effort: a troca
- * já está persistida quando o gatilho é publicado.
- */
-async function enqueueReengage(
-  workspaceId: string,
-  trigger: { conversationId: string; contactId: string; channelId: string; provider: ChannelProvider },
-): Promise<void> {
-  const { channel } = await getMqHandle();
-  const envelope = makeEnvelope(INBOUND_FLOW_TYPE, workspaceId, {
-    conversationId: trigger.conversationId,
-    contactId: trigger.contactId,
-    channelId: trigger.channelId,
-    provider: trigger.provider,
-  });
-  channel.sendToQueue(FLOWS_QUEUE, Buffer.from(JSON.stringify(envelope)), {
-    persistent: true,
-    contentType: 'application/json',
-  });
-  await Promise.resolve();
+/** Provider do canal conhecido pelo worker de agentes? (o gatilho exige). */
+function isChannelProvider(value: string | null | undefined): value is ChannelProvider {
+  return value !== null && value !== undefined && (CHANNEL_PROVIDERS as readonly string[]).includes(value);
 }
 
 /**
@@ -302,13 +291,23 @@ export function createConversationAgentRouter(): Router {
           })
           .where(eq(schema.conversations.id, conversationId));
 
-        return {
-          ok: true as const,
-          agentName: target.name,
-          contactId: conversation.contactId,
-          channelId: conversation.channelId,
-          provider: channel?.provider ?? null,
-        };
+        // Re-engajamento na MESMA transação (F70-S25): só com gatilho válido (contato +
+        // provider conhecidos) — o worker de agentes exige os dois no envelope.
+        const provider = channel?.provider ?? null;
+        const contactId = conversation.contactId;
+        if (contactId !== null && isChannelProvider(provider)) {
+          await enqueueOutbox(
+            tx,
+            agentRunJobOutbox(workspaceId, {
+              conversationId,
+              contactId,
+              channelId: conversation.channelId,
+              provider,
+            }),
+          );
+        }
+
+        return { ok: true as const, agentName: target.name };
       });
 
       if ('notFound' in result) {
@@ -330,26 +329,8 @@ export function createConversationAgentRouter(): Router {
         agentName: result.agentName,
       };
 
-      // Re-engajamento só dispara com gatilho válido (contact + provider conhecidos);
-      // o worker de agentes exige `contactId`/`provider` no envelope.
-      const canReengage =
-        result.contactId !== null &&
-        result.provider !== null &&
-        (CHANNEL_PROVIDERS as readonly string[]).includes(result.provider);
-
-      await Promise.allSettled([
-        emitAgentChanged(workspaceId, conversationId, payload),
-        ...(canReengage
-          ? [
-              enqueueReengage(workspaceId, {
-                conversationId,
-                contactId: result.contactId!,
-                channelId: result.channelId,
-                provider: result.provider as ChannelProvider,
-              }),
-            ]
-          : []),
-      ]);
+      // Socket best-effort, depois do commit (o gatilho da IA já está na outbox).
+      await Promise.allSettled([emitAgentChanged(workspaceId, conversationId, payload)]);
 
       res.json({ conversationId, agentId });
     },

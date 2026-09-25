@@ -4,15 +4,18 @@
  * API publica (FLOW_BUILDER.md secao 3.1) consumida por API (F4-S08), worker (F4-S03) e
  * dispatcher inbound (F4-S13). O nucleo (dispatcher) e puro: opera sobre `FlowEngineDeps`.
  * Aqui compomos os ports reais (DB/HTTP/outbound) com defaults; `createFlowEngine` permite
- * injecao (worker liga o publisher RabbitMQ real; testes injetam fakes).
+ * injecao (worker liga o outbound e os eventos reais; testes injetam fakes).
+ *
+ * F70-S25: nao ha mais port de fila. O port de banco real grava o job de cada step na
+ * outbox, na transacao da execucao — entao a engine default (triggers do inbound, API v1)
+ * dispara flows de verdade, e nenhum chamador precisa injetar publisher.
  */
 import { createLogger } from '@hm/logger';
 import * as core from './dispatcher';
-import type { FlowEngineDeps, FlowLoggerPort, FlowQueuePort } from './deps';
+import type { FlowEngineDeps, FlowLoggerPort } from './deps';
 import { flowDbPort } from './ports/db.port';
 import { flowHttpPort } from './ports/http.port';
 import { flowOutboundPort } from './ports/outbound.port';
-import { createInMemoryQueuePort } from './ports/queue.port';
 
 const baseLogger = createLogger('info', { pkg: '@hm/flow-engine' });
 const loggerPort: FlowLoggerPort = {
@@ -21,11 +24,10 @@ const loggerPort: FlowLoggerPort = {
   },
 };
 
-/** Liga uma engine com ports injetados. O worker passa o queue port com MQ real. */
+/** Liga uma engine com ports injetados (o worker passa outbound e eventos reais). */
 export function createFlowEngine(overrides: Partial<FlowEngineDeps> = {}): FlowEngineApi {
   const deps: FlowEngineDeps = {
     db: overrides.db ?? flowDbPort,
-    queue: overrides.queue ?? defaultQueuePort,
     outbound: overrides.outbound ?? flowOutboundPort,
     http: overrides.http ?? flowHttpPort,
     logger: overrides.logger ?? loggerPort,
@@ -61,9 +63,6 @@ export interface FlowEngineApi {
   readonly deps: FlowEngineDeps;
 }
 
-// Default queue port: in-memory sink ate o worker (F4-S03) injetar o MQ real.
-const defaultQueuePort: FlowQueuePort = createInMemoryQueuePort();
-
 // ─── API publica direta (ports default), espelhando FLOW_BUILDER secao 3.1 ───
 const defaultEngine = createFlowEngine();
 
@@ -88,11 +87,6 @@ export {
   type FlowValidationSeverity,
 } from './validation';
 export { interpolate, extractVarReferences } from './utils/interpolate';
-export {
-  createQueuePort,
-  createInMemoryQueuePort,
-  type EnvelopePublisher,
-} from './ports/queue.port';
 export { createOutboundPort, type OutboundPublisher } from './ports/outbound.port';
 export { MESSAGE_PRE_ACTION_MAX_MS, MESSAGE_DELAY_MAX_MS } from './handlers/message.handler';
 export * from './backup';

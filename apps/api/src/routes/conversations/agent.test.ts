@@ -7,8 +7,10 @@
  *    (401/403/404), Zod (400), fallback sem-departamento.
  *
  * Estratégia (espelha state.test.ts): mocks de `@hm/db`, `@hm/shared/mq` e
- * `../../middlewares/auth` — sem Docker/Postgres. O relay e o re-engajamento são
- * best-effort (allSettled) sobre o mesmo `sendToQueue` mockado.
+ * `../../middlewares/auth` — sem Docker/Postgres. O relay é best-effort sobre o
+ * `sendToQueue` mockado; o re-engajamento vai para a outbox na transação da troca
+ * (F70-S25), registrado pelo `enqueueOutbox` mockado. Commit/rollback contra o banco:
+ * `agent.outbox.integration.test.ts`.
  */
 import express from 'express';
 import request from 'supertest';
@@ -25,9 +27,10 @@ const AGENT_B = '00000000-0000-0000-0000-0000000000a2';
 const AGENT_OUTSIDER = '00000000-0000-0000-0000-0000000000a9';
 
 // ─── Mocks de infra ───────────────────────────────────────────────────────────
-const { assertVisibleMock, listAgentsForDepartmentMock } = vi.hoisted(() => ({
+const { assertVisibleMock, listAgentsForDepartmentMock, enqueueOutboxMock } = vi.hoisted(() => ({
   assertVisibleMock: vi.fn(),
   listAgentsForDepartmentMock: vi.fn(),
+  enqueueOutboxMock: vi.fn(async () => 1),
 }));
 
 const sendToQueueMock = vi.fn();
@@ -39,6 +42,10 @@ const connectMqMock = vi.fn().mockResolvedValue({
 vi.mock('@hm/shared/mq', () => ({
   connectMq: (...args: unknown[]) => connectMqMock(...args),
   makeEnvelope: (type: string, _ws: string, payload: unknown) => ({ type, payload }),
+  agentRunJobOutbox: (workspaceId: string, payload: unknown) => ({
+    routingKey: 'hm.q.flows',
+    envelope: { type: 'flow.run.requested', workspaceId, payload },
+  }),
 }));
 
 // Estado mutável da conversa.
@@ -85,6 +92,7 @@ vi.mock('@hm/db', () => ({
     agents: { ...TBL.agents, id: 'id', name: 'name', status: 'status' },
   },
   assertConversationVisible: assertVisibleMock,
+  enqueueOutbox: enqueueOutboxMock,
   agentDepartmentsRepo: {
     listAgentsForDepartment: (...args: unknown[]) => listAgentsForDepartmentMock(...args),
   },
@@ -307,11 +315,23 @@ describe('POST /api/conversations/:id/agent', () => {
       .send({ agentId: AGENT_B });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ conversationId: CONV_ID, agentId: AGENT_B });
-    // 1× relay (conversation:agent_changed) + 1× re-engaje (flow.run.requested).
-    expect(sendToQueueMock).toHaveBeenCalledTimes(2);
-    const queues = sendToQueueMock.mock.calls.map((c) => c[0]);
-    expect(queues).toContain('hm.q.socket.relay');
-    expect(queues).toContain('hm.q.flows');
+    // Relay (conversation:agent_changed) pelo canal; re-engaje na outbox, na tx da troca.
+    expect(sendToQueueMock).toHaveBeenCalledTimes(1);
+    expect(sendToQueueMock.mock.calls[0]?.[0]).toBe('hm.q.socket.relay');
+    expect(enqueueOutboxMock).toHaveBeenCalledTimes(1);
+    expect(enqueueOutboxMock).toHaveBeenCalledWith(expect.anything(), {
+      routingKey: 'hm.q.flows',
+      envelope: {
+        type: 'flow.run.requested',
+        workspaceId: 'ws-test',
+        payload: {
+          conversationId: CONV_ID,
+          contactId: '00000000-0000-0000-0000-0000000000ff',
+          channelId: '00000000-0000-0000-0000-0000000000ce',
+          provider: 'meta_whatsapp',
+        },
+      },
+    });
   });
 
   it('AGENT troca em conversa própria para elegível → 200', async () => {
@@ -332,6 +352,7 @@ describe('POST /api/conversations/:id/agent', () => {
     expect(res.status).toBe(200);
     expect(sendToQueueMock).toHaveBeenCalledTimes(1);
     expect(sendToQueueMock.mock.calls[0]?.[0]).toBe('hm.q.socket.relay');
+    expect(enqueueOutboxMock).not.toHaveBeenCalled();
   });
 
   it('fallback sem-dept: agente ativo é elegível mesmo sem vínculo de departamento', async () => {

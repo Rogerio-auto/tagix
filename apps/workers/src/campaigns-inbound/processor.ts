@@ -7,8 +7,12 @@
  *     de campanhas MARKETING futuras + envia confirmacao automatica. Para aqui
  *     (nao trata como reply de campanha).
  *  2) REPLY handling: se houve delivery recente desse contato (janela 7d), marca
- *     o recipient como responded, faz AI handoff se a campanha tiver
- *     auto_handoff_on_reply + ai_handoff_agent_id, e publica followup on_reply.
+ *     o recipient como responded (e, com followup on_reply, grava o followup junto),
+ *     e faz AI handoff se a campanha tiver auto_handoff_on_reply + ai_handoff_agent_id.
+ *
+ * F70-S25: o que sai para uma fila nasce na transacao do dado que o motiva — a
+ * confirmacao de opt-out (mensagem `pending` real + job) com o opt-out, o followup
+ * `on_reply` com a marca de resposta. Por isso as portas juntam as duas coisas.
  */
 import type { Logger } from '@hm/logger';
 import { isOptOutKeyword } from './optout';
@@ -42,23 +46,25 @@ export interface HandoffResult {
 
 /** Ports do processor — injetadas pelo bootstrap, mockadas em teste. */
 export interface CampaignInboundPorts {
-  /** Opta o contato out + tira de campanhas MARKETING (reusa optOutContact da API). */
-  optOutContact(workspaceId: string, contactId: string, reason: string): Promise<void>;
-  /** Envia a confirmacao automatica de opt-out ao contato. */
-  sendOptOutConfirmation(message: InboundMessage): Promise<void>;
+  /**
+   * Opta o contato out, tira de campanhas MARKETING (regra do optOutContact da API) e
+   * grava a confirmacao automatica ao contato (mensagem `pending` + job de envio), tudo na
+   * MESMA transacao.
+   */
+  optOutContact(message: InboundMessage, reason: string): Promise<void>;
   /** Delivery mais recente do contato na janela de 7d (ou null). */
   findRecentDelivery(message: InboundMessage): Promise<RecentDelivery | null>;
-  /** Marca o recipient como respondido. */
-  markRecipientResponded(workspaceId: string, recipientId: string): Promise<void>;
+  /**
+   * Marca o recipient como respondido. Com `onReplyFollowup`, grava na MESMA transacao o
+   * evento de followup `on_reply` (duravel via scheduled_followups, F6-S06).
+   */
+  markRecipientResponded(
+    workspaceId: string,
+    recipientId: string,
+    onReplyFollowup: { readonly campaignId: string } | null,
+  ): Promise<void>;
   /** Tenta ligar a IA na conversa com o agente da campanha; devolve se ligou de fato. */
   handoffToAgent(message: InboundMessage, agentId: string): Promise<HandoffResult>;
-  /** Publica o evento de followup on_reply (duravel via scheduled_followups). */
-  publishFollowup(args: {
-    workspaceId: string;
-    campaignId: string;
-    recipientId: string;
-    event: 'on_reply';
-  }): Promise<void>;
 }
 
 export interface CampaignInboundDeps {
@@ -83,8 +89,7 @@ export async function processCampaignInbound(
 
   // 1) Opt-out por keyword (match exato).
   if (isOptOutKeyword(message.text)) {
-    await ports.optOutContact(message.workspaceId, message.contactId, 'KEYWORD_STOP');
-    await ports.sendOptOutConfirmation(message);
+    await ports.optOutContact(message, 'KEYWORD_STOP');
     logger.info('campaigns-inbound: opt-out por keyword', {
       contactId: message.contactId,
     });
@@ -97,7 +102,11 @@ export async function processCampaignInbound(
     return { kind: 'no_op' };
   }
 
-  await ports.markRecipientResponded(message.workspaceId, delivery.recipientId);
+  await ports.markRecipientResponded(
+    message.workspaceId,
+    delivery.recipientId,
+    delivery.hasOnReplyFollowup ? { campaignId: delivery.campaignId } : null,
+  );
 
   // `handedOff` reflete o que aconteceu com a IA, não a intenção da campanha: a
   // trava de origem pode recusar (conversa sem origem comprovada).
@@ -105,15 +114,6 @@ export async function processCampaignInbound(
   if (delivery.autoHandoffOnReply && delivery.aiHandoffAgentId) {
     const handoff = await ports.handoffToAgent(message, delivery.aiHandoffAgentId);
     handedOff = handoff.applied;
-  }
-
-  if (delivery.hasOnReplyFollowup) {
-    await ports.publishFollowup({
-      workspaceId: message.workspaceId,
-      campaignId: delivery.campaignId,
-      recipientId: delivery.recipientId,
-      event: 'on_reply',
-    });
   }
 
   logger.info('campaigns-inbound: reply de campanha tratado', {

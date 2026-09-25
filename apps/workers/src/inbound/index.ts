@@ -44,7 +44,7 @@ export {
   DbInboundPersistence,
   DbInboundChannelResolver,
   MqInboundSocketEmit,
-  MqInboundFlowEnqueue,
+  inboundAgentRunJob,
   INBOUND_FLOW_TYPE,
   FLOWS_QUEUE,
   SOCKET_RELAY_QUEUE,
@@ -52,8 +52,6 @@ export {
   type ResolvedInboundChannel,
   type InboundSocketPort,
   type InboundMessageNewEmit,
-  type InboundFlowEnqueuePort,
-  type InboundFlowTrigger,
 } from './db-ports';
 
 // F70-S07 — origem/atribuição, ecos do Instagram e trava da IA no handoff de campanha.

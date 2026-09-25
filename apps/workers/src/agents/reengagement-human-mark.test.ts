@@ -19,6 +19,7 @@ import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeDb, getDb, schema } from '@hm/db';
 import { planHumanReply } from '@hm/shared';
+import { outboxRowsOf } from '../outbox/testing';
 import { runReengagementTick, type ReengagementDeps } from './reengagement';
 import { authorizeAiReply } from './run';
 
@@ -156,21 +157,15 @@ describe.skipIf(!url)('marca humana x retomada automática (DB, F70-S23)', () =>
     expect(before).toMatchObject({ aiMode: 'paused', aiPausedReason: 'human_takeover' });
     expect(before.aiAutoEnabledAt).toBeNull();
 
-    const published: unknown[] = [];
     const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), child: vi.fn() };
-    const deps = {
-      redis: makeRedis(),
-      channel: {
-        sendToQueue(_queue: string, buf: Buffer) {
-          published.push((JSON.parse(buf.toString()) as { payload: unknown }).payload);
-          return true;
-        },
-      },
-      logger,
-    } as unknown as ReengagementDeps;
+    const deps = { redis: makeRedis(), logger } as unknown as ReengagementDeps;
 
     const res = await runReengagementTick(deps, { workspaceId: WS, now, idleMinutes: 60 });
     expect(res).toMatchObject({ ran: true, enqueued: 1, blockedByOrigin: 1 });
+    // F70-S25: o gatilho está na outbox, gravado com a retomada.
+    const published = (await outboxRowsOf(WS))
+      .filter((r) => r.routingKey === 'hm.q.flows')
+      .map((r) => r.envelope.payload);
     expect(published).toEqual([expect.objectContaining({ conversationId: convs.resumed })]);
 
     const after = await row(convs.resumed);

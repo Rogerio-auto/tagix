@@ -30,7 +30,6 @@ import { runInboundPipeline } from './pipeline';
 import { ChannelInboundParser } from './parse';
 import {
   DbInboundPersistence,
-  type InboundFlowEnqueuePort,
   type InboundSocketPort,
 } from './db-ports';
 import { createInstagramEchoStep } from './instagram-echoes';
@@ -49,7 +48,6 @@ const noopSocket: InboundSocketPort = {
   async emitContactPresence() {},
   async emitConversationAssigned() {},
 };
-const noopFlow: InboundFlowEnqueuePort = { async enqueue() {} };
 const noopStatusDeps: StatusDeps = {
   channels: {
     async resolve() {
@@ -82,11 +80,9 @@ describe('gateCampaignAiHandoff (F70-S07)', () => {
   };
   const base: CampaignInboundPorts = {
     optOutContact: vi.fn(async () => undefined),
-    sendOptOutConfirmation: vi.fn(async () => undefined),
     findRecentDelivery: vi.fn(async () => null),
     markRecipientResponded: vi.fn(async () => undefined),
     handoffToAgent: vi.fn(async () => ({ applied: true })),
-    publishFollowup: vi.fn(async () => undefined),
   };
 
   it('liga a IA pelo port com trava (nunca pelo UPDATE cru da campanha)', async () => {
@@ -143,7 +139,7 @@ describe.skipIf(!url)('F70-S07 origem + atribuição + eco IG + trava da IA (DB)
       },
       logger,
     ),
-    persistence: new DbInboundPersistence(noopSocket, noopFlow, noopStatusDeps, logger),
+    persistence: new DbInboundPersistence(noopSocket, noopStatusDeps, logger),
     instagramEchoes: createInstagramEchoStep(createCoexistenceDeps(logger)),
   };
 

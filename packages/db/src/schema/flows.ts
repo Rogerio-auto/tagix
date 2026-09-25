@@ -138,6 +138,10 @@ export const flowExecutions = pgTable(
       .on(t.status, t.nextStepAt)
       .where(sql`${t.status} = 'waiting' and ${t.nextStepAt} is not null`),
     index('idx_flow_executions_workspace_status').on(t.workspaceId, t.status),
+    // F70-S25 (0090): recuperação de `running` parada pelo scheduler (varredura cross-tenant).
+    index('idx_flow_executions_running_since')
+      .on(sql`(coalesce(${t.updatedAt}, ${t.startedAt}))`)
+      .where(sql`${t.status} = 'running'`),
     index('idx_flow_executions_conversation')
       .on(t.conversationId)
       .where(sql`${t.conversationId} is not null`),

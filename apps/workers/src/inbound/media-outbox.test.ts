@@ -17,7 +17,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import type * as Db from '@hm/db';
 import type { InboundEvent } from '@hm/channels';
 import { createLogger } from '@hm/logger';
-import type { InboundFlowEnqueuePort, InboundSocketPort } from './db-ports';
+import type { InboundSocketPort } from './db-ports';
 import type { StatusDeps } from './status';
 import type { PersistInboundRequest } from './ports';
 
@@ -51,7 +51,6 @@ const noopSocket: InboundSocketPort = {
   async emitContactPresence() {},
   async emitConversationAssigned() {},
 };
-const noopFlow: InboundFlowEnqueuePort = { async enqueue() {} };
 const noopStatusDeps: StatusDeps = {
   channels: {
     async resolve() {
@@ -74,7 +73,6 @@ const noopStatusDeps: StatusDeps = {
 
 const persistence = new DbInboundPersistence(
   noopSocket,
-  noopFlow,
   noopStatusDeps,
   createLogger('error'),
   { resolve: async () => ({ channelId: CHANNEL, workspaceId: WS }) },
