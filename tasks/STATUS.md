@@ -56,7 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 28     | 0   | 2   | 0   | 0   | 2   | 24   |
+| F70   | 28     | 0   | 2   | 0   | 0   | 1   | 25   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -792,7 +792,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70-S25 | Gatilhos da IA e passos de flow pela outbox, lembrete da agenda com conversa real                               | ✅ done     | high       | F70-S21                   |
 | F70-S26 | Turno da IA idempotente por envelope                                                                            | ✅ done     | high       | F70-S25                   |
 | F70-S27 | Falha de storage visível e mídia reprocessável depois de corrigida                                              | ✅ done     | critical   | F70-S25                   |
-| F70-S28 | Sessão expirada volta ao login, no navegador e no PWA                                                           | 🟣 review   | critical   | F70-S01                   |
+| F70-S28 | Sessão expirada volta ao login, no navegador e no PWA                                                           | ✅ done     | critical   | F70-S01                   |
 
 ## Fase 8 — Permissions & Settings
 

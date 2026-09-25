@@ -2,7 +2,7 @@
 id: F70-S28
 title: Sessão expirada volta ao login, no navegador e no PWA
 phase: F70
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F70-S01]
