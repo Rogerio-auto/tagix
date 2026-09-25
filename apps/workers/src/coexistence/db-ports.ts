@@ -32,13 +32,24 @@
  *
  * Idempotência: reprocessar qualquer evento é seguro. O dedup por id externo
  * garante zero duplicação de mensagens/contatos em reentrega/reprocesso.
+ *
+ * Webhooks de saída (F70-S13): conversa que o eco ou o histórico ABRIU publica
+ * `conversation.opened` depois do commit (construtor do catálogo, eventId canônico
+ * `<conversa>:opened`). `created` só é verdadeiro para quem inseriu a linha, então
+ * reentrega e o perdedor de uma corrida não republicam; rollback não publica.
  */
 import { Buffer } from 'node:buffer';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { getDb, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
-import { makeEnvelope, type MqHandle } from '@hm/shared/mq';
+import {
+  domainEvents,
+  emitDomainEvent,
+  makeEnvelope,
+  type DomainEventDraft,
+  type MqHandle,
+} from '@hm/shared/mq';
 import type {
   ConversationAiModeChangedPayload,
   ConversationOriginValue,
@@ -347,7 +358,27 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
      * é resposta humana e é ignorado. Vazio = sem filtro (só o dedup por mid).
      */
     private readonly ownMetaAppIds: ReadonlySet<string> = new Set(),
+    /** F70-S13: publicação de eventos de domínio (webhooks de saída). Nunca lança. */
+    private readonly emitEvent: (draft: DomainEventDraft) => Promise<boolean> = emitDomainEvent,
   ) {}
+
+  /** `conversation.opened` de cada conversa aberta — chamar SÓ depois do commit. */
+  private async emitOpened(
+    workspaceId: string,
+    channelId: string,
+    opened: readonly OpenedConversation[],
+  ): Promise<void> {
+    for (const conv of opened) {
+      await this.emitEvent(
+        domainEvents.conversationOpened(workspaceId, {
+          conversationId: conv.conversationId,
+          contactId: conv.contactId,
+          channelId,
+          trigger: 'inbound',
+        }),
+      );
+    }
+  }
 
   async persistEcho(payload: CoexistenceEchoPayload): Promise<CoexistenceEchoResult> {
     const channel = await this.channels.resolve(payload.phoneNumberId);
@@ -462,12 +493,19 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
         })
         .returning({ id: schema.messages.id });
 
+      // A conversa criada nesta transação é aberta mesmo que a mensagem dedupe (não
+      // acontece na prática: conversa nova não tem mensagem para colidir).
+      const opened: OpenedConversation[] = conversation.created
+        ? [{ conversationId: conversation.id, contactId }]
+        : [];
+
       if (inserted === undefined) {
         return {
           conversationId: conversation.id,
           messageId: undefined,
           aiPaused: false,
           startedByApp: false,
+          opened,
         };
       }
 
@@ -520,8 +558,12 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
         messageId: inserted.id,
         aiPaused: plan.paused,
         startedByApp,
+        opened,
       };
     });
+
+    // F70-S13: a conversa aberta pelo eco avisa antes da mensagem (espelha o inbound).
+    await this.emitOpened(workspaceId, channelId, result.opened);
 
     // Pós-persist (fora da transação): empurra o echo ao vivo. Só quando inseriu
     // de fato (dedup não reemite — espelha `insertMessages` do inbound).
@@ -582,6 +624,8 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
       // Conversas que receberam pelo menos uma mensagem nova (para sinalizar a
       // ChatList uma vez por conversa, fora da transação — sem floodar threads).
       const touchedConversations = new Set<string>();
+      // F70-S13: conversas criadas por este lote (publicadas após o commit).
+      const openedConversations: OpenedConversation[] = [];
       // Jobs de download de mídia das mensagens inseridas (publicados após o commit).
       const mediaJobs: InboundMediaJob[] = [];
       // 1) Upsert idempotente de contatos por (workspace, phone=waId). Insert em
@@ -597,7 +641,10 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
         const created = await tx
           .insert(schema.contacts)
           .values(contactRows)
-          .onConflictDoNothing({ target: [schema.contacts.workspaceId, schema.contacts.phone] })
+          .onConflictDoNothing({
+            target: [schema.contacts.workspaceId, schema.contacts.phone],
+            where: contactPhoneArbiterWhere(),
+          })
           .returning({ id: schema.contacts.id });
         contactsInserted = created.length;
       }
@@ -628,6 +675,7 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
         );
         if (conversationCreated) {
           await applyOriginTag(tx, workspaceId, contactId, HISTORY_CONVERSATION_ORIGIN, null);
+          openedConversations.push({ conversationId, contactId });
         }
 
         const mediaByExternal = new Map<string, MediaRef>();
@@ -701,8 +749,11 @@ export class DbCoexistencePersistence implements CoexistencePersistencePort {
         messagesDeduped: messagesTotal - messagesInserted,
         touchedConversations: [...touchedConversations],
         mediaJobs,
+        openedConversations,
       };
     });
+
+    await this.emitOpened(workspaceId, channelId, outcome.openedConversations);
 
     // Pós-persist: um sinal por conversa afetada → a ChatList revalida a projeção
     // (last message/contadores) sem reordenar/floodar a thread com timestamps antigos.
@@ -769,6 +820,15 @@ function counterpartOf(msg: CoexistenceHistoryMessagePayload): string | null {
 // ─── Upsert helpers (rodam DENTRO de withWorkspace) ───────────────────────────
 
 /**
+ * Predicado do índice PARCIAL `uq_contacts_workspace_phone` (phone não nulo e
+ * contato não apagado). O ON CONFLICT precisa repeti-lo para o Postgres inferir o
+ * árbitro; sem ele, todo contato NOVO derrubava a transação com 42P10 (F70-S13).
+ */
+function contactPhoneArbiterWhere() {
+  return sql`${schema.contacts.phone} is not null and ${schema.contacts.deletedAt} is null`;
+}
+
+/**
  * Garante o contato do `remoteId` (telefone WA ou IGSID do IG — a mesma
  * convenção do inbound: `contacts.phone` guarda o id remoto) dentro do
  * workspace, casando por `uq_contacts_workspace_phone`. Idempotente. Retorna o
@@ -797,7 +857,10 @@ async function ensureContact(
   const [created] = await tx
     .insert(contacts)
     .values({ workspaceId, phone, source })
-    .onConflictDoNothing({ target: [contacts.workspaceId, contacts.phone] })
+    .onConflictDoNothing({
+      target: [contacts.workspaceId, contacts.phone],
+      where: contactPhoneArbiterWhere(),
+    })
     .returning({ id: contacts.id });
   if (created !== undefined) return created.id;
 
@@ -817,6 +880,12 @@ async function ensureContact(
     throw new Error('coexistence: contato não materializou após upsert.');
   }
   return row.id;
+}
+
+/** Conversa criada numa transação, a anunciar como `conversation.opened` após o commit. */
+interface OpenedConversation {
+  readonly conversationId: string;
+  readonly contactId: string;
 }
 
 /** Conversa garantida + se ESTA chamada a criou (base da regra de prospecção). */

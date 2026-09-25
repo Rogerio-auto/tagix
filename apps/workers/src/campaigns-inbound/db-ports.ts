@@ -19,6 +19,7 @@ import type { MqHandle } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
 import type {
   CampaignInboundPorts,
+  HandoffResult,
   InboundMessage,
   RecentDelivery,
 } from './processor';
@@ -167,7 +168,7 @@ export function createCampaignInboundPorts(
       );
     },
 
-    async handoffToAgent(message: InboundMessage, agentId: string): Promise<void> {
+    async handoffToAgent(message: InboundMessage, agentId: string): Promise<HandoffResult> {
       // F70-S08: mesma trava do flow `ai_action` — conversa sem origem comprovada
       // continua com a IA desligada; a recusa e registrada, o processor segue.
       const result = await ai.setConversationAi(message.workspaceId, {
@@ -183,6 +184,7 @@ export function createCampaignInboundPorts(
           reason: result.reason,
         });
       }
+      return { applied: result.applied };
     },
 
     async publishFollowup(args): Promise<void> {
