@@ -11,6 +11,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
 import type { MqHealth, ResilientMqHandle } from '@hm/shared/mq';
+import type * as StorageModule from '@hm/storage';
+import type { StorageProbeResult } from '@hm/storage';
 
 // --- Estado controlável dos mocks (mutável por teste) ---------------------
 let mqHealthValue: MqHealth = { healthy: true, connections: [] };
@@ -19,8 +21,14 @@ let connectMqImpl: () => Promise<ResilientMqHandle> = () =>
 
 const dbExecute = vi.fn<() => Promise<unknown>>(() => Promise.resolve(undefined));
 const redisPing = vi.fn<() => Promise<string>>(() => Promise.resolve('PONG'));
-/** F61-S11: o probe de storage é um `put` de verdade — aqui é o único mock que decide. */
+/** F61-S11: fallback de sonda por `put` (driver sem `probe`). */
 const storagePut = vi.fn<() => Promise<void>>(() => Promise.resolve());
+/** F70-S27: a sonda do driver (`HeadBucket` no R2) — aqui é o mock que decide. */
+const storageProbeFn = vi.fn<(timeoutMs: number) => Promise<StorageProbeResult>>(() =>
+  Promise.resolve({ state: 'ok', durationMs: 5 }),
+);
+/** `true` = driver com sonda própria; `false` = driver antigo, só `put`. */
+let driverHasProbe = true;
 
 vi.mock('./config', () => ({
   loadConfig: () => ({
@@ -43,9 +51,14 @@ vi.mock('ioredis', () => ({
   },
 }));
 
-vi.mock('@hm/storage', () => ({
-  createStorage: () => ({ put: storagePut }),
-}));
+vi.mock('@hm/storage', async (importOriginal) => {
+  const actual = await importOriginal<typeof StorageModule>();
+  return {
+    ...actual,
+    createStorage: () =>
+      driverHasProbe ? { put: storagePut, probe: storageProbeFn } : { put: storagePut },
+  };
+});
 
 vi.mock('@hm/shared/mq', () => ({
   getMqHealth: (): MqHealth => mqHealthValue,
@@ -53,6 +66,7 @@ vi.mock('@hm/shared/mq', () => ({
 }));
 
 const { healthHandler, closeHealth, awaitStorageProbe } = await import('./health');
+const { getMetricsRegistry } = await import('./middlewares/metrics');
 
 // --- Helpers ---------------------------------------------------------------
 interface Captured {
@@ -100,6 +114,8 @@ beforeEach(() => {
   dbExecute.mockClear().mockResolvedValue(undefined);
   redisPing.mockClear().mockResolvedValue('PONG');
   storagePut.mockClear().mockResolvedValue(undefined);
+  storageProbeFn.mockClear().mockResolvedValue({ state: 'ok', durationMs: 5 });
+  driverHasProbe = true;
 });
 
 afterEach(async () => {
@@ -168,11 +184,11 @@ describe('GET /health — RabbitMQ', () => {
 });
 
 /**
- * F61-S11 — o `/health` sabe dizer que perdeu o storage.
+ * F61-S11 → F70-S27 — o `/health` sabe dizer que perdeu o storage, e por quê.
  *
- * Regressão do incidente de 2026-09-09: o token do R2 foi revogado e a API seguiu
- * respondendo 200 "ok" por dias. Nenhuma mídia subia, nenhuma signed URL abria, e
- * a primeira notícia veio de um print de cliente.
+ * Regressão dos incidentes de 2026-09-09 e 2026-09-25: o token do R2 foi recusado e a
+ * API seguiu respondendo 200 "ok". Nenhuma mídia subia, nenhuma signed URL abria, e a
+ * primeira notícia veio de um print de cliente.
  */
 describe('GET /health — storage', () => {
   // Broker saudável em todos: isola o eixo storage (mesmo padrão do bloco acima).
@@ -180,11 +196,20 @@ describe('GET /health — storage', () => {
     mqHealthValue = { healthy: true, connections: [fakeHandle(true).state()] };
   });
 
+  async function probed(): Promise<Captured> {
+    await callHealth();
+    await awaitStorageProbe();
+    return callHealth();
+  }
+
+  async function gaugeValue(state: string): Promise<number | undefined> {
+    const metric = await getMetricsRegistry().getSingleMetric('hm_storage_state')?.get();
+    return metric?.values.find((v) => v.labels['state'] === state)?.value;
+  }
+
   it('a PRIMEIRA chamada devolve "checking" e não espera pela sondagem', async () => {
-    // Regressão do incidente de 2026-09-09: o probe aguardava o PUT e reportava
-    // `down` ao estourar o prazo. Em produção isso marcou como caído um R2 vivo,
-    // porque a primeira chamada do processo paga a inicialização do cliente S3.
-    // Um alarme que mente é pior que nenhum: ensina a ser ignorado.
+    // O probe antigo aguardava e reportava falha ao estourar o prazo: a primeira chamada
+    // do processo paga a inicialização do cliente S3, e um R2 vivo parecia caído.
     const res = await callHealth();
     expect(res.body['storage']).toBe('checking');
     expect(res.body['status']).toBe('ok');
@@ -196,53 +221,63 @@ describe('GET /health — storage', () => {
     expect(res.body['status']).toBe('ok');
   });
 
-  it('depois da sondagem, reporta connected', async () => {
-    await callHealth();
-    await awaitStorageProbe();
-    const res = await callHealth();
-    expect(res.body['storage']).toBe('connected');
+  it('depois da sondagem, reporta ok', async () => {
+    const res = await probed();
+    expect(res.body['storage']).toBe('ok');
     expect(res.body['status']).toBe('ok');
+    expect(await gaugeValue('ok')).toBe(1);
+    expect(await gaugeValue('denied')).toBe(0);
   });
 
-  it('credencial morta (put rejeita) → degraded, storage down', async () => {
-    storagePut.mockRejectedValue(new Error('AccessDenied'));
-    await callHealth();
-    await awaitStorageProbe();
-    const res = await callHealth();
-    expect(res.body['storage']).toBe('down');
+  it('credencial inválida (sonda recusada) → storage denied, degraded, métrica denied=1', async () => {
+    storageProbeFn.mockResolvedValue({ state: 'denied', code: 'AccessDenied', durationMs: 40 });
+    const res = await probed();
+    expect(res.body['storage']).toBe('denied');
+    expect(res.body['status']).toBe('degraded');
+    expect(await gaugeValue('denied')).toBe(1);
+    expect(await gaugeValue('ok')).toBe(0);
+  });
+
+  it('storage que não responde → unreachable (diferente de denied)', async () => {
+    storageProbeFn.mockResolvedValue({ state: 'unreachable', code: 'TimeoutError', durationMs: 15_000 });
+    const res = await probed();
+    expect(res.body['storage']).toBe('unreachable');
     expect(res.body['status']).toBe('degraded');
   });
 
-  it('storage caído NÃO derruba o /health para 503', async () => {
+  it('storage negado NÃO derruba o /health para 503', async () => {
     // 503 tira a API de rotação. Uma plataforma inteira fora do ar é pior que
     // mídia que não carrega — o alarme informa sem causar um segundo incidente.
-    storagePut.mockRejectedValue(new Error('AccessDenied'));
-    await callHealth();
-    await awaitStorageProbe();
-    const res = await callHealth();
+    storageProbeFn.mockResolvedValue({ state: 'denied', code: 'AccessDenied', durationMs: 40 });
+    const res = await probed();
     expect(res.status).toBe(200);
   });
 
-  it('assinar URL não vale como probe — só um write prova a credencial', async () => {
-    // `getSignedUrl` é operação local: passa com credencial revogada. Se um dia
-    // alguém trocar o probe por ele, este teste cai.
-    await callHealth();
-    await awaitStorageProbe();
-    expect(storagePut).toHaveBeenCalledTimes(1);
+  it('a sonda é a do driver (HeadBucket), não um write — nada de lixo no bucket', async () => {
+    await probed();
+    expect(storageProbeFn).toHaveBeenCalledTimes(1);
+    expect(storagePut).not.toHaveBeenCalled();
   });
 
-  it('o resultado é cacheado — /health a cada 5s não vira 1 write a cada 5s', async () => {
-    await callHealth();
-    await awaitStorageProbe();
-    await callHealth();
-    await callHealth();
+  it('driver sem sonda própria cai no put; AccessDenied vira denied', async () => {
+    driverHasProbe = false;
+    storagePut.mockRejectedValue(
+      Object.assign(new Error('Access Denied'), { name: 'AccessDenied', $metadata: { httpStatusCode: 403 } }),
+    );
+    const res = await probed();
     expect(storagePut).toHaveBeenCalledTimes(1);
+    expect(res.body['storage']).toBe('denied');
+  });
+
+  it('o resultado é cacheado — /health a cada 5s não vira 1 sondagem a cada 5s', async () => {
+    await probed();
+    await callHealth();
+    expect(storageProbeFn).toHaveBeenCalledTimes(1);
   });
 
   it('chamadas simultâneas não disparam sondagens paralelas', async () => {
-    // Sem o guard de "em voo", dez healthchecks concorrentes viram dez PUTs.
     await Promise.all([callHealth(), callHealth(), callHealth()]);
     await awaitStorageProbe();
-    expect(storagePut).toHaveBeenCalledTimes(1);
+    expect(storageProbeFn).toHaveBeenCalledTimes(1);
   });
 });

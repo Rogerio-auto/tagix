@@ -23,6 +23,10 @@
  *  - F70-S07: a regra é `planHumanReply` (`@hm/shared`), a MESMA que o worker aplica
  *    ao eco do app (WhatsApp coexistência / Instagram). Uma regra, duas pontas.
  *
+ * F70-S27 — `POST /api/conversations/:id/messages/:messageId/retry-media`: o
+ * "Tentar de novo" da mídia recebida que falhou. Reenfileira o download pela outbox,
+ * na mesma transação que volta o status para `pending` (ver `decideMediaRetry`).
+ *
  * Router NÃO montado aqui — o orchestrator monta `createMessagesRouter()` em
  * `apps/api/src/app.ts`.
  */
@@ -30,9 +34,10 @@ import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, eq, sql } from 'drizzle-orm';
-import { assertConversationVisible, schema } from '@hm/db';
-import { connectMq, makeEnvelope, type MqHandle } from '@hm/shared/mq';
+import { assertConversationVisible, enqueueOutbox, schema } from '@hm/db';
+import { connectMq, makeEnvelope, QUEUES, queueJobOutbox, type MqHandle } from '@hm/shared/mq';
 import {
+  CHANNEL_PROVIDERS,
   contactsPayloadSchema,
   locationPayloadSchema,
   planHumanReply,
@@ -136,6 +141,117 @@ function storedType(type: string, richKind: RichKind | null): string {
 function paramId(req: Request, name: string): string {
   const raw = req.params[name];
   return typeof raw === 'string' ? raw : '';
+}
+
+// ─── "Tentar de novo" da mídia recebida (F70-S27) ─────────────────────────────
+//
+// Espelha contratos do worker de mídia sem importar o grafo de `apps/workers` (fora do
+// build da API), como `IG_MESSAGE_TAGS` acima:
+//  - o job é o de `media/job.ts` (`mediaJobSchema`), gravado pelo worker em
+//    `metadata.mediaJob` quando a mídia falha;
+//  - os motivos terminais são os de `TERMINAL_MEDIA_FAILURES` (`media/ports.ts`);
+//  - a regra de "pedido em voo" é a de `reprocessInFlight` (`media/reprocess.ts`).
+
+/** Tipo do envelope do job de mídia (= `INBOUND_MEDIA_TYPE` do worker). */
+const INBOUND_MEDIA_TYPE = 'inbound.media.requested';
+const MEDIA_FAILURE_META = 'mediaFailure';
+const MEDIA_JOB_META = 'mediaJob';
+const MEDIA_REPROCESS_META = 'mediaReprocess';
+const TERMINAL_MEDIA_FAILURES: ReadonlySet<string> = new Set([
+  'media_expired',
+  'media_unavailable',
+  'empty_media',
+]);
+/** Pendente há mais que isto sem virar mídia = travada (a UI desiste no mesmo prazo). */
+const MEDIA_STUCK_MS = 2 * 60_000;
+/** Um pedido de "tentar de novo" em voo segura novos pedidos por este tempo. */
+const MEDIA_RETRY_COOLDOWN_MS = 10 * 60_000;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const storedMediaJobSchema = z.object({
+  provider: z.enum(CHANNEL_PROVIDERS),
+  externalId: z.string().min(1),
+  mediaRef: z.object({
+    refOrUrl: z.string().min(1),
+    mimeType: z.string().min(1).optional(),
+    sha256: z.string().min(1).optional(),
+    fileName: z.string().min(1).optional(),
+  }),
+  routing: z.object({
+    phoneNumberId: z.string().min(1).optional(),
+    igUserId: z.string().min(1).optional(),
+    wahaSession: z.string().min(1).optional(),
+  }),
+});
+type StoredMediaJob = z.infer<typeof storedMediaJobSchema>;
+
+const failureMetaSchema = z.object({ reason: z.string(), at: z.string().optional() }).passthrough();
+const reprocessMetaSchema = z.object({ requestedAt: z.string() }).passthrough();
+
+type RetryMediaRefusal =
+  | 'already_ready'
+  | 'not_retryable'
+  | 'terminal'
+  | 'in_progress'
+  | 'no_reference';
+type RetryMediaOutcome = 'not_found' | 'queued' | 'already_queued' | RetryMediaRefusal;
+
+const RETRY_MEDIA_MESSAGES: Readonly<Record<RetryMediaRefusal, string>> = {
+  already_ready: 'A mídia já está disponível.',
+  not_retryable: 'Esta mensagem não tem mídia recebida para recuperar.',
+  terminal: 'O arquivo não existe mais na origem e não pode ser recuperado.',
+  in_progress: 'A mídia ainda está sendo carregada.',
+  no_reference: 'Não foi possível tentar de novo por aqui. O suporte consegue recuperar esta mídia.',
+};
+
+function parseIso(raw: string | undefined): number | null {
+  if (raw === undefined) return null;
+  const t = Date.parse(raw);
+  return Number.isFinite(t) ? t : null;
+}
+
+/**
+ * Decide o "tentar de novo" a partir da linha travada. PURA e exportada para teste.
+ *
+ * Só retenta mídia recebida, não ingerida, com falha recuperável (ou pendente além
+ * do prazo) e com o job guardado. Um pedido feito DEPOIS da última falha e há menos
+ * de {@link MEDIA_RETRY_COOLDOWN_MS} está em voo: responde sem duplicar.
+ */
+export function decideMediaRetry(row: {
+  readonly direction: string;
+  readonly mediaStatus: string | null;
+  readonly mediaSha256: string | null;
+  readonly metadata: Record<string, unknown>;
+  readonly createdAt: Date;
+  readonly now: Date;
+}):
+  | { readonly kind: 'retry'; readonly job: StoredMediaJob }
+  | { readonly kind: RetryMediaRefusal | 'already_queued' } {
+  if (row.mediaSha256 !== null || row.mediaStatus === 'ready') return { kind: 'already_ready' };
+  if (row.direction !== 'inbound' || row.mediaStatus === null) return { kind: 'not_retryable' };
+
+  const failure = failureMetaSchema.safeParse(row.metadata[MEDIA_FAILURE_META]);
+  if (failure.success && TERMINAL_MEDIA_FAILURES.has(failure.data.reason)) {
+    return { kind: 'terminal' };
+  }
+  const stuck =
+    row.mediaStatus === 'failed' || row.now.getTime() - row.createdAt.getTime() > MEDIA_STUCK_MS;
+  if (!stuck) return { kind: 'in_progress' };
+
+  const reprocess = reprocessMetaSchema.safeParse(row.metadata[MEDIA_REPROCESS_META]);
+  const requestedAt = reprocess.success ? parseIso(reprocess.data.requestedAt) : null;
+  const failedAt = failure.success ? parseIso(failure.data.at) : null;
+  if (
+    requestedAt !== null &&
+    (failedAt === null || failedAt < requestedAt) &&
+    row.now.getTime() - requestedAt < MEDIA_RETRY_COOLDOWN_MS
+  ) {
+    return { kind: 'already_queued' };
+  }
+
+  const job = storedMediaJobSchema.safeParse(row.metadata[MEDIA_JOB_META]);
+  if (!job.success) return { kind: 'no_reference' };
+  return { kind: 'retry', job: job.data };
 }
 
 /** Limite do header `Idempotency-Key` (anti-abuso). */
@@ -585,6 +701,86 @@ export function createMessagesRouter(): Router {
       }
 
       res.status(201).json({ message });
+    },
+  );
+
+  // POST /api/conversations/:id/messages/:messageId/retry-media — "Tentar de novo" da
+  // mídia recebida que falhou (F70-S27). Reenfileira o download pela outbox.
+  router.post(
+    '/api/conversations/:id/messages/:messageId/retry-media',
+    ...sendGuard,
+    async (req: Request, res: Response): Promise<void> => {
+      const conversationId = paramId(req, 'id');
+      const messageId = paramId(req, 'messageId');
+      if (!UUID_RE.test(conversationId) || !UUID_RE.test(messageId)) {
+        res.status(400).json({ message: 'id ou messageId inválido.' });
+        return;
+      }
+      const memberId = req.auth!.member.id;
+      const role = req.auth!.member.role as Role;
+      const workspaceId = req.auth!.workspace.id;
+
+      const outcome = await req.scoped!(
+        async (tx): Promise<RetryMediaOutcome> => {
+          if (
+            !(await assertConversationVisible(tx, { memberId, role, workspaceId }, conversationId))
+          ) {
+            return 'not_found';
+          }
+          const { messages } = schema;
+          // FOR UPDATE: dois cliques (ou duas abas) serializam aqui; o segundo vê o
+          // pedido do primeiro e não duplica o job.
+          const [row] = await tx
+            .select({
+              direction: messages.direction,
+              mediaStatus: messages.mediaStatus,
+              mediaSha256: messages.mediaSha256,
+              metadata: messages.metadata,
+              createdAt: messages.createdAt,
+            })
+            .from(messages)
+            .where(and(eq(messages.id, messageId), eq(messages.conversationId, conversationId)))
+            .limit(1)
+            .for('update');
+          if (row === undefined) return 'not_found';
+
+          const now = new Date();
+          const decision = decideMediaRetry({ ...row, now });
+          if (decision.kind !== 'retry') return decision.kind;
+
+          const mark = {
+            [MEDIA_REPROCESS_META]: { requestedAt: now.toISOString(), source: 'member', memberId },
+          };
+          await tx
+            .update(messages)
+            .set({
+              mediaStatus: 'pending',
+              metadata: sql`${messages.metadata} || ${JSON.stringify(mark)}::jsonb`,
+              updatedAt: now,
+            })
+            .where(eq(messages.id, messageId));
+          await enqueueOutbox(
+            tx,
+            queueJobOutbox(
+              QUEUES.media,
+              makeEnvelope(INBOUND_MEDIA_TYPE, workspaceId, decision.job),
+            ),
+          );
+          return 'queued';
+        },
+      );
+
+      switch (outcome) {
+        case 'not_found':
+          res.status(404).json({ message: 'Mensagem não encontrada.' });
+          return;
+        case 'queued':
+        case 'already_queued':
+          res.status(202).json({ status: outcome });
+          return;
+        default:
+          res.status(409).json({ code: outcome, message: RETRY_MEDIA_MESSAGES[outcome] });
+      }
     },
   );
 
