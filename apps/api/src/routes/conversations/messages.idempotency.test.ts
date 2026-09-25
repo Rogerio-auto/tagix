@@ -13,7 +13,7 @@ import request from 'supertest';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { assertVisibleMock } = vi.hoisted(() => ({ assertVisibleMock: vi.fn() }));
-const { publishOutboundJobMock } = vi.hoisted(() => ({ publishOutboundJobMock: vi.fn() }));
+const { enqueueOutboundJobMock } = vi.hoisted(() => ({ enqueueOutboundJobMock: vi.fn() }));
 
 const sendToQueueMock = vi.fn();
 vi.mock('@hm/shared/mq', () => ({
@@ -21,8 +21,10 @@ vi.mock('@hm/shared/mq', () => ({
   makeEnvelope: (_t: string, _w: string, payload: unknown) => payload,
 }));
 
+// F70-S21: o job vai para a outbox na transação da mensagem (gravação real coberta por
+// `messages.outbox.integration.test.ts`); aqui só conta se foi enfileirado.
 vi.mock('../../mq/outbound-publisher', () => ({
-  publishOutboundJob: (...args: unknown[]) => publishOutboundJobMock(...args),
+  enqueueOutboundJob: (...args: unknown[]) => enqueueOutboundJobMock(...args),
 }));
 
 const CONV_ID = '00000000-0000-0000-0000-000000000c01';
@@ -138,7 +140,7 @@ function makeApp() {
 beforeEach(() => {
   vi.clearAllMocks();
   assertVisibleMock.mockResolvedValue(true);
-  publishOutboundJobMock.mockResolvedValue(true);
+  enqueueOutboundJobMock.mockResolvedValue(undefined);
   existingMessage = null;
   lastInsertValues = null;
   convRow = {
@@ -165,7 +167,7 @@ describe('POST /api/conversations/:id/messages — idempotência (F52-S04)', () 
 
     expect(res.status).toBe(200);
     expect(res.body.message.id).toBe('00000000-0000-0000-0000-0000000000ee');
-    expect(publishOutboundJobMock).not.toHaveBeenCalled();
+    expect(enqueueOutboundJobMock).not.toHaveBeenCalled();
     expect(lastInsertValues).toBeNull(); // nenhum INSERT
   });
 
@@ -179,7 +181,7 @@ describe('POST /api/conversations/:id/messages — idempotência (F52-S04)', () 
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty('message');
     expect(lastInsertValues).toMatchObject({ outboundIdempotencyKey: 'key-novo' });
-    expect(publishOutboundJobMock).toHaveBeenCalledOnce();
+    expect(enqueueOutboundJobMock).toHaveBeenCalledOnce();
   });
 
   it('sem header → 201 legado (chave null, sem lookup de replay)', async () => {
@@ -193,6 +195,6 @@ describe('POST /api/conversations/:id/messages — idempotência (F52-S04)', () 
 
     expect(res.status).toBe(201);
     expect(lastInsertValues).toMatchObject({ outboundIdempotencyKey: null });
-    expect(publishOutboundJobMock).toHaveBeenCalledOnce();
+    expect(enqueueOutboundJobMock).toHaveBeenCalledOnce();
   });
 });

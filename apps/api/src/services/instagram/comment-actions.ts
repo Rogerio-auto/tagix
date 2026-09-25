@@ -4,6 +4,10 @@
  * resposta quando aplicavel, e enfileira o OutboundJob IG que o worker outbound
  * (F15-S04) despacha. Tudo sob RLS (req.scoped). Sem any.
  *
+ * F70-S21: o job entra na outbox na MESMA transacao da escrita que o motiva (a
+ * message `pending` da resposta; o `hidden` do comment). Rollback leva os dois; o
+ * relay publica depois do commit, com confirms.
+ *
  * Kinds suportados:
  *  - ig_public_reply / ig_private_reply: cria message pending + enfileira.
  *  - ig_hide_comment: enfileira hide (sem message); marca ig_comments.hidden.
@@ -13,7 +17,7 @@
 import { eq } from 'drizzle-orm';
 import { schema } from '@hm/db';
 import type { Request } from 'express';
-import { publishOutboundJob } from '../../mq/outbound-publisher';
+import { enqueueOutboundJob } from '../../mq/outbound-publisher';
 
 export type CommentActionInput =
   | { kind: 'ig_public_reply'; commentId: string; text: string }
@@ -68,31 +72,43 @@ async function resolveComment(req: Request, externalCommentId: string): Promise<
   };
 }
 
-/** Cria uma message outbound `pending` na conversa (para correlacao de status). */
-async function createPendingMessage(
+/**
+ * Cria uma message outbound `pending` na conversa (para correlacao de status) e
+ * grava o job da resposta na outbox, na mesma transacao. `null` se o insert nao
+ * materializou (nada vai para a outbox).
+ */
+async function createPendingReply(
   req: Request,
   workspaceId: string,
-  conversationId: string,
-  type: 'comment_reply' | 'text',
-  content: string,
+  resolved: ResolvedComment & { readonly conversationId: string },
+  input: { kind: 'ig_public_reply' | 'ig_private_reply'; text: string },
 ): Promise<string | null> {
   const senderMemberId = req.auth!.member.id;
-  const rows = await req.scoped!((tx) =>
-    tx
+  return req.scoped!(async (tx) => {
+    const [row] = await tx
       .insert(schema.messages)
       .values({
         workspaceId,
-        conversationId,
+        conversationId: resolved.conversationId,
         direction: 'outbound',
         senderType: 'member',
         senderMemberId,
-        type,
-        content,
+        type: input.kind === 'ig_public_reply' ? 'comment_reply' : 'text',
+        content: input.text,
         viewStatus: 'pending',
       })
-      .returning({ id: schema.messages.id }),
-  );
-  return rows[0]?.id ?? null;
+      .returning({ id: schema.messages.id });
+    if (row === undefined) return null;
+    await enqueueOutboundJob(tx, workspaceId, {
+      kind: input.kind,
+      channelId: resolved.channelId,
+      conversationId: resolved.conversationId,
+      messageId: row.id,
+      commentId: resolved.commentId,
+      text: input.text,
+    });
+    return row.id;
+  });
 }
 
 export async function enqueueCommentAction(
@@ -125,51 +141,45 @@ export async function enqueueCommentAction(
     return { ok: true };
   }
 
-  // hide: marca DB + enfileira hide.
+  // hide: marca DB + enfileira hide, na mesma transacao. Sem conversa associada o
+  // `hidden` continua gravado (comportamento de antes) e nenhum job sai: o worker
+  // outbound precisa da conversa (chave FIFO e roteamento de socket).
   if (input.kind === 'ig_hide_comment') {
-    await req.scoped!((tx) =>
-      tx
+    const conversationId = resolved.conversationId;
+    await req.scoped!(async (tx) => {
+      await tx
         .update(schema.igComments)
         .set({ hidden: input.hide, updatedAt: new Date() })
-        .where(eq(schema.igComments.id, resolved.id)),
-    );
-    if (resolved.conversationId === null) {
+        .where(eq(schema.igComments.id, resolved.id));
+      if (conversationId === null) return;
+      await enqueueOutboundJob(tx, workspaceId, {
+        kind: 'ig_hide_comment',
+        channelId: resolved.channelId,
+        conversationId,
+        messageId: resolved.id,
+        commentId: resolved.commentId,
+        hide: input.hide,
+      });
+    });
+    if (conversationId === null) {
       return { ok: false, status: 409, message: 'Sem conversa associada ao comment.' };
     }
-    await publishOutboundJob(workspaceId, {
-      kind: 'ig_hide_comment',
-      channelId: resolved.channelId,
-      conversationId: resolved.conversationId,
-      messageId: resolved.id,
-      commentId: resolved.commentId,
-      hide: input.hide,
-    });
     return { ok: true };
   }
 
-  // reply public/private: cria message pending + enfileira.
-  if (resolved.conversationId === null) {
+  // reply public/private: cria message pending + enfileira (mesma transacao).
+  const { conversationId } = resolved;
+  if (conversationId === null) {
     return { ok: false, status: 409, message: 'Sem conversa associada ao comment.' };
   }
-  const msgType = input.kind === 'ig_public_reply' ? 'comment_reply' : 'text';
-  const messageId = await createPendingMessage(
+  const messageId = await createPendingReply(
     req,
     workspaceId,
-    resolved.conversationId,
-    msgType,
-    input.text,
+    { ...resolved, conversationId },
+    input,
   );
   if (messageId === null) {
     return { ok: false, status: 500, message: 'Falha ao criar a mensagem.' };
   }
-
-  await publishOutboundJob(workspaceId, {
-    kind: input.kind,
-    channelId: resolved.channelId,
-    conversationId: resolved.conversationId,
-    messageId,
-    commentId: resolved.commentId,
-    text: input.text,
-  });
   return { ok: true, messageId };
 }

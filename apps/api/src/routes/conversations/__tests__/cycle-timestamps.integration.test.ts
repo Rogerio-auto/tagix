@@ -75,8 +75,9 @@ vi.mock('@hm/shared/mq', async () => {
     domainEventsOutbox: actual.domainEventsOutbox,
   };
 });
+// O `makeEnvelope` acima é falso: o job da outbox (F70-S21) fica fora deste teste.
 vi.mock('../../../mq/outbound-publisher', () => ({
-  publishOutboundJob: vi.fn().mockResolvedValue(true),
+  enqueueOutboundJob: vi.fn().mockResolvedValue(undefined),
 }));
 
 const { createConversationStateRouter } = await import('../state');
