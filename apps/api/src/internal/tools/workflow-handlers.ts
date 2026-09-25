@@ -14,9 +14,9 @@
  *  - register_conversion → respeita `allow_agent_conversions`; registra de verdade via o
  *    serviço de conversões (F5-S12). Fecha o stub-até-F5 de F2-S20.
  *
- * Eventos de domínio (F70-S09): cada ação devolve `events` como dado; o router publica
- * depois do commit (`conversation.handoff`, `conversation.resolved`,
- * `conversion.registered`, `deal.stage_changed`).
+ * Eventos de domínio (F70-S09): cada ação devolve `events` como dado; o router os grava
+ * na outbox dentro da transação da ação (F70-S17) — `conversation.handoff`,
+ * `conversation.resolved`, `conversion.registered`, `deal.stage_changed`.
  */
 import { z } from 'zod';
 import { eq, sql } from 'drizzle-orm';
@@ -41,14 +41,23 @@ function fail(error: string): ToolHandlerResult {
   return { ok: false, error };
 }
 
-/** `conversation.resolved` quando a IA resolve (autor = agente). */
+/**
+ * `conversation.resolved` quando a IA resolve (autor = agente). Ocorrência = execução
+ * (F70-S20, como o handoff): repetir `mark_resolved`, ou resolver de novo por
+ * `change_conversation_status`, na mesma execução grava UM evento — o `event_id`
+ * `<conversa>:resolved:<executionId>` vira DO NOTHING na outbox.
+ */
 function resolvedByAgent(env: ToolCallEnvelope, conversationId: string): DomainEventDraft {
-  return domainEvents.conversationResolved(env.workspaceId, {
-    conversationId,
-    resolvedBy: 'agent',
-    memberId: null,
-    agentId: env.agentId,
-  });
+  return domainEvents.conversationResolved(
+    env.workspaceId,
+    {
+      conversationId,
+      resolvedBy: 'agent',
+      memberId: null,
+      agentId: env.agentId,
+    },
+    env.executionId,
+  );
 }
 
 /**
