@@ -2,7 +2,7 @@
 id: F70-S22
 title: deploy.sh migra antes de subir o código novo
 phase: F70
-status: in-progress
+status: review
 priority: critical
 estimated_size: S
 depends_on: [F70-S20]
@@ -12,6 +12,7 @@ source_docs:
   - docs/runbooks/deploy-production.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T12:33:39Z
+completed_at: 2026-09-25T12:46:39Z
 
 ---
 # F70-S22 — deploy.sh migra antes de subir o código novo
