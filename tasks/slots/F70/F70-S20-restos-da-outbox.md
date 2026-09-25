@@ -2,7 +2,7 @@
 id: F70-S20
 title: Restos da outbox — envios da API v1, message.sent atômico, mídia da coexistência e emissor morto
 phase: F70
-status: in-progress
+status: review
 priority: medium
 estimated_size: S
 depends_on: [F70-S17, F70-S19]
@@ -12,6 +12,7 @@ source_docs:
   - tasks/slots/F70/F70-S17-produtores-da-api-no-outbox.md
 agent_id: backend-engineer
 claimed_at: 2026-09-25T06:45:27Z
+completed_at: 2026-09-25T12:23:38Z
 
 ---
 # F70-S20 — Restos da outbox
