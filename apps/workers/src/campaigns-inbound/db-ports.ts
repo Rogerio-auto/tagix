@@ -4,10 +4,16 @@
  * recipients -> campaigns, filtrando pelo contato e canal). optOutContact espelha
  * a regra da API (F6-S04): marca opt-out + tira de campanhas MARKETING pendentes.
  * publishFollowup enfileira o evento que S06 materializa em scheduled_followups.
+ *
+ * F70-S08 — handoffToAgent NAO tem mais UPDATE proprio: liga a IA pelo port de
+ * outbound da flow-engine (`setConversationAi`), cujo UPDATE e condicional na
+ * `origin` da conversa (trava atomica, fail-closed). Nao existe caminho cru para
+ * religar por engano, nem se alguem montar estes ports sem o `gateCampaignAiHandoff`.
  */
 import { Buffer } from 'node:buffer';
 import { and, desc, eq, gte, inArray } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
+import { createOutboundPort, type FlowOutboundPort } from '@hm/flow-engine';
 import { makeEnvelope, QUEUES } from '@hm/shared/mq';
 import type { MqHandle } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
@@ -40,11 +46,17 @@ const REPLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 export interface CampaignInboundDbDeps {
   readonly channel: MqChannel;
   readonly logger: Logger;
+  /**
+   * Mutacao de IA com a trava de origem. Default: o port real de outbound da
+   * flow-engine. Injetavel para teste; nunca um UPDATE sem trava.
+   */
+  readonly ai?: Pick<FlowOutboundPort, 'setConversationAi'>;
 }
 
 export function createCampaignInboundPorts(
   deps: CampaignInboundDbDeps,
 ): CampaignInboundPorts {
+  const ai = deps.ai ?? createOutboundPort();
   return {
     async optOutContact(workspaceId, contactId, reason): Promise<void> {
       await withWorkspace(workspaceId, async (tx) => {
@@ -156,12 +168,21 @@ export function createCampaignInboundPorts(
     },
 
     async handoffToAgent(message: InboundMessage, agentId: string): Promise<void> {
-      await withWorkspace(message.workspaceId, (tx) =>
-        tx
-          .update(conversations)
-          .set({ aiMode: 'on', agentId, updatedAt: new Date() })
-          .where(eq(conversations.id, message.conversationId)),
-      );
+      // F70-S08: mesma trava do flow `ai_action` — conversa sem origem comprovada
+      // continua com a IA desligada; a recusa e registrada, o processor segue.
+      const result = await ai.setConversationAi(message.workspaceId, {
+        conversationId: message.conversationId,
+        aiMode: 'on',
+        agentId,
+      });
+      if (!result.applied) {
+        deps.logger.warn('campaigns-inbound: handoff para IA recusado pela trava de origem', {
+          workspaceId: message.workspaceId,
+          conversationId: message.conversationId,
+          agentId,
+          reason: result.reason,
+        });
+      }
     },
 
     async publishFollowup(args): Promise<void> {
