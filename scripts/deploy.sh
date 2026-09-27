@@ -94,6 +94,17 @@ APP_VERSION="$(git rev-parse --short HEAD 2>/dev/null || echo latest)"
 export APP_VERSION
 ok "Versão do deploy: $APP_VERSION"
 
+# Configs do Swarm são IMUTÁVEIS: o `stack deploy` aborta com "only updates to Labels are
+# allowed" quando o arquivo de uma config muda e o nome continua o mesmo (incidente de
+# 27/09: a F70-S27 acrescentou alertas ao alerts.yml e travou o deploy depois das
+# migrações). O nome de cada config leva o hash do conteúdo: conteúdo novo, config nova,
+# e o serviço troca de config no mesmo deploy. Conteúdo igual, mesmo nome, nada muda.
+config_hash() { sha256sum "$1" | cut -c1-12; }
+PROMETHEUS_CONFIG_HASH="$(config_hash "$APP_DIR/infra/prometheus/prometheus.yml")"
+PROMETHEUS_ALERTS_HASH="$(config_hash "$APP_DIR/infra/prometheus/alerts.yml")"
+ALERTMANAGER_CONFIG_HASH="$(config_hash "$APP_DIR/infra/prometheus/alertmanager.yml")"
+export PROMETHEUS_CONFIG_HASH PROMETHEUS_ALERTS_HASH ALERTMANAGER_CONFIG_HASH
+
 # --- 3. Build das imagens no nó ----------------------------------------------
 # Só constrói; nada sobe. A imagem da api é a que roda as migrations no §6.
 step "Buildando imagens (api, web, workers, agent-runtime, landing) :$APP_VERSION"

@@ -13,6 +13,7 @@ Rodar: python -m pytest -q scripts/tests/test_deploy_order.py
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -39,6 +40,7 @@ case "$1 $2" in
     for a in "$@"; do [ "$prev" = "-c" ] && file="$a"; prev="$a"; done
     n=$(find "$st" -maxdepth 1 -name 'stack_deploy_*' | wc -l)
     cp "$file" "$st/stack_deploy_$n.yml"
+    printf '%s %s %s\n' "${PROMETHEUS_CONFIG_HASH:-}" "${PROMETHEUS_ALERTS_HASH:-}" "${ALERTMANAGER_CONFIG_HASH:-}" > "$st/stack_env_$n"
     touch "$st/postgres_service"
     exit 0 ;;
   "stack services") echo "ID NAME MODE REPLICAS IMAGE"; exit 0 ;;
@@ -107,6 +109,7 @@ class DeployOrderTest(unittest.TestCase):
             d.mkdir(parents=True)
         shutil.copyfile(DEPLOY_SH, self.app / "scripts" / "deploy.sh")
         shutil.copyfile(PROD_COMPOSE, self.app / "infra" / "docker" / "docker-compose.prod.yml")
+        shutil.copytree(REPO / "infra" / "prometheus", self.app / "infra" / "prometheus")
         (self.app / ".env").write_bytes(b"PG_USER=leadium\nPG_PASSWORD=segredo\nPG_DB=leadium\n")
         for name, body in (("docker", FAKE_DOCKER), ("git", FAKE_GIT), ("sleep", FAKE_SLEEP)):
             f = self.bin / name
@@ -185,6 +188,39 @@ class DeployOrderTest(unittest.TestCase):
         self.assertIn("--network leadium_leadium_internal", calls[migrate])
         dumps = list((self.app / "backups").glob(f"leadium-*-{SHA}.dump"))
         self.assertEqual(len(dumps), 1)
+
+    def test_configs_do_swarm_levam_o_hash_do_conteudo(self) -> None:
+        # Incidente de 27/09: config do Swarm é imutável; nome fixo + conteúdo novo faz o
+        # `stack deploy` abortar ("only updates to Labels are allowed").
+        prom = self.app / "infra" / "prometheus"
+
+        def esperado() -> list[str]:
+            return [
+                hashlib.sha256((prom / f).read_bytes()).hexdigest()[:12]
+                for f in ("prometheus.yml", "alerts.yml", "alertmanager.yml")
+            ]
+
+        r = self._deploy()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        primeiro = (self.state / "stack_env_0").read_text(encoding="utf-8").split()
+        self.assertEqual(primeiro, esperado())
+
+        # Mudar o alerts.yml muda só o hash dele; o compose usa os três no nome das configs.
+        with open(prom / "alerts.yml", "ab") as f:
+            f.write(b"\n# alerta novo\n")
+        for extra in self.state.glob("stack_*"):
+            extra.unlink()
+        r = self._deploy()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        segundo = (self.state / "stack_env_0").read_text(encoding="utf-8").split()
+        self.assertEqual(segundo, esperado())
+        self.assertEqual(primeiro[0], segundo[0])
+        self.assertNotEqual(primeiro[1], segundo[1])
+        self.assertEqual(primeiro[2], segundo[2])
+
+        compose = PROD_COMPOSE.read_text(encoding="utf-8")
+        for var in ("PROMETHEUS_CONFIG_HASH", "PROMETHEUS_ALERTS_HASH", "ALERTMANAGER_CONFIG_HASH"):
+            self.assertIn("${" + var + ":-manual}", compose)
 
     def test_migracao_falhou_nenhum_stack_deploy(self) -> None:
         r = self._deploy(FAKE_MIGRATE_RC="1")
