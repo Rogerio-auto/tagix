@@ -2,7 +2,7 @@
 id: F70-S29
 title: e2e do CI verde de novo (gate do deploy)
 phase: F70
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: [F70-S28]
@@ -12,6 +12,7 @@ source_docs:
   - apps/web/playwright.config.ts
 agent_id: backend-engineer
 claimed_at: 2026-09-25T20:32:15Z
+completed_at: 2026-09-27T20:30:10Z
 
 ---
 # F70-S29 — e2e do CI verde de novo
