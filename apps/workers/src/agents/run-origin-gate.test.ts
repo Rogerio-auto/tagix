@@ -81,6 +81,30 @@ describe('authorizeAiReply (F70-S19)', () => {
   });
 });
 
+describe('authorizeAiReply com a trava do workspace (F70-S30)', () => {
+  const none = { aiEnabledAt: null, aiAutoEnabledAt: null };
+
+  it('trava desligada: qualquer origem responde sem marca humana', () => {
+    for (const origin of [null, 'sem-origem', 'origem:prospeccao', 'origem:qualquer']) {
+      expect(authorizeAiReply({ ...none, origin, requiresProvenOrigin: false })).toEqual({
+        allowed: true,
+        basis: 'origin_gate_off',
+      });
+    }
+  });
+
+  it('trava ligada, ausente ou null: vale a regra da origem (fail-closed)', () => {
+    for (const requiresProvenOrigin of [true, null, undefined]) {
+      expect(
+        authorizeAiReply({ ...none, origin: 'sem-origem', requiresProvenOrigin }).allowed,
+      ).toBe(false);
+      expect(
+        authorizeAiReply({ ...none, origin: 'origem:anuncio', requiresProvenOrigin }),
+      ).toEqual({ allowed: true, basis: 'origin' });
+    }
+  });
+});
+
 // ─── 2) Postgres dev ─────────────────────────────────────────────────────────
 
 describe.skipIf(!url)('worker de agentes — trava de origem e marca humana (DB, F70-S19)', () => {
@@ -337,6 +361,41 @@ describe.skipIf(!url)('worker de agentes — trava de origem e marca humana (DB,
     }
     expect(sqlState(error)).toBe('23503');
     expect((await marks(conv)).aiEnabledAt).toBeNull();
+  });
+
+  describe('trava de origem desligada no workspace (F70-S30)', () => {
+    async function setLock(value: boolean): Promise<void> {
+      await getDb()
+        .update(schema.workspaces)
+        .set({ aiRequiresProvenOrigin: value })
+        .where(eq(schema.workspaces.id, WS));
+    }
+
+    it('conversa `on` sem origem e sem marca humana → responde; religar a trava → barra', async () => {
+      const legacy = await newConversation(null, 'on');
+      const noOrigin = await newConversation('sem-origem', 'off');
+      await setLock(false);
+      try {
+        await automationSets(noOrigin, 'on'); // `on` automático: carimba ai_auto_enabled_at
+        expect((await marks(noOrigin)).aiAutoEnabledAt).toBeInstanceOf(Date);
+
+        const before = runtimeCalls;
+        expect((await run(legacy)).status).toBe('replied');
+        expect((await run(noOrigin)).status).toBe('replied');
+        expect(runtimeCalls).toBe(before + 2);
+      } finally {
+        await setLock(true);
+      }
+
+      // A trava vale no turno seguinte: sem origem e sem marca humana, o worker para.
+      const other = await newConversation('sem-origem', 'on');
+      logger.warn.mockClear();
+      expect(await run(other)).toEqual({ status: 'skipped', reason: 'origin_not_eligible' });
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('não responde'),
+        expect.objectContaining({ conversationId: other, requiresProvenOrigin: true }),
+      );
+    });
   });
 
   it('membro removido: a autoria vira NULL e a marca continua valendo', async () => {

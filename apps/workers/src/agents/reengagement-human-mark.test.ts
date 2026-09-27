@@ -192,6 +192,35 @@ describe.skipIf(!url)('marca humana x retomada automática (DB, F70-S23)', () =>
     expect(authorizeAiReply(r)).toEqual({ allowed: false });
   });
 
+  it('F70-S30: trava desligada retoma a pausa de marca vencida e o worker responde', async () => {
+    // `staleMark` ficou pausada no primeiro caso (marca vencida por um `on` automático).
+    expect(await row(convs.staleMark)).toMatchObject({ aiMode: 'paused' });
+    await getDb()
+      .update(schema.workspaces)
+      .set({ aiRequiresProvenOrigin: false })
+      .where(eq(schema.workspaces.id, WS));
+    try {
+      const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), child: vi.fn() };
+      const deps = { redis: makeRedis(), logger } as unknown as ReengagementDeps;
+      const res = await runReengagementTick(deps, { workspaceId: WS, now, idleMinutes: 60 });
+      expect(res).toMatchObject({ ran: true, enqueued: 1, blockedByOrigin: 0 });
+
+      const r = await row(convs.staleMark);
+      expect(r).toMatchObject({ aiMode: 'on', aiPausedReason: null });
+      // Sem marca válida, só a trava desligada autoriza.
+      expect(authorizeAiReply({ ...r, requiresProvenOrigin: true })).toEqual({ allowed: false });
+      expect(authorizeAiReply({ ...r, requiresProvenOrigin: false })).toEqual({
+        allowed: true,
+        basis: 'origin_gate_off',
+      });
+    } finally {
+      await getDb()
+        .update(schema.workspaces)
+        .set({ aiRequiresProvenOrigin: true })
+        .where(eq(schema.workspaces.id, WS));
+    }
+  });
+
   it('a função da regra: só pausa human_takeover com marca válida anterior à pausa', async () => {
     const t = (iso: string) => sql`${iso}::timestamptz`;
     const cases: Array<{

@@ -52,10 +52,11 @@
  * transação do workspace falhar, as marcas gravadas nela são desfeitas (best-effort),
  * para o próximo tick tentar de novo em vez de perder a janela.
  *
- * **Trava de origem (F70-S08):** retomar é LIGAR a IA automaticamente, então passa
- * pela mesma regra do flow `ai_action` (`AI_ELIGIBLE_CONVERSATION_ORIGINS`, derivado
- * de `isAiEligibleOrigin`): o UPDATE é condicional na `origin` da conversa (atômico,
- * fail-closed — NULL não está no IN). Conversa sem origem comprovada fica `paused`,
+ * **Trava de origem (F70-S08, configurável na F70-S30):** retomar é LIGAR a IA
+ * automaticamente, então passa pelo mesmo predicado do flow `ai_action` (`aiOriginGateSql`,
+ * `@hm/flow-engine`): o UPDATE é condicional na configuração do workspace e na `origin` da
+ * conversa, lidas no próprio UPDATE (atômico, fail-closed). Com a trava desligada a origem
+ * não importa. Com ela ligada, conversa sem origem comprovada fica `paused`,
  * o run NÃO é publicado e a recusa é logada uma vez por janela (a marca de
  * idempotência já foi gravada, então o tick seguinte não repete o log). Um humano
  * ainda pode religar a IA à mão.
@@ -69,9 +70,9 @@
  *   pausa `human_takeover` + marca anterior à pausa + marca não vencida por um `on`
  *   automático. Fail-closed: qualquer campo NULL, pausa `manual` ou IA `off` não retoma.
  */
-import { and, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, eq, or, sql } from 'drizzle-orm';
 import { enqueueOutbox, getDb, schema, withWorkspace } from '@hm/db';
-import { AI_ELIGIBLE_CONVERSATION_ORIGINS } from '@hm/flow-engine';
+import { aiOriginGateSql } from '@hm/flow-engine';
 import type { DbTx } from '@hm/db';
 import {
   AGENT_RUN_REQUESTED_TYPE,
@@ -484,11 +485,12 @@ async function resumeAiMode(
     .where(
       and(
         eq(schema.conversations.id, conversationId),
-        // F70-S08 — trava de origem: só retoma conversa com origem comprovada, OU (F70-S23)
-        // ligada por um humano com a marca válida no momento da pausa. O estado lido aqui
-        // é o de antes do UPDATE, o mesmo que o trigger avalia.
+        // F70-S08/S30 — trava de origem: só retoma se a trava do workspace deixa (desligada
+        // ou origem comprovada, o predicado único `aiOriginGateSql`), OU (F70-S23) se um
+        // humano ligou a IA com a marca válida no momento da pausa. O estado lido aqui é o
+        // de antes do UPDATE, o mesmo que o trigger avalia.
         or(
-          inArray(schema.conversations.origin, [...AI_ELIGIBLE_CONVERSATION_ORIGINS]),
+          aiOriginGateSql(),
           sql`public.conversation_ai_resume_keeps_human_mark(${schema.conversations.aiMode}, ${schema.conversations.aiPausedReason}, ${schema.conversations.aiPausedAt}, ${schema.conversations.aiEnabledAt}, ${schema.conversations.aiAutoEnabledAt})`,
         ),
       ),

@@ -4,9 +4,10 @@
  * O handoff de campanha (`campaigns-inbound`, F6-S07) liga a IA quando o
  * destinatário responde. É um caminho AUTOMÁTICO — nenhum humano decide por
  * conversa —, então passa pela mesma trava do flow `ai_action`: o port de outbound
- * da flow-engine, cujo `setConversationAi('on')` é um UPDATE condicional na
- * `origin` (atômico, fail-closed). Conversa sem origem comprovada fica com a IA
- * desligada e a recusa é registrada.
+ * da flow-engine, cujo `setConversationAi('on')` é um UPDATE condicional no predicado
+ * único da trava (`aiOriginGateSql`: configuração do workspace, F70-S30, e `origin`;
+ * atômico, fail-closed). Com a trava ligada, conversa sem origem comprovada fica com a
+ * IA desligada e a recusa é registrada; com ela desligada, o handoff liga a IA.
  *
  * Mora aqui (composição do inbound) porque é aqui que o processor de campanhas é
  * montado; o processor em si não muda.

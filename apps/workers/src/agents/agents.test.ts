@@ -73,7 +73,10 @@ vi.mock('@hm/db', () => ({
       aiMode: 'ai_mode',
       agentId: 'agent_id',
       departmentId: 'department_id',
+      workspaceId: 'workspace_id',
     },
+    // F70-S30: `loadContext` lê a trava do workspace pelo SQL de `@hm/flow-engine`.
+    workspaces: { id: 'id', aiRequiresProvenOrigin: 'ai_requires_proven_origin' },
     agents: { id: 'id', status: 'status' },
     messages: {
       conversationId: 'conversation_id',

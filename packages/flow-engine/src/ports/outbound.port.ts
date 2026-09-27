@@ -10,9 +10,9 @@
  * (engine pura / testes / API sem worker): mantem o contrato estavel sem acoplar a engine
  * ao transporte de mensagens.
  */
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
-import { AI_ELIGIBLE_CONVERSATION_ORIGINS } from '../ai-origin-gate';
+import { aiOriginGateSql } from '../ai-origin-gate';
 import type { FlowOutboundPort } from '../deps';
 import type { FlowOutboundMessage, FlowPresenceAction, SetConversationAiResult } from '../types';
 
@@ -43,14 +43,12 @@ export function createOutboundPort(publisher: OutboundPublisher = noopPublisher)
     async setConversationAi(workspaceId, input): Promise<SetConversationAiResult> {
       return withWorkspace(workspaceId, async (tx) => {
         const byId = eq(conversations.id, input.conversationId);
-        // F70-S07 — trava de origem. Ligar a IA é um UPDATE CONDICIONAL na própria
-        // origem: atômico (sem janela entre ler e ligar) e fail-closed (NULL não está
-        // no IN, então conversa sem origem gravada nunca liga). Desligar/pausar não
-        // tem trava — tirar a IA é sempre seguro.
-        const where =
-          input.aiMode === 'on'
-            ? and(byId, inArray(conversations.origin, [...AI_ELIGIBLE_CONVERSATION_ORIGINS]))
-            : byId;
+        // F70-S07/S30 — trava de origem. Ligar a IA é um UPDATE CONDICIONAL no predicado
+        // único da trava (`aiOriginGateSql`): a configuração do workspace e a origem são
+        // lidas no próprio UPDATE, atômico (sem janela entre ler e ligar) e fail-closed
+        // (trava ligada e origem NULL não passam). Desligar/pausar não tem trava — tirar
+        // a IA é sempre seguro.
+        const where = input.aiMode === 'on' ? and(byId, aiOriginGateSql()) : byId;
         const updated = await tx
           .update(conversations)
           .set({ aiMode: input.aiMode, agentId: input.agentId ?? null, updatedAt: new Date() })

@@ -8,3 +8,5 @@ export { default as BusinessHoursSection } from './BusinessHoursSection';
 export { default as SlasSection } from './SlasSection';
 /** F30-S10: configuração de visibilidade de inbox + peer-privacy. */
 export { default as InboxVisibilitySection } from './InboxVisibilitySection';
+/** F70-S30: trava de origem da IA do workspace. */
+export { default as AiOriginLockSection } from './AiOriginLockSection';

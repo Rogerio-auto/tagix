@@ -150,4 +150,31 @@ describe.skipIf(!url)('transfer_to_agent — trava de origem (DB, F70-S08)', () 
     expect(res.ok).toBe(true);
     expect(row).toMatchObject({ aiMode: 'on', agentId: TO_AGENT });
   });
+
+  it('F70-S30: trava do workspace desligada → sem-origem pausada e legado off transferem e ligam', async () => {
+    await getDb()
+      .update(schema.workspaces)
+      .set({ aiRequiresProvenOrigin: false })
+      .where(eq(schema.workspaces.id, WS));
+    try {
+      for (const [origin, aiMode] of [
+        ['sem-origem', 'paused'],
+        [null, 'off'],
+      ] as const) {
+        const conv = await conversation(origin, aiMode);
+        const { res, row, reengage } = await transfer(conv);
+        expect(res.ok).toBe(true);
+        expect(row).toEqual({ aiMode: 'on', agentId: TO_AGENT, aiPausedReason: null });
+        expect(reengage).toHaveBeenCalledTimes(1);
+      }
+    } finally {
+      await getDb()
+        .update(schema.workspaces)
+        .set({ aiRequiresProvenOrigin: true })
+        .where(eq(schema.workspaces.id, WS));
+    }
+    // Religada, a mesma situação volta a ser recusada.
+    const conv = await conversation('sem-origem', 'paused');
+    expect((await transfer(conv)).res.ok).toBe(false);
+  });
 });

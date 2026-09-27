@@ -23,7 +23,7 @@ type LlmModelSeed = typeof llmModelsWhitelist.$inferInsert;
  * Pricing OpenRouter (USD por 1M tokens) capturado no momento do seed.
  * F2.5-S02 mantém atualizado depois via `GET /api/v1/models`.
  */
-const LLM_MODELS: readonly LlmModelSeed[] = [
+export const LLM_MODELS: readonly LlmModelSeed[] = [
   // ── OpenAI ──────────────────────────────────────────────────────────────
   {
     slug: 'openai/gpt-4o-mini',
@@ -137,6 +137,23 @@ const LLM_MODELS: readonly LlmModelSeed[] = [
     isActive: true,
     defaultPlanKeys: ['business'],
     notes: 'Geração 4: raciocínio e agentic tool-use de ponta.',
+  },
+  // Id, contexto e preço confirmados em `GET https://openrouter.ai/api/v1/models`
+  // em 25/09/2026 (F70-S31): prompt 0.000002 e completion 0.00001 USD por token.
+  // Mesma política de planos do Sonnet 4, a geração que ele sucede.
+  {
+    slug: 'anthropic/claude-sonnet-5',
+    displayName: 'Claude Sonnet 5',
+    upstreamProvider: 'anthropic',
+    contextLength: 1_000_000,
+    supportsTools: true,
+    supportsVision: true,
+    supportsStreaming: true,
+    pricingPromptPer1m: '2.000000',
+    pricingCompletionPer1m: '10.000000',
+    isActive: true,
+    defaultPlanKeys: ['business'],
+    notes: 'Geração 5: Sonnet mais novo, contexto de 1M e mais barato que o Sonnet 4.',
   },
   // ── Google ──────────────────────────────────────────────────────────────
   {

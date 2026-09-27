@@ -30,7 +30,7 @@ export const ARCADA_TAGS = {
 export type ArcadaTagKey = keyof typeof ARCADA_TAGS;
 
 /** Slug OpenRouter do modelo (whitelist do Leadium: `llm_models_whitelist`). */
-export const ARCADA_MODEL = 'anthropic/claude-sonnet-4';
+export const ARCADA_MODEL = 'anthropic/claude-sonnet-5';
 
 /**
  * Parâmetros do modelo. `max_tokens` limita o custo por TURNO (o runtime ainda

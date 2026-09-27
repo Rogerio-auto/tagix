@@ -68,7 +68,7 @@ describe('Arcada — limites de negociação', () => {
       deliveryBusinessDays: 5,
     });
     expect(ARCADA_TIERS.map((t) => t.priceBrl)).toEqual([1000, 2500, 5000]);
-    expect(ARCADA_MODEL).toBe('anthropic/claude-sonnet-4');
+    expect(ARCADA_MODEL).toBe('anthropic/claude-sonnet-5');
   });
 
   it('o prompt declara cada limite', () => {
@@ -448,5 +448,51 @@ describe('Arcada — seed no banco (dev)', () => {
     // Reaplicar o mesmo conteúdo novo não cria v3.
     const again = await withWorkspace(ws, (tx) => seedArcadaAttendance(tx, ws, changed));
     expect(again.draftPromptVersion).toBeNull();
+  });
+
+  it('troca de modelo (Sonnet 4 → Sonnet 5, F70-S31) vira RASCUNHO; o live e o agente não mudam', async () => {
+    const db = getDb();
+    const [w] = await db
+      .insert(workspaces)
+      .values({ name: `Arcada S31 ${sfx}`, slug: `arcada-s31-${sfx}` })
+      .returning({ id: workspaces.id });
+    if (!w) throw new Error('Falha ao criar workspace de teste.');
+    const ws31 = w.id;
+    try {
+      // Estado da produção antes da S31: agente semeado com o Sonnet 4.
+      const base = defaultArcadaSeedContent();
+      const legacy = { ...base, model: 'anthropic/claude-sonnet-4' };
+      await withWorkspace(ws31, (tx) => seedArcadaAttendance(tx, ws31, legacy));
+
+      // Seed atual (Sonnet 5, prompt igual): só o modelo muda.
+      const report = await withWorkspace(ws31, (tx) => seedArcadaAttendance(tx, ws31));
+      expect(report.draftPromptVersion).toBe(2);
+      expect(report.warnings.some((m) => m.includes('anthropic/claude-sonnet-5'))).toBe(false);
+
+      const versions = await db
+        .select()
+        .from(agentPromptVersions)
+        .where(eq(agentPromptVersions.agentId, report.agentId));
+      const byVersion = new Map(versions.map((v) => [v.version, v]));
+      expect(byVersion.get(1)).toMatchObject({
+        status: 'live',
+        model: 'anthropic/claude-sonnet-4',
+      });
+      expect(byVersion.get(2)).toMatchObject({
+        status: 'draft',
+        model: 'anthropic/claude-sonnet-5',
+        systemPrompt: base.systemPrompt,
+      });
+      expect(byVersion.get(2)?.note).toContain('anthropic/claude-sonnet-5');
+
+      const [agent] = await db.select().from(agents).where(eq(agents.id, report.agentId));
+      expect(agent).toMatchObject({ model: 'anthropic/claude-sonnet-4', status: 'inactive' });
+
+      // Idempotente: a 2ª rodada com o Sonnet 5 não cria v3.
+      const again = await withWorkspace(ws31, (tx) => seedArcadaAttendance(tx, ws31));
+      expect(again.draftPromptVersion).toBeNull();
+    } finally {
+      await db.delete(workspaces).where(eq(workspaces.id, ws31));
+    }
   });
 });
