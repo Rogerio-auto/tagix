@@ -2,7 +2,7 @@
 id: F70-S29
 title: e2e do CI verde de novo (gate do deploy)
 phase: F70
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F70-S28]
