@@ -118,6 +118,10 @@ export async function installApiMocks(page: Page): Promise<MockState> {
     route.fulfill({ status: 200, contentType: 'text/plain', body: 'ok' }),
   );
 
+  //    SDK da Meta (Embedded Signup): nunca sai para a Meta. Com o app configurado
+  //    no build, um clique em "Conectar com a Meta" falha como falharia sem rede.
+  await page.route('https://connect.facebook.net/**', (route) => route.abort());
+
   // 2) Auth: UM handler, que decide pelo pathname. O Playwright consulta as rotas da
   //    MAIS NOVA para a mais antiga; com `**/auth/login` e depois `**/auth/**`, o
   //    genérico respondia o login com `{ ok: true }`, sem `member`, e o LoginForm

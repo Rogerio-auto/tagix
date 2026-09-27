@@ -130,6 +130,11 @@ jobs:
       # a porta da API falsa do e2e (a mesma de `playwright.config.ts`), nunca 3001.
       API_PROXY_TARGET: http://127.0.0.1:3199
       E2E_SERVER: start
+      # Ids PÚBLICOS e fictícios do app da Meta: ligam o fluxo do Embedded Signup no
+      # wizard de canais (specs/whatsapp-coexistence). O SDK nunca carrega — a
+      # fixture aborta connect.facebook.net. Não são segredos.
+      NEXT_PUBLIC_META_APP_ID: '000000000000000'
+      NEXT_PUBLIC_META_CONFIG_ID: '000000000000001'
     steps:
       - uses: actions/checkout@v4
 
