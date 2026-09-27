@@ -23,6 +23,7 @@ import {
   INBOUND_MESSAGE,
   MANUAL_FLOW,
   ME,
+  ONBOARDING_STATE,
   PIPELINE,
   STAGES,
   WINDOW_OPEN,
@@ -108,22 +109,30 @@ export async function installApiMocks(page: Page): Promise<MockState> {
   // 1) socket.io: responde 200 vazio para o handshake não vazar erro de rede.
   //    O SocketProvider é resiliente a connect_error; a jornada não depende de
   //    push de socket (usa polling/optimistic), então o realtime fica inerte.
-  await page.route('**/socket.io/**', (route) =>
+  //    Casa por pathname: o handshake sai como `/socket.io/?EIO=4…` e, depois do
+  //    redirect de barra final do Next, como `/socket.io?EIO=4…` — o glob
+  //    `**/socket.io/**` deixava a segunda forma escapar para o proxy.
+  //    RegExp, não predicado: com função o Playwright intercepta TODO pedido da
+  //    página (inclusive os chunks do Next) só para devolvê-lo à rede.
+  await page.route(/^https?:\/\/[^/]+\/socket\.io(?:[/?]|$)/, (route) =>
     route.fulfill({ status: 200, contentType: 'text/plain', body: 'ok' }),
   );
 
-  // 2) Auth: login seta o cookie de sessão (httpOnly) e devolve o member.
-  await page.route('**/auth/login', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      headers: {
-        'set-cookie': `${'hm_session'}=e2e-token; Path=/; HttpOnly; SameSite=Lax`,
-      },
-      body: JSON.stringify(ME),
-    }),
-  );
-  await page.route('**/auth/**', (route) => json(route, { ok: true }));
+  // 2) Auth: UM handler, que decide pelo pathname. O Playwright consulta as rotas da
+  //    MAIS NOVA para a mais antiga; com `**/auth/login` e depois `**/auth/**`, o
+  //    genérico respondia o login com `{ ok: true }`, sem `member`, e o LoginForm
+  //    quebrava no `snapshotFromMember` (F70-S29).
+  await page.route('**/auth/**', (route) => {
+    if (pathOf(route.request().url()) === '/auth/login') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'set-cookie': 'hm_session=e2e-token; Path=/; HttpOnly; SameSite=Lax' },
+        body: JSON.stringify(ME),
+      });
+    }
+    return json(route, { ok: true });
+  });
 
   // 3) API: roteador único por pathname + método.
   await page.route('**/api/**', async (route) => {
@@ -133,6 +142,9 @@ export async function installApiMocks(page: Page): Promise<MockState> {
 
     // ── Sessão / identidade ──────────────────────────────────────────────
     if (path === '/api/me') return json(route, ME);
+    if (path === '/api/onboarding/state' && method === 'GET') {
+      return json(route, ONBOARDING_STATE);
+    }
 
     // ── Dashboard ────────────────────────────────────────────────────────
     if (path === '/api/dashboard/me') return json(route, DASHBOARD);
@@ -211,7 +223,8 @@ export async function installApiMocks(page: Page): Promise<MockState> {
 
     // ── Pipeline / deals ─────────────────────────────────────────────────
     if (path === '/api/pipelines' && method === 'GET') {
-      return json(route, { pipelines: [PIPELINE] });
+      // Contrato atual (F35-S02): { data, meta: { limit, current } }.
+      return json(route, { data: [PIPELINE], meta: { limit: 10, current: 1 } });
     }
     const pipeDetail = /^\/api\/pipelines\/([^/]+)$/.exec(path);
     if (pipeDetail && method === 'GET') {

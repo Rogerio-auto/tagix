@@ -182,3 +182,32 @@ export const DASHBOARD = {
   alerts: [] as unknown[],
   layoutPreferences: { hidden: [] as string[], order: [] as string[], period: null },
 } as const;
+
+/**
+ * Tours guiados do shell (`shared/components/tour/content/tours.tsx`, F43-S07).
+ * Cópia dos ids: o tour abre sozinho na primeira visita a `/`, `/conversations`,
+ * `/pipeline`, `/agents` e `/flows` e cobre a tela com um spotlight modal.
+ */
+export const TOUR_IDS = [
+  'tour:dashboard',
+  'tour:inbox',
+  'tour:pipeline',
+  'tour:agents',
+  'tour:flows',
+] as const;
+
+/**
+ * `GET /api/onboarding/state` de um workspace já verticalizado cujo membro já
+ * dispensou os tours (F70-S29). Antes caía no fallback `{}`: cada spec abria por
+ * baixo do tour de primeira visita, com o spotlight e o painel de ajuda tapando a
+ * tela. O cenário destes specs é o de quem usa o produto todo dia, não o first-run.
+ */
+export const ONBOARDING_STATE = {
+  onboarding: {
+    niche_key: 'agency',
+    applied_at: '2026-06-12T12:00:00.000Z',
+    survey: null,
+    setup_completed: true,
+  },
+  tourState: Object.fromEntries(TOUR_IDS.map((id) => [id, { dismissed: true }])),
+} as const;
