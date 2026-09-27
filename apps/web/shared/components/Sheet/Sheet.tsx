@@ -163,7 +163,13 @@ export function Sheet({
   const isDragging = dragState.current.active;
 
   return createPortal(
+    // Fechado, o Sheet segue montado só para a animação de saída. `inert` o tira do
+    // foco por Tab e dos cliques; `aria-hidden` o tira da árvore de acessibilidade
+    // também onde `inert` ainda não chega a ela. Sem isso o leitor de tela anunciava
+    // um diálogo "modal" fora da tela e o Tab entrava nos botões dele (F70-S29).
     <div
+      inert={!open}
+      aria-hidden={open ? undefined : true}
       className={cn(
         'fixed inset-0 z-50 flex flex-col justify-end',
         open ? 'pointer-events-auto' : 'pointer-events-none',

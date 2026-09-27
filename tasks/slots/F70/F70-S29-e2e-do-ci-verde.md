@@ -36,6 +36,18 @@ O job `e2e` do CI voltar a passar. Sem ele verde, o `deploy` é pulado e nada ch
 - `apps/web/playwright.config.ts`
 - `.github/workflows/ci.yml` *(só o job `e2e`)*
 - `apps/web/next.config.mjs` *(só se o proxy de dev precisar de ajuste para o e2e, sem mudar produção)*
+- `apps/web/shared/components/Sheet/Sheet.tsx` *(nota de correção abaixo)*
+
+### Nota de correção de escopo (25/09)
+
+`mobile-navigation`, `mobile-pipeline` e `mobile-table` afirmam que o Sheet **fechou**
+(`getByRole('dialog', { name }) → toHaveCount(0)`). Falham porque o Sheet fechado do web
+(`shared/components/Sheet/Sheet.tsx`) continua montado no portal com `role="dialog"` e
+`aria-modal="true"`, só deslocado para fora da tela (`translate-y-full`): leitor de tela o
+anuncia e o Tab alcança os botões de dentro dele. O spec está certo e o componente está
+errado (WCAG 2.4.3 e 4.1.2). Afrouxar o assert esconderia o bug, então a correção entra
+no componente: fechado, o painel fica `inert` e sai da árvore de acessibilidade. A
+animação de entrada e saída continua igual.
 
 ## Escopo (faz)
 
