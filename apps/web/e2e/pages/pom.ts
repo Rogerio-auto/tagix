@@ -8,12 +8,30 @@
 import type { Page, Locator } from '@playwright/test';
 import { expect } from '@playwright/test';
 
+/**
+ * Espera o React hidratar o elemento (F70-S29). O `next start` entrega o HTML
+ * pronto e o `click` do Playwright só espera o elemento estar visível e estável —
+ * não hidratado. Clicar antes disso cai no HTML puro: botão sem handler (o clique
+ * some) ou `<form>` fazendo submit nativo (o CI chegou a registrar
+ * `/login?email=…&password=…`). O React marca o nó hidratado com `__reactProps$…`.
+ */
+export async function waitForHydration(target: Locator): Promise<void> {
+  await expect
+    .poll(() => target.evaluate((el) => Object.keys(el).some((k) => k.startsWith('__reactProps$'))))
+    .toBe(true);
+}
+
 /** Login (LoginForm.tsx): inputs por label, submit "Entrar". */
 export class LoginPage {
   constructor(private readonly page: Page) {}
 
   async goto(): Promise<void> {
     await this.page.goto('/login');
+  }
+
+  /** O formulário de login já responde ao React (ver `waitForHydration`). */
+  async waitForHydration(): Promise<void> {
+    await waitForHydration(this.page.locator('form').filter({ has: this.submit() }));
   }
 
   email(): Locator {
@@ -29,6 +47,7 @@ export class LoginPage {
   }
 
   async login(email: string, password: string): Promise<void> {
+    await this.waitForHydration();
     await this.email().fill(email);
     await this.password().fill(password);
     await this.submit().click();
@@ -65,10 +84,7 @@ export class ChannelsPage {
     await this.page.getByLabel('ID da sessão WAHA').fill(sessionId);
     await this.page.getByLabel('Chave de API').fill(apiKey);
     // O botão de submit do form tem o mesmo texto "Conectar canal".
-    await this.page
-      .getByRole('dialog')
-      .getByRole('button', { name: 'Conectar canal' })
-      .click();
+    await this.page.getByRole('dialog').getByRole('button', { name: 'Conectar canal' }).click();
   }
 }
 
@@ -85,10 +101,10 @@ export class ConversationsPage {
   }
 
   chatList(): Locator {
-    return this.page.getByRole('list', { name: 'Conversas' });
+    return this.page.getByRole('listbox', { name: 'Conversas' });
   }
 
-  /** Item da conversa pelo remoteId exibido (ChatListItem). */
+  /** Item da conversa pelo remoteId exibido (ChatListItem, `option` com link). */
   chatItem(remoteId: string): Locator {
     return this.chatList().getByRole('link').filter({ hasText: remoteId });
   }

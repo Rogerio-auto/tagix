@@ -80,10 +80,10 @@ priorizando acessibilidade:
   (`features/auth/components/LoginForm.tsx`).
 - Canais: botão "Conectar canal", cards de provider por label, inputs por label
   (`features/channels/components/{ChannelsManager,ConnectWizard}.tsx`).
-- Conversa: lista `getByRole('list', { name: 'Conversas' })`, composer por
+- Conversa: lista `getByRole('listbox', { name: 'Conversas' })`, composer por
   placeholder, botão "Enviar mensagem", bolhas por `data-direction`/`data-type`
   (`features/conversations/components/{ConversationsLayout,ChatList/ChatList,
-  ChatList/ChatListItem,MessageComposer/MessageComposer,MessageBubble/MessageBubble}.tsx`).
+ChatList/ChatListItem,MessageComposer/MessageComposer,MessageBubble/MessageBubble}.tsx`).
 - Flow manual: chips da `ManualFlowsQuickbar` + `TriggerConfirmModal`
   (`features/flow-builder/livechat/*`).
 - Pipeline: headings de stage (`StageColumn`), cards de deal (`DealCard`), select

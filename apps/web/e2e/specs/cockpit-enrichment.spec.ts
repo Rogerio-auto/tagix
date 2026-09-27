@@ -117,11 +117,13 @@ test.describe('F47 — Catálogo de Produtos (Settings)', () => {
 
     // CTA "Novo produto" abre o painel de criação.
     await page.getByRole('button', { name: 'Novo produto' }).first().click();
-    await expect(page.getByRole('heading', { name: 'Novo produto' })).toBeVisible();
+    const form = page.getByRole('dialog', { name: 'Novo produto' });
+    await expect(form).toBeVisible();
 
-    // Preenche e salva (o mock stateful o adiciona ao catálogo).
-    await page.getByLabel(/Nome/i).first().fill('Plano Pro');
-    await page.getByRole('button', { name: /Criar|Salvar/i }).first().click();
+    // Preenche e salva (o mock stateful o adiciona ao catálogo). O botão de envio
+    // hoje se chama "Adicionar produto".
+    await form.getByRole('textbox', { name: 'Nome' }).fill('Plano Pro');
+    await form.getByRole('button', { name: 'Adicionar produto' }).click();
 
     // A lista reflete o produto recém-criado.
     await expect(page.getByText('Plano Pro')).toBeVisible();
@@ -144,13 +146,20 @@ test.describe('F47 — Catálogo de Produtos (Settings)', () => {
 test.describe('F47 — Card-da-conversa: contrato (idempotência + recompute)', () => {
   test('auto-create idempotente: 2 chamadas devolvem o MESMO deal', async ({ page }) => {
     // Mock stateful: 1 deal por conversa (espelha ensureDealForConversation).
-    const dealsByConversation = new Map<string, { id: string; conversationId: string; valueCents: number }>();
+    const dealsByConversation = new Map<
+      string,
+      { id: string; conversationId: string; valueCents: number }
+    >();
     await page.route('**/api/conversations/*/deal', async (route) => {
       const url = new URL(route.request().url());
       const convId = url.pathname.split('/')[3] ?? '';
       let deal = dealsByConversation.get(convId);
       if (!deal) {
-        deal = { id: `deal_${dealsByConversation.size + 1}`, conversationId: convId, valueCents: 0 };
+        deal = {
+          id: `deal_${dealsByConversation.size + 1}`,
+          conversationId: convId,
+          valueCents: 0,
+        };
         dealsByConversation.set(convId, deal);
       }
       return route.fulfill({
@@ -185,7 +194,10 @@ test.describe('F47 — Card-da-conversa: contrato (idempotência + recompute)', 
     await page.route('**/api/deals/*/items', async (route) => {
       const req = route.request();
       if (req.method() === 'POST') {
-        const body = JSON.parse(req.postData() ?? '{}') as { qty?: number; unitPriceCents?: number };
+        const body = JSON.parse(req.postData() ?? '{}') as {
+          qty?: number;
+          unitPriceCents?: number;
+        };
         const item = {
           id: `item_${items.length + 1}`,
           qty: body.qty ?? 1,

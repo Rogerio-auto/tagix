@@ -23,6 +23,7 @@ import {
   INBOUND_MESSAGE,
   MANUAL_FLOW,
   ME,
+  ONBOARDING_STATE,
   PIPELINE,
   STAGES,
   WINDOW_OPEN,
@@ -61,7 +62,15 @@ export interface MockState {
   /** Conta envios outbound do atendente para encadear a resposta do agente. */
   agentRepliedFor: Set<string>;
   /** Threads de suporte (F38) abertas durante o teste. */
-  supportThreads: { id: string; subject: string; status: string; priority: string; assignedTo: string | null; lastMessageAt: string; createdAt: string }[];
+  supportThreads: {
+    id: string;
+    subject: string;
+    status: string;
+    priority: string;
+    assignedTo: string | null;
+    lastMessageAt: string;
+    createdAt: string;
+  }[];
 }
 
 function freshState(): MockState {
@@ -108,22 +117,34 @@ export async function installApiMocks(page: Page): Promise<MockState> {
   // 1) socket.io: responde 200 vazio para o handshake não vazar erro de rede.
   //    O SocketProvider é resiliente a connect_error; a jornada não depende de
   //    push de socket (usa polling/optimistic), então o realtime fica inerte.
-  await page.route('**/socket.io/**', (route) =>
+  //    Casa por pathname: o handshake sai como `/socket.io/?EIO=4…` e, depois do
+  //    redirect de barra final do Next, como `/socket.io?EIO=4…` — o glob
+  //    `**/socket.io/**` deixava a segunda forma escapar para o proxy.
+  //    RegExp, não predicado: com função o Playwright intercepta TODO pedido da
+  //    página (inclusive os chunks do Next) só para devolvê-lo à rede.
+  await page.route(/^https?:\/\/[^/]+\/socket\.io(?:[/?]|$)/, (route) =>
     route.fulfill({ status: 200, contentType: 'text/plain', body: 'ok' }),
   );
 
-  // 2) Auth: login seta o cookie de sessão (httpOnly) e devolve o member.
-  await page.route('**/auth/login', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      headers: {
-        'set-cookie': `${'hm_session'}=e2e-token; Path=/; HttpOnly; SameSite=Lax`,
-      },
-      body: JSON.stringify(ME),
-    }),
-  );
-  await page.route('**/auth/**', (route) => json(route, { ok: true }));
+  //    SDK da Meta (Embedded Signup): nunca sai para a Meta. Com o app configurado
+  //    no build, um clique em "Conectar com a Meta" falha como falharia sem rede.
+  await page.route('https://connect.facebook.net/**', (route) => route.abort());
+
+  // 2) Auth: UM handler, que decide pelo pathname. O Playwright consulta as rotas da
+  //    MAIS NOVA para a mais antiga; com `**/auth/login` e depois `**/auth/**`, o
+  //    genérico respondia o login com `{ ok: true }`, sem `member`, e o LoginForm
+  //    quebrava no `snapshotFromMember` (F70-S29).
+  await page.route('**/auth/**', (route) => {
+    if (pathOf(route.request().url()) === '/auth/login') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'set-cookie': 'hm_session=e2e-token; Path=/; HttpOnly; SameSite=Lax' },
+        body: JSON.stringify(ME),
+      });
+    }
+    return json(route, { ok: true });
+  });
 
   // 3) API: roteador único por pathname + método.
   await page.route('**/api/**', async (route) => {
@@ -133,6 +154,9 @@ export async function installApiMocks(page: Page): Promise<MockState> {
 
     // ── Sessão / identidade ──────────────────────────────────────────────
     if (path === '/api/me') return json(route, ME);
+    if (path === '/api/onboarding/state' && method === 'GET') {
+      return json(route, ONBOARDING_STATE);
+    }
 
     // ── Dashboard ────────────────────────────────────────────────────────
     if (path === '/api/dashboard/me') return json(route, DASHBOARD);
@@ -162,9 +186,7 @@ export async function installApiMocks(page: Page): Promise<MockState> {
     if (msgMatch) {
       const conversationId = msgMatch[1] ?? '';
       if (method === 'GET') {
-        const ordered = [...state.messages].sort((a, b) =>
-          b.createdAt.localeCompare(a.createdAt),
-        );
+        const ordered = [...state.messages].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         return json(route, { messages: ordered });
       }
       if (method === 'POST') {
@@ -211,7 +233,8 @@ export async function installApiMocks(page: Page): Promise<MockState> {
 
     // ── Pipeline / deals ─────────────────────────────────────────────────
     if (path === '/api/pipelines' && method === 'GET') {
-      return json(route, { pipelines: [PIPELINE] });
+      // Contrato atual (F35-S02): { data, meta: { limit, current } }.
+      return json(route, { data: [PIPELINE], meta: { limit: 10, current: 1 } });
     }
     const pipeDetail = /^\/api\/pipelines\/([^/]+)$/.exec(path);
     if (pipeDetail && method === 'GET') {
@@ -234,25 +257,66 @@ export async function installApiMocks(page: Page): Promise<MockState> {
     if (path === '/api/help/categories' && method === 'GET') {
       return json(route, {
         categories: [
-          { id: 'cat_e2e_1', slug: 'primeiros-passos', title: 'Primeiros passos', description: 'Comece por aqui.', icon: null, order: 0, publishedCount: 1 },
+          {
+            id: 'cat_e2e_1',
+            slug: 'primeiros-passos',
+            title: 'Primeiros passos',
+            description: 'Comece por aqui.',
+            icon: null,
+            order: 0,
+            publishedCount: 1,
+          },
         ],
       });
     }
     if (path === '/api/help/articles' && method === 'GET') {
       return json(route, {
         articles: [
-          { id: 'art_e2e_1', categoryId: 'cat_e2e_1', slug: 'como-criar-um-agente', title: 'Como criar um agente', excerpt: 'Em poucos passos.', status: 'published', order: 0, anchorKey: 'agents.list' },
+          {
+            id: 'art_e2e_1',
+            categoryId: 'cat_e2e_1',
+            slug: 'como-criar-um-agente',
+            title: 'Como criar um agente',
+            excerpt: 'Em poucos passos.',
+            status: 'published',
+            order: 0,
+            anchorKey: 'agents.list',
+          },
         ],
       });
     }
     if (path.startsWith('/api/help/articles/by-anchor/') && method === 'GET') {
       return json(route, {
-        article: { id: 'art_e2e_1', categoryId: 'cat_e2e_1', slug: 'como-criar-um-agente', title: 'Como criar um agente', excerpt: 'Em poucos passos.', status: 'published', order: 0, anchorKey: 'agents.list', bodyMd: '## Passo a passo\n\nEscolha um **template**.', publishedAt: null, updatedAt: null },
+        article: {
+          id: 'art_e2e_1',
+          categoryId: 'cat_e2e_1',
+          slug: 'como-criar-um-agente',
+          title: 'Como criar um agente',
+          excerpt: 'Em poucos passos.',
+          status: 'published',
+          order: 0,
+          anchorKey: 'agents.list',
+          bodyMd: '## Passo a passo\n\nEscolha um **template**.',
+          publishedAt: null,
+          updatedAt: null,
+        },
       });
     }
     if (path.startsWith('/api/help/articles/') && method === 'GET') {
       return json(route, {
-        article: { id: 'art_e2e_1', categoryId: 'cat_e2e_1', slug: 'como-criar-um-agente', title: 'Como criar um agente', excerpt: 'Em poucos passos.', status: 'published', order: 0, anchorKey: 'agents.list', bodyMd: '## Passo a passo\n\nEscolha um **template**.', publishedAt: null, updatedAt: null },
+        article: {
+          id: 'art_e2e_1',
+          categoryId: 'cat_e2e_1',
+          slug: 'como-criar-um-agente',
+          title: 'Como criar um agente',
+          excerpt: 'Em poucos passos.',
+          status: 'published',
+          order: 0,
+          anchorKey: 'agents.list',
+          bodyMd: '## Passo a passo\n\nEscolha um **template**.',
+          publishedAt: null,
+          updatedAt: null,
+        },
       });
     }
     if (path.endsWith('/feedback') && path.startsWith('/api/help/') && method === 'POST') {
@@ -266,21 +330,84 @@ export async function installApiMocks(page: Page): Promise<MockState> {
     if (path === '/api/support/threads' && method === 'POST') {
       const body = parseBody(request) as { subject?: string; priority?: string; message?: string };
       const now = new Date().toISOString();
-      const thread = { id: 'sup_e2e_' + (state.supportThreads.length + 1), subject: body.subject ?? 'Sem assunto', status: 'open', priority: body.priority ?? 'normal', assignedTo: null, lastMessageAt: now, createdAt: now };
+      const thread = {
+        id: 'sup_e2e_' + (state.supportThreads.length + 1),
+        subject: body.subject ?? 'Sem assunto',
+        status: 'open',
+        priority: body.priority ?? 'normal',
+        assignedTo: null,
+        lastMessageAt: now,
+        createdAt: now,
+      };
       state.supportThreads.unshift(thread);
-      return json(route, { thread, message: { id: 'msg_e2e_1', threadId: thread.id, senderType: 'member', senderId: 'mem_e2e', body: body.message ?? '', createdAt: now } }, 201);
+      return json(
+        route,
+        {
+          thread,
+          message: {
+            id: 'msg_e2e_1',
+            threadId: thread.id,
+            senderType: 'member',
+            senderId: 'mem_e2e',
+            body: body.message ?? '',
+            createdAt: now,
+          },
+        },
+        201,
+      );
     }
-    if (path.startsWith('/api/support/threads/') && path.endsWith('/messages') && method === 'POST') {
-      return json(route, { message: { id: 'msg_e2e_2', threadId: 'sup_e2e_1', senderType: 'member', senderId: 'mem_e2e', body: (parseBody(request) as { body?: string }).body ?? '', createdAt: new Date().toISOString() } }, 201);
+    if (
+      path.startsWith('/api/support/threads/') &&
+      path.endsWith('/messages') &&
+      method === 'POST'
+    ) {
+      return json(
+        route,
+        {
+          message: {
+            id: 'msg_e2e_2',
+            threadId: 'sup_e2e_1',
+            senderType: 'member',
+            senderId: 'mem_e2e',
+            body: (parseBody(request) as { body?: string }).body ?? '',
+            createdAt: new Date().toISOString(),
+          },
+        },
+        201,
+      );
     }
-    if (path.startsWith('/api/support/threads/') && path.endsWith('/resolve') && method === 'POST') {
+    if (
+      path.startsWith('/api/support/threads/') &&
+      path.endsWith('/resolve') &&
+      method === 'POST'
+    ) {
       const t = state.supportThreads[0];
       if (t) t.status = 'resolved';
       return json(route, { thread: t ?? { id: 'sup_e2e_1', status: 'resolved' } });
     }
     if (path.startsWith('/api/support/threads/') && method === 'GET') {
-      const t = state.supportThreads[0] ?? { id: 'sup_e2e_1', subject: 'Ajuda', status: 'open', priority: 'normal', assignedTo: null, lastMessageAt: new Date().toISOString(), createdAt: new Date().toISOString() };
-      return json(route, { thread: t, messages: [{ id: 'msg_e2e_1', threadId: t.id, senderType: 'member', senderId: 'mem_e2e', body: 'Preciso de ajuda', createdAt: new Date().toISOString() }] });
+      const t = state.supportThreads[0] ?? {
+        id: 'sup_e2e_1',
+        subject: 'Ajuda',
+        status: 'open',
+        priority: 'normal',
+        assignedTo: null,
+        lastMessageAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      };
+      return json(route, {
+        thread: t,
+        messages: [
+          {
+            id: 'msg_e2e_1',
+            threadId: t.id,
+            senderType: 'member',
+            senderId: 'mem_e2e',
+            body: 'Preciso de ajuda',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      });
     }
 
     // ─── F38: Portal do Desenvolvedor (OpenAPI live) ───────────────────────
@@ -289,8 +416,12 @@ export async function installApiMocks(page: Page): Promise<MockState> {
         openapi: '3.1.0',
         info: { title: 'Leadium API', version: '1.0.0', description: 'API publica v1 da Leadium.' },
         paths: {
-          '/api/v1/contacts': { get: { summary: 'Lista contatos', description: 'Requer o scope `contacts:read`.' } },
-          '/api/v1/deals': { get: { summary: 'Lista deals', description: 'Requer o scope `deals:read`.' } },
+          '/api/v1/contacts': {
+            get: { summary: 'Lista contatos', description: 'Requer o scope `contacts:read`.' },
+          },
+          '/api/v1/deals': {
+            get: { summary: 'Lista deals', description: 'Requer o scope `deals:read`.' },
+          },
         },
       });
     }

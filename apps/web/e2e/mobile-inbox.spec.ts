@@ -110,7 +110,7 @@ test.describe('Mobile — inbox em pilha de views', () => {
 
     // Lista em tela cheia: o item da conversa pelo remoteId exibido.
     const item = page
-      .getByRole('list', { name: 'Conversas' })
+      .getByRole('listbox', { name: 'Conversas' })
       .getByRole('link')
       .filter({ hasText: CONVERSATION.remoteId });
     await expect(item).toBeVisible();

@@ -62,13 +62,15 @@ test.describe('Mobile — bottom nav (thumb-first)', () => {
     await more.click();
 
     // O overflow abre num Sheet (role=dialog) com os destinos restantes.
-    const sheet = page.getByRole('dialog');
+    // Pelo nome: a tela tem outros diálogos (ajuda do dashboard, notificações). O
+    // que este teste prova é o ciclo do Sheet "Mais": abre, navega, fecha.
+    const sheet = page.getByRole('dialog', { name: 'Mais' });
     await expect(sheet).toBeVisible();
 
     // "Configurações" é o último item da nav → sempre cai no overflow. Navega e fecha.
     await sheet.getByRole('link', { name: 'Configurações' }).click();
     await expect(page).toHaveURL(/\/settings/);
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Mais' })).toHaveCount(0);
   });
 
   test('a sidebar do desktop NÃO está montada no mobile (regressão de estrutura)', async ({

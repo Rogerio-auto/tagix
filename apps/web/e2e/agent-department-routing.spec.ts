@@ -30,7 +30,10 @@ import { CONVERSATION, ME } from './fixtures/seed';
 const DEPARTMENT = { id: 'dept_support_e2e', name: 'Suporte' } as const;
 
 /** Agente de ENTRADA do departamento (default do dept → resolvido pela IA em S03). */
-const ENTRY_AGENT = { id: '11111111-1111-4111-8111-111111111111', name: 'Aurora (Suporte)' } as const;
+const ENTRY_AGENT = {
+  id: '11111111-1111-4111-8111-111111111111',
+  name: 'Aurora (Suporte)',
+} as const;
 /** Outro agente elegível ao mesmo departamento (alvo da troca manual). */
 const OTHER_AGENT = { id: '22222222-2222-4222-8222-222222222222', name: 'Atlas (Vendas)' } as const;
 
@@ -73,9 +76,7 @@ function parseBody(request: Request): Record<string, unknown> {
 }
 
 test.describe('Roteamento agente ↔ departamento', () => {
-  test('IA resolve o agente de entrada do dept e o operador troca no cockpit', async ({
-    page,
-  }) => {
+  test('IA resolve o agente de entrada do dept e o operador troca no cockpit', async ({ page }) => {
     // Estado local da conversa: começa no agente de ENTRADA resolvido pela IA (S03).
     let currentAgentId: string = ENTRY_AGENT.id;
     let assignCalls = 0;
@@ -86,8 +87,7 @@ test.describe('Roteamento agente ↔ departamento', () => {
       new RegExp(`/api/conversations/${CONVERSATION.id}/agent$`),
       async (route: Route) => {
         const request = route.request();
-        const currentName =
-          CANDIDATES.find((c) => c.id === currentAgentId)?.name ?? null;
+        const currentName = CANDIDATES.find((c) => c.id === currentAgentId)?.name ?? null;
 
         if (request.method() === 'GET') {
           return route.fulfill({
@@ -128,26 +128,26 @@ test.describe('Roteamento agente ↔ departamento', () => {
     );
 
     // GET /api/conversations/:id — detalhe servido ao cockpit (dept + ai_mode='on').
-    await page.route(
-      new RegExp(`/api/conversations/${CONVERSATION.id}$`),
-      async (route: Route) => {
-        if (route.request().method() === 'GET') {
-          return route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({ conversation: conversationDetail(currentAgentId) }),
-          });
-        }
-        return route.fallback();
-      },
-    );
+    await page.route(new RegExp(`/api/conversations/${CONVERSATION.id}$`), async (route: Route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ conversation: conversationDetail(currentAgentId) }),
+        });
+      }
+      return route.fallback();
+    });
 
     // ── Abre a conversa do departamento "Suporte" ─────────────────────────────
     await page.goto(`/conversations/${CONVERSATION.id}`);
 
-    // ── Abre o cockpit (botão Info do header) ─────────────────────────────────
-    await page.getByRole('button', { name: 'Abrir painel de informações' }).click();
+    // ── O cockpit abre sozinho no desktop ao selecionar a conversa ────────────
+    // (`ConversationsLayout`: área de trabalho do atendente, sem clique extra). O
+    // botão do header passa a ser o de FECHAR — clicar nele, como o spec antigo
+    // fazia, fechava o painel que o teste queria usar.
     await expect(page.getByRole('complementary', { name: 'Cockpit da conversa' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Fechar painel' }).first()).toBeVisible();
 
     // ── 1) Resolução por dept: o agente de ENTRADA é o responsável atual ──────
     // O gatilho do seletor é o único botão com `aria-haspopup="listbox"` (AgentSelector).
@@ -156,17 +156,18 @@ test.describe('Roteamento agente ↔ departamento', () => {
     await expect(selector).toContainText(ENTRY_AGENT.name);
 
     // O dept da conversa também aparece no contexto do cockpit.
-    await expect(
-      page.getByRole('complementary', { name: 'Cockpit da conversa' }),
-    ).toContainText(DEPARTMENT.name);
+    await expect(page.getByRole('complementary', { name: 'Cockpit da conversa' })).toContainText(
+      DEPARTMENT.name,
+    );
 
     // ── 2) Operador abre o dropdown e troca para o OUTRO agente do dept ───────
     await selector.click();
     const listbox = page.getByRole('listbox', { name: 'Selecionar agente' });
     await expect(listbox).toBeVisible();
-    // Ambos os candidatos elegíveis ao dept aparecem.
-    await expect(listbox.getByRole('option', { name: new RegExp(ENTRY_AGENT.name) })).toBeVisible();
-    const otherOption = listbox.getByRole('option', { name: new RegExp(OTHER_AGENT.name) });
+    // Ambos os candidatos elegíveis ao dept aparecem. Nome por substring (string),
+    // não `new RegExp(nome)`: os parênteses de "Aurora (Suporte)" viravam grupo.
+    await expect(listbox.getByRole('option', { name: ENTRY_AGENT.name })).toBeVisible();
+    const otherOption = listbox.getByRole('option', { name: OTHER_AGENT.name });
     await expect(otherOption).toBeVisible();
 
     await otherOption.click();
@@ -183,7 +184,7 @@ test.describe('Roteamento agente ↔ departamento', () => {
     await selector.click();
     await page
       .getByRole('listbox', { name: 'Selecionar agente' })
-      .getByRole('option', { name: new RegExp(OTHER_AGENT.name) })
+      .getByRole('option', { name: OTHER_AGENT.name })
       .click();
     // Nenhuma chamada adicional ao POST.
     expect(assignCalls).toBe(1);

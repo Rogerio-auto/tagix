@@ -10,24 +10,20 @@
  */
 
 import { test, expect } from '../fixtures/test';
-import {
-  ChannelsPage,
-  ConversationsPage,
-  PipelinePage,
-  expectOutboundBubble,
-} from '../pages/pom';
+import { ChannelsPage, ConversationsPage, PipelinePage, expectOutboundBubble } from '../pages/pom';
 import { CONVERSATION, MANUAL_FLOW } from '../fixtures/seed';
 
 test.describe('Jornada completa', () => {
   test('do canal ao pipeline, ponta-a-ponta', async ({ page, mock }) => {
     // ── 0) Já autenticado (storageState). Confere que o app abriu. ──────────
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    // O TopBar repete o título num <h1> próprio; o da página é o do <main>.
+    await expect(page.getByRole('main').getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 
     // ── 1) Conectar canal (WAHA, sem dependência do SDK da Meta) ────────────
     const channels = new ChannelsPage(page);
     await channels.goto();
-    await expect(page.getByRole('heading', { name: 'Canais' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Canais', level: 1 })).toBeVisible();
 
     const before = mock.channels.length;
     await channels.connectWaha('Suporte WAHA', 'sess-e2e', 'key-e2e');

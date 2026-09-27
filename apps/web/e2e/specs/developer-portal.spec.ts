@@ -17,9 +17,10 @@ test.describe('F38 — Portal do Desenvolvedor', () => {
     await expect(page.getByRole('heading', { name: 'Autenticacao' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Referencia' })).toBeVisible();
 
-    // Referencia agrupada por recurso (do OpenAPI mockado: contacts, deals).
-    await expect(page.getByText('/api/v1/contacts')).toBeVisible();
-    await expect(page.getByText('/api/v1/deals')).toBeVisible();
+    // Referencia agrupada por recurso (do OpenAPI mockado: contacts, deals). Texto
+    // exato: o exemplo de curl da pagina tambem cita /api/v1/contacts.
+    await expect(page.getByText('/api/v1/contacts', { exact: true })).toBeVisible();
+    await expect(page.getByText('/api/v1/deals', { exact: true })).toBeVisible();
     // Scope extraido da descricao.
     await expect(page.getByText('contacts:read')).toBeVisible();
   });

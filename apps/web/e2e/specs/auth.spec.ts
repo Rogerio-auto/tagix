@@ -26,7 +26,8 @@ test.describe('Autenticação', () => {
 
     // O LoginForm faz router.push('/') no sucesso → cai no dashboard.
     await expect(page).toHaveURL((url) => !url.pathname.startsWith('/login'));
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    // O TopBar repete o título num <h1> próprio; o da página é o do <main>.
+    await expect(page.getByRole('main').getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   });
 
   test('credenciais inválidas mostram erro e mantêm na tela de login', async ({ page }) => {
@@ -43,13 +44,18 @@ test.describe('Autenticação', () => {
     await login.goto();
     await login.login('errado@empresa.com', 'senha-errada-123');
 
-    await expect(page.getByText('Não foi possível entrar')).toBeVisible();
+    // 401 é credencial errada, não falha genérica. O aviso inline fica no formulário
+    // (o toast repete o texto fora do `main`).
+    await expect(
+      page.getByRole('main').getByRole('alert').getByText('Email ou senha incorretos'),
+    ).toBeVisible();
     await expect(page).toHaveURL(/\/login$/);
   });
 
   test('validação client-side bloqueia senha curta', async ({ page }) => {
     const login = new LoginPage(page);
     await login.goto();
+    await login.waitForHydration();
     await login.email().fill('ana@empresa.com');
     await login.password().fill('123');
     await login.submit().click();
