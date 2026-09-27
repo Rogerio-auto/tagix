@@ -146,13 +146,20 @@ test.describe('F47 — Catálogo de Produtos (Settings)', () => {
 test.describe('F47 — Card-da-conversa: contrato (idempotência + recompute)', () => {
   test('auto-create idempotente: 2 chamadas devolvem o MESMO deal', async ({ page }) => {
     // Mock stateful: 1 deal por conversa (espelha ensureDealForConversation).
-    const dealsByConversation = new Map<string, { id: string; conversationId: string; valueCents: number }>();
+    const dealsByConversation = new Map<
+      string,
+      { id: string; conversationId: string; valueCents: number }
+    >();
     await page.route('**/api/conversations/*/deal', async (route) => {
       const url = new URL(route.request().url());
       const convId = url.pathname.split('/')[3] ?? '';
       let deal = dealsByConversation.get(convId);
       if (!deal) {
-        deal = { id: `deal_${dealsByConversation.size + 1}`, conversationId: convId, valueCents: 0 };
+        deal = {
+          id: `deal_${dealsByConversation.size + 1}`,
+          conversationId: convId,
+          valueCents: 0,
+        };
         dealsByConversation.set(convId, deal);
       }
       return route.fulfill({
@@ -187,7 +194,10 @@ test.describe('F47 — Card-da-conversa: contrato (idempotência + recompute)', 
     await page.route('**/api/deals/*/items', async (route) => {
       const req = route.request();
       if (req.method() === 'POST') {
-        const body = JSON.parse(req.postData() ?? '{}') as { qty?: number; unitPriceCents?: number };
+        const body = JSON.parse(req.postData() ?? '{}') as {
+          qty?: number;
+          unitPriceCents?: number;
+        };
         const item = {
           id: `item_${items.length + 1}`,
           qty: body.qty ?? 1,

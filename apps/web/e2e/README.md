@@ -83,7 +83,7 @@ priorizando acessibilidade:
 - Conversa: lista `getByRole('listbox', { name: 'Conversas' })`, composer por
   placeholder, botão "Enviar mensagem", bolhas por `data-direction`/`data-type`
   (`features/conversations/components/{ConversationsLayout,ChatList/ChatList,
-  ChatList/ChatListItem,MessageComposer/MessageComposer,MessageBubble/MessageBubble}.tsx`).
+ChatList/ChatListItem,MessageComposer/MessageComposer,MessageBubble/MessageBubble}.tsx`).
 - Flow manual: chips da `ManualFlowsQuickbar` + `TriggerConfirmModal`
   (`features/flow-builder/livechat/*`).
 - Pipeline: headings de stage (`StageColumn`), cards de deal (`DealCard`), select

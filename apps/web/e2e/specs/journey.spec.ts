@@ -10,12 +10,7 @@
  */
 
 import { test, expect } from '../fixtures/test';
-import {
-  ChannelsPage,
-  ConversationsPage,
-  PipelinePage,
-  expectOutboundBubble,
-} from '../pages/pom';
+import { ChannelsPage, ConversationsPage, PipelinePage, expectOutboundBubble } from '../pages/pom';
 import { CONVERSATION, MANUAL_FLOW } from '../fixtures/seed';
 
 test.describe('Jornada completa', () => {

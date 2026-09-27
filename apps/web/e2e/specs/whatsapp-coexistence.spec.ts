@@ -189,7 +189,9 @@ test.describe('Conectar WhatsApp oficial (Cloud API × coexistência)', () => {
     // Escopo no wizard: o painel de ajuda da tela repete o texto.
     const wizard = page.getByRole('dialog', { name: 'Conectar WhatsApp (Meta)' });
     await wizard.getByRole('button', { name: /Coexistência/ }).click();
-    await expect(wizard.getByText(/histórico já existente pode levar alguns minutos/i)).toBeVisible();
+    await expect(
+      wizard.getByText(/histórico já existente pode levar alguns minutos/i),
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Continuar' }).click();
 
     // Passo 2: em coexistência o CTA vira "Conectar número existente".
@@ -224,7 +226,9 @@ test.describe('Conectar WhatsApp oficial (Cloud API × coexistência)', () => {
     await expect(row.getByText('Conectado')).toBeVisible();
   });
 
-  test('Voltar no passo final preserva o que foi digitado no signup (UX §2.8)', async ({ page }) => {
+  test('Voltar no passo final preserva o que foi digitado no signup (UX §2.8)', async ({
+    page,
+  }) => {
     // BUG CONHECIDO (F70-S29, ver slot): o `WaSignupStep` guarda os campos em estado
     // local e remonta ao voltar, então tudo o que foi digitado some. `test.fail` roda o
     // teste e exige que ele falhe: quando o wizard for corrigido, este teste acusa e a

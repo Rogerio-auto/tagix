@@ -46,7 +46,9 @@ test.describe('Autenticação', () => {
 
     // 401 é credencial errada, não falha genérica. O aviso inline fica no formulário
     // (o toast repete o texto fora do `main`).
-    await expect(page.getByRole('main').getByRole('alert').getByText('Email ou senha incorretos')).toBeVisible();
+    await expect(
+      page.getByRole('main').getByRole('alert').getByText('Email ou senha incorretos'),
+    ).toBeVisible();
     await expect(page).toHaveURL(/\/login$/);
   });
 

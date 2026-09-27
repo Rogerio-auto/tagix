@@ -53,7 +53,9 @@ test.describe('Pipeline', () => {
 
     const pipeline = new PipelinePage(page);
     await pipeline.goto();
-    await expect(page.getByRole('heading', { name: 'Nenhuma pipeline criada ainda' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Nenhuma pipeline criada ainda' }),
+    ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Criar pipeline' })).toBeVisible();
   });
 });

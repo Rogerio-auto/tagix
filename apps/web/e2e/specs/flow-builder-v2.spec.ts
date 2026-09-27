@@ -39,24 +39,48 @@ import type { Page as PW } from '@playwright/test';
 async function mocks(page: PW): Promise<void> {
   await page.route('**/api/flows', (r) => {
     if (r.request().method() === 'GET')
-      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flows: [FLOW_DRAFT] }) });
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ flows: [FLOW_DRAFT] }),
+      });
     return r.fallback();
   });
   await page.route('**/api/flows/' + FLOW_ID, (r) => {
     if (r.request().method() === 'GET')
-      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flow: FLOW_DRAFT, versions: [FLOW_VERSION] }) });
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ flow: FLOW_DRAFT, versions: [FLOW_VERSION] }),
+      });
     if (r.request().method() === 'PUT')
-      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flow: FLOW_DRAFT }) });
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ flow: FLOW_DRAFT }),
+      });
     return r.fallback();
   });
   await page.route('**/api/flows/' + FLOW_ID + '/publish', (r) =>
-    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flow: { ...FLOW_DRAFT, status: 'active' }, version: FLOW_VERSION }) }),
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ flow: { ...FLOW_DRAFT, status: 'active' }, version: FLOW_VERSION }),
+    }),
   );
   await page.route('**/api/flows/' + FLOW_ID + '/trigger', (r) =>
-    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ executionId: EXEC.id }) }),
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ executionId: EXEC.id }),
+    }),
   );
   await page.route('**/api/flows/' + FLOW_ID + '/executions', (r) =>
-    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ executions: [EXEC] }) }),
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ executions: [EXEC] }),
+    }),
   );
   await page.route('**/api/flows/manual-order', (r) =>
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) }),
@@ -64,7 +88,11 @@ async function mocks(page: PW): Promise<void> {
   for (const seg of ['agents', 'tags', 'conversion-types', 'workspace/members', 'pipelines']) {
     const key = seg.split('/').pop()!.replace(/-/g, '_');
     await page.route('**/api/' + seg, (r) =>
-      r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ [key]: [] }) }),
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ [key]: [] }),
+      }),
     );
   }
 }
@@ -118,7 +146,11 @@ test.describe('Flow Builder v2', () => {
     let called = false;
     await page.route('**/api/flows/' + FLOW_ID + '/publish', (r) => {
       called = true;
-      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flow: { ...FLOW_DRAFT, status: 'active' }, version: FLOW_VERSION }) });
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ flow: { ...FLOW_DRAFT, status: 'active' }, version: FLOW_VERSION }),
+      });
     });
     await page.goto('/flows/' + FLOW_ID);
     await page.getByRole('button', { name: 'Publicar' }).click();
@@ -129,12 +161,22 @@ test.describe('Flow Builder v2', () => {
     await mocks(page);
     await page.route('**/api/flows', (r) => {
       if (r.request().method() !== 'GET') return r.fallback();
-      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flows: [{ ...FLOW_DRAFT, status: 'active', triggerType: 'manual', manualPosition: 0 }] }) });
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          flows: [{ ...FLOW_DRAFT, status: 'active', triggerType: 'manual', manualPosition: 0 }],
+        }),
+      });
     });
     let called = false;
     await page.route('**/api/flows/' + FLOW_ID + '/trigger', (r) => {
       called = true;
-      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ executionId: EXEC.id }) });
+      return r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ executionId: EXEC.id }),
+      });
     });
     // A quickbar vive na conversa aberta, não na lista.
     await page.goto('/conversations/conv_e2e_1');

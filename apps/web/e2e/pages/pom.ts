@@ -17,9 +17,7 @@ import { expect } from '@playwright/test';
  */
 export async function waitForHydration(target: Locator): Promise<void> {
   await expect
-    .poll(() =>
-      target.evaluate((el) => Object.keys(el).some((k) => k.startsWith('__reactProps$'))),
-    )
+    .poll(() => target.evaluate((el) => Object.keys(el).some((k) => k.startsWith('__reactProps$'))))
     .toBe(true);
 }
 
@@ -86,10 +84,7 @@ export class ChannelsPage {
     await this.page.getByLabel('ID da sessão WAHA').fill(sessionId);
     await this.page.getByLabel('Chave de API').fill(apiKey);
     // O botão de submit do form tem o mesmo texto "Conectar canal".
-    await this.page
-      .getByRole('dialog')
-      .getByRole('button', { name: 'Conectar canal' })
-      .click();
+    await this.page.getByRole('dialog').getByRole('button', { name: 'Conectar canal' }).click();
   }
 }
 
