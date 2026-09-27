@@ -125,6 +125,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NODE_ENV: test
+      # F70-S29: o e2e roda `next start` sobre o build do passo abaixo, e os
+      # rewrites de /api, /auth e /socket.io ficam gravados NO BUILD. Apontam para
+      # a porta da API falsa do e2e (a mesma de `playwright.config.ts`), nunca 3001.
+      API_PROXY_TARGET: http://127.0.0.1:3199
+      E2E_SERVER: start
     steps:
       - uses: actions/checkout@v4
 
@@ -138,8 +143,8 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # Builda os pacotes de workspace (@hm/ui, @hm/shared, …) que o `next dev`
-      # consome; gera next-env.d.ts.
+      # Hoje o único `build` do workspace é o `next build` do @hm/web: é o build de
+      # produção que o `next start` do e2e serve (com o API_PROXY_TARGET do job).
       - name: Build workspace libs
         run: pnpm -r --if-present build
 
