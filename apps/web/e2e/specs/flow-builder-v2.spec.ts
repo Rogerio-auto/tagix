@@ -7,26 +7,30 @@
 import { test, expect } from '../fixtures/test';
 
 const FLOW_ID = 'flow_e2e_editor';
+// Contrato atual (`features/flow-builder/services.ts` ↔ `GET /api/flows/:id`): o
+// rascunho editável (nodes/edges) vem na própria linha do flow; `versions` só lista
+// as versões publicadas. Com os nodes dentro de `versions`, o editor quebrava em
+// `flow.nodes.map` e caía na tela de erro (F70-S29).
 const FLOW_DRAFT = {
   id: FLOW_ID,
   name: 'Flow de Boas-vindas',
+  description: null,
   status: 'draft',
   triggerType: 'new_message',
   triggerConfig: {},
   manualPosition: null,
-  createdAt: '2026-06-15T00:00:00.000Z',
-  updatedAt: null,
-};
-const FLOW_VERSION = {
-  id: 'fv_e2e_1',
-  flowId: FLOW_ID,
-  version: 1,
   nodes: [
     { id: 'n_trig', type: 'trigger', position: { x: 100, y: 100 }, data: {} },
     { id: 'n_msg', type: 'message', position: { x: 300, y: 100 }, data: { text: 'Ola!' } },
   ],
   edges: [{ id: 'e1', source: 'n_trig', target: 'n_msg', sourceHandle: 'default' }],
   createdAt: '2026-06-15T00:00:00.000Z',
+  updatedAt: null,
+};
+const FLOW_VERSION = {
+  id: 'fv_e2e_1',
+  version: 1,
+  publishedAt: '2026-06-15T00:00:00.000Z',
 };
 const EXEC = { id: 'exec_e2e_1', flowId: FLOW_ID, status: 'running' };
 
@@ -36,14 +40,14 @@ async function mocks(page: PW): Promise<void> {
   await page.route('**/api/flows', (r) => {
     if (r.request().method() === 'GET')
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flows: [FLOW_DRAFT] }) });
-    return r.continue();
+    return r.fallback();
   });
   await page.route('**/api/flows/' + FLOW_ID, (r) => {
     if (r.request().method() === 'GET')
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flow: FLOW_DRAFT, versions: [FLOW_VERSION] }) });
     if (r.request().method() === 'PUT')
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flow: FLOW_DRAFT }) });
-    return r.continue();
+    return r.fallback();
   });
   await page.route('**/api/flows/' + FLOW_ID + '/publish', (r) =>
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flow: { ...FLOW_DRAFT, status: 'active' }, version: FLOW_VERSION }) }),
@@ -72,25 +76,41 @@ test.describe('Flow Builder v2', () => {
     await expect(page.getByText('Flow de Boas-vindas')).toBeVisible();
   });
 
+  // F70-S29: a rota do editor é `/flows/:id` (não `/flows/:id/edit`, que dá 404), e
+  // os testes abaixo tinham `if (visível) { … }` — num 404 passavam sem provar nada.
+  // Agora cada um exige o que diz.
   test('editor exibe o titulo do flow', async ({ page, mock: _m }) => {
     await mocks(page);
-    await page.goto('/flows/' + FLOW_ID + '/edit');
+    await page.goto('/flows/' + FLOW_ID);
     await expect(page.getByText('Flow de Boas-vindas')).toBeVisible();
+    await expect(page.getByText('Salvo', { exact: true })).toBeVisible();
   });
 
   test('salvar aciona PUT /api/flows/:id', async ({ page, mock: _m }) => {
     await mocks(page);
     let called = false;
     await page.route('**/api/flows/' + FLOW_ID, (r) => {
-      if (r.request().method() === 'PUT') { called = true; }
-      return r.continue();
+      if (r.request().method() === 'PUT') called = true;
+      return r.fallback();
     });
-    await page.goto('/flows/' + FLOW_ID + '/edit');
-    const btn = page.getByRole('button', { name: /salvar/i });
-    if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await btn.click();
-      await expect.poll(() => called, { timeout: 3000 }).toBe(true);
-    }
+    await page.goto('/flows/' + FLOW_ID);
+    const save = page.getByRole('button', { name: 'Salvar' });
+    // Sem alteração não há o que salvar.
+    await expect(save).toBeDisabled();
+
+    // Arrasta o nó de mensagem: o canvas fica com alterações não salvas.
+    const node = page.locator('.react-flow__node').filter({ hasText: 'Ola!' });
+    const box = await node.boundingBox();
+    if (!box) throw new Error('nó de mensagem sem caixa no canvas');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 60, { steps: 8 });
+    await page.mouse.up();
+    await expect(page.getByText('Alteracoes nao salvas')).toBeVisible();
+
+    await save.click();
+    await expect.poll(() => called).toBe(true);
+    await expect(page.getByText('Salvo', { exact: true })).toBeVisible();
   });
 
   test('publicar aciona POST /api/flows/:id/publish', async ({ page, mock: _m }) => {
@@ -100,18 +120,15 @@ test.describe('Flow Builder v2', () => {
       called = true;
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flow: { ...FLOW_DRAFT, status: 'active' }, version: FLOW_VERSION }) });
     });
-    await page.goto('/flows/' + FLOW_ID + '/edit');
-    const btn = page.getByRole('button', { name: /publicar/i });
-    if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await btn.click();
-      await expect.poll(() => called, { timeout: 3000 }).toBe(true);
-    }
+    await page.goto('/flows/' + FLOW_ID);
+    await page.getByRole('button', { name: 'Publicar' }).click();
+    await expect.poll(() => called).toBe(true);
   });
 
   test('flow manual na quickbar aciona POST /api/flows/:id/trigger', async ({ page, mock: _m }) => {
     await mocks(page);
     await page.route('**/api/flows', (r) => {
-      if (r.request().method() !== 'GET') return r.continue();
+      if (r.request().method() !== 'GET') return r.fallback();
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ flows: [{ ...FLOW_DRAFT, status: 'active', triggerType: 'manual', manualPosition: 0 }] }) });
     });
     let called = false;
@@ -119,16 +136,12 @@ test.describe('Flow Builder v2', () => {
       called = true;
       return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ executionId: EXEC.id }) });
     });
-    await page.goto('/conversations');
-    const chip = page.getByText('Flow de Boas-vindas');
-    if (await chip.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await chip.click();
-      const confirmBtn = page.getByRole('button', { name: /confirmar|disparar|enviar/i });
-      if (await confirmBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await confirmBtn.click();
-        await expect.poll(() => called, { timeout: 3000 }).toBe(true);
-      }
-    }
-    // Sem chip visivel, passa graciosamente.
+    // A quickbar vive na conversa aberta, não na lista.
+    await page.goto('/conversations/conv_e2e_1');
+    await page.getByRole('button', { name: /Flow de Boas-vindas/ }).click();
+    const confirm = page.getByRole('dialog', { name: 'Disparar flow' });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole('button', { name: 'Disparar' }).click();
+    await expect.poll(() => called).toBe(true);
   });
 });

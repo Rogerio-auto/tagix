@@ -117,11 +117,13 @@ test.describe('F47 — Catálogo de Produtos (Settings)', () => {
 
     // CTA "Novo produto" abre o painel de criação.
     await page.getByRole('button', { name: 'Novo produto' }).first().click();
-    await expect(page.getByRole('heading', { name: 'Novo produto' })).toBeVisible();
+    const form = page.getByRole('dialog', { name: 'Novo produto' });
+    await expect(form).toBeVisible();
 
-    // Preenche e salva (o mock stateful o adiciona ao catálogo).
-    await page.getByLabel(/Nome/i).first().fill('Plano Pro');
-    await page.getByRole('button', { name: /Criar|Salvar/i }).first().click();
+    // Preenche e salva (o mock stateful o adiciona ao catálogo). O botão de envio
+    // hoje se chama "Adicionar produto".
+    await form.getByRole('textbox', { name: 'Nome' }).fill('Plano Pro');
+    await form.getByRole('button', { name: 'Adicionar produto' }).click();
 
     // A lista reflete o produto recém-criado.
     await expect(page.getByText('Plano Pro')).toBeVisible();
