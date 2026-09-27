@@ -145,9 +145,12 @@ test.describe('Roteamento agente ↔ departamento', () => {
     // ── Abre a conversa do departamento "Suporte" ─────────────────────────────
     await page.goto(`/conversations/${CONVERSATION.id}`);
 
-    // ── Abre o cockpit (botão Info do header) ─────────────────────────────────
-    await page.getByRole('button', { name: 'Abrir painel de informações' }).click();
+    // ── O cockpit abre sozinho no desktop ao selecionar a conversa ────────────
+    // (`ConversationsLayout`: área de trabalho do atendente, sem clique extra). O
+    // botão do header passa a ser o de FECHAR — clicar nele, como o spec antigo
+    // fazia, fechava o painel que o teste queria usar.
     await expect(page.getByRole('complementary', { name: 'Cockpit da conversa' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Fechar painel' }).first()).toBeVisible();
 
     // ── 1) Resolução por dept: o agente de ENTRADA é o responsável atual ──────
     // O gatilho do seletor é o único botão com `aria-haspopup="listbox"` (AgentSelector).
@@ -164,9 +167,10 @@ test.describe('Roteamento agente ↔ departamento', () => {
     await selector.click();
     const listbox = page.getByRole('listbox', { name: 'Selecionar agente' });
     await expect(listbox).toBeVisible();
-    // Ambos os candidatos elegíveis ao dept aparecem.
-    await expect(listbox.getByRole('option', { name: new RegExp(ENTRY_AGENT.name) })).toBeVisible();
-    const otherOption = listbox.getByRole('option', { name: new RegExp(OTHER_AGENT.name) });
+    // Ambos os candidatos elegíveis ao dept aparecem. Nome por substring (string),
+    // não `new RegExp(nome)`: os parênteses de "Aurora (Suporte)" viravam grupo.
+    await expect(listbox.getByRole('option', { name: ENTRY_AGENT.name })).toBeVisible();
+    const otherOption = listbox.getByRole('option', { name: OTHER_AGENT.name });
     await expect(otherOption).toBeVisible();
 
     await otherOption.click();
@@ -183,7 +187,7 @@ test.describe('Roteamento agente ↔ departamento', () => {
     await selector.click();
     await page
       .getByRole('listbox', { name: 'Selecionar agente' })
-      .getByRole('option', { name: new RegExp(OTHER_AGENT.name) })
+      .getByRole('option', { name: OTHER_AGENT.name })
       .click();
     // Nenhuma chamada adicional ao POST.
     expect(assignCalls).toBe(1);
