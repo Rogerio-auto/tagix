@@ -468,14 +468,19 @@ services:
         reservations: { memory: 32M }
 
 # =============================================================================
-# Configs do Swarm (distribuídas via Raft; imutáveis — versionar com sufixo se
-# mudar o conteúdo, pois o Swarm não atualiza um config existente in-place).
+# Configs do Swarm (distribuídas via Raft; IMUTÁVEIS: o Swarm não atualiza uma config
+# existente). O nome leva o hash do conteúdo, calculado pelo deploy.sh: conteúdo novo gera
+# config nova e o serviço troca no mesmo deploy. Sem o hash (stack deploy manual), o nome
+# cai no sufixo `manual`, e um conteúdo mudado exige remover a config antiga à mão.
 configs:
   prometheus_config:
+    name: leadium_prometheus_config_${PROMETHEUS_CONFIG_HASH:-manual}
     file: ../prometheus/prometheus.yml
   prometheus_alerts:
+    name: leadium_prometheus_alerts_${PROMETHEUS_ALERTS_HASH:-manual}
     file: ../prometheus/alerts.yml
   alertmanager_config:
+    name: leadium_alertmanager_config_${ALERTMANAGER_CONFIG_HASH:-manual}
     file: ../prometheus/alertmanager.yml
   rabbitmq_enabled_plugins:
     file: ./rabbitmq/enabled_plugins
