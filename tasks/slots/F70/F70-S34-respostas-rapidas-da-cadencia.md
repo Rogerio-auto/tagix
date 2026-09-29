@@ -2,7 +2,7 @@
 id: F70-S34
 title: Respostas rápidas da cadência da Arcada — "Agora não" encerra, "Quero…" reabre com a IA
 phase: F70
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F70-S06, F70-S30]
