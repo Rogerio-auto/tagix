@@ -108,7 +108,6 @@ pnpm --filter @hm/db exec tsx src/seed/agent_templates_arcada.run.ts --workspace
 - **Nada ativado:** agente `inactive` (o worker pula `agent_inactive`), flows `draft` sem `flow_versions`
   (o dispatcher só lê `active`), KB `draft` + `visible_to_agents=false` e sem chunks.
 
-<<<<<<< HEAD
 ### Respostas rápidas dos modelos (F70-S34)
 
 Os três modelos da cadência têm "Quero seguir" / "Quero retomar" / "Quero a prévia" e "Agora não",
@@ -126,7 +125,7 @@ e o rodapé "responda SAIR". O flow não precisa ramificar por eles; a plataform
 - **"SAIR"**: supressão pela F59; o portão de envio recusa o modelo de Marketing.
 - Opcional (higiene do monitor): condição `MSG_EQUALS trigger.message "Agora não"` logo depois do
   `trigger` da cadência — ver a seção "Mudança sugerida no seed" do F70-S34.
-=======
+
 ### Decisões de 29/09 (Rogério; implementadas em F70-S33)
 
 - **Preço de lançamento:** Essencial R$ 297, Estúdio R$ 397, Cinema R$ 999 (antes R$ 1.000 / 2.500 /
@@ -157,7 +156,6 @@ e o rodapé "responda SAIR". O flow não precisa ramificar por eles; a plataform
   `pt_BR`, envio sem parâmetros. **Aguardam aprovação na Meta.** O flow de cadência continua em
   rascunho; na cadência já semeada (rascunho), o seed troca só o `templateName` que ainda é o marcador
   antigo — o nome editado pelo operador vence e o flow publicado nunca é tocado.
->>>>>>> feat/f70-s33
 
 ## Marcadores a preencher (Rogério)
 
