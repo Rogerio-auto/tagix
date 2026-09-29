@@ -906,3 +906,14 @@ A liberação é só `atendimento-humano`. Etiqueta de conversão não entra nun
 - **Sonnet 5 entra na lista de modelos** e passa a ser o modelo da Arcada (F70-S31).
 - **Toque de 30 dias da cadência conta a partir de `esfriou`** (dia 37 desde a última mensagem): já é o comportamento da F70-S06.
 - **CI:** o job `e2e` falha desde 22/09 e pula o `deploy`; o hotfix `d774835a` foi para `origin/main` mas não para produção. Correção na F70-S29.
+
+## Decisões do Rogério — 2026-09-29 (Arcada: preço de lançamento)
+
+- **Preço de lançamento:** Essencial R$ 297, Estúdio R$ 397, Cinema R$ 999 (antes R$ 1.000 / 2.500 / 5.000). É condição verdadeira; os valores sobem quando houver casos entregues e depoimentos. Rogério OS e Hermes já atualizados; o agente do Leadium entra na **F70-S33**.
+- **Pagamento:** sem desconto em nenhum nível. Essencial e Estúdio só à vista; Cinema à vista ou 2 × R$ 499,50, nunca mais que 2x. Pedido fora disso → handoff `out_of_limits`.
+- **Prazo:** até 5 dias úteis em todos os níveis, contados do recebimento do material completo, com o CRO do responsável técnico.
+- **Tom:** "valor de lançamento, enquanto a Arcada monta os primeiros casos". Sem urgência, escassez ou prazo de promoção.
+- **Cadência:** modelos `arcada_lembrete_dia_3`, `arcada_lembrete_dia_7` e `arcada_toque_30_dias` (Marketing, pt_BR, sem variáveis, 2 respostas rápidas cada) em aprovação na Meta. "Agora não" encerra a cadência; "Quero…" reabre com a IA se a origem estiver comprovada → **F70-S34**.
+- **Pendências registradas:** teto de custo por conversa, custo médio e handoff nos 4 gatilhos → **F70-S35**. F70-S32 segue aberta. Direct do Instagram continua fora (F69-S08, sem `instagram_manage_messages` no app).
+- **WhatsApp:** o número real (+55 69 9967-0030, WABA `395375790331443`) está conectado em coexistência no workspace Leadium desde 25/09, sem histórico importado. Detalhes na F70-S03.
+- **Produção:** a v2 do prompt e da KB entra pelo seed idempotente depois do deploy, com o agente inativo até a aprovação e as 10 conversas de teste. Commit e push só com o ok do Rogério.
