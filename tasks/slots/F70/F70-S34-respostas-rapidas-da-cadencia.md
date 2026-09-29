@@ -2,13 +2,16 @@
 id: F70-S34
 title: Respostas rápidas da cadência da Arcada — "Agora não" encerra, "Quero…" reabre com a IA
 phase: F70
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F70-S06, F70-S30]
 blocks: []
 source_docs:
   - tasks/slots/F70/F70-S06-agente-de-atendimento-da-arcada.md
+agent_id: backend-engineer
+claimed_at: 2026-09-29T16:22:01Z
+
 ---
 # F70-S34 — Respostas rápidas da cadência
 
