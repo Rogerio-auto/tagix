@@ -1,9 +1,9 @@
 /**
- * F70-S06 — agente de atendimento da Arcada.
+ * F70-S06 — agente de atendimento da Arcada (preço de lançamento: F70-S33).
  *
- * 1) Conteúdo (puro): os limites de negociação aprovados em 24/09 estão travados,
- *    os 4 gatilhos de handoff estão no prompt, e nenhum número fora dos limites
- *    (percentual, parcelas, valor em R$) aparece no prompt ou na KB.
+ * 1) Conteúdo (puro): preço de lançamento, pagamento por nível e prazo de 29/09 estão
+ *    travados; nenhuma oferta de desconto, urgência ou escassez aparece no prompt ou na
+ *    KB; os 4 gatilhos de handoff estão no prompt; nenhum valor fora da tabela aparece.
  * 2) Grafos dos flows: 1 trigger, tudo alcançável, sem ciclo (regras do publish),
  *    handles válidos por tipo de node.
  * 3) Integração (Postgres dev): o seed roda sob RLS, não ativa nada e é idempotente.
@@ -27,22 +27,33 @@ import {
   workspaces,
 } from '../schema';
 import {
+  ARCADA_CADENCE,
+  ARCADA_DELIVERY_COMMITMENT,
   ARCADA_HANDOFF_TRIGGERS,
+  ARCADA_LAUNCH_PRICE_PHRASE,
   ARCADA_MODEL,
   ARCADA_NEGOTIATION_LIMITS,
+  ARCADA_NO_DISCOUNT,
+  ARCADA_NO_PRESSURE_RULE,
+  ARCADA_PREFILLED_FOR_APPROVAL,
+  ARCADA_SITE_URL,
   ARCADA_TAGS,
+  ARCADA_TIER_INCLUDES,
   ARCADA_TIERS,
   allowedAmountsCents,
   buildArcadaKbDocuments,
   buildArcadaSystemPrompt,
+  describeInstallments,
   installmentsCents,
   listPendingMarkers,
+  tierIncludesText,
 } from './agent_templates_arcada.content';
 import {
   arcadaIds,
   buildActivationFlowGraph,
   buildCadenceFlowGraph,
   defaultArcadaSeedContent,
+  fillLegacyTemplateNames,
   seedArcadaAttendance,
   type SeedFlowGraph,
 } from './agent_templates_arcada';
@@ -50,6 +61,9 @@ import { seedLlmModels } from './llm_models';
 
 const prompt = buildArcadaSystemPrompt();
 const kbTexts = buildArcadaKbDocuments().map((d) => d.rawContent);
+const allTexts = [prompt, ...kbTexts];
+const kbLevels = kbTexts[0] ?? '';
+const kbFaq = kbTexts[1] ?? '';
 
 /** `R$ 1.234,56` → centavos. */
 function parseBrl(raw: string): number {
@@ -57,66 +71,197 @@ function parseBrl(raw: string): number {
   return Number(reais) * 100 + Number(cents.padEnd(2, '0'));
 }
 
-describe('Arcada — limites de negociação', () => {
-  it('limites aprovados em 24/09 estão travados', () => {
-    expect(ARCADA_NEGOTIATION_LIMITS).toEqual({
-      defaultInstallments: 2,
-      maxInstallments: 3,
-      installmentsDiscountPct: 0,
-      cashDiscountPct: 10,
-      maxCashDiscountPct: 15,
-      deliveryBusinessDays: 5,
-    });
-    expect(ARCADA_TIERS.map((t) => t.priceBrl)).toEqual([1000, 2500, 5000]);
+/** Remove as ocorrências exatas de um trecho autorizado antes de varrer o texto. */
+function without(text: string, allowedSnippet: string): string {
+  return text.split(allowedSnippet).join(' ');
+}
+
+const NO_DISCOUNT_RE = new RegExp(ARCADA_NO_DISCOUNT, 'gi');
+
+/**
+ * Detector de oferta de desconto. A única menção permitida é a negação exata
+ * (`não tem desconto`): toda ocorrência de "descont…" precisa ser ela. Fora disso,
+ * nenhum percentual, abatimento, cupom, "de R$ x por R$ y" nem valor fora da tabela.
+ */
+function discountOffers(text: string): string[] {
+  const found: string[] = [];
+  const mentions = (text.match(/descont/gi) ?? []).length;
+  const negations = (text.match(NO_DISCOUNT_RE) ?? []).length;
+  if (mentions !== negations) found.push(`"desconto" fora da negação (${mentions}/${negations})`);
+  const rest = without(text, ARCADA_NO_DISCOUNT);
+  for (const re of [
+    /\d+(?:,\d+)?\s*%/,
+    /por cento/i,
+    /abatimento|cupom|\boff\b|mais barat|preço especial|de R\$[^\n]*por R\$/i,
+  ]) {
+    const hit = rest.match(re);
+    if (hit) found.push(hit[0]);
+  }
+  const allowed = allowedAmountsCents();
+  for (const [raw, brl] of rest.matchAll(/R\$\s*([\d.]+(?:,\d{2})?)/g)) {
+    if (!allowed.has(parseBrl(brl ?? ''))) found.push(raw);
+  }
+  return found;
+}
+
+const PRESSURE_RE =
+  /urg[êe]n|escass|\bvagas?\b|só hoje|somente hoje|tempo limitado|\bcorra\b|aproveite|promo[çc]|\bacaba|termina em|última chance|últimos dias|v[aá]lid[oa] até|até o fim|até o dia|(esta|essa) semana|(este|esse) mês|\brestam\b|poucas unidades|limitad/i;
+
+describe('Arcada — preço de lançamento e pagamento (29/09)', () => {
+  it('níveis: nome, preço de lançamento e parcelas máximas por nível', () => {
+    expect(
+      ARCADA_TIERS.map((t) => ({
+        key: t.key,
+        name: t.name,
+        priceBrl: t.priceBrl,
+        maxInstallments: t.maxInstallments,
+      })),
+    ).toEqual([
+      { key: 'essencial', name: 'Essencial', priceBrl: 297, maxInstallments: 1 },
+      { key: 'estudio', name: 'Estúdio', priceBrl: 397, maxInstallments: 1 },
+      { key: 'cinema', name: 'Cinema', priceBrl: 999, maxInstallments: 2 },
+    ]);
+    expect(ARCADA_NEGOTIATION_LIMITS).toEqual({ discountAllowed: false, deliveryBusinessDays: 5 });
     expect(ARCADA_MODEL).toBe('anthropic/claude-sonnet-5');
   });
 
-  it('o prompt declara cada limite', () => {
+  it('prompt e KB declaram preço e pagamento de cada nível (Cinema 2 × R$ 499,50)', () => {
     for (const s of [
-      'R$ 1.000',
-      'R$ 2.500',
-      'R$ 5.000',
-      'ofereça em até 2x sem juros',
-      'pode chegar a 3x sem juros',
-      'Nunca parcele em mais de 3 vezes',
-      'No parcelado não existe desconto',
-      '10% de desconto em qualquer nível',
-      'pode chegar a 15%, uma única vez, e esse é o teto absoluto',
-      'Desconto e parcelamento nunca se combinam',
-      'até 5 dias úteis',
-      'Não prometa prazo menor',
-      'Costuma ficar pronto antes',
+      '- Essencial, R$ 297: só à vista.',
+      '- Estúdio, R$ 397: só à vista.',
+      '- Cinema, R$ 999: à vista ou em 2 parcelas iguais (2 × R$ 499,50), nunca mais que 2.',
     ]) {
       expect(prompt).toContain(s);
+      expect(kbLevels).toContain(s);
+    }
+    expect(installmentsCents(999, 2)).toEqual([49950, 49950]);
+    expect(describeInstallments(999, 2)).toBe('2 × R$ 499,50');
+  });
+
+  it('parcelamento só no Cinema: toda linha com parcelas ou R$ 499,50 fala do Cinema', () => {
+    for (const text of allTexts) {
+      for (const line of text.split('\n')) {
+        if (/\d\s*[x×]\s*R\$|R\$\s*499,50|parcela/i.test(line)) {
+          expect(line, line).toContain('Cinema');
+        }
+      }
+      for (const [, n] of text.matchAll(/\b(\d+)\s*[x×](?=\s)/g)) expect(Number(n)).toBe(2);
+      expect(text).not.toMatch(/\b\d+\s*vezes|sem juros|juros/i);
+    }
+    // Essencial e Estúdio: sem parcelamento em lugar nenhum da seção deles na KB.
+    for (const name of ['Essencial', 'Estúdio']) {
+      const section = kbLevels.split('\n## ').find((s) => s.startsWith(`${name}:`)) ?? '';
+      expect(section, name).toContain(`Pagamento do ${name}: só à vista.`);
+      expect(section, name).not.toMatch(/parcela|×|R\$\s*499,50/);
     }
   });
 
-  it('nenhum percentual, parcelamento ou valor fora dos limites aparece (prompt e KB)', () => {
+  it('nenhum valor fora da tabela aparece (nem os preços antigos)', () => {
     const allowed = allowedAmountsCents();
-    for (const text of [prompt, ...kbTexts]) {
-      for (const [, pct] of text.matchAll(/(\d+)\s*%/g)) {
-        expect([10, 15]).toContain(Number(pct));
-      }
-      for (const [, n] of text.matchAll(/\b(\d+)x\b/g)) {
-        expect([2, 3]).toContain(Number(n));
-      }
+    expect([...allowed].sort((a, b) => a - b)).toEqual([29700, 39700, 49950, 99900]);
+    for (const text of allTexts) {
       for (const [, brl] of text.matchAll(/R\$\s*([\d.]+(?:,\d{2})?)/g)) {
-        expect(allowed.has(parseBrl(brl ?? ''))).toBe(true);
+        expect(allowed.has(parseBrl(brl ?? '')), `R$ ${brl}`).toBe(true);
       }
+      expect(text).not.toMatch(/1\.000|2\.500|5\.000|\b1000\b|\b2500\b|\b5000\b/);
     }
   });
 
-  it('valores de referência corretos (à vista e parcelas somam o preço)', () => {
-    expect(prompt).toContain('R$ 1.000: à vista com 10% = R$ 900; teto com 15% = R$ 850');
-    expect(prompt).toContain('R$ 2.500: à vista com 10% = R$ 2.250; teto com 15% = R$ 2.125');
-    expect(prompt).toContain('R$ 5.000: à vista com 10% = R$ 4.500; teto com 15% = R$ 4.250');
-    expect(prompt).toContain('3x (R$ 333,33 + R$ 333,33 + R$ 333,34)');
+  it('nenhuma oferta de desconto no prompt nem na KB; a única menção é "não tem desconto"', () => {
+    for (const text of allTexts) expect(discountOffers(text)).toEqual([]);
+    expect(prompt).toContain(
+      `explique, sem pressão, que é o ${ARCADA_LAUNCH_PRICE_PHRASE}, e que ${ARCADA_NO_DISCOUNT}.`,
+    );
+    expect(prompt).toContain(
+      `com preço fechado: ${ARCADA_NO_DISCOUNT}, nem à vista, nem negociando`,
+    );
+    expect(kbLevels).toContain(`Preço fechado: ${ARCADA_NO_DISCOUNT}`);
+    expect(kbFaq).toContain(`O preço é fechado e ${ARCADA_NO_DISCOUNT}.`);
+  });
+
+  it('o detector de desconto pega oferta real e aceita a negação (controle)', () => {
+    for (const bad of [
+      'À vista com 10% de desconto.',
+      'Consigo um desconto para você.',
+      'Tem desconto no Pix.',
+      'Fica R$ 250 à vista.',
+      'De R$ 1.000 por R$ 297.',
+      'Faço 5 por cento a menos.',
+      `Normalmente ${ARCADA_NO_DISCOUNT}, mas hoje dou desconto.`,
+    ]) {
+      expect(discountOffers(bad).length, bad).toBeGreaterThan(0);
+    }
+    expect(discountOffers(`O preço é fechado e ${ARCADA_NO_DISCOUNT}.`)).toEqual([]);
+  });
+
+  it('tom: valor de lançamento, sem urgência, escassez ou prazo para a condição', () => {
+    expect(ARCADA_LAUNCH_PRICE_PHRASE).toBe(
+      'valor de lançamento, enquanto a Arcada monta os primeiros casos',
+    );
+    // Onde há preço (prompt, níveis, FAQ), ele vem com o posicionamento de lançamento.
+    for (const text of [prompt, kbLevels, kbFaq])
+      expect(text).toContain(ARCADA_LAUNCH_PRICE_PHRASE);
+    // A regra anti-pressão (único trecho que cita os exemplos proibidos) está no prompt.
+    expect(prompt).toContain(ARCADA_NO_PRESSURE_RULE);
+    for (const text of allTexts) {
+      const rest = without(text, ARCADA_NO_PRESSURE_RULE);
+      expect(rest.match(PRESSURE_RE)?.[0] ?? null).toBeNull();
+      expect(rest).not.toMatch(/\b\d{1,2}\/\d{1,2}\b/); // nenhuma data
+    }
+    // Controle: o detector pega pressão real.
+    for (const bad of ['Últimas vagas!', 'Só hoje.', 'A promoção vale até sexta.', 'Restam 2.']) {
+      expect(bad).toMatch(PRESSURE_RE);
+    }
+  });
+
+  it('prazo: até 5 dias úteis a partir do material completo com CRO, em todos os níveis', () => {
+    const commitment =
+      'até 5 dias úteis, contados a partir do recebimento do material completo, com o CRO do responsável técnico';
+    expect(ARCADA_DELIVERY_COMMITMENT).toBe(commitment);
+    expect(prompt).toContain(`Prazo, em todos os níveis: entrega final em ${commitment}.`);
+    expect(prompt).toContain(`- Prazo: ${commitment}. Nunca prometa prazo menor.`);
     for (const t of ARCADA_TIERS) {
-      for (const n of [2, 3]) {
-        const parts = installmentsCents(t.priceBrl, n);
-        expect(parts.reduce((a, b) => a + b, 0)).toBe(t.priceBrl * 100);
+      const section = kbLevels.split('\n## ').find((s) => s.startsWith(`${t.name}:`)) ?? '';
+      expect(section, t.name).toContain(`Prazo do ${t.name}: entrega final em ${commitment}.`);
+    }
+    expect(kbFaq).toContain(commitment);
+    for (const text of allTexts) {
+      for (const [, n] of text.matchAll(/(\d+)\s*dias úteis/g)) expect(Number(n)).toBe(5);
+      expect(text).not.toMatch(
+        /pronto antes|costuma ficar|normalmente fica|mais rápido|antes do prazo/i,
+      );
+    }
+  });
+
+  it('o que cada nível inclui veio das fontes; demos sempre como projeto conceito', () => {
+    expect(ARCADA_TIER_INCLUDES.essencial.items[0]).toBe(
+      '1 página longa, mais política de privacidade e página 404',
+    );
+    expect(ARCADA_TIER_INCLUDES.estudio.items[0]).toBe('10 a 16 páginas');
+    expect(ARCADA_TIER_INCLUDES.cinema.items).toEqual([
+      'tudo do Estúdio',
+      'mais a camada de movimento: cena de scroll gerada, vídeo no topo e movimento dirigido',
+    ]);
+    for (const t of ARCADA_TIERS) {
+      expect(prompt).toContain(`- ${t.name}, R$ ${t.priceBrl}: ${tierIncludesText(t)}`);
+      for (const item of ARCADA_TIER_INCLUDES[t.key].items) expect(kbLevels).toContain(`- ${item}`);
+    }
+    expect(ARCADA_TIERS.map((t) => [t.name, t.demo])).toEqual([
+      ['Essencial', 'Aline Tenório Odontologia'],
+      ['Estúdio', 'Quadrante Odontologia'],
+      ['Cinema', 'Nácar Odontologia'],
+    ]);
+    for (const text of allTexts) {
+      for (const line of text.split('\n')) {
+        if (/Aline Tenório|Quadrante|Nácar/.test(line)) {
+          expect(line, line).toMatch(/projeto conceito/i);
+          expect(line, line).toContain('não é cliente');
+        }
       }
     }
+    expect(ARCADA_SITE_URL).toBe('https://arcada-sandy.vercel.app');
+    expect(prompt).toContain(ARCADA_SITE_URL);
+    expect(prompt).toContain('nunca os apresente como cliente ou caso real');
   });
 });
 
@@ -144,21 +289,35 @@ describe('Arcada — handoff para humano', () => {
       'Já tem site hoje?',
       'É quem decide?',
       'Para quando precisa do site?',
-      '{{links_do_portfolio}}',
+      ARCADA_SITE_URL,
+      '{{links_das_demos}}',
       '{{como_agendar}}',
     ]) {
       expect(prompt).toContain(s);
     }
   });
 
-  it('marcadores pendentes são exatamente os conhecidos (nada inventado no lugar)', () => {
-    expect(listPendingMarkers().sort()).toEqual(
+  it('marcadores: os de nome novo estão pré-preenchidos; pendentes são só os sem fonte', () => {
+    expect(ARCADA_TIERS.map((t) => t.includesMarker)).toEqual([
+      'nivel_essencial_inclui',
+      'nivel_estudio_inclui',
+      'nivel_cinema_inclui',
+    ]);
+    expect(Object.keys(ARCADA_PREFILLED_FOR_APPROVAL).sort()).toEqual(
       [
-        'nivel_1000_inclui',
-        'nivel_2500_inclui',
-        'nivel_5000_inclui',
+        'nivel_essencial_inclui',
+        'nivel_estudio_inclui',
+        'nivel_cinema_inclui',
         'inicio_do_prazo',
         'links_do_portfolio',
+        'modelo_lembrete_dia_3',
+        'modelo_lembrete_dia_7',
+        'modelo_toque_30_dias',
+      ].sort(),
+    );
+    expect(listPendingMarkers().sort()).toEqual(
+      [
+        'links_das_demos',
         'casos_autorizados',
         'como_agendar',
         'meios_de_pagamento',
@@ -167,11 +326,15 @@ describe('Arcada — handoff para humano', () => {
         'alteracoes_e_manutencao',
         'google_e_seo',
         'contrato_e_nota_fiscal',
-        'modelo_lembrete_dia_3',
-        'modelo_lembrete_dia_7',
-        'modelo_toque_30_dias',
       ].sort(),
     );
+    // Nenhum marcador antigo nem pré-preenchido sobrou no texto.
+    for (const text of allTexts) {
+      expect(text).not.toMatch(/nivel_(1000|2500|5000)_inclui/);
+      for (const key of Object.keys(ARCADA_PREFILLED_FOR_APPROVAL)) {
+        expect(text).not.toContain(`{{${key}}}`);
+      }
+    }
     expect(prompt).toContain('Nunca mostre esses trechos ao cliente');
   });
 });
@@ -279,7 +442,18 @@ describe('Arcada — flows', () => {
       .map((n) => n.data['timeoutMinutes']);
     // Relógio cumulativo desde a última mensagem do cliente: 20h, 3º dia, 7º dia, +30 dias.
     expect(waits).toEqual([20 * 60, 3 * 24 * 60 - 20 * 60, 4 * 24 * 60, 30 * 24 * 60]);
-    expect(g.nodes.filter((n) => n.type === 'template')).toHaveLength(3);
+    const templates = g.nodes.filter((n) => n.type === 'template');
+    // Modelos definidos pelo Rogério (29/09), enviados sem parâmetros.
+    expect(templates.map((n) => n.data['templateName'])).toEqual([
+      'arcada_lembrete_dia_3',
+      'arcada_lembrete_dia_7',
+      'arcada_toque_30_dias',
+    ]);
+    for (const t of templates) {
+      expect(t.data['languageCode']).toBe(ARCADA_CADENCE.templateLanguage);
+      expect(t.data).not.toHaveProperty('params');
+    }
+    expect(JSON.stringify(g)).not.toContain('{{');
     expect(g.nodes.filter((n) => n.type === 'message')).toHaveLength(1);
     for (const send of g.nodes.filter((n) => n.type === 'message' || n.type === 'template')) {
       const incoming = g.edges.filter((e) => e.target === send.id);
@@ -300,6 +474,43 @@ describe('Arcada — flows', () => {
         expect.objectContaining({ source: w.id, target: 'clear_cooled', sourceHandle: 'response' }),
       );
     }
+  });
+});
+
+/** Cadência como a versão anterior do seed gravava: `templateName` = marcador. */
+function legacyCadenceNodes(tagIds: Parameters<typeof buildCadenceFlowGraph>[0]): unknown[] {
+  const legacy: Readonly<Record<string, string>> = {
+    arcada_lembrete_dia_3: '{{modelo_lembrete_dia_3}}',
+    arcada_lembrete_dia_7: '{{modelo_lembrete_dia_7}}',
+    arcada_toque_30_dias: '{{modelo_toque_30_dias}}',
+  };
+  return buildCadenceFlowGraph(tagIds).nodes.map((n) => {
+    const name = n.data['templateName'];
+    return n.type === 'template' && typeof name === 'string'
+      ? { ...n, data: { ...n.data, templateName: legacy[name] } }
+      : n;
+  });
+}
+
+describe('Arcada — nomes dos modelos na cadência já existente', () => {
+  it('troca só o marcador antigo; nome editado pelo operador fica', () => {
+    const legacy = legacyCadenceNodes(FAKE_TAGS);
+    const { nodes, changed } = fillLegacyTemplateNames(legacy);
+    expect(changed).toBe(3);
+    expect(nodes).toEqual(buildCadenceFlowGraph(FAKE_TAGS).nodes);
+
+    const edited = legacy.map((n, i) =>
+      i === legacy.findIndex((x) => JSON.stringify(x).includes('modelo_lembrete_dia_3'))
+        ? { ...(n as object), data: { templateName: 'modelo_do_operador', languageCode: 'pt_BR' } }
+        : n,
+    );
+    const second = fillLegacyTemplateNames(edited);
+    expect(second.changed).toBe(2);
+    expect(JSON.stringify(second.nodes)).toContain('modelo_do_operador');
+    // Idempotente: rodar de novo não muda nada.
+    expect(fillLegacyTemplateNames(nodes).changed).toBe(0);
+    // Entrada estranha é ignorada, sem lançar.
+    expect(fillLegacyTemplateNames([null, 1, { type: 'template' }]).changed).toBe(0);
   });
 });
 
@@ -493,6 +704,84 @@ describe('Arcada — seed no banco (dev)', () => {
       expect(again.draftPromptVersion).toBeNull();
     } finally {
       await db.delete(workspaces).where(eq(workspaces.id, ws31));
+    }
+  });
+
+  it('preço de lançamento (F70-S33) sobre o seed anterior: v2 rascunho, KB em rascunho atualizada, live intocado', async () => {
+    const db = getDb();
+    const [w] = await db
+      .insert(workspaces)
+      .values({ name: `Arcada S33 ${sfx}`, slug: `arcada-s33-${sfx}` })
+      .returning({ id: workspaces.id });
+    if (!w) throw new Error('Falha ao criar workspace de teste.');
+    const ws33 = w.id;
+    try {
+      // Estado anterior: prompt/KB da versão de 24/09 e cadência com marcadores.
+      const base = defaultArcadaSeedContent();
+      const legacy = {
+        ...base,
+        systemPrompt: 'Prompt de 24/09: R$ 1.000 / R$ 2.500 / R$ 5.000, {{nivel_1000_inclui}}.',
+        kbDocuments: base.kbDocuments.map((d) => ({
+          ...d,
+          rawContent: `${d.key}: versão de 24/09`,
+        })),
+      };
+      const first = await withWorkspace(ws33, (tx) => seedArcadaAttendance(tx, ws33, legacy));
+      await db
+        .update(flows)
+        .set({ nodes: legacyCadenceNodes(first.tagIds) })
+        .where(eq(flows.id, first.flowIds.cadence));
+      // O operador já publicou o portfólio: a KB publicada não pode ser tocada.
+      const portfolioId = arcadaIds(ws33).kbDocumentId('portfolio');
+      await db
+        .update(kbDocuments)
+        .set({ status: 'active', visibleToAgents: true })
+        .where(eq(kbDocuments.id, portfolioId));
+
+      const report = await withWorkspace(ws33, (tx) => seedArcadaAttendance(tx, ws33));
+      expect(report.draftPromptVersion).toBe(2);
+      expect(report.created).toEqual(
+        expect.arrayContaining([
+          'prompt_version:2:draft',
+          'kb:niveis:updated',
+          'kb:faq:updated',
+          'flow:cadence:templates:3',
+        ]),
+      );
+      expect(report.created).not.toContain('kb:portfolio:updated');
+
+      const versions = await db
+        .select()
+        .from(agentPromptVersions)
+        .where(eq(agentPromptVersions.agentId, report.agentId));
+      const byVersion = new Map(versions.map((v) => [v.version, v]));
+      expect(byVersion.get(1)).toMatchObject({ status: 'live', systemPrompt: legacy.systemPrompt });
+      expect(byVersion.get(2)).toMatchObject({ status: 'draft', systemPrompt: base.systemPrompt });
+
+      const [agent] = await db.select().from(agents).where(eq(agents.id, report.agentId));
+      expect(agent).toMatchObject({ status: 'inactive', systemPrompt: legacy.systemPrompt });
+
+      const docs = await db.select().from(kbDocuments).where(eq(kbDocuments.workspaceId, ws33));
+      const byId = new Map(docs.map((d) => [d.id, d]));
+      for (const d of base.kbDocuments) {
+        const row = byId.get(arcadaIds(ws33).kbDocumentId(d.key));
+        if (d.key === 'portfolio') {
+          expect(row?.rawContent).toBe('portfolio: versão de 24/09');
+        } else {
+          expect(row).toMatchObject({ status: 'draft', rawContent: d.rawContent });
+        }
+      }
+
+      const [cadence] = await db.select().from(flows).where(eq(flows.id, report.flowIds.cadence));
+      expect(cadence?.status).toBe('draft');
+      expect(cadence?.nodes).toEqual(buildCadenceFlowGraph(report.tagIds).nodes);
+
+      // 2ª rodada: nada criado.
+      const again = await withWorkspace(ws33, (tx) => seedArcadaAttendance(tx, ws33));
+      expect(again.created).toEqual([]);
+      expect(again.draftPromptVersion).toBeNull();
+    } finally {
+      await db.delete(workspaces).where(eq(workspaces.id, ws33));
     }
   });
 });
