@@ -2,7 +2,7 @@
 id: F70-S33
 title: Agente da Arcada com preço de lançamento, pagamento por nível e prazo de 5 dias úteis
 phase: F70
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F70-S06, F70-S31]
@@ -11,6 +11,9 @@ source_docs:
   - tasks/slots/F70/F70-S06-agente-de-atendimento-da-arcada.md
   - ../rogerio-os/vault/04-projetos/arcada.md
   - ../portfolio-sites/planejamento/niveis-odonto/PLANO.md
+agent_id: backend-engineer
+claimed_at: 2026-09-29T16:20:44Z
+
 ---
 # F70-S33 — Agente da Arcada com preço de lançamento
 
