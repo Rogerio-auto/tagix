@@ -56,7 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 35     | 3   | 2   | 0   | 0   | 2   | 28   |
+| F70   | 35     | 2   | 2   | 0   | 0   | 3   | 28   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -797,7 +797,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70-S30 | Trava de origem da IA como configuração do workspace                                                            | ✅ done      | high       | F70-S28                   |
 | F70-S31 | Sonnet 5 na lista de modelos e no agente da Arcada                                                              | ✅ done      | medium     | F70-S06                   |
 | F70-S32 | Wizard do WhatsApp preserva o signup ao voltar e painéis fechados saem da acessibilidade                        | 🟢 available | medium     | F70-S29                   |
-| F70-S33 | Agente da Arcada com preço de lançamento, pagamento por nível e prazo de 5 dias úteis                           | 🟢 available | critical   | F70-S06, F70-S31          |
+| F70-S33 | Agente da Arcada com preço de lançamento, pagamento por nível e prazo de 5 dias úteis                           | 🟣 review    | critical   | F70-S06, F70-S31          |
 | F70-S34 | Respostas rápidas da cadência da Arcada — "Agora não" encerra, "Quero…" reabre com a IA                         | 🟣 review    | high       | F70-S06, F70-S30          |
 | F70-S35 | Teto de custo por conversa, custo médio medido e handoff testado nos 4 gatilhos                                 | 🟢 available | high       | F70-S26                   |
 

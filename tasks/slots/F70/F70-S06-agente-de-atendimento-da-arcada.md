@@ -35,9 +35,12 @@ O Leadium tem runtime de agente (LangGraph + OpenRouter, `transfer_to_human`, pr
 
 ## Escopo (faz)
 
-- Agente "Arcada" com prompt versionado: os 3 níveis (1.000 / 2.500 / 5.000), qualificação (clínica, tem site, decisor, prazo), envio de portfólio, agendamento.
-- Passagem para humano: o agente trata objeções e negocia dentro dos limites aprovados e passa para o Rogério **quando o cliente está pronto para fechar**; também em pedido explícito de humano ou irritação.
-- Limites aprovados em 24/09: parcelamento em 2x sem juros, até 3x se o cliente insistir (sem desconto); à vista, 10% de desconto, máximo 15%; entrega em até 5 dias úteis.
+- Agente "Arcada" com prompt versionado: os 3 níveis (Essencial R$ 297 / Estúdio R$ 397 / Cinema R$ 999, preço de lançamento de 29/09; antes 1.000 / 2.500 / 5.000), qualificação (clínica, tem site, decisor, prazo), envio de portfólio, agendamento.
+- Passagem para humano: o agente trata objeções sem sair das condições aprovadas e passa para o Rogério **quando o cliente está pronto para fechar**; também em pedido explícito de humano ou irritação.
+- ~~Limites aprovados em 24/09: parcelamento em 2x sem juros, até 3x se o cliente insistir (sem desconto); à vista, 10% de desconto, máximo 15%; entrega em até 5 dias úteis.~~
+  **Substituídos pelas decisões de 29/09 (F70-S33):** sem desconto em nenhum nível; Essencial e
+  Estúdio só à vista; Cinema à vista ou 2 × R$ 499,50; entrega final em até 5 dias úteis em todos os
+  níveis, contados do recebimento do material completo, com o CRO do responsável técnico.
 - Sem resposta: lembrete dentro das 24h, outro no 3º e no 7º dia (modelo aprovado), etiqueta `esfriou` e um toque 30 dias depois.
 - Flow `new_lead` / `new_message` → `ai_action ACTIVATE` só para conversas iniciadas pelo cliente com origem comprovada (F70-S05).
 - Sonnet via OpenRouter (whitelist do Leadium) e teto de custo por conversa.
@@ -72,12 +75,12 @@ pnpm --filter @hm/db exec tsx src/seed/agent_templates_arcada.run.ts --workspace
 
 - **Template do WORKSPACE, não global.** O prompt tem preços e limites comerciais do Rogério; um
   `agent_templates` global (`workspace_id IS NULL`) é legível por todo tenant (RLS de leitura global).
-- **Números derivados, nunca digitados.** Preços, valor à vista (10%/15%) e parcelas (2x/3x, com o
-  último centavo na última parcela) saem das constantes. O teste varre prompt e KB: qualquer `%` fora de
-  {10, 15}, `Nx` fora de {2, 3} ou `R$` fora da tabela derivada quebra o build.
+- **Números derivados, nunca digitados.** Preços e parcelas saem das constantes. (24/09: à vista
+  10%/15% e 2x/3x; desde 29/09: sem desconto e só o Cinema em 2 × R$ 499,50 — ver "Decisões de 29/09".)
+  O teste varre prompt e KB: qualquer `%`, parcela fora do Cinema ou `R$` fora da tabela quebra o build.
 - **Nada inventado.** O que só o Rogério sabe virou marcador `{{…}}` (lista abaixo). O prompt manda
-  nunca mostrar marcador ao cliente e tratar como "vou confirmar com o Rogério". "Costuma ficar pronto
-  antes" veio da instrução do Rogério; o compromisso escrito é "até 5 dias úteis".
+  nunca mostrar marcador ao cliente e tratar como "vou confirmar com o Rogério". (O "costuma ficar
+  pronto antes" de 24/09 saiu em 29/09: o compromisso é só "até 5 dias úteis".)
 - **Modelo:** `anthropic/claude-sonnet-4` (Sonnet mais novo em `llm_models_whitelist`; `defaultPlanKeys`
   = business). O seed falha se o slug não estiver ativo na whitelist e avisa se a policy do workspace
   restringir modelos sem incluí-lo. `model_params = { temperature: 0.4, max_tokens: 600 }`.
@@ -105,6 +108,7 @@ pnpm --filter @hm/db exec tsx src/seed/agent_templates_arcada.run.ts --workspace
 - **Nada ativado:** agente `inactive` (o worker pula `agent_inactive`), flows `draft` sem `flow_versions`
   (o dispatcher só lê `active`), KB `draft` + `visible_to_agents=false` e sem chunks.
 
+<<<<<<< HEAD
 ### Respostas rápidas dos modelos (F70-S34)
 
 Os três modelos da cadência têm "Quero seguir" / "Quero retomar" / "Quero a prévia" e "Agora não",
@@ -122,16 +126,51 @@ e o rodapé "responda SAIR". O flow não precisa ramificar por eles; a plataform
 - **"SAIR"**: supressão pela F59; o portão de envio recusa o modelo de Marketing.
 - Opcional (higiene do monitor): condição `MSG_EQUALS trigger.message "Agora não"` logo depois do
   `trigger` da cadência — ver a seção "Mudança sugerida no seed" do F70-S34.
+=======
+### Decisões de 29/09 (Rogério; implementadas em F70-S33)
+
+- **Preço de lançamento:** Essencial R$ 297, Estúdio R$ 397, Cinema R$ 999 (antes R$ 1.000 / 2.500 /
+  5.000). Posicionamento único, no prompt e na KB: "valor de lançamento, enquanto a Arcada monta os
+  primeiros casos". Sobe quando houver casos entregues e depoimentos; o agente nunca inventa prazo para a
+  condição, nunca usa urgência, escassez ou "últimas vagas", e nunca cita o preço antigo (seria âncora de
+  desconto). O "teto de 1 Cinema por mês" do `arcada.md` NÃO entra no texto do agente: dito ao cliente,
+  vira escassez. Disponibilidade de agenda é conversa do Rogério (handoff `ready_to_close`).
+- **Pagamento:** sem desconto em nenhum nível, nem à vista, nem negociando. Essencial e Estúdio só à
+  vista; Cinema à vista ou 2 × R$ 499,50, nunca mais que 2x (`ARCADA_TIERS[].maxInstallments` = 1/1/2).
+  Saíram `cashDiscountPct`, `maxCashDiscountPct`, `defaultInstallments`, `installmentsDiscountPct`.
+  Pedido de desconto: o agente explica, sem pressão, que é o valor de lançamento e "não tem desconto"; se
+  o cliente insistir ou pedir outra forma de pagar → `out_of_limits`.
+- **Prazo:** entrega final em até 5 dias úteis em todos os níveis, contados a partir do recebimento do
+  material completo, com o CRO do responsável técnico (`inicio_do_prazo` pré-preenchido, de
+  `niveis-odonto/PLANO.md` §5 etapa 2 e §7). Saiu o "costuma ficar pronto antes": nunca prometer menos.
+- **Travas no teste:** a única forma permitida de "desconto" no texto gerado é a negação exata "não tem
+  desconto" (o teste conta as ocorrências); nenhum `%`, cupom, abatimento, "de R$ x por R$ y" ou valor
+  fora de {297, 397, 999, 499,50}; parcelas só em linha que fala do Cinema; nenhuma expressão de
+  urgência/escassez/data fora da regra anti-pressão; "N dias úteis" só com N = 5. Cada detector tem
+  controle negativo (frases ruins que ele precisa pegar).
+- **O que cada nível inclui:** pré-preenchido, para aprovação, só com o que está no `arcada.md`
+  (prevalece) e no `niveis-odonto/PLANO.md` §1 (`ARCADA_TIER_INCLUDES`). Divergências em F70-S33.
+- **Portfólio:** <https://arcada-sandy.vercel.app> e as demos Aline Tenório (Essencial), Quadrante
+  (Estúdio) e Nácar (Cinema), sempre "projeto conceito (clínica fictícia, não é cliente)". O teste
+  exige isso em toda linha que cita uma demo. A URL de cada demo não está nas fontes: `links_das_demos`.
+- **Modelos da cadência:** `arcada_lembrete_dia_3`, `arcada_lembrete_dia_7`, `arcada_toque_30_dias`,
+  `pt_BR`, envio sem parâmetros. **Aguardam aprovação na Meta.** O flow de cadência continua em
+  rascunho; na cadência já semeada (rascunho), o seed troca só o `templateName` que ainda é o marcador
+  antigo — o nome editado pelo operador vence e o flow publicado nunca é tocado.
+>>>>>>> feat/f70-s33
 
 ## Marcadores a preencher (Rogério)
 
-Prompt + KB: `nivel_1000_inclui`, `nivel_2500_inclui`, `nivel_5000_inclui`, `inicio_do_prazo` (a partir
-de quando contam os 5 dias úteis), `links_do_portfolio`, `casos_autorizados` (ex.: Nácar, só o que
-puder ser citado), `como_agendar`, `meios_de_pagamento`.
+Pré-preenchidos em 29/09, aguardando aprovação (publicar o rascunho): `nivel_essencial_inclui`,
+`nivel_estudio_inclui`, `nivel_cinema_inclui` (antes `nivel_1000/2500/5000_inclui`), `inicio_do_prazo`,
+`links_do_portfolio`, `modelo_lembrete_dia_3`, `modelo_lembrete_dia_7`, `modelo_toque_30_dias`.
+
+Ainda pendentes — prompt + KB: `links_das_demos` (URL de cada projeto conceito), `casos_autorizados`
+(hoje não há caso entregue; só clientes reais, nunca as demos), `como_agendar`, `meios_de_pagamento`
+(Pix, cartão, boleto: as fontes só dizem "à vista"/"2x").
 Só KB (FAQ): `material_necessario`, `dominio_e_hospedagem`, `alteracoes_e_manutencao`, `google_e_seo`,
 `contrato_e_nota_fiscal`.
-Cadência (nome exato do template aprovado na Meta): `modelo_lembrete_dia_3`, `modelo_lembrete_dia_7`,
-`modelo_toque_30_dias`. Texto sugerido do lembrete de 24h (aprovar): em `ARCADA_CADENCE.reminderText`.
+Texto sugerido do lembrete de 24h (aprovar): em `ARCADA_CADENCE.reminderText`.
 
 ## Como ligar (depois da aprovação)
 
@@ -147,8 +186,9 @@ Cadência (nome exato do template aprovado na Meta): `modelo_lembrete_dia_3`, `m
 6. Flows → "Arcada — ligar IA (conversa iniciada pelo cliente)": opcional restringir canais; **Publicar**.
    Conversas elegíveis já em andamento sem a etiqueta `ia-arcada` recebem a IA na próxima mensagem do
    cliente; para evitar, aplicar `ia-arcada` nesses contatos antes de publicar.
-7. Flows → "Arcada — cadência sem resposta": trocar os 3 `templateName` pelos modelos aprovados
-   (o publish avisa `unknown_var` enquanto houver `{{…}}`), restringir ao canal WhatsApp Cloud
+7. Flows → "Arcada — cadência sem resposta": conferir que os 3 modelos (`arcada_lembrete_dia_3`,
+   `arcada_lembrete_dia_7`, `arcada_toque_30_dias`) já estão **aprovados na Meta** (o seed preenche os
+   nomes desde F70-S33; publicar antes da aprovação faz o envio falhar), restringir ao canal WhatsApp Cloud
    (template não existe no WAHA nem no Instagram) e **Publicar**. Pode ficar desligado sem afetar o resto.
 8. Desligar: despublicar o flow de ativação e pôr o agente em inativo.
 

@@ -27,7 +27,9 @@
  *    gravada enquanto `overrides` estiver vazio — a edição do operador vence.
  *  - KB: criado uma vez; re-rodar atualiza o texto só enquanto o doc está em
  *    `draft` e invisível (depois de publicado, a UI manda).
- *  - flows: criados uma vez; nunca sobrescritos (o Rogério edita/publica na UI).
+ *  - flows: criados uma vez; nunca sobrescritos (o Rogério edita/publica na UI). Única
+ *    exceção (F70-S33): na cadência ainda em `draft`, o `templateName` que continua igual
+ *    ao marcador da versão anterior (`{{modelo_…}}`) recebe o nome do modelo definido.
  *
  * RLS-safe: recebe a transação já escopada (`withWorkspace`), como o instanciador de
  * Niche Blueprint. Execução: `agent_templates_arcada.run.ts`.
@@ -49,13 +51,14 @@ import {
 } from '../schema';
 import {
   ARCADA_CADENCE,
+  ARCADA_LEGACY_TEMPLATE_MARKERS,
   ARCADA_MODEL,
   ARCADA_MODEL_PARAMS,
+  ARCADA_PREFILLED_FOR_APPROVAL,
   ARCADA_TAGS,
   buildArcadaKbDocuments,
   buildArcadaSystemPrompt,
   listPendingMarkers,
-  marker,
   type ArcadaKbDocument,
   type ArcadaTagKey,
 } from './agent_templates_arcada.content';
@@ -216,8 +219,9 @@ export function buildCadenceFlowGraph(tagIds: TagIds): SeedFlowGraph {
   const c = ARCADA_CADENCE;
   const waitD3 = c.day3Minutes - c.reminderWithin24hMinutes;
   const waitD7 = c.day7Minutes - c.day3Minutes;
-  const template = (templateMarker: string) => ({
-    templateName: marker(templateMarker),
+  // Envio sem parâmetros: os modelos da Arcada não têm variáveis (sem `params`).
+  const template = (templateName: string) => ({
+    templateName,
     languageCode: c.templateLanguage,
   });
   const humanGate = (id: string, y: number): SeedFlowNode => ({
@@ -273,7 +277,7 @@ export function buildCadenceFlowGraph(tagIds: TagIds): SeedFlowGraph {
       {
         id: 'template_d3',
         type: 'template',
-        data: { label: 'Modelo aprovado — 3º dia', ...template(c.day3TemplateMarker) },
+        data: { label: 'Modelo aprovado — 3º dia', ...template(c.day3TemplateName) },
         position: { x: col(2), y: row(7) },
       },
       {
@@ -286,7 +290,7 @@ export function buildCadenceFlowGraph(tagIds: TagIds): SeedFlowGraph {
       {
         id: 'template_d7',
         type: 'template',
-        data: { label: 'Modelo aprovado — 7º dia', ...template(c.day7TemplateMarker) },
+        data: { label: 'Modelo aprovado — 7º dia', ...template(c.day7TemplateName) },
         position: { x: col(2), y: row(10) },
       },
       {
@@ -305,7 +309,7 @@ export function buildCadenceFlowGraph(tagIds: TagIds): SeedFlowGraph {
       {
         id: 'template_d30',
         type: 'template',
-        data: { label: 'Modelo aprovado — toque de 30 dias', ...template(c.day30TemplateMarker) },
+        data: { label: 'Modelo aprovado — toque de 30 dias', ...template(c.day30TemplateName) },
         position: { x: col(2), y: row(14) },
       },
     ],
@@ -344,6 +348,33 @@ export function buildCadenceFlowGraph(tagIds: TagIds): SeedFlowGraph {
 
 // ─── Seed.
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Troca, nos nodes `template`, o `templateName` que ainda é marcador da versão anterior
+ * (`{{modelo_…}}`) pelo nome definido. Qualquer outro valor fica como está.
+ */
+export function fillLegacyTemplateNames(nodes: readonly unknown[]): {
+  nodes: unknown[];
+  changed: number;
+} {
+  let changed = 0;
+  const out = nodes.map((node) => {
+    if (!isRecord(node) || node['type'] !== 'template' || !isRecord(node['data'])) return node;
+    const current = node['data']['templateName'];
+    if (typeof current !== 'string' || !Object.hasOwn(ARCADA_LEGACY_TEMPLATE_MARKERS, current)) {
+      return node;
+    }
+    const name = ARCADA_LEGACY_TEMPLATE_MARKERS[current];
+    if (name === undefined) return node;
+    changed += 1;
+    return { ...node, data: { ...node['data'], templateName: name } };
+  });
+  return { nodes: out, changed };
+}
+
 export interface ArcadaSeedContent {
   readonly systemPrompt: string;
   readonly model: string;
@@ -373,11 +404,13 @@ export interface ArcadaSeedReport {
   readonly linkedTools: readonly string[];
   readonly missingTools: readonly string[];
   readonly pendingMarkers: readonly string[];
+  /** Conteúdo pré-preenchido que aguarda aprovação (marcador → fonte). */
+  readonly prefilledForApproval: Readonly<Record<string, string>>;
   readonly warnings: readonly string[];
 }
 
 const TEMPLATE_DESCRIPTION =
-  'Atendimento consultivo da Arcada (sites para clínicas): qualifica, mostra portfólio, agenda, negocia dentro dos limites aprovados e passa para o Rogério na hora de fechar.';
+  'Atendimento consultivo da Arcada (sites para clínicas odontológicas): qualifica, mostra portfólio, agenda, explica preço de lançamento, pagamento e prazo sem sair das condições aprovadas e passa para o Rogério na hora de fechar.';
 
 function sha256(text: string): string {
   return createHash('sha256').update(text.trim(), 'utf8').digest('hex');
@@ -528,7 +561,7 @@ export async function seedArcadaAttendance(
         systemPrompt: content.systemPrompt,
         model: content.model,
         modelParams: { ...content.modelParams },
-        label: `Seed F70-S06 (v${next}) — rascunho`,
+        label: `Seed da Arcada (v${next}) — rascunho para aprovação`,
         note: `Conteúdo do seed mudou (modelo ${content.model}); rascunho para revisão. O live não foi alterado.`,
       });
       draftPromptVersion = next;
@@ -698,6 +731,25 @@ export async function seedArcadaAttendance(
     if (inserted.length > 0) created.push(`flow:${f.key}`);
   }
 
+  // ─── Cadência já existente: nomes dos modelos (F70-S33). Só em RASCUNHO e só o
+  // `templateName` que ainda é o marcador da versão anterior do seed (a edição do
+  // operador vence; um flow publicado nunca é tocado).
+  const [cadence] = await tx
+    .select({ status: flows.status, nodes: flows.nodes })
+    .from(flows)
+    .where(eq(flows.id, ids.cadenceFlowId))
+    .limit(1);
+  if (cadence && cadence.status === 'draft') {
+    const { nodes: migrated, changed } = fillLegacyTemplateNames(cadence.nodes);
+    if (changed > 0) {
+      await tx
+        .update(flows)
+        .set({ nodes: migrated, updatedAt: new Date() })
+        .where(and(eq(flows.id, ids.cadenceFlowId), eq(flows.status, 'draft')));
+      created.push(`flow:cadence:templates:${changed}`);
+    }
+  }
+
   return {
     workspaceId,
     agentId: ids.agentId,
@@ -709,6 +761,7 @@ export async function seedArcadaAttendance(
     linkedTools,
     missingTools,
     pendingMarkers: listPendingMarkers(),
+    prefilledForApproval: ARCADA_PREFILLED_FOR_APPROVAL,
     warnings,
   };
 }

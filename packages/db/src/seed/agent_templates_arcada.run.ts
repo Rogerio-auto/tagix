@@ -142,6 +142,10 @@ async function main(): Promise<void> {
   console.log(
     `[arcada] marcadores a preencher (${report.pendingMarkers.length}): ${report.pendingMarkers.join(', ')}`,
   );
+  const prefilled = Object.keys(report.prefilledForApproval);
+  console.log(
+    `[arcada] pré-preenchidos, aguardando aprovação (${prefilled.length}): ${prefilled.join(', ')}`,
+  );
 }
 
 /** Só executa como CLI; importar o módulo (teste da guarda) não semeia nada. */
