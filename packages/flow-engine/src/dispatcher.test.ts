@@ -19,6 +19,7 @@ import type {
   LoadedExecution,
 } from './deps';
 import type { FlowHandlerResult, RegisteredFlowHandler } from './types';
+import { FlowSendSuppressedError } from './send-suppressed';
 
 const WS = '11111111-1111-1111-1111-111111111111';
 const EX = '22222222-2222-2222-2222-222222222222';
@@ -215,6 +216,61 @@ describe('processFlowStep (algoritmo secao 3.2)', () => {
     });
     await processFlowStepScoped(deps, WS, EX);
     expect(patches.at(-1)?.patch.currentNodeId).toBe('n_no');
+  });
+});
+
+describe('envio suprimido pelo contato (F70-S34)', () => {
+  it('handler lanca FlowSendSuppressedError → execucao CANCELADA (nao failed), sem proximo step', async () => {
+    const exec = makeExec({ currentNodeId: 'n_msg' });
+    const { deps, patches, enqueued, events, logs } = makeDeps(exec, {
+      execute: () => {
+        throw new FlowSendSuppressedError('contact_declined', 'c1');
+      },
+    });
+    await processFlowStepScoped(deps, WS, EX);
+    const last = patches.at(-1);
+    expect(last?.patch).toMatchObject({ status: 'cancelled', lastError: 'contact_declined' });
+    expect(last?.patch.completedAt).toBeInstanceOf(Date);
+    expect(enqueued).toHaveLength(0);
+    expect(events.at(-1)?.status).toBe('cancelled');
+    expect(logs.at(-1)).toMatchObject({ level: 'info', nodeId: 'n_msg' });
+  });
+
+  it('reconhece o erro pelo nome (atravessa copias do modulo)', async () => {
+    const foreign = Object.assign(new Error('x'), {
+      name: 'FlowSendSuppressedError',
+      reason: 'contact_declined',
+    });
+    const { deps, patches } = makeDeps(makeExec(), {
+      execute: () => {
+        throw foreign;
+      },
+    });
+    await processFlowStepScoped(deps, WS, EX);
+    expect(patches.at(-1)?.patch.status).toBe('cancelled');
+  });
+
+  it('outro erro continua falhando a execucao', async () => {
+    const { deps, patches } = makeDeps(makeExec(), {
+      execute: () => {
+        throw new Error('boom');
+      },
+    });
+    await processFlowStepScoped(deps, WS, EX);
+    expect(patches.at(-1)?.patch).toMatchObject({ status: 'failed', lastError: 'boom' });
+  });
+
+  it('cancel concorrente vence: o patch fenced nao reescreve', async () => {
+    const holder: { row?: { status: FlowExecutionStatus } } = {};
+    const made = makeDeps(makeExec(), {
+      execute: () => {
+        if (holder.row) holder.row.status = 'cancelled';
+        throw new FlowSendSuppressedError('contact_declined', 'c1');
+      },
+    });
+    holder.row = made.row;
+    await processFlowStepScoped(made.deps, WS, EX);
+    expect(made.patches.find((p) => p.patch.lastError === 'contact_declined')).toBeUndefined();
   });
 });
 

@@ -192,7 +192,87 @@ describe('parseWhatsAppWebhook', () => {
     if (ev?.type === 'message') {
       expect(ev.messageType).toBe('interactive');
       expect(ev.metadata?.['interactive']).toMatchObject({ type: 'button_reply' });
+      // F70-S34: o título do botão é o que o contato "disse"; o clique vai cru.
+      expect(ev.content).toBe('Sim');
+      expect(ev.metadata?.['quickReply']).toEqual({
+        source: 'interactive',
+        text: 'Sim',
+        payload: 'btn_yes',
+      });
     }
+  });
+
+  describe('resposta rápida de modelo (F70-S34)', () => {
+    function buttonMessage(button: Record<string, unknown>): Record<string, unknown> {
+      return envelope({
+        messages: [
+          {
+            context: { from: '5511900000000', id: 'wamid.TEMPLATE' },
+            from: '5511555555555',
+            id: 'wamid.BTN',
+            timestamp: '1700000005',
+            type: 'button',
+            button,
+          },
+        ],
+      });
+    }
+
+    it('type button → texto do botão + clique cru com payload', () => {
+      const [ev] = parseWhatsAppWebhook(
+        buttonMessage({ payload: 'Agora não', text: 'Agora não' }),
+      );
+      expect(ev?.type).toBe('message');
+      if (ev?.type !== 'message') return;
+      expect(ev.messageType).toBe('text');
+      expect(ev.content).toBe('Agora não');
+      expect(ev.metadata?.['quickReply']).toEqual({
+        source: 'button',
+        text: 'Agora não',
+        payload: 'Agora não',
+      });
+      expect(ev.metadata?.['replyToExternalId']).toBe('wamid.TEMPLATE');
+      expect(ev.metadata?.['unknownWaType']).toBeUndefined();
+    });
+
+    it('sem payload → só o texto', () => {
+      const [ev] = parseWhatsAppWebhook(buttonMessage({ text: 'Quero seguir' }));
+      if (ev?.type !== 'message') throw new Error('esperava mensagem');
+      expect(ev.metadata?.['quickReply']).toEqual({ source: 'button', text: 'Quero seguir' });
+    });
+
+    it('botão sem texto → não é clique reconhecível (nem conteúdo)', () => {
+      const [ev] = parseWhatsAppWebhook(buttonMessage({ payload: 'x' }));
+      if (ev?.type !== 'message') throw new Error('esperava mensagem');
+      expect(ev.content).toBeUndefined();
+      expect(ev.metadata?.['quickReply']).toBeUndefined();
+    });
+
+    it('list_reply → título da linha + id como payload', () => {
+      const [ev] = parseWhatsAppWebhook(
+        envelope({
+          messages: [
+            {
+              from: '5511444444444',
+              id: 'wamid.LIST',
+              timestamp: '1700000006',
+              type: 'interactive',
+              interactive: {
+                type: 'list_reply',
+                list_reply: { id: 'row_1', title: 'Quero a prévia', description: 'x' },
+              },
+            },
+          ],
+        }),
+      );
+      if (ev?.type !== 'message') throw new Error('esperava mensagem');
+      expect(ev.content).toBe('Quero a prévia');
+      expect(ev.metadata?.['quickReply']).toEqual({
+        source: 'interactive',
+        text: 'Quero a prévia',
+        payload: 'row_1',
+      });
+    });
   });
 
   it('parseia reaction como evento dedicado', () => {

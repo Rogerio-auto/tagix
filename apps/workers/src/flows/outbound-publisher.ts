@@ -16,6 +16,12 @@
  *   → publishPresenceJob(ws, { kind:'typing_indicator', ... })  (no-op se sem alvo)
  * ```
  *
+ * F70-S34: e o PONTO DE ENVIO do flow, entao e aqui que a recusa do contato ("Agora nao",
+ * `hasContactDeclined` da `@hm/flow-engine`) e conferida, na mesma transacao que grava a
+ * mensagem e o job: se a ultima mensagem do contato e a recusa, nada e gravado e o envio
+ * lanca `FlowSendSuppressedError` — o dispatcher cancela a execucao. Vale para o lembrete
+ * que ja estava agendado quando a recusa chegou. A presenca ("digitando…") tambem nao sai.
+ *
  * F70-S21: o job de envio nasce da mensagem `pending` e entra na outbox NA MESMA
  * transacao (o relay publica depois do commit, com confirms). Antes era publicado
  * depois do commit: uma queda ou recusa do broker entre os dois deixava a mensagem
@@ -43,11 +49,13 @@ import {
 import { buildMessageNewPayload, previewFor } from '@hm/shared';
 import { enqueueOutbox, schema, withWorkspace } from '@hm/db';
 import { createStorage, type IStorageDriver } from '@hm/storage';
-import type {
-  FlowOutboundMediaKind,
-  FlowOutboundMessage,
-  FlowPresenceAction,
-  OutboundPublisher,
+import {
+  FlowSendSuppressedError,
+  hasContactDeclined,
+  type FlowOutboundMediaKind,
+  type FlowOutboundMessage,
+  type FlowPresenceAction,
+  type OutboundPublisher,
 } from '@hm/flow-engine';
 import type { Logger } from '@hm/logger';
 
@@ -193,6 +201,7 @@ export interface OutboundPersistencePort {
    * Persiste a message `pending` (senderType=system), resolve channelId/remoteId da
    * conversa e grava o job de envio (`buildJob(target)`) na outbox, tudo na MESMA
    * transacao RLS. `null` se a conversa nao existe no tenant (nada e gravado).
+   * Lanca `FlowSendSuppressedError` (nada gravado) se o contato recusou (F70-S34).
    */
   persistOutboundMessage(
     input: PersistOutboundMessageInput,
@@ -219,6 +228,9 @@ export function createDbOutboundPersistence(): OutboundPersistencePort {
   return {
     async persistOutboundMessage(input, buildJob) {
       return withWorkspace(input.workspaceId, async (tx) => {
+        // F70-S34: trava a linha da conversa antes de conferir a recusa. O inbound atualiza
+        // a mesma linha na transacao que insere a mensagem do contato, entao uma recusa ja
+        // gravada e ainda nao commitada e esperada aqui, nao atropelada.
         const [conv] = await tx
           .select({
             channelId: schema.conversations.channelId,
@@ -226,8 +238,13 @@ export function createDbOutboundPersistence(): OutboundPersistencePort {
           })
           .from(schema.conversations)
           .where(eq(schema.conversations.id, input.conversationId))
-          .limit(1);
+          .limit(1)
+          .for('no key update');
         if (!conv) return null;
+
+        if (await hasContactDeclined(tx, input.conversationId)) {
+          throw new FlowSendSuppressedError('contact_declined', input.conversationId);
+        }
 
         const [row] = await tx
           .insert(schema.messages)
@@ -296,6 +313,11 @@ export function createDbOutboundPersistence(): OutboundPersistencePort {
           .where(eq(schema.conversations.id, input.conversationId))
           .limit(1);
         if (!conv) return null;
+
+        // F70-S34: depois de "Agora nao" o flow nao fala — nem "digitando…".
+        if (await hasContactDeclined(tx, input.conversationId)) {
+          return { channelId: conv.channelId, remoteId: conv.remoteId, targetExternalId: null };
+        }
 
         const [lastInbound] = await tx
           .select({ externalId: schema.messages.externalId })

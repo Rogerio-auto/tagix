@@ -133,11 +133,15 @@ export interface FlowExecutionContext {
  * Resultado de `setConversationAi` (F70-S07). `origin_not_eligible`: a conversa nao
  * tem origem comprovada (anuncio/site/instagram) e a IA nao foi ligada — recusa
  * esperada, nao erro. `conversation_not_found`: a conversa sumiu (ou nao ha conversa
- * na execucao).
+ * na execucao). `contact_declined` (F70-S34): a ultima mensagem do contato e "Agora nao"
+ * — nenhuma automacao liga a IA ate ele voltar a escrever (`quick-replies.ts`).
  */
 export type SetConversationAiResult =
   | { readonly applied: true }
-  | { readonly applied: false; readonly reason: 'origin_not_eligible' | 'conversation_not_found' };
+  | {
+      readonly applied: false;
+      readonly reason: 'origin_not_eligible' | 'conversation_not_found' | 'contact_declined';
+    };
 
 export type FlowLogLevel = 'debug' | 'info' | 'warn' | 'error';
 

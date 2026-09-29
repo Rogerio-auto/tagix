@@ -10,9 +10,10 @@
  * (engine pura / testes / API sem worker): mantem o contrato estavel sem acoplar a engine
  * ao transporte de mensagens.
  */
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
 import { aiOriginGateSql } from '../ai-origin-gate';
+import { contactDeclinedSql } from '../quick-replies';
 import type { FlowOutboundPort } from '../deps';
 import type { FlowOutboundMessage, FlowPresenceAction, SetConversationAiResult } from '../types';
 
@@ -48,7 +49,12 @@ export function createOutboundPort(publisher: OutboundPublisher = noopPublisher)
         // lidas no próprio UPDATE, atômico (sem janela entre ler e ligar) e fail-closed
         // (trava ligada e origem NULL não passam). Desligar/pausar não tem trava — tirar
         // a IA é sempre seguro.
-        const where = input.aiMode === 'on' ? and(byId, aiOriginGateSql()) : byId;
+        // F70-S34 — e nenhuma automação liga a IA de quem acabou de responder "Agora não"
+        // (a última mensagem do contato é a recusa; `contactDeclinedSql`, mesmo UPDATE).
+        const where =
+          input.aiMode === 'on'
+            ? and(byId, aiOriginGateSql(), sql`not ${contactDeclinedSql(conversations.id)}`)
+            : byId;
         const updated = await tx
           .update(conversations)
           .set({ aiMode: input.aiMode, agentId: input.agentId ?? null, updatedAt: new Date() })
@@ -56,14 +62,20 @@ export function createOutboundPort(publisher: OutboundPublisher = noopPublisher)
           .returning({ id: conversations.id });
         if (updated.length > 0) return { applied: true };
 
-        // Nada atualizado: a conversa não existe (no escopo RLS) ou a origem barrou.
-        const [exists] = await tx
-          .select({ id: conversations.id })
+        // Nada atualizado: a conversa não existe (no escopo RLS), a origem barrou ou o
+        // contato recusou. A trava de origem tem precedência no motivo: é ela que continua
+        // valendo depois que o contato voltar a escrever.
+        const [row] = await tx
+          .select({
+            passesOrigin: aiOriginGateSql(),
+            declined: contactDeclinedSql(conversations.id),
+          })
           .from(conversations)
           .where(byId)
           .limit(1);
-        return exists === undefined
-          ? { applied: false, reason: 'conversation_not_found' }
+        if (row === undefined) return { applied: false, reason: 'conversation_not_found' };
+        return row.passesOrigin === true && row.declined === true
+          ? { applied: false, reason: 'contact_declined' }
           : { applied: false, reason: 'origin_not_eligible' };
       });
     },

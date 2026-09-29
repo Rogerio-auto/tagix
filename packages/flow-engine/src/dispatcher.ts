@@ -35,6 +35,7 @@ import type {
   LoadedExecution,
 } from './deps';
 import { getHandler } from './registry';
+import { isFlowSendSuppressedError } from './send-suppressed';
 import type {
   FlowEdge,
   FlowExecutionContext,
@@ -292,6 +293,13 @@ async function runStep(deps: FlowEngineDeps, exec: LoadedExecution): Promise<voi
   try {
     result = await handler.execute(node as FlowNode<unknown>, ctx);
   } catch (err) {
+    // F70-S34: o ponto de envio recusou porque o contato respondeu "Agora não". Não é
+    // falha do flow: a execução termina CANCELADA, e nenhum passo seguinte roda (o
+    // lembrete agendado antes da recusa não sai, nem o próximo).
+    if (isFlowSendSuppressedError(err)) {
+      await cancelSuppressed(deps, exec, node, err.reason);
+      return;
+    }
     const error = err instanceof Error ? err.message : String(err);
     await persistFailure(deps, exec, node, error);
     return;
@@ -437,6 +445,36 @@ async function persistFailure(
   );
   if (applied) await emitEvent(deps, execEvent(exec, 'failed', null));
   else logLostClaim(deps, exec, 'failed');
+}
+
+/**
+ * Envio suprimido (F70-S34): cancela a execucao com o motivo, fenced em `processing` (um
+ * cancel concorrente ou takeover vence e nada e reescrito). Log `info`: e o comportamento
+ * pedido pelo contato, nao erro.
+ */
+async function cancelSuppressed(
+  deps: FlowEngineDeps,
+  exec: LoadedExecution,
+  node: FlowNode,
+  reason: string,
+): Promise<void> {
+  await deps.db.insertLog({
+    executionId: exec.executionId,
+    workspaceId: exec.workspaceId,
+    nodeId: node.id,
+    nodeType: node.type,
+    level: 'info',
+    message: `envio suprimido: ${reason} — execucao cancelada`,
+    payload: { reason },
+  });
+  const applied = await deps.db.patchExecution(
+    exec.workspaceId,
+    exec.executionId,
+    { status: 'cancelled', lastError: reason, completedAt: deps.now() },
+    { expectStatus: ['processing'] },
+  );
+  if (applied) await emitEvent(deps, execEvent(exec, 'cancelled', null));
+  else logLostClaim(deps, exec, 'cancelled');
 }
 
 export async function resumeFlowWithResponse(
