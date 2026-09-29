@@ -26,6 +26,8 @@
  * status events → handleStatusEvent (S20, fora do withWorkspace: resolve próprio)
  * presence (typing do contato) → emitContactPresence (S21)
  * ai_mode='on' + mensagem nova → gatilho do agente na outbox, na transação acima (F70-S25)
+ * resposta rápida (F70-S34): significado no metadata; "Quero…" reabre (IA pela trava de
+ *   origem); "Agora não" não gera turno do agente                    (quick-reply.ts)
  * ```
  *
  * Idempotência: reprocessar o mesmo envelope é seguro. O dedup por
@@ -50,7 +52,9 @@ import {
 import type {
   ChannelProvider,
   ContactPresence,
+  ConversationAiModeChangedPayload,
   ConversationAssignedPayload,
+  ConversationStateChangedPayload,
   ConversationOriginValue,
   ServerToClientEvent,
   TypingFromContactPayload,
@@ -68,6 +72,12 @@ import {
   recordFirstTouchAttribution,
 } from './origin';
 import { inboundMediaJobOutbox } from './mq-ports';
+import {
+  annotateQuickReplies,
+  reopenForQuickReply,
+  type QuickReplyReopenOutcome,
+} from './quick-reply';
+import type { QuickReplyIntent } from '@hm/flow-engine';
 import type {
   AutoAssignAutomatic,
   AutoAssignPick,
@@ -173,6 +183,18 @@ export interface InboundSocketPort extends ContactPresenceEmitPort {
     workspaceId: string,
     payload: ConversationAssignedPayload,
   ): Promise<void>;
+  /**
+   * F70-S34: "Quero…" religou a IA / reabriu a conversa. Opcionais: composições e testes
+   * que não os injetam só não avisam a tela (o estado no banco é o mesmo).
+   */
+  emitConversationAiModeChanged?(
+    workspaceId: string,
+    payload: ConversationAiModeChangedPayload,
+  ): Promise<void>;
+  emitConversationStateChanged?(
+    workspaceId: string,
+    payload: ConversationStateChangedPayload,
+  ): Promise<void>;
 }
 
 /** Publica `{ event, target:{conversationId}, data }` no relay → room conversation:{id}. */
@@ -250,6 +272,34 @@ export class MqInboundSocketEmit implements InboundSocketPort {
     );
     await Promise.resolve();
   }
+
+  async emitConversationAiModeChanged(
+    workspaceId: string,
+    payload: ConversationAiModeChangedPayload,
+  ): Promise<void> {
+    relayEnvelope(
+      this.channel,
+      workspaceId,
+      'conversation:ai_mode_changed',
+      payload.conversationId,
+      payload,
+    );
+    await Promise.resolve();
+  }
+
+  async emitConversationStateChanged(
+    workspaceId: string,
+    payload: ConversationStateChangedPayload,
+  ): Promise<void> {
+    relayEnvelope(
+      this.channel,
+      workspaceId,
+      'conversation:state_changed',
+      payload.conversationId,
+      payload,
+    );
+    await Promise.resolve();
+  }
 }
 
 // ─── Gatilho do agente de IA (ai_mode='on') — outbox (F70-S25) ────────────────
@@ -264,6 +314,10 @@ export const INBOUND_FLOW_TYPE = AGENT_RUN_REQUESTED_TYPE;
  * Quem pode LIGAR a IA não muda aqui: o gatilho só nasce em conversa que já está `on`, e o
  * worker de agentes ainda confere origem elegível ou marca humana antes de responder
  * (`authorizeAiReply`, F70-S07/S08/S19). Uma conversa criada agora nasce `off`.
+ *
+ * F70-S34: "Agora não" como última mensagem não gera turno — o contato pediu para parar,
+ * e uma resposta automática a isso é exatamente o que ele recusou. A IA continua como
+ * estava e responde normalmente quando ele voltar a escrever.
  */
 export function inboundAgentRunJob(input: {
   readonly workspaceId: string;
@@ -278,8 +332,11 @@ export function inboundAgentRunJob(input: {
    * do gatilho (`agentRunTriggerId.inbound`, F70-S26) no construtor.
    */
   readonly lastInboundExternalId: string;
+  /** Intenção de resposta rápida da última mensagem inserida (F70-S34), se houver. */
+  readonly quickReplyIntent?: QuickReplyIntent | null;
 }): OutboxMessage | null {
   if (input.inserted === 0 || input.aiMode !== 'on') return null;
+  if (input.quickReplyIntent === 'decline') return null;
   return agentRunJobOutbox(input.workspaceId, {
     conversationId: input.conversationId,
     contactId: input.contactId,
@@ -458,11 +515,18 @@ export class DbInboundPersistence implements InboundPersistencePort {
       // F70-S07: primeiro toque de anúncio no contato (nunca sobrescreve).
       await recordFirstTouchAttribution(tx, resolved.contactId, messageEvents);
       await fillContactName(tx, resolved.contactId, messageEvents);
+      // F70-S34: o significado de uma resposta rápida entra no metadata da própria
+      // mensagem, antes do INSERT (é o que as automações leem depois).
+      const quickReplies = await annotateQuickReplies(
+        tx,
+        resolved.conversationId,
+        messageEvents,
+      );
       const inserted = await insertMessages(
         tx,
         workspaceId,
         resolved.conversationId,
-        messageEvents,
+        quickReplies.events,
       );
       if (inserted.length > 0) {
         await bumpConversation(tx, resolved.conversationId, messageEvents, inserted.length);
@@ -553,15 +617,27 @@ export class DbInboundPersistence implements InboundPersistencePort {
       // pode ser uma reentrega já respondida; o id do gatilho (conversa + external_id)
       // colidiria com o turno antigo e a mensagem nova ficaria sem resposta.
       const lastInserted = inserted[inserted.length - 1];
+
+      // F70-S34: a última mensagem NOVA é uma resposta rápida? "Quero…" reabre a conversa
+      // (IA só pela trava de origem, e se nenhum humano estiver com ela); "Agora não" não
+      // gera turno. Reentrega deduplicada não repete nada (`inserted` só tem linhas novas).
+      const quickReplyIntent =
+        lastInserted === undefined ? null : quickReplies.intentOf(lastInserted.externalId);
+      const reopen: QuickReplyReopenOutcome | null =
+        quickReplyIntent === 'reopen'
+          ? await reopenForQuickReply(tx, resolved.conversationId)
+          : null;
+
       const agentRun = inboundAgentRunJob({
         workspaceId,
         conversationId: resolved.conversationId,
         contactId: resolved.contactId,
         channelId,
         provider,
-        aiMode: resolved.aiMode,
+        aiMode: reopen?.ai === 'reopened' ? 'on' : resolved.aiMode,
         inserted: inserted.length,
         lastInboundExternalId: lastInserted?.externalId ?? anchor.externalId,
+        quickReplyIntent,
       });
       if (agentRun !== null) await enqueueOutbox(tx, agentRun);
 
@@ -571,6 +647,8 @@ export class DbInboundPersistence implements InboundPersistencePort {
         autoAssignedTo,
         mediaJobs: mediaJobs.length,
         agentRunQueued: agentRun !== null,
+        quickReplyIntent,
+        reopen,
       };
     });
 
@@ -579,6 +657,30 @@ export class DbInboundPersistence implements InboundPersistencePort {
       await this.socket.emitConversationAssigned(workspaceId, {
         conversationId: outcome.resolved.conversationId,
         assignedTo: outcome.autoAssignedTo,
+      });
+    }
+
+    // F70-S34: resposta rápida — rastro no log e a tela avisada do que mudou.
+    if (outcome.quickReplyIntent !== null) {
+      this.logger.info('inbound: resposta rápida da cadência', {
+        conversationId: outcome.resolved.conversationId,
+        intent: outcome.quickReplyIntent,
+        ai: outcome.reopen?.ai ?? null,
+        statusReopened: outcome.reopen?.statusReopened ?? false,
+        agentRunQueued: outcome.agentRunQueued,
+      });
+    }
+    if (outcome.reopen?.ai === 'reopened') {
+      await this.socket.emitConversationAiModeChanged?.(workspaceId, {
+        conversationId: outcome.resolved.conversationId,
+        aiMode: 'on',
+        reason: null,
+      });
+    }
+    if (outcome.reopen?.statusReopened === true) {
+      await this.socket.emitConversationStateChanged?.(workspaceId, {
+        conversationId: outcome.resolved.conversationId,
+        status: 'open',
       });
     }
 
