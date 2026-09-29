@@ -56,3 +56,18 @@ Parser e worker de coexistência existem (`packages/channels/src/meta/whatsapp/c
 - [ ] R1–R6 marcados como validados ou corrigidos no runbook
 - [ ] 3 cenários provados em produção: inbound, eco do app, histórico
 - [ ] teste automatizado para cada correção feita no parser
+
+## Estado real (conferido em produção, 29/09/2026, só leitura)
+
+- **Canal:** `meta_whatsapp` "Arcada Rogério" (`cc6ca56b-d524-46d7-bc1d-b6d6b00193dc`), modo **coexistência**, ativo desde 25/09.
+  - WABA `395375790331443`, conta "Rogerio Viana", portfólio 3d_viana (`997352610954716`), número +55 69 9967-0030, compartilhada com o Sólio com controle total.
+  - Workspace: **Leadium** (`afe23bf3-…`), o único de produção, com a trava de origem ligada (F70-S30).
+- **O número real entrou antes do previsto:** a decisão de 24/09 era conectar só no fim. O canal de teste da Meta foi pulado, e o número real já recebe inbound e ecos do app.
+- **Histórico não foi compartilhado**, como decidido: nenhum webhook `history` chegou, e as mensagens começam em 25/09 14:31, no momento da conexão (988 mensagens até 29/09: 613 do contato, 210 ecos antigos gravados antes da F70-S04 e 165 ecos do app).
+- **Pendência:** `channels.phone_number` está vazio. O canal foi conectado pelo conector antigo, antes do hotfix `d774835a`, que resolve o número pela WABA. Dá para preencher numa próxima conexão ou num backfill pontual.
+- **Entra no fluxo da Arcada?** Ainda não:
+  - o agente "Arcada — atendimento" não existe em produção (o seed nunca rodou lá; ver F70-S33);
+  - nenhum flow está publicado;
+  - as 19 conversas estão com a IA desligada: 15 sem origem gravada (anteriores ao deploy da F70) e 4 `sem-origem`.
+  - Com a trava ligada, só conversa nova de anúncio, site ou Instagram poderá receber a IA quando o agente for ativado.
+- **R1–R6 do runbook:** a validação formal segue pendente. O inbound e o eco já funcionam com o número real.
