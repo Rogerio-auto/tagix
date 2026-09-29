@@ -113,7 +113,11 @@ describe('classifyQuickReply', () => {
       via: 'text',
     });
     await expect(
-      classifyQuickReply({ click: undefined, text: 'agora nao', repliesToTemplate: async () => false }),
+      classifyQuickReply({
+        click: undefined,
+        text: 'agora nao',
+        repliesToTemplate: async () => false,
+      }),
     ).resolves.toBeNull();
   });
 
@@ -146,22 +150,30 @@ describe.skipIf(!ready)('"o contato recusou?" e o port que liga a IA (Postgres d
   const AGENT = randomUUID();
   const outbound = createOutboundPort();
   let seq = 0;
+  // Relógio fixo: minutos iguais = mesmo instante (empate de propósito).
+  const BASE = Date.now();
 
   async function conversation(origin: string | null): Promise<string> {
     const id = randomUUID();
     const contactId = randomUUID();
     await getDb()
       .insert(schema.contacts)
-      .values({ id: contactId, workspaceId: WS, phone: `+5511${String(Date.now()).slice(-8)}${seq}` });
-    await getDb().insert(schema.conversations).values({
-      id,
-      workspaceId: WS,
-      channelId: CHANNEL,
-      contactId,
-      remoteId: `r-${id.slice(0, 8)}`,
-      status: 'open',
-      ...(origin !== null ? { origin: origin as 'origem:anuncio' } : {}),
-    });
+      .values({
+        id: contactId,
+        workspaceId: WS,
+        phone: `+5511${String(Date.now()).slice(-8)}${seq}`,
+      });
+    await getDb()
+      .insert(schema.conversations)
+      .values({
+        id,
+        workspaceId: WS,
+        channelId: CHANNEL,
+        contactId,
+        remoteId: `r-${id.slice(0, 8)}`,
+        status: 'open',
+        ...(origin !== null ? { origin: origin as 'origem:anuncio' } : {}),
+      });
     return id;
   }
 
@@ -173,7 +185,7 @@ describe.skipIf(!ready)('"o contato recusou?" e o port que liga a IA (Postgres d
     intent?: 'reopen' | 'decline',
   ): Promise<void> {
     seq += 1;
-    const at = new Date(Date.now() - minutesAgo * 60_000);
+    const at = new Date(BASE - minutesAgo * 60_000);
     await getDb()
       .insert(schema.messages)
       .values({
@@ -244,6 +256,15 @@ describe.skipIf(!ready)('"o contato recusou?" e o port que liga a IA (Postgres d
     expect(await declined(conv)).toBe(true);
 
     await contactSays(conv, 'mudei de ideia', 1);
+    expect(await declined(conv)).toBe(false);
+  });
+
+  it('empate no mesmo instante: a recusa só vale se todas as mensagens forem recusa', async () => {
+    const conv = await conversation('origem:anuncio');
+    await contactSays(conv, 'Agora não', 3, 'decline');
+    await contactSays(conv, 'Agora não', 3, 'decline');
+    expect(await declined(conv)).toBe(true);
+    await contactSays(conv, 'na verdade, me conta mais', 3);
     expect(await declined(conv)).toBe(false);
   });
 

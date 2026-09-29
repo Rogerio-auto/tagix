@@ -163,25 +163,28 @@ export async function classifyQuickReply(input: QuickReplyInput): Promise<QuickR
  * conversa sem mensagem do contato = `false`.
  *
  * Ordem: `coalesce(provider_timestamp, created_at)` — a mesma da timeline, servida pelo
- * índice `idx_messages_conversation_provider_ts`.
+ * índice `idx_messages_conversation_provider_ts`. O horário do provedor tem resolução de
+ * segundo: quando várias mensagens do contato empatam no instante mais recente, a recusa só
+ * vale se TODAS forem recusa ("Agora não" e "oi" no mesmo segundo = o contato voltou).
  *
- * O subselect vai ANINHADO num `sql` externo de propósito: num SELECT de tabela única o
+ * Os subselects vão ANINHADOS num `sql` externo de propósito: num SELECT de tabela única o
  * Drizzle tira a qualificação das colunas que estão no primeiro nível de um campo `sql`, e
  * `"conversation_id" = "id"` passaria a comparar com `messages.id` (sempre falso).
  */
 export function contactDeclinedSql(conversationId: SQL | AnyPgColumn | string): SQL<boolean> {
-  const latestIsDecline = sql`(
-    select (${messages.metadata} -> ${QUICK_REPLY_METADATA_KEY} ->> 'intent') = 'decline'
-    from ${messages}
-    where ${messages.conversationId} = ${conversationId}
+  const fromContact = sql`${messages.conversationId} = ${conversationId}
       and ${messages.direction} = 'inbound'
       and ${messages.senderType} = 'contact'
-      and ${messages.deletedAt} is null
-    order by coalesce(${messages.providerTimestamp}, ${messages.createdAt}) desc,
-             ${messages.createdAt} desc
-    limit 1
+      and ${messages.deletedAt} is null`;
+  const at = sql`coalesce(${messages.providerTimestamp}, ${messages.createdAt})`;
+  const latestAt = sql`(select max(${at}) from ${messages} where ${fromContact})`;
+  const latestAllDecline = sql`(
+    select bool_and(coalesce(
+      (${messages.metadata} -> ${QUICK_REPLY_METADATA_KEY} ->> 'intent') = 'decline', false))
+    from ${messages}
+    where ${fromContact} and ${at} = ${latestAt}
   )`;
-  return sql<boolean>`coalesce(${latestIsDecline}, false)`;
+  return sql<boolean>`coalesce(${latestAllDecline}, false)`;
 }
 
 /**

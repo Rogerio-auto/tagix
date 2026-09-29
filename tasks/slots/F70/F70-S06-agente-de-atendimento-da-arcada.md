@@ -105,6 +105,24 @@ pnpm --filter @hm/db exec tsx src/seed/agent_templates_arcada.run.ts --workspace
 - **Nada ativado:** agente `inactive` (o worker pula `agent_inactive`), flows `draft` sem `flow_versions`
   (o dispatcher só lê `active`), KB `draft` + `visible_to_agents=false` e sem chunks.
 
+### Respostas rápidas dos modelos (F70-S34)
+
+Os três modelos da cadência têm "Quero seguir" / "Quero retomar" / "Quero a prévia" e "Agora não",
+e o rodapé "responda SAIR". O flow não precisa ramificar por eles; a plataforma garante:
+
+- **"Agora não"**: o clique entra como mensagem do contato (retoma a execução em espera pela aresta
+  `response`, como qualquer mensagem) e fica marcado como recusa. Enquanto a última mensagem do
+  contato for a recusa, nenhuma mensagem de flow sai: o ponto de envio cancela a execução
+  (`cancelled`, `contact_declined`), inclusive o lembrete que já estava agendado e a cadência nova
+  que a própria recusa dispara. Nenhuma automação liga a IA e a recusa não gera turno do agente.
+  Quando o contato volta a escrever, a cadência recomeça do zero.
+- **"Quero…"**: reabre a conversa (`resolved`/`closed` → `open`) e religa a IA só pela trava de
+  origem do workspace (F70-S30), se nenhum humano estiver com ela (`paused`/`pending`) e houver
+  agente. Sem origem comprovada, fica para o humano.
+- **"SAIR"**: supressão pela F59; o portão de envio recusa o modelo de Marketing.
+- Opcional (higiene do monitor): condição `MSG_EQUALS trigger.message "Agora não"` logo depois do
+  `trigger` da cadência — ver a seção "Mudança sugerida no seed" do F70-S34.
+
 ## Marcadores a preencher (Rogério)
 
 Prompt + KB: `nivel_1000_inclui`, `nivel_2500_inclui`, `nivel_5000_inclui`, `inicio_do_prazo` (a partir
