@@ -2,7 +2,7 @@
 id: F71-S03
 title: Sessão por pessoa e empresa ativa — troca de empresa, login escolhe a última usada
 phase: F71
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F71-S01, F71-S02]
