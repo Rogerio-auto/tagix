@@ -9,11 +9,9 @@
  *   GET    /api/members/me/sessions     lista a(s) sessão(ões) do member
  *   DELETE /api/members/me/sessions/:id revoga sessão (encerra)
  *
- * Nota de honestidade: o contrato IAuthProvider (Supabase atrás de adapter) ainda
- * não expõe updatePassword nem enumeração de devices. Aqui:
- *  - password: re-autentica com a senha atual (provider.signIn). Persistência da
- *    nova senha depende do provider — o mock aceita; provider sem suporte responde
- *    501 honesto (não finge sucesso).
+ * Nota de honestidade: o contrato de auth ainda não expõe enumeração de devices. Aqui:
+ *  - password: re-autentica com a senha atual (provider.signIn) e persiste via
+ *    provider.updatePassword(authUserId) (F71-S02). Falha do provider → 502.
  *  - sessions: modelo de sessão é o cookie httpOnly atual (uma sessão por device).
  *    Listamos a sessão corrente; revogar = signOut (logout). Multi-device real
  *    chega quando o provider expuser enumeração — endpoint já está no contrato.
@@ -116,18 +114,16 @@ export function createMembersMeRouter(): Router {
       throw err;
     }
 
-    // Persistência da nova senha depende do provider expor updatePassword.
-    // Contrato atual (IAuthProvider) ainda não tem — resposta honesta, sem fingir.
-    const maybeUpdate = (provider as { updatePassword?: (email: string, pw: string) => Promise<void> })
-      .updatePassword;
-    if (typeof maybeUpdate !== 'function') {
-      res.status(501).json({
-        error: 'password_change_unavailable',
-        message: 'Troca de senha indisponível neste provedor de autenticação.',
+    // Persiste pelo id da conta no provider (nunca pelo email). O contrato não lança:
+    // `false` = o provider recusou/falhou — 502 honesto, sem fingir sucesso.
+    const updated = await provider.updatePassword(req.auth!.member.authUserId, newPassword);
+    if (!updated) {
+      res.status(502).json({
+        error: 'password_update_failed',
+        message: 'Não foi possível trocar a senha agora. Tente novamente.',
       });
       return;
     }
-    await maybeUpdate(email, newPassword);
     res.sendStatus(204);
   });
 

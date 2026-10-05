@@ -4,12 +4,16 @@ import {
   type SupabaseClient,
   type UserResponse,
 } from '@supabase/supabase-js';
+import { z } from 'zod';
 import {
   AuthError,
+  resolveEmailRedirect,
   type AuthCredentials,
   type AuthIdentity,
   type AuthSession,
-  type IAuthProvider,
+  type AuthUserLookup,
+  type IAccountAuthProvider,
+  type InviteResult,
   type SignUpResult,
 } from '@hm/shared';
 
@@ -27,19 +31,67 @@ export class AuthProviderUnavailableError extends Error {
 }
 
 /**
- * Adapter Supabase Auth: login por senha, verificação de token, e os verbos do
- * cadastro self-serve (signup com email NÃO confirmado, reset, verify).
+ * Marca em `app_metadata` (só a service key escreve; o usuário não altera) gravada
+ * sempre que ESTE adapter define uma senha. O GoTrue não expõe o hash da senha, então
+ * é por ela que `findUserByEmail` sabe se uma conta criada por convite já foi completada.
+ */
+export const PASSWORD_SET_FLAG = 'hm_password_set';
+
+/** Página da listagem admin. Com o `filter` do GoTrue a 1ª página quase sempre basta. */
+const LIST_PER_PAGE = 100;
+/** Teto de páginas: passou disso, "não sei" (lança) em vez de "não existe". */
+const LIST_MAX_PAGES = 50;
+/** Teto de cada chamada à API admin: o Supabase lento não prende o request do usuário. */
+const ADMIN_TIMEOUT_MS = 10_000;
+
+/** Usuário como a API admin do GoTrue devolve (só os campos que usamos). */
+const goTrueUserSchema = z.object({
+  id: z.string().min(1),
+  email: z.string().nullish(),
+  email_confirmed_at: z.string().nullish(),
+  invited_at: z.string().nullish(),
+  app_metadata: z.record(z.unknown()).nullish(),
+});
+type GoTrueUser = z.infer<typeof goTrueUserSchema>;
+
+/** `GET /admin/users` → `{ users: [...], aud }`. Cada item é validado à parte. */
+const goTrueUserListSchema = z.object({ users: z.array(z.unknown()) });
+
+/**
+ * Corpo de erro do GoTrue. Varia por versão: `error_code` (atual), `code` (numérico em
+ * respostas antigas, string em algumas), `msg`/`message`/`error_description`.
+ */
+const goTrueErrorSchema = z.object({
+  error_code: z.string().optional(),
+  code: z.union([z.string(), z.number()]).optional(),
+  msg: z.string().optional(),
+  message: z.string().optional(),
+  error_description: z.string().optional(),
+});
+
+interface GoTrueErrorInfo {
+  status: number;
+  code: string | undefined;
+  message: string;
+}
+
+const uuidSchema = z.string().uuid();
+
+/**
+ * Adapter Supabase Auth: login por senha, verificação de token, os verbos do cadastro
+ * self-serve (signup com email NÃO confirmado, reset, verify) e os de conta da F71
+ * (lookup exato, convite, link de acesso, completar conta, trocar senha).
  *
  * Duas chaves:
- *  - `anonKey`: cliente público (login/verify de token de sessão).
- *  - `serviceKey` (opcional, server-side): admin REST API para criar usuário com
- *    `email_confirm:false`. NUNCA exposta ao cliente. Sem ela, `signUp` falha
- *    explicitamente (provider_error) — não há fallback inseguro.
+ *  - `anonKey`: cliente público (login, verify, OTP, reset).
+ *  - `serviceKey` (opcional, server-side): API admin (criar/atualizar/listar usuário,
+ *    convite). NUNCA exposta ao cliente. Sem ela, os verbos admin falham explicitamente
+ *    — não há fallback inseguro.
  *
- * O `redirectTo` dos emails (reset/verify) aponta para a app web (env
- * `AUTH_EMAIL_REDIRECT_URL`), nunca para um destino controlado pelo atacante.
+ * Todo link de email aponta para o app (`AUTH_EMAIL_REDIRECT_URL`), nunca para um
+ * destino controlado pelo atacante (ver `resolveEmailRedirect`).
  */
-export class SupabaseAuthProvider implements IAuthProvider {
+export class SupabaseAuthProvider implements IAccountAuthProvider {
   readonly kind = 'supabase' as const;
   private readonly client: SupabaseClient;
   private readonly url: string;
@@ -64,10 +116,58 @@ export class SupabaseAuthProvider implements IAuthProvider {
     return base ? base.replace(/\/+$/, '') + path : undefined;
   }
 
+  /**
+   * Destino de convite/link de acesso. Diferente de `redirectFor`, aqui a base é
+   * obrigatória: sem ela o Supabase cairia no Site URL e o token do caminho
+   * (`/convite/<token>`) se perderia — melhor falhar antes de mandar um email inútil.
+   */
+  private requireRedirect(redirectTo: string): string {
+    const target = resolveEmailRedirect(redirectTo, process.env['AUTH_EMAIL_REDIRECT_URL']);
+    if (!target) {
+      throw new AuthError(
+        'Destino do link de email recusado (fora do app ou AUTH_EMAIL_REDIRECT_URL ausente).',
+        'provider_error',
+      );
+    }
+    return target;
+  }
+
+  private requireServiceKey(): string {
+    if (!this.serviceKey) {
+      throw new AuthError('Operação admin indisponível: service key ausente.', 'provider_error');
+    }
+    return this.serviceKey;
+  }
+
+  private adminHeaders(serviceKey: string): Record<string, string> {
+    return {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json',
+    };
+  }
+
   async signIn({ email, password }: AuthCredentials): Promise<AuthSession> {
-    const { data, error } = await this.client.auth.signInWithPassword({ email, password });
-    if (error || !data.session || !data.user) {
-      throw new AuthError(error?.message ?? 'Credenciais inválidas.', 'invalid_credentials');
+    let result: Awaited<ReturnType<SupabaseClient['auth']['signInWithPassword']>>;
+    try {
+      result = await this.client.auth.signInWithPassword({ email, password });
+    } catch {
+      throw new AuthError('Provider de auth indisponível.', 'provider_error');
+    }
+    const { data, error } = result;
+    if (error) {
+      // O GoTrue só chega em "email não confirmado" DEPOIS de aceitar a senha (senha
+      // errada responde invalid_credentials antes), então isto não enumera contas.
+      if (isEmailNotConfirmed(error)) {
+        throw new AuthError('Email não confirmado.', 'email_unverified');
+      }
+      if (isAuthRetryableFetchError(error)) {
+        throw new AuthError('Provider de auth indisponível.', 'provider_error');
+      }
+      throw new AuthError('Credenciais inválidas.', 'invalid_credentials');
+    }
+    if (!data.session || !data.user) {
+      throw new AuthError('Credenciais inválidas.', 'invalid_credentials');
     }
     return {
       accessToken: data.session.access_token,
@@ -123,12 +223,14 @@ export class SupabaseAuthProvider implements IAuthProvider {
     }
     const res = await fetch(`${this.url}/auth/v1/admin/users`, {
       method: 'POST',
-      headers: {
-        apikey: this.serviceKey,
-        Authorization: `Bearer ${this.serviceKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email, password, email_confirm: false }),
+      headers: this.adminHeaders(this.serviceKey),
+      body: JSON.stringify({
+        email,
+        password,
+        email_confirm: false,
+        app_metadata: { [PASSWORD_SET_FLAG]: true },
+      }),
+      signal: AbortSignal.timeout(ADMIN_TIMEOUT_MS),
     });
     if (res.ok) {
       const body: unknown = await res.json();
@@ -196,15 +298,124 @@ export class SupabaseAuthProvider implements IAuthProvider {
     } catch {
       return false;
     }
+    return this.adminUpdateUser(userId, {
+      password: newPassword,
+      app_metadata: { [PASSWORD_SET_FLAG]: true },
+    });
+  }
+
+  async findUserByEmail(email: string): Promise<AuthUserLookup | null> {
+    const user = await this.findAdminUserByEmail(email);
+    if (!user) return null;
+    return {
+      authUserId: user.id,
+      emailConfirmed: Boolean(user.email_confirmed_at),
+      hasPassword: user.app_metadata?.[PASSWORD_SET_FLAG] === true || !user.invited_at,
+    };
+  }
+
+  /**
+   * `POST /auth/v1/invite` (o mesmo de `auth.admin.inviteUserByEmail`), com a service key.
+   * O GoTrue recusa com 422 `email_exists` quando a conta já existe e está confirmada
+   * (conta não confirmada é reconvidada) — nesse caso cai para o link de acesso.
+   */
+  async sendInvite(email: string, redirectTo: string): Promise<InviteResult> {
+    const serviceKey = this.requireServiceKey();
+    const target = this.requireRedirect(redirectTo);
+    const normalized = normalizeEmail(email);
+
+    let res: Response;
     try {
-      const res = await fetch(`${this.url}/auth/v1/admin/users/${userId}`, {
+      res = await fetch(`${this.url}/auth/v1/invite?redirect_to=${encodeURIComponent(target)}`, {
+        method: 'POST',
+        headers: this.adminHeaders(serviceKey),
+        body: JSON.stringify({ email: normalized }),
+        signal: AbortSignal.timeout(ADMIN_TIMEOUT_MS),
+      });
+    } catch {
+      throw new AuthError('Provider de auth indisponível ao enviar convite.', 'provider_error');
+    }
+
+    if (res.ok) {
+      const parsed = goTrueUserSchema.safeParse(await readJson(res));
+      if (!parsed.success) {
+        throw new AuthError('Resposta inesperada do provider no convite.', 'provider_error');
+      }
+      return { authUserId: parsed.data.id, channel: 'invite' };
+    }
+
+    const info = await readGoTrueError(res);
+    if (isEmailExists(info)) {
+      const existing = await this.findAdminUserByEmail(normalized);
+      if (!existing) {
+        throw new AuthError('Conta existente não localizada após o convite.', 'provider_error');
+      }
+      await this.sendSignInLink(normalized, redirectTo);
+      return { authUserId: existing.id, channel: 'sign_in_link' };
+    }
+    // Sem o email na mensagem (PII); status + código bastam para diagnóstico.
+    throw new AuthError(
+      `Convite recusado pelo provider (${info.status}${info.code ? ` ${info.code}` : ''}).`,
+      'provider_error',
+    );
+  }
+
+  /**
+   * `signInWithOtp({ shouldCreateUser:false })` — template "Magic link". Sem conta, o
+   * GoTrue responde 422 "Signups not allowed for otp"; isso resolve em silêncio
+   * (anti-enumeração). Qualquer outra recusa (rate limit, SMTP, 5xx) lança.
+   */
+  async sendSignInLink(email: string, redirectTo: string): Promise<void> {
+    const target = this.requireRedirect(redirectTo);
+    let result: Awaited<ReturnType<SupabaseClient['auth']['signInWithOtp']>>;
+    try {
+      result = await this.client.auth.signInWithOtp({
+        email: normalizeEmail(email),
+        options: { shouldCreateUser: false, emailRedirectTo: target },
+      });
+    } catch {
+      throw new AuthError('Provider de auth indisponível ao enviar o link.', 'provider_error');
+    }
+    const { error } = result;
+    if (!error) return;
+    if (isNoAccountForOtp(error)) return;
+    throw new AuthError(
+      `Link de acesso recusado pelo provider (${error.status ?? 0}${error.code ? ` ${error.code}` : ''}).`,
+      'provider_error',
+    );
+  }
+
+  async completeAccount(authUserId: string, password: string): Promise<boolean> {
+    return this.adminUpdateUser(authUserId, {
+      password,
+      email_confirm: true,
+      app_metadata: { [PASSWORD_SET_FLAG]: true },
+    });
+  }
+
+  async updatePassword(authUserId: string, password: string): Promise<boolean> {
+    return this.adminUpdateUser(authUserId, {
+      password,
+      app_metadata: { [PASSWORD_SET_FLAG]: true },
+    });
+  }
+
+  /**
+   * `PUT /admin/users/:id`. `app_metadata` é mesclado pelo GoTrue (não substitui o
+   * `provider`/`providers`). Id fora do formato UUID nem chega ao provider. Nunca lança.
+   */
+  private async adminUpdateUser(
+    authUserId: string,
+    attributes: Record<string, unknown>,
+  ): Promise<boolean> {
+    if (!this.serviceKey) return false;
+    if (!uuidSchema.safeParse(authUserId).success) return false;
+    try {
+      const res = await fetch(`${this.url}/auth/v1/admin/users/${authUserId}`, {
         method: 'PUT',
-        headers: {
-          apikey: this.serviceKey,
-          Authorization: `Bearer ${this.serviceKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ password: newPassword }),
+        headers: this.adminHeaders(this.serviceKey),
+        body: JSON.stringify(attributes),
+        signal: AbortSignal.timeout(ADMIN_TIMEOUT_MS),
       });
       return res.ok;
     } catch {
@@ -225,30 +436,120 @@ export class SupabaseAuthProvider implements IAuthProvider {
     }
   }
 
-  /** Best-effort lookup do id por email via admin API (idempotência de signup). */
-  private async lookupUserId(email: string): Promise<string | null> {
-    if (!this.serviceKey) return null;
-    try {
-      const res = await fetch(
-        `${this.url}/auth/v1/admin/users?filter=${encodeURIComponent(`email eq "${email}"`)}`,
-        {
-          headers: {
-            apikey: this.serviceKey,
-            Authorization: `Bearer ${this.serviceKey}`,
-          },
-        },
-      );
-      if (!res.ok) return null;
-      const body: unknown = await res.json();
-      if (body && typeof body === 'object' && 'users' in body) {
-        const users = (body as { users: unknown }).users;
-        if (Array.isArray(users) && users.length > 0) return extractUserId(users[0]);
+  /**
+   * Busca na API admin pelo email EXATO.
+   *
+   * O `filter` de `GET /admin/users` NÃO é uma linguagem de consulta: o GoTrue o usa
+   * como trecho (`email LIKE %filter%` OU `full_name ILIKE %filter%`). Por isso:
+   *  - passamos o próprio email (minúsculo, como o GoTrue grava) só para estreitar;
+   *  - comparamos o endereço inteiro em cada item (`ana@x.com` ≠ `joana@x.com`);
+   *  - paginamos até uma página incompleta. Se o servidor ignorar o `filter`, a
+   *    resposta continua correta (só mais lenta), até o teto de páginas.
+   * Falha de rede/HTTP, resposta fora do formato ou teto estourado → LANÇA
+   * `provider_error`: "não sei" nunca vira "não existe".
+   */
+  private async findAdminUserByEmail(email: string): Promise<GoTrueUser | null> {
+    const serviceKey = this.requireServiceKey();
+    const wanted = normalizeEmail(email);
+    if (!wanted) return null;
+
+    for (let page = 1; page <= LIST_MAX_PAGES; page += 1) {
+      const qs = new URLSearchParams({
+        page: String(page),
+        per_page: String(LIST_PER_PAGE),
+        filter: wanted,
+      });
+      let res: Response;
+      try {
+        res = await fetch(`${this.url}/auth/v1/admin/users?${qs.toString()}`, {
+          headers: this.adminHeaders(serviceKey),
+          signal: AbortSignal.timeout(ADMIN_TIMEOUT_MS),
+        });
+      } catch {
+        throw new AuthError('Provider de auth indisponível na busca de conta.', 'provider_error');
       }
-      return null;
+      if (!res.ok) {
+        throw new AuthError(`Busca de conta recusada (${res.status}).`, 'provider_error');
+      }
+      const list = goTrueUserListSchema.safeParse(await readJson(res));
+      if (!list.success) {
+        throw new AuthError('Resposta inesperada do provider na busca de conta.', 'provider_error');
+      }
+      for (const raw of list.data.users) {
+        const user = goTrueUserSchema.safeParse(raw);
+        if (user.success && normalizeEmail(user.data.email ?? '') === wanted) return user.data;
+      }
+      if (list.data.users.length < LIST_PER_PAGE) return null;
+    }
+    throw new AuthError('Busca de conta excedeu o teto de páginas.', 'provider_error');
+  }
+
+  /** Best-effort: id da conta por email exato (idempotência de signup). Nunca lança. */
+  private async lookupUserId(email: string): Promise<string | null> {
+    try {
+      const user = await this.findAdminUserByEmail(email);
+      return user?.id ?? null;
     } catch {
       return null;
     }
   }
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+/** Corpo JSON ou `null` se não for JSON (sem lançar). */
+async function readJson(res: Response): Promise<unknown> {
+  try {
+    const parsed: unknown = await res.json();
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function readGoTrueError(res: Response): Promise<GoTrueErrorInfo> {
+  let text = '';
+  try {
+    text = await res.text();
+  } catch {
+    // corpo ilegível: segue só com o status
+  }
+  let raw: unknown = null;
+  try {
+    raw = text ? JSON.parse(text) : null;
+  } catch {
+    raw = null;
+  }
+  const parsed = goTrueErrorSchema.safeParse(raw);
+  if (!parsed.success) return { status: res.status, code: undefined, message: text };
+  const body = parsed.data;
+  return {
+    status: res.status,
+    code: body.error_code ?? (typeof body.code === 'string' ? body.code : undefined),
+    message: body.msg ?? body.message ?? body.error_description ?? text,
+  };
+}
+
+/** Conta já existe (convite recusado). Código atual + mensagem legada. */
+function isEmailExists(info: GoTrueErrorInfo): boolean {
+  if (info.code === 'email_exists' || info.code === 'user_already_exists') return true;
+  return info.status === 422 && /already (been )?registered|already exists/i.test(info.message);
+}
+
+/**
+ * Login recusado por email não confirmado. GoTrue atual: HTTP 400 com
+ * `error_code: "email_not_confirmed"` em `/token?grant_type=password`; versões antigas
+ * só trazem a mensagem "Email not confirmed".
+ */
+function isEmailNotConfirmed(error: { code?: string | undefined; message: string }): boolean {
+  return error.code === 'email_not_confirmed' || /email not confirmed/i.test(error.message);
+}
+
+/** OTP com `shouldCreateUser:false` para email sem conta. */
+function isNoAccountForOtp(error: { code?: string | undefined; message: string }): boolean {
+  return error.code === 'user_not_found' || /signups not allowed for otp/i.test(error.message);
 }
 
 /** Narrowing seguro do id do usuário na resposta do Supabase (sem `any`). */

@@ -1,8 +1,8 @@
-import type { IAuthProvider } from '@hm/shared';
+import type { IAccountAuthProvider } from '@hm/shared';
 import { MockAuthProvider } from './mock-provider';
 import { SupabaseAuthProvider } from './supabase-provider';
 
-let cached: IAuthProvider | null = null;
+let cached: IAccountAuthProvider | null = null;
 
 function isUsable(value: string | undefined, placeholderHint: string): value is string {
   return Boolean(value && !value.includes(placeholderHint));
@@ -24,7 +24,7 @@ export function __resetAuthProviderCache(): void {
  * erro claro. O `createAuthRouter` resolve o provider na montagem do app, então
  * a falha acontece no boot, não no primeiro request.
  */
-export function getAuthProvider(): IAuthProvider {
+export function getAuthProvider(): IAccountAuthProvider {
   if (cached) return cached;
 
   const isProd = process.env['NODE_ENV'] === 'production';
@@ -51,7 +51,11 @@ export function getAuthProvider(): IAuthProvider {
   // nunca cai num caminho inseguro. NUNCA exposta ao cliente.
   const serviceKey = process.env['SUPABASE_SERVICE_KEY'];
 
-  if (isUsable(url, 'your-project') && url.startsWith('https://') && isUsable(anonKey, 'your-anon')) {
+  if (
+    isUsable(url, 'your-project') &&
+    url.startsWith('https://') &&
+    isUsable(anonKey, 'your-anon')
+  ) {
     cached = new SupabaseAuthProvider(
       url,
       anonKey,
