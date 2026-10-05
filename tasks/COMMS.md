@@ -917,3 +917,8 @@ A liberação é só `atendimento-humano`. Etiqueta de conversão não entra nun
 - **Pendências registradas:** teto de custo por conversa, custo médio e handoff nos 4 gatilhos → **F70-S35**. F70-S32 segue aberta. Direct do Instagram continua fora (F69-S08, sem `instagram_manage_messages` no app).
 - **WhatsApp:** o número real (+55 69 9967-0030, WABA `395375790331443`) está conectado em coexistência no workspace Leadium desde 25/09, sem histórico importado. Detalhes na F70-S03.
 - **Produção:** a v2 do prompt e da KB entra pelo seed idempotente depois do deploy, com o agente inativo até a aprovação e as 10 conversas de teste. Commit e push só com o ok do Rogério.
+
+## F71 — Orchestrator — 2026-10-05
+
+- **Onda 1 despachada:** F71-S01 (db-engineer, `packages/db/**`) ‖ F71-S02 (backend-engineer, `packages/shared/src/auth/**` + provider em `apps/api/src/auth/{supabase,mock}-provider.ts`, `provider.ts` + runbook). Paths disjuntos. Workers escrevem na mesma árvore (sem git); integração 1 por vez via stash por slot → claim → validate → finish → merge --no-ff → done.
+- Regra da fase: só a S01 toca `packages/db/**`. Qualquer necessidade de banco em S02–S10 volta para cá.
