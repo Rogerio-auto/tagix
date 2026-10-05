@@ -2,7 +2,7 @@
 id: F71-S05
 title: Convite de verdade — criar, enviar, reenviar, revogar, copiar link e aceitar, com limite de membros
 phase: F71
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F71-S01, F71-S02, F71-S03]
@@ -10,6 +10,9 @@ blocks: [F71-S07]
 source_docs:
   - docs/features/CONTAS_E_CONVITES.md
   - docs/features/PERMISSIONS.md
+agent_id: backend-engineer
+claimed_at: 2026-10-05T17:11:26Z
+
 ---
 # F71-S05 — Convites (API)
 
