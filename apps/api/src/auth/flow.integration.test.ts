@@ -66,7 +66,8 @@ const workspaceIds: string[] = [];
 
 afterAll(async () => {
   const db = getDb();
-  for (const id of workspaceIds) await db.delete(schema.workspaces).where(eq(schema.workspaces.id, id));
+  for (const id of workspaceIds)
+    await db.delete(schema.workspaces).where(eq(schema.workspaces.id, id));
 });
 
 function payload(email: string, extra: Record<string, unknown> = {}) {
@@ -134,12 +135,24 @@ describe('Fluxo signup → verify → login', () => {
     expect(after?.status).toBe('active'); // promovido
 
     // Login agora resolve a sessão (mock aceita qualquer senha p/ member existente).
-    const loginRes = await request(app)
-      .post('/auth/login')
-      .send({ email, password: 'qualquer' });
+    const loginRes = await request(app).post('/auth/login').send({ email, password: 'qualquer' });
     expect(loginRes.status).toBe(200);
     expect(loginRes.body.member.email).toBe(email);
     expect(loginRes.body.member.isPlatformAdmin).toBe(false);
+
+    // F71-S03: a sessão resolve por auth_user_id e o login fixa a empresa ativa.
+    expect(loginRes.body.workspace.id).toBe(after?.workspaceId);
+    const raw: unknown = loginRes.headers['set-cookie'];
+    const cookies = Array.isArray(raw) ? raw.filter((c): c is string => typeof c === 'string') : [];
+    expect(cookies.some((c) => c.startsWith(`hm_workspace=${after?.workspaceId ?? ''};`))).toBe(
+      true,
+    );
+    const sessionCookie = cookies.find((c) => c.startsWith('hm_session='))?.split(';')[0] ?? '';
+    const me = await request(app).get('/api/me').set('Cookie', sessionCookie);
+    expect(me.status).toBe(200);
+    expect(me.body.memberships).toEqual([
+      expect.objectContaining({ workspaceId: after?.workspaceId, role: 'OWNER' }),
+    ]);
   });
 
   it('signup duplicado → resposta uniforme, sem segundo member (T3/T13)', async () => {

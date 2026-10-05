@@ -12,7 +12,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb, impersonationSessionsRepo, schema } from '@hm/db';
 import { SESSION_COOKIE } from '../auth/session';
 import { requireAuth } from './auth';
-import { IMPERSONATION_COOKIE, impersonationMiddleware } from './impersonation';
+import {
+  IMPERSONATION_COOKIE,
+  hasActiveImpersonation,
+  impersonationMiddleware,
+} from './impersonation';
 
 const { workspaces, members } = schema;
 
@@ -29,7 +33,10 @@ app.use(express.json());
 app.use(requireAuth);
 app.use(impersonationMiddleware);
 app.get('/echo', (req: Request, res: Response) => {
-  res.json({ workspaceId: req.auth?.workspace.id, impersonating: req.impersonation?.targetWorkspaceId ?? null });
+  res.json({
+    workspaceId: req.auth?.workspace.id,
+    impersonating: req.impersonation?.targetWorkspaceId ?? null,
+  });
 });
 app.post('/write', (_req: Request, res: Response) => res.json({ ok: true }));
 app.get('/api/platform/anything', (_req: Request, res: Response) => res.json({ ok: true }));
@@ -74,7 +81,13 @@ beforeAll(async () => {
   const uEmail = `impuser-${sfx}@t.local`;
   await db
     .insert(members)
-    .values({ workspaceId: wsAdmin, authUserId: uAuth, email: uEmail, role: 'AGENT', status: 'active' });
+    .values({
+      workspaceId: wsAdmin,
+      authUserId: uAuth,
+      email: uEmail,
+      role: 'AGENT',
+      status: 'active',
+    });
   userCookie = cookieFor(uAuth, uEmail);
 });
 
@@ -170,5 +183,57 @@ describe('anti-tampering', () => {
       .set('Cookie', `${userCookie}; ${impCookie(s.id)}`);
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('impersonation_claim_rejected');
+  });
+});
+
+describe('claim malformado (F71-S03)', () => {
+  it('claim nao-uuid -> no-op (nao chega ao SQL nem vira 500)', async () => {
+    const res = await request(app)
+      .get('/echo')
+      .set('Cookie', `${adminCookie}; ${impCookie('nao-e-uuid')}`);
+    expect(res.status).toBe(200);
+    expect(res.body.workspaceId).toBe(wsAdmin);
+    expect(res.body.impersonating).toBeNull();
+  });
+});
+
+describe('hasActiveImpersonation (guarda da troca de empresa, F71-S03)', () => {
+  const reqWith = (cookie?: string) => ({ headers: { cookie } }) as unknown as Request;
+
+  it('sessao de view-as ativa -> true', async () => {
+    const s = await makeSession();
+    await expect(hasActiveImpersonation(reqWith(impCookie(s.id)))).resolves.toBe(true);
+  });
+
+  it('expirada, inexistente, malformada ou ausente -> false', async () => {
+    const expired = await makeSession({ expired: true });
+    await expect(hasActiveImpersonation(reqWith(impCookie(expired.id)))).resolves.toBe(false);
+    await expect(hasActiveImpersonation(reqWith(impCookie(randomUUID())))).resolves.toBe(false);
+    await expect(hasActiveImpersonation(reqWith(impCookie('lixo')))).resolves.toBe(false);
+    await expect(hasActiveImpersonation(reqWith(undefined))).resolves.toBe(false);
+  });
+});
+
+describe('requireAuth + hm_workspace (F71-S03)', () => {
+  it('pessoa com membership ativa em 2 empresas: o cookie escolhe a empresa do request', async () => {
+    const db = getDb();
+    const [admin] = await db.select().from(members).where(eq(members.id, adminMemberId));
+    await db.insert(members).values({
+      workspaceId: wsTarget,
+      authUserId: admin!.authUserId,
+      email: admin!.email,
+      role: 'AGENT',
+      status: 'active',
+    });
+    const chosen = await request(app)
+      .get('/echo')
+      .set('Cookie', `${adminCookie}; hm_workspace=${wsTarget}`);
+    expect(chosen.status).toBe(200);
+    expect(chosen.body.workspaceId).toBe(wsTarget);
+    expect(chosen.body.impersonating).toBeNull();
+
+    // Sem o cookie: a padrao (nenhuma usada ainda -> a membership mais antiga).
+    const fallback = await request(app).get('/echo').set('Cookie', adminCookie);
+    expect(fallback.body.workspaceId).toBe(wsAdmin);
   });
 });

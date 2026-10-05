@@ -54,6 +54,30 @@ function readCookie(req: Request, name: string): string | null {
   return null;
 }
 
+/** Formato do id de `impersonation_sessions` (uuid). Claim fora dele nem chega ao SQL. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Claim bem-formado do cookie, ou null (ausente/malformado = sem claim). */
+function readClaim(req: Request): string | null {
+  const claim = readCookie(req, IMPERSONATION_COOKIE);
+  return claim && UUID_RE.test(claim) ? claim : null;
+}
+
+/**
+ * Há uma sessão de view-as ATIVA (não encerrada, não expirada) no cookie deste request?
+ *
+ * Para rotas montadas ANTES deste middleware (o router de auth) que mudam o contexto da
+ * sessão — ex.: `POST /api/me/workspace` (F71-S03) tem de ser recusado sob view-as, e o
+ * bloqueio de escrita daqui não chega lá. Não confere o dono do claim: qualquer claim
+ * ativo já basta para recusar (fail-closed; o dono legítimo encerra o view-as antes).
+ */
+export async function hasActiveImpersonation(req: Request): Promise<boolean> {
+  const claim = readClaim(req);
+  if (!claim) return false;
+  const session = await impersonationSessionsRepo.findActiveById(claim, new Date());
+  return session !== null;
+}
+
 /** Detecta rota de plataforma ou de secret -- proibidas durante impersonation. */
 function isForbiddenPath(path: string): boolean {
   const p = path.toLowerCase();
@@ -69,7 +93,8 @@ export const impersonationMiddleware: RequestHandler = (
   res: Response,
   next: NextFunction,
 ): void => {
-  const claim = readCookie(req, IMPERSONATION_COOKIE);
+  // Claim malformado (não-uuid) é tratado como ausente: antes chegava ao SQL e virava 500.
+  const claim = readClaim(req);
   if (!claim) {
     next();
     return;

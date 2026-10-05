@@ -1,9 +1,13 @@
 import type { NextFunction, Request, Response } from 'express';
 import { withWorkspace, type DbTx } from '@hm/db';
 import { can, type Permission, type Role } from '@hm/shared';
-import { readToken, resolveSessionStatus } from '../auth';
+import { readPreferredWorkspace, readToken, resolveSessionStatus } from '../auth';
 
-/** Exige sessão válida; popula `req.auth` (member + workspace). */
+/**
+ * Exige sessão válida; popula `req.auth` (member + workspace). A empresa é a do cookie
+ * `hm_workspace` quando a pessoa tem membership `active` nela; senão a última usada
+ * (F71-S03). Cookie de empresa inválida é ignorado, nunca vira erro.
+ */
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   // View-as (F26-S05): quando o middleware de impersonation já resolveu a sessão do
   // admin e sobrepôs o workspace pelo ALVO (req.impersonation presente + req.auth setado),
@@ -15,7 +19,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
   const token = readToken(req);
-  const result = token ? await resolveSessionStatus(token) : ({ kind: 'invalid' } as const);
+  const result = token
+    ? await resolveSessionStatus(token, readPreferredWorkspace(req))
+    : ({ kind: 'invalid' } as const);
   if (result.kind === 'unavailable') {
     // F70-S28: provider de auth fora do ar (sem cache recente) NÃO é sessão morta.
     // 401 aqui mandaria todo mundo para o login a cada instabilidade do Supabase.

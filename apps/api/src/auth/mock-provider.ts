@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
-import { membersRepo } from '@hm/db';
+import { asc, eq, sql } from 'drizzle-orm';
+import { getDb, schema } from '@hm/db';
 import {
   AuthError,
   resolveEmailRedirect,
@@ -38,8 +39,10 @@ export interface MockAuthEmail {
 const OUTBOX_LIMIT = 100;
 
 /**
- * Provider de auth para dev (sem Supabase). Aceita qualquer senha para um member
- * existente (resolvido por email). Token = payload base64url (não assinado — só dev).
+ * Provider de auth para dev (sem Supabase). Aceita qualquer senha para uma pessoa que
+ * tenha member em alguma empresa: o email só serve para achar o `auth_user_id` (como o
+ * GoTrue faz no login); a empresa e a membership são resolvidas depois, por
+ * `auth_user_id`, pela sessão (F71-S03). Token = payload base64url (não assinado — só dev).
  * Nunca em produção: `getAuthProvider` aborta o boot (SEC-02).
  *
  * Contas em memória: `signUp`, `sendInvite`, `verifyEmailToken`, `completeAccount` e o
@@ -63,14 +66,14 @@ export class MockAuthProvider implements IAccountAuthProvider {
     if (known && !known.emailConfirmed) {
       throw new AuthError('Email não confirmado.', 'email_unverified');
     }
-    const member = await membersRepo.findByEmail(email);
-    if (!member) throw new AuthError('Credenciais inválidas.', 'invalid_credentials');
-    const identity: AuthIdentity = { authUserId: member.authUserId, email: member.email };
+    const authUserId = known?.authUserId ?? (await findPersonByEmail(email));
+    if (!authUserId) throw new AuthError('Credenciais inválidas.', 'invalid_credentials');
+    const identity: AuthIdentity = { authUserId, email: normalizeEmail(email) };
     // Quem entrou passa a ser conta conhecida (convite para ela vira link de acesso).
     if (!known) {
-      this.users.set(normalizeEmail(member.email), {
-        authUserId: member.authUserId,
-        email: normalizeEmail(member.email),
+      this.users.set(identity.email, {
+        authUserId,
+        email: identity.email,
         emailConfirmed: true,
         hasPassword: true,
       });
@@ -129,7 +132,10 @@ export class MockAuthProvider implements IAccountAuthProvider {
       if (!email.includes('@')) return null;
       const known = this.users.get(email);
       if (known) known.emailConfirmed = true;
-      return { authUserId: known?.authUserId ?? randomUUID(), email };
+      // Processo reiniciado entre o signup e o clique: a "conta" sumiu da memória, mas o
+      // member provisionado guarda o `auth_user_id` (o real o teria no GoTrue).
+      const authUserId = known?.authUserId ?? (await findPersonByEmail(email)) ?? randomUUID();
+      return { authUserId, email };
     } catch {
       return null;
     }
@@ -215,6 +221,28 @@ export class MockAuthProvider implements IAccountAuthProvider {
     this.outbox.push(mail);
     if (this.outbox.length > OUTBOX_LIMIT) this.outbox.shift();
   }
+}
+
+/**
+ * O `auth_user_id` da pessoa com este email — o papel do diretório de usuários do GoTrue,
+ * que o mock não tem. Linhas `members` da mesma pessoa compartilham o `auth_user_id`;
+ * havendo mais de um (resto de convite antigo com id aleatório), vence o de linha
+ * `active`, depois a empresa usada por último. Só identifica a pessoa: nunca decide
+ * empresa nem membership (isso é da sessão, por `auth_user_id`).
+ */
+async function findPersonByEmail(email: string): Promise<string | null> {
+  const { members } = schema;
+  const [row] = await getDb()
+    .select({ authUserId: members.authUserId })
+    .from(members)
+    .where(eq(members.email, normalizeEmail(email)))
+    .orderBy(
+      sql`(${members.status} = 'active') desc`,
+      sql`${members.lastActiveAt} desc nulls last`,
+      asc(members.createdAt),
+    )
+    .limit(1);
+  return row?.authUserId ?? null;
 }
 
 function normalizeEmail(email: string): string {
