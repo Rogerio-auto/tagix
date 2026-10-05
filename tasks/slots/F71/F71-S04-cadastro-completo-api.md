@@ -2,7 +2,7 @@
 id: F71-S04
 title: Cadastro sem beco sem saída — reenviar confirmação, login diz "confirme seu email", aceite de termos
 phase: F71
-status: blocked
+status: in-progress
 priority: high
 estimated_size: S
 depends_on: [F71-S02, F71-S03]
@@ -10,6 +10,9 @@ blocks: [F71-S09]
 source_docs:
   - docs/features/CONTAS_E_CONVITES.md
   - docs/features/SELF_SERVE_SIGNUP.md
+agent_id: backend-engineer
+claimed_at: 2026-10-05T17:07:09Z
+
 ---
 # F71-S04 — Cadastro completo (API)
 
