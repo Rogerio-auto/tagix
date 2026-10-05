@@ -2,7 +2,7 @@
 id: F71-S01
 title: Schema de convites, membership por pessoa e trial de 15 dias no provisionador
 phase: F71
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: []
@@ -10,6 +10,9 @@ blocks: [F71-S03, F71-S05, F71-S06]
 source_docs:
   - docs/features/CONTAS_E_CONVITES.md
   - docs/features/PERMISSIONS.md
+agent_id: backend-engineer
+claimed_at: 2026-10-05T16:01:11Z
+
 ---
 # F71-S01 — Schema de convites, membership por pessoa e trial de 15 dias no provisionador
 

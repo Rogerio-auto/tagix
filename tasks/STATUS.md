@@ -57,7 +57,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F70   | 35     | 2   | 2   | 0   | 0   | 2   | 29   |
-| F71   | 10     | 2   | 8   | 0   | 0   | 0   | 0   |
+| F71   | 10     | 1   | 8   | 0   | 1   | 0   | 0   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -804,18 +804,18 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 71
 
-| ID      | Titulo                                                                                                         | Status      | Prioridade | Depende de                |
-| ------- | -------------------------------------------------------------------------------------------------------------- | ----------- | ---------- | ------------------------- |
-| F71-S01 | Schema de convites, membership por pessoa e trial de 15 dias no provisionador                                  | 🟢 available | critical   | —                         |
-| F71-S02 | Provider de auth envia convite, define senha e acha usuário por email exato; runbook dos templates do Supabase | 🟢 available | critical   | —                         |
-| F71-S03 | Sessão por pessoa e empresa ativa — troca de empresa, login escolhe a última usada                             | ⏸️ blocked  | critical   | F71-S01, F71-S02          |
-| F71-S04 | Cadastro sem beco sem saída — reenviar confirmação, login diz "confirme seu email", aceite de termos           | ⏸️ blocked  | high       | F71-S02, F71-S03          |
-| F71-S05 | Convite de verdade — criar, enviar, reenviar, revogar, copiar link e aceitar, com limite de membros            | ⏸️ blocked  | critical   | F71-S01, F71-S02, F71-S03 |
-| F71-S06 | Trial expira em 15 dias e empresa sem assinatura ativa fica só leitura                                         | ⏸️ blocked  | high       | F71-S01, F71-S03          |
-| F71-S07 | Tela de aceitar convite e gestão de membros com convites pendentes                                             | ⏸️ blocked  | high       | F71-S05                   |
-| F71-S08 | Seletor de empresa no shell e aviso de trial, convite pendente e modo só leitura                               | ⏸️ blocked  | high       | F71-S03, F71-S06          |
-| F71-S09 | Telas de cadastro sem beco sem saída — reenviar confirmação, login de não confirmado e aceite de termos        | ⏸️ blocked  | high       | F71-S04                   |
-| F71-S10 | Auditoria de segurança da F71 e teste do fluxo inteiro de contas                                               | ⏸️ blocked  | high       | F71-S07, F71-S08, F71-S09 |
+| ID      | Titulo                                                                                                         | Status        | Prioridade | Depende de                |
+| ------- | -------------------------------------------------------------------------------------------------------------- | ------------- | ---------- | ------------------------- |
+| F71-S01 | Schema de convites, membership por pessoa e trial de 15 dias no provisionador                                  | 🔵 in-progress | critical   | —                         |
+| F71-S02 | Provider de auth envia convite, define senha e acha usuário por email exato; runbook dos templates do Supabase | 🟢 available   | critical   | —                         |
+| F71-S03 | Sessão por pessoa e empresa ativa — troca de empresa, login escolhe a última usada                             | ⏸️ blocked    | critical   | F71-S01, F71-S02          |
+| F71-S04 | Cadastro sem beco sem saída — reenviar confirmação, login diz "confirme seu email", aceite de termos           | ⏸️ blocked    | high       | F71-S02, F71-S03          |
+| F71-S05 | Convite de verdade — criar, enviar, reenviar, revogar, copiar link e aceitar, com limite de membros            | ⏸️ blocked    | critical   | F71-S01, F71-S02, F71-S03 |
+| F71-S06 | Trial expira em 15 dias e empresa sem assinatura ativa fica só leitura                                         | ⏸️ blocked    | high       | F71-S01, F71-S03          |
+| F71-S07 | Tela de aceitar convite e gestão de membros com convites pendentes                                             | ⏸️ blocked    | high       | F71-S05                   |
+| F71-S08 | Seletor de empresa no shell e aviso de trial, convite pendente e modo só leitura                               | ⏸️ blocked    | high       | F71-S03, F71-S06          |
+| F71-S09 | Telas de cadastro sem beco sem saída — reenviar confirmação, login de não confirmado e aceite de termos        | ⏸️ blocked    | high       | F71-S04                   |
+| F71-S10 | Auditoria de segurança da F71 e teste do fluxo inteiro de contas                                               | ⏸️ blocked    | high       | F71-S07, F71-S08, F71-S09 |
 
 ## Fase 8 — Permissions & Settings
 
