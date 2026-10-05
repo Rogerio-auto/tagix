@@ -922,3 +922,11 @@ A liberação é só `atendimento-humano`. Etiqueta de conversão não entra nun
 
 - **Onda 1 despachada:** F71-S01 (db-engineer, `packages/db/**`) ‖ F71-S02 (backend-engineer, `packages/shared/src/auth/**` + provider em `apps/api/src/auth/{supabase,mock}-provider.ts`, `provider.ts` + runbook). Paths disjuntos. Workers escrevem na mesma árvore (sem git); integração 1 por vez via stash por slot → claim → validate → finish → merge --no-ff → done.
 - Regra da fase: só a S01 toca `packages/db/**`. Qualquer necessidade de banco em S02–S10 volta para cá.
+
+### F71 — Orchestrator — onda 1 integrada (2026-10-05)
+
+- **Incidente de despacho:** a primeira leva da onda 1 foi em background e um redespacho em primeiro plano rodou junto; por alguns minutos houve 2 workers por slot na mesma árvore. Os de background detectaram e pararam; o estado final é do worker de primeiro plano, revisado no diff antes do merge (sem colunas duplicadas). Daqui em diante: workers só em primeiro plano.
+- **F71-S01 done** (merge f2369855). Backfill do trial no dev atingiu 8 empresas de teste; query de prévia para produção nas Notas de execução do slot. PENDÊNCIA HUMANA: Rogério roda a query em produção e estende as empresas reais antes do deploy.
+- **F71-S02 done.** Desvio de files_allowed autorizado pelo orchestrator: `apps/api/src/routes/members/me.ts` + `me-password.test.ts` (dono: S03, ainda não iniciada). Motivo: o novo `updatePassword(authUserId)` quebrava o typecheck e, em runtime, a rota passaria o email no lugar do id. Correção: chamada tipada com `authUserId`, `false` → 502 `password_update_failed`. A S03 herda o arquivo já corrigido (item "fim do 501" do escopo dela já está feito).
+- PENDÊNCIA HUMANA: aplicar `docs/runbooks/supabase-auth-emails.md` no painel do Supabase de produção (SMTP próprio, Redirect URLs, 4 templates) e conferir `AUTH_EMAIL_REDIRECT_URL`/`SUPABASE_SERVICE_KEY` na API.
+- **Onda 2 despachada:** F71-S03 (backend-engineer).

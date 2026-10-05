@@ -2,7 +2,7 @@
 id: F71-S02
 title: Provider de auth envia convite, define senha e acha usuário por email exato; runbook dos templates do Supabase
 phase: F71
-status: review
+status: done
 priority: critical
 estimated_size: S
 depends_on: []
