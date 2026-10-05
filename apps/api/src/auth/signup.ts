@@ -4,15 +4,20 @@
  * provider (email NÃO confirmado) → provisionamento do workspace (sem platform
  * admin) com rollback se o tenant falhar. SEM auto-login. Resposta uniforme.
  *
- * Anti-enumeração (T3): a resposta e o caminho de tempo são uniformes — email já
- * existente, descartável ou novo retornam o MESMO 202. O trabalho condicional fica
- * atrás de uma resposta constante, sem sinal observável.
+ * Anti-enumeração (T3): a resposta e o tempo são uniformes — email já existente,
+ * descartável ou novo retornam o MESMO 202, no MESMO piso de tempo
+ * (`runWithUniformTiming`); o trabalho condicional (criar, provisionar, reenviar a
+ * confirmação) não deixa sinal observável.
+ *
+ * F71-S04: aceite de termos obrigatório (gravado no OWNER, LGPD — A7) e signup repetido
+ * de conta ainda não confirmada reenvia a confirmação (A2).
  */
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { provisionWorkspaceWithOwner } from '@hm/db';
 import { AuthError } from '@hm/shared';
 import { getAuthProvider } from './provider';
+import { resendVerificationIfPending, runWithUniformTiming } from './resend';
 import { auditAuthEvent } from '../middlewares/rate-limit';
 import { DISPOSABLE_EMAIL_DOMAINS } from './disposable-domains';
 
@@ -24,6 +29,19 @@ export const strongPassword = z
   .refine((v) => /[a-zA-Z]/.test(v) && /[0-9]/.test(v), {
     message: 'Use letras e números na senha.',
   });
+
+/**
+ * Versão do texto aceito = data de "Atualizados em" de `/termos` e `/privacidade`, em
+ * `AAAA-MM-DD` (hoje `2026-09-14`). Data de calendário válida; nada além disso.
+ */
+export const termsVersionSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Versão dos termos inválida.')
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, 'Versão dos termos inválida.');
 
 /** Zod STRICT: rejeita campos extras (T9 — sem workspaceId/role/isPlatformAdmin do body). */
 export const signupSchema = z
@@ -37,6 +55,10 @@ export const signupSchema = z
     // o provisioner valida contra o catálogo e só grava se for plano pago existente.
     // Nunca libera plano pago aqui; o checkout acontece pós-login (com pagamento).
     plan: z.string().trim().toLowerCase().max(40).optional(),
+    // Aceite dos Termos de uso e da Política de privacidade (LGPD). Só `true` passa:
+    // ausente ou `false` → 400, nada é criado.
+    acceptTerms: z.literal(true),
+    termsVersion: termsVersionSchema,
   })
   .strict();
 
@@ -59,7 +81,10 @@ export async function performSignup(input: SignupInput, req: Request): Promise<v
   // Email descartável: trata como sucesso uniforme (não revela a política — T3),
   // mas NÃO provisiona nada.
   if (isDisposable(input.email)) {
-    await auditAuthEvent('auth.signup', req, { email: input.email, outcome: 'rejected_disposable' });
+    await auditAuthEvent('auth.signup', req, {
+      email: input.email,
+      outcome: 'rejected_disposable',
+    });
     return;
   }
 
@@ -83,6 +108,9 @@ export async function performSignup(input: SignupInput, req: Request): Promise<v
     return;
   }
 
+  // O aceite vale a partir de agora (servidor), nunca de um horário vindo do cliente.
+  const termsAcceptedAt = new Date();
+
   // Provisiona o tenant — IDEMPOTENTE (o provisioner ancora por email). Roda tanto para
   // cadastro novo (created:true) quanto para usuário já existente (created:false). Isso
   // FECHA a armadilha do órfão (#3): se um signup anterior criou o usuário no provider
@@ -96,6 +124,8 @@ export async function performSignup(input: SignupInput, req: Request): Promise<v
       authUserId: signUp.authUserId,
       workspaceName: input.workspaceName,
       pendingPlanKey: input.plan,
+      termsAcceptedAt,
+      termsVersion: input.termsVersion,
     });
     await auditAuthEvent('auth.signup', req, {
       email: input.email,
@@ -114,9 +144,32 @@ export async function performSignup(input: SignupInput, req: Request): Promise<v
       error: err instanceof Error ? err.message : String(err),
     });
   }
+
+  // Signup repetido (A2): a conta já existia. Se ainda não confirmou o email, quem está
+  // tentando de novo provavelmente perdeu o link — reenvia. Conta confirmada ou criada
+  // por convite: nada. Fica dentro do piso de tempo, então a resposta não muda.
+  if (!signUp.created) {
+    try {
+      const outcome = await resendVerificationIfPending(input.email);
+      if (outcome === 'sent') {
+        await auditAuthEvent('auth.verification_resent', req, {
+          email: input.email,
+          outcome,
+          via: 'signup',
+        });
+      }
+    } catch (err) {
+      await auditAuthEvent('auth.verification_resent', req, {
+        email: input.email,
+        outcome: 'provider_error',
+        via: 'signup',
+        code: err instanceof AuthError ? err.code : 'unknown',
+      });
+    }
+  }
 }
 
-/** Handler HTTP: valida, executa em tempo ~uniforme e responde 202 constante. */
+/** Handler HTTP: valida, executa no piso de tempo uniforme e responde 202 constante. */
 export async function signupHandler(req: Request, res: Response): Promise<void> {
   const parsed = signupSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -125,6 +178,7 @@ export async function signupHandler(req: Request, res: Response): Promise<void> 
     res.status(400).json({ message: 'Dados inválidos. Confira os campos e tente de novo.' });
     return;
   }
-  await performSignup(parsed.data, req);
+  const input = parsed.data;
+  await runWithUniformTiming('auth.signup', () => performSignup(input, req));
   res.status(202).json(UNIFORM_RESPONSE);
 }

@@ -25,6 +25,7 @@ import {
   type SessionContext,
 } from './session';
 import { signupHandler } from './signup';
+import { resendLimiters, resendVerificationHandler } from './resend';
 import { resetHandler, verifyHandler, confirmResetHandler } from './reset';
 import { loginCaptchaRequired, recordLoginFailure } from './login-captcha';
 import { auditAuthEvent, rateLimit, verifyTurnstile, clientIp } from '../middlewares/rate-limit';
@@ -128,6 +129,20 @@ export function createAuthRouter(): Router {
         pendingPlanKey,
       });
     } catch (err) {
+      if (err instanceof AuthError && err.code === 'email_unverified') {
+        // A3 (F71-S04): o provider só diz "não confirmado" DEPOIS de aceitar a senha, então
+        // isto não enumera contas (senha errada cai em invalid_credentials abaixo). Não é
+        // falha de credencial: NÃO alimenta o captcha progressivo do IP.
+        await auditAuthEvent('auth.login_failed', req, {
+          email: parsed.data.email,
+          reason: 'email_unverified',
+        });
+        res.status(403).json({
+          error: 'email_unverified',
+          message: 'Confirme seu email para entrar.',
+        });
+        return;
+      }
       if (err instanceof AuthError) {
         // T10: trilha de login falho (sem senha). Email no metadata p/ correlação.
         // SEC-05: alimenta o contador que arma o captcha progressivo do IP.
@@ -156,6 +171,9 @@ export function createAuthRouter(): Router {
     await signupHandler(req, res);
   });
 
+  // Reenvio da confirmação de cadastro (F71-S04). Limites, captcha e resposta/tempo
+  // uniformes ficam em `./resend`.
+  router.post('/auth/resend-verification', ...resendLimiters, resendVerificationHandler);
   router.post('/auth/reset', resetLimiter, resetHandler);
   router.post('/auth/reset/confirm', resetConfirmLimiter, confirmResetHandler);
   router.post('/auth/verify', verifyLimiter, verifyHandler);
