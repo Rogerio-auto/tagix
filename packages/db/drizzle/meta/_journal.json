@@ -659,6 +659,13 @@
       "when": 1781452854000,
       "tag": "0093_f70_workspace_ai_origin_lock",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1781452855000,
+      "tag": "0094_f71_member_invites",
+      "breakpoints": true
     }
   ]
 }

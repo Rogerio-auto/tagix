@@ -39,6 +39,11 @@ export const membersRepo = {
       .where(and(eq(members.workspaceId, workspaceId), eq(members.authUserId, authUserId)));
     return row ?? null;
   },
+  /**
+   * @deprecated F71-S01: não filtra por empresa — quem está em várias empresas cai numa linha
+   * qualquer, em qualquer status. Use `membershipsRepo.listActiveByAuthUser` /
+   * `membershipsRepo.findActive` (membership por `auth_user_id`). Consumidores migram na F71-S03.
+   */
   async findByEmail(email: string) {
     const [row] = await getDb().select().from(members).where(eq(members.email, email));
     return row ?? null;

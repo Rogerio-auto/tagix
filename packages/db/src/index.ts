@@ -23,6 +23,26 @@ export { encryptSecret, decryptSecret } from './crypto';
 export * as schema from './schema';
 export { RLS_TABLES } from './schema';
 export { workspacesRepo, membersRepo } from './repos';
+// Convites de membros e membership por pessoa (F71-S01).
+export {
+  invitesRepo,
+  generateInviteToken,
+  hashInviteToken,
+  isInvitableRole,
+  InviteAcceptConflictError,
+  INVITE_TTL_DAYS,
+  type MemberInviteView,
+  type CreateInviteInput,
+  type CreateInviteResult,
+  type InviteLookup,
+  type PendingInviteForEmail,
+  type AcceptInviteInput,
+  type AcceptInviteResult,
+  type ResendInviteResult,
+} from './repos/member-invites';
+export { membershipsRepo, type ActiveMembership } from './repos/memberships';
+export { INVITABLE_ROLES } from './schema/member_invites';
+export type { InvitableRole, MemberInvite } from './schema/member_invites';
 export { paymentEventsRepo } from './repos/payment-events';
 export type { PaymentEvent, NewPaymentEvent } from './schema/billing';
 export type {
@@ -100,6 +120,7 @@ export { instantiateNicheBlueprint } from './seed/niches/instantiate';
 // + subscription trial free, idempotente. Caminho privilegiado isolado.
 export {
   provisionWorkspaceWithOwner,
+  TRIAL_DAYS,
   type ProvisionWorkspaceInput,
   type ProvisionWorkspaceResult,
   slugifyWorkspaceName,
