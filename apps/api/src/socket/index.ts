@@ -1,10 +1,17 @@
 import type { Server as HttpServer } from 'node:http';
-import { Server, type DefaultEventsMap } from 'socket.io';
+import { Server, type DefaultEventsMap, type ExtendedError, type Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { eq } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
-import { SESSION_COOKIE, resolveSessionStatus, type SessionContext } from '../auth';
+import {
+  SESSION_COOKIE,
+  preferredWorkspaceFromHeader,
+  readCookieFromHeader,
+  resolveSessionStatus,
+  type SessionContext,
+  type SessionResolution,
+} from '../auth';
 import { loadConfig } from '../config';
 import { startSocketRelay } from './relay';
 import { wireSupportRealtime } from '../services/support-realtime';
@@ -21,14 +28,7 @@ interface SocketData {
 
 type IoServer = Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, SocketData>;
 
-function parseCookie(header: string, name: string): string | null {
-  for (const part of header.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq === -1) continue;
-    if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1).trim());
-  }
-  return null;
-}
+type IoSocket = Socket<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, SocketData>;
 
 /**
  * Mensagem do `connect_error` do handshake — contrato com o `SocketProvider` do web
@@ -37,6 +37,55 @@ function parseCookie(header: string, name: string): string | null {
  */
 export function handshakeErrorMessage(kind: 'invalid' | 'unavailable'): string {
   return kind === 'invalid' ? 'unauthorized' : 'auth_unavailable';
+}
+
+/**
+ * Resolve a sessão do handshake a partir do header `Cookie` cru, com as MESMAS regras da
+ * API: `hm_session` + empresa ativa `hm_workspace` revalidada contra membership `active`
+ * do `auth_user_id` (F71-S03). Cookie de empresa inválida é ignorado (cai na padrão).
+ */
+export async function resolveHandshakeSession(
+  cookieHeader: string | undefined,
+): Promise<SessionResolution> {
+  const token = readCookieFromHeader(cookieHeader, SESSION_COOKIE);
+  if (!token) return { kind: 'invalid' };
+  return resolveSessionStatus(token, preferredWorkspaceFromHeader(cookieHeader));
+}
+
+/** Rooms em que o socket entra: a empresa ATIVA da sessão e o próprio membro. */
+export function sessionRooms(session: SessionContext): [string, string] {
+  return [`ws:${session.workspace.id}`, `member:${session.member.id}`];
+}
+
+/**
+ * Middleware de handshake (`io.use`): sem sessão, recusa com a mensagem do contrato
+ * (`handshakeErrorMessage`); com sessão, a anexa em `socket.data.session`.
+ */
+export function handshakeAuth(socket: IoSocket, next: (err?: ExtendedError) => void): void {
+  void (async () => {
+    const cookieHeader = socket.handshake.headers.cookie;
+    const result = await resolveHandshakeSession(cookieHeader);
+    if (result.kind !== 'ok') {
+      socketLog.warn('handshake unauthorized', {
+        hasCookieHeader: Boolean(cookieHeader),
+        hasSessionCookie: readCookieFromHeader(cookieHeader, SESSION_COOKIE) !== null,
+        reason: result.kind,
+        url: socket.handshake.url,
+        transport: socket.conn.transport.name,
+      });
+      // F70-S28: o cliente só volta ao login em `unauthorized` (sessão morta).
+      // `auth_unavailable` (provider fora do ar) ele trata como falha temporária e
+      // tenta de novo com backoff — nunca desloga por instabilidade de infra.
+      next(new Error(handshakeErrorMessage(result.kind)));
+      return;
+    }
+    socket.data.session = result.session;
+    next();
+  })().catch((err: unknown) => {
+    // Falha inesperada (ex.: banco fora): recusa como temporária, sem deslogar.
+    socketLog.error('handshake falhou', { err: err instanceof Error ? err.message : String(err) });
+    next(new Error(handshakeErrorMessage('unavailable')));
+  });
 }
 
 /**
@@ -62,28 +111,7 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
   // F38: liga o seam de eventos de suporte ao emit em processo (rooms support:*).
   wireSupportRealtime(io);
 
-  io.use((socket, next) => {
-    void (async () => {
-      const token = parseCookie(socket.handshake.headers.cookie ?? '', SESSION_COOKIE);
-      const result = token ? await resolveSessionStatus(token) : ({ kind: 'invalid' } as const);
-      if (result.kind !== 'ok') {
-        socketLog.warn('handshake unauthorized', {
-          hasCookieHeader: Boolean(socket.handshake.headers.cookie),
-          hasSessionCookie: token !== null,
-          reason: result.kind,
-          url: socket.handshake.url,
-          transport: socket.conn.transport.name,
-        });
-        // F70-S28: o cliente só volta ao login em `unauthorized` (sessão morta).
-        // `auth_unavailable` (provider fora do ar) ele trata como falha temporária e
-        // tenta de novo com backoff — nunca desloga por instabilidade de infra.
-        next(new Error(handshakeErrorMessage(result.kind)));
-        return;
-      }
-      socket.data.session = result.session;
-      next();
-    })();
-  });
+  io.use(handshakeAuth);
 
   io.on('connection', (socket) => {
     const session = socket.data.session;
@@ -91,8 +119,9 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
       socket.disconnect(true);
       return;
     }
-    const wsRoom = `ws:${session.workspace.id}`;
-    socket.join([wsRoom, `member:${session.member.id}`]);
+    const rooms = sessionRooms(session);
+    const [wsRoom] = rooms;
+    socket.join(rooms);
     io.to(wsRoom).emit('member:online', { memberId: session.member.id });
     socketLog.info('socket conectado', {
       memberId: session.member.id,

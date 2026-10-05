@@ -23,7 +23,13 @@ import { schema } from '@hm/db';
 import { AuthError } from '@hm/shared';
 import { requireAuth, withRLS } from '../../middlewares/auth';
 import { getAuthProvider } from '../../auth/provider';
-import { clearSessionCookie, publicMember, readToken } from '../../auth/session';
+import {
+  clearActiveWorkspaceCookie,
+  clearSessionCookie,
+  publicMember,
+  readToken,
+} from '../../auth/session';
+import { createMemberSubrouters } from './index';
 
 const { members } = schema;
 
@@ -108,7 +114,9 @@ export function createMembersMeRouter(): Router {
       await provider.signIn({ email, password: currentPassword });
     } catch (err) {
       if (err instanceof AuthError) {
-        res.status(401).json({ error: 'invalid_current_password', message: 'Senha atual incorreta.' });
+        res
+          .status(401)
+          .json({ error: 'invalid_current_password', message: 'Senha atual incorreta.' });
         return;
       }
       throw err;
@@ -156,8 +164,12 @@ export function createMembersMeRouter(): Router {
       await getAuthProvider().signOut(token);
     }
     clearSessionCookie(res);
+    clearActiveWorkspaceCookie(res);
     res.sendStatus(204);
   });
+
+  // Sub-routers pessoais (ponto de montagem em ./index.ts).
+  router.use(createMemberSubrouters());
 
   return router;
 }

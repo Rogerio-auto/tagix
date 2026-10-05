@@ -4,9 +4,10 @@
  */
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { getDb, schema } from '@hm/db';
 import { getAuthProvider } from './provider';
+import { isUuid } from './session';
 import { strongPassword } from './signup';
 import { auditAuthEvent } from '../middlewares/rate-limit';
 
@@ -35,9 +36,15 @@ export async function resetHandler(req: Request, res: Response): Promise<void> {
 
 /**
  * POST /auth/verify — confirma o email a partir do token do link.
- * Em sucesso, promove o member de 'invited' → 'active' (libera o bloqueio duro: a
- * partir daqui resolveSession aceita a sessão). Token inválido → 400 uniforme.
- * NÃO faz auto-login: o usuário segue para /login.
+ * Em sucesso, promove a linha `invited` da PESSOA confirmada → `active` (libera o
+ * bloqueio duro: a partir daqui resolveSession aceita a sessão). Token inválido → 400
+ * uniforme. NÃO faz auto-login: o usuário segue para /login.
+ *
+ * A5/T6 (F71-S03): a promoção é por `auth_user_id`, NUNCA por email — antes, toda linha
+ * com o email era ativada, em qualquer empresa e status (reativava removido/bloqueado).
+ * Só a linha `invited`, OWNER, sem `invited_by` (o dono que o signup provisionou e que
+ * aguarda a confirmação) é promovida; `inactive`/`blocked` ficam como estão, e convite de
+ * outra empresa entra pelo aceite (`member_invites`), não por aqui.
  */
 export async function verifyHandler(req: Request, res: Response): Promise<void> {
   const parsed = verifySchema.safeParse(req.body);
@@ -51,13 +58,27 @@ export async function verifyHandler(req: Request, res: Response): Promise<void> 
     res.status(400).json({ message: 'Link inválido ou expirado.' });
     return;
   }
-  // Ativa o member correspondente (idempotente; sem elevar privilégio).
+  // Ativa SÓ o dono pendente desta pessoa (idempotente; sem elevar privilégio).
   const { members } = schema;
-  await getDb()
-    .update(members)
-    .set({ status: 'active', joinedAt: new Date() })
-    .where(eq(members.email, identity.email));
-  await auditAuthEvent('auth.verify', req, { email: identity.email, outcome: 'verified' });
+  const promoted = isUuid(identity.authUserId)
+    ? await getDb()
+        .update(members)
+        .set({ status: 'active', joinedAt: new Date() })
+        .where(
+          and(
+            eq(members.authUserId, identity.authUserId),
+            eq(members.status, 'invited'),
+            eq(members.role, 'OWNER'),
+            isNull(members.invitedBy),
+          ),
+        )
+        .returning({ id: members.id })
+    : [];
+  await auditAuthEvent('auth.verify', req, {
+    email: identity.email,
+    outcome: 'verified',
+    promoted: promoted.length,
+  });
   res.status(200).json({ ok: true });
 }
 
