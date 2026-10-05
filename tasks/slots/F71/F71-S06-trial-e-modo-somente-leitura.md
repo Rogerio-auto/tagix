@@ -2,7 +2,7 @@
 id: F71-S06
 title: Trial expira em 15 dias e empresa sem assinatura ativa fica só leitura
 phase: F71
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F71-S01, F71-S03]
@@ -10,6 +10,9 @@ blocks: [F71-S08]
 source_docs:
   - docs/features/CONTAS_E_CONVITES.md
   - docs/features/PLATFORM_TENANT_MANAGEMENT.md
+agent_id: backend-engineer
+claimed_at: 2026-10-05T17:08:21Z
+
 ---
 # F71-S06 — Trial e modo só leitura
 
