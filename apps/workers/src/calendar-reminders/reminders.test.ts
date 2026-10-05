@@ -50,6 +50,8 @@ function reminder(overrides: Partial<DueReminder> = {}): DueReminder {
 function ports(over: Partial<ReminderPorts> = {}): ReminderPorts {
   return {
     selectDue: vi.fn(async () => []),
+    // F71-S06: assinatura ativa por padrão; o caso inativo tem teste próprio.
+    checkSubscription: vi.fn(async () => ({ active: true as const, status: 'active' })),
     notifyOrganizer: vi.fn(async () => {}),
     sendContactReminder: vi.fn(async () => true),
     runDueAction: vi.fn(async () => {}),
@@ -168,6 +170,30 @@ describe('runReminderTick', () => {
     expect(res.notified).toBe(2); // 1440 + 60
     expect(res.whatsapp).toBe(2);
     expect(p.markReminded).toHaveBeenCalledWith('ev-1', 'ws-1', [1440, 60]);
+  });
+
+  it('F71-S06: assinatura inativa → organizador avisado no app, nada ao contato, ação não roda, marcas gravadas', async () => {
+    const check = vi.fn(async () => ({ active: false as const, status: 'expired' }));
+    const p = ports({
+      selectDue: vi.fn(async () => [
+        reminder({ startAt: new Date('2099-01-05T12:00:00Z'), dueAction: { kind: 'add_tag', tagId: '00000000-0000-0000-0000-000000000001' } }),
+        reminder({ eventId: 'ev-2' }),
+      ]),
+      checkSubscription: check,
+    });
+    const deps: ReminderDeps = { redis: fakeRedis(true), logger, ports: p };
+    const res = await runReminderTick(deps, { now, offsets: [60] });
+
+    expect(res.skippedSubscriptionInactive).toBe(2);
+    expect(res.whatsapp).toBe(0);
+    expect(res.actions).toBe(0);
+    expect(p.sendContactReminder).not.toHaveBeenCalled();
+    expect(p.runDueAction).not.toHaveBeenCalled();
+    expect(p.notifyOrganizer).toHaveBeenCalled();
+    expect(p.markReminded).toHaveBeenCalledWith('ev-1', 'ws-1', [60]);
+    expect(p.markDueActionDone).toHaveBeenCalledWith('ev-1', 'ws-1');
+    // Memo por tick: duas linhas da mesma empresa = uma leitura.
+    expect(check).toHaveBeenCalledTimes(1);
   });
 
   it('idempotente: offsets já enviados não re-disparam', async () => {

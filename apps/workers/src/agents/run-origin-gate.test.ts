@@ -17,6 +17,7 @@ import { closeDb, getDb, schema } from '@hm/db';
 import type { AgentStreamEvent } from '@hm/agents-client';
 import type { ConversationOriginValue } from '@hm/shared';
 import { authorizeAiReply, DbAgentRunStore, runAgent, type AgentRunDeps } from './run';
+import { subscriptionGate } from '../lib/subscription-gate';
 
 const url = process.env['DATABASE_URL'];
 
@@ -139,6 +140,8 @@ describe.skipIf(!url)('worker de agentes — trava de origem e marca humana (DB,
       cancel: vi.fn(),
     } as unknown as AgentRunDeps['client'],
     logger: logger as unknown as AgentRunDeps['logger'],
+    // F71-S06: portão real — as empresas destes testes estão em trial sem data (ativas).
+    subscription: subscriptionGate,
   };
 
   async function newConversation(

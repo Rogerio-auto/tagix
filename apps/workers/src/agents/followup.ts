@@ -59,6 +59,11 @@ import { sql } from 'drizzle-orm';
 import { enqueueOutbox, getDb, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import {
+  recordSubscriptionSkip,
+  subscriptionGate,
+  type SubscriptionGate,
+} from '../lib/subscription-gate';
+import {
   AGENT_RUN_REQUESTED_TYPE,
   agentRunJobOutbox,
   agentRunTriggerId,
@@ -321,6 +326,8 @@ export interface FollowupDeps {
   /** Cliente Redis (lock de scheduler + marca de idempotência). */
   readonly redis: RedisLike;
   readonly logger: Logger;
+  /** Portão de assinatura (F71-S06). Default: lê `workspaces` no tick. */
+  readonly subscription?: SubscriptionGate;
 }
 
 /** Opções do tick (instante de referência injetável p/ teste). */
@@ -341,6 +348,8 @@ export interface FollowupTickResult {
   readonly enqueued: number;
   /** Elegíveis puladas por já terem sido seguidas nesta janela (idempotência). */
   readonly skippedDuplicate: number;
+  /** Workspaces pulados por assinatura inativa (F71-S06): nenhum follow-up enfileirado. */
+  readonly skippedSubscriptionInactive: number;
 }
 
 /**
@@ -396,7 +405,13 @@ export async function runFollowupTick(
   const release = await acquireSchedulerLock(deps.redis, FOLLOWUP_LOCK_KEY, FOLLOWUP_LOCK_TTL_MS);
   if (release === null) {
     deps.logger.debug('followup: tick pulado — lock detido por outra instância');
-    return { ran: false, workspaces: 0, enqueued: 0, skippedDuplicate: 0 };
+    return {
+      ran: false,
+      workspaces: 0,
+      enqueued: 0,
+      skippedDuplicate: 0,
+      skippedSubscriptionInactive: 0,
+    };
   }
 
   try {
@@ -407,8 +422,18 @@ export async function runFollowupTick(
 
     let enqueued = 0;
     let skippedDuplicate = 0;
+    let skippedSubscriptionInactive = 0;
+    const gate = deps.subscription ?? subscriptionGate;
     for (const workspaceId of targets) {
       try {
+        // F71-S06: empresa sem assinatura ativa não recebe follow-up. Antes da marca de
+        // idempotência: quando a assinatura voltar, a janela ainda está livre.
+        const subscription = await gate.check(workspaceId);
+        if (!subscription.active) {
+          skippedSubscriptionInactive += 1;
+          recordSubscriptionSkip(deps.logger, 'agent-followup', workspaceId, subscription.status);
+          continue;
+        }
         const res = await tickWorkspace(workspaceId, deps, now);
         enqueued += res.enqueued;
         skippedDuplicate += res.skipped;
@@ -427,11 +452,13 @@ export async function runFollowupTick(
       workspaces: targets.length,
       enqueued,
       skippedDuplicate,
+      skippedSubscriptionInactive,
     };
     deps.logger.info('followup: tick concluído', {
       workspaces: result.workspaces,
       enqueued: result.enqueued,
       skippedDuplicate: result.skippedDuplicate,
+      skippedSubscriptionInactive: result.skippedSubscriptionInactive,
     });
     return result;
   } finally {

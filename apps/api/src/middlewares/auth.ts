@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { withWorkspace, type DbTx } from '@hm/db';
 import { can, type Permission, type Role } from '@hm/shared';
 import { readPreferredWorkspace, readToken, resolveSessionStatus } from '../auth';
+import { requireActiveSubscription } from './subscription-guard';
 
 /**
  * Exige sessão válida; popula `req.auth` (member + workspace). A empresa é a do cookie
@@ -40,7 +41,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   next();
 }
 
-/** Disponibiliza `req.scoped(fn)` — roda `fn` numa transação com RLS do workspace. */
+/**
+ * Disponibiliza `req.scoped(fn)` — roda `fn` numa transação com RLS do workspace.
+ *
+ * Também aplica o modo só leitura por assinatura (F71-S06): empresa `expired`/`canceled`
+ * recebe 402 em escrita, salvo as exceções de `subscription-guard.ts`. Fica aqui porque
+ * toda rota escopada por empresa passa por `withRLS` depois do `requireAuth` — uma guarda
+ * só cobre todas, sem depender de cada router lembrar dela.
+ */
 export function withRLS(req: Request, res: Response, next: NextFunction): void {
   if (!req.auth) {
     res.status(401).json({ message: 'Não autenticado.' });
@@ -48,7 +56,7 @@ export function withRLS(req: Request, res: Response, next: NextFunction): void {
   }
   const workspaceId = req.auth.workspace.id;
   req.scoped = <T>(fn: (tx: DbTx) => Promise<T>) => withWorkspace<T>(workspaceId, fn);
-  next();
+  requireActiveSubscription(req, res, next);
 }
 
 /** Autoriza pela matriz `can()`. Usar após `requireAuth`. */

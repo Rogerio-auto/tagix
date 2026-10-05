@@ -41,6 +41,13 @@ import { createFlowEngine, type FlowEngineApi } from '@hm/flow-engine';
 import type { Logger } from '@hm/logger';
 import { acquireSchedulerLock, type RedisLike } from '../flows/scheduler';
 import { queueContactTemplate, REMINDER_OUTBOUND_JOB_TYPE } from './contact-conversation';
+import {
+  memoizeSubscriptionGate,
+  recordSubscriptionSkip,
+  subscriptionGate,
+  type SubscriptionGate,
+  type SubscriptionGateDecision,
+} from '../lib/subscription-gate';
 
 type MqChannel = MqHandle['channel'];
 
@@ -229,6 +236,11 @@ export interface ReminderPorts {
   /** Eventos due na janela. */
   selectDue(now: Date, offsets: readonly number[], limit: number): Promise<DueReminder[]>;
   /**
+   * F71-S06 — a empresa pode disparar automações de saída agora? Lido do banco; o tick
+   * memoiza por empresa só durante a própria varredura.
+   */
+  checkSubscription(workspaceId: string): Promise<SubscriptionGateDecision>;
+  /**
    * Notifica o organizer em tempo real (socket relay → member/ws) + auditLog.
    * Best-effort: erro de socket não pode abortar o tick.
    */
@@ -255,6 +267,8 @@ export interface ReminderPorts {
 export interface ReminderDbDeps {
   readonly channel: MqChannel;
   readonly logger: Logger;
+  /** Portão de assinatura (F71-S06). Default: lê `workspaces`. */
+  readonly subscription?: SubscriptionGate;
 }
 
 /**
@@ -365,9 +379,14 @@ export function createReminderPorts(deps: ReminderDbDeps): ReminderPorts {
   // Engine de flows real: o primeiro step entra na outbox com a execução (F70-S25), então
   // não há publisher a injetar.
   const flowEngine: FlowEngineApi = createFlowEngine();
+  const subscription = deps.subscription ?? subscriptionGate;
 
   return {
     selectDue,
+
+    async checkSubscription(workspaceId) {
+      return subscription.check(workspaceId);
+    },
 
     async notifyOrganizer(reminder, offsetMin) {
       await withWorkspace(reminder.workspaceId, async (tx) => {
@@ -617,6 +636,8 @@ export interface ReminderTickResult {
   readonly notified: number;
   readonly whatsapp: number;
   readonly actions: number;
+  /** F71-S06: eventos cujo lembrete ao contato / ação de vencimento foi pulado (assinatura inativa). */
+  readonly skippedSubscriptionInactive: number;
 }
 
 export interface ReminderDeps {
@@ -639,7 +660,16 @@ export async function runReminderTick(
     CALENDAR_REMINDERS_LOCK_KEY,
     CALENDAR_REMINDERS_LOCK_TTL_MS,
   );
-  if (release === null) return { ran: false, events: 0, notified: 0, whatsapp: 0, actions: 0 };
+  if (release === null) {
+    return {
+      ran: false,
+      events: 0,
+      notified: 0,
+      whatsapp: 0,
+      actions: 0,
+      skippedSubscriptionInactive: 0,
+    };
+  }
 
   try {
     const candidates = await deps.ports.selectDue(now, offsets, limit);
@@ -647,11 +677,49 @@ export async function runReminderTick(
     let notified = 0;
     let whatsapp = 0;
     let actions = 0;
+    let skippedSubscriptionInactive = 0;
+    // F71-S06: uma leitura por empresa nesta varredura (nada sobrevive ao tick).
+    const gate = memoizeSubscriptionGate({ check: (ws) => deps.ports.checkSubscription(ws) });
 
     for (const reminder of candidates) {
       const due = dueOffsets(reminder, now, offsets);
       const actionPending = dueActionPending(reminder, now);
       if (due.length === 0 && !actionPending) continue;
+
+      // F71-S06: sem assinatura ativa, o organizador ainda é avisado no app (é a agenda
+      // dele, leitura), mas NADA sai para o contato e a ação de vencimento não roda. As
+      // marcas são gravadas igual: concluído, sem retry e sem rajada quando a assinatura
+      // voltar.
+      const subscription = await gate.check(reminder.workspaceId);
+      if (!subscription.active) {
+        for (const offsetMin of due) {
+          try {
+            await deps.ports.notifyOrganizer(reminder, offsetMin);
+            notified += 1;
+          } catch (err: unknown) {
+            deps.logger.error('calendar-reminders: notifyOrganizer falhou', {
+              eventId: reminder.eventId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+        if (due.length > 0) {
+          await deps.ports.markReminded(reminder.eventId, reminder.workspaceId, due);
+        }
+        if (actionPending) {
+          await deps.ports.markDueActionDone(reminder.eventId, reminder.workspaceId);
+        }
+        recordSubscriptionSkip(
+          deps.logger,
+          'calendar-reminder',
+          reminder.workspaceId,
+          subscription.status,
+          { eventId: reminder.eventId, offsets: due, dueActionSkipped: actionPending },
+        );
+        skippedSubscriptionInactive += 1;
+        touched += 1;
+        continue;
+      }
 
       for (const offsetMin of due) {
         try {
@@ -701,9 +769,15 @@ export async function runReminderTick(
     }
 
     if (touched > 0) {
-      deps.logger.info('calendar-reminders: tick', { events: touched, notified, whatsapp, actions });
+      deps.logger.info('calendar-reminders: tick', {
+        events: touched,
+        notified,
+        whatsapp,
+        actions,
+        skippedSubscriptionInactive,
+      });
     }
-    return { ran: true, events: touched, notified, whatsapp, actions };
+    return { ran: true, events: touched, notified, whatsapp, actions, skippedSubscriptionInactive };
   } finally {
     await release();
   }
