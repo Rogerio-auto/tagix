@@ -2,13 +2,16 @@
 id: F71-S03
 title: Sessão por pessoa e empresa ativa — troca de empresa, login escolhe a última usada
 phase: F71
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: M
 depends_on: [F71-S01, F71-S02]
 blocks: [F71-S04, F71-S05, F71-S06, F71-S08]
 source_docs:
   - docs/features/CONTAS_E_CONVITES.md
+agent_id: backend-engineer
+claimed_at: 2026-10-05T16:05:37Z
+
 ---
 # F71-S03 — Sessão por pessoa e empresa ativa
 
