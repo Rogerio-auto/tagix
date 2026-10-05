@@ -57,7 +57,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F70   | 35     | 2   | 2   | 0   | 0   | 2   | 29   |
-| F71   | 10     | 0   | 5   | 0   | 0   | 1   | 4   |
+| F71   | 10     | 0   | 5   | 0   | 0   | 0   | 5   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -811,7 +811,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F71-S03 | Sessão por pessoa e empresa ativa — troca de empresa, login escolhe a última usada                             | ✅ done     | critical   | F71-S01, F71-S02          |
 | F71-S04 | Cadastro sem beco sem saída — reenviar confirmação, login diz "confirme seu email", aceite de termos           | ✅ done     | high       | F71-S02, F71-S03          |
 | F71-S05 | Convite de verdade — criar, enviar, reenviar, revogar, copiar link e aceitar, com limite de membros            | ⏸️ blocked | critical   | F71-S01, F71-S02, F71-S03 |
-| F71-S06 | Trial expira em 15 dias e empresa sem assinatura ativa fica só leitura                                         | 🟣 review   | high       | F71-S01, F71-S03          |
+| F71-S06 | Trial expira em 15 dias e empresa sem assinatura ativa fica só leitura                                         | ✅ done     | high       | F71-S01, F71-S03          |
 | F71-S07 | Tela de aceitar convite e gestão de membros com convites pendentes                                             | ⏸️ blocked | high       | F71-S05                   |
 | F71-S08 | Seletor de empresa no shell e aviso de trial, convite pendente e modo só leitura                               | ⏸️ blocked | high       | F71-S03, F71-S06          |
 | F71-S09 | Telas de cadastro sem beco sem saída — reenviar confirmação, login de não confirmado e aceite de termos        | ⏸️ blocked | high       | F71-S04                   |

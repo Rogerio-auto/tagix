@@ -2,7 +2,7 @@
 id: F71-S06
 title: Trial expira em 15 dias e empresa sem assinatura ativa fica só leitura
 phase: F71
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F71-S01, F71-S03]
