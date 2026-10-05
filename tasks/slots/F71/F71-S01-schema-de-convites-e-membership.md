@@ -2,7 +2,7 @@
 id: F71-S01
 title: Schema de convites, membership por pessoa e trial de 15 dias no provisionador
 phase: F71
-status: in-progress
+status: review
 priority: critical
 estimated_size: M
 depends_on: []
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/PERMISSIONS.md
 agent_id: backend-engineer
 claimed_at: 2026-10-05T16:01:11Z
+completed_at: 2026-10-05T16:03:21Z
 
 ---
 # F71-S01 — Schema de convites, membership por pessoa e trial de 15 dias no provisionador
@@ -86,3 +87,50 @@ node --env-file=.env packages/db/node_modules/vitest/vitest.mjs run --root packa
 
 - Schema é sequencial: nenhum outro slot da F71 toca `packages/db/**`. Se S03–S06 precisarem de algo do banco, volta para cá ou abre slot próprio.
 - Agente: `db-engineer`.
+
+## Notas de execução
+
+### Backfill do trial no banco de dev (aplicado em 2026-10-05, migração 0094)
+
+Empresas em `trial` com `trial_ends_at` nulo antes da migração (todas recebem `now() + 15 dias`):
+
+| workspace | slug | criada em | `workspaces.trial_ends_at` | `subscriptions` |
+|---|---|---|---|---|
+| EvalIdem c5103c10 | evalidem-c5103c10 | 2026-09-09 | nulo | sem assinatura |
+| Eval 3144484e | eval-3144484e | 2026-09-09 | nulo | sem assinatura |
+| EvalIdem d4380490 | evalidem-d4380490 | 2026-09-09 | nulo | sem assinatura |
+| EvalFail 8fb1e798 | evalfail-8fb1e798 | 2026-09-09 | nulo | sem assinatura |
+| V1 A | v1a-265e0e73 | 2026-09-09 | nulo | sem assinatura |
+| Dev Workspace | dev | 2026-09-25 | nulo | trial, `trial_ends_at` nulo |
+| F69S03 | f69s03-2fedef1f | 2026-09-25 | nulo | sem assinatura |
+| F69S03-b | f69s03b-2fedef1f | 2026-09-25 | nulo | sem assinatura |
+
+Todas são dados de teste/dev. Convites antigos (`members` `invited` com `invited_by`) no dev: **0**.
+
+### Query para rodar em produção ANTES do deploy (só leitura)
+
+Empresas que o backfill atinge (passam a expirar em 15 dias a partir do deploy). Estender pelo
+painel (`PUT /api/platform/tenants/:id/subscription`) as que não podem expirar:
+
+```sql
+SELECT w.id, w.name, w.slug, w.created_at,
+       w.subscription_status, w.trial_ends_at AS ws_trial_ends_at,
+       s.status AS sub_status, s.trial_ends_at AS sub_trial_ends_at,
+       (SELECT count(*) FROM members m
+         WHERE m.workspace_id = w.id AND m.status = 'active') AS membros_ativos
+  FROM workspaces w
+  LEFT JOIN subscriptions s ON s.workspace_id = w.id
+ WHERE (w.subscription_status = 'trial' AND w.trial_ends_at IS NULL)
+    OR (s.status = 'trial' AND s.trial_ends_at IS NULL)
+ ORDER BY w.created_at;
+```
+
+Convites antigos que a migração move para `member_invites` (o admin precisa reenviar):
+
+```sql
+SELECT w.name AS empresa, m.email, m.role, m.invited_at
+  FROM members m
+  JOIN workspaces w ON w.id = m.workspace_id
+ WHERE m.status = 'invited' AND m.invited_by IS NOT NULL
+ ORDER BY w.name, m.invited_at;
+```

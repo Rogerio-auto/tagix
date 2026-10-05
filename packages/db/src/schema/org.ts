@@ -28,6 +28,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
@@ -51,6 +52,8 @@ export const departments = pgTable(
   },
   (t) => [
     index('idx_departments_workspace').on(t.workspaceId),
+    // Alvo da FK composta por workspace de `member_invites.department_id` (F71-S01, 0094).
+    uniqueIndex('uq_departments_workspace_id').on(t.workspaceId, t.id),
     unique('departments_workspace_name_uq').on(t.workspaceId, t.name),
     check('departments_is_active_chk', sql`${t.isActive} in ('active','archived')`),
   ],
