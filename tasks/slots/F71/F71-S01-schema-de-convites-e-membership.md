@@ -2,7 +2,7 @@
 id: F71-S01
 title: Schema de convites, membership por pessoa e trial de 15 dias no provisionador
 phase: F71
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: []
