@@ -2,7 +2,7 @@
 id: F71-S02
 title: Provider de auth envia convite, define senha e acha usuário por email exato; runbook dos templates do Supabase
 phase: F71
-status: available
+status: in-progress
 priority: critical
 estimated_size: S
 depends_on: []
@@ -10,6 +10,9 @@ blocks: [F71-S03, F71-S04, F71-S05]
 source_docs:
   - docs/features/CONTAS_E_CONVITES.md
   - docs/features/SELF_SERVE_SIGNUP.md
+agent_id: backend-engineer
+claimed_at: 2026-10-05T16:03:35Z
+
 ---
 # F71-S02 — Provider de auth: convite, senha, lookup exato e templates
 
