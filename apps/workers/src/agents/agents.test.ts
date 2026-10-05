@@ -100,6 +100,7 @@ import type {
 } from './run';
 import type { AgentStreamEvent } from '@hm/agents-client';
 import type { Envelope } from '@hm/shared/mq';
+import type { SubscriptionGate } from '../lib/subscription-gate';
 
 const WS = '00000000-0000-0000-0000-0000000000aa';
 const CONV = '00000000-0000-0000-0000-0000000000c1';
@@ -160,9 +161,19 @@ const logger = {
   }),
 };
 
+/** Portão de assinatura fake (F71-S06): ativo por padrão; `inactive` simula empresa expirada. */
+function fakeSubscription(active = true): SubscriptionGate & { check: ReturnType<typeof vi.fn> } {
+  return {
+    check: vi.fn(async () =>
+      active ? { active: true as const, status: 'active' } : { active: false as const, status: 'expired' },
+    ),
+  };
+}
+
 function makeDeps(
   store: AgentRunStore,
   run: (...args: unknown[]) => AsyncGenerator<AgentStreamEvent, void, unknown>,
+  subscription: SubscriptionGate = fakeSubscription(),
 ): {
   deps: AgentRunDeps;
   started: ReturnType<typeof vi.fn>;
@@ -178,6 +189,7 @@ function makeDeps(
       socket: { emitStarted: started, emitCompleted: completed },
       client: { run, health: vi.fn(), cancel: vi.fn() } as never,
       logger,
+      subscription,
     },
   };
 }
@@ -301,6 +313,24 @@ describe('runAgent — happy path', () => {
 
     expect(outcome).toEqual({ status: 'skipped', reason: 'no_context' });
     expect(runSpy).not.toHaveBeenCalled();
+  });
+
+  it('F71-S06: empresa com assinatura inativa → skip antes de ler a conversa; nada roda nem é enviado', async () => {
+    const s = makeStore(ctx());
+    const runSpy = vi.fn(() => gen([]));
+    const gate = fakeSubscription(false);
+    const { deps, started, completed } = makeDeps(s.store, runSpy, gate);
+
+    const outcome = await runAgent(WS, { conversationId: CONV, contactId: 'c1', channelId: 'ch1', provider: 'waha' }, deps);
+
+    expect(outcome).toEqual({ status: 'skipped', reason: 'subscription_inactive' });
+    expect(gate.check).toHaveBeenCalledWith(WS);
+    expect(s.store.loadContext).not.toHaveBeenCalled();
+    expect(runSpy).not.toHaveBeenCalled();
+    expect(started).not.toHaveBeenCalled();
+    expect(completed).not.toHaveBeenCalled();
+    expect(s.startExecution).not.toHaveBeenCalled();
+    expect(s.persistAgentMessage).not.toHaveBeenCalled();
   });
 
   it('pula quando ai_mode não está on', async () => {

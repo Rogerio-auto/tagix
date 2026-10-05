@@ -6,6 +6,8 @@
  * turno de resposta do agente:
  *
  * ```
+ * assinatura da empresa inativa (expired/canceled/trial vencido) → skip, nada é lido nem
+ *   enviado (F71-S06; ver `lib/subscription-gate.ts`)
  * load (RLS): conversa + agente ativo + texto do gatilho + histórico
  *   ai_mode != 'on' | sem agente ativo  → skip (no-op, ack)
  *   trava de origem do workspace ligada, origem não elegível e sem marca humana
@@ -61,6 +63,7 @@ import {
   type ToolDescriptorBuild,
 } from './tools';
 import type { AgentRunTrigger } from './worker';
+import { recordSubscriptionSkip, type SubscriptionGate } from '../lib/subscription-gate';
 
 /** Quantas mensagens recentes carregar como histórico para o runtime. */
 export const HISTORY_LIMIT = 20;
@@ -261,6 +264,11 @@ export interface AgentRunDeps {
   readonly socket: AgentRunSocketPort;
   readonly client: AgentsClient;
   readonly logger: Logger;
+  /**
+   * Portão de assinatura (F71-S06). Obrigatório de propósito: um caminho de produção que
+   * esquecesse de injetá-lo responderia por empresa sem assinatura ativa.
+   */
+  readonly subscription: SubscriptionGate;
 }
 
 // ─── Orquestração ─────────────────────────────────────────────────────────────
@@ -269,7 +277,12 @@ export interface AgentRunDeps {
 export type AgentRunOutcome =
   | {
       readonly status: 'skipped';
-      readonly reason: 'no_context' | 'ai_off' | 'agent_inactive' | 'origin_not_eligible';
+      readonly reason:
+        | 'no_context'
+        | 'ai_off'
+        | 'agent_inactive'
+        | 'origin_not_eligible'
+        | 'subscription_inactive';
     }
   | { readonly status: 'budget_denied'; readonly executionId: string }
   | { readonly status: 'runtime_blocked'; readonly executionId: string; readonly reason: string }
@@ -484,6 +497,17 @@ export async function runAgent(
   opts?: RunOptions,
 ): Promise<AgentRunOutcome> {
   const { store, socket, client, logger } = deps;
+
+  // F71-S06: empresa sem assinatura ativa não responde. Antes de qualquer leitura/escrita
+  // (o `loadContext` fixa o agente sticky): nenhuma execução, nenhum socket, nenhum envio.
+  // Retorna sem lançar → o envelope é ack'd, sem retry.
+  const subscription = await deps.subscription.check(workspaceId);
+  if (!subscription.active) {
+    recordSubscriptionSkip(logger, 'agent-run', workspaceId, subscription.status, {
+      conversationId: trigger.conversationId,
+    });
+    return { status: 'skipped', reason: 'subscription_inactive' };
+  }
 
   const ctx = await store.loadContext(workspaceId, trigger);
   if (ctx === null) {

@@ -32,11 +32,21 @@
  * `set_config('app.workspace_id', …)` por transação. Isso fecha o bug do GUC vazio que
  * quebrava schedulers cross-tenant: nunca tocamos linhas de tenant sem o GUC setado.
  *
+ * **Fim do trial (F71-S06, CONTAS_E_CONVITES §3.3):** no mesmo tick e sob o mesmo lock,
+ * empresas `trial` com `trial_ends_at <= now` passam a `expired` — `workspaces.subscription_status`
+ * (fonte da verdade da sessão e dos workers) e `subscriptions.status` da empresa, mais a
+ * auditoria `billing.trial_expired`, numa transação RLS. O UPDATE é condicional
+ * (`status = 'trial' and trial_ends_at <= now`): rodar de novo, ou correr contra uma
+ * extensão de trial feita pelo painel no mesmo instante, não faz nada (sem auditoria
+ * duplicada). A API já trata trial vencido como só leitura antes deste tick (ver
+ * `apps/api/src/middlewares/subscription-guard.ts`); aqui o status gravado passa a dizer a
+ * verdade para painel, métricas e UI.
+ *
  * **DI / testabilidade:** `provider` (`IPaymentProvider`), `db` (port de consulta/mutação)
  * e `clock` são injetados. Os testes da régua passam ports fake (sem Postgres/rede) e um
  * `now` fixo. O bootstrap injeta o provider real (factory por env) + o port de DB real.
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, lte, sql } from 'drizzle-orm';
 import { getDb, paymentEventsRepo, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
 import type {
@@ -48,6 +58,7 @@ import type {
 } from '@hm/payments';
 import type { Logger } from '@hm/logger';
 import { acquireSchedulerLock, type RedisLike } from '../flows/scheduler';
+import { recordTrialsExpired } from './metrics';
 
 const { subscriptions, plans, workspaces, members, auditLogs } = schema;
 
@@ -197,6 +208,23 @@ export interface BillingDbPort {
   transitionStatus(sub: PixSubscription, next: 'past_due' | 'canceled', reason: string, now: Date): Promise<void>;
   /** Finaliza um cancel-at-period-end: status `canceled`, `canceled_at`, audit (sob RLS). */
   finalizeCancellation(sub: PixSubscription, now: Date): Promise<void>;
+  /**
+   * F71-S06 — empresas em `trial` com `trial_ends_at <= now` (cross-tenant, owner-level: é o
+   * passo que ENUMERA tenants). `workspaceId` restringe a uma empresa (teste/operação).
+   */
+  listExpiredTrials(now: Date, limit: number, workspaceId?: string): Promise<ExpiredTrial[]>;
+  /**
+   * F71-S06 — `trial → expired` em `workspaces` + `subscriptions` + auditoria
+   * `billing.trial_expired`, numa transação RLS. Condicional: `false` quando a empresa já
+   * não está em trial vencido (outra execução levou, ou o trial foi estendido) — nada gravado.
+   */
+  expireTrial(trial: ExpiredTrial, now: Date): Promise<boolean>;
+}
+
+/** Empresa com trial vencido, como o enumerador a vê. */
+export interface ExpiredTrial {
+  readonly workspaceId: string;
+  readonly trialEndsAt: Date;
 }
 
 /** Preço do ciclo em centavos a partir do plano. */
@@ -376,6 +404,71 @@ export function createBillingDbPort(): BillingDbPort {
       });
     },
 
+    async listExpiredTrials(now, limit, workspaceId) {
+      const rows = await getDb()
+        .select({ workspaceId: workspaces.id, trialEndsAt: workspaces.trialEndsAt })
+        .from(workspaces)
+        .where(
+          and(
+            eq(workspaces.subscriptionStatus, 'trial'),
+            isNotNull(workspaces.trialEndsAt),
+            lte(workspaces.trialEndsAt, now),
+            ...(workspaceId !== undefined ? [eq(workspaces.id, workspaceId)] : []),
+          ),
+        )
+        .orderBy(asc(workspaces.trialEndsAt))
+        .limit(limit);
+      const out: ExpiredTrial[] = [];
+      for (const r of rows) {
+        if (r.trialEndsAt !== null) {
+          out.push({ workspaceId: r.workspaceId, trialEndsAt: r.trialEndsAt });
+        }
+      }
+      return out;
+    },
+
+    async expireTrial(trial, now) {
+      return withWorkspace(trial.workspaceId, async (tx: DbTx) => {
+        const moved = await tx
+          .update(workspaces)
+          .set({ subscriptionStatus: 'expired', updatedAt: now })
+          .where(
+            and(
+              eq(workspaces.id, trial.workspaceId),
+              eq(workspaces.subscriptionStatus, 'trial'),
+              isNotNull(workspaces.trialEndsAt),
+              lte(workspaces.trialEndsAt, now),
+            ),
+          )
+          .returning({ id: workspaces.id, trialEndsAt: workspaces.trialEndsAt });
+        const ws = moved[0];
+        if (ws === undefined) return false;
+
+        const subs = await tx
+          .update(subscriptions)
+          .set({ status: 'expired', updatedAt: now })
+          .where(
+            and(eq(subscriptions.workspaceId, trial.workspaceId), eq(subscriptions.status, 'trial')),
+          )
+          .returning({ id: subscriptions.id });
+
+        await tx.insert(auditLogs).values({
+          workspaceId: trial.workspaceId,
+          actorType: 'system',
+          action: 'billing.trial_expired',
+          resourceType: 'workspace',
+          resourceId: trial.workspaceId,
+          metadata: {
+            from: 'trial',
+            to: 'expired',
+            trialEndsAt: ws.trialEndsAt?.toISOString() ?? null,
+            subscriptionIds: subs.map((s) => s.id),
+          },
+        });
+        return true;
+      });
+    },
+
     async finalizeCancellation(sub, now) {
       await withWorkspace(sub.workspaceId, async (tx: DbTx) => {
         await tx
@@ -428,6 +521,55 @@ export interface RecurrenceTickOptions {
   readonly limit?: number;
 }
 
+/** Opções da varredura de trials vencidos. */
+export interface TrialExpiryOptions {
+  readonly now: Date;
+  readonly limit?: number;
+  /** Restringe a uma empresa (teste/operação). */
+  readonly workspaceId?: string;
+}
+
+/**
+ * F71-S06 — move para `expired` as empresas com trial vencido. NÃO adquire lock: roda dentro
+ * do tick ({@link runRecurrenceTick}), que já detém o lock singleton. Uma empresa com falha
+ * não derruba as demais (o próximo tick recomputa). Devolve quantas foram movidas.
+ */
+export async function expireTrials(
+  deps: Pick<RecurrenceDeps, 'db' | 'logger'>,
+  options: TrialExpiryOptions,
+): Promise<number> {
+  const trials = await deps.db.listExpiredTrials(
+    options.now,
+    options.limit ?? 500,
+    options.workspaceId,
+  );
+  let expired = 0;
+  for (const trial of trials) {
+    try {
+      if (await deps.db.expireTrial(trial, options.now)) {
+        expired += 1;
+        deps.logger.info('billing: trial vencido → expired', {
+          workspaceId: trial.workspaceId,
+          trialEndsAt: trial.trialEndsAt.toISOString(),
+        });
+      }
+    } catch (err: unknown) {
+      deps.logger.error('billing: falha ao expirar trial', {
+        workspaceId: trial.workspaceId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  recordTrialsExpired(expired);
+  if (trials.length > 0) {
+    deps.logger.info('billing: varredura de trials vencidos', {
+      found: trials.length,
+      trialExpired: expired,
+    });
+  }
+  return expired;
+}
+
 export interface RecurrenceTickResult {
   readonly ran: boolean;
   /** Assinaturas PIX inspecionadas neste tick. */
@@ -442,6 +584,8 @@ export interface RecurrenceTickResult {
   readonly cutoff: number;
   /** Finalizadas por cancel-at-period-end. */
   readonly canceled: number;
+  /** F71-S06: empresas cujo trial venceu e foram movidas para `expired` neste tick. */
+  readonly trialExpired: number;
 }
 
 const EMPTY_RESULT: RecurrenceTickResult = {
@@ -452,6 +596,7 @@ const EMPTY_RESULT: RecurrenceTickResult = {
   pastDue: 0,
   cutoff: 0,
   canceled: 0,
+  trialExpired: 0,
 };
 
 /**
@@ -597,6 +742,16 @@ export async function runRecurrenceTick(
       }
     }
 
+    // F71-S06: fim do trial, sob o MESMO lock. Falha aqui não perde o que a régua PIX fez.
+    let trialExpired = 0;
+    try {
+      trialExpired = await expireTrials(deps, { now, limit });
+    } catch (err: unknown) {
+      deps.logger.error('billing: varredura de trials vencidos falhou', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     const result: RecurrenceTickResult = {
       ran: true,
       inspected,
@@ -605,14 +760,16 @@ export async function runRecurrenceTick(
       pastDue,
       cutoff,
       canceled,
+      trialExpired,
     };
-    if (inspected > 0) {
+    if (inspected > 0 || trialExpired > 0) {
       deps.logger.info('billing-recurrence: tick concluído', {
         inspected,
         charged,
         pastDue,
         cutoff,
         canceled,
+        trialExpired,
       });
     }
     return result;

@@ -82,6 +82,11 @@ import {
 } from '@hm/shared/mq';
 import { CHANNEL_PROVIDERS, type ChannelProvider } from '@hm/shared';
 import type { Logger } from '@hm/logger';
+import {
+  recordSubscriptionSkip,
+  subscriptionGate,
+  type SubscriptionGate,
+} from '../lib/subscription-gate';
 
 /** Fila canônica de flows/agentes (mesma do followup.ts e do worker de F2-S11). */
 export const REENGAGEMENT_FLOWS_QUEUE = QUEUES.flows;
@@ -528,6 +533,8 @@ async function enqueueReengagementRun(
 export interface ReengagementDeps {
   readonly redis: ReengagementRedis;
   readonly logger: Logger;
+  /** Portão de assinatura (F71-S06). Default: lê `workspaces` no tick. */
+  readonly subscription?: SubscriptionGate;
 }
 
 /** Opções do tick (instante injetável p/ teste). */
@@ -552,6 +559,8 @@ export interface ReengagementTickResult {
   readonly skippedDuplicate: number;
   /** Elegíveis recusadas pela trava de origem (IA continua pausada) — F70-S08. */
   readonly blockedByOrigin: number;
+  /** Workspaces pulados por assinatura inativa (F71-S06): a IA segue pausada. */
+  readonly skippedSubscriptionInactive: number;
 }
 
 /**
@@ -650,7 +659,14 @@ export async function runReengagementTick(
   );
   if (release === null) {
     deps.logger.debug('reengajamento: tick pulado — lock detido por outra instância');
-    return { ran: false, workspaces: 0, enqueued: 0, skippedDuplicate: 0, blockedByOrigin: 0 };
+    return {
+      ran: false,
+      workspaces: 0,
+      enqueued: 0,
+      skippedDuplicate: 0,
+      blockedByOrigin: 0,
+      skippedSubscriptionInactive: 0,
+    };
   }
 
   try {
@@ -662,8 +678,23 @@ export async function runReengagementTick(
     let enqueued = 0;
     let skippedDuplicate = 0;
     let blockedByOrigin = 0;
+    let skippedSubscriptionInactive = 0;
+    const gate = deps.subscription ?? subscriptionGate;
     for (const workspaceId of targets) {
       try {
+        // F71-S06: sem assinatura ativa a IA não é religada (nem a marca de janela gasta):
+        // retomar e responder é automação de saída.
+        const subscription = await gate.check(workspaceId);
+        if (!subscription.active) {
+          skippedSubscriptionInactive += 1;
+          recordSubscriptionSkip(
+            deps.logger,
+            'agent-reengagement',
+            workspaceId,
+            subscription.status,
+          );
+          continue;
+        }
         const res = await tickWorkspace(workspaceId, deps, now, idleMinutes);
         enqueued += res.enqueued;
         skippedDuplicate += res.skipped;
@@ -683,12 +714,14 @@ export async function runReengagementTick(
       enqueued,
       skippedDuplicate,
       blockedByOrigin,
+      skippedSubscriptionInactive,
     };
     deps.logger.info('reengajamento: tick concluído', {
       workspaces: result.workspaces,
       enqueued: result.enqueued,
       skippedDuplicate: result.skippedDuplicate,
       blockedByOrigin: result.blockedByOrigin,
+      skippedSubscriptionInactive: result.skippedSubscriptionInactive,
     });
     return result;
   } finally {

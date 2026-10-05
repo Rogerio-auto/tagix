@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { and, eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { closeDb, getDb, schema } from '@hm/db';
 import { createLogger } from '@hm/logger';
 import type {
   IPaymentProvider,
@@ -6,7 +9,9 @@ import type {
   CreatePixChargeInput,
 } from '@hm/payments';
 import {
+  createBillingDbPort,
   dunningStage,
+  expireTrials,
   pixChargeEventId,
   runRecurrenceTick,
   DEFAULT_DUNNING_POLICY,
@@ -16,6 +21,7 @@ import {
   type RecurrenceDeps,
 } from './recurrence';
 import type { RedisLike } from '../flows/scheduler';
+import { getWorkersMetricsRegistry } from '../observability/metrics';
 
 const logger = createLogger('error');
 const DAY = 24 * 60 * 60 * 1000;
@@ -88,19 +94,50 @@ function fakeProvider(): IPaymentProvider & { charges: CreatePixChargeInput[] } 
   return provider;
 }
 
+/** Empresa em memória para a varredura de trials (F71-S06). */
+interface FakeTrialWorkspace {
+  id: string;
+  status: string;
+  trialEndsAt: Date | null;
+}
+
 /** DB port fake em memória: marcas de cobrança + transições registradas. */
-function fakeDb(subs: PixSubscription[]): BillingDbPort & {
+function fakeDb(
+  subs: PixSubscription[],
+  trialWorkspaces: FakeTrialWorkspace[] = [],
+): BillingDbPort & {
   charged: Set<string>;
   transitions: { id: string; next: string }[];
   cancellations: string[];
+  trialWorkspaces: FakeTrialWorkspace[];
+  trialAudits: string[];
 } {
   const charged = new Set<string>();
   const transitions: { id: string; next: string }[] = [];
   const cancellations: string[] = [];
+  const trialAudits: string[] = [];
+  const vencido = (w: FakeTrialWorkspace, now: Date): boolean =>
+    w.status === 'trial' && w.trialEndsAt !== null && w.trialEndsAt.getTime() <= now.getTime();
   return {
     charged,
     transitions,
     cancellations,
+    trialWorkspaces,
+    trialAudits,
+    async listExpiredTrials(now, limit) {
+      return trialWorkspaces
+        .filter((w) => vencido(w, now))
+        .slice(0, limit)
+        .map((w) => ({ workspaceId: w.id, trialEndsAt: w.trialEndsAt ?? now }));
+    },
+    // Mesma semântica do port real: UPDATE condicional, auditoria só quando move.
+    async expireTrial(trial, now) {
+      const w = trialWorkspaces.find((x) => x.id === trial.workspaceId);
+      if (!w || !vencido(w, now)) return false;
+      w.status = 'expired';
+      trialAudits.push(w.id);
+      return true;
+    },
     async listActionablePixSubscriptions() {
       return subs;
     },
@@ -127,12 +164,15 @@ function fakeDb(subs: PixSubscription[]): BillingDbPort & {
   };
 }
 
-function deps(subs: PixSubscription[]): RecurrenceDeps & {
+function deps(
+  subs: PixSubscription[],
+  trialWorkspaces: FakeTrialWorkspace[] = [],
+): RecurrenceDeps & {
   db: ReturnType<typeof fakeDb>;
   provider: ReturnType<typeof fakeProvider>;
 } {
   const provider = fakeProvider();
-  const db = fakeDb(subs);
+  const db = fakeDb(subs, trialWorkspaces);
   return { redis: fakeRedis(), provider, db, logger, policy };
 }
 
@@ -269,5 +309,176 @@ describe('runRecurrenceTick', () => {
     expect(DEFAULT_DUNNING_POLICY.pixExpiresInSeconds).toBeGreaterThan(
       (DEFAULT_DUNNING_POLICY.graceDays + DEFAULT_DUNNING_POLICY.pastDueDays) * 24 * 60 * 60,
     );
+  });
+});
+
+// ─── F71-S06: fim do trial ──────────────────────────────────────────────────────
+
+/** Valor atual do contador `hm_billing_trial_expired_total`. */
+async function trialExpiredCounter(): Promise<number> {
+  const metric = getWorkersMetricsRegistry().getSingleMetric('hm_billing_trial_expired_total');
+  if (!metric) return 0;
+  const data = await metric.get();
+  return data.values.reduce((acc, v) => acc + v.value, 0);
+}
+
+describe('runRecurrenceTick — trial vencido (F71-S06)', () => {
+  const now = new Date('2099-03-01T12:00:00Z');
+
+  it('trial vencido vira expired; rodar de novo não faz nada', async () => {
+    const d = deps([], [
+      { id: 'ws-vencido', status: 'trial', trialEndsAt: new Date(now.getTime() - DAY) },
+      { id: 'ws-no-prazo', status: 'trial', trialEndsAt: new Date(now.getTime() + DAY) },
+      { id: 'ws-cortesia', status: 'trial', trialEndsAt: null },
+      { id: 'ws-pago', status: 'active', trialEndsAt: new Date(now.getTime() - DAY) },
+    ]);
+    const before = await trialExpiredCounter();
+
+    const first = await runRecurrenceTick(d, { now });
+    expect(first.trialExpired).toBe(1);
+    expect(d.db.trialWorkspaces.map((w) => [w.id, w.status])).toEqual([
+      ['ws-vencido', 'expired'],
+      ['ws-no-prazo', 'trial'],
+      ['ws-cortesia', 'trial'],
+      ['ws-pago', 'active'],
+    ]);
+    expect(d.db.trialAudits).toEqual(['ws-vencido']);
+    expect(await trialExpiredCounter()).toBe(before + 1);
+
+    const second = await runRecurrenceTick(d, { now: new Date(now.getTime() + 60_000) });
+    expect(second.trialExpired).toBe(0);
+    expect(d.db.trialAudits).toEqual(['ws-vencido']);
+    expect(await trialExpiredCounter()).toBe(before + 1);
+  });
+
+  it('sem o lock, nada expira', async () => {
+    const d = deps([], [{ id: 'ws-x', status: 'trial', trialEndsAt: new Date(now.getTime() - DAY) }]);
+    const res = await runRecurrenceTick({ ...d, redis: fakeRedis(null) }, { now });
+    expect(res.ran).toBe(false);
+    expect(d.db.trialWorkspaces[0]?.status).toBe('trial');
+  });
+
+  it('log do tick traz a contagem de trial_expired', async () => {
+    const d = deps([], [{ id: 'ws-y', status: 'trial', trialEndsAt: new Date(now.getTime() - DAY) }]);
+    const info = vi.spyOn(d.logger, 'info');
+    await runRecurrenceTick(d, { now });
+    expect(info).toHaveBeenCalledWith(
+      'billing-recurrence: tick concluído',
+      expect.objectContaining({ trialExpired: 1 }),
+    );
+    info.mockRestore();
+  });
+
+  it('falha numa empresa não impede as outras', async () => {
+    const d = deps([], [
+      { id: 'ws-bad', status: 'trial', trialEndsAt: new Date(now.getTime() - 2 * DAY) },
+      { id: 'ws-ok', status: 'trial', trialEndsAt: new Date(now.getTime() - DAY) },
+    ]);
+    const orig = d.db.expireTrial.bind(d.db);
+    d.db.expireTrial = vi.fn(async (t, n) => {
+      if (t.workspaceId === 'ws-bad') throw new Error('boom');
+      return orig(t, n);
+    });
+    const res = await runRecurrenceTick(d, { now });
+    expect(res.trialExpired).toBe(1);
+    expect(d.db.trialAudits).toEqual(['ws-ok']);
+  });
+});
+
+/**
+ * Port REAL contra o Postgres dev: `workspaces` + `subscriptions` + `audit_logs`. A varredura
+ * é restrita à empresa do teste (`workspaceId`) para não mexer em dados de outros testes.
+ */
+describe.skipIf(!process.env['DATABASE_URL'])('expireTrials — port real (Postgres dev, F71-S06)', () => {
+  const { workspaces, subscriptions, plans, auditLogs } = schema;
+  const db = createBillingDbPort();
+  const sfx = randomUUID().slice(0, 8);
+  let wsVencido = '';
+  let wsNoPrazo = '';
+  let planId = '';
+
+  beforeAll(async () => {
+    const [plan] = await getDb()
+      .insert(plans)
+      .values({ key: `f71s06-${sfx}`, name: 'F71S06', priceMonthlyCents: 100 })
+      .returning({ id: plans.id });
+    if (!plan) throw new Error('plan');
+    planId = plan.id;
+    const ended = new Date(Date.now() - DAY);
+    const [a] = await getDb()
+      .insert(workspaces)
+      .values({ name: 'Trial vencido', slug: `f71s06-v-${sfx}`, trialEndsAt: ended })
+      .returning({ id: workspaces.id });
+    const [b] = await getDb()
+      .insert(workspaces)
+      .values({
+        name: 'Trial no prazo',
+        slug: `f71s06-p-${sfx}`,
+        trialEndsAt: new Date(Date.now() + 10 * DAY),
+      })
+      .returning({ id: workspaces.id });
+    if (!a || !b) throw new Error('workspaces');
+    wsVencido = a.id;
+    wsNoPrazo = b.id;
+    await getDb().insert(subscriptions).values([
+      { workspaceId: wsVencido, planId, status: 'trial', trialEndsAt: ended },
+      { workspaceId: wsNoPrazo, planId, status: 'trial', trialEndsAt: new Date(Date.now() + 10 * DAY) },
+    ]);
+  });
+
+  afterAll(async () => {
+    for (const id of [wsVencido, wsNoPrazo]) {
+      if (id) await getDb().delete(workspaces).where(eq(workspaces.id, id));
+    }
+    if (planId) await getDb().delete(plans).where(eq(plans.id, planId));
+    await closeDb();
+  });
+
+  async function state(workspaceId: string) {
+    const [ws] = await getDb()
+      .select({ status: workspaces.subscriptionStatus })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId));
+    const [sub] = await getDb()
+      .select({ status: subscriptions.status })
+      .from(subscriptions)
+      .where(eq(subscriptions.workspaceId, workspaceId));
+    const audits = await getDb()
+      .select({ id: auditLogs.id, metadata: auditLogs.metadata, actorType: auditLogs.actorType })
+      .from(auditLogs)
+      .where(
+        and(eq(auditLogs.workspaceId, workspaceId), eq(auditLogs.action, 'billing.trial_expired')),
+      );
+    return { ws: ws?.status, sub: sub?.status, audits };
+  }
+
+  it('trial vencido vira expired (empresa + assinatura + auditoria); de novo, nada', async () => {
+    const now = new Date();
+    const d = { db, logger };
+
+    expect(await expireTrials(d, { now, workspaceId: wsVencido })).toBe(1);
+    const after = await state(wsVencido);
+    expect(after.ws).toBe('expired');
+    expect(after.sub).toBe('expired');
+    expect(after.audits).toHaveLength(1);
+    expect(after.audits[0]?.actorType).toBe('system');
+    expect(after.audits[0]?.metadata).toMatchObject({ from: 'trial', to: 'expired' });
+
+    expect(await expireTrials(d, { now, workspaceId: wsVencido })).toBe(0);
+    expect((await state(wsVencido)).audits).toHaveLength(1);
+  });
+
+  it('trial no prazo não é tocado', async () => {
+    expect(await expireTrials({ db, logger }, { now: new Date(), workspaceId: wsNoPrazo })).toBe(0);
+    const s = await state(wsNoPrazo);
+    expect(s.ws).toBe('trial');
+    expect(s.sub).toBe('trial');
+    expect(s.audits).toHaveLength(0);
+  });
+
+  it('extensão de trial entre a varredura e o UPDATE vence (UPDATE condicional)', async () => {
+    const stale = { workspaceId: wsNoPrazo, trialEndsAt: new Date(Date.now() - DAY) };
+    expect(await db.expireTrial(stale, new Date())).toBe(false);
+    expect((await state(wsNoPrazo)).ws).toBe('trial');
   });
 });

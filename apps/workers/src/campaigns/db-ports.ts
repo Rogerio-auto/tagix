@@ -57,6 +57,7 @@ import type {
   RunningCampaign,
 } from './tick';
 import type { SendWindows } from './windows';
+import { subscriptionGate, type SubscriptionGate } from '../lib/subscription-gate';
 import {
   advanceAfterDispatch,
   afterDispatchFailure,
@@ -90,6 +91,8 @@ export interface CampaignDbDeps {
   readonly channel: MqChannel;
   readonly logger: Logger;
   readonly graph?: GraphClient;
+  /** Portão de assinatura (F71-S06). Default: lê `workspaces` a cada tick da campanha. */
+  readonly subscription?: SubscriptionGate;
 }
 
 /**
@@ -190,7 +193,13 @@ function isDue(now: Date) {
 export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts {
   const graph = deps.graph ?? new GraphClient();
 
+  const subscription = deps.subscription ?? subscriptionGate;
+
   return {
+    async checkSubscription(campaign: RunningCampaign) {
+      return subscription.check(campaign.workspaceId);
+    },
+
     async listDueCampaigns(now: Date): Promise<RunningCampaign[]> {
       const rows = await getDb()
         .select({
