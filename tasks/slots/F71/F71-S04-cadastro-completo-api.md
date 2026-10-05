@@ -2,7 +2,7 @@
 id: F71-S04
 title: Cadastro sem beco sem saída — reenviar confirmação, login diz "confirme seu email", aceite de termos
 phase: F71
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 depends_on: [F71-S02, F71-S03]
@@ -12,6 +12,7 @@ source_docs:
   - docs/features/SELF_SERVE_SIGNUP.md
 agent_id: backend-engineer
 claimed_at: 2026-10-05T17:07:09Z
+completed_at: 2026-10-05T17:08:12Z
 
 ---
 # F71-S04 — Cadastro completo (API)
@@ -75,3 +76,57 @@ node --env-file=.env apps/api/node_modules/vitest/vitest.mjs run --root apps/api
 
 - Agente: `backend-engineer`.
 - Roda em paralelo com S05 e S06: S05 não toca `routes.ts` (monta o próprio router em `app.ts`).
+
+## Notas de execução
+
+- **`email_unverified` só com a senha certa (confirmado).** `SupabaseAuthProvider.signIn` só
+  lança `email_unverified` quando o GoTrue responde `error_code: "email_not_confirmed"` (ou a
+  mensagem legada "Email not confirmed") em `/token?grant_type=password`, e o GoTrue valida a
+  senha antes de olhar a confirmação; senha errada continua `invalid_credentials` → 401
+  genérico. O mock tem a mesma ordem. Logo o 403 não enumera contas.
+- **Login:** `email_unverified` → `403 { error: 'email_unverified', message: 'Confirme seu
+  email para entrar.' }`, sem cookie, sem `recordLoginFailure` (não arma o captcha
+  progressivo); auditado como `auth.login_failed` com `reason: 'email_unverified'`. Os
+  limitadores de borda (`login`/`login_ip`) continuam contando a tentativa.
+- **`POST /auth/resend-verification`** (`auth/resend.ts`), ordem: `resend_ip` (20/h por IP) →
+  `resend` (3/h por IP+email) → Zod strict `{ email, turnstileToken }` (400
+  `invalid_payload`) → Turnstile server-side (400 `captcha_failed`) → trabalho condicional no
+  piso de tempo → `200 { ok: true }`.
+  - **Captcha recusado responde 400, não 200** (mesmo padrão do signup F44): o veredito sai
+    antes de qualquer consulta e não depende da conta, então não enumera; responder 200 faria
+    o usuário legítimo achar que o email saiu.
+  - Envia só se `findUserByEmail` acha a conta, `emailConfirmed=false` e `hasPassword=true`.
+    Conta de convite sem senha não recebe o email de cadastro (se completa pelo convite).
+    `provider_error` no lookup → mesma resposta, auditado.
+  - Auditoria `auth.verification_resent` com `{ email, outcome, via }`
+    (`outcome`: `sent | no_account | already_confirmed | invite_pending | provider_error`);
+    nunca senha nem token.
+- **Tempo uniforme (`runWithUniformTiming`).** A F44 não tinha piso de tempo nem teste de
+  tempo (só resposta uniforme); este slot criou o mecanismo e o aplicou ao resend **e** ao
+  signup. A resposta sai EXATAMENTE no piso: trabalho mais rápido espera o restante; mais lento
+  segue em segundo plano (erro logado sem PII e engolido). Piso padrão 1200 ms, ajustável por
+  `AUTH_UNIFORM_RESPONSE_MS` (aceita 50–10000; fora disso cai no padrão). Efeito colateral
+  aceito: o signup passa a responder em ~1,2 s, e um provider lento termina o
+  provisionamento/envio logo depois do 202 (o signup já era idempotente e se refaz no retry).
+  Env não documentado em `.env.example` (fora do `files_allowed`).
+- **Signup:** `acceptTerms: z.literal(true)` + `termsVersion` em `AAAA-MM-DD` (data de
+  calendário válida; atual = `2026-09-14`, o "Atualizados em" de `/termos` e `/privacidade`).
+  `termsAcceptedAt` = relógio do servidor, nunca do cliente; vão ao provisionador da S01 sem
+  ajuste. Signup repetido (`created:false`) chama o mesmo `resendVerificationIfPending` após
+  o provisionamento idempotente; resposta e tempo inalterados.
+- **`docs/api-reference`:** só documenta a API pública v1 (conversas, contatos, flows); as rotas
+  de auth não estão lá, então nada a atualizar.
+- **Testes:** `resend.test.ts` (novo, 17: casos, auditoria, entrada, tempo uniforme com
+  mediana de 3 medições por caso e caso "provider mais lento que o piso"); `routes.test.ts`
+  (+termos, signup repetido, rota de reenvio com composição dos limites, login 403);
+  `flow.integration.test.ts` (termos gravados no OWNER, login 403 → verify → 200, reenvio
+  real com o mock provider, signup repetido reenvia).
+
+### Validação (2026-10-05)
+
+- `pnpm --filter @hm/api typecheck` → ok.
+- `pnpm --filter @hm/api lint` → o pacote não tem script; `npx eslint` nos 7 arquivos tocados
+  → 0 problemas; `prettier --check` limpo.
+- `vitest run src/auth --maxWorkers=1` → 7 arquivos, 175 testes, 0 falhas.
+  `resend.test.ts` rodado mais 3× isolado → 17/17 em todas. `src/middlewares/rate-limit` →
+  10/10.

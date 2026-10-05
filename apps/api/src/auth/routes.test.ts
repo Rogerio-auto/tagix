@@ -3,7 +3,13 @@ import express from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
-import type { AuthIdentity, IAuthProvider, SignUpResult } from '@hm/shared';
+import type {
+  AuthIdentity,
+  AuthUserLookup,
+  IAccountAuthProvider,
+  IAuthProvider,
+  SignUpResult,
+} from '@hm/shared';
 import { AuthError } from '@hm/shared';
 import { closeDb, getDb, impersonationSessionsRepo, schema } from '@hm/db';
 import { closeRateLimit } from '../middlewares/rate-limit';
@@ -23,6 +29,10 @@ const providerState: {
   signInToken: string;
   confirmReset: boolean;
   verifyThrows: boolean;
+  /** Código do AuthError que o signIn lança quando `signInThrows`. */
+  signInErrorCode: 'invalid_credentials' | 'email_unverified';
+  /** O que `findUserByEmail` devolve (signup repetido / reenvio). */
+  lookup: AuthUserLookup | null;
 } = {
   signUpResult: { authUserId: 'auth-user-1', created: true },
   signUpThrows: false,
@@ -33,15 +43,22 @@ const providerState: {
   signInToken: 't',
   confirmReset: true,
   verifyThrows: false,
+  signInErrorCode: 'invalid_credentials',
+  lookup: null,
 };
+
+// Piso de tempo curto (o real é 1,2 s): os dublês resolvem em microssegundos.
+vi.stubEnv('AUTH_UNIFORM_RESPONSE_MS', '60');
+
+const resendVerificationMock = vi.fn(async (_email: string) => {});
 
 /** Sessões válidas conhecidas pelo dublê: token → identidade (o resto é inválido). */
 const liveTokens = new Map<string, AuthIdentity>();
 
-const fakeProvider: IAuthProvider = {
+const fakeProvider: IAuthProvider & Pick<IAccountAuthProvider, 'findUserByEmail'> = {
   kind: 'mock',
   async signIn() {
-    if (providerState.signInThrows) throw new AuthError('bad', 'invalid_credentials');
+    if (providerState.signInThrows) throw new AuthError('bad', providerState.signInErrorCode);
     const email = providerState.signInEmail ?? 'x@y.z';
     const identity = { authUserId: providerState.signInAuthUserId, email };
     liveTokens.set(providerState.signInToken, identity);
@@ -57,7 +74,10 @@ const fakeProvider: IAuthProvider = {
     return providerState.signUpResult;
   },
   async requestPasswordReset() {},
-  async resendVerification() {},
+  resendVerification: resendVerificationMock,
+  async findUserByEmail() {
+    return providerState.lookup;
+  },
   async verifyEmailToken() {
     return providerState.verifyIdentity;
   },
@@ -128,6 +148,9 @@ vi.mock('@hm/db', async (importOriginal) => {
 
 // Importa o router DEPOIS dos mocks.
 const { createAuthRouter } = await import('./routes');
+const rateLimitModule = await import('../middlewares/rate-limit');
+const verifyTurnstileMock = vi.mocked(rateLimitModule.verifyTurnstile);
+const auditMock = vi.mocked(rateLimitModule.auditAuthEvent);
 
 const app = express();
 app.use(express.json());
@@ -163,6 +186,10 @@ beforeEach(() => {
   providerState.signInToken = 't';
   providerState.confirmReset = true;
   providerState.verifyThrows = false;
+  providerState.signInErrorCode = 'invalid_credentials';
+  providerState.lookup = null;
+  resendVerificationMock.mockClear();
+  auditMock.mockClear();
   captchaState.required = false;
   recordFailureMock.mockClear();
   provisionMock.mockReset();
@@ -181,6 +208,8 @@ function validSignup(overrides: Record<string, unknown> = {}) {
     password: 'senhaForte123',
     workspaceName: 'Acme',
     turnstileToken: 'tok',
+    acceptTerms: true,
+    termsVersion: '2026-09-14',
     ...overrides,
   };
 }
@@ -247,6 +276,188 @@ describe('POST /auth/signup', () => {
     expect(res.status).toBe(202);
     expect(res.body).toEqual({ status: 'verification_sent' });
     expect(provisionMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe('POST /auth/signup — aceite de termos (F71-S04, A7)', () => {
+  it('sem acceptTerms → 400, nada provisionado', async () => {
+    const body: Record<string, unknown> = validSignup();
+    delete body['acceptTerms'];
+    const res = await request(app).post('/auth/signup').send(body);
+    expect(res.status).toBe(400);
+    expect(provisionMock).not.toHaveBeenCalled();
+  });
+
+  it('acceptTerms:false → 400', async () => {
+    const res = await request(app)
+      .post('/auth/signup')
+      .send(validSignup({ acceptTerms: false }));
+    expect(res.status).toBe(400);
+    expect(provisionMock).not.toHaveBeenCalled();
+  });
+
+  it('acceptTerms como string "true" → 400 (só o literal booleano)', async () => {
+    const res = await request(app)
+      .post('/auth/signup')
+      .send(validSignup({ acceptTerms: 'true' }));
+    expect(res.status).toBe(400);
+  });
+
+  it.each([undefined, '', 'v1', '2026-9-14', '2026-02-30', '2026-09-14T00:00:00Z', 'x'.repeat(65)])(
+    'termsVersion inválida (%s) → 400',
+    async (termsVersion) => {
+      const res = await request(app).post('/auth/signup').send(validSignup({ termsVersion }));
+      expect(res.status).toBe(400);
+      expect(provisionMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('aceite válido → provisionador recebe a data do SERVIDOR e a versão', async () => {
+    const before = Date.now();
+    const res = await request(app).post('/auth/signup').send(validSignup());
+    expect(res.status).toBe(202);
+    expect(provisionMock).toHaveBeenCalledOnce();
+    const arg: unknown = provisionMock.mock.calls[0]?.[0];
+    expect(arg).toMatchObject({ termsVersion: '2026-09-14' });
+    const acceptedAt = (arg as { termsAcceptedAt?: unknown }).termsAcceptedAt;
+    expect(acceptedAt).toBeInstanceOf(Date);
+    expect((acceptedAt as Date).getTime()).toBeGreaterThanOrEqual(before);
+    expect((acceptedAt as Date).getTime()).toBeLessThanOrEqual(Date.now());
+  });
+});
+
+describe('POST /auth/signup — repetido reenvia a confirmação (F71-S04, A2)', () => {
+  it('conta existente NÃO confirmada → reenvia, mesma resposta', async () => {
+    providerState.signUpResult = { authUserId: 'existing', created: false };
+    providerState.lookup = { authUserId: 'existing', emailConfirmed: false, hasPassword: true };
+    const body = validSignup();
+    const res = await request(app).post('/auth/signup').send(body);
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ status: 'verification_sent' });
+    expect(resendVerificationMock).toHaveBeenCalledExactlyOnceWith(body.email);
+    expect(auditMock).toHaveBeenCalledWith(
+      'auth.verification_resent',
+      expect.anything(),
+      expect.objectContaining({ email: body.email, outcome: 'sent', via: 'signup' }),
+    );
+  });
+
+  it('conta existente confirmada → não reenvia, mesma resposta', async () => {
+    providerState.signUpResult = { authUserId: 'existing', created: false };
+    providerState.lookup = { authUserId: 'existing', emailConfirmed: true, hasPassword: true };
+    const res = await request(app).post('/auth/signup').send(validSignup());
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ status: 'verification_sent' });
+    expect(resendVerificationMock).not.toHaveBeenCalled();
+  });
+
+  it('conta de convite ainda sem senha → não reenvia o email de cadastro', async () => {
+    providerState.signUpResult = { authUserId: 'invited', created: false };
+    providerState.lookup = { authUserId: 'invited', emailConfirmed: false, hasPassword: false };
+    const res = await request(app).post('/auth/signup').send(validSignup());
+    expect(res.status).toBe(202);
+    expect(resendVerificationMock).not.toHaveBeenCalled();
+  });
+
+  it('cadastro novo → não chama o reenvio (o provider já mandou o 1º email)', async () => {
+    providerState.lookup = { authUserId: 'auth-user-1', emailConfirmed: false, hasPassword: true };
+    const res = await request(app).post('/auth/signup').send(validSignup());
+    expect(res.status).toBe(202);
+    expect(resendVerificationMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /auth/resend-verification (F71-S04, A2)', () => {
+  function resendBody(email: string) {
+    return { email, turnstileToken: 'tok' };
+  }
+
+  it('não confirmado → 200 { ok: true } e reenvia', async () => {
+    providerState.lookup = { authUserId: 'u', emailConfirmed: false, hasPassword: true };
+    const res = await request(app)
+      .post('/auth/resend-verification')
+      .set('x-test-ip', `rs-${randomUUID().slice(0, 8)}`)
+      .send(resendBody('pendente@empresa.com'));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(resendVerificationMock).toHaveBeenCalledExactlyOnceWith('pendente@empresa.com');
+  });
+
+  it('inexistente e confirmado → MESMO 200, sem envio', async () => {
+    const lookups: (AuthUserLookup | null)[] = [
+      null,
+      { authUserId: 'u', emailConfirmed: true, hasPassword: true },
+    ];
+    for (const lookup of lookups) {
+      providerState.lookup = lookup;
+      const res = await request(app)
+        .post('/auth/resend-verification')
+        .set('x-test-ip', `rs-${randomUUID().slice(0, 8)}`)
+        .send(resendBody(`rs-${randomUUID().slice(0, 8)}@empresa.com`));
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true });
+    }
+    expect(resendVerificationMock).not.toHaveBeenCalled();
+  });
+
+  it('4º pedido do mesmo IP+email na hora → 429 (3/h)', async () => {
+    const ip = `rs-${randomUUID().slice(0, 8)}`;
+    const email = `rl-${randomUUID().slice(0, 8)}@empresa.com`;
+    for (let i = 0; i < 3; i += 1) {
+      const ok = await request(app)
+        .post('/auth/resend-verification')
+        .set('x-test-ip', ip)
+        .send(resendBody(email));
+      expect(ok.status).toBe(200);
+    }
+    const blocked = await request(app)
+      .post('/auth/resend-verification')
+      .set('x-test-ip', ip)
+      .send(resendBody(email));
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.reason).toBe('rate_limited');
+  });
+
+  it('teto só por IP: o 21º pedido com emails sempre novos → 429', async () => {
+    const ip = `rs-${randomUUID().slice(0, 8)}`;
+    for (let i = 0; i < 20; i += 1) {
+      const ok = await request(app)
+        .post('/auth/resend-verification')
+        .set('x-test-ip', ip)
+        .send(resendBody(`spray-${i}-${randomUUID().slice(0, 6)}@empresa.com`));
+      expect(ok.status).toBe(200);
+    }
+    const blocked = await request(app)
+      .post('/auth/resend-verification')
+      .set('x-test-ip', ip)
+      .send(resendBody('spray-final@empresa.com'));
+    expect(blocked.status).toBe(429);
+  });
+
+  it('captcha recusado → 400 captcha_failed, provider intocado', async () => {
+    providerState.lookup = { authUserId: 'u', emailConfirmed: false, hasPassword: true };
+    verifyTurnstileMock.mockResolvedValueOnce(false);
+    const res = await request(app)
+      .post('/auth/resend-verification')
+      .set('x-test-ip', `rs-${randomUUID().slice(0, 8)}`)
+      .send(resendBody('captcha@empresa.com'));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('captcha_failed');
+    expect(resendVerificationMock).not.toHaveBeenCalled();
+  });
+
+  it('payload com campo extra ou sem captcha → 400 invalid_payload', async () => {
+    const extra = await request(app)
+      .post('/auth/resend-verification')
+      .set('x-test-ip', `rs-${randomUUID().slice(0, 8)}`)
+      .send({ ...resendBody('a@empresa.com'), redirectTo: 'https://evil.example' });
+    expect(extra.status).toBe(400);
+    expect(extra.body.error).toBe('invalid_payload');
+    const noToken = await request(app)
+      .post('/auth/resend-verification')
+      .set('x-test-ip', `rs-${randomUUID().slice(0, 8)}`)
+      .send({ email: 'a@empresa.com' });
+    expect(noToken.status).toBe(400);
   });
 });
 
@@ -321,6 +532,39 @@ describe('POST /auth/login (audit de falha)', () => {
     const res = await request(app).post('/auth/login').send({ email: 'a@b.com', password: 'x' });
     expect(res.status).toBe(401);
     expect(recordFailureMock).toHaveBeenCalledOnce(); // SEC-05: arma o captcha progressivo
+  });
+});
+
+describe('POST /auth/login (F71-S04, A3 — email não confirmado)', () => {
+  it('senha certa + email não confirmado → 403 email_unverified, sem cookie e sem captcha', async () => {
+    providerState.signInThrows = true;
+    providerState.signInErrorCode = 'email_unverified';
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ email: 'nao-confirmado@empresa.com', password: 'senhaForte123' });
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({
+      error: 'email_unverified',
+      message: 'Confirme seu email para entrar.',
+    });
+    expect(recordFailureMock).not.toHaveBeenCalled();
+    expect(setCookies(res)).toHaveLength(0);
+    expect(auditMock).toHaveBeenCalledWith(
+      'auth.login_failed',
+      expect.anything(),
+      expect.objectContaining({ reason: 'email_unverified' }),
+    );
+  });
+
+  it('senha errada continua 401 genérico (o provider não diz "não confirmado")', async () => {
+    providerState.signInThrows = true;
+    providerState.signInErrorCode = 'invalid_credentials';
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ email: 'nao-confirmado@empresa.com', password: 'errada' });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBeUndefined();
+    expect(recordFailureMock).toHaveBeenCalledOnce();
   });
 });
 

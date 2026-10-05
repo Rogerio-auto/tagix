@@ -136,7 +136,9 @@ export type AuthAuditAction =
   | 'auth.login_failed'
   | 'auth.reset_requested'
   | 'auth.reset_confirmed'
-  | 'auth.verify';
+  | 'auth.verify'
+  /** Reenvio do email de confirmação (rota própria ou signup repetido). Sem senha/token. */
+  | 'auth.verification_resent';
 
 /**
  * Registra um evento de auth em `audit_logs` (best-effort, nunca quebra o request).
