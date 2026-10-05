@@ -2,7 +2,7 @@
 id: F71-S04
 title: Cadastro sem beco sem saída — reenviar confirmação, login diz "confirme seu email", aceite de termos
 phase: F71
-status: review
+status: done
 priority: high
 estimated_size: S
 depends_on: [F71-S02, F71-S03]
