@@ -7,9 +7,10 @@
  * depois do middleware de impersonation, então escrita sob view-as é bloqueada lá.
  */
 import { Router } from 'express';
+import { createInvitesMeRouter } from './invites-me';
 
 export function createMemberSubrouters(): Router {
   const router = Router();
-  // F71-S05: router.use(createInvitesMeRouter());  // GET /api/me/invites (invites-me.ts)
+  router.use(createInvitesMeRouter()); // F71-S05: GET /api/me/invites
   return router;
 }

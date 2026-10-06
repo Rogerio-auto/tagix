@@ -120,11 +120,19 @@ describe('MockAuthProvider — verbos de conta da F71 (em memória)', () => {
     const mock = new MockAuthProvider();
     const invite = await mock.sendInvite('bia@x.com', '/convite/tok');
     expect(invite.channel).toBe('invite');
-    expect(mock.outbox.at(-1)).toEqual({
+    const sent = mock.outbox.at(-1);
+    expect(sent).toMatchObject({
       kind: 'invite',
       email: 'bia@x.com',
       redirectTo: 'http://localhost:3000/convite/tok',
+      proofType: 'invite',
     });
+    // O botão do email leva a prova de posse da caixa no FRAGMENTO, nunca na query
+    // (runbook §4.3: o fragmento não vai ao servidor, a log nem ao Referer).
+    expect(new URL(sent?.link ?? 'http://x').search).toBe('');
+    expect(sent?.link).toBe(
+      `http://localhost:3000/convite/tok#token_hash=${sent?.tokenHash ?? ''}&type=invite`,
+    );
     await expect(mock.findUserByEmail('bia@x.com')).resolves.toEqual({
       authUserId: invite.authUserId,
       emailConfirmed: false,
@@ -163,5 +171,42 @@ describe('MockAuthProvider — verbos de conta da F71 (em memória)', () => {
     await expect(mock.completeAccount('nao-existe', 'x')).resolves.toBe(false);
     const { authUserId } = await mock.signUp({ email: 'd@x.com', password: 'x' });
     await expect(mock.updatePassword(authUserId, 'y')).resolves.toBe(true);
+  });
+
+  it('verifyEmailOwnership: só o token_hash que saiu no email, do mesmo tipo, uma vez', async () => {
+    vi.stubEnv('AUTH_EMAIL_REDIRECT_URL', '');
+    const mock = new MockAuthProvider();
+    const { authUserId } = await mock.sendInvite('eva@x.com', '/convite/t1');
+    const first = mock.outbox.at(-1);
+    if (!first) throw new Error('sem email');
+    // Tipo errado, hash inventado → null (e não consome).
+    await expect(mock.verifyEmailOwnership(first.tokenHash, 'magiclink')).resolves.toBeNull();
+    await expect(mock.verifyEmailOwnership('f'.repeat(56), 'invite')).resolves.toBeNull();
+
+    // Envio novo invalida o anterior.
+    await mock.sendInvite('eva@x.com', '/convite/t2');
+    const second = mock.outbox.at(-1);
+    if (!second) throw new Error('sem email');
+    await expect(mock.verifyEmailOwnership(first.tokenHash, 'invite')).resolves.toBeNull();
+
+    await expect(mock.verifyEmailOwnership(second.tokenHash, 'invite')).resolves.toEqual({
+      authUserId,
+      email: 'eva@x.com',
+    });
+    await expect(mock.findUserByEmail('eva@x.com')).resolves.toMatchObject({ emailConfirmed: true });
+    // Reuso → null.
+    await expect(mock.verifyEmailOwnership(second.tokenHash, 'invite')).resolves.toBeNull();
+  });
+
+  it('verifyEmailOwnership: link de acesso → type magiclink', async () => {
+    const mock = new MockAuthProvider();
+    const { authUserId } = await mock.signUp({ email: 'fe@x.com', password: 'x' });
+    await mock.sendSignInLink('fe@x.com', '/convite/t');
+    const mail = mock.outbox.at(-1);
+    expect(mail?.proofType).toBe('magiclink');
+    await expect(mock.verifyEmailOwnership(mail?.tokenHash ?? '', 'magiclink')).resolves.toEqual({
+      authUserId,
+      email: 'fe@x.com',
+    });
   });
 });

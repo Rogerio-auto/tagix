@@ -1,6 +1,7 @@
 import compression from 'compression';
 import express, { type Express } from 'express';
 import { createAuthRouter } from './auth';
+import { createInviteAuthRouter } from './auth/invite';
 import { loadConfig } from './config';
 import { healthHandler } from './health';
 import { errorHandler } from './middlewares/error';
@@ -149,6 +150,9 @@ export function createApp(): Express {
     }),
   );
   app.use(createAuthRouter());
+  // F71-S05: preview/aceite de convite pelo link (público, rate-limit por IP). Antes do
+  // view-as: quem abre o link ainda não é membro da empresa do convite.
+  app.use(createInviteAuthRouter());
 
   // View-as / impersonation (F26-S05): quando ha um claim de impersonation no
   // cookie, resolve a sessao do admin (requireAuth) e aplica o middleware que

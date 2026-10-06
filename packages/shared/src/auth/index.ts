@@ -60,6 +60,15 @@ export interface InviteResult {
   channel: 'invite' | 'sign_in_link';
 }
 
+/**
+ * Tipo do link de email que carrega a prova de posse da caixa (F71-S05):
+ *  - `invite`: template "Invite user" (`sendInvite`);
+ *  - `magiclink`: template "Magic link" (`sendSignInLink`).
+ * Vai na URL do email (`?token_hash=…&type=…`) e volta no aceite do convite.
+ */
+export const EMAIL_PROOF_TYPES = ['invite', 'magiclink'] as const;
+export type EmailProofType = (typeof EMAIL_PROOF_TYPES)[number];
+
 export interface IAuthProvider {
   readonly kind: 'supabase' | 'mock';
 
@@ -162,6 +171,27 @@ export interface IAccountAuthProvider extends IAuthProvider {
    * fraca). Não lança. A senha nunca é logada.
    */
   completeAccount(authUserId: string, password: string): Promise<boolean>;
+
+  /**
+   * Prova de posse da caixa de email (F71-S05, T2). Consome o `token_hash` que o provider
+   * colocou no link de um email "Invite user" (`type: 'invite'`) ou "Magic link"
+   * (`type: 'magiclink'`) e devolve a conta dona daquele endereço. Só quem leu o email tem
+   * o `token_hash`: diferente do token do convite, o admin que copia o link nunca o vê.
+   *
+   * - Uso único: o provider invalida o `token_hash` ao verificar (reuso → `null`). Um envio
+   *   novo para o mesmo endereço também invalida o anterior.
+   * - Não emite sessão para o cliente: a implementação real descarta (e revoga) a sessão
+   *   que o provider cria ao verificar. Só a identidade sai daqui.
+   * - `null` = inválido, expirado, já usado ou de outro tipo. LANÇA
+   *   `AuthError('provider_error')` quando não dá para saber (rede/5xx): "não sei" nunca
+   *   vira "inválido" nem "válido".
+   *
+   * Por que não `verifyEmailToken`: aquele é o verify do cadastro (tipo fixo, o mock lê o
+   * email do próprio token e a página `/verify` depende disso). Este é parametrizado por
+   * tipo, não toca no estado do cliente compartilhado e, no mock, só aceita o `token_hash`
+   * que de fato "saiu" num email.
+   */
+  verifyEmailOwnership(tokenHash: string, type: EmailProofType): Promise<AuthIdentity | null>;
 
   /**
    * Troca a senha de uma conta existente (usuário autenticado). Não mexe na
