@@ -2,7 +2,7 @@
 id: F71-S05
 title: Convite de verdade — criar, enviar, reenviar, revogar, copiar link e aceitar, com limite de membros
 phase: F71
-status: review
+status: done
 priority: critical
 estimated_size: M
 depends_on: [F71-S01, F71-S02, F71-S03]
