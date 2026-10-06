@@ -18,13 +18,45 @@ da URL — o app do Leadium não usa esse caminho.
 |---|---|---|---|
 | Confirm signup | `signUp` / `resendVerification` | `/verify` | `token_hash` (valida com `type=email`) |
 | Reset password | `requestPasswordReset` | `/reset-password` | `token_hash` (valida com `type=recovery`) |
-| Invite user | `sendInvite` (pessoa sem conta) | `/convite/<token>` | o **nosso** token, no caminho |
-| Magic link | `sendSignInLink` (pessoa com conta) | `/convite/<token>` | o **nosso** token, no caminho |
+| Invite user | `sendInvite` (pessoa sem conta) | `/convite/<token>` | o **nosso** token, no caminho, + `token_hash` no **fragmento** (`type=invite`) |
+| Magic link | `sendSignInLink` (pessoa com conta) | `/convite/<token>` | o **nosso** token, no caminho, + `token_hash` no **fragmento** (`type=magiclink`) |
 
-Convite e link de acesso apontam direto para o destino (`{{ .RedirectTo }}`): o que dá acesso
-é o token do Leadium no caminho (uso único, 7 dias, só o hash no banco), não a sessão do
-Supabase. Isso também protege contra antivírus de email que "clicam" nos links (Outlook Safe
-Links etc.): abrir a página não consome nada; só o envio do formulário consome.
+Convite e link de acesso apontam para o destino (`{{ .RedirectTo }}`) e acrescentam a prova
+de posse da caixa no fragmento: `{{ .RedirectTo }}#token_hash={{ .TokenHash }}&type=…`. São
+duas provas diferentes (F71-S05, achado A1 da auditoria):
+
+- o **token do convite** (no caminho; uso único, 7 dias, só o hash no banco) prova "tenho o
+  link". O admin também o tem: "copiar link" o devolve em claro;
+- o **`token_hash`** (no fragmento, depois do `#`) prova "li este email". Só existe dentro do email; o admin
+  nunca o vê. A API o exige para **criar a senha** de quem ainda não tem senha
+  (`POST /auth/invite/accept` com `emailProof`). Sem ele, quem tem só o link copiado não
+  cria nem toma conta nenhuma: a página pede o email (`POST /auth/invite/send-email`).
+
+A sessão do Supabase não é usada: a API verifica o `token_hash` no servidor
+(`POST /auth/v1/verify`), lê só a conta e revoga a sessão criada. Abrir a página não consome
+nada — só o envio do formulário de senha consome o `token_hash` (uso único). Isso protege
+contra antivírus de email que "clicam" nos links (Outlook Safe Links etc.). **A página
+`/convite` nunca pode verificar o `token_hash` ao carregar** (S07).
+
+**Por que fragmento (`#`) e não query (`?`).** O navegador nunca manda o fragmento ao
+servidor: ele não aparece no access log do proxy nem do Next, não vai no `Referer` de nenhum
+recurso ou link da página e não entra nos logs de request da API. Na query, o `token_hash`
+cairia em todos esses lugares (e no histórico do navegador) — e o de `magiclink` é uma
+credencial de login do Supabase (`/auth/v1/verify` devolve sessão por até 24 h). Quem lesse um
+log teria o `token_hash` e, com o `/convite/<token>` da mesma linha, criaria a senha da conta:
+o A1 reaberto. A página `/convite/<token>` lê `location.hash` (`token_hash`, `type`), guarda
+em memória, limpa o fragmento na hora com `history.replaceState` (sai do histórico e de um
+"copiar URL") e só envia a prova no corpo do `POST /auth/invite/accept` (`emailProof`). Os
+templates de cadastro e de senha (§4.1, §4.2) continuam com query porque as páginas
+`/verify` e `/reset-password` leem a query hoje; o de redefinição de senha tem o mesmo tipo de
+exposição e migrar os dois para fragmento é melhoria registrada nas notas da F71-S05 (exige
+mudar as páginas junto com os templates, no mesmo deploy).
+
+Tipo no GoTrue: o template de convite leva `type=invite` e a API verifica com `invite`. O de
+link de acesso leva `type=magiclink` na URL do app, mas a API verifica com `type=email` — o
+tipo `magiclink` está deprecado no GoTrue, e `email` procura o `token_hash` tanto no token de
+confirmação quanto no de recuperação (cobre conta confirmada e não confirmada). Não troque o
+`type` da URL: o app mapeia.
 
 ## Pré-requisitos
 
@@ -148,6 +180,11 @@ Outlook e Apple Mail, inclusive no modo escuro.
 
 **Subject:** `Você foi convidado para o Leadium`
 
+O link é `{{ .RedirectTo }}#token_hash={{ .TokenHash }}&type=invite` — exatamente assim, com
+`#` (fragmento), nunca `?`. Sem o `token_hash`, quem não tem conta não consegue criar a senha
+(a página pede outro email). Com `?` a prova vazaria para logs e histórico (ver "Por que
+fragmento" no topo).
+
 ```html
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <tr><td align="center">
@@ -157,7 +194,7 @@ Outlook e Apple Mail, inclusive no modo escuro.
         Você foi convidado para entrar numa empresa no Leadium. Abra o convite para ver quem convidou e criar sua senha.
       </td></tr>
       <tr><td style="padding-top:24px;">
-        <a href="{{ .RedirectTo }}"
+        <a href="{{ .RedirectTo }}#token_hash={{ .TokenHash }}&type=invite"
            style="display:inline-block;background:#09090b;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 20px;border-radius:8px;">Abrir convite</a>
       </td></tr>
       <tr><td style="padding-top:24px;font-size:13px;line-height:20px;color:#71717a;">
@@ -170,8 +207,17 @@ Outlook e Apple Mail, inclusive no modo escuro.
 
 ### 4.4 Magic link
 
-Usado só para convidar quem **já tem conta** no Leadium (o app não oferece login sem senha).
-Se um dia o login por link entrar no produto, este template precisa ser revisto.
+Usado para convidar quem **já tem conta** no Leadium (o app não oferece login sem senha) e
+para reenviar o convite a quem já abriu um convite antes mas ainda não criou a senha (conta
+confirmada, sem senha). Se um dia o login por link entrar no produto, este template precisa
+ser revisto.
+
+O link é `{{ .RedirectTo }}#token_hash={{ .TokenHash }}&type=magiclink` — exatamente assim,
+com `#` (fragmento), nunca `?`. O `token_hash` deste template é uma credencial de login do
+Supabase: ele só serve à API do Leadium, que o verifica no servidor e descarta a sessão. No
+fragmento ele não chega a servidor nem a log; além disso, a página `/convite` limpa o
+fragmento ao carregar, responde com `Referrer-Policy: no-referrer`, e o Sentry da API mascara
+`token_hash` em query e fragmento (F71-S05).
 
 **Subject:** `Você tem um novo convite no Leadium`
 
@@ -184,7 +230,7 @@ Se um dia o login por link entrar no produto, este template precisa ser revisto.
         Você foi convidado para mais uma empresa no Leadium. Entre com a sua conta de sempre e aceite o convite.
       </td></tr>
       <tr><td style="padding-top:24px;">
-        <a href="{{ .RedirectTo }}"
+        <a href="{{ .RedirectTo }}#token_hash={{ .TokenHash }}&type=magiclink"
            style="display:inline-block;background:#09090b;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 20px;border-radius:8px;">Ver convite</a>
       </td></tr>
       <tr><td style="padding-top:24px;font-size:13px;line-height:20px;color:#71717a;">
@@ -228,16 +274,34 @@ Use uma caixa real que você controla e que **não** tenha conta no Leadium (ex.
 
 1. Logado como OWNER/ADMIN, convide um email **sem conta** em Configurações → Membros.
 2. O email "Você foi convidado para o Leadium" chega; o link é
-   `https://app.leadium.com.br/convite/<token>` (o token é longo e aleatório).
-3. Abra: a página mostra a empresa e quem convidou; defina a senha; o app manda para
+   `https://app.leadium.com.br/convite/<token>#token_hash=<hash>&type=invite` (o token é longo
+   e aleatório; o hash é hex). Se aparecer `?token_hash=`, o template está errado: corrija o
+   passo 4.3 antes de seguir.
+3. Abra: assim que a página carrega, a barra de endereço perde o `#token_hash=…` (fica só
+   `/convite/<token>`). A página mostra a empresa e quem convidou; defina a senha; o app manda para
    `/login` com o email preenchido; entre: você está na empresa que convidou.
 4. Abra o mesmo link de novo: "convite inválido ou já usado".
+5. **Link copiado (anti-takeover):** convide outro email sem conta; na lista, "copiar link";
+   abra o link copiado numa janela anônima. A página **não** oferece criar senha: oferece
+   "enviar o convite para o email". Peça; o email chega com o MESMO `/convite/<token>` e um
+   `#token_hash`; pelo email, crie a senha. Repita o pedido em menos de 1 minuto: a página
+   avisa para aguardar.
+6. Pegue um `token_hash` já usado (passo 3) e cole no fragmento de outro convite do mesmo
+   email (`/convite/<outro>#token_hash=<usado>&type=invite`): criar a senha falha ("abra o
+   link que enviamos").
+7. **Fora dos logs:** procure o `<hash>` do passo 2 no access log do proxy (e no do Next, se
+   houver): não pode aparecer. Só `/convite/<token>` aparece.
 
 ### 5.4 Magic link (depois da F71-S05)
 
 1. Convide para **outra** empresa o email do teste 5.3 (que agora tem conta).
-2. Chega "Você tem um novo convite no Leadium"; o link é `/convite/<token>`.
+2. Chega "Você tem um novo convite no Leadium"; o link é
+   `/convite/<token>#token_hash=<hash>&type=magiclink` (fragmento; nunca `?token_hash=`).
 3. Logado com essa conta, aceite: a nova empresa vira a ativa e o seletor mostra as duas.
+4. Sem estar logado, a página pede para entrar (nunca oferece criar senha para conta que já
+   tem senha).
+5. Se em vez do "Magic link" chegar o "Confirm signup" (conta ainda não confirmada), registre
+   no slot F71-S05: é o GoTrue tratando `signInWithOtp` de conta não confirmada como cadastro.
 
 ### 5.5 Busca de conta por email exato (A4)
 
@@ -265,12 +329,13 @@ execução". Depois: `Remove-Item Env:SK`.
 - [ ] Confirm email ligado; OTP expiration 86400; senha mínima 10
 - [ ] Template "Confirm signup" usa `{{ .SiteURL }}/verify?token_hash={{ .TokenHash }}&type=email`
 - [ ] Template "Reset password" usa `{{ .SiteURL }}/reset-password?token_hash={{ .TokenHash }}&type=recovery`
-- [ ] Templates "Invite user" e "Magic link" usam `{{ .RedirectTo }}`
+- [ ] Template "Invite user" usa `{{ .RedirectTo }}#token_hash={{ .TokenHash }}&type=invite` (fragmento, `#`)
+- [ ] Template "Magic link" usa `{{ .RedirectTo }}#token_hash={{ .TokenHash }}&type=magiclink` (fragmento, `#`)
 - [ ] Nenhum template usa `{{ .ConfirmationURL }}`
 - [ ] API de produção com `AUTH_EMAIL_REDIRECT_URL=https://app.leadium.com.br` e `SUPABASE_SERVICE_KEY`
 - [ ] Teste 5.1 (cadastro) ok, incluindo link reusado recusado
 - [ ] Teste 5.2 (reset) ok, incluindo email inexistente com resposta igual
-- [ ] Teste 5.3 (convite sem conta) ok — após F71-S05
+- [ ] Teste 5.3 (convite sem conta) ok, incluindo link copiado sem criar senha, `token_hash` reusado recusado e `token_hash` ausente do access log — após F71-S05
 - [ ] Teste 5.4 (convite com conta) ok — após F71-S05
 - [ ] Teste 5.5 registrado no slot
 
@@ -283,4 +348,8 @@ execução". Depois: `Remove-Item Env:SK`.
 | `/verify` diz "link inválido" no primeiro clique | Template sem `token_hash`, ou OTP expirado | Passo 4; conferir OTP expiration |
 | Convite abre a home em vez de `/convite/…` | `/convite/**` fora das Redirect URLs | Passo 2 |
 | Convite falha ao enviar na tela de membros | `AUTH_EMAIL_REDIRECT_URL` ou service key ausente na API; rate limit | Variáveis da API; enquanto isso, use "copiar link" do convite |
+| Convidado sem conta abre o email e a página diz "abra o link que enviamos" | Template de convite sem `#token_hash={{ .TokenHash }}&type=invite`, ou com `?` no lugar de `#` (a página só lê o fragmento) | Passo 4.3 |
+| `token_hash=` aparece no access log do proxy/Next | Template "Invite user" ou "Magic link" com `?token_hash` em vez de `#token_hash` | Passo 4.3/4.4; trate os hashes logados como vazados: reenvie os convites afetados (o envio novo invalida o anterior) |
+| "Muitos convites enviados" (429) na tela de membros | Cota da API: 30 emails/h por empresa | Esperar a janela; enquanto isso, "copiar link" |
+| Convite criado, mas "não foi possível enviar o email" | Cota de 10 emails/dia por destinatário (somando empresas), Redis fora ou falha do provider: o convite fica pendente, sem email | "Copiar link" e mandar por outro canal; ou reenviar no dia seguinte |
 | Email cai no spam | DKIM/DMARC ausentes ou remetente diferente do domínio autenticado | Passo 1, item 5 |

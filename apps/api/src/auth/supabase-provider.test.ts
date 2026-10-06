@@ -502,3 +502,69 @@ describe('SupabaseAuthProvider.completeAccount / updatePassword', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('SupabaseAuthProvider.verifyEmailOwnership (F71-S05, prova de posse)', () => {
+  const HASH = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4';
+
+  it('invite → POST /verify type=invite com a anon key; devolve a conta; revoga a sessão', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        json({ access_token: 'sess-1', user: goTrueUser(ID_A, 'Ana@X.com') }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await expect(makeProvider().verifyEmailOwnership(HASH, 'invite')).resolves.toEqual({
+      authUserId: ID_A,
+      email: 'ana@x.com',
+    });
+    const { url, init } = call(0);
+    expect(url.href).toBe(`${SUPABASE_URL}/auth/v1/verify`);
+    expect(init?.method).toBe('POST');
+    expect((init?.headers as Record<string, string>)['apikey']).toBe('anon-key');
+    expect(bodyOf(0)).toEqual({ type: 'invite', token_hash: HASH });
+    // A sessão criada pelo verify não vira login de ninguém: revogada em seguida.
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const logout = call(1);
+    expect(logout.url.pathname).toBe('/auth/v1/logout');
+    expect(logout.url.searchParams.get('scope')).toBe('local');
+    expect((logout.init?.headers as Record<string, string>)['Authorization']).toBe('Bearer sess-1');
+  });
+
+  it('magiclink → type=email no GoTrue (magiclink está deprecado)', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ access_token: 's', user: goTrueUser(ID_B, 'bia@x.com') }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await expect(makeProvider().verifyEmailOwnership(HASH, 'magiclink')).resolves.toMatchObject({
+      authUserId: ID_B,
+    });
+    expect(bodyOf(0)).toEqual({ type: 'email', token_hash: HASH });
+  });
+
+  it('token expirado/usado (4xx) → null; hash fora do formato nem chega ao provider', async () => {
+    fetchMock.mockResolvedValueOnce(json({ error_code: 'otp_expired', msg: 'expired' }, 403));
+    await expect(makeProvider().verifyEmailOwnership(HASH, 'invite')).resolves.toBeNull();
+    await expect(makeProvider().verifyEmailOwnership('../x?y', 'invite')).resolves.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('rede, 429 e 5xx → provider_error ("não sei" nunca vira válido nem inválido)', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+    await expect(makeProvider().verifyEmailOwnership(HASH, 'invite')).rejects.toMatchObject({
+      code: 'provider_error',
+    });
+    fetchMock.mockResolvedValueOnce(json({ msg: 'slow down' }, 429));
+    await expect(makeProvider().verifyEmailOwnership(HASH, 'invite')).rejects.toBeInstanceOf(AuthError);
+    fetchMock.mockResolvedValueOnce(json({ msg: 'boom' }, 503));
+    await expect(makeProvider().verifyEmailOwnership(HASH, 'magiclink')).rejects.toBeInstanceOf(
+      AuthError,
+    );
+  });
+
+  it('resposta 200 fora do formato → provider_error; sem email → null', async () => {
+    fetchMock.mockResolvedValueOnce(json({ user: { nope: true } }));
+    await expect(makeProvider().verifyEmailOwnership(HASH, 'invite')).rejects.toMatchObject({
+      code: 'provider_error',
+    });
+    fetchMock.mockResolvedValueOnce(json({ user: { id: ID_A, email: null } }));
+    await expect(makeProvider().verifyEmailOwnership(HASH, 'invite')).resolves.toBeNull();
+  });
+});

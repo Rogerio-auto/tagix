@@ -66,6 +66,9 @@ const ID_AFTER = new Set<string>([
 const ID_AFTER_NESTED = new Set<string>([
   'dev/webhooks',
   'dev/api-keys',
+  // F71-S05: /api/members/invites[/:id/...] — `invites` é sub-coleção, não :id de membro.
+  // A lista passa; o :id do convite (índice 3) é validado aqui como os demais.
+  'members/invites',
 ]);
 
 /**

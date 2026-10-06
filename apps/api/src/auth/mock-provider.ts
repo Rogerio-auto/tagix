@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { asc, eq, sql } from 'drizzle-orm';
 import { getDb, schema } from '@hm/db';
 import {
@@ -9,6 +9,7 @@ import {
   type AuthIdentity,
   type AuthSession,
   type AuthUserLookup,
+  type EmailProofType,
   type IAccountAuthProvider,
   type InviteResult,
   type SignUpResult,
@@ -32,7 +33,24 @@ interface MockUser {
 export interface MockAuthEmail {
   kind: 'invite' | 'sign_in_link';
   email: string;
+  /** Destino (`{{ .RedirectTo }}`), sem a prova. */
   redirectTo: string;
+  /** `{{ .TokenHash }}` deste envio: prova de posse da caixa, uso único. */
+  tokenHash: string;
+  /** `type` que o template põe na URL (`invite` ou `magiclink`). */
+  proofType: EmailProofType;
+  /**
+   * URL que o botão do email abre: `<redirectTo>#token_hash=…&type=…` (runbook §4). A prova
+   * vai no FRAGMENTO: o navegador não o manda ao servidor nem no Referer (não cai em log).
+   */
+  link: string;
+}
+
+/** `token_hash` emitido por um envio do mock, aceito uma vez. */
+interface MockProof {
+  email: string;
+  type: EmailProofType;
+  used: boolean;
 }
 
 /** Teto da caixa de saída em memória (processo de dev longo não cresce sem limite). */
@@ -56,6 +74,9 @@ export class MockAuthProvider implements IAccountAuthProvider {
 
   /** Emails que teriam saído (mais recentes no fim). */
   readonly outbox: MockAuthEmail[] = [];
+
+  /** token_hash → prova (só os emitidos pelo `record`). */
+  private readonly proofs = new Map<string, MockProof>();
 
   readonly kind = 'mock' as const;
 
@@ -217,8 +238,35 @@ export class MockAuthProvider implements IAccountAuthProvider {
     return undefined;
   }
 
-  private record(mail: MockAuthEmail): void {
-    this.outbox.push(mail);
+  /**
+   * Prova de posse: só aceita um `token_hash` que saiu num email deste mock, do mesmo tipo,
+   * uma vez. Paridade com o GoTrue: verificar confirma o email; um envio mais novo para o
+   * mesmo endereço invalida o anterior (o `record` apaga as provas antigas).
+   */
+  async verifyEmailOwnership(tokenHash: string, type: EmailProofType): Promise<AuthIdentity | null> {
+    const proof = this.proofs.get(tokenHash);
+    if (!proof || proof.used || proof.type !== type) return null;
+    proof.used = true;
+    const user = this.users.get(proof.email);
+    if (!user) return null;
+    user.emailConfirmed = true;
+    return { authUserId: user.authUserId, email: user.email };
+  }
+
+  private record(mail: Omit<MockAuthEmail, 'tokenHash' | 'proofType' | 'link'>): void {
+    const proofType: EmailProofType = mail.kind === 'invite' ? 'invite' : 'magiclink';
+    for (const [hash, proof] of this.proofs) {
+      if (proof.email === mail.email) this.proofs.delete(hash);
+    }
+    const tokenHash = randomBytes(28).toString('hex');
+    this.proofs.set(tokenHash, { email: mail.email, type: proofType, used: false });
+    if (this.proofs.size > OUTBOX_LIMIT) {
+      const oldest = this.proofs.keys().next();
+      if (!oldest.done) this.proofs.delete(oldest.value);
+    }
+    const link = new URL(mail.redirectTo);
+    link.hash = new URLSearchParams({ token_hash: tokenHash, type: proofType }).toString();
+    this.outbox.push({ ...mail, tokenHash, proofType, link: link.toString() });
     if (this.outbox.length > OUTBOX_LIMIT) this.outbox.shift();
   }
 }

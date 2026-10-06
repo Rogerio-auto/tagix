@@ -12,6 +12,7 @@ import {
   type AuthIdentity,
   type AuthSession,
   type AuthUserLookup,
+  type EmailProofType,
   type IAccountAuthProvider,
   type InviteResult,
   type SignUpResult,
@@ -57,6 +58,12 @@ type GoTrueUser = z.infer<typeof goTrueUserSchema>;
 /** `GET /admin/users` → `{ users: [...], aud }`. Cada item é validado à parte. */
 const goTrueUserListSchema = z.object({ users: z.array(z.unknown()) });
 
+/** Resposta do `POST /verify` (sessão). Só o usuário interessa; o token é revogado. */
+const verifySessionSchema = z.object({
+  access_token: z.string().min(1).optional(),
+  user: goTrueUserSchema.nullish(),
+});
+
 /**
  * Corpo de erro do GoTrue. Varia por versão: `error_code` (atual), `code` (numérico em
  * respostas antigas, string em algumas), `msg`/`message`/`error_description`.
@@ -95,10 +102,12 @@ export class SupabaseAuthProvider implements IAccountAuthProvider {
   readonly kind = 'supabase' as const;
   private readonly client: SupabaseClient;
   private readonly url: string;
+  private readonly anonKey: string;
   private readonly serviceKey: string | undefined;
 
   constructor(url: string, anonKey: string, serviceKey?: string) {
     this.url = url.replace(/\/$/, '');
+    this.anonKey = anonKey;
     this.serviceKey = serviceKey;
     this.client = createClient(url, anonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -391,6 +400,64 @@ export class SupabaseAuthProvider implements IAccountAuthProvider {
       email_confirm: true,
       app_metadata: { [PASSWORD_SET_FLAG]: true },
     });
+  }
+
+  /**
+   * `POST /auth/v1/verify { type, token_hash }` por `fetch` direto (não pelo cliente
+   * auth-js compartilhado, que guardaria a sessão em memória do processo). O GoTrue
+   * consome o `token_hash` (uso único) e devolve uma sessão: só o usuário é lido, e a
+   * sessão é revogada em seguida (`/logout?scope=local`, best-effort) — a prova não vira
+   * login de ninguém.
+   *
+   * Tipo no GoTrue: `invite` → `invite` (procura pelo `confirmation_token`); `magiclink`
+   * → `email`, o tipo atual recomendado (o `magiclink` está deprecado) e que procura pelo
+   * `confirmation_token` OU `recovery_token` — cobre o link de acesso de conta
+   * confirmada (recovery) e o de conta ainda não confirmada.
+   *
+   * 4xx (expirado, já usado, inexistente) → `null`. Rede, 429 e 5xx → `provider_error`.
+   */
+  async verifyEmailOwnership(tokenHash: string, type: EmailProofType): Promise<AuthIdentity | null> {
+    if (!/^[A-Za-z0-9_-]{8,256}$/.test(tokenHash)) return null;
+    let res: Response;
+    try {
+      res = await fetch(`${this.url}/auth/v1/verify`, {
+        method: 'POST',
+        headers: { apikey: this.anonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: type === 'invite' ? 'invite' : 'email',
+          token_hash: tokenHash,
+        }),
+        signal: AbortSignal.timeout(ADMIN_TIMEOUT_MS),
+      });
+    } catch {
+      throw new AuthError('Provider de auth indisponível na prova de email.', 'provider_error');
+    }
+    if (res.status === 429 || res.status >= 500) {
+      throw new AuthError(`Prova de email recusada (${res.status}).`, 'provider_error');
+    }
+    if (!res.ok) return null;
+    const parsed = verifySessionSchema.safeParse(await readJson(res));
+    if (!parsed.success) {
+      throw new AuthError('Resposta inesperada do provider na prova de email.', 'provider_error');
+    }
+    const { access_token: accessToken } = parsed.data;
+    const user = parsed.data.user;
+    if (accessToken) void this.revokeSession(accessToken);
+    if (!user?.email) return null;
+    return { authUserId: user.id, email: normalizeEmail(user.email) };
+  }
+
+  /** Revoga a sessão criada pelo verify da prova. Best-effort: nunca lança nem espera. */
+  private async revokeSession(accessToken: string): Promise<void> {
+    try {
+      await fetch(`${this.url}/auth/v1/logout?scope=local`, {
+        method: 'POST',
+        headers: { apikey: this.anonKey, Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(ADMIN_TIMEOUT_MS),
+      });
+    } catch {
+      // A sessão expira sozinha; o cliente nunca a recebeu.
+    }
   }
 
   async updatePassword(authUserId: string, password: string): Promise<boolean> {

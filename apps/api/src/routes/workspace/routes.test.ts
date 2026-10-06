@@ -32,4 +32,14 @@ describe('rotas de workspace settings (autorização)', () => {
   it('DELETE /api/members/:id sem sessão -> 401', async () => {
     expect((await request(app).delete(`/api/members/${ID}`)).status).toBe(401);
   });
+  // F71-S05: convites montados pelo router de settings, antes de /api/members/:id.
+  it('GET /api/members/invites sem sessão -> 401', async () => {
+    expect((await request(app).get('/api/members/invites')).status).toBe(401);
+  });
+  it('POST /api/members/invites sem sessão -> 401', async () => {
+    expect((await request(app).post('/api/members/invites').send({ email: 'a@b.com', role: 'AGENT' })).status).toBe(401);
+  });
+  it('DELETE /api/members/invites/:id sem sessão -> 401', async () => {
+    expect((await request(app).delete(`/api/members/invites/${ID}`)).status).toBe(401);
+  });
 });

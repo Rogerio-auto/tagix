@@ -113,6 +113,25 @@ describe('uuidParamGuard', () => {
     expect(run('/api/sla').nexted).toBe(true);
   });
 
+  it('F71-S05: /api/members/invites passa; o :id do convite é validado como UUID', () => {
+    // A lista (GET/POST) e as variantes sem id passam até a rota.
+    expect(run('/api/members/invites').nexted).toBe(true);
+    // :id válido nas sub-rotas passa.
+    expect(run(`/api/members/invites/${UUID}`).nexted).toBe(true);
+    expect(run(`/api/members/invites/${UUID}/resend`).nexted).toBe(true);
+    expect(run(`/api/members/invites/${UUID}/link`).nexted).toBe(true);
+    // :id malformado → 404 central (nunca chega ao Postgres).
+    for (const p of ['/api/members/invites/nao-uuid', '/api/members/invites/1/resend', '/api/members/invites/x/link']) {
+      const r = run(p);
+      expect(r.nexted, p).toBe(false);
+      expect(r.status, p).toBe(404);
+    }
+    // `invites` deixou de ser literal global: em posição de :id de outra coleção é 404.
+    expect(run('/api/deals/invites').status).toBe(404);
+    // E não é mais um carve-out de :id de membro qualquer.
+    expect(run('/api/members/not-a-uuid').status).toBe(404);
+  });
+
   it('é determinístico (sem efeitos colaterais entre chamadas)', () => {
     const spy = vi.fn();
     expect(spy).not.toHaveBeenCalled();
