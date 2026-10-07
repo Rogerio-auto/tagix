@@ -2,7 +2,7 @@
 id: F71-S10
 title: Auditoria de segurança da F71 e teste do fluxo inteiro de contas
 phase: F71
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F71-S07, F71-S08, F71-S09]
@@ -10,6 +10,9 @@ blocks: []
 source_docs:
   - docs/features/CONTAS_E_CONVITES.md
   - docs/security
+agent_id: backend-engineer
+claimed_at: 2026-10-07T01:33:15Z
+
 ---
 # F71-S10 — Segurança e fluxo ponta a ponta
 
