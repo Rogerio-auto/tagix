@@ -17,6 +17,8 @@ import { startSocketRelay } from './relay';
 import { wireSupportRealtime } from '../services/support-realtime';
 import { registerSupportSocketHandlers } from '../sockets/support';
 import { createLogger } from '@hm/logger';
+import { startSocketRevalidation } from './revalidate';
+import { setMemberDisconnector } from './member-disconnect';
 
 // Diagnóstico de tempo real: loga handshake (auth ok/falha), conexão + rooms e
 // join de conversa. Sem isto, "socket não atualiza" é uma caixa-preta.
@@ -113,6 +115,12 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
 
   io.use(handshakeAuth);
 
+  // F-03: bloqueio/remoção de membro derruba os sockets dele na hora (todas as instâncias,
+  // via adapter Redis). O timer de revalidação abaixo cobre os caminhos que não passam aqui.
+  setMemberDisconnector((memberId) => {
+    io.in(`member:${memberId}`).disconnectSockets(true);
+  });
+
   io.on('connection', (socket) => {
     const session = socket.data.session;
     if (!session) {
@@ -123,6 +131,17 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
     const [wsRoom] = rooms;
     socket.join(rooms);
     io.to(wsRoom).emit('member:online', { memberId: session.member.id });
+    // F-03: o handshake autentica uma vez; revalida a sessão/membership a cada 60 s.
+    startSocketRevalidation(socket, {
+      session,
+      cookieHeader: socket.handshake.headers.cookie,
+      resolve: resolveHandshakeSession,
+      onRevoked: () =>
+        socketLog.warn('socket derrubado: sessão/membership não vale mais', {
+          memberId: session.member.id,
+          workspaceId: session.workspace.id,
+        }),
+    });
     socketLog.info('socket conectado', {
       memberId: session.member.id,
       workspaceId: session.workspace.id,

@@ -21,8 +21,9 @@
  * O token do convite prova "tenho o link". Ele NÃO prova "sou dono deste email": o admin que
  * clica em "copiar link" o recebe em claro. Por isso, criar a senha de uma conta exige a
  * prova de posse da caixa — o `token_hash` do provider de auth, que só existe dentro do
- * email ("Invite user" / "Magic link" linkam `/convite/<token>?token_hash=…&type=…`; ver o
- * runbook `supabase-auth-emails.md`) e que o admin nunca vê.
+ * email ("Invite user" / "Magic link" linkam `/convite/<token>#token_hash=…&type=…` — a prova
+ * vai no FRAGMENTO da URL, que o navegador não envia ao servidor nem ao `Referer`, nunca na
+ * query; ver o runbook `supabase-auth-emails.md`) e que o admin nunca vê.
  *
  * Classificação pelo email DO CONVITE (nunca pelo body), com `findUserByEmail`:
  *
@@ -172,6 +173,17 @@ function inviteConflict(res: Response): void {
   });
 }
 
+/** Motivos (fechados) da trilha de aceite negado — vão para `audit_logs.metadata.reason`. */
+type AcceptDeniedReason =
+  | 'login_required'
+  | 'wrong_account'
+  | 'email_proof_missing'
+  | 'email_proof_invalid'
+  | 'email_proof_other_email'
+  | 'email_proof_other_account'
+  | 'blocked_member'
+  | 'invite_conflict';
+
 /** Sem cache e sem `Referer`: o corpo/URL dessas rotas carrega segredo de uso único. */
 function noStore(_req: Request, res: Response, next: NextFunction): void {
   res.setHeader('Cache-Control', 'no-store');
@@ -204,6 +216,36 @@ export function createInviteAuthRouter(options: InviteAuthRouterOptions = {}): R
   const previewLimiter = limiter('invite_preview', 60, 10 * 60, options.limits?.preview);
   const acceptLimiter = limiter('invite_accept', 20, 15 * 60, options.limits?.accept);
   const sendEmailLimiter = limiter('invite_send_email', 5, 15 * 60, options.limits?.sendEmail);
+
+  /**
+   * F-16: trilha interna de aceite negado (`actorType:'system'`). Metadata SÓ com o motivo e o
+   * email mascarado — nunca token, hash, prova nem email completo. Best-effort: falha de
+   * auditoria vai ao log e NÃO muda a resposta (que segue uniforme para quem chamou).
+   */
+  async function auditDenied(
+    req: Request,
+    invite: InviteLookup,
+    reason: AcceptDeniedReason,
+  ): Promise<void> {
+    try {
+      await withWorkspace(invite.workspaceId, (tx) =>
+        recordWorkspaceAudit(tx, req, {
+          workspaceId: invite.workspaceId,
+          actorMemberId: null,
+          actorType: 'system',
+          action: INVITE_AUDIT_ACTIONS.acceptDenied,
+          resourceId: invite.id,
+          metadata: { reason, emailMasked: maskEmail(invite.email) },
+        }),
+      );
+    } catch (err: unknown) {
+      log.error('invite_accept_denied_audit_failed', {
+        inviteId: invite.id,
+        workspaceId: invite.workspaceId,
+        err: err instanceof Error ? err.name : 'unknown',
+      });
+    }
+  }
 
   const router = Router();
   router.use('/auth/invite', noStore);
@@ -320,6 +362,7 @@ export function createInviteAuthRouter(options: InviteAuthRouterOptions = {}): R
     const knownId = account.kind === 'none' ? null : account.authUserId;
     if (await isBlockedMember(invite.workspaceId, { email: invite.email, authUserId: knownId })) {
       log.warn('invite_accept_blocked_member', { inviteId: invite.id, workspaceId: invite.workspaceId });
+      await auditDenied(req, invite, 'blocked_member');
       inviteConflict(res);
       return;
     }
@@ -344,6 +387,7 @@ export function createInviteAuthRouter(options: InviteAuthRouterOptions = {}): R
       ? await verifyTokenResilient(sessionToken)
       : null;
     if (!identity) {
+      await auditDenied(req, invite, 'login_required');
       res.status(401).json({
         error: 'login_required',
         message: 'Entre com a sua conta para aceitar o convite.',
@@ -351,6 +395,7 @@ export function createInviteAuthRouter(options: InviteAuthRouterOptions = {}): R
       return;
     }
     if (!sameEmail(identity.email, invite.email) || identity.authUserId !== accountId) {
+      await auditDenied(req, invite, 'wrong_account');
       res.status(403).json({
         error: 'wrong_account',
         message: 'Este convite é para outro email. Entre com a conta convidada.',
@@ -387,6 +432,7 @@ export function createInviteAuthRouter(options: InviteAuthRouterOptions = {}): R
   ): Promise<void> {
     const proof = body.emailProof;
     if (!proof) {
+      await auditDenied(req, invite, 'email_proof_missing');
       emailProofRequired(res);
       return;
     }
@@ -425,11 +471,13 @@ export function createInviteAuthRouter(options: InviteAuthRouterOptions = {}): R
         workspaceId: invite.workspaceId,
         reason: owner ? 'other_email' : 'invalid',
       });
+      await auditDenied(req, invite, owner ? 'email_proof_other_email' : 'email_proof_invalid');
       emailProofRequired(res);
       return;
     }
     if (current.kind === 'account' && current.authUserId === owner.authUserId) {
       // Dono da caixa, mas a conta já tem senha: entra e aceita logado.
+      await auditDenied(req, invite, 'login_required');
       res.status(401).json({
         error: 'login_required',
         message: 'Entre com a sua conta para aceitar o convite.',
@@ -442,10 +490,12 @@ export function createInviteAuthRouter(options: InviteAuthRouterOptions = {}): R
         workspaceId: invite.workspaceId,
         reason: 'other_account',
       });
+      await auditDenied(req, invite, 'email_proof_other_account');
       emailProofRequired(res);
       return;
     }
     if (await isBlockedMember(invite.workspaceId, { email: invite.email, authUserId: owner.authUserId })) {
+      await auditDenied(req, invite, 'blocked_member');
       inviteConflict(res);
       return;
     }
@@ -493,6 +543,7 @@ export function createInviteAuthRouter(options: InviteAuthRouterOptions = {}): R
     } catch (err: unknown) {
       if (err instanceof InviteAcceptConflictError) {
         log.warn('invite_accept_conflict', { inviteId: invite.id, workspaceId: invite.workspaceId });
+        await auditDenied(req, invite, 'invite_conflict');
         inviteConflict(res);
         return null;
       }

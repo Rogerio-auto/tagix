@@ -118,6 +118,11 @@ export function memoizeSubscriptionGate(gate: SubscriptionGate): SubscriptionGat
   };
 }
 
+/** Portão permissivo — SÓ para teste (o nome diz isso). */
+export const allowAllSubscriptionGate: SubscriptionGate = {
+  check: async () => ({ active: true, status: 'active' }),
+};
+
 /** Portão default do processo (lê o banco a cada job). */
 export const subscriptionGate: SubscriptionGate = createSubscriptionGate();
 
@@ -141,7 +146,8 @@ export type GatedWorker =
   | 'campaign-tick'
   | 'campaign-followup'
   | 'flow-step'
-  | 'calendar-reminder';
+  | 'calendar-reminder'
+  | 'outbound';
 
 /** Registra (métrica + log) um job concluído como {@link SKIPPED_SUBSCRIPTION_INACTIVE}. */
 export function recordSubscriptionSkip(

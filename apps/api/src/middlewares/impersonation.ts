@@ -5,8 +5,8 @@
  * de impersonation valido (cookie `hm_impersonation` = id de uma impersonation_session
  * ativa), este middleware:
  *
- *   1. Exige que a sessao normal (req.auth) ja esteja resolvida e que o member
- *      autenticado seja EXATAMENTE o admin que abriu a sessao E seja platform-admin.
+ *   1. Exige que a sessao normal (req.auth) ja esteja resolvida e que a PESSOA autenticada
+ *      (authUserId) seja a dona da membership que abriu a sessao, ainda platform-admin ativa.
  *      Claim que nao bate com a sessao -> 403 (anti-tampering).
  *   2. BLOQUEIA qualquer metodo nao-GET (POST/PUT/PATCH/DELETE) com 403 -- read-only duro.
  *   3. NEGA acesso a rotas de plataforma (/api/platform/*) e a qualquer rota de secret
@@ -20,7 +20,8 @@
  * NUNCA expoe secret/token. O `reason`/inicio/fim sao auditados na API (impersonation.ts).
  */
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
-import { impersonationSessionsRepo, workspacesRepo } from '@hm/db';
+import { eq } from 'drizzle-orm';
+import { getDb, impersonationSessionsRepo, schema, workspacesRepo } from '@hm/db';
 
 /** Cookie que carrega o id da impersonation_session ativa (separado da sessao normal). */
 export const IMPERSONATION_COOKIE = 'hm_impersonation';
@@ -108,10 +109,31 @@ export const impersonationMiddleware: RequestHandler = (
       return;
     }
 
-    // Anti-tampering: precisa de sessao normal, e o admin tem de ser o dono do claim
-    // E continuar sendo platform-admin. Caso contrario, recusa (nao vaza contexto).
-    const member = req.auth?.member;
-    if (!member || !member.isPlatformAdmin || member.id !== session.adminMemberId) {
+    // Anti-tampering: precisa de sessao normal, e a PESSOA do claim tem de ser a da sessao.
+    // A comparacao e por `authUserId` (nao por `member.id`): o `req.auth.member` depende da
+    // empresa ATIVA (F71-S03), entao o id muda quando o admin troca de empresa e o admin
+    // legitimo ficaria trancado para fora do proprio view-as. A membership do claim
+    // (`adminMemberId`) tem de continuar sendo platform-admin ATIVA e da mesma pessoa.
+    // Fail-closed: sem sessao, membership sumida, inativa ou de outra pessoa -> 403.
+    const identity = req.auth?.identity;
+    const [adminRow] = identity
+      ? await getDb()
+          .select({
+            authUserId: schema.members.authUserId,
+            isPlatformAdmin: schema.members.isPlatformAdmin,
+            status: schema.members.status,
+          })
+          .from(schema.members)
+          .where(eq(schema.members.id, session.adminMemberId))
+          .limit(1)
+      : [];
+    if (
+      !identity ||
+      !adminRow ||
+      !adminRow.isPlatformAdmin ||
+      adminRow.status !== 'active' ||
+      adminRow.authUserId !== identity.authUserId
+    ) {
       res.status(403).json({ error: 'impersonation_claim_rejected' });
       return;
     }

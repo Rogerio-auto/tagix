@@ -43,6 +43,7 @@ const { outboxRowsOf, eventOf } = await import('../outbox/testing');
 const { parseOutboundJob } = await import('../outbound/job');
 const { handleOutboundEnvelope } = await import('../outbound/worker');
 const { allowAllConsentGate } = await import('../outbound/consent-gate');
+const { allowAllSubscriptionGate } = await import('../lib/subscription-gate');
 const { DbOutboundPersistence } = await import('../outbound/db-ports');
 const { createReminderPorts, REMINDER_TEMPLATE_NAME } = await import('./reminders');
 const { REMINDER_CONVERSATION_ORIGIN } = await import('./contact-conversation');
@@ -311,6 +312,7 @@ async function deliverThroughOutbound(
     },
     logger: createLogger('error'),
     consentGate: allowAllConsentGate,
+        subscriptionGate: allowAllSubscriptionGate,
   });
 }
 

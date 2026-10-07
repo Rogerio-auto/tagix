@@ -154,6 +154,12 @@ const auditMock = vi.mocked(rateLimitModule.auditAuthEvent);
 
 const app = express();
 app.use(express.json());
+// Cada POST /auth/signup ganha um IP de teste próprio (salvo se o teste fixar `x-test-ip`):
+// o balde `signup_ip` (10/h por IP, F-10) esgotaria com tantos signups no mesmo IP simulado.
+app.use('/auth/signup', (req, _res, next) => {
+  if (typeof req.headers['x-test-ip'] !== 'string') req.headers['x-test-ip'] = randomUUID();
+  next();
+});
 app.use(createAuthRouter());
 
 // Workspaces criados direto no DB pelos testes de login (cascade limpa member+sub).
@@ -262,6 +268,23 @@ describe('POST /auth/signup', () => {
     expect(provisionMock).toHaveBeenCalledOnce();
   });
 
+  it('conta existente CONFIRMADA (ex.: convidada) → 202 uniforme e provisiona a própria empresa (spec §1.3)', async () => {
+    providerState.signUpResult = { authUserId: 'existing', created: false };
+    providerState.lookup = { authUserId: 'existing', emailConfirmed: true, hasPassword: true };
+    const res = await request(app).post('/auth/signup').send(validSignup());
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ status: 'verification_sent' });
+    expect(provisionMock).toHaveBeenCalledOnce();
+  });
+
+  it('conta existente NÃO confirmada → provisiona (retry do órfão segue funcionando)', async () => {
+    providerState.signUpResult = { authUserId: 'existing', created: false };
+    providerState.lookup = { authUserId: 'existing', emailConfirmed: false, hasPassword: true };
+    const res = await request(app).post('/auth/signup').send(validSignup());
+    expect(res.status).toBe(202);
+    expect(provisionMock).toHaveBeenCalledOnce();
+  });
+
   it('authUserId vazio (lookup do provider falhou) → 202 uniforme, sem provisionar', async () => {
     providerState.signUpResult = { authUserId: '', created: false };
     const res = await request(app).post('/auth/signup').send(validSignup());
@@ -276,6 +299,28 @@ describe('POST /auth/signup', () => {
     expect(res.status).toBe(202);
     expect(res.body).toEqual({ status: 'verification_sent' });
     expect(provisionMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe('POST /auth/signup — teto por IP independente do email (F-10)', () => {
+  it('11º signup do MESMO IP com emails sempre novos → 429', async () => {
+    const ip = `signup-ip-${randomUUID().slice(0, 8)}`;
+    for (let i = 0; i < 10; i += 1) {
+      const ok = await request(app).post('/auth/signup').set('x-test-ip', ip).send(validSignup());
+      expect(ok.status).toBe(202);
+    }
+    const blocked = await request(app)
+      .post('/auth/signup')
+      .set('x-test-ip', ip)
+      .send(validSignup());
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.reason).toBe('rate_limited');
+    // Outro IP não herda o bloqueio.
+    const other = await request(app)
+      .post('/auth/signup')
+      .set('x-test-ip', `${ip}-b`)
+      .send(validSignup());
+    expect(other.status).toBe(202);
   });
 });
 

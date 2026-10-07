@@ -32,6 +32,25 @@ vi.mock('../../middlewares/auth', () => ({
   withRLS: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
 }));
 
+// Rate-limit em memória (algoritmo real com Redis é coberto no rate-limit.test): honra
+// bucket/max e é zerado a cada teste via `rateLimitCounts`.
+const rateLimitCounts = new Map<string, number>();
+vi.mock('../../middlewares/rate-limit', () => ({
+  auditAuthEvent: vi.fn(async () => undefined),
+  verifyTurnstile: vi.fn(async () => true),
+  clientIp: () => 'ip',
+  rateLimit: (opts: { bucket: string; max: number }) =>
+    (_req: express.Request, res: express.Response, next: express.NextFunction): void => {
+      const count = (rateLimitCounts.get(opts.bucket) ?? 0) + 1;
+      rateLimitCounts.set(opts.bucket, count);
+      if (count > opts.max) {
+        res.status(429).json({ reason: 'rate_limited' });
+        return;
+      }
+      next();
+    },
+}));
+
 vi.mock('../../auth/provider', () => ({
   getAuthProvider: () => ({ signIn, updatePassword }),
 }));
@@ -45,10 +64,11 @@ function makeApp(): express.Express {
   return app;
 }
 
-const VALID = { currentPassword: 'senha-atual', newPassword: 'nova-senha-forte' };
+const VALID = { currentPassword: 'senha-atual', newPassword: 'novaSenha12345' };
 
 describe('POST /api/members/me/password', () => {
   beforeEach(() => {
+    rateLimitCounts.clear();
     signIn.mockReset().mockResolvedValue({});
     updatePassword.mockReset().mockResolvedValue(true);
   });
@@ -91,5 +111,28 @@ describe('POST /api/members/me/password', () => {
     expect(res.status).toBe(400);
     expect(signIn).not.toHaveBeenCalled();
     expect(updatePassword).not.toHaveBeenCalled();
+  });
+
+  it('nova senha fraca (sem número / <10 chars) → 400 e não chama o provider (F-09)', async () => {
+    for (const newPassword of ['apenasletrasaqui', '12345678901', 'abc12345']) {
+      const res = await request(makeApp())
+        .post('/api/members/me/password')
+        .send({ currentPassword: 'x', newPassword });
+      expect(res.status).toBe(400);
+    }
+    expect(signIn).not.toHaveBeenCalled();
+    expect(updatePassword).not.toHaveBeenCalled();
+  });
+
+  it('11ª tentativa na janela → 429 e não toca o provider (F-09)', async () => {
+    signIn.mockRejectedValue(new AuthError('Senha incorreta.', 'invalid_credentials'));
+    const app = makeApp();
+    for (let i = 0; i < 10; i += 1) {
+      const res = await request(app).post('/api/members/me/password').send(VALID);
+      expect(res.status).toBe(401);
+    }
+    const blocked = await request(app).post('/api/members/me/password').send(VALID);
+    expect(blocked.status).toBe(429);
+    expect(signIn).toHaveBeenCalledTimes(10);
   });
 });

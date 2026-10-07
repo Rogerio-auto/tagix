@@ -426,6 +426,11 @@ export async function installApiMocks(page: Page): Promise<MockState> {
       });
     }
 
+    // Contadores da sidebar de Configurações (F71-S10): o envelope `{}` do fallback derruba
+    // o painel (`tags.length` sobre undefined). Listas vazias bastam.
+    if (path === '/api/tags' && method === 'GET') return json(route, { tags: [] });
+    if (path === '/api/conversion-types' && method === 'GET') return json(route, { conversionTypes: [] });
+
     // Fallback: qualquer GET não modelado devolve um envelope vazio plausível,
     // para nenhum hook de UI quebrar com 404 e poluir o teste com erro de rede.
     if (method === 'GET') return json(route, {});

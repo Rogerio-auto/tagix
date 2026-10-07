@@ -57,7 +57,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F70   | 35     | 2   | 2   | 0   | 0   | 2   | 29   |
-| F71   | 10     | 0   | 0   | 0   | 1   | 0   | 9   |
+| F71   | 19     | 9   | 0   | 0   | 0   | 1   | 9   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -804,18 +804,27 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 71
 
-| ID      | Titulo                                                                                                         | Status        | Prioridade | Depende de                |
-| ------- | -------------------------------------------------------------------------------------------------------------- | ------------- | ---------- | ------------------------- |
-| F71-S01 | Schema de convites, membership por pessoa e trial de 15 dias no provisionador                                  | ✅ done        | critical   | —                         |
-| F71-S02 | Provider de auth envia convite, define senha e acha usuário por email exato; runbook dos templates do Supabase | ✅ done        | critical   | —                         |
-| F71-S03 | Sessão por pessoa e empresa ativa — troca de empresa, login escolhe a última usada                             | ✅ done        | critical   | F71-S01, F71-S02          |
-| F71-S04 | Cadastro sem beco sem saída — reenviar confirmação, login diz "confirme seu email", aceite de termos           | ✅ done        | high       | F71-S02, F71-S03          |
-| F71-S05 | Convite de verdade — criar, enviar, reenviar, revogar, copiar link e aceitar, com limite de membros            | ✅ done        | critical   | F71-S01, F71-S02, F71-S03 |
-| F71-S06 | Trial expira em 15 dias e empresa sem assinatura ativa fica só leitura                                         | ✅ done        | high       | F71-S01, F71-S03          |
-| F71-S07 | Tela de aceitar convite e gestão de membros com convites pendentes                                             | ✅ done        | high       | F71-S05                   |
-| F71-S08 | Seletor de empresa no shell e aviso de trial, convite pendente e modo só leitura                               | ✅ done        | high       | F71-S03, F71-S06          |
-| F71-S09 | Telas de cadastro sem beco sem saída — reenviar confirmação, login de não confirmado e aceite de termos        | ✅ done        | high       | F71-S04                   |
-| F71-S10 | Auditoria de segurança da F71 e teste do fluxo inteiro de contas                                               | 🔵 in-progress | high       | F71-S07, F71-S08, F71-S09 |
+| ID      | Titulo                                                                                                         | Status      | Prioridade | Depende de                |
+| ------- | -------------------------------------------------------------------------------------------------------------- | ----------- | ---------- | ------------------------- |
+| F71-S01 | Schema de convites, membership por pessoa e trial de 15 dias no provisionador                                  | ✅ done      | critical   | —                         |
+| F71-S02 | Provider de auth envia convite, define senha e acha usuário por email exato; runbook dos templates do Supabase | ✅ done      | critical   | —                         |
+| F71-S03 | Sessão por pessoa e empresa ativa — troca de empresa, login escolhe a última usada                             | ✅ done      | critical   | F71-S01, F71-S02          |
+| F71-S04 | Cadastro sem beco sem saída — reenviar confirmação, login diz "confirme seu email", aceite de termos           | ✅ done      | high       | F71-S02, F71-S03          |
+| F71-S05 | Convite de verdade — criar, enviar, reenviar, revogar, copiar link e aceitar, com limite de membros            | ✅ done      | critical   | F71-S01, F71-S02, F71-S03 |
+| F71-S06 | Trial expira em 15 dias e empresa sem assinatura ativa fica só leitura                                         | ✅ done      | high       | F71-S01, F71-S03          |
+| F71-S07 | Tela de aceitar convite e gestão de membros com convites pendentes                                             | ✅ done      | high       | F71-S05                   |
+| F71-S08 | Seletor de empresa no shell e aviso de trial, convite pendente e modo só leitura                               | ✅ done      | high       | F71-S03, F71-S06          |
+| F71-S09 | Telas de cadastro sem beco sem saída — reenviar confirmação, login de não confirmado e aceite de termos        | ✅ done      | high       | F71-S04                   |
+| F71-S10 | Auditoria de segurança da F71 e teste do fluxo inteiro de contas                                               | 🟣 review    | high       | F71-S07, F71-S08, F71-S09 |
+| F71-S11 | Web com headers de segurança reais, Sentry sem token e token_hash fora da query                                | 🟢 available | high       | F71-S10                   |
+| F71-S12 | Empresa ativa por aba com X-Workspace-Id e 409 workspace_mismatch                                              | 🟢 available | medium     | F71-S10                   |
+| F71-S13 | Preview de convite sem oráculo de conta e aceite inline autenticado                                            | 🟢 available | medium     | F71-S10, F71-S14          |
+| F71-S14 | Convite não reativa bloqueado, logger com redact e papéis do Postgres                                          | 🟢 available | medium     | F71-S10                   |
+| F71-S15 | Verify de cadastro define a senha e fecha o pre-hijack                                                         | 🟢 available | high       | F71-S11, F71-S13          |
+| F71-S16 | Tokens de status legíveis no tema claro, TopBar sob a faixa e bottom-nav no claro                              | 🟢 available | medium     | F71-S10, F70-S32          |
+| F71-S17 | Botões de escrita desabilitados com tooltip no modo só leitura, por feature                                    | 🟢 available | medium     | F71-S16                   |
+| F71-S18 | Hardening menor da fase (Origin do socket, rate limit atômico, isenções do guard)                              | 🟢 available | low        | F71-S12, F71-S13, F71-S14 |
+| F71-S19 | Criar empresa própria estando autenticado                                                                      | 🟢 available | medium     | F71-S10                   |
 
 ## Fase 8 — Permissions & Settings
 

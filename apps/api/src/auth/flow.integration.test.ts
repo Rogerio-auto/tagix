@@ -60,6 +60,7 @@ beforeAll(async () => {
       'login',
       'login_ip',
       'signup',
+      'signup_ip',
       'reset',
       'reset_confirm',
       'verify',
@@ -212,6 +213,28 @@ describe('Fluxo signup → verify → login', () => {
     expect(all).toHaveLength(1); // não duplicou
     // A2 (F71-S04): o 2º signup de conta não confirmada reenviou a confirmação.
     expect(resendSpy).toHaveBeenCalledExactlyOnceWith(email);
+  });
+
+  it('signup sobre conta JÁ confirmada: mesma resposta; idempotente para quem já é dono (spec §1.3)', async () => {
+    const email = `confirmed-${randomUUID().slice(0, 8)}@empresa.com`;
+    emails.push(email);
+    expect((await request(app).post('/auth/signup').send(payload(email))).status).toBe(202);
+    const db = getDb();
+    const [m] = await db.select().from(schema.members).where(eq(schema.members.email, email));
+    if (m) workspaceIds.push(m.workspaceId);
+    const verify = await request(app)
+      .post('/auth/verify')
+      .send({ token: mockVerifyToken(email) });
+    expect(verify.status).toBe(200);
+
+    const before = await db.select().from(schema.members).where(eq(schema.members.email, email));
+    const again = await request(app).post('/auth/signup').send(payload(email));
+    expect(again.status).toBe(202);
+    expect(again.body).toEqual({ status: 'verification_sent' });
+
+    // Idempotência por authUserId OWNER do provisionador: quem já é dono não ganha 2ª empresa.
+    const after = await db.select().from(schema.members).where(eq(schema.members.email, email));
+    expect(after).toHaveLength(before.length);
   });
 
   it('login antes de confirmar → 403 email_unverified; depois do verify entra (A3)', async () => {

@@ -113,6 +113,23 @@ test.describe('Seletor de empresa', () => {
     expect(account.switched).toEqual(['ws_b']);
   });
 
+  test('trocar para empresa em só leitura: faixa aparece; voltar à plena a remove', async ({ page }) => {
+    const expiredB: MembershipSeed = { ...B, subscriptionStatus: 'expired' };
+    await mockAccount(page, { memberships: [A, expiredB] });
+    await page.goto('/');
+    const banner = page.getByRole('region', { name: 'Aviso da conta' });
+    await expect(banner).toHaveCount(0);
+    const nav = page.getByRole('complementary', { name: 'Navegação principal' });
+    await nav.getByRole('button', { name: /Trocar de empresa/ }).click();
+    await page.getByRole('menuitemradio', { name: /Studio Vértice/ }).click();
+    await expect(banner).toContainText('modo só leitura');
+    // A troca em si segue liberada na empresa em só leitura: volta para a plena.
+    await nav.getByRole('button', { name: /Trocar de empresa/ }).click();
+    await page.getByRole('menuitemradio', { name: /Clínica Aurora/ }).click();
+    await expect(nav.getByText('Clínica Aurora')).toBeVisible();
+    await expect(banner).toHaveCount(0);
+  });
+
   test('erro 404 na troca: mostra o aviso e mantém a empresa', async ({ page }) => {
     await mockAccount(page, { memberships: [A, B] });
     await page.route('**/api/me/workspace', (route) =>
