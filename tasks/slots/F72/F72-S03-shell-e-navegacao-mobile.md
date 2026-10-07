@@ -2,7 +2,7 @@
 id: F72-S03
 title: Shell do produto no DS 3.0 e navegação mobile com 4 abas mais Mais
 phase: F72
-status: review
+status: done
 priority: critical
 estimated_size: M
 ui: true
