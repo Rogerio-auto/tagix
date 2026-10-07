@@ -2,7 +2,7 @@
 id: F70-S37
 title: Lista e cabeçalho da conversa mostram o nome do contato, não o número
 phase: F70
-status: in-progress
+status: review
 priority: high
 estimated_size: S
 ui: true
@@ -13,6 +13,7 @@ source_docs:
   - docs/UX_PRINCIPLES.md
 agent_id: backend-engineer
 claimed_at: 2026-10-07T17:41:11Z
+completed_at: 2026-10-07T18:10:05Z
 
 ---
 # F70-S37 — Lista e cabeçalho da conversa mostram o nome do contato
