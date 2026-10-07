@@ -10,6 +10,9 @@
  *    devolvido para a UI exibir o banner "Human Agent Tag" e o backend logar
  *    o uso da tag em audit_logs no envio.
  *  - waha: sem janela imposta pela plataforma → sempre aberta.
+ *  - email (F60-S11): e-mail não tem janela de atendimento → sempre aberta. Antes
+ *    o endpoint devolvia 422 para conversa de e-mail e o composer ficava sem o
+ *    portão de consentimento — contato suprimido por e-mail não aparecia travado.
  *
  * Este router NÃO é montado aqui: `createApp` deve fazer
  * `app.use(createWindowRouter())` após `express.json` (ver relatório do slot).
@@ -54,7 +57,19 @@ export interface SendRestriction {
 }
 
 /** Provider técnico do canal (espelha channels_provider_chk). */
-type Provider = 'meta_whatsapp' | 'meta_instagram' | 'waha';
+type Provider = 'meta_whatsapp' | 'meta_instagram' | 'waha' | 'email';
+
+/**
+ * Nome do canal como o atendente o conhece. O portão (`decideOutbound`) monta a
+ * frase com o identificador técnico (`meta_whatsapp`), que é o certo para log e
+ * métrica e o errado para a tela.
+ */
+const CHANNEL_LABEL: Readonly<Record<Provider, string>> = {
+  meta_whatsapp: 'WhatsApp',
+  meta_instagram: 'Instagram',
+  waha: 'WhatsApp',
+  email: 'e-mail',
+};
 
 /** Janela em milissegundos (24h) usada por WhatsApp e Instagram. */
 const WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -79,12 +94,13 @@ export interface WindowState {
   messageTag: IgMessageTag | null;
 }
 
-function computeWindow(
+export function computeWindow(
   provider: Provider,
   lastInboundAt: Date | null,
   now: Date,
 ): WindowState {
-  if (provider === 'waha') {
+  // Canais sem janela imposta pela plataforma.
+  if (provider === 'waha' || provider === 'email') {
     return { provider, isOpen: true, expiresAt: null, requiresTemplate: false, messageTag: null };
   }
 
@@ -133,7 +149,9 @@ export function toRestriction(
     return {
       canSend: false,
       reason: decision.reason,
-      message: decision.message,
+      // O portão interpola o provider literal (`por ${channel}`); troca só esse
+      // token pelo nome do canal. O motivo (enum) e a decisão ficam intactos.
+      message: decision.message.split(state.provider).join(CHANNEL_LABEL[state.provider]),
       retryAt: decision.retryAt?.toISOString() ?? null,
     };
   }
@@ -166,7 +184,9 @@ export function toRestriction(
 }
 
 function isProvider(value: string): value is Provider {
-  return value === 'meta_whatsapp' || value === 'meta_instagram' || value === 'waha';
+  return (
+    value === 'meta_whatsapp' || value === 'meta_instagram' || value === 'waha' || value === 'email'
+  );
 }
 
 /**
@@ -195,7 +215,9 @@ export function createWindowRouter(): Router {
 
       const result = await req.scoped!(async (tx) => {
         // Guard de visibilidade por-conversa (S07.1): nega quem não enxerga a conversa.
-        if (!(await assertConversationVisible(tx, { memberId, role, workspaceId }, conversationId))) {
+        if (
+          !(await assertConversationVisible(tx, { memberId, role, workspaceId }, conversationId))
+        ) {
           return null;
         }
         // Provider vem do canal da conversa (RLS-escopado por workspace).
