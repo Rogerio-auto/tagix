@@ -238,6 +238,12 @@ describe('open redirect — `next` só aceita caminho interno', () => {
     expect(postLoginPath('/signup')).toBe('/');
   });
 
+  it('next apontando para o convite é preservado (F71-S07: "Entre para aceitar")', () => {
+    expect(postLoginPath('/convite/tok_abc-123')).toBe('/convite/tok_abc-123');
+    expect(postLoginPath('/convite')).toBe('/');
+    expect(postLoginPath('//evil.com/convite/x')).toBe('/');
+  });
+
   it('loginUrl descarta next externo e mantém o motivo', () => {
     expect(loginUrl('//evil.com', true)).toBe('/login?motivo=sessao-expirada');
     expect(loginUrl('https://evil.com', false)).toBe('/login');

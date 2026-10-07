@@ -10,6 +10,8 @@
  * exigência da Meta: o revisor do App Review e quem pediu exclusão de dados não têm
  * conta aqui.
  *
+ * `/convite/<token>` (F71-S07) abre sem sessão: quem recebe o convite pode não ter conta.
+ *
  * Edge-safe: sem import de Node nem de React (roda no middleware).
  */
 export const PUBLIC_PREFIXES = [
@@ -17,6 +19,7 @@ export const PUBLIC_PREFIXES = [
   '/reset-password',
   '/signup',
   '/verify',
+  '/convite',
   '/privacidade',
   '/termos',
   '/exclusao-de-dados',
@@ -29,4 +32,15 @@ export const PUBLIC_PREFIXES = [
  */
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+/**
+ * Telas públicas para as quais FAZ sentido voltar depois do login (`?next=`). Hoje só o
+ * convite: quem está deslogado clica "Entre para aceitar" e precisa cair de volta nele.
+ * As demais públicas (`/login`, `/signup`…) continuam descartadas do `next` (laço).
+ */
+export const RETURNABLE_PUBLIC_PREFIXES = ['/convite'] as const;
+
+export function isReturnablePublicPath(pathname: string): boolean {
+  return RETURNABLE_PUBLIC_PREFIXES.some((p) => pathname.startsWith(`${p}/`));
 }
