@@ -6,7 +6,10 @@ import type { WindowState } from './useWindowState';
 
 export interface WindowNoticeProps {
   window: WindowState;
-  /** Dispara o fluxo de reabrir com template (WhatsApp). */
+  /**
+   * Dispara o fluxo de reabrir com template (WhatsApp). Sem handler, o CTA não é
+   * exibido — hoje nenhum consumidor liga um seletor de modelo à conversa.
+   */
   onReopenWithTemplate?: () => void;
   className?: string;
 }
@@ -35,24 +38,25 @@ export function WindowNotice({ window, onReopenWithTemplate, className }: Window
       >
         <Lock className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className="font-body text-sm font-medium text-text">
-            Janela de 24h encerrada
-          </p>
+          <p className="font-body text-sm font-medium text-text">Janela de 24h encerrada</p>
           <p className="font-body text-xs text-text-mid">
             O contato não interage há mais de 24 horas. Para retomar, reabra a conversa com um
             template aprovado.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onReopenWithTemplate}
-          className={cn(
-            'shrink-0 rounded-sm border border-warn px-3 py-1.5 font-body text-xs font-medium text-warn outline-none transition-colors',
-            'hover:bg-warn hover:text-text-on-brand focus-visible:shadow-glow-md',
-          )}
-        >
-          Reabrir com template
-        </button>
+        {/* Só com destino real: botão sem handler é promessa falsa (F60-S11). */}
+        {onReopenWithTemplate && (
+          <button
+            type="button"
+            onClick={onReopenWithTemplate}
+            className={cn(
+              'shrink-0 rounded-sm border border-warn px-3 py-1.5 font-body text-xs font-medium text-warn outline-none transition-colors',
+              'hover:bg-warn hover:text-text-on-brand focus-visible:shadow-glow-md',
+            )}
+          >
+            Reabrir com template
+          </button>
+        )}
       </div>
     );
   }
