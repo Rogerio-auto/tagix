@@ -35,6 +35,7 @@ auditoria de 2026-09-14: a F60-S03 e a F60-S08 construíram o canal inteiro — 
 - `infra/docker/docker-compose.prod.yml`
 - `.env.example`
 - `docs/decisions/ADR-001-provedor-de-email.md`
+- `apps/workers/src/inbound/worker.ts`, `apps/workers/src/inbound/index.ts`, `apps/api/src/routes/webhooks/index.ts` *(adicionados em 2026-10-07: ligar o inbound da F60-S10, ver Notas)*
 
 ### files_forbidden
 
@@ -74,3 +75,20 @@ pnpm lint
 ## Notas
 
 - A régua: o cliente manda um e-mail pelo Leadium e ele chega na caixa de entrada, não no spam.
+
+### Herdado da F60-S10 (2026-10-07) — sem isto o e-mail não funciona de ponta a ponta
+
+1. **O banco recusa canal de e-mail.** A constraint `channels_provider_columns` (migration 0002) só
+   aceita `meta_whatsapp`, `meta_instagram` e `waha`: nenhum canal `email` pode ser criado hoje — trava
+   o envio (F60-S03) e o recebimento (F60-S10). Migration nova ampliando a constraint para o provider
+   de e-mail e suas colunas. Ao corrigir, os 2 testes pulados do resolver de canal em
+   `apps/workers/src/inbound/email-inbound.test.ts` passam a rodar sozinhos.
+2. **Ninguém chama `handleEmailInbound`.** A rota `webhooks/email.ts` está montada inerte (recusa tudo).
+   Ligar a rota ao consumidor da fila em `worker.ts`/`index.ts`/`webhooks/index.ts`, junto do provedor
+   real. Contrato da fila: o Zod `emailInboundPayloadSchema`.
+3. **Teto do corpo do webhook:** hoje 10 MB; o Postmark manda inbound de até 35 MB. Decidir o teto.
+4. **`Message-ID`:** se o id devolvido pelo Postmark no envio diferir do cabeçalho SMTP `Message-ID`,
+   respostas a mensagens nossas não casam com a conversa (o thread é por `In-Reply-To`/`References`).
+   Gravar o cabeçalho real ou fixar o `Message-ID` no envio.
+5. **Índice sugerido** em migration futura: `messages (workspace_id, external_id)` — a busca de thread
+   filtra por `external_id`, hoje só indexado junto com `conversation_id`.
