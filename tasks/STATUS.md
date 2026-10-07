@@ -52,7 +52,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F58   | 14     | 5   | 0   | 0   | 0   | 1   | 8   |
 | F59   | 9     | 1   | 0   | 0   | 0   | 0   | 8   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F60   | 9     | 3   | 0   | 0   | 0   | 0   | 6   |
+| F60   | 9     | 2   | 0   | 0   | 0   | 0   | 7   |
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 7   | 0   | 0   | 0   | 4   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -717,7 +717,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F60-S08 | E-mail — recebimento, retorno e supressão por bounce                                  | ✅ done      | critical   | F60-S03          |
 | F60-S09 | Campanha multicanal na interface — passos por capacidade, público e métrica por canal | 🟢 available | high       | F60-S07, F58-S12 |
 | F60-S10 | E-mail recebido completo — anexo no R2, anti-SSRF e reuso de thread                   | ✅ done      | high       | F60-S08          |
-| F60-S11 | Composer mostra a restrição de envio — por quê e quando volta a poder                 | 🟢 available | medium     | F60-S02          |
+| F60-S11 | Composer mostra a restrição de envio — por quê e quando volta a poder                 | ✅ done      | medium     | F60-S02          |
 
 ## Fase 61
 
