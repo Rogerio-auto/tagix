@@ -945,3 +945,10 @@ A liberação é só `atendimento-humano`. Etiqueta de conversão não entra nun
 - **S06 lacuna:** `/api/v1/**` (API key, sem withRLS) e o worker de outbound nao tem guarda de assinatura. Decisao: tratar na S10 (ou slot novo se tocar `packages/`/api-key).
 - **PENDENCIAS HUMANAS:** (1) templates "Invite user" e "Magic link" no Supabase com FRAGMENTO (runbook §4.3/4.4), sem isso convidado sem conta nao cria senha; (2) desligar "Allow new users to sign up" no Supabase (L3); (3) confirmar lista de empresas em trial do backfill.
 - **Onda 4 despachada:** S07 || S08 || S09 (frontend-engineer, ui:true).
+
+### F71 — Orchestrator — onda 4 integrada (2026-10-06)
+
+- **F71-S07, S09, S08 done** (3 merges --no-ff, nesta ordem). Revisao de design (/hm-designer) feita por revisor dedicado: APROVADO COM RESSALVAS nos 3; subsecao "Revisao de design" em cada slot.
+- Desvios de files_allowed (autorizados): S07 -> `apps/web/shared/auth/route-guard.ts(+test)` (`postLoginPath` preserva `/convite/<token>`; `/convite` virou publico e descartava o `?next=`); S09 -> `apps/web/app/(auth)/layout.tsx` (padding lateral mobile: `pl-safe/pr-safe` anulava `px-5`). Integracao S07<->S09: `from=invite` anexado pela tela de convite ao `next` da API.
+- Ressalvas abertas (nao bloqueiam): (1) tokens `--danger/--warn/--success` sem variante no tema claro em `packages/design-tokens` (erro do `Input` do `@hm/ui` 3,03:1 no claro) -> slot novo de design-tokens; (2) `TopBar` mobile soma `pt-safe` sob a faixa de conta (TopBar e da F70-S32); (3) bottom-nav ativo no claro 1,36:1 (anterior a F71); (4) peso: First Load JS 255-274 kB nas rotas auth, acima do teto 200 kB do canone por causa da base compartilhada de 213 kB (preexistente, MOBILE_AUDIT); (5) banner de convite sem "Aceitar" inline: follow-up sugerido `POST /api/me/invites/:id/accept`; (6) `useIsReadOnly`/tooltip nao aplicados nos botoes de escrita das features (fora dos files_allowed).
+- **Onda 5 (S10) despachada:** security-auditor (threat model §6 + lacuna `/api/v1` e worker outbound sem guarda de assinatura + riscos S03: view-as com outra empresa ativa, `is_platform_admin` por linha) + qa-engineer (jornada integrada + e2e).

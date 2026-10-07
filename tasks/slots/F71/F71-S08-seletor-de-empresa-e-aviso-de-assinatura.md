@@ -2,7 +2,7 @@
 id: F71-S08
 title: Seletor de empresa no shell e aviso de trial, convite pendente e modo só leitura
 phase: F71
-status: review
+status: done
 priority: high
 estimated_size: M
 ui: true
