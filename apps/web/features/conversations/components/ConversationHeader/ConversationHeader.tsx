@@ -23,6 +23,7 @@ import { useAuthStore } from '@/shared/stores/auth.store';
 import { FlowExecutionsBadge } from '@/features/flow-builder/livechat';
 import { SnoozeMenu } from '../SnoozeMenu';
 import { useChangeStatus, useChangeAiMode } from '../../queries';
+import { contactLabel } from '../../contact-label';
 import type { ConversationDetail } from '../../types';
 
 export interface ConversationHeaderProps {
@@ -119,6 +120,14 @@ export function ConversationHeader({
   }
 
   const statusInfo = statusMeta(status);
+  const who = detail
+    ? contactLabel({
+        displayName: detail.contact?.displayName,
+        profileName: detail.contact?.profileName,
+        remoteId: detail.remoteId,
+        channel: detail.channelProvider ?? detail.kind,
+      })
+    : null;
 
   return (
     <header className="flex h-14 items-center justify-between gap-3 border-b border-border px-4">
@@ -126,11 +135,19 @@ export function ConversationHeader({
       <div className="flex min-w-0 items-center gap-3">
         <div className="min-w-0">
           <p className="truncate font-head font-semibold text-text">
-            {detail?.remoteId ?? 'Conversa'}
+            {who?.label ?? 'Conversa'}
           </p>
           {detail && (
-            <p className={cn('font-body text-xs', statusInfo.className)}>
-              {statusInfo.label}
+            <p className="flex min-w-0 items-center gap-1.5 font-body text-xs">
+              <span className={cn('shrink-0', statusInfo.className)}>{statusInfo.label}</span>
+              {who && who.source !== 'phone' && who.secondary && (
+                <>
+                  <span className="text-text-low" aria-hidden>
+                    ·
+                  </span>
+                  <span className="truncate text-text-low">{who.secondary}</span>
+                </>
+              )}
             </p>
           )}
         </div>

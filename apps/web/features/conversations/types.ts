@@ -24,6 +24,8 @@ export interface ConversationDeal {
 export interface ConversationContact {
   id: string;
   displayName: string | null;
+  /** Nome que a pessoa definiu no perfil do WhatsApp/Instagram (F70-S36). */
+  profileName: string | null;
   phone: string | null;
   email: string | null;
   document: string | null;
@@ -36,6 +38,10 @@ export interface ConversationSummary {
   contactId: string | null;
   channelId: string;
   remoteId: string;
+  /** Nome salvo no sistema para o contato (F70-S36). */
+  contactDisplayName: string | null;
+  /** Nome do perfil do WhatsApp/Instagram (F70-S36). */
+  contactProfileName: string | null;
   kind: string;
   status: string;
   aiMode: string;

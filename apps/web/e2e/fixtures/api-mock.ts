@@ -180,7 +180,18 @@ export async function installApiMocks(page: Page): Promise<MockState> {
 
     // ── Conversas / mensagens ────────────────────────────────────────────
     if (path === '/api/conversations' && method === 'GET') {
-      return json(route, { conversations: [CONVERSATION] });
+      // Campos da F70-S37. O nome do sistema espelha o remoteId para que as specs
+      // antigas, que localizam o item pelo texto do remoteId, sigam valendo; a
+      // `conversations-contact-name.spec.ts` sobrescreve a rota com nomes reais.
+      return json(route, {
+        conversations: [
+          {
+            ...CONVERSATION,
+            contactDisplayName: CONVERSATION.remoteId,
+            contactProfileName: null,
+          },
+        ],
+      });
     }
     const msgMatch = /^\/api\/conversations\/([^/]+)\/messages$/.exec(path);
     if (msgMatch) {
