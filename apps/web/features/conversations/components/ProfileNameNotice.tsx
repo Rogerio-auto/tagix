@@ -9,11 +9,13 @@
  * reversível (edita-se de novo no cadastro), sem confirmação extra.
  */
 
+import { useQueryClient } from '@tanstack/react-query';
 import { UserCheck } from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
 import { can } from '@hm/shared';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { useUpdateContact } from '@/features/contacts/queries';
+import { clean } from '../contact-label';
 import type { ConversationContact } from '../types';
 
 export function channelNameLabel(channel: string | null | undefined): string {
@@ -24,10 +26,11 @@ export function channelNameLabel(channel: string | null | undefined): string {
 
 /** Verdadeiro quando há nome de perfil útil e ele difere do nome do sistema. */
 export function shouldShowProfileName(contact: ConversationContact | null): boolean {
-  const profile = contact?.profileName?.trim() ?? '';
-  if (profile === '') return false;
-  const system = contact?.displayName?.trim() ?? '';
-  return profile !== system;
+  const profile = clean(contact?.profileName);
+  if (profile === null) return false;
+  const system = clean(contact?.displayName);
+  if (system === null) return true;
+  return profile.localeCompare(system, 'pt-BR', { sensitivity: 'base' }) !== 0;
 }
 
 export function ProfileNameNotice({
@@ -40,20 +43,27 @@ export function ProfileNameNotice({
   const auth = useAuthStore((s) => s.auth);
   const { toast } = useToast();
   const update = useUpdateContact();
+  const queryClient = useQueryClient();
 
   if (!contact || !shouldShowProfileName(contact)) return null;
 
-  const profile = contact.profileName?.trim() ?? '';
-  const hasSystemName = (contact.displayName?.trim() ?? '') !== '';
+  const id = contact.id;
+  const profile = clean(contact.profileName) ?? '';
+  const hasSystemName = clean(contact.displayName) !== null;
   const role = auth?.role ?? null;
   const canEdit = role ? can(role, 'contact.edit') : false;
 
   function applyProfileName(): void {
     if (update.isPending) return;
     update.mutate(
-      { id: contact?.id ?? '', patch: { displayName: profile } },
+      { id, patch: { displayName: profile } },
       {
-        onSuccess: () => toast({ title: 'Nome salvo no cadastro', variant: 'success' }),
+        onSuccess: () => {
+          // Lista = ['conversations', …]; detalhe/mensagens = ['conversation', id, …].
+          void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+          void queryClient.invalidateQueries({ queryKey: ['conversation'] });
+          toast({ title: 'Nome salvo no cadastro', variant: 'success' });
+        },
         onError: () => toast({ title: 'Não foi possível salvar o nome', variant: 'error' }),
       },
     );

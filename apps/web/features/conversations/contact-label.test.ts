@@ -28,8 +28,9 @@ describe('contactLabel — hierarquia sistema > perfil > telefone', () => {
     expect(contactLabel({ ...wa, displayName: '  Ana  Lima ' }).label).toBe('Ana Lima');
   });
 
-  it('iniciais: primeira letra de até 2 palavras', () => {
-    expect(initialsOf('ana beatriz de souza')).toBe('AB');
+  it('iniciais: primeira + última palavra significativa, ignorando partículas', () => {
+    expect(initialsOf('ana beatriz de souza')).toBe('AS');
+    expect(initialsOf('João do Perfil')).toBe('JP');
     expect(initialsOf('Édson')).toBe('É');
     expect(initialsOf('🌸 !!!')).toBe('?');
   });

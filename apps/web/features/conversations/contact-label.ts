@@ -27,7 +27,7 @@ export interface ContactLabel {
   initials: string;
 }
 
-function clean(value: string | null | undefined): string | null {
+export function clean(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null;
   const t = value.trim().replace(/\s+/g, ' ');
   return t === '' ? null : t;
@@ -62,14 +62,25 @@ function looksLikePhone(remoteId: string): boolean {
   return d.length >= 8 && d.length <= 15 && /^[+\d\s().-]+$/.test(remoteId);
 }
 
+const NAME_PARTICLES = new Set(['de', 'da', 'do', 'dos', 'das', 'e']);
+
+/** Primeira + última palavra significativa (ignora de/da/do/dos/das/e). */
 export function initialsOf(text: string): string {
   const words = text
     .replace(/^@/, '')
     .split(/\s+/)
-    .map((w) => Array.from(w.replace(/[^\p{L}\p{N}]/gu, ''))[0])
-    .filter((c): c is string => typeof c === 'string' && c !== '');
-  if (words.length === 0) return '?';
-  return words.slice(0, 2).join('').toLocaleUpperCase('pt-BR');
+    .map((w) => w.replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter((w) => w !== '');
+  const significant = words.filter((w) => !NAME_PARTICLES.has(w.toLocaleLowerCase('pt-BR')));
+  const pool = significant.length > 0 ? significant : words;
+  const first = pool[0];
+  const last = pool[pool.length - 1];
+  if (first === undefined || last === undefined) return '?';
+  const chars = pool.length === 1 ? [first] : [first, last];
+  return chars
+    .map((w) => Array.from(w)[0] ?? '')
+    .join('')
+    .toLocaleUpperCase('pt-BR');
 }
 
 export function contactLabel(input: ContactLabelInput): ContactLabel {
@@ -98,7 +109,7 @@ export function contactLabel(input: ContactLabelInput): ContactLabel {
     label: fallback,
     source: 'phone',
     secondary,
-    // Sem nome, o avatar não mostra pedaço de número: ícone neutro via "?".
+    // Sem nome, o avatar não mostra pedaço de número: '@' (Instagram), '?' (sem identificador) ou '#' (telefone).
     initials: instagram ? '@' : secondary === null ? '?' : '#',
   };
 }
