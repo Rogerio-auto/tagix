@@ -2,7 +2,7 @@
 id: F71-S07
 title: Tela de aceitar convite e gestão de membros com convites pendentes
 phase: F71
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 ui: true
@@ -12,6 +12,9 @@ source_docs:
   - docs/features/CONTAS_E_CONVITES.md
   - docs/UX_PRINCIPLES.md
   - docs/DESIGN_SYSTEM.md
+agent_id: backend-engineer
+claimed_at: 2026-10-07T01:30:04Z
+
 ---
 # F71-S07 — Convites (UI)
 
