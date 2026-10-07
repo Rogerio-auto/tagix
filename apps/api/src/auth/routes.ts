@@ -47,6 +47,14 @@ const loginLimiter = rateLimit({ bucket: 'login', max: 10, windowSec: 15 * 60 })
 // SEC-05: teto ABSOLUTO por IP, independente do email. O limiter IP+email não barra
 // spraying (1 IP × N emails = N chaves novas); este fecha o volume bruto por origem.
 const loginIpLimiter = rateLimit({ bucket: 'login_ip', max: 60, windowSec: 60, byEmail: false });
+// F-10: balde por IP (sem email) ANTES do por IP+email — quem varia o email a cada tentativa
+// escapava do limite por email; este fecha o volume bruto de signups por origem.
+const signupIpLimiter = rateLimit({
+  bucket: 'signup_ip',
+  max: 10,
+  windowSec: 60 * 60,
+  byEmail: false,
+});
 const signupLimiter = rateLimit({ bucket: 'signup', max: 5, windowSec: 60 * 60 });
 const resetLimiter = rateLimit({ bucket: 'reset', max: 5, windowSec: 60 * 60 });
 // confirm: por IP (o body não tem email, só token+senha). Tolera retentativas de
@@ -157,7 +165,7 @@ export function createAuthRouter(): Router {
 
   // Cadastro self-serve (F44). Captcha server-side ANTES de provisionar; rate-limit
   // por IP+email. Resposta uniforme/anti-enumeração no próprio handler.
-  router.post('/auth/signup', signupLimiter, async (req: Request, res: Response) => {
+  router.post('/auth/signup', signupIpLimiter, signupLimiter, async (req: Request, res: Response) => {
     // Pré-checa só a presença do token para o captcha (forma completa é validada
     // pelo signupSchema dentro do handler).
     const token = extractTurnstileToken(req);

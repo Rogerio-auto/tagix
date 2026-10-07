@@ -400,17 +400,55 @@ Toda mudança de **secret** (`platform_secrets`) registra também na timeline do
 
 ## 7. Convites de members e propagação de role
 
-Fluxo:
+Implementado na F71 (spec: `CONTAS_E_CONVITES.md`, §10 traz o que diverge dela). O convite é uma
+tabela própria (`member_invites`, RLS por `workspace_id`) e **não** cria linha em `members` até o
+aceite.
 
-1. ADMIN clica "Convidar member" → modal: email, role inicial, depto/time.
-2. Sistema cria row `members(status='invited')` + envia email com token.
-3. Member abre link → Supabase Auth cria conta → linka `auth_user_id` no `members`.
-4. `members.status='active'`, `joined_at=now()`.
-5. Audit registra `member.invited` e depois `member.joined`.
+### 7.1 Fluxo
 
-**Não dá pra criar OWNER por convite.** Sempre começa como ADMIN ou abaixo. Mudança pra OWNER é cerimônia separada que exige confirmação do OWNER atual (porque OWNER é único? — não, podem ser múltiplos. Mas promoção a OWNER tem typing-to-confirm).
+1. Quem tem `member.invite` (OWNER e ADMIN) abre Configurações > Membros > "Convidar membro":
+   email, papel e departamento opcional. `POST /api/members/invites`.
+2. O servidor grava o convite (token de 32 bytes aleatórios; só o `sha256` vai ao banco; vale 7
+   dias, uso único, revogável) e manda o email pelo Supabase Auth: "Invite user" para quem não
+   tem conta, "Magic link" para quem tem. A resposta traz `delivery: 'sent' | 'failed'`; com
+   `failed` o admin usa **Copiar link** (`POST /api/members/invites/:id/link`, que **troca** o
+   token: o link do email deixa de valer).
+3. A pessoa abre `/convite/<token>`. O token sozinho **não basta** para quem não tem senha:
+   ela precisa também da **prova de posse da caixa de email**, que chega no fragmento do link do
+   email (`#token_hash=…&type=invite|magiclink`), sai da barra de endereço na hora e viaja só no
+   corpo do `POST /auth/invite/accept` (nunca em query nem storage). Link copiado (sem fragmento)
+   leva à tela "Receber email de confirmação" (`POST /auth/invite/send-email`).
+   - **Sem conta (ou conta criada só pelo convite, sem senha):** define nome e senha com a prova
+     → conta confirmada + `members(status='active')` na empresa → vai para `/login?email=…`
+     (sem auto-login).
+   - **Com conta (senha):** precisa estar logada com o email do convite
+     (`401 login_required`, `403 wrong_account`); aceita com um clique e a empresa vira a ativa
+     (`hm_workspace`).
+4. Audit: `member.invited`, `member.invite_resent`, `member.invite_link_copied`,
+   `member.invite_revoked`, `member.joined` (nunca com token nem hash).
 
----
+### 7.2 Regras
+
+- **OWNER não é convidável.** O convite aceita `ADMIN | SUPERVISOR | AGENT | READONLY`
+  (`400 owner_not_invitable`); o papel vem do convite, nunca do corpo do aceite (`role` no corpo
+  é `400`). Promoção a OWNER continua sendo cerimônia separada, com typing-to-confirm.
+- **Uniformidade:** token inválido, expirado, revogado ou já usado respondem o mesmo `404
+  invite_not_found`. Prova de posse de outro email ou inválida: `403 email_proof_required`.
+- **Limites:** `max_members` do plano conta ativos + convites pendentes (`402 seat_limit`);
+  30 envios/hora por empresa, 10/dia por destinatário (somando empresas) e 1/min + 5 no total por
+  convite no envio público (cotas em Redis, fail-closed); reenvio 1/min e no máximo 6 envios por
+  convite.
+- **Ciclo de vida:** remover (`DELETE /api/members/:id`) ou bloquear um membro revoga os convites
+  pendentes do email dele na empresa. Bloqueado não é convidável (`409 member_blocked`). Remover
+  não apaga a conta: a pessoa segue nas outras empresas e o cookie `hm_workspace` da removida é
+  ignorado. O verify de email só promove a linha `invited` do OWNER do signup, nunca reativa um
+  removido.
+- **Só leitura:** com a empresa em `expired`/`canceled` (fim do trial de 15 dias incluso), gerir
+  membros e convidar também é escrita e responde `402 subscription_inactive`; a leitura, o billing
+  e a troca de empresa seguem livres.
+- **Várias empresas:** a mesma pessoa pode ser membro de várias empresas, cada uma com o seu
+  papel; a empresa ativa é validada contra membership `active` a cada request.
+- O contrato antigo `POST /api/members` responde `410` (aponta para `/api/members/invites`).
 
 ## 8. Convidando membros para nichos diferentes
 

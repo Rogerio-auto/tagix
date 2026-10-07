@@ -186,6 +186,50 @@ describe('anti-tampering', () => {
   });
 });
 
+describe('anti-tampering por pessoa, nao por member.id (F-13)', () => {
+  it('admin com a empresa ativa trocada (member.id diferente) continua usando o proprio view-as', async () => {
+    const db = getDb();
+    const [other] = await db
+      .insert(workspaces)
+      .values({ name: `ImpOtherWS ${sfx}`, slug: `imp-other-${sfx}` })
+      .returning();
+    try {
+      const [admin] = await db.select().from(members).where(eq(members.id, adminMemberId));
+      await db.insert(members).values({
+        workspaceId: other!.id,
+        authUserId: admin!.authUserId,
+        email: admin!.email,
+        role: 'AGENT',
+        status: 'active',
+      });
+      const s = await makeSession();
+      const res = await request(app)
+        .get('/echo')
+        .set('Cookie', `${adminCookie}; hm_workspace=${other!.id}; ${impCookie(s.id)}`);
+      expect(res.status).toBe(200);
+      expect(res.body.workspaceId).toBe(wsTarget);
+      expect(res.body.impersonating).toBe(wsTarget);
+    } finally {
+      await db.delete(workspaces).where(eq(workspaces.id, other!.id));
+    }
+  });
+
+  it('claim cuja membership deixou de ser platform-admin -> 403 (fail-closed)', async () => {
+    const db = getDb();
+    const s = await makeSession();
+    await db.update(members).set({ isPlatformAdmin: false }).where(eq(members.id, adminMemberId));
+    try {
+      const res = await request(app)
+        .get('/echo')
+        .set('Cookie', `${adminCookie}; ${impCookie(s.id)}`);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('impersonation_claim_rejected');
+    } finally {
+      await db.update(members).set({ isPlatformAdmin: true }).where(eq(members.id, adminMemberId));
+    }
+  });
+});
+
 describe('claim malformado (F71-S03)', () => {
   it('claim nao-uuid -> no-op (nao chega ao SQL nem vira 500)', async () => {
     const res = await request(app)

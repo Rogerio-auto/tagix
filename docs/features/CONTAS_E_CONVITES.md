@@ -145,3 +145,48 @@ Ver `tasks/slots/F71/`. Ondas:
 - Transferência de propriedade (OWNER).
 - Email transacional próprio (Postmark) — F60-S04.
 - Enforcement de outros limites de plano além de `max_members`.
+
+## 10. Como ficou (pós-implementação)
+
+Desvios da spec acima (S01–S09 integradas, validados pela jornada da S10 em
+`apps/api/src/auth/accounts-journey.integration.test.ts`). Onde este capítulo e o §5 divergem, vale
+este.
+
+- **Preview é `POST /auth/invite/preview { token }`**, não `GET /auth/invite/:token`: o token nunca
+  vai em path/query (access log do proxy, referrer). Responde `requiresEmailProof` no lugar de
+  `hasAccount` (é o complemento exato: `true` = sem conta ou conta sem senha).
+- **Prova de posse do email no aceite sem senha.** O token do convite deixou de ser suficiente
+  (quem tivesse o link, inclusive o admin que o copiou, tomaria a conta): o aceite exige
+  `emailProof { tokenHash, type: 'invite' | 'magiclink' }`, verificada no provider
+  (`verifyEmailOwnership`). `403 email_proof_required` para ausente, inválida, usada ou de outro
+  email. Novo `POST /auth/invite/send-email { token }` para quem chegou por link copiado.
+- **A prova viaja no fragmento** (`#token_hash=…&type=…`) dos templates do Supabase; a página lê,
+  limpa a URL com `history.replaceState`, guarda só em memória e manda no corpo. A página nunca
+  consome a prova ao carregar (antivírus de email abrem links).
+- **Link copiado é `POST /api/members/invites/:id/link`** (era `GET`): tem efeito (troca o token), então
+  respeita view-as e só leitura; devolve `no-store`/`no-referrer`.
+- **`POST /api/members` → `410`** com `replacement: '/api/members/invites'`; o convite antigo
+  (linha `members.status='invited'`) é migrado ou aparece como `legacyInvite`.
+- **Cotas de envio em Redis** (`invite-quota.ts`, script Lua atômico, fail-closed): 30/h por empresa,
+  10/dia por destinatário (`sha256(email)`), 1/min e 5 por convite no envio público. Acrescentam-se
+  ao teto de reenvio por convite. Redis fora: criação devolve `delivery: 'failed'` (o link segue
+  copiável), reenvio e envio público respondem `503`.
+- **Só leitura por guarda em `withRLS`** (`requireActiveSubscription`), não middleware global: todo
+  router escopado por empresa passa por `requireAuth` + `withRLS`; GET/HEAD/OPTIONS passam;
+  `/auth/**`, `/api/billing/**`, `/api/me/**` (inclui a troca de empresa), push, suporte e alguns
+  `members/me` são exceções. `trial` com `trial_ends_at` no passado já vale `expired` antes do tick
+  do worker. Workers de saída (agente, campanha, flow, lembrete) têm portão próprio. **Lacuna
+  conhecida:** `/api/v1/**` (API key, sem `withRLS`) e o worker de outbound não passam pela guarda.
+- **`/api/me` devolve `memberships[]`** (`workspaceId, name, slug, role, subscriptionStatus`, em
+  ordem de uso) junto de `member` e `workspace` (que traz `subscriptionStatus` e `trialEndsAt`).
+  `POST /api/me/workspace` responde com o mesmo payload; empresa inexistente e alheia dão o mesmo
+  `404 workspace_not_found`.
+- **Login escolhe a empresa por `last_active_at`**, ignorando o `hm_workspace` que o navegador já
+  tinha (pode ser de outra pessoa).
+- **Bloquear/remover membro revoga convites pendentes** do email na empresa; `member_blocked` (409)
+  impede reconvidar bloqueado.
+- **Aceite pelo banner não existe:** `GET /api/me/invites` não devolve token e o aceite exige o
+  link do email; o banner explica onde está o link. Follow-up possível: `POST
+  /api/me/invites/:id/accept` autenticado.
+- **Rota ainda aberta:** pessoa com conta e sem nenhuma membership ativa não obtém sessão (login
+  `403`), então não aceita pelo caminho "com conta". Decisão de produto pendente.

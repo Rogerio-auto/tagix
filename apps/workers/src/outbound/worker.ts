@@ -30,6 +30,12 @@ import { runWithDistributedLock, type LockStore } from '../lock';
 import { resolveOutboundLockStore } from '../redis';
 import { parseOutboundJob, type OutboundJob } from './job';
 import { dispatchOutbound, type DispatchResult } from './dispatch';
+import {
+  recordSubscriptionSkip,
+  SKIPPED_SUBSCRIPTION_INACTIVE,
+  subscriptionGate as defaultSubscriptionGate,
+  type SubscriptionGate,
+} from '../lib/subscription-gate';
 import { createConsentGate } from './consent-gate';
 import { purposeOf } from './job';
 import type { ConsentGatePort } from './ports';
@@ -177,6 +183,11 @@ export interface OutboundWorkerOptions {
    * nome diz isso.
    */
   readonly consentGate?: ConsentGatePort;
+  /**
+   * Portão de assinatura (F71 — F-02). Default: o real (lê `workspaces` a cada job).
+   * Empresa `expired`/`canceled` não envia nada (exceto `typing_indicator`).
+   */
+  readonly subscriptionGate?: SubscriptionGate;
 }
 
 /**
@@ -219,11 +230,37 @@ export async function handleOutboundEnvelope(
   const consentGate = options.consentGate ?? defaultConsentGate;
   const job: OutboundJob = parseOutboundJob(envelope.payload);
   const workspaceId = envelope.workspaceId;
+  const subscriptionGate = options.subscriptionGate ?? defaultSubscriptionGate;
 
   await runWithDistributedLock(
     lockKey(job.conversationId),
     OUTBOUND_LOCK_TTL_MS,
     async () => {
+      // F71 (F-02): portão de assinatura. Empresa só leitura NÃO envia ao provider.
+      // `typing_indicator` é presença (sem mensagem persistida), não é bloqueado.
+      // Falha permanente: a mensagem vira `failed` visível, ack, sem retry.
+      if (job.kind !== 'typing_indicator') {
+        const decision = await subscriptionGate.check(workspaceId);
+        if (!decision.active) {
+          recordSubscriptionSkip(logger, 'outbound', workspaceId, decision.status, {
+            kind: job.kind,
+            conversationId: job.conversationId,
+            messageId: job.messageId,
+          });
+          await finalizeOutbound(
+            job,
+            {
+              ok: false,
+              errorCode: SKIPPED_SUBSCRIPTION_INACTIVE,
+              errorMessage: 'Assinatura inativa: envio não realizado.',
+            },
+            workspaceId,
+            deps,
+          );
+          return;
+        }
+      }
+
       const { channel, adapter } = await deps.channels.resolve(job.channelId, workspaceId);
 
       // F59-S05: portão de consentimento. Última linha de defesa antes do

@@ -75,6 +75,8 @@ export const INVITE_AUDIT_ACTIONS = {
   /** Email pedido pela página pública do convite (link copiado, `POST /auth/invite/send-email`). */
   emailRequested: 'member.invite_email_requested',
   joined: 'member.joined',
+  /** Aceite público negado (prova rejeitada, conta errada, login pendente, conflito) — F-16. */
+  acceptDenied: 'member.invite_accept_denied',
 } as const;
 
 /** Envios por convite: 1 original + 5 reenvios. */

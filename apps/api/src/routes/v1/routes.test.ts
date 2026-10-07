@@ -468,3 +468,50 @@ describe('flows + events (F38-S12)', () => {
     expect(res.status).toBe(422);
   });
 });
+
+describe('modo só leitura por assinatura (F71 — F-01)', () => {
+  const past = new Date(Date.now() - 60_000);
+  const future = new Date(Date.now() + 86_400_000);
+  const cases: ReadonlyArray<{
+    label: string;
+    status: string;
+    trialEndsAt: Date | null;
+    writeStatus: number;
+  }> = [
+    { label: 'expired', status: 'expired', trialEndsAt: null, writeStatus: 402 },
+    { label: 'canceled', status: 'canceled', trialEndsAt: null, writeStatus: 402 },
+    { label: 'trial vencido', status: 'trial', trialEndsAt: past, writeStatus: 402 },
+    { label: 'past_due', status: 'past_due', trialEndsAt: null, writeStatus: 200 },
+    { label: 'trial válido', status: 'trial', trialEndsAt: future, writeStatus: 200 },
+  ];
+
+  for (const c of cases) {
+    it(`${c.label}: POST upsert_contact -> ${c.writeStatus}; GET -> 200`, async () => {
+      const db = getDb();
+      const sfx = randomUUID().slice(0, 8);
+      const [w] = await db
+        .insert(workspaces)
+        .values({
+          name: `RO ${c.label}`,
+          slug: `ro-${sfx}`,
+          subscriptionStatus: c.status,
+          trialEndsAt: c.trialEndsAt,
+        })
+        .returning();
+      if (!w) throw new Error('ws');
+      try {
+        const token = await seedKey(w.id, ALL_SCOPES);
+        const write = await request(app)
+          .post('/api/v1/upsert_contact')
+          .set(bearer(token))
+          .send({ phone: `+5511977${String(Date.now()).slice(-6)}`, displayName: 'RO' });
+        expect(write.status).toBe(c.writeStatus);
+        if (c.writeStatus === 402) expect(write.body.error).toBe('subscription_inactive');
+        const read = await request(app).get('/api/v1/conversations').set(bearer(token));
+        expect(read.status).toBe(200);
+      } finally {
+        await db.delete(workspaces).where(eq(workspaces.id, w.id));
+      }
+    });
+  }
+});

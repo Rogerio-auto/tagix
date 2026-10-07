@@ -480,6 +480,24 @@ describe.skipIf(!url || !isMock)('convites (F71-S05) — integração', () => {
     expect(complete).not.toHaveBeenCalled();
     complete.mockRestore();
 
+    // F-16: os dois aceites negados deixam trilha interna, sem token nem email completo.
+    const inviteId: string = created.body.invite.id;
+    expect(await auditCount(INVITE_AUDIT_ACTIONS.acceptDenied, inviteId)).toBe(2);
+    const denied = await getDb()
+      .select({ actorType: auditLogs.actorType, metadata: auditLogs.metadata })
+      .from(auditLogs)
+      .where(
+        and(eq(auditLogs.action, INVITE_AUDIT_ACTIONS.acceptDenied), eq(auditLogs.resourceId, inviteId)),
+      );
+    expect(denied.map((r) => r.actorType)).toEqual(['system', 'system']);
+    expect(denied.map((r) => (r.metadata as { reason: string }).reason).sort()).toEqual([
+      'login_required',
+      'wrong_account',
+    ]);
+    const blob = JSON.stringify(denied);
+    expect(blob).not.toContain(addr);
+    expect(blob).not.toContain(mail.token);
+
     const ok = await accept({ token: mail.token, password: 'ignorada-123' }, cookies.get('person'));
     expect(ok.status).toBe(200);
     expect(ok.body).toEqual({ next: '/' });

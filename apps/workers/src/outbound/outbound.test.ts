@@ -18,6 +18,7 @@ import { handleOutboundEnvelope } from './worker';
 // nao conformidade — entao injetam explicitamente o permissivo. A conformidade
 // tem suite propria em `consent-gate.test.ts`.
 import { allowAllConsentGate } from './consent-gate';
+import { allowAllSubscriptionGate } from '../lib/subscription-gate';
 import type { OutboundDeps } from './ports';
 import type { OrphanStatusStore } from '../inbound/status';
 import type { Envelope } from '@hm/shared/mq';
@@ -336,7 +337,7 @@ describe('handleOutboundEnvelope — finalize', () => {
         text: 'hi',
       },
     };
-    await handleOutboundEnvelope(envelope, { deps: d.deps, logger, consentGate: allowAllConsentGate });
+    await handleOutboundEnvelope(envelope, { deps: d.deps, logger, consentGate: allowAllConsentGate, subscriptionGate: allowAllSubscriptionGate });
     expect(d.persist).toHaveBeenCalledOnce();
     expect(d.emit).toHaveBeenCalledOnce();
     expect(d.persist.mock.calls[0]?.[0]).toMatchObject({ status: 'sent', externalId: 'wamid.X' });
@@ -377,7 +378,7 @@ describe('handleOutboundEnvelope — finalize', () => {
         text: 'hi',
       },
     };
-    await handleOutboundEnvelope(envelope, { deps: d.deps, logger, consentGate: allowAllConsentGate });
+    await handleOutboundEnvelope(envelope, { deps: d.deps, logger, consentGate: allowAllConsentGate, subscriptionGate: allowAllSubscriptionGate });
     expect(d.persist.mock.calls[0]?.[0]).toMatchObject({ status: 'failed' });
     expect(d.emitNew).not.toHaveBeenCalled();
   });

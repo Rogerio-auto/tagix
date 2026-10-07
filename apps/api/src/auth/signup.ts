@@ -111,38 +111,47 @@ export async function performSignup(input: SignupInput, req: Request): Promise<v
   // O aceite vale a partir de agora (servidor), nunca de um horário vindo do cliente.
   const termsAcceptedAt = new Date();
 
-  // Provisiona o tenant — IDEMPOTENTE (o provisioner ancora por email). Roda tanto para
-  // cadastro novo (created:true) quanto para usuário já existente (created:false). Isso
+  // Decisão de produto (CONTAS_E_CONVITES §1 item 3): quem foi convidado a outra empresa e faz
+  // signup ganha a PRÓPRIA empresa — por isso provisionamos também para conta já confirmada.
+  // A empresa nasce `invited` e só ativa quando o dono confirma pelo verify, então o vetor de
+  // poluição (terceiro digitando o email alheio) é baixo; endurecimento fica para o F71-S19
+  // (criar empresa autenticado + signup público de conta confirmada deixa de provisionar).
+  const shouldProvision = true;
+
+  // Provisiona o tenant — IDEMPOTENTE (o provisioner ancora por email). Roda para cadastro
+  // novo (created:true) e para conta existente (created:false). Isso
   // FECHA a armadilha do órfão (#3): se um signup anterior criou o usuário no provider
   // mas o tenant falhou (transação revertida → sem member/workspace), o retry agora
   // provisiona o workspace que faltava. Para um usuário que JÁ tem workspace, o
   // provisioner é no-op (created:false) — sem duplicar (T13) e sem reenviar email.
-  try {
-    const result = await provisionWorkspaceWithOwner({
-      ownerEmail: input.email,
-      ownerName: input.name,
-      authUserId: signUp.authUserId,
-      workspaceName: input.workspaceName,
-      pendingPlanKey: input.plan,
-      termsAcceptedAt,
-      termsVersion: input.termsVersion,
-    });
-    await auditAuthEvent('auth.signup', req, {
-      email: input.email,
-      outcome: result.created ? 'provisioned' : 'already_provisioned',
-      workspaceId: result.workspaceId,
-      slug: result.slug,
-    });
-  } catch (err) {
-    // Compensação (T14): tenant falhou após criar o usuário no provider. Marca o
-    // evento para reconciliação; o usuário órfão fica sem workspace e nunca acessa
-    // (resolveSession exige member active) — e o PRÓXIMO retry o reprovisiona (acima).
-    // Não relança — resposta uniforme.
-    await auditAuthEvent('auth.signup', req, {
-      email: input.email,
-      outcome: 'provision_failed_orphan_user',
-      error: err instanceof Error ? err.message : String(err),
-    });
+  if (shouldProvision) {
+    try {
+      const result = await provisionWorkspaceWithOwner({
+        ownerEmail: input.email,
+        ownerName: input.name,
+        authUserId: signUp.authUserId,
+        workspaceName: input.workspaceName,
+        pendingPlanKey: input.plan,
+        termsAcceptedAt,
+        termsVersion: input.termsVersion,
+      });
+      await auditAuthEvent('auth.signup', req, {
+        email: input.email,
+        outcome: result.created ? 'provisioned' : 'already_provisioned',
+        workspaceId: result.workspaceId,
+        slug: result.slug,
+      });
+    } catch (err) {
+      // Compensação (T14): tenant falhou após criar o usuário no provider. Marca o
+      // evento para reconciliação; o usuário órfão fica sem workspace e nunca acessa
+      // (resolveSession exige member active) — e o PRÓXIMO retry o reprovisiona (acima).
+      // Não relança — resposta uniforme.
+      await auditAuthEvent('auth.signup', req, {
+        email: input.email,
+        outcome: 'provision_failed_orphan_user',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   // Signup repetido (A2): a conta já existia. Se ainda não confirmou o email, quem está

@@ -29,6 +29,8 @@ import {
   publicMember,
   readToken,
 } from '../../auth/session';
+import { strongPassword } from '../../auth/signup';
+import { rateLimit } from '../../middlewares/rate-limit';
 import { createMemberSubrouters } from './index';
 
 const { members } = schema;
@@ -67,9 +69,21 @@ const updateMeSchema = z
   })
   .strict();
 
+/**
+ * F-09: teto de tentativas de troca de senha (cada uma re-autentica a senha ATUAL: sem teto,
+ * uma sessão roubada vira oráculo de força bruta da senha). Por IP, 10 a cada 15 min.
+ */
+const passwordLimiter = rateLimit({
+  bucket: 'me_password',
+  max: 10,
+  windowSec: 15 * 60,
+  byEmail: false,
+});
+
 const passwordSchema = z.object({
   currentPassword: z.string().min(1),
-  newPassword: z.string().min(8).max(200),
+  // F-09: mesma política do cadastro/reset (≥10, letra e número).
+  newPassword: strongPassword,
 });
 
 export function createMembersMeRouter(): Router {
@@ -99,7 +113,7 @@ export function createMembersMeRouter(): Router {
   });
 
   // ─── POST /api/members/me/password ─────────────────────────────────────────
-  router.post('/api/members/me/password', ...guard, async (req: Request, res: Response) => {
+  router.post('/api/members/me/password', ...guard, passwordLimiter, async (req: Request, res: Response) => {
     const parsed = passwordSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'invalid_payload', issues: parsed.error.issues });

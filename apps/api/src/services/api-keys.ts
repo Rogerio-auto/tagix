@@ -15,7 +15,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import { getDb, schema } from '@hm/db';
 
-const { apiKeys } = schema;
+const { apiKeys, workspaces } = schema;
 
 /** Prefixo do token claro — identifica a origem e habilita scan/rotação. */
 export const API_KEY_TOKEN_PREFIX = 'hm_';
@@ -64,6 +64,9 @@ export interface ApiKeyAuth {
   readonly workspaceId: string;
   readonly scopes: readonly string[];
   readonly rateLimitPerMinute: number;
+  /** Status de assinatura da empresa da chave (F71 — modo só leitura). */
+  readonly subscriptionStatus: string;
+  readonly trialEndsAt: Date | null;
 }
 
 /**
@@ -81,8 +84,11 @@ export async function lookupApiKey(token: string): Promise<ApiKeyAuth | null> {
       keyHash: apiKeys.keyHash,
       scopes: apiKeys.scopes,
       rateLimitPerMinute: apiKeys.rateLimitPerMinute,
+      subscriptionStatus: workspaces.subscriptionStatus,
+      trialEndsAt: workspaces.trialEndsAt,
     })
     .from(apiKeys)
+    .innerJoin(workspaces, eq(workspaces.id, apiKeys.workspaceId))
     .where(
       and(
         eq(apiKeys.keyHash, candidate),
@@ -106,6 +112,8 @@ export async function lookupApiKey(token: string): Promise<ApiKeyAuth | null> {
     workspaceId: row.workspaceId,
     scopes: row.scopes ?? [],
     rateLimitPerMinute: row.rateLimitPerMinute,
+    subscriptionStatus: row.subscriptionStatus,
+    trialEndsAt: row.trialEndsAt,
   };
 }
 

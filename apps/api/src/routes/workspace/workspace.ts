@@ -25,6 +25,7 @@ import { schema } from '@hm/db';
 import { ROLES } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { param } from '../conversions/types';
+import { disconnectMemberSockets } from '../../socket/member-disconnect';
 import { revokePendingInvitesFor, seatUsage, seatsAvailable } from './invites';
 
 const { workspaces, members } = schema;
@@ -270,6 +271,8 @@ export function createWorkspaceRouter(): Router {
         return;
       default:
         if (outcome.member && (parsed.data.status === 'blocked' || parsed.data.status === 'inactive')) {
+          // F-03: sessão em tempo real do membro cai junto (após o commit).
+          await disconnectMemberSockets(id);
           await revokePendingInvitesFor(
             req,
             workspaceId,
@@ -324,6 +327,7 @@ export function createWorkspaceRouter(): Router {
         res.status(409).json({ error: 'last_owner', message: 'O workspace precisa de ao menos um OWNER.' });
         return;
       default:
+        await disconnectMemberSockets(id);
         await revokePendingInvitesFor(req, req.auth!.workspace.id, outcome.email, 'member_removed');
         res.sendStatus(204);
     }
