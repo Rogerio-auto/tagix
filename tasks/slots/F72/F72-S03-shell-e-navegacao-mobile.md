@@ -2,7 +2,7 @@
 id: F72-S03
 title: Shell do produto no DS 3.0 e navegação mobile com 4 abas mais Mais
 phase: F72
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: M
 ui: true
@@ -12,6 +12,9 @@ source_docs:
   - docs/features/DS3_ADOCAO.md
   - docs/features/APP_MOBILE_PLAN.md
   - docs/design/ds-3.0-agency-os.html
+agent_id: backend-engineer
+claimed_at: 2026-10-07T20:09:53Z
+
 ---
 # F72-S03 — Shell e navegação mobile
 
