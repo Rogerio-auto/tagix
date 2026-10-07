@@ -60,3 +60,7 @@ pnpm --filter @hm/web exec vitest run features/conversations --maxWorkers=1
 ## Notas
 
 - Agente: `frontend-engineer`.
+
+## Revisão de design (/hm-designer, revisor delegado)
+
+APROVADO COM RESSALVAS. B1 (aviso não sumia após "Usar este nome": cache de conversas/detalhe) corrigido, junto com F1 (iniciais ignoram preposições) e F5 (comparação de nome sem caixa/acento). Follow-ups abertos: F2 ícone de pessoa no avatar sem nome (hoje '#'); F3 cor determinística de avatar (slot de DS); F4 telefone visível na lista para homônimos; F7 contraste do selo "IA" no claro; a11y `nested-interactive` (serious, preexistente: `li role=option` com `<a>`; trocar para nav/ul). Fixture de e2e: `contactDisplayName` espelha o remoteId para não quebrar specs que acham o item pelo número (pom.ts/seed.ts fora de files_allowed). Capturas 375/1440 dark+light na scratchpad da sessão; axe sem violação nova.
