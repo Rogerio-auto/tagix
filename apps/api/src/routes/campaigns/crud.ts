@@ -5,10 +5,15 @@
  *
  * Referências (F70-S18): `channelId` e `aiHandoffAgentId` precisam ser DESTE workspace (a FK
  * ignora RLS). Id de outro workspace responde igual a id inexistente: 422 `invalid_reference`.
+ *
+ * F58-S11: a data final precisa ser depois do início (no create e no update, contra o
+ * valor já gravado quando só um dos dois vem). O detalhe devolve `statusReason` — o
+ * último motivo de mudança de status (agendamento venceu, pausa por canal, prazo
+ * final...), com a orientação ao cliente gravada em `audit_logs`.
  */
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { requireRefsInWorkspace, schema, TenantRefError } from '@hm/db';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { param } from '../conversions/types';
@@ -21,7 +26,35 @@ import {
   toStoredCampaignType,
 } from './builder/contracts';
 
-const { campaigns, campaignSteps, campaignFollowups } = schema;
+const { campaigns, campaignSteps, campaignFollowups, auditLogs } = schema;
+
+/** Ações de ciclo de vida que explicam o status atual (worker + pessoas). */
+const STATUS_ACTIONS = [
+  'campaign.started',
+  'campaign.scheduled',
+  'campaign.paused',
+  'campaign.resumed',
+  'campaign.completed',
+] as const;
+
+/** Metadata gravada junto da mudança de status (validada: audit_logs é jsonb livre). */
+const statusMetadataSchema = z.object({
+  reason: z.string(),
+  message: z.string().optional(),
+});
+
+const SCHEDULE_ORDER_MESSAGE = 'A data final precisa ser depois do início do envio.';
+
+/** true se as duas datas existem e a final não é depois do início. */
+function invalidSchedule(startAt: Date | null, endAt: Date | null): boolean {
+  return startAt !== null && endAt !== null && endAt.getTime() <= startAt.getTime();
+}
+
+/** Converte o campo opcional/nulo do payload em Date|null|undefined (undefined = não veio). */
+function toDate(value: string | null | undefined): Date | null | undefined {
+  if (value === undefined) return undefined;
+  return value === null ? null : new Date(value);
+}
 
 /** 422 canônico da F70-S11 para referência fora do workspace; `false` = não era esse erro. */
 function sendInvalidReference(res: Response, err: unknown): boolean {
@@ -63,6 +96,9 @@ const campaignFieldsSchema = z.object({
 });
 
 const createSchema = campaignFieldsSchema.superRefine((value, ctx) => {
+  if (invalidSchedule(toDate(value.startAt) ?? null, toDate(value.endAt) ?? null)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['endAt'], message: SCHEDULE_ORDER_MESSAGE });
+  }
   if (!value.mode && !value.type) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -168,7 +204,35 @@ export function createCampaignsCrudRouter(): Router {
         .from(campaignFollowups)
         .where(eq(campaignFollowups.campaignId, id))
         .orderBy(asc(campaignFollowups.position));
-      return { campaign, steps, followups };
+      const [last] = await tx
+        .select({
+          action: auditLogs.action,
+          actorType: auditLogs.actorType,
+          metadata: auditLogs.metadata,
+          createdAt: auditLogs.createdAt,
+        })
+        .from(auditLogs)
+        .where(
+          and(
+            eq(auditLogs.resourceType, 'campaign'),
+            eq(auditLogs.resourceId, id),
+            inArray(auditLogs.action, [...STATUS_ACTIONS]),
+          ),
+        )
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(1);
+      const meta = last ? statusMetadataSchema.safeParse(last.metadata) : null;
+      const statusReason =
+        last && meta?.success
+          ? {
+              action: last.action,
+              actor: last.actorType,
+              reason: meta.data.reason,
+              message: meta.data.message ?? null,
+              at: last.createdAt,
+            }
+          : null;
+      return { campaign, steps, followups, statusReason };
     });
     if (!result) {
       res.sendStatus(404);
@@ -248,16 +312,27 @@ export function createCampaignsCrudRouter(): Router {
     if (d.autoHandoffOnReply !== undefined) patch['autoHandoffOnReply'] = d.autoHandoffOnReply;
     if (d.aiHandoffAgentId !== undefined) patch['aiHandoffAgentId'] = d.aiHandoffAgentId;
 
-    let updated: typeof campaigns.$inferSelect | undefined;
+    let updated: typeof campaigns.$inferSelect | 'invalid_schedule' | undefined;
     try {
       updated = await req.scoped!(async (tx) => {
         // Campanha alheia/inexistente/fora de rascunho responde ANTES de olhar o payload.
         const [current] = await tx
-          .select({ id: campaigns.id })
+          .select({ id: campaigns.id, startAt: campaigns.startAt, endAt: campaigns.endAt })
           .from(campaigns)
           .where(and(eq(campaigns.id, id), eq(campaigns.status, 'draft')))
           .limit(1);
         if (!current) return undefined;
+        // F58-S11: início/fim valem juntos — compara com o que já está gravado.
+        const startAt = toDate(d.startAt);
+        const endAt = toDate(d.endAt);
+        if (
+          invalidSchedule(
+            startAt === undefined ? current.startAt : startAt,
+            endAt === undefined ? current.endAt : endAt,
+          )
+        ) {
+          return 'invalid_schedule' as const;
+        }
         await requireRefsInWorkspace(tx, [
           { kind: 'agent', id: d.aiHandoffAgentId, field: 'aiHandoffAgentId' },
         ]);
@@ -271,6 +346,13 @@ export function createCampaignsCrudRouter(): Router {
     } catch (err: unknown) {
       if (sendInvalidReference(res, err)) return;
       throw err;
+    }
+    if (updated === 'invalid_schedule') {
+      res.status(400).json({
+        error: 'invalid_payload',
+        issues: [{ code: 'custom', path: ['endAt'], message: SCHEDULE_ORDER_MESSAGE }],
+      });
+      return;
     }
     if (!updated) {
       res

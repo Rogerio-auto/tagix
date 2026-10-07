@@ -7,10 +7,11 @@
  *   CAMP-03  drip de 2+ passos envia TODOS os passos respeitando delaySeconds;
  *   CAMP-04  recipient e campanha chegam a `completed` (nextTickAt = null);
  *   CAMP-06  dailyLimit interrompe o batch e reseta na virada do dia.
+ *   F58-S11  compasso (GCRA): vazao = ritmo configurado, sem rajada; prazo final;
+ *            reserva de ritmo/cota pelo MESMO nucleo puro do db-ports real.
  */
 import { describe, it, expect, vi } from 'vitest';
 import type { Logger } from '@hm/logger';
-import type { ChannelHealth } from '@hm/channels';
 import {
   processCampaign,
   deliveryIdempotencyKey,
@@ -22,6 +23,7 @@ import {
   type ReapResult,
   type RunningCampaign,
 } from '../tick';
+import { decideDispatchGate } from '../rate';
 import {
   advanceAfterDispatch,
   campaignIsExhausted,
@@ -50,6 +52,7 @@ interface FakeRecipient {
 
 interface FakeCampaign {
   status: 'running' | 'paused' | 'completed';
+  endAt: Date | null;
   nextTickAt: Date | null;
   dailyLimit: number | null;
   messagesSentToday: number;
@@ -73,10 +76,12 @@ function makeDb(init: {
   recipients: number;
   dailyLimit?: number | null;
   timezone?: string;
+  endAt?: Date | null;
 }): FakeDb {
   const steps = init.steps;
   const campaign: FakeCampaign = {
     status: 'running',
+    endAt: init.endAt ?? null,
     nextTickAt: new Date(0),
     dailyLimit: init.dailyLimit ?? null,
     messagesSentToday: 0,
@@ -109,11 +114,13 @@ function makeDb(init: {
     denyRecipient: async () => undefined,
     // F71-S06: assinatura ativa — o portao tem teste proprio em tick.test.ts.
     checkSubscription: async () => ({ active: true as const, status: 'active' }),
+    promoteScheduledCampaigns: async () => [],
     listDueCampaigns: async () => [],
-    fetchQuality: async (): Promise<ChannelHealth> => ({
-      qualityRating: 'GREEN',
-      tierLimit: 1000,
+    inspectChannel: async () => ({
+      kind: 'ready' as const,
+      health: { qualityRating: 'GREEN' as const, tierLimit: 1000 },
     }),
+    deferRecipient: async () => undefined,
 
     reapRecipients: async (_c, now): Promise<ReapResult> => {
       let recovered = 0;
@@ -151,10 +158,6 @@ function makeDb(init: {
         },
         now,
       );
-      if (q.needsReset) {
-        campaign.messagesSentToday = 0;
-        campaign.lastDailyResetAt = now;
-      }
       return { remaining: q.remaining, resetsAt: q.resetsAt };
     },
 
@@ -171,26 +174,29 @@ function makeDb(init: {
       return out;
     },
 
-    enqueueDelivery: async (_c, d, key, now): Promise<DispatchOutcome> => {
+    enqueueDelivery: async (_c, d, key, now, pacing): Promise<DispatchOutcome> => {
       const r = recipients.find((x) => x.id === d.recipientId);
       // Claim atomico: so despacha quem ainda esta pending E devido.
       if (!r || !isDue(r, now)) return { kind: 'skipped' };
-      r.status = 'sending';
-      r.attempts += 1;
 
       if (deliveries.has(key)) {
         // Step ja despachado: nao reenvia, mas destrava o drip.
         Object.assign(r, advanceAfterDispatch(steps, d.stepIndex, now));
         return { kind: 'duplicate' };
       }
+      // F58-S11: o MESMO portao puro do db-ports (la sob FOR NO KEY UPDATE). Recusa = rollback.
+      const gate = decideDispatchGate(campaign, { now, ...pacing });
+      if (gate.kind === 'closed') {
+        return { kind: 'gate_closed', reason: gate.reason, retryAt: gate.retryAt };
+      }
+      campaign.nextTickAt = gate.patch.nextTickAt;
+      campaign.messagesSentToday = gate.patch.messagesSentToday;
+      campaign.lastDailyResetAt = gate.patch.lastDailyResetAt;
+      r.attempts += 1;
       deliveries.set(key, { stepId: d.stepId, recipientId: d.recipientId });
       sent.push({ recipientId: d.recipientId, stepId: d.stepId, at: now });
       Object.assign(r, advanceAfterDispatch(steps, d.stepIndex, now));
       return { kind: 'enqueued' };
-    },
-
-    recordDailyUsage: async (_c, n) => {
-      campaign.messagesSentToday += n;
     },
 
     settleCampaign: async () => {
@@ -205,13 +211,34 @@ function makeDb(init: {
       return true;
     },
 
+    closeCampaign: async () => {
+      if (campaign.status !== 'running') return { closed: false, notReached: 0 };
+      let notReached = 0;
+      for (const r of recipients) {
+        if (r.status === 'pending') {
+          r.status = 'failed';
+          r.nextStepAt = null;
+          notReached += 1;
+        }
+      }
+      campaign.status = 'completed';
+      campaign.nextTickAt = null;
+      return { closed: true, notReached };
+    },
+
     pauseCampaign: async () => {
+      if (campaign.status !== 'running') return;
       campaign.status = 'paused';
       campaign.nextTickAt = null;
     },
 
+    // Mesma semantica do SQL real: least(greatest(cursor, at), end_at).
     scheduleNextTick: async (_id, at) => {
-      campaign.nextTickAt = at;
+      if (campaign.status !== 'running') return;
+      const cursor = campaign.nextTickAt ?? at;
+      let next = cursor > at ? cursor : at;
+      if (campaign.endAt !== null && campaign.endAt < next) next = campaign.endAt;
+      campaign.nextTickAt = next;
     },
 
     applyErrorAction: async () => undefined,
@@ -227,14 +254,28 @@ const CAMP: RunningCampaign = {
   sendWindows: null,
   rateLimitPerMinute: 60,
   deliveryRate: null,
+  endAt: null,
+  nextTickAt: null,
 };
 
-/** Roda um tick so se a campanha esta running e o nextTickAt ja venceu. */
-async function tickAt(db: FakeDb, now: Date): Promise<ProcessCampaignResult | null> {
+/**
+ * Roda um tick so se a campanha esta running e o nextTickAt ja venceu. O snapshot
+ * vem do "banco" (como o listDueCampaigns real): cursor e prazo atuais.
+ */
+async function tickAt(
+  db: FakeDb,
+  now: Date,
+  camp: RunningCampaign = CAMP,
+): Promise<ProcessCampaignResult | null> {
   if (db.campaign.status !== 'running') return null;
   const next = db.campaign.nextTickAt;
   if (next !== null && next > now) return null;
-  return processCampaign(CAMP, { ports: db.ports, logger: makeLogger() }, now);
+  const snapshot: RunningCampaign = {
+    ...camp,
+    endAt: db.campaign.endAt,
+    nextTickAt: db.campaign.nextTickAt,
+  };
+  return processCampaign(snapshot, { ports: db.ports, logger: makeLogger() }, now);
 }
 
 const T0 = new Date('2026-07-13T12:00:00Z');
@@ -381,11 +422,11 @@ describe('CAMP-06 — teto diario', () => {
     expect(db.campaign.status).toBe('completed');
   });
 
-  it('sem dailyLimit o batch e limitado apenas pelo rate', async () => {
+  it('sem dailyLimit o batch e limitado apenas pelo compasso', async () => {
     const db = makeDb({ steps, recipients: 40, dailyLimit: null });
     const r = await tickAt(db, T0);
-    // rate 60/min -> batchSizeForTick = 15.
-    expect(r?.dispatched).toBe(15);
+    // rate 60/min, janela 5s -> balde de 6 (5s de ritmo + 1 de granularidade).
+    expect(r?.dispatched).toBe(6);
     expect(db.campaign.status).toBe('running');
   });
 
@@ -396,5 +437,118 @@ describe('CAMP-06 — teto diario', () => {
     // Fechou no proprio tick (unico recipient completou).
     expect(db.campaign.status).toBe('completed');
     expect(db.campaign.nextTickAt).toBeNull();
+  });
+});
+
+describe('F58-S11 — compasso ao longo do tempo (relogio simulado)', () => {
+  const steps: CampaignStepRef[] = [{ id: 's0', position: 0, delaySeconds: 0 }];
+
+  /** Varre de `from` ate `to` a cada `pollMs`, como o scheduler real. */
+  async function runFor(
+    db: FakeDb,
+    from: Date,
+    durationMs: number,
+    pollMs: number,
+    camp: RunningCampaign,
+  ): Promise<void> {
+    for (let t = 0; t <= durationMs; t += pollMs) {
+      await tickAt(db, new Date(from.getTime() + t), camp);
+    }
+  }
+
+  /** Maior numero de envios em qualquer janela deslizante de `windowMs`. */
+  function maxInWindow(sent: ReadonlyArray<{ at: Date }>, windowMs: number): number {
+    let best = 0;
+    for (let i = 0; i < sent.length; i++) {
+      const start = sent[i]!.at.getTime();
+      let n = 0;
+      for (let j = i; j < sent.length && sent[j]!.at.getTime() < start + windowMs; j++) n += 1;
+      best = Math.max(best, n);
+    }
+    return best;
+  }
+
+  for (const rate of [1, 7, 30, 60, 120, 600]) {
+    it(`${rate}/min: vazao = ritmo configurado (nao rate/4) e sem rajada`, { timeout: 30_000 }, async () => {
+      // Sobra de publico: a vazao e limitada pelo compasso, nunca pela falta de gente.
+      const db = makeDb({ steps, recipients: rate * 11 + 60, dailyLimit: null });
+      const camp = { ...CAMP, rateLimitPerMinute: rate };
+      await runFor(db, T0, minutes(10) - 1, 5000, camp);
+
+      // Em 10 minutos sai ~10x o ritmo. Teto: 10*rate + o balde inicial (burst).
+      const burst = Math.floor(5000 / Math.ceil(60_000 / rate)) + 1;
+      expect(db.sent.length).toBeLessThanOrEqual(rate * 10 + burst);
+      expect(db.sent.length).toBeGreaterThanOrEqual(Math.floor(rate * 10 * 0.97));
+
+      // Nunca mais que um minuto de ritmo (+balde) dentro de QUALQUER minuto.
+      expect(maxInWindow(db.sent, 60_000)).toBeLessThanOrEqual(rate + burst);
+      // E dentro de 5s, no maximo o balde: nada de despejar o minuto inteiro.
+      expect(maxInWindow(db.sent, 5000)).toBeLessThanOrEqual(Math.max(burst, 2 * burst - 1));
+    });
+  }
+
+  it('YELLOW (ritmo efetivo menor) chega ao portao: 60/min vira 30/min de verdade', async () => {
+    const db = makeDb({ steps, recipients: 1000, dailyLimit: null });
+    db.ports.inspectChannel = async () => ({
+      kind: 'ready',
+      health: { qualityRating: 'YELLOW', tierLimit: 1000 },
+    });
+    await runFor(db, T0, minutes(10) - 1, 5000, CAMP);
+    expect(db.sent.length).toBeLessThanOrEqual(30 * 10 + 4);
+    expect(db.sent.length).toBeGreaterThanOrEqual(290);
+  });
+
+  it('ociosidade longa nao acumula credito: depois de 1h parada sai so o balde', async () => {
+    const db = makeDb({ steps, recipients: 1000, dailyLimit: null });
+    const camp = { ...CAMP, rateLimitPerMinute: 600 };
+    db.campaign.nextTickAt = new Date(T0.getTime() - minutes(60));
+    const r = await tickAt(db, T0, camp);
+    // 600/min = 100ms entre mensagens; janela 5s => balde de 51.
+    expect(r?.dispatched).toBe(51);
+  });
+
+  it('prazo final interrompe no meio: nada sai depois do end_at e quem sobrou fica de fora', async () => {
+    const endAt = new Date(T0.getTime() + minutes(2));
+    const db = makeDb({ steps, recipients: 500, dailyLimit: null, endAt });
+    await runFor(db, T0, minutes(5), 5000, CAMP);
+    expect(db.sent.every((s) => s.at.getTime() < endAt.getTime())).toBe(true);
+    expect(db.sent.length).toBeGreaterThanOrEqual(115);
+    expect(db.sent.length).toBeLessThanOrEqual(127);
+    expect(db.campaign.status).toBe('completed');
+    expect(db.recipients.filter((r) => r.status === 'failed').length).toBe(500 - db.sent.length);
+  });
+
+  it('reagendamento nunca passa do prazo (fecha na hora mesmo dormindo por cota)', async () => {
+    const endAt = new Date(T0.getTime() + minutes(30));
+    const db = makeDb({ steps, recipients: 10, dailyLimit: 2, endAt });
+    await tickAt(db, T0);
+    await tickAt(db, new Date(T0.getTime() + minutes(1)));
+    // A cota mandaria dormir ate a meia-noite; o prazo puxa para end_at.
+    expect(db.campaign.nextTickAt?.getTime()).toBe(endAt.getTime());
+    await tickAt(db, endAt);
+    expect(db.campaign.status).toBe('completed');
+    expect(db.sent).toHaveLength(2);
+  });
+
+  it('teto diario no fuso com horario de verao (America/New_York, 08/03/2026)', async () => {
+    // 08/03/2026 02:00 local pula para 03:00 (dia de 23h). Meia-noite = 05:00Z (EST);
+    // a meia-noite seguinte e 04:00Z de 09/03 (EDT).
+    const db = makeDb({ steps, recipients: 6, dailyLimit: 2, timezone: 'America/New_York' });
+    const morning = new Date('2026-03-08T14:00:00Z'); // 10:00 EDT
+    const r1 = await tickAt(db, morning);
+    expect(r1?.dispatched).toBe(2);
+    const r2 = await tickAt(db, new Date(morning.getTime() + minutes(1)));
+    expect(r2?.quotaExhausted).toBe(true);
+    expect(db.campaign.nextTickAt?.toISOString()).toBe('2026-03-09T04:00:00.000Z');
+    // 23:59 local ainda e o mesmo dia: nada sai.
+    expect(await tickAt(db, new Date('2026-03-09T03:59:00Z'))).toBeNull();
+    // Virou o dia local: a cota reseta. O balde acorda vazio (sem rajada na
+    // virada) e completa o saldo na varredura seguinte.
+    const r3 = await tickAt(db, new Date('2026-03-09T04:00:00Z'));
+    expect(r3?.dispatched).toBe(1);
+    const r4 = await tickAt(db, new Date('2026-03-09T04:00:05Z'));
+    expect(r4?.dispatched).toBe(1);
+    expect(db.campaign.messagesSentToday).toBe(2);
+    expect(db.sent).toHaveLength(4);
   });
 });

@@ -32,10 +32,10 @@
  * `(channel_id, remote_id)`: o perdedor de uma corrida com o inbound reusa a
  * conversa vencedora e nao anuncia nada; rollback nao anuncia nada.
  */
-import { and, asc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import { consentRepo, decryptSecret, enqueueOutbox, getDb, schema, withWorkspace } from '@hm/db';
 import type { DbTx } from '@hm/db';
-import { GraphClient, fetchChannelQuality, type ChannelHealth } from '@hm/channels';
+import { GraphClient, MetaError, fetchChannelQuality, type ChannelHealth } from '@hm/channels';
 import { decideOutbound, isMarketCode } from '@hm/shared';
 import type { ChannelKind, MarketCode, OutboundDecision } from '@hm/shared';
 import {
@@ -48,14 +48,20 @@ import {
 import type { Envelope, MqHandle, OutboxMessage } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
 import type { CampaignErrorAction } from '@hm/channels';
-import type {
-  CampaignQuota,
-  CampaignTickPorts,
-  DispatchOutcome,
-  PendingDispatch,
-  ReapResult,
-  RunningCampaign,
+import {
+  describeStopReason,
+  type CampaignQuota,
+  type CampaignTickPorts,
+  type ChannelInspection,
+  type CloseResult,
+  type DispatchOutcome,
+  type DispatchPacing,
+  type PendingDispatch,
+  type PromotedCampaign,
+  type ReapResult,
+  type RunningCampaign,
 } from './tick';
+import { decideDispatchGate, type DispatchGateDecision } from './rate';
 import type { SendWindows } from './windows';
 import { subscriptionGate, type SubscriptionGate } from '../lib/subscription-gate';
 import {
@@ -81,6 +87,7 @@ const {
   contacts,
   conversations,
   messages,
+  auditLogs,
 } = schema;
 
 export const OUTBOUND_QUEUE = QUEUES.outbound;
@@ -125,20 +132,6 @@ function dispatchOutbox(campaign: RunningCampaign, done: DispatchTx): OutboxMess
 }
 
 const settled = (outcome: DispatchOutcome): DispatchTx => ({ outcome, opened: null, job: null });
-
-async function loadChannelToken(
-  tx: DbTx,
-  channelId: string,
-): Promise<{ accessToken: string; phoneNumberId: string } | null> {
-  const [channel] = await tx.select().from(channels).where(eq(channels.id, channelId));
-  if (!channel) return null;
-  const [secret] = await tx
-    .select()
-    .from(channelSecrets)
-    .where(eq(channelSecrets.channelId, channelId));
-  const accessToken = secret ? decryptSecret(secret.accessTokenEnc, secret.keyVersion) : '';
-  return { accessToken, phoneNumberId: channel.phoneNumberId ?? '' };
-}
 
 /** Steps da campanha na ordem de posicao (o indice do array = indice do passo). */
 async function loadSteps(tx: DbTx, campaignId: string): Promise<CampaignStepRef[]> {
@@ -190,17 +183,118 @@ function isDue(now: Date) {
   return or(isNull(campaignRecipients.nextStepAt), lte(campaignRecipients.nextStepAt, now));
 }
 
+/**
+ * Desfaz a transacao inteira devolvendo um valor (o `withWorkspace` faz rollback
+ * em qualquer throw). Usado quando o portao da campanha recusa a mensagem DEPOIS
+ * do claim: claim, delivery e mensagem somem juntos.
+ */
+class TxAbort<T> extends Error {
+  constructor(readonly value: T) {
+    super('campaign tx abort');
+    this.name = 'TxAbort';
+  }
+}
+
+/** Acoes de ciclo de vida gravadas em `audit_logs` (motivo observavel). */
+type CampaignStatusAction = 'campaign.started' | 'campaign.paused' | 'campaign.completed';
+
+/**
+ * F58-S11: registra a mudanca de status com motivo + orientacao legivel. A API
+ * devolve o ultimo registro no detalhe da campanha (`statusReason`).
+ */
+async function recordStatusChange(
+  tx: DbTx,
+  args: {
+    readonly workspaceId: string;
+    readonly campaignId: string;
+    readonly action: CampaignStatusAction;
+    readonly reason: string;
+    readonly extra?: Record<string, unknown>;
+  },
+): Promise<void> {
+  await tx.insert(auditLogs).values({
+    workspaceId: args.workspaceId,
+    actorType: 'system',
+    action: args.action,
+    resourceType: 'campaign',
+    resourceId: args.campaignId,
+    metadata: { reason: args.reason, message: describeStopReason(args.reason), ...args.extra },
+  });
+}
+
+/** Quality do numero muda devagar: 1 leitura da Graph por canal por minuto basta. */
+export const QUALITY_CACHE_TTL_MS = 60_000;
+
+/** Codigos Graph de credencial recusada (token invalido/expirado, sem permissao). */
+const CREDENTIAL_ERROR_CODES: ReadonlySet<number> = new Set([190, 10, 200]);
+
+/** true se o erro da Graph significa "reconecte o canal" (nao "tente mais tarde"). */
+export function isCredentialError(err: unknown): boolean {
+  if (!(err instanceof MetaError)) return false;
+  if (err.code !== undefined && CREDENTIAL_ERROR_CODES.has(err.code)) return true;
+  return err.httpStatus === 401 || err.httpStatus === 403;
+}
+
+/** Credenciais lidas do banco para consultar a Graph (fora da transacao). */
+type ChannelCredentials =
+  | { readonly kind: 'meta'; readonly phoneNumberId: string; readonly accessToken: string }
+  | { readonly kind: 'not_meta' }
+  | Extract<ChannelInspection, { kind: 'blocked' }>;
+
 export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts {
   const graph = deps.graph ?? new GraphClient();
 
   const subscription = deps.subscription ?? subscriptionGate;
+  /** Cache de quality por canal (por processo; a Graph nao e consultada a cada 5s). */
+  const qualityCache = new Map<string, { health: ChannelHealth; expiresAt: number }>();
 
   return {
     async checkSubscription(campaign: RunningCampaign) {
       return subscription.check(campaign.workspaceId);
     },
 
+    /**
+     * F58-S11: `scheduled -> running` quando start_at vence. UPDATE condicional
+     * unico (WHERE status='scheduled'): sob concorrencia, a segunda instancia
+     * re-avalia a linha depois do lock e nao a ve mais como agendada — cada
+     * campanha e promovida (e auditada) exatamente uma vez. Cross-tenant, como a
+     * listagem do tick; o motivo vai para audit_logs na mesma transacao.
+     */
+    async promoteScheduledCampaigns(now: Date): Promise<PromotedCampaign[]> {
+      return getDb().transaction(async (tx) => {
+        const rows = await tx
+          .update(campaigns)
+          .set({ status: 'running', nextTickAt: now, updatedAt: now })
+          .where(
+            and(
+              eq(campaigns.status, 'scheduled'),
+              isNotNull(campaigns.startAt),
+              lte(campaigns.startAt, now),
+            ),
+          )
+          .returning({
+            id: campaigns.id,
+            workspaceId: campaigns.workspaceId,
+            startAt: campaigns.startAt,
+          });
+        const out: PromotedCampaign[] = [];
+        for (const r of rows) {
+          const startAt = r.startAt ?? now;
+          await recordStatusChange(tx, {
+            workspaceId: r.workspaceId,
+            campaignId: r.id,
+            action: 'campaign.started',
+            reason: 'start_at_reached',
+            extra: { startAt: startAt.toISOString() },
+          });
+          out.push({ id: r.id, workspaceId: r.workspaceId, startAt });
+        }
+        return out;
+      });
+    },
+
     async listDueCampaigns(now: Date): Promise<RunningCampaign[]> {
+      // Uma consulta so (antes: 1 + N para as metricas) — a varredura agora e a cada 5s.
       const rows = await getDb()
         .select({
           id: campaigns.id,
@@ -208,47 +302,104 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           channelId: campaigns.channelId,
           sendWindows: campaigns.sendWindows,
           rateLimitPerMinute: campaigns.rateLimitPerMinute,
+          endAt: campaigns.endAt,
+          nextTickAt: campaigns.nextTickAt,
+          deliveryRate: schema.campaignMetrics.deliveryRate,
         })
         .from(campaigns)
+        .leftJoin(schema.campaignMetrics, eq(schema.campaignMetrics.campaignId, campaigns.id))
         .where(
           and(
             eq(campaigns.status, 'running'),
             or(isNull(campaigns.nextTickAt), lte(campaigns.nextTickAt, now)),
           ),
-        );
+        )
+        .orderBy(asc(sql`coalesce(${campaigns.nextTickAt}, '-infinity'::timestamptz)`));
 
-      const out: RunningCampaign[] = [];
-      for (const r of rows) {
-        const metricRows = await withWorkspace(r.workspaceId, (tx) =>
-          tx
-            .select({ deliveryRate: schema.campaignMetrics.deliveryRate })
-            .from(schema.campaignMetrics)
-            .where(eq(schema.campaignMetrics.campaignId, r.id)),
-        );
-        const m = metricRows[0];
-        out.push({
-          id: r.id,
-          workspaceId: r.workspaceId,
-          channelId: r.channelId,
-          sendWindows: r.sendWindows as SendWindows | null,
-          rateLimitPerMinute: r.rateLimitPerMinute,
-          deliveryRate: m && m.deliveryRate != null ? Number(m.deliveryRate) : null,
-        });
-      }
-      return out;
+      return rows.map((r) => ({
+        id: r.id,
+        workspaceId: r.workspaceId,
+        channelId: r.channelId,
+        sendWindows: r.sendWindows as SendWindows | null,
+        rateLimitPerMinute: r.rateLimitPerMinute,
+        deliveryRate: r.deliveryRate != null ? Number(r.deliveryRate) : null,
+        endAt: r.endAt,
+        nextTickAt: r.nextTickAt,
+      }));
     },
 
-    async fetchQuality(campaign: RunningCampaign): Promise<ChannelHealth> {
-      return withWorkspace(campaign.workspaceId, async (tx) => {
-        const creds = await loadChannelToken(tx, campaign.channelId);
-        if (!creds || !creds.phoneNumberId) {
-          return { qualityRating: 'UNKNOWN', tierLimit: 250 };
-        }
-        return fetchChannelQuality(graph, {
+    /**
+     * F58-S11: canal ativo + credencial + quality. As credenciais saem do banco
+     * numa transacao curta; a chamada HTTP a Graph acontece FORA dela (nunca
+     * segurar conexao do pool esperando rede). Quality fica em cache por canal.
+     */
+    async inspectChannel(campaign: RunningCampaign): Promise<ChannelInspection> {
+      const creds = await withWorkspace(
+        campaign.workspaceId,
+        async (tx): Promise<ChannelCredentials> => {
+          const [channel] = await tx
+            .select({
+              provider: channels.provider,
+              isActive: channels.isActive,
+              phoneNumberId: channels.phoneNumberId,
+            })
+            .from(channels)
+            .where(eq(channels.id, campaign.channelId));
+          if (!channel) return { kind: 'blocked', reason: 'channel_not_found' };
+          if (!channel.isActive) return { kind: 'blocked', reason: 'channel_inactive' };
+          if (channel.provider !== 'meta_whatsapp') return { kind: 'not_meta' };
+          if (!channel.phoneNumberId) {
+            return { kind: 'blocked', reason: 'channel_credentials_missing' };
+          }
+          const [secret] = await tx
+            .select()
+            .from(channelSecrets)
+            .where(eq(channelSecrets.channelId, campaign.channelId));
+          if (!secret) return { kind: 'blocked', reason: 'channel_credentials_missing' };
+          let accessToken: string;
+          try {
+            accessToken = decryptSecret(secret.accessTokenEnc, secret.keyVersion);
+          } catch {
+            // Segredo ilegivel (chave rotacionada/corrompido): so reconectar resolve.
+            return { kind: 'blocked', reason: 'channel_credentials_invalid' };
+          }
+          if (accessToken.length === 0) {
+            return { kind: 'blocked', reason: 'channel_credentials_missing' };
+          }
+          return { kind: 'meta', phoneNumberId: channel.phoneNumberId, accessToken };
+        },
+      );
+
+      if (creds.kind === 'blocked') return creds;
+      if (creds.kind === 'not_meta') {
+        // WAHA e afins nao tem quality rating: o ritmo configurado vale como esta.
+        return { kind: 'ready', health: { qualityRating: 'UNKNOWN', tierLimit: 250 } };
+      }
+
+      const nowMs = Date.now();
+      const cached = qualityCache.get(campaign.channelId);
+      if (cached && cached.expiresAt > nowMs) return { kind: 'ready', health: cached.health };
+
+      try {
+        const health = await fetchChannelQuality(graph, {
           phoneNumberId: creds.phoneNumberId,
           accessToken: creds.accessToken,
         });
-      });
+        qualityCache.set(campaign.channelId, {
+          health,
+          expiresAt: nowMs + QUALITY_CACHE_TTL_MS,
+        });
+        return { kind: 'ready', health };
+      } catch (err: unknown) {
+        qualityCache.delete(campaign.channelId);
+        if (isCredentialError(err)) {
+          return { kind: 'blocked', reason: 'channel_credentials_invalid' };
+        }
+        return {
+          kind: 'unavailable',
+          detail: err instanceof Error ? err.message : String(err),
+        };
+      }
     },
 
     async reapRecipients(campaign: RunningCampaign, now: Date): Promise<ReapResult> {
@@ -301,6 +452,12 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
       });
     },
 
+    /**
+     * Saldo do teto diario — SOMENTE leitura (F58-S11). O reset por virada de dia
+     * e a contagem acontecem atomicamente na reserva de cada dispatch (lock de
+     * linha); um reset aqui, baseado numa leitura sem lock, podia zerar envios
+     * que outra instancia acabara de contar e furar o teto.
+     */
     async ensureDailyQuota(campaign: RunningCampaign, now: Date): Promise<CampaignQuota> {
       return withWorkspace(campaign.workspaceId, async (tx) => {
         const rows = await tx
@@ -317,7 +474,6 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           // Campanha sumiu no meio do tick: nada a enviar.
           return { remaining: 0, resetsAt: new Date(now.getTime() + 60 * 60 * 1000) };
         }
-
         const quota = evaluateDailyQuota(
           {
             dailyLimit: row.dailyLimit,
@@ -327,29 +483,8 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           },
           now,
         );
-
-        if (quota.needsReset) {
-          await tx
-            .update(campaigns)
-            .set({ messagesSentToday: 0, lastDailyResetAt: now })
-            .where(eq(campaigns.id, campaign.id));
-        }
-
         return { remaining: quota.remaining, resetsAt: quota.resetsAt };
       });
-    },
-
-    async recordDailyUsage(campaign: RunningCampaign, sent: number, now: Date): Promise<void> {
-      if (sent <= 0) return;
-      await withWorkspace(campaign.workspaceId, (tx) =>
-        tx
-          .update(campaigns)
-          .set({
-            messagesSentToday: sql`${campaigns.messagesSentToday} + ${sent}`,
-            lastDailyResetAt: sql`coalesce(${campaigns.lastDailyResetAt}, ${now.toISOString()}::timestamptz)`,
-          })
-          .where(eq(campaigns.id, campaign.id)),
-      );
     },
 
     async pendingRecipients(
@@ -480,11 +615,35 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
       });
     },
 
+    /**
+     * F58-S11 — janela horaria do contato: o recipient sai da frente da fila ate
+     * `until` (continua `pending`). Antes ele voltava a cada tick e, com poucos
+     * creditos, podia ocupar o lote inteiro e travar os demais.
+     */
+    async deferRecipient(
+      campaign: RunningCampaign,
+      dispatch: PendingDispatch,
+      until: Date,
+    ): Promise<void> {
+      await withWorkspace(campaign.workspaceId, (tx) =>
+        tx
+          .update(campaignRecipients)
+          .set({ nextStepAt: until })
+          .where(
+            and(
+              eq(campaignRecipients.id, dispatch.recipientId),
+              eq(campaignRecipients.status, 'pending'),
+            ),
+          ),
+      );
+    },
+
     async enqueueDelivery(
       campaign: RunningCampaign,
       dispatch: PendingDispatch,
       idempotencyKey: string,
       now: Date,
+      pacing: DispatchPacing,
     ): Promise<DispatchOutcome> {
       const dispatchInTx = async (tx: DbTx): Promise<DispatchTx> => {
         // (1) Claim atomico: so avanca quem ainda esta pending E devido.
@@ -632,6 +791,18 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
         const applied = advanceAfterDispatch(steps, dispatch.stepIndex, now);
         await applyTransition(tx, dispatch.recipientId, applied);
 
+        // (4) F58-S11 — portao da campanha, sob lock de linha, por ULTIMO (lock da
+        // campanha seguro pelo menor tempo possivel; ordem recipient -> campanha,
+        // a mesma do resume e do encerramento). Recusa => rollback de tudo acima.
+        const gate = await reserveDispatch(tx, campaign.id, now, pacing);
+        if (gate.kind === 'closed') {
+          throw new TxAbort<DispatchOutcome>({
+            kind: 'gate_closed',
+            reason: gate.reason,
+            retryAt: gate.retryAt,
+          });
+        }
+
         const job = {
           kind: 'template',
           channelId: campaign.channelId,
@@ -650,11 +821,16 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
         };
       };
 
-      return withWorkspace(campaign.workspaceId, async (tx) => {
-        const done = await dispatchInTx(tx);
-        await enqueueOutbox(tx, dispatchOutbox(campaign, done));
-        return done.outcome;
-      });
+      try {
+        return await withWorkspace(campaign.workspaceId, async (tx) => {
+          const done = await dispatchInTx(tx);
+          await enqueueOutbox(tx, dispatchOutbox(campaign, done));
+          return done.outcome;
+        });
+      } catch (err: unknown) {
+        if (err instanceof TxAbort) return err.value as DispatchOutcome;
+        throw err;
+      }
     },
 
     async settleCampaign(campaign: RunningCampaign, now: Date): Promise<boolean> {
@@ -677,10 +853,70 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           .set({ status: 'completed', nextTickAt: null, updatedAt: now })
           .where(and(eq(campaigns.id, campaign.id), eq(campaigns.status, 'running')))
           .returning({ id: campaigns.id });
-        return updated.length > 0;
+        if (updated.length === 0) return false;
+        await recordStatusChange(tx, {
+          workspaceId: campaign.workspaceId,
+          campaignId: campaign.id,
+          action: 'campaign.completed',
+          reason: 'all_recipients_done',
+        });
+        return true;
       });
     },
 
+    /**
+     * F58-S11 — prazo final: quem ainda estava `pending` fica de fora (`failed`
+     * `campaign_end_reached`, contavel no relatorio) e a campanha fecha
+     * `completed` com o motivo gravado. Se ela ja nao estava `running` (pausada
+     * no meio do caminho), desfaz tudo: nao fecha campanha alheia ao tick.
+     */
+    async closeCampaign(
+      campaign: RunningCampaign,
+      reason: 'end_at_reached',
+      now: Date,
+    ): Promise<CloseResult> {
+      try {
+        return await withWorkspace(campaign.workspaceId, async (tx) => {
+          const left = await tx
+            .update(campaignRecipients)
+            .set({ status: 'failed', failedReason: 'campaign_end_reached', nextStepAt: null })
+            .where(
+              and(
+                eq(campaignRecipients.campaignId, campaign.id),
+                eq(campaignRecipients.status, 'pending'),
+              ),
+            )
+            .returning({ id: campaignRecipients.id });
+          const updated = await tx
+            .update(campaigns)
+            .set({ status: 'completed', nextTickAt: null, updatedAt: now })
+            .where(and(eq(campaigns.id, campaign.id), eq(campaigns.status, 'running')))
+            .returning({ id: campaigns.id });
+          if (updated.length === 0) {
+            throw new TxAbort<CloseResult>({ closed: false, notReached: 0 });
+          }
+          await recordStatusChange(tx, {
+            workspaceId: campaign.workspaceId,
+            campaignId: campaign.id,
+            action: 'campaign.completed',
+            reason,
+            extra: {
+              endAt: campaign.endAt?.toISOString() ?? null,
+              notReached: left.length,
+            },
+          });
+          return { closed: true, notReached: left.length };
+        });
+      } catch (err: unknown) {
+        if (err instanceof TxAbort) return err.value as CloseResult;
+        throw err;
+      }
+    },
+
+    /**
+     * Pausa so o que esta `running` (nunca "pausa" campanha concluida/cancelada) e
+     * grava o motivo + orientacao na mesma transacao.
+     */
     async pauseCampaign(campaignId: string, reason: string): Promise<void> {
       const rows = await getDb()
         .select({ workspaceId: campaigns.workspaceId })
@@ -688,15 +924,29 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
         .where(eq(campaigns.id, campaignId));
       const row = rows[0];
       if (!row) return;
-      await withWorkspace(row.workspaceId, (tx) =>
-        tx
+      const paused = await withWorkspace(row.workspaceId, async (tx) => {
+        const updated = await tx
           .update(campaigns)
           .set({ status: 'paused', nextTickAt: null, updatedAt: new Date() })
-          .where(eq(campaigns.id, campaignId)),
-      );
-      deps.logger.warn('campaigns: campanha pausada', { campaignId, reason });
+          .where(and(eq(campaigns.id, campaignId), eq(campaigns.status, 'running')))
+          .returning({ id: campaigns.id });
+        if (updated.length === 0) return false;
+        await recordStatusChange(tx, {
+          workspaceId: row.workspaceId,
+          campaignId,
+          action: 'campaign.paused',
+          reason,
+        });
+        return true;
+      });
+      if (paused) deps.logger.warn('campaigns: campanha pausada', { campaignId, reason });
     },
 
+    /**
+     * Proxima olhada: nunca ANTES do cursor do compasso (greatest — reagendar nao
+     * pode liberar credito) e nunca DEPOIS do prazo final (least — o prazo fecha
+     * na hora). So mexe em campanha `running`.
+     */
     async scheduleNextTick(campaignId: string, at: Date): Promise<void> {
       const rows = await getDb()
         .select({ workspaceId: campaigns.workspaceId })
@@ -704,8 +954,14 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
         .where(eq(campaigns.id, campaignId));
       const row = rows[0];
       if (!row) return;
+      const atIso = at.toISOString();
       await withWorkspace(row.workspaceId, (tx) =>
-        tx.update(campaigns).set({ nextTickAt: at }).where(eq(campaigns.id, campaignId)),
+        tx
+          .update(campaigns)
+          .set({
+            nextTickAt: sql`least(greatest(coalesce(${campaigns.nextTickAt}, ${atIso}::timestamptz), ${atIso}::timestamptz), coalesce(${campaigns.endAt}, 'infinity'::timestamptz))`,
+          })
+          .where(and(eq(campaigns.id, campaignId), eq(campaigns.status, 'running'))),
       );
     },
 
@@ -765,4 +1021,53 @@ async function applyFailure(
       failedReason: t.failedReason,
     })
     .where(eq(campaignRecipients.id, recipientId));
+}
+
+/**
+ * F58-S11 — reserva atomica de UMA mensagem: le a campanha com `FOR NO KEY UPDATE`
+ * (serializa todos os dispatches da campanha, em qualquer instancia), decide
+ * pelo nucleo puro `decideDispatchGate` e grava cursor do compasso + contador do
+ * dia. Commit junto com a entrega; rollback devolve o credito sozinho.
+ */
+async function reserveDispatch(
+  tx: DbTx,
+  campaignId: string,
+  now: Date,
+  pacing: DispatchPacing,
+): Promise<DispatchGateDecision> {
+  const [row] = await tx
+    .select({
+      status: campaigns.status,
+      endAt: campaigns.endAt,
+      nextTickAt: campaigns.nextTickAt,
+      dailyLimit: campaigns.dailyLimit,
+      messagesSentToday: campaigns.messagesSentToday,
+      lastDailyResetAt: campaigns.lastDailyResetAt,
+      timezone: campaigns.timezone,
+    })
+    .from(campaigns)
+    .where(eq(campaigns.id, campaignId))
+    // NO KEY UPDATE, nao UPDATE: o INSERT em campaign_deliveries (FK -> campaigns)
+    // ja segura KEY SHARE nesta linha; FOR UPDATE conflita com KEY SHARE e dois
+    // dispatches simultaneos entravam em deadlock (provado no teste de concorrencia).
+    // NO KEY UPDATE serializa os dispatches entre si sem conflitar com a FK.
+    .for('no key update');
+  if (!row) return { kind: 'closed', reason: 'not_running', retryAt: null };
+
+  const decision = decideDispatchGate(row, {
+    now,
+    ratePerMinute: pacing.ratePerMinute,
+    windowMs: pacing.windowMs,
+  });
+  if (decision.kind === 'reserve') {
+    await tx
+      .update(campaigns)
+      .set({
+        nextTickAt: decision.patch.nextTickAt,
+        messagesSentToday: decision.patch.messagesSentToday,
+        lastDailyResetAt: decision.patch.lastDailyResetAt,
+      })
+      .where(eq(campaigns.id, campaignId));
+  }
+  return decision;
 }
