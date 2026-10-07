@@ -17,6 +17,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { OutboxMessage } from '@hm/shared/mq';
+import type { SubscriptionGate } from '../lib/subscription-gate';
 import type { ReengagementDeps } from './reengagement';
 import { isWithinBusinessHours } from './reengagement';
 
@@ -165,13 +166,29 @@ function makeEligibleRow(overrides: Partial<{
 type Redis = ReturnType<typeof makeRedis>;
 type Outbox = ReturnType<typeof makeOutbox>;
 type Logger = ReturnType<typeof makeLogger>;
-interface Deps { redis: Redis; outbox: Outbox; logger: Logger }
+interface Deps {
+  redis: Redis;
+  outbox: Outbox;
+  logger: Logger;
+  subscription: SubscriptionGate;
+}
 
 function asDeps(d: Deps): ReengagementDeps {
   return d as unknown as ReengagementDeps;
 }
+/** Portão de assinatura fake (F71-S06): ativo por padrão; o caso inativo tem teste próprio. */
+function gate(active = true): SubscriptionGate & { check: ReturnType<typeof vi.fn> } {
+  return {
+    check: vi.fn(async () =>
+      active
+        ? { active: true as const, status: 'active' }
+        : { active: false as const, status: 'expired' },
+    ),
+  };
+}
+
 function deps(): Deps {
-  return { redis: makeRedis(), outbox: makeOutbox(), logger: makeLogger() };
+  return { redis: makeRedis(), outbox: makeOutbox(), logger: makeLogger(), subscription: gate() };
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -213,6 +230,23 @@ beforeEach(() => {
 // ─── Testes ───────────────────────────────────────────────────────────────────
 
 describe('runReengagementTick — gatilho idle', () => {
+  it('F71-S06: assinatura inativa → não religa a IA, não publica e não gasta a marca da janela', async () => {
+    eligibleRows = [makeEligibleRow({ reason: 'idle' })];
+    const d = { ...deps(), subscription: gate(false) };
+    const withWs = vi.fn(withWorkspaceImpl);
+    withWorkspaceImpl = withWs;
+
+    const res = await runReengagementTick(asDeps(d), { workspaceId: WS });
+
+    expect(res.ran).toBe(true);
+    expect(res.skippedSubscriptionInactive).toBe(1);
+    expect(res.enqueued).toBe(0);
+    expect(d.subscription.check).toHaveBeenCalledWith(WS);
+    expect(withWs).not.toHaveBeenCalled();
+    expect(d.outbox.published).toHaveLength(0);
+    expect(d.redis.store.has(reengagementMarkKey(CONV, BUCKET))).toBe(false);
+  });
+
   it('reengaja conversa ociosa: grava mark, update ai_mode, publica flow.run.requested', async () => {
     eligibleRows = [makeEligibleRow({ reason: 'idle' })];
     const d = deps();
@@ -250,7 +284,7 @@ describe('runReengagementTick — gatilho idle', () => {
     const redis = makeRedis();
     const outbox = makeOutbox();
     const logger = makeLogger();
-    const d = { redis, outbox, logger };
+    const d = { redis, outbox, logger, subscription: gate() };
 
     const first = await runReengagementTick(asDeps(d), { workspaceId: WS });
     expect(first.enqueued).toBe(1);
@@ -267,7 +301,7 @@ describe('runReengagementTick — gatilho idle', () => {
   it('novo bucket permite novo reengajamento (ai_last_human_at resetou)', async () => {
     const redis = makeRedis();
     const outbox = makeOutbox();
-    const d = { redis, outbox, logger: makeLogger() };
+    const d = { redis, outbox, logger: makeLogger(), subscription: gate() };
 
     eligibleRows = [makeEligibleRow({ bucket_epoch: BUCKET })];
     await runReengagementTick(asDeps(d), { workspaceId: WS });
@@ -298,7 +332,7 @@ describe('runReengagementTick — lock de scheduler', () => {
     const redis = makeRedis();
     redis.store.set(REENGAGEMENT_LOCK_KEY, 'other-instance-token');
     const outbox = makeOutbox();
-    const d = { redis, outbox, logger: makeLogger() };
+    const d = { redis, outbox, logger: makeLogger(), subscription: gate() };
 
     eligibleRows = [makeEligibleRow()];
     const res = await runReengagementTick(asDeps(d), { workspaceId: WS });

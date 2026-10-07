@@ -14,6 +14,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { OutboxMessage } from '@hm/shared/mq';
+import type { SubscriptionGate } from '../lib/subscription-gate';
 import type { FollowupDeps } from './followup';
 
 // ─── Mock de @hm/db ───────────────────────────────────────────────────────────
@@ -125,6 +126,7 @@ interface Deps {
   redis: Redis;
   outbox: Outbox;
   logger: Logger;
+  subscription: SubscriptionGate;
 }
 
 /** Coerção dos fakes para `FollowupDeps` (as portas só usam um subconjunto). */
@@ -132,8 +134,19 @@ function asDeps(d: Deps): FollowupDeps {
   return d as unknown as FollowupDeps;
 }
 
+/** Portão de assinatura fake (F71-S06): ativo por padrão; o caso inativo tem teste próprio. */
+function gate(active = true): SubscriptionGate & { check: ReturnType<typeof vi.fn> } {
+  return {
+    check: vi.fn(async () =>
+      active
+        ? { active: true as const, status: 'active' }
+        : { active: false as const, status: 'expired' },
+    ),
+  };
+}
+
 function deps(): Deps {
-  return { redis: makeRedis(), outbox: makeOutbox(), logger: makeLogger() };
+  return { redis: makeRedis(), outbox: makeOutbox(), logger: makeLogger(), subscription: gate() };
 }
 
 beforeEach(() => {
@@ -145,6 +158,21 @@ beforeEach(() => {
 });
 
 describe('runFollowupTick', () => {
+  it('F71-S06: assinatura inativa → nenhum follow-up e a marca da janela fica livre', async () => {
+    eligibleRows = [eligibleRow];
+    const d = { ...deps(), subscription: gate(false) };
+
+    const res = await runFollowupTick(asDeps(d), { workspaceId: WS });
+
+    expect(res.ran).toBe(true);
+    expect(res.skippedSubscriptionInactive).toBe(1);
+    expect(res.enqueued).toBe(0);
+    expect(d.subscription.check).toHaveBeenCalledWith(WS);
+    expect(txExecute).not.toHaveBeenCalled();
+    expect(d.outbox.published).toHaveLength(0);
+    expect(d.redis.store.has(followupMarkKey(CONV, BUCKET))).toBe(false);
+  });
+
   it('seleciona elegíveis, marca idempotência e publica flow.run.requested', async () => {
     eligibleRows = [eligibleRow];
     const d = deps();
@@ -182,7 +210,7 @@ describe('runFollowupTick', () => {
     const redis = makeRedis();
     const outbox = makeOutbox();
     const logger = makeLogger();
-    const d = { redis, outbox, logger };
+    const d = { redis, outbox, logger, subscription: gate() };
 
     const first = await runFollowupTick(asDeps(d), { workspaceId: WS });
     expect(first.enqueued).toBe(1);
@@ -200,7 +228,7 @@ describe('runFollowupTick', () => {
   it('nova janela (novo last_message_epoch) permite novo follow-up', async () => {
     const redis = makeRedis();
     const outbox = makeOutbox();
-    const d = { redis, outbox, logger: makeLogger() };
+    const d = { redis, outbox, logger: makeLogger(), subscription: gate() };
 
     eligibleRows = [eligibleRow];
     await runFollowupTick(asDeps(d), { workspaceId: WS });
@@ -218,7 +246,7 @@ describe('runFollowupTick', () => {
     // Outra instância já detém o lock.
     redis.store.set(FOLLOWUP_LOCK_KEY, 'other-instance-token');
     const outbox = makeOutbox();
-    const d = { redis, outbox, logger: makeLogger() };
+    const d = { redis, outbox, logger: makeLogger(), subscription: gate() };
 
     eligibleRows = [eligibleRow];
     const res = await runFollowupTick(asDeps(d), { workspaceId: WS });

@@ -8,15 +8,7 @@ import type { Role } from '@hm/shared';
 import { api } from '@/shared/lib/api-client';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { cn } from '@/shared/lib/cn';
-
-/** Rótulos PT-BR dos papéis (a API expõe o enum em maiúsculas). */
-const ROLE_LABEL: Record<Role, string> = {
-  OWNER: 'Proprietário',
-  ADMIN: 'Administrador',
-  SUPERVISOR: 'Supervisor',
-  AGENT: 'Agente',
-  READONLY: 'Somente leitura',
-};
+import { ROLE_LABEL, WorkspaceList, useWorkspaceSwitcher } from '@/shared/components/workspace-switcher';
 
 /** Iniciais a partir do nome (sem avatar no store — UX §2.4: identidade legível). */
 export function initialsFromName(name: string): string {
@@ -87,6 +79,7 @@ export function UserMenu({
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
 
+  const { activeName, canSwitch } = useWorkspaceSwitcher();
   const initials = initialsFromName(name);
   const roleLabel = ROLE_LABEL[role];
 
@@ -139,6 +132,7 @@ export function UserMenu({
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         title={collapsed ? `${name} · ${roleLabel}` : undefined}
+        aria-label={variant === 'compact' || collapsed ? `Conta de ${name}` : undefined}
         className={cn(
           'group flex items-center rounded-sm outline-none transition-colors duration-200 focus-visible:shadow-glow-md',
           collapsed
@@ -176,7 +170,8 @@ export function UserMenu({
             // `block` ocupa a largura do gatilho (rodapé da Sidebar); `compact`
             // abre um popover de largura fixa ancorado à direita (TopBar mobile).
             // `collapsed` (sidebar recolhida) ancora à esquerda e abre p/ a direita.
-            collapsed ? 'left-0 w-56' : variant === 'block' ? 'left-0' : 'w-56',
+            collapsed ? 'left-0 w-56' : variant === 'block' ? 'left-0' : 'w-72 max-w-[calc(100vw-1rem)]',
+            'max-h-[75dvh] overflow-y-auto',
             placement === 'up' ? 'bottom-full mb-2' : 'top-full mt-2',
           )}
         >
@@ -184,6 +179,20 @@ export function UserMenu({
             <div className="border-b border-border px-3 py-2">
               <p className="truncate font-head text-sm font-medium text-text">{name}</p>
               <p className="truncate text-xs text-text-low">{roleLabel}</p>
+            </div>
+          )}
+          {/* Empresa (F71-S08) — paridade mobile do seletor da Sidebar: nome da
+              empresa ativa sempre visível; lista de troca só com 2+ empresas. */}
+          {variant === 'compact' && (activeName || canSwitch) && (
+            <div className="border-b border-border px-2 py-2">
+              <p className="px-1 pb-1 font-head text-xs font-medium uppercase tracking-wide text-text-low">
+                {canSwitch ? 'Suas empresas' : 'Empresa'}
+              </p>
+              {canSwitch ? (
+                <WorkspaceList autoFocus onSelected={() => setOpen(false)} />
+              ) : (
+                <p className="truncate px-1 font-head text-sm text-text">{activeName}</p>
+              )}
             </div>
           )}
           <Link

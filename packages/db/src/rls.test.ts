@@ -17,6 +17,7 @@ import { quickRepliesRepo } from './repos/quick-replies';
 import { onboardingRepo } from './repos/onboarding';
 import { productsRepo } from './repos/products';
 import { dealItemsRepo } from './repos/deal_items';
+import { generateInviteToken } from './repos/member-invites';
 import {
   agentDepartments,
   agents,
@@ -56,6 +57,7 @@ import {
   kbChunks,
   kbDocuments,
   kbFeedback,
+  memberInvites,
   members,
   outboundWebhookDeliveries,
   outboundWebhooks,
@@ -2448,5 +2450,144 @@ describe('RLS backstop — FORCE + agent_templates (F56-S08)', () => {
     expect(still?.id).toBe(globalTpl.id);
 
     await db.delete(agentTemplates).where(eq(agentTemplates.id, globalTpl.id));
+  });
+});
+
+describe('RLS Member invites (F71-S01)', () => {
+  async function seedInvite(workspaceId: string, email: string, invitedBy: string | null) {
+    const db = getDb(); // owner → bypassa RLS (seed)
+    const [row] = await db
+      .insert(memberInvites)
+      .values({
+        workspaceId,
+        email,
+        role: 'AGENT',
+        invitedBy,
+        tokenHash: generateInviteToken().tokenHash,
+        expiresAt: new Date(Date.now() + 7 * 24 * 3600_000),
+      })
+      .returning();
+    if (!row) throw new Error('Falha ao semear convite.');
+    return row;
+  }
+
+  it('member_invites isola por workspace: B não lê, não altera e não grava em A', async () => {
+    const sfx = randomUUID().slice(0, 8);
+    const inviteA = await seedInvite(wsA, `rls-inv-${sfx}@test.local`, memberA);
+
+    const fromA = await withWorkspace(wsA, (tx) => tx.select().from(memberInvites));
+    expect(fromA.some((i) => i.id === inviteA.id)).toBe(true);
+    expect(fromA.every((i) => i.workspaceId === wsA)).toBe(true);
+
+    const fromB = await withWorkspace(wsB, (tx) => tx.select().from(memberInvites));
+    expect(fromB.some((i) => i.id === inviteA.id)).toBe(false);
+
+    // UPDATE/DELETE de B não alcançam a linha de A.
+    const updated = await withWorkspace(wsB, (tx) =>
+      tx
+        .update(memberInvites)
+        .set({ revokedAt: new Date() })
+        .where(eq(memberInvites.id, inviteA.id))
+        .returning(),
+    );
+    expect(updated).toHaveLength(0);
+    const deleted = await withWorkspace(wsB, (tx) =>
+      tx.delete(memberInvites).where(eq(memberInvites.id, inviteA.id)).returning(),
+    );
+    expect(deleted).toHaveLength(0);
+
+    // WITH CHECK: B não grava convite com workspace_id de A.
+    await expect(
+      withWorkspace(wsB, (tx) =>
+        tx.insert(memberInvites).values({
+          workspaceId: wsA,
+          email: `forjado-${sfx}@test.local`,
+          role: 'AGENT',
+          tokenHash: generateInviteToken().tokenHash,
+          expiresAt: new Date(Date.now() + 3600_000),
+        }),
+      ),
+    ).rejects.toThrow();
+
+    // UPDATE de A não consegue mover a linha para B.
+    await expect(
+      withWorkspace(wsA, (tx) =>
+        tx.update(memberInvites).set({ workspaceId: wsB }).where(eq(memberInvites.id, inviteA.id)),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('um pendente por (workspace, email), sem diferenciar caixa; aceito/revogado liberam', async () => {
+    const sfx = randomUUID().slice(0, 8);
+    const email = `pend-${sfx}@test.local`;
+    const first = await seedInvite(wsA, email, memberA);
+    await expect(seedInvite(wsA, email.toUpperCase(), memberA)).rejects.toThrow();
+    // Outra empresa pode convidar o mesmo email.
+    await seedInvite(wsB, email, null);
+    // Revogado sai da unicidade de pendente.
+    await getDb()
+      .update(memberInvites)
+      .set({ revokedAt: new Date() })
+      .where(eq(memberInvites.id, first.id));
+    await expect(seedInvite(wsA, email, memberA)).resolves.toBeTruthy();
+  });
+
+  it('CHECKs: sem OWNER, token_hash só sha256 hex (ou legacy:), estados finais excludentes', async () => {
+    const db = getDb();
+    const sfx = randomUUID().slice(0, 8);
+    const base = {
+      workspaceId: wsA,
+      expiresAt: new Date(Date.now() + 3600_000),
+    };
+    await expect(
+      db.execute(sql`
+        insert into member_invites (workspace_id, email, role, token_hash, expires_at)
+        values (${wsA}, ${`own-${sfx}@test.local`}, 'OWNER', ${generateInviteToken().tokenHash}, now() + interval '1 day')
+      `),
+    ).rejects.toMatchObject({ cause: { constraint_name: 'member_invites_role_chk' } });
+    await expect(
+      db.insert(memberInvites).values({
+        ...base,
+        email: `tok-${sfx}@test.local`,
+        role: 'AGENT',
+        tokenHash: 'token-em-claro',
+      }),
+    ).rejects.toThrow();
+    await expect(
+      db.insert(memberInvites).values({
+        ...base,
+        email: `fin-${sfx}@test.local`,
+        role: 'AGENT',
+        tokenHash: generateInviteToken().tokenHash,
+        acceptedAt: new Date(),
+        revokedAt: new Date(),
+      }),
+    ).rejects.toThrow();
+    // Hash idêntico em outro convite: token_hash é único.
+    const shared = generateInviteToken().tokenHash;
+    await db.insert(memberInvites).values({
+      ...base,
+      email: `u1-${sfx}@test.local`,
+      role: 'AGENT',
+      tokenHash: shared,
+    });
+    await expect(
+      db.insert(memberInvites).values({
+        ...base,
+        email: `u2-${sfx}@test.local`,
+        role: 'AGENT',
+        tokenHash: shared,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('FK composta: invited_by de outra empresa é recusado mesmo pelo owner do banco', async () => {
+    const sfx = randomUUID().slice(0, 8);
+    const [memberB] = await getDb()
+      .select({ id: members.id })
+      .from(members)
+      .where(eq(members.workspaceId, wsB))
+      .limit(1);
+    await expect(seedInvite(wsA, `fk-${sfx}@test.local`, memberB?.id ?? null)).rejects.toThrow();
   });
 });

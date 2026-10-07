@@ -7,7 +7,14 @@
  *       value: { messaging_product, metadata, contacts?, messages?, statuses? } }] }] }
  *
  * Cobre mensagens (text/image/video/audio/voice/document/sticker/location/
- * contacts/interactive/reaction) e status (sent/delivered/read/failed).
+ * contacts/interactive/button/reaction) e status (sent/delivered/read/failed).
+ *
+ * F70-S34 — clique em resposta rápida. O botão de resposta rápida de um MODELO chega
+ * como `type: 'button'` (`button.text` + `button.payload`); o botão de uma mensagem
+ * interativa, como `interactive.button_reply` (`id` + `title`) ou `list_reply`. Nos
+ * dois casos o texto do botão vira o `content` (é o que o contato "disse") e o clique
+ * cru vai em `metadata.quickReply` (`{ source, text, payload? }`). Quem decide o que o
+ * clique SIGNIFICA é o inbound (`@hm/flow-engine`, `quick-replies.ts`), não o parser.
  * Tudo navegado por colchetes com narrowing seguro (sem `any`).
  */
 
@@ -103,6 +110,11 @@ function mapMessageType(waType: string | undefined, msg: JsonRecord): MessageTyp
       return 'contact';
     case 'interactive':
       return 'interactive';
+    // F70-S34: clique em resposta rápida de modelo. Antes caía em `system` e a bolha
+    // aparecia como nota de sistema, sem autor; é o contato respondendo com o texto
+    // do botão, então é texto.
+    case 'button':
+      return 'text';
     case 'reaction':
       return 'reaction';
     case 'audio': {
@@ -147,9 +159,57 @@ function extractContent(waType: string | undefined, msg: JsonRecord): string | u
       const button = msg['button'];
       return isRecord(button) ? asString(button['text']) : undefined;
     }
+    case 'interactive':
+      return readInteractiveReply(msg)?.text;
     default:
       return undefined;
   }
+}
+
+/** Clique cru numa resposta rápida (F70-S34). O significado é decidido no inbound. */
+interface WhatsAppQuickReplyClick {
+  /** `button` = resposta rápida de modelo; `interactive` = botão/lista de mensagem interativa. */
+  readonly source: 'button' | 'interactive';
+  /** Texto do botão, como o contato viu. */
+  readonly text: string;
+  /** `button.payload` do modelo ou `id` do botão/linha interativa, quando vier. */
+  readonly payload?: string;
+}
+
+/** `interactive.button_reply` / `interactive.list_reply` → `{ id, title }`. */
+function readInteractiveReply(msg: JsonRecord): { text: string; payload?: string } | undefined {
+  const interactive = msg['interactive'];
+  if (!isRecord(interactive)) return undefined;
+  const kind = asString(interactive['type']);
+  if (kind !== 'button_reply' && kind !== 'list_reply') return undefined;
+  const reply = interactive[kind];
+  if (!isRecord(reply)) return undefined;
+  const text = asString(reply['title']);
+  if (text === undefined || text.trim() === '') return undefined;
+  const payload = asString(reply['id']);
+  return payload !== undefined && payload !== '' ? { text, payload } : { text };
+}
+
+/** Clique de resposta rápida da mensagem, se for um. */
+function readQuickReplyClick(
+  waType: string | undefined,
+  msg: JsonRecord,
+): WhatsAppQuickReplyClick | undefined {
+  if (waType === 'button') {
+    const button = msg['button'];
+    if (!isRecord(button)) return undefined;
+    const text = asString(button['text']);
+    if (text === undefined || text.trim() === '') return undefined;
+    const payload = asString(button['payload']);
+    return payload !== undefined && payload !== ''
+      ? { source: 'button', text, payload }
+      : { source: 'button', text };
+  }
+  if (waType === 'interactive') {
+    const reply = readInteractiveReply(msg);
+    return reply === undefined ? undefined : { source: 'interactive', ...reply };
+  }
+  return undefined;
 }
 
 /**
@@ -174,6 +234,9 @@ function extractMetadata(
     const interactive = msg['interactive'];
     if (isRecord(interactive)) meta['interactive'] = interactive;
   }
+  // F70-S34: clique em resposta rápida (modelo ou interativa), cru.
+  const quickReply = readQuickReplyClick(waType, msg);
+  if (quickReply !== undefined) meta['quickReply'] = quickReply;
   if (waType === 'location') {
     const location = msg['location'];
     if (isRecord(location)) meta['location'] = location;

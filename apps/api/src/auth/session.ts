@@ -1,12 +1,27 @@
 import { createHash } from 'node:crypto';
 import type { Request, Response } from 'express';
-import { membersRepo, workspacesRepo } from '@hm/db';
+import { membershipsRepo, workspacesRepo } from '@hm/db';
 import type { AuthIdentity } from '@hm/shared';
 import { getAuthProvider } from './provider';
 
 export const SESSION_COOKIE = 'hm_session';
+/**
+ * Empresa ativa da sessão (F71-S03, CONTAS_E_CONVITES §3.2). Só carrega um UUID e é
+ * PREFERÊNCIA, não autorização: a cada request o id é revalidado contra uma membership
+ * `active` do `auth_user_id` da sessão (T5). Cookie de empresa alheia, removida ou
+ * malformado é ignorado em silêncio e a sessão cai na empresa padrão (a última usada).
+ */
+export const WORKSPACE_COOKIE = 'hm_workspace';
 const isProd = process.env['NODE_ENV'] === 'production';
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const WORKSPACE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** UUID canônico (qualquer versão). O cookie não aceita outra forma (nem chega ao SQL). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isUuid(value: string): boolean {
+  return UUID_RE.test(value);
+}
 
 export function setSessionCookie(res: Response, token: string): void {
   res.cookie(SESSION_COOKIE, token, {
@@ -22,26 +37,75 @@ export function clearSessionCookie(res: Response): void {
   res.clearCookie(SESSION_COOKIE, { path: '/' });
 }
 
-/** Lê o token do cookie sem depender de cookie-parser. */
-export function readToken(req: Request): string | null {
-  const header = req.headers.cookie;
+/**
+ * Grava a empresa ativa (`hm_workspace`): httpOnly, SameSite=Lax, Secure em produção,
+ * 30 dias. Chamar SÓ depois de confirmar membership `active` do `auth_user_id` nesta
+ * empresa (login, troca de empresa, aceite de convite) — o cookie não autoriza nada
+ * sozinho, mas gravar um id não validado esconderia bug. Id fora do formato UUID é erro
+ * de programação e lança.
+ */
+export function setActiveWorkspaceCookie(res: Response, workspaceId: string): void {
+  if (!isUuid(workspaceId)) {
+    throw new Error('setActiveWorkspaceCookie: workspaceId precisa ser um UUID.');
+  }
+  res.cookie(WORKSPACE_COOKIE, workspaceId.toLowerCase(), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isProd,
+    path: '/',
+    maxAge: WORKSPACE_MAX_AGE_MS,
+  });
+}
+
+/** Apaga a empresa ativa (logout). Mesmo path do set para o navegador casar o cookie. */
+export function clearActiveWorkspaceCookie(res: Response): void {
+  res.clearCookie(WORKSPACE_COOKIE, { path: '/' });
+}
+
+/** Lê um cookie de um header `Cookie` cru, sem cookie-parser (Express e handshake do socket). */
+export function readCookieFromHeader(header: string | undefined, name: string): string | null {
   if (!header) return null;
   for (const part of header.split(';')) {
     const eq = part.indexOf('=');
     if (eq === -1) continue;
-    if (part.slice(0, eq).trim() === SESSION_COOKIE) {
-      return decodeURIComponent(part.slice(eq + 1).trim());
+    if (part.slice(0, eq).trim() === name) {
+      try {
+        return decodeURIComponent(part.slice(eq + 1).trim());
+      } catch {
+        return null; // escape percentual malformado: cookie ilegível = ausente
+      }
     }
   }
   return null;
 }
 
-export type Member = NonNullable<Awaited<ReturnType<typeof membersRepo.findByEmail>>>;
+/** Lê o token do cookie sem depender de cookie-parser. */
+export function readToken(req: Request): string | null {
+  return readCookieFromHeader(req.headers.cookie, SESSION_COOKIE);
+}
+
+/**
+ * Empresa preferida do header `Cookie` (`hm_workspace`), já filtrada por formato: só um
+ * UUID passa. Não valida membership — isso é do `resolveSessionStatus`.
+ */
+export function preferredWorkspaceFromHeader(header: string | undefined): string | null {
+  const raw = readCookieFromHeader(header, WORKSPACE_COOKIE);
+  return raw && isUuid(raw) ? raw.toLowerCase() : null;
+}
+
+/** `preferredWorkspaceFromHeader` sobre o request do Express. */
+export function readPreferredWorkspace(req: Request): string | null {
+  return preferredWorkspaceFromHeader(req.headers.cookie);
+}
+
+export type Member = NonNullable<Awaited<ReturnType<typeof membershipsRepo.findActive>>>;
 export type Workspace = NonNullable<Awaited<ReturnType<typeof workspacesRepo.findById>>>;
 
 export interface SessionContext {
   identity: AuthIdentity;
+  /** A membership `active` da pessoa NA empresa ativa (nunca resolvida por email). */
   member: Member;
+  /** Empresa ativa. Sob view-as, o middleware de impersonation sobrepõe pelo alvo. */
   workspace: Workspace;
 }
 
@@ -148,23 +212,52 @@ export type SessionResolution =
   | { readonly kind: 'unavailable' };
 
 /**
- * Verifica o token e resolve member + workspace, distinguindo "sessão morta"
- * (`invalid` → 401) de "provider fora do ar" (`unavailable` → 503). Member inativo
- * ou sem workspace é `invalid`: a sessão existe no provider mas não dá acesso.
+ * Verifica o token e resolve a membership + empresa ativa, distinguindo "sessão morta"
+ * (`invalid` → 401) de "provider fora do ar" (`unavailable` → 503).
+ *
+ * Resolução por PESSOA (`auth_user_id`), nunca por email (C1, F71-S03):
+ *   1. `preferredWorkspaceId` (cookie `hm_workspace`), se for UUID E membership `active`
+ *      desta pessoa naquela empresa (T5). Qualquer outra coisa é ignorada em silêncio;
+ *   2. senão, a empresa de `last_active_at` mais recente (`listActiveByAuthUser`);
+ *   3. nenhuma membership `active` → `invalid` (`invited`, `inactive` e `blocked` não
+ *      dão acesso).
+ *
+ * Custo: com cookie válido, 2 consultas indexadas (membership + empresa), o mesmo de
+ * antes; sem cookie ou com cookie inválido, +1 (lista de memberships).
  */
-export async function resolveSessionStatus(token: string): Promise<SessionResolution> {
+export async function resolveSessionStatus(
+  token: string,
+  preferredWorkspaceId?: string | null,
+): Promise<SessionResolution> {
   const v = await verifyTokenDetailed(token);
   if (v.kind !== 'ok') return v;
-  const member = await membersRepo.findByEmail(v.identity.email);
-  if (!member || member.status !== 'active') return { kind: 'invalid' };
+  const { authUserId } = v.identity;
+  // Ids de conta do provider são UUID (GoTrue e mock); outra forma nem chega ao SQL.
+  if (!isUuid(authUserId)) return { kind: 'invalid' };
+
+  let member: Member | null = null;
+  if (preferredWorkspaceId && isUuid(preferredWorkspaceId)) {
+    member = await membershipsRepo.findActive(authUserId, preferredWorkspaceId.toLowerCase());
+  }
+  if (!member) {
+    const [fallback] = await membershipsRepo.listActiveByAuthUser(authUserId);
+    if (!fallback) return { kind: 'invalid' };
+    // Relê a linha inteira (o contexto carrega preferências etc.) e revalida o `active`:
+    // entre as duas consultas a membership pode ter sido removida.
+    member = await membershipsRepo.findActive(authUserId, fallback.workspaceId);
+  }
+  if (!member) return { kind: 'invalid' };
   const workspace = await workspacesRepo.findById(member.workspaceId);
   if (!workspace) return { kind: 'invalid' };
   return { kind: 'ok', session: { identity: v.identity, member, workspace } };
 }
 
 /** Verifica o token e resolve member + workspace (member precisa estar ativo). */
-export async function resolveSession(token: string): Promise<SessionContext | null> {
-  const r = await resolveSessionStatus(token);
+export async function resolveSession(
+  token: string,
+  preferredWorkspaceId?: string | null,
+): Promise<SessionContext | null> {
+  const r = await resolveSessionStatus(token, preferredWorkspaceId);
   return r.kind === 'ok' ? r.session : null;
 }
 

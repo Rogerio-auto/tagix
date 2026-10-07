@@ -32,6 +32,7 @@ import {
   type AgentRunDeps,
 } from './run';
 import { deepMerge, filterToolsByPolicy, toToolDescriptors, type AgentToolRow } from './tools';
+import { subscriptionGate } from '../lib/subscription-gate';
 
 const url = process.env['DATABASE_URL'];
 
@@ -335,6 +336,8 @@ describe.skipIf(!url)('runAgent entrega as tools habilitadas ao runtime (DB, F70
         cancel: vi.fn(),
       } as unknown as AgentRunDeps['client'],
       logger: logger as unknown as AgentRunDeps['logger'],
+      // F71-S06: portão real — as empresas destes testes estão em trial sem data (ativas).
+      subscription: subscriptionGate,
     };
 
     const outcome = await runAgent(

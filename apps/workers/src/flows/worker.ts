@@ -7,6 +7,8 @@
  * ```
  * consume hm.q.flow.execution → valida Envelope (Zod, em consume)
  *   → parseFlowExecutionStep (payload { workspaceId, executionId })
+ *   → assinatura da empresa inativa (F71-S06) → execucao `cancelled` com
+ *     `skipped_subscription_inactive`, nenhum step roda, nada e enviado → ack
  *   → engine.processFlowStepScoped(workspaceId, executionId)
  *   → ack (sucesso) | nack→DLX (erro transitorio, re-lanca)
  * ```
@@ -25,6 +27,12 @@ import {
 } from '@hm/shared/mq';
 import { createFlowEngine, createOutboundPort, type FlowEngineApi } from '@hm/flow-engine';
 import type { Logger } from '@hm/logger';
+import {
+  recordSubscriptionSkip,
+  SKIPPED_SUBSCRIPTION_INACTIVE,
+  subscriptionGate,
+  type SubscriptionGate,
+} from '../lib/subscription-gate';
 import { createOutboundPublisher } from './outbound-publisher';
 import { createFlowEventsPublisher } from './execution-events-publisher';
 
@@ -36,6 +44,8 @@ export const FLOW_EXECUTION_QUEUE = QUEUES.flowExecution;
 export interface FlowWorkerDeps {
   readonly engine: FlowEngineApi;
   readonly logger: Logger;
+  /** Portão de assinatura (F71-S06). Obrigatório: lido do banco a cada step. */
+  readonly subscription: SubscriptionGate;
 }
 
 /**
@@ -49,7 +59,7 @@ export function createFlowWorkerDeps(logger: Logger): FlowWorkerDeps {
   // F51: notifica o cockpit em tempo real publicando flow_execution:updated no socket relay.
   const events = createFlowEventsPublisher({ logger });
   const engine = createFlowEngine({ outbound, events });
-  return { engine, logger };
+  return { engine, logger, subscription: subscriptionGate };
 }
 
 /** Processa um unico envelope (testavel sem RabbitMQ). Re-lanca em falha transitoria. */
@@ -70,6 +80,19 @@ export async function handleFlowExecutionEnvelope(
   }
 
   const { workspaceId, executionId } = parsed;
+
+  // F71-S06: empresa sem assinatura ativa nao executa passo (passo de flow e automacao de
+  // saida). A execucao termina `cancelled` — terminal, entao o wakeup e a recuperacao de
+  // `running` nao a republicam em loop, e nada dispara sozinho quando a assinatura voltar.
+  const subscription = await deps.subscription.check(workspaceId);
+  if (!subscription.active) {
+    await deps.engine.cancelFlowExecution(workspaceId, executionId, SKIPPED_SUBSCRIPTION_INACTIVE);
+    recordSubscriptionSkip(deps.logger, 'flow-step', workspaceId, subscription.status, {
+      executionId,
+    });
+    return;
+  }
+
   await deps.engine.processFlowStepScoped(workspaceId, executionId);
 }
 

@@ -1,20 +1,22 @@
 /**
- * Conteúdo do agente de atendimento da Arcada (F70-S06) — PURO, sem I/O.
+ * Conteúdo do agente de atendimento da Arcada (F70-S06, preço de lançamento F70-S33) — PURO, sem I/O.
  *
- * Fonte única do que o agente pode afirmar: oferta (3 níveis), limites de
- * negociação aprovados em 24/09, gatilhos de handoff, base de conhecimento e
- * textos da cadência. O seed (`agent_templates_arcada.ts`) só persiste o que sai
- * daqui; os testes (`agent_templates_arcada.test.ts`) travam os limites.
+ * Fonte única do que o agente pode afirmar: oferta (3 níveis com preço de lançamento),
+ * pagamento por nível, prazo, gatilhos de handoff, base de conhecimento e textos da
+ * cadência. O seed (`agent_templates_arcada.ts`) só persiste o que sai daqui; os testes
+ * (`agent_templates_arcada.test.ts`) travam preços, parcelas, prazo e a ausência de
+ * qualquer oferta de desconto, urgência ou escassez.
  *
- * Regra de conteúdo: nada é inventado. Tudo que o Rogério ainda precisa informar
- * (o que cada nível inclui, portfólio, casos, meios de pagamento, como agendar,
- * nomes dos modelos aprovados na Meta) fica como marcador `{{marcador}}` e é
- * listado por `listPendingMarkers()`. O prompt instrui o agente a nunca expor um
- * marcador ao cliente.
+ * Regra de conteúdo: nada é inventado. O que cada nível inclui foi transcrito de
+ * `rogerio-os/vault/04-projetos/arcada.md` (prevalece) e de
+ * `portfolio-sites/planejamento/niveis-odonto/PLANO.md` (detalhe), e está PRÉ-PREENCHIDO
+ * para aprovação do Rogério (entra como rascunho de versão). O que essas fontes não dizem
+ * continua como marcador `{{marcador}}`, listado por `listPendingMarkers()`. O prompt
+ * instrui o agente a nunca expor um marcador ao cliente.
  *
- * Valores (preços, parcelas, descontos) são DERIVADOS das constantes abaixo, nunca
- * digitados à mão no texto: mudar um limite muda o prompt inteiro de forma coerente,
- * e o teste garante que nenhum número fora dos limites aparece.
+ * Valores (preço, parcelas) são DERIVADOS das constantes abaixo, nunca digitados à mão
+ * no texto: mudar um preço muda o prompt inteiro de forma coerente, e o teste garante que
+ * nenhum valor fora da tabela aparece.
  */
 
 /** Etiquetas usadas pelos flows e pelo agente. Nomes são contrato com os flows. */
@@ -42,28 +44,73 @@ export const ARCADA_MODEL_PARAMS: Readonly<Record<string, unknown>> = {
   max_tokens: 600,
 };
 
-/** Níveis da oferta, em reais inteiros. Aprovados pelo Rogério (slot F70-S06). */
+/**
+ * Níveis da oferta com o PREÇO DE LANÇAMENTO (Rogério, 29/09/2026), em reais inteiros.
+ * `maxInstallments`: 1 = só à vista; o Cinema divide em até 2 parcelas iguais.
+ * Nunca há desconto (nem à vista, nem negociando).
+ */
 export const ARCADA_TIERS = [
-  { priceBrl: 1000, includesMarker: 'nivel_1000_inclui' },
-  { priceBrl: 2500, includesMarker: 'nivel_2500_inclui' },
-  { priceBrl: 5000, includesMarker: 'nivel_5000_inclui' },
+  {
+    key: 'essencial',
+    name: 'Essencial',
+    priceBrl: 297,
+    maxInstallments: 1,
+    includesMarker: 'nivel_essencial_inclui',
+    demo: 'Aline Tenório Odontologia',
+  },
+  {
+    key: 'estudio',
+    name: 'Estúdio',
+    priceBrl: 397,
+    maxInstallments: 1,
+    includesMarker: 'nivel_estudio_inclui',
+    demo: 'Quadrante Odontologia',
+  },
+  {
+    key: 'cinema',
+    name: 'Cinema',
+    priceBrl: 999,
+    maxInstallments: 2,
+    includesMarker: 'nivel_cinema_inclui',
+    demo: 'Nácar Odontologia',
+  },
 ] as const;
 
-/** Limites de negociação aprovados em 24/09. Nunca ultrapassáveis pelo agente. */
+export type ArcadaTier = (typeof ARCADA_TIERS)[number];
+export type ArcadaTierKey = ArcadaTier['key'];
+
+/** Regras comerciais de 29/09 (substituem os limites de 24/09). */
 export const ARCADA_NEGOTIATION_LIMITS = {
-  /** Parcelamento oferecido de saída, sem juros. */
-  defaultInstallments: 2,
-  /** Máximo de parcelas, só se o cliente insistir. Sem juros. */
-  maxInstallments: 3,
-  /** Parcelado nunca tem desconto. */
-  installmentsDiscountPct: 0,
-  /** Desconto à vista oferecido, em qualquer nível. */
-  cashDiscountPct: 10,
-  /** Teto absoluto do desconto à vista. */
-  maxCashDiscountPct: 15,
-  /** Prazo de entrega comprometido. */
+  /** Nenhum desconto, em nenhum nível, em nenhuma circunstância. */
+  discountAllowed: false,
+  /** Entrega final em todos os níveis. Nunca prometer menos. */
   deliveryBusinessDays: 5,
 } as const;
+
+/** Frase única do posicionamento do preço (prompt e KB). Nada de prazo para a condição. */
+export const ARCADA_LAUNCH_PRICE_PHRASE =
+  'valor de lançamento, enquanto a Arcada monta os primeiros casos';
+
+/**
+ * A ÚNICA forma em que a palavra "desconto" pode aparecer no texto gerado: a negação.
+ * O teste conta as ocorrências de "descont…" e exige que todas sejam esta.
+ */
+export const ARCADA_NO_DISCOUNT = 'não tem desconto';
+
+/** Início do prazo (pré-preenchido para aprovação; `PLANO.md` §5 etapa 2 e §7). */
+export const ARCADA_DEADLINE_START =
+  'recebimento do material completo, com o CRO do responsável técnico';
+
+/** Compromisso de prazo, idêntico em todos os níveis, no prompt e na KB. */
+export const ARCADA_DELIVERY_COMMITMENT = `até ${ARCADA_NEGOTIATION_LIMITS.deliveryBusinessDays} dias úteis, contados a partir do ${ARCADA_DEADLINE_START}`;
+
+/**
+ * Regra de tom contra pressão. É o ÚNICO trecho que pode citar expressões de urgência e
+ * escassez (como exemplos do que é proibido); o teste remove esta frase exata antes de
+ * varrer o texto.
+ */
+export const ARCADA_NO_PRESSURE_RULE =
+  '- Sem pressão: nunca use urgência ou escassez ("só hoje", "últimas vagas", "promoção acaba", "por tempo limitado"). O valor de lançamento não tem data para acabar: nunca invente prazo para ele. Se o cliente quiser pensar, respeite.';
 
 /** Os 4 gatilhos de handoff para humano (`transfer_to_human`). */
 export const ARCADA_HANDOFF_TRIGGERS = [
@@ -85,11 +132,91 @@ export const ARCADA_HANDOFF_TRIGGERS = [
   {
     id: 'out_of_limits',
     title: 'Pedido fora dos limites',
-    when: 'pediu qualquer coisa fora dos limites deste texto: desconto acima do teto, mais parcelas que o máximo, desconto no parcelado, prazo menor que o combinado, algo que não está descrito nos níveis, ou não é uma clínica. Também quando você não souber responder com segurança.',
+    when: `pediu qualquer coisa fora deste texto: insistiu em baixar o preço depois de ouvir que é o valor de lançamento e ${ARCADA_NO_DISCOUNT}, pediu parcelamento fora do permitido (Essencial e Estúdio só à vista; Cinema em no máximo 2 parcelas), prazo menor que o combinado, algo que não está descrito nos níveis, ou não é uma clínica. Também quando você não souber responder com segurança.`,
   },
 ] as const;
 
 export type ArcadaHandoffTriggerId = (typeof ARCADA_HANDOFF_TRIGGERS)[number]['id'];
+
+// ─── O que cada nível inclui — PRÉ-PREENCHIDO para aprovação (F70-S33).
+//
+// Fonte: `arcada.md` (tabela "Níveis", prevalece) + `niveis-odonto/PLANO.md` §1 (detalhe
+// do Essencial e do Estúdio; o Cinema é "Estúdio + camada de movimento"). Divergências
+// registradas no slot F70-S33.
+
+export interface ArcadaTierIncludes {
+  /** Para quem o nível foi pensado (`arcada.md`, linha "Para quem"). */
+  readonly forWhom: string;
+  /** O que o nível entrega, item a item. */
+  readonly items: readonly string[];
+}
+
+export const ARCADA_TIER_INCLUDES: Readonly<Record<ArcadaTierKey, ArcadaTierIncludes>> = {
+  essencial: {
+    forWhom: 'dentista que atende sozinho (ou em dupla) e hoje tem só Instagram ou Linktree',
+    items: [
+      '1 página longa, mais política de privacidade e página 404',
+      'até 6 tratamentos, cada um num bloco próprio da página',
+      'responsável técnico em destaque (mais 1 colega), com nome e CRO',
+      'design no sistema visual da Arcada, na direção escolhida e ajustada à marca da clínica',
+      'fotos do próprio cliente, feitas no celular, com guia de fotografia e tratamento de imagem da Arcada',
+      'textos da biblioteca da Arcada, adaptados à clínica e aprovados pelo dentista',
+      'até 6 avaliações do Google, reproduzidas como foram publicadas, com link para a ficha',
+      'medição sem cookie, com contagem de cliques no WhatsApp',
+      'SEO local: negócio local e perguntas frequentes em dados estruturados, com Search Console',
+      'ficha do Google revisada: categoria, link, horários e fotos',
+      '2 rodadas de revisão',
+      '30 dias de ajustes depois da entrega',
+    ],
+  },
+  estudio: {
+    forWhom: 'clínica com 2 ou mais dentistas e tratamentos de ticket alto',
+    items: [
+      '10 a 16 páginas',
+      'até 8 tratamentos, cada um com página própria',
+      'página do corpo clínico, com perfil de cada dentista e o CRO de cada um',
+      'design feito do zero, a partir da marca e das fotos reais da clínica',
+      'roteiro de fotos e sessão de fotos guiada por vídeo (sem fotógrafo)',
+      'textos escritos por tratamento, a partir de uma entrevista de 30 minutos, aprovados pelo dentista',
+      'até 12 avaliações do Google, reproduzidas como foram publicadas, filtráveis por tratamento',
+      'medição com GA4, Meta Pixel e API de Conversões, com banner de consentimento',
+      'SEO: tudo do Essencial, mais dados estruturados por tratamento, sitemap por página e 3 artigos iniciais',
+      'ficha do Google revisada, mais um plano de 4 semanas de postagens na ficha',
+      '3 rodadas de revisão',
+      '30 dias de ajustes depois da entrega e relatório de 30 dias',
+    ],
+  },
+  cinema: {
+    forWhom: 'clínica que quer ser a referência visual da cidade',
+    items: [
+      'tudo do Estúdio',
+      'mais a camada de movimento: cena de scroll gerada, vídeo no topo e movimento dirigido',
+    ],
+  },
+};
+
+/** Vale para todos os níveis (`arcada.md`: regra dos níveis, CFO e diferenciais declarados). */
+export const ARCADA_ALL_TIERS_INCLUDE: readonly string[] = [
+  'O nível muda o escopo, nunca a qualidade.',
+  'Todo site passa pela verificação do Código de Ética Odontológica antes de ir ao ar.',
+  'O site é entregue na estrutura da clínica e continua dela; não há mensalidade obrigatória.',
+];
+
+/** Site da Arcada (`arcada.md`, Status > Site). */
+export const ARCADA_SITE_URL = 'https://arcada-sandy.vercel.app';
+
+/** Nível pela chave (lança se não existir: chave é contrato do código). */
+export function tierByKey(key: ArcadaTierKey): ArcadaTier {
+  const found = ARCADA_TIERS.find((t) => t.key === key);
+  if (!found) throw new Error(`Nível desconhecido: ${key}`);
+  return found;
+}
+
+/** Descrição do que um nível inclui, como entra no prompt e na KB. */
+export function tierIncludesText(tier: ArcadaTier): string {
+  const inc = ARCADA_TIER_INCLUDES[tier.key];
+  return `para ${inc.forWhom}. Inclui: ${inc.items.join('; ')}.`;
+}
 
 // ─── Formatação monetária (pt-BR, determinística — sem depender de ICU/locale do SO).
 
@@ -104,14 +231,9 @@ export function formatBrlCents(cents: number): string {
   return rest === 0 ? `R$ ${reaisStr}` : `R$ ${reaisStr},${String(rest).padStart(2, '0')}`;
 }
 
-/** Valor à vista com desconto (em centavos, arredondado ao centavo). */
-export function cashPriceCents(priceBrl: number, discountPct: number): number {
-  return Math.round(priceBrl * 100 * (1 - discountPct / 100));
-}
-
 /**
- * Parcelas sem juros que somam exatamente o preço: as primeiras levam o valor
- * truncado, a última absorve o resto do centavo (R$ 1.000 em 3x = 333,33 + 333,33 + 333,34).
+ * Parcelas que somam exatamente o preço: as primeiras levam o valor truncado, a última
+ * absorve o resto do centavo. O Cinema (R$ 999 em 2) divide em 2 × R$ 499,50 exatos.
  */
 export function installmentsCents(priceBrl: number, count: number): number[] {
   if (!Number.isInteger(count) || count < 1) throw new Error(`parcelas inválidas (${count})`);
@@ -122,40 +244,35 @@ export function installmentsCents(priceBrl: number, count: number): number[] {
   return parts;
 }
 
-function describeInstallments(priceBrl: number, count: number): string {
+/** `2 × R$ 499,50` (parcelas iguais) ou `2 parcelas (R$ a + R$ b)` quando o centavo não fecha. */
+export function describeInstallments(priceBrl: number, count: number): string {
   const parts = installmentsCents(priceBrl, count);
   const first = parts[0] ?? 0;
   const last = parts[parts.length - 1] ?? 0;
-  if (first === last) return `${count}x de ${formatBrlCents(first)}`;
-  const head = parts.slice(0, -1).map(formatBrlCents).join(' + ');
-  return `${count}x (${head} + ${formatBrlCents(last)})`;
+  if (first === last) return `${count} × ${formatBrlCents(first)}`;
+  return `${count} parcelas (${parts.map(formatBrlCents).join(' + ')})`;
+}
+
+/** Como o nível pode ser pago (só à vista, ou à vista ou em N parcelas iguais). */
+export function tierPaymentText(tier: ArcadaTier): string {
+  if (tier.maxInstallments <= 1) return 'só à vista';
+  return `à vista ou em ${tier.maxInstallments} parcelas iguais (${describeInstallments(tier.priceBrl, tier.maxInstallments)}), nunca mais que ${tier.maxInstallments}`;
 }
 
 /** Tabela de referência dos valores permitidos por nível (entra no prompt). */
 export function negotiationReferenceLines(): string[] {
-  const l = ARCADA_NEGOTIATION_LIMITS;
-  return ARCADA_TIERS.map((t) => {
-    const price = formatBrlCents(t.priceBrl * 100);
-    const cash = formatBrlCents(cashPriceCents(t.priceBrl, l.cashDiscountPct));
-    const cashMax = formatBrlCents(cashPriceCents(t.priceBrl, l.maxCashDiscountPct));
-    return (
-      `- ${price}: à vista com ${l.cashDiscountPct}% = ${cash}; teto com ${l.maxCashDiscountPct}% = ${cashMax}; ` +
-      `${describeInstallments(t.priceBrl, l.defaultInstallments)}; ` +
-      `se insistir, ${describeInstallments(t.priceBrl, l.maxInstallments)}.`
-    );
-  });
+  return ARCADA_TIERS.map(
+    (t) => `- ${t.name}, ${formatBrlCents(t.priceBrl * 100)}: ${tierPaymentText(t)}.`,
+  );
 }
 
 /** Todos os valores em centavos que o agente pode citar (usado pelo teste anti-invenção). */
 export function allowedAmountsCents(): Set<number> {
-  const l = ARCADA_NEGOTIATION_LIMITS;
   const out = new Set<number>();
   for (const t of ARCADA_TIERS) {
     out.add(t.priceBrl * 100);
-    out.add(cashPriceCents(t.priceBrl, l.cashDiscountPct));
-    out.add(cashPriceCents(t.priceBrl, l.maxCashDiscountPct));
-    for (let n = l.defaultInstallments; n <= l.maxInstallments; n += 1) {
-      for (const c of installmentsCents(t.priceBrl, n)) out.add(c);
+    if (t.maxInstallments > 1) {
+      for (const c of installmentsCents(t.priceBrl, t.maxInstallments)) out.add(c);
     }
   }
   return out;
@@ -166,32 +283,46 @@ export function allowedAmountsCents(): Set<number> {
 /** Marcador de conteúdo pendente, no formato que o prompt e o teste reconhecem. */
 const m = (key: string): string => `{{${key}}}`;
 
+/** Linhas do portfólio: site da Arcada + demos, sempre como projeto conceito. */
+function portfolioLines(): string[] {
+  return [
+    `Site da Arcada: ${ARCADA_SITE_URL}`,
+    ...ARCADA_TIERS.map(
+      (t) => `${t.demo}: projeto conceito do nível ${t.name} (clínica fictícia, não é cliente).`,
+    ),
+    `Links dos projetos conceito: ${m('links_das_demos')}.`,
+  ];
+}
+
 /** Monta o system prompt do agente "Arcada — atendimento" (pt-BR). */
 export function buildArcadaSystemPrompt(): string {
-  const l = ARCADA_NEGOTIATION_LIMITS;
   const tiers = ARCADA_TIERS.map(
-    (t) => `- ${formatBrlCents(t.priceBrl * 100)}: ${m(t.includesMarker)}`,
+    (t) => `- ${t.name}, ${formatBrlCents(t.priceBrl * 100)}: ${tierIncludesText(t)}`,
   );
   const triggers = ARCADA_HANDOFF_TRIGGERS.map(
     (t, i) => `${i + 1}. ${t.title} [${t.id}]: o cliente ${t.when}`,
   );
 
   return [
-    'Você é o atendimento da Arcada no WhatsApp e no Instagram. A Arcada cria sites para clínicas.',
-    'Quem decide e fecha é o Rogério. Seu papel: entender a clínica, tirar dúvidas, mostrar o portfólio, ajudar a agendar uma conversa e negociar somente dentro dos limites deste texto. Quando o cliente estiver pronto para fechar, você passa para o Rogério.',
+    'Você é o atendimento da Arcada no WhatsApp e no Instagram. A Arcada cria sites para clínicas odontológicas.',
+    'Quem decide e fecha é o Rogério. Seu papel: entender a clínica, tirar dúvidas, mostrar o portfólio, ajudar a agendar uma conversa e explicar as condições deste texto, sem sair delas. Quando o cliente estiver pronto para fechar, você passa para o Rogério.',
     '',
     '## Como você conversa',
     '- Português do Brasil, tom consultivo e humano, de quem entende a rotina de uma clínica. Nada de linguagem de vendedor.',
     '- Mensagens curtas (de 1 a 3 frases) e uma pergunta por vez. Escute antes de oferecer.',
-    '- Sem pressão: nunca use urgência ou escassez ("só hoje", "últimas vagas", "promoção acaba"). Se o cliente quiser pensar, respeite.',
+    ARCADA_NO_PRESSURE_RULE,
     '- Emoji só se o cliente usar, e no máximo um.',
     '- Se perguntarem se você é uma pessoa, diga com naturalidade que é o assistente virtual da Arcada e que o Rogério acompanha as conversas.',
     '- Não invente nada. Se a resposta não estiver neste texto nem na base de conhecimento, diga que confirma com o Rogério.',
     '- Trechos entre chaves duplas (como {{exemplo}}) são informações ainda não preenchidas. Nunca mostre esses trechos ao cliente e nunca suponha o conteúdo deles: trate como "vou confirmar com o Rogério".',
     '',
     '## Oferta: três níveis de site para clínicas, preço fechado',
+    `Os preços abaixo são o ${ARCADA_LAUNCH_PRICE_PHRASE}.`,
     ...tiers,
-    `Prazo: entrega em até ${l.deliveryBusinessDays} dias úteis, contados a partir de ${m('inicio_do_prazo')}. Costuma ficar pronto antes, mas o compromisso é de até ${l.deliveryBusinessDays} dias úteis.`,
+    ...ARCADA_ALL_TIERS_INCLUDE.map(
+      (s) => `- Em todos os níveis: ${s.charAt(0).toLowerCase()}${s.slice(1)}`,
+    ),
+    `Prazo, em todos os níveis: entrega final em ${ARCADA_DELIVERY_COMMITMENT}.`,
     'Recomende o nível a partir do que a clínica precisa, usando só a descrição de cada nível. Na dúvida, apresente os três e pergunte o que pesa mais para ela.',
     '',
     '## Qualificação (ao longo da conversa, nunca como formulário)',
@@ -199,25 +330,24 @@ export function buildArcadaSystemPrompt(): string {
     '2. Já tem site hoje? Se tiver, peça o link.',
     '3. É quem decide? Se não for, pergunte quem mais participa da decisão.',
     '4. Para quando precisa do site?',
-    'Se não for uma clínica, explique com respeito que o foco da Arcada é site para clínicas e passe para o Rogério.',
+    'Se não for uma clínica, explique com respeito que o foco da Arcada é site para clínicas odontológicas e passe para o Rogério.',
     '',
     '## Portfólio e casos',
-    `- Envie o portfólio quando o cliente quiser ver trabalhos ou depois de entender a clínica: ${m('links_do_portfolio')}.`,
-    `- Casos que você pode citar: ${m('casos_autorizados')}. Cite apenas o que estiver escrito ali; não mencione nenhum outro cliente.`,
+    '- Envie o portfólio quando o cliente quiser ver trabalhos ou depois de entender a clínica:',
+    ...portfolioLines().map((l) => `  ${l}`),
+    '- Os projetos conceito mostram cada nível, mas são clínicas fictícias: sempre diga que são projeto conceito e nunca os apresente como cliente ou caso real.',
+    `- Casos de clientes que você pode citar: ${m('casos_autorizados')}. Cite apenas o que estiver escrito ali; não mencione nenhum outro cliente.`,
     '',
     '## Agendamento',
     `Quando fizer sentido uma conversa com o Rogério (dúvida que você não resolve, cliente quer mostrar para um sócio, quer entender melhor antes de decidir): ${m('como_agendar')}.`,
     '',
-    '## Negociação: limites aprovados (nunca ultrapasse)',
-    `- Parcelamento: ofereça em até ${l.defaultInstallments}x sem juros. Só se o cliente insistir, pode chegar a ${l.maxInstallments}x sem juros. Nunca parcele em mais de ${l.maxInstallments} vezes.`,
-    '- No parcelado não existe desconto.',
-    `- À vista: ${l.cashDiscountPct}% de desconto em qualquer nível. Se o cliente continuar negociando o preço, você pode chegar a ${l.maxCashDiscountPct}%, uma única vez, e esse é o teto absoluto.`,
-    '- Desconto e parcelamento nunca se combinam.',
-    `- Meios de pagamento: ${m('meios_de_pagamento')}.`,
-    `- Prazo: até ${l.deliveryBusinessDays} dias úteis. Não prometa prazo menor.`,
-    '- Não prometa nada que não esteja neste texto ou na base de conhecimento: funcionalidades, domínio, hospedagem, manutenção, garantias, integrações, brindes ou condições especiais.',
-    'Valores de referência (use exatamente estes):',
+    '## Pagamento e prazo (nunca saia disto)',
+    `- É o ${ARCADA_LAUNCH_PRICE_PHRASE}, com preço fechado: ${ARCADA_NO_DISCOUNT}, nem à vista, nem negociando, em nenhum nível.`,
     ...negotiationReferenceLines(),
+    `- Se o cliente pedir para baixar o preço: explique, sem pressão, que é o ${ARCADA_LAUNCH_PRICE_PHRASE}, e que ${ARCADA_NO_DISCOUNT}. Se ele insistir, ou pedir uma forma de pagar diferente das de cima, passe para o Rogério [out_of_limits].`,
+    `- Meios de pagamento: ${m('meios_de_pagamento')}.`,
+    `- Prazo: ${ARCADA_DELIVERY_COMMITMENT}. Nunca prometa prazo menor.`,
+    '- Não prometa nada que não esteja neste texto ou na base de conhecimento: funcionalidades, domínio, hospedagem, manutenção, garantias, integrações ou condições especiais.',
     '',
     '## Quando passar para o Rogério',
     'Chame a ferramenta transfer_to_human, com o motivo em uma frase, em QUALQUER um destes casos:',
@@ -242,14 +372,22 @@ export interface ArcadaKbDocument {
 }
 
 export function buildArcadaKbDocuments(): ArcadaKbDocument[] {
-  const l = ARCADA_NEGOTIATION_LIMITS;
-  const tierSections = ARCADA_TIERS.map((t) =>
-    [
-      `## Site de ${formatBrlCents(t.priceBrl * 100)}`,
+  const tierSections = ARCADA_TIERS.map((t) => {
+    const inc = ARCADA_TIER_INCLUDES[t.key];
+    return [
+      `## ${t.name}: ${formatBrlCents(t.priceBrl * 100)}`,
       '',
-      `O que inclui: ${m(t.includesMarker)}`,
-    ].join('\n'),
-  );
+      `Para quem: ${inc.forWhom}.`,
+      '',
+      'O que inclui:',
+      ...inc.items.map((i) => `- ${i}`),
+      '',
+      // Cada linha nomeia o nível: o chunk indexado continua legível fora da seção.
+      `Pagamento do ${t.name}: ${tierPaymentText(t)}.`,
+      `Prazo do ${t.name}: entrega final em ${ARCADA_DELIVERY_COMMITMENT}.`,
+      `Projeto conceito do ${t.name}: ${t.demo} (clínica fictícia, não é cliente).`,
+    ].join('\n');
+  });
 
   return [
     {
@@ -260,14 +398,19 @@ export function buildArcadaKbDocuments(): ArcadaKbDocument[] {
       rawContent: [
         '# Níveis de site da Arcada',
         '',
-        'A Arcada faz sites para clínicas em três níveis, com preço fechado.',
+        'A Arcada faz sites para clínicas odontológicas em três níveis, com preço fechado.',
+        `Os preços são o ${ARCADA_LAUNCH_PRICE_PHRASE}.`,
         '',
         ...tierSections.flatMap((s) => [s, '']),
+        '## Em todos os níveis',
+        '',
+        ...ARCADA_ALL_TIERS_INCLUDE.map((s) => `- ${s}`),
+        '',
         '## Condições',
         '',
-        `- Parcelamento em até ${l.defaultInstallments}x sem juros; até ${l.maxInstallments}x sem juros se o cliente precisar. Parcelado não tem desconto.`,
-        `- À vista: ${l.cashDiscountPct}% de desconto.`,
-        `- Prazo de entrega: até ${l.deliveryBusinessDays} dias úteis, contados a partir de ${m('inicio_do_prazo')}.`,
+        `- Preço fechado: ${ARCADA_NO_DISCOUNT}, nem à vista, nem negociando, em nenhum nível.`,
+        ...negotiationReferenceLines(),
+        `- Prazo de entrega final: ${ARCADA_DELIVERY_COMMITMENT}.`,
         `- Meios de pagamento: ${m('meios_de_pagamento')}.`,
       ].join('\n'),
     },
@@ -280,10 +423,13 @@ export function buildArcadaKbDocuments(): ArcadaKbDocument[] {
         '# Perguntas frequentes',
         '',
         '## Quanto tempo leva para o site ficar pronto?',
-        `Até ${l.deliveryBusinessDays} dias úteis, contados a partir de ${m('inicio_do_prazo')}. Normalmente fica pronto antes.`,
+        `A entrega final é em ${ARCADA_DELIVERY_COMMITMENT}, em todos os níveis.`,
         '',
         '## Quais são as formas de pagamento?',
-        `${m('meios_de_pagamento')}. Parcelamento em até ${l.defaultInstallments}x sem juros (até ${l.maxInstallments}x se precisar); à vista com ${l.cashDiscountPct}% de desconto.`,
+        `${m('meios_de_pagamento')}. Essencial e Estúdio: só à vista. Cinema: ${tierPaymentText(tierByKey('cinema'))}.`,
+        '',
+        '## Dá para fazer um preço melhor?',
+        `Os preços já são o ${ARCADA_LAUNCH_PRICE_PHRASE}. O preço é fechado e ${ARCADA_NO_DISCOUNT}.`,
         '',
         '## O que eu preciso enviar para começar?',
         m('material_necessario'),
@@ -310,9 +456,11 @@ export function buildArcadaKbDocuments(): ArcadaKbDocument[] {
         '# Portfólio e casos',
         '',
         '## Portfólio',
-        m('links_do_portfolio'),
+        ...portfolioLines().map((l) => `- ${l}`),
         '',
-        '## Casos que podem ser citados',
+        'Os projetos conceito são clínicas fictícias, criadas para mostrar cada nível. Nunca são apresentados como cliente ou caso real.',
+        '',
+        '## Casos de clientes que podem ser citados',
         `${m('casos_autorizados')}`,
         '',
         'Só cite clientes listados aqui, com as informações escritas aqui.',
@@ -335,12 +483,41 @@ export const ARCADA_CADENCE = {
   /** Texto sugerido do lembrete dentro de 24h (aguarda aprovação do Rogério). */
   reminderText:
     'Oi! Passando só para saber se ficou alguma dúvida sobre o site da clínica. Se quiser, seguimos por aqui mesmo.',
-  /** Modelos aprovados na Meta (nome exato do template) — a preencher. */
-  day3TemplateMarker: 'modelo_lembrete_dia_3',
-  day7TemplateMarker: 'modelo_lembrete_dia_7',
-  day30TemplateMarker: 'modelo_toque_30_dias',
+  /**
+   * Modelos da Meta (nomes definidos pelo Rogério em 29/09; aprovação na Meta pendente).
+   * Envio SEM parâmetros (o node `template` não leva `params`).
+   */
+  day3TemplateName: 'arcada_lembrete_dia_3',
+  day7TemplateName: 'arcada_lembrete_dia_7',
+  day30TemplateName: 'arcada_toque_30_dias',
   templateLanguage: 'pt_BR',
 } as const;
+
+/**
+ * Marcadores dos modelos na versão anterior do seed → nome definido. O seed troca no
+ * flow de cadência em RASCUNHO só o `templateName` que ainda é o marcador (edição do
+ * operador vence).
+ */
+export const ARCADA_LEGACY_TEMPLATE_MARKERS: Readonly<Record<string, string>> = {
+  [m('modelo_lembrete_dia_3')]: ARCADA_CADENCE.day3TemplateName,
+  [m('modelo_lembrete_dia_7')]: ARCADA_CADENCE.day7TemplateName,
+  [m('modelo_toque_30_dias')]: ARCADA_CADENCE.day30TemplateName,
+};
+
+/**
+ * Marcadores da versão anterior que agora estão PRÉ-PREENCHIDOS e aguardam a aprovação do
+ * Rogério (publicando o rascunho). Chave = marcador; valor = de onde veio o conteúdo.
+ */
+export const ARCADA_PREFILLED_FOR_APPROVAL: Readonly<Record<string, string>> = {
+  nivel_essencial_inclui: 'arcada.md (Níveis) + niveis-odonto/PLANO.md §1',
+  nivel_estudio_inclui: 'arcada.md (Níveis) + niveis-odonto/PLANO.md §1',
+  nivel_cinema_inclui: 'arcada.md (Níveis) + niveis-odonto/PLANO.md §1',
+  inicio_do_prazo: 'niveis-odonto/PLANO.md §5 (etapa 2) e §7',
+  links_do_portfolio: 'arcada.md (Status > Site; demos, projeto conceito)',
+  modelo_lembrete_dia_3: 'Rogério, 29/09 (aprovação na Meta pendente)',
+  modelo_lembrete_dia_7: 'Rogério, 29/09 (aprovação na Meta pendente)',
+  modelo_toque_30_dias: 'Rogério, 29/09 (aprovação na Meta pendente)',
+};
 
 export const marker = m;
 
@@ -356,15 +533,9 @@ export function extractMarkers(text: string): string[] {
   return out;
 }
 
-/** Tudo que o Rogério ainda precisa preencher (prompt + KB + cadência). */
+/** Tudo que o Rogério ainda precisa preencher (prompt + KB). */
 export function listPendingMarkers(): string[] {
-  const texts = [
-    buildArcadaSystemPrompt(),
-    ...buildArcadaKbDocuments().map((d) => d.rawContent),
-    m(ARCADA_CADENCE.day3TemplateMarker),
-    m(ARCADA_CADENCE.day7TemplateMarker),
-    m(ARCADA_CADENCE.day30TemplateMarker),
-  ];
+  const texts = [buildArcadaSystemPrompt(), ...buildArcadaKbDocuments().map((d) => d.rawContent)];
   const out: string[] = [];
   for (const t of texts) for (const k of extractMarkers(t)) if (!out.includes(k)) out.push(k);
   return out;

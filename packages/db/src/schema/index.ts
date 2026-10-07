@@ -159,6 +159,16 @@ export const members = pgTable(
     }),
     invitedAt: ts('invited_at'),
     joinedAt: ts('joined_at'),
+    /**
+     * Última vez que a pessoa ENTROU nesta empresa (login ou troca de empresa — F71-S01).
+     * Decide a empresa padrão de quem está em várias (`membershipsRepo.listActiveByAuthUser`
+     * ordena por ela). Não é presença: presença é `is_online`/`last_seen_at`.
+     */
+    lastActiveAt: ts('last_active_at'),
+    /** Aceite de termos/privacidade (LGPD, F71-S04). Gravado no OWNER pelo provisionador. */
+    termsAcceptedAt: ts('terms_accepted_at'),
+    /** Versão do texto aceito em `terms_accepted_at` (ex.: `2026-10-05`). */
+    termsVersion: text('terms_version'),
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at'),
   },
@@ -174,6 +184,11 @@ export const members = pgTable(
     check('members_status_chk', sql`${t.status} in ('invited','active','inactive','blocked')`),
     check('members_theme_chk', sql`${t.themePreference} in ('dark','light','system')`),
     check('members_density_chk', sql`${t.densityPreference} in ('comfortable','compact')`),
+    // Aceite sem versão (ou versão sem aceite) é registro LGPD inútil: andam juntos.
+    check(
+      'members_terms_chk',
+      sql`(${t.termsAcceptedAt} is null) = (${t.termsVersion} is null) and (${t.termsVersion} is null or length(${t.termsVersion}) between 1 and 64)`,
+    ),
   ],
 );
 
@@ -369,6 +384,11 @@ export * from './calendar';
 // (backfill: as colunas já existiam como uuid soltos).
 export * from './org';
 
+// --- Convites de membro (F71-S01: CONTAS_E_CONVITES.md §4) ---
+// member_invites (tenant, RLS direto). FKs compostas para members e departments →
+// importada DEPOIS de org.
+export * from './member_invites';
+
 // --- Inbox visibility domain (F30: LIVECHAT_OPS.md §1) ---
 // inbox_visibility_settings (1/workspace, default peer-privacy) + member_visibility_
 // overrides (visibilidade extra por membro×depto). Ambas workspace-scoped (RLS direto;
@@ -560,4 +580,6 @@ export const RLS_TABLES = [
   'payment_events',
   // Onboarding / Verticalização (F43). quick_replies tem workspace_id próprio → RLS direto.
   'quick_replies',
+  // Convites de membro (F71-S01). workspace_id próprio → RLS direto.
+  'member_invites',
 ] as const;

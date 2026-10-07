@@ -9,11 +9,9 @@
  *   GET    /api/members/me/sessions     lista a(s) sessão(ões) do member
  *   DELETE /api/members/me/sessions/:id revoga sessão (encerra)
  *
- * Nota de honestidade: o contrato IAuthProvider (Supabase atrás de adapter) ainda
- * não expõe updatePassword nem enumeração de devices. Aqui:
- *  - password: re-autentica com a senha atual (provider.signIn). Persistência da
- *    nova senha depende do provider — o mock aceita; provider sem suporte responde
- *    501 honesto (não finge sucesso).
+ * Nota de honestidade: o contrato de auth ainda não expõe enumeração de devices. Aqui:
+ *  - password: re-autentica com a senha atual (provider.signIn) e persiste via
+ *    provider.updatePassword(authUserId) (F71-S02). Falha do provider → 502.
  *  - sessions: modelo de sessão é o cookie httpOnly atual (uma sessão por device).
  *    Listamos a sessão corrente; revogar = signOut (logout). Multi-device real
  *    chega quando o provider expuser enumeração — endpoint já está no contrato.
@@ -25,7 +23,15 @@ import { schema } from '@hm/db';
 import { AuthError } from '@hm/shared';
 import { requireAuth, withRLS } from '../../middlewares/auth';
 import { getAuthProvider } from '../../auth/provider';
-import { clearSessionCookie, publicMember, readToken } from '../../auth/session';
+import {
+  clearActiveWorkspaceCookie,
+  clearSessionCookie,
+  publicMember,
+  readToken,
+} from '../../auth/session';
+import { strongPassword } from '../../auth/signup';
+import { rateLimit } from '../../middlewares/rate-limit';
+import { createMemberSubrouters } from './index';
 
 const { members } = schema;
 
@@ -63,9 +69,21 @@ const updateMeSchema = z
   })
   .strict();
 
+/**
+ * F-09: teto de tentativas de troca de senha (cada uma re-autentica a senha ATUAL: sem teto,
+ * uma sessão roubada vira oráculo de força bruta da senha). Por IP, 10 a cada 15 min.
+ */
+const passwordLimiter = rateLimit({
+  bucket: 'me_password',
+  max: 10,
+  windowSec: 15 * 60,
+  byEmail: false,
+});
+
 const passwordSchema = z.object({
   currentPassword: z.string().min(1),
-  newPassword: z.string().min(8).max(200),
+  // F-09: mesma política do cadastro/reset (≥10, letra e número).
+  newPassword: strongPassword,
 });
 
 export function createMembersMeRouter(): Router {
@@ -95,7 +113,7 @@ export function createMembersMeRouter(): Router {
   });
 
   // ─── POST /api/members/me/password ─────────────────────────────────────────
-  router.post('/api/members/me/password', ...guard, async (req: Request, res: Response) => {
+  router.post('/api/members/me/password', ...guard, passwordLimiter, async (req: Request, res: Response) => {
     const parsed = passwordSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'invalid_payload', issues: parsed.error.issues });
@@ -110,24 +128,24 @@ export function createMembersMeRouter(): Router {
       await provider.signIn({ email, password: currentPassword });
     } catch (err) {
       if (err instanceof AuthError) {
-        res.status(401).json({ error: 'invalid_current_password', message: 'Senha atual incorreta.' });
+        res
+          .status(401)
+          .json({ error: 'invalid_current_password', message: 'Senha atual incorreta.' });
         return;
       }
       throw err;
     }
 
-    // Persistência da nova senha depende do provider expor updatePassword.
-    // Contrato atual (IAuthProvider) ainda não tem — resposta honesta, sem fingir.
-    const maybeUpdate = (provider as { updatePassword?: (email: string, pw: string) => Promise<void> })
-      .updatePassword;
-    if (typeof maybeUpdate !== 'function') {
-      res.status(501).json({
-        error: 'password_change_unavailable',
-        message: 'Troca de senha indisponível neste provedor de autenticação.',
+    // Persiste pelo id da conta no provider (nunca pelo email). O contrato não lança:
+    // `false` = o provider recusou/falhou — 502 honesto, sem fingir sucesso.
+    const updated = await provider.updatePassword(req.auth!.member.authUserId, newPassword);
+    if (!updated) {
+      res.status(502).json({
+        error: 'password_update_failed',
+        message: 'Não foi possível trocar a senha agora. Tente novamente.',
       });
       return;
     }
-    await maybeUpdate(email, newPassword);
     res.sendStatus(204);
   });
 
@@ -160,8 +178,12 @@ export function createMembersMeRouter(): Router {
       await getAuthProvider().signOut(token);
     }
     clearSessionCookie(res);
+    clearActiveWorkspaceCookie(res);
     res.sendStatus(204);
   });
+
+  // Sub-routers pessoais (ponto de montagem em ./index.ts).
+  router.use(createMemberSubrouters());
 
   return router;
 }

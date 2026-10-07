@@ -20,6 +20,7 @@ import {
   touchApiKeyLastUsed,
   type ApiKeyAuth,
 } from '../services/api-keys';
+import { isSubscriptionInactive, SUBSCRIPTION_INACTIVE_ERROR } from './subscription-guard';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -30,6 +31,9 @@ declare global {
     }
   }
 }
+
+/** Métodos que não mudam estado (passam mesmo com a assinatura inativa). */
+const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /** Janela do rate limit, em segundos. `rate_limit_per_minute` é por esta janela. */
 const WINDOW_SECONDS = 60;
@@ -102,6 +106,16 @@ export async function requireApiKey(
     res
       .status(401)
       .json({ error: 'unauthorized', message: 'API key inválida, expirada ou revogada.' });
+    return;
+  }
+
+  // Modo só leitura (F71): empresa expired/canceled (ou trial vencido) só lê via API pública.
+  if (!SAFE_METHODS.has(req.method) && isSubscriptionInactive(auth.subscriptionStatus, auth.trialEndsAt)) {
+    res.status(402).json({
+      error: SUBSCRIPTION_INACTIVE_ERROR,
+      message:
+        'A assinatura desta empresa não está ativa. A API permite apenas consultas até que um plano seja assinado.',
+    });
     return;
   }
 

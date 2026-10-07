@@ -50,6 +50,38 @@ export function setUnauthorizedListener(listener: UnauthorizedListener | null): 
   unauthorizedListener = listener;
 }
 
+/**
+ * Ponto único de reação a `402 subscription_inactive` (F71-S08): o servidor recusou
+ * uma escrita porque a empresa está em só leitura. NÃO é sessão morta — nada de
+ * logout; quem registra o ouvinte (o shell) explica o só leitura em um toast.
+ */
+type SubscriptionInactiveListener = (error: ApiError) => void;
+let subscriptionInactiveListener: SubscriptionInactiveListener | null = null;
+
+/** Registra (ou remove, com `null`) o handler central de 402. Só no navegador. */
+export function setSubscriptionInactiveListener(
+  listener: SubscriptionInactiveListener | null,
+): void {
+  subscriptionInactiveListener = listener;
+}
+
+/** `true` para o 402 de empresa sem assinatura ativa (escrita bloqueada). */
+export function isSubscriptionInactiveError(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError && error.status === 402 && error.code === 'subscription_inactive'
+  );
+}
+
+/** Avisa o ouvinte de 402 sem nunca trocar o erro original por outro. */
+export function notifySubscriptionInactive(error: ApiError): void {
+  if (!subscriptionInactiveListener) return;
+  try {
+    subscriptionInactiveListener(error);
+  } catch {
+    // O handler nunca pode trocar o erro original por outro.
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -85,6 +117,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
         // O handler nunca pode trocar o erro original por outro.
       }
     }
+    if (isSubscriptionInactiveError(error)) notifySubscriptionInactive(error);
     throw error;
   }
 

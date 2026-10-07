@@ -11,6 +11,13 @@ import { enqueueOutbox, getDb, schema, withWorkspace } from '@hm/db';
 import { makeEnvelope, queueJobOutbox, QUEUES } from '@hm/shared/mq';
 import type { MqHandle } from '@hm/shared/mq';
 import type { Logger } from '@hm/logger';
+import {
+  memoizeSubscriptionGate,
+  recordSubscriptionSkip,
+  SKIPPED_SUBSCRIPTION_INACTIVE,
+  subscriptionGate,
+  type SubscriptionGate,
+} from '../lib/subscription-gate';
 
 type MqChannel = MqHandle['channel'];
 
@@ -44,7 +51,14 @@ export type ScheduleOutcome =
 
 export interface FollowupPorts {
   scheduleFollowup(event: FollowupEvent): Promise<ScheduleOutcome>;
-  drainDue(now: Date): Promise<{ sent: number; failed: number }>;
+  drainDue(now: Date): Promise<FollowupDrainResult>;
+}
+
+export interface FollowupDrainResult {
+  readonly sent: number;
+  readonly failed: number;
+  /** F71-S06: followups encerrados (`cancelled`) por assinatura inativa — nada enviado. */
+  readonly skippedSubscriptionInactive?: number;
 }
 
 export interface FollowupDeps {
@@ -55,6 +69,8 @@ export interface FollowupDeps {
 export interface FollowupDbDeps {
   readonly channel: MqChannel;
   readonly logger: Logger;
+  /** Portão de assinatura (F71-S06). Default: lê `workspaces` (uma vez por empresa por drain). */
+  readonly subscription?: SubscriptionGate;
 }
 
 export function createFollowupPorts(deps: FollowupDbDeps): FollowupPorts {
@@ -97,7 +113,7 @@ export function createFollowupPorts(deps: FollowupDbDeps): FollowupPorts {
       });
     },
 
-    async drainDue(now: Date): Promise<{ sent: number; failed: number }> {
+    async drainDue(now: Date): Promise<FollowupDrainResult> {
       const due = await getDb()
         .select({
           id: scheduledFollowups.id,
@@ -116,8 +132,43 @@ export function createFollowupPorts(deps: FollowupDbDeps): FollowupPorts {
 
       let sent = 0;
       let failed = 0;
+      let skippedSubscriptionInactive = 0;
+      // F71-S06: decisão lida do banco neste drain, uma vez por empresa (memo do drain).
+      const gate = memoizeSubscriptionGate(deps.subscription ?? subscriptionGate);
       for (const item of due) {
         try {
+          const subscription = await gate.check(item.workspaceId);
+          if (!subscription.active) {
+            // Concluído sem envio e sem retry: `cancelled` com o motivo canônico. Fenced em
+            // `scheduled` (outro drain pode ter levado o item).
+            const closed = await withWorkspace(item.workspaceId, (tx) =>
+              tx
+                .update(scheduledFollowups)
+                .set({
+                  status: 'cancelled',
+                  failedReason: SKIPPED_SUBSCRIPTION_INACTIVE,
+                  processedAt: new Date(),
+                })
+                .where(
+                  and(
+                    eq(scheduledFollowups.id, item.id),
+                    eq(scheduledFollowups.status, 'scheduled'),
+                  ),
+                )
+                .returning({ id: scheduledFollowups.id }),
+            );
+            if (closed.length > 0) {
+              skippedSubscriptionInactive += 1;
+              recordSubscriptionSkip(
+                deps.logger,
+                'campaign-followup',
+                item.workspaceId,
+                subscription.status,
+                { scheduledFollowupId: item.id, campaignId: item.campaignId },
+              );
+            }
+            continue;
+          }
           const ok = await withWorkspace(item.workspaceId, async (tx) => {
             const claimed = await tx
               .update(scheduledFollowups)
@@ -217,7 +268,7 @@ export function createFollowupPorts(deps: FollowupDbDeps): FollowupPorts {
           });
         }
       }
-      return { sent, failed };
+      return { sent, failed, skippedSubscriptionInactive };
     },
   };
 }

@@ -10,10 +10,13 @@
  *  - T7: pré-verify o member fica inativo (sem sessão plena); verify o ativa.
  *  - T3/T13: resposta uniforme p/ email novo e duplicado.
  *  - T14: signup não deixa estado parcial observável (uniforme mesmo em falha).
+ *  - F71-S04: aceite de termos gravado no OWNER; login de não confirmado → 403
+ *    `email_unverified`; reenvio da confirmação (rota e signup repetido) só para conta
+ *    existente e não confirmada, sempre com a mesma resposta.
  */
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import Redis from 'ioredis';
 import { closeDb, getDb, schema } from '@hm/db';
@@ -21,14 +24,23 @@ import { closeDb, getDb, schema } from '@hm/db';
 // Garante mock provider + sem captcha (dev bypass) antes de carregar a app.
 vi.stubEnv('AUTH_PROVIDER', 'mock');
 vi.stubEnv('TURNSTILE_SECRET_KEY', '');
+// Piso de tempo das rotas uniformes: menor que o de produção (1,2 s) para a suíte, mas
+// folgado o bastante para o provisionamento real terminar antes da resposta.
+vi.stubEnv('AUTH_UNIFORM_RESPONSE_MS', '500');
 
 const { createApp } = await import('../app');
 const { mockVerifyToken } = await import('./mock-provider');
 const { closeHealth } = await import('../health');
 const { closeLoginCaptcha } = await import('./login-captcha');
 const { closeRateLimit } = await import('../middlewares/rate-limit');
+const { getAuthProvider } = await import('./provider');
 
 const app = createApp();
+// Espião no provider real (mock) da app: conta os reenvios sem mudar o comportamento.
+const resendSpy = vi.spyOn(getAuthProvider(), 'resendVerification');
+beforeEach(() => {
+  resendSpy.mockClear();
+});
 
 // Higiene do fixture: este arquivo exercita os limiters de borda REAIS (Redis dev),
 // keyed pelo IP do host — as janelas (reset 5/h, verify 20/h) acumulam entre runs e
@@ -44,7 +56,17 @@ beforeAll(async () => {
   const { loadConfig } = await import('../config');
   const redis = new Redis(loadConfig().redisUrl, { lazyConnect: true, maxRetriesPerRequest: 1 });
   try {
-    const buckets = ['login', 'login_ip', 'signup', 'reset', 'reset_confirm', 'verify'];
+    const buckets = [
+      'login',
+      'login_ip',
+      'signup',
+      'signup_ip',
+      'reset',
+      'reset_confirm',
+      'verify',
+      'resend',
+      'resend_ip',
+    ];
     for (const bucket of buckets) {
       const keys = await redis.keys(`rl:${bucket}:*`);
       if (keys.length > 0) await redis.del(...keys);
@@ -66,7 +88,8 @@ const workspaceIds: string[] = [];
 
 afterAll(async () => {
   const db = getDb();
-  for (const id of workspaceIds) await db.delete(schema.workspaces).where(eq(schema.workspaces.id, id));
+  for (const id of workspaceIds)
+    await db.delete(schema.workspaces).where(eq(schema.workspaces.id, id));
 });
 
 function payload(email: string, extra: Record<string, unknown> = {}) {
@@ -76,6 +99,8 @@ function payload(email: string, extra: Record<string, unknown> = {}) {
     password: 'senhaForte123',
     workspaceName: `Fluxo ${randomUUID().slice(0, 6)}`,
     turnstileToken: 'dev',
+    acceptTerms: true,
+    termsVersion: '2026-09-14',
     ...extra,
   };
 }
@@ -97,7 +122,24 @@ describe('Fluxo signup → verify → login', () => {
       expect(m.role).toBe('OWNER');
       expect(m.isPlatformAdmin).toBe(false); // T9
       expect(m.status).not.toBe('active'); // T7: bloqueio duro pré-verify
+      // A7 (F71-S04): aceite gravado no OWNER, com data do servidor.
+      expect(m.termsVersion).toBe('2026-09-14');
+      expect(m.termsAcceptedAt).toBeInstanceOf(Date);
+      expect(Math.abs(Date.now() - (m.termsAcceptedAt?.getTime() ?? 0))).toBeLessThan(60_000);
     }
+  });
+
+  it('signup sem aceite de termos → 400, nada provisionado (A7)', async () => {
+    const email = `noterms-${randomUUID().slice(0, 8)}@empresa.com`;
+    const res = await request(app)
+      .post('/auth/signup')
+      .send(payload(email, { acceptTerms: false }));
+    expect(res.status).toBe(400);
+    const found = await getDb()
+      .select()
+      .from(schema.members)
+      .where(eq(schema.members.email, email));
+    expect(found).toHaveLength(0);
   });
 
   it('injeção de isPlatformAdmin/role/workspaceId no body é ignorada (T9 / strict)', async () => {
@@ -134,12 +176,24 @@ describe('Fluxo signup → verify → login', () => {
     expect(after?.status).toBe('active'); // promovido
 
     // Login agora resolve a sessão (mock aceita qualquer senha p/ member existente).
-    const loginRes = await request(app)
-      .post('/auth/login')
-      .send({ email, password: 'qualquer' });
+    const loginRes = await request(app).post('/auth/login').send({ email, password: 'qualquer' });
     expect(loginRes.status).toBe(200);
     expect(loginRes.body.member.email).toBe(email);
     expect(loginRes.body.member.isPlatformAdmin).toBe(false);
+
+    // F71-S03: a sessão resolve por auth_user_id e o login fixa a empresa ativa.
+    expect(loginRes.body.workspace.id).toBe(after?.workspaceId);
+    const raw: unknown = loginRes.headers['set-cookie'];
+    const cookies = Array.isArray(raw) ? raw.filter((c): c is string => typeof c === 'string') : [];
+    expect(cookies.some((c) => c.startsWith(`hm_workspace=${after?.workspaceId ?? ''};`))).toBe(
+      true,
+    );
+    const sessionCookie = cookies.find((c) => c.startsWith('hm_session='))?.split(';')[0] ?? '';
+    const me = await request(app).get('/api/me').set('Cookie', sessionCookie);
+    expect(me.status).toBe(200);
+    expect(me.body.memberships).toEqual([
+      expect.objectContaining({ workspaceId: after?.workspaceId, role: 'OWNER' }),
+    ]);
   });
 
   it('signup duplicado → resposta uniforme, sem segundo member (T3/T13)', async () => {
@@ -157,6 +211,89 @@ describe('Fluxo signup → verify → login', () => {
 
     const all = await db.select().from(schema.members).where(eq(schema.members.email, email));
     expect(all).toHaveLength(1); // não duplicou
+    // A2 (F71-S04): o 2º signup de conta não confirmada reenviou a confirmação.
+    expect(resendSpy).toHaveBeenCalledExactlyOnceWith(email);
+  });
+
+  it('signup sobre conta JÁ confirmada: mesma resposta; idempotente para quem já é dono (spec §1.3)', async () => {
+    const email = `confirmed-${randomUUID().slice(0, 8)}@empresa.com`;
+    emails.push(email);
+    expect((await request(app).post('/auth/signup').send(payload(email))).status).toBe(202);
+    const db = getDb();
+    const [m] = await db.select().from(schema.members).where(eq(schema.members.email, email));
+    if (m) workspaceIds.push(m.workspaceId);
+    const verify = await request(app)
+      .post('/auth/verify')
+      .send({ token: mockVerifyToken(email) });
+    expect(verify.status).toBe(200);
+
+    const before = await db.select().from(schema.members).where(eq(schema.members.email, email));
+    const again = await request(app).post('/auth/signup').send(payload(email));
+    expect(again.status).toBe(202);
+    expect(again.body).toEqual({ status: 'verification_sent' });
+
+    // Idempotência por authUserId OWNER do provisionador: quem já é dono não ganha 2ª empresa.
+    const after = await db.select().from(schema.members).where(eq(schema.members.email, email));
+    expect(after).toHaveLength(before.length);
+  });
+
+  it('login antes de confirmar → 403 email_unverified; depois do verify entra (A3)', async () => {
+    const email = `unverified-${randomUUID().slice(0, 8)}@empresa.com`;
+    const signupRes = await request(app).post('/auth/signup').send(payload(email));
+    expect(signupRes.status).toBe(202);
+    const db = getDb();
+    const [m] = await db.select().from(schema.members).where(eq(schema.members.email, email));
+    if (m) workspaceIds.push(m.workspaceId);
+
+    const blocked = await request(app).post('/auth/login').send({ email, password: 'qualquer' });
+    expect(blocked.status).toBe(403);
+    expect(blocked.body).toEqual({
+      error: 'email_unverified',
+      message: 'Confirme seu email para entrar.',
+    });
+    expect(blocked.headers['set-cookie']).toBeUndefined();
+
+    await request(app)
+      .post('/auth/verify')
+      .send({ token: mockVerifyToken(email) })
+      .expect(200);
+    const ok = await request(app).post('/auth/login').send({ email, password: 'qualquer' });
+    expect(ok.status).toBe(200);
+  });
+
+  it('reenviar confirmação: mesma resposta sempre; só envia para não confirmado (A2/T3)', async () => {
+    const pending = `resend-${randomUUID().slice(0, 8)}@empresa.com`;
+    const signupRes = await request(app).post('/auth/signup').send(payload(pending));
+    expect(signupRes.status).toBe(202);
+    const db = getDb();
+    const [m] = await db.select().from(schema.members).where(eq(schema.members.email, pending));
+    if (m) workspaceIds.push(m.workspaceId);
+
+    const send = (email: string) =>
+      request(app).post('/auth/resend-verification').send({ email, turnstileToken: 'dev' });
+
+    // Não confirmado → envia.
+    const first = await send(pending);
+    expect(first.status).toBe(200);
+    expect(first.body).toEqual({ ok: true });
+    expect(resendSpy).toHaveBeenCalledExactlyOnceWith(pending);
+
+    // Inexistente → mesma resposta, nada sai.
+    resendSpy.mockClear();
+    const ghost = await send(`ghost-${randomUUID().slice(0, 8)}@empresa.com`);
+    expect(ghost.status).toBe(200);
+    expect(ghost.body).toEqual({ ok: true });
+    expect(resendSpy).not.toHaveBeenCalled();
+
+    // Confirmado → mesma resposta, nada sai.
+    await request(app)
+      .post('/auth/verify')
+      .send({ token: mockVerifyToken(pending) })
+      .expect(200);
+    const confirmed = await send(pending);
+    expect(confirmed.status).toBe(200);
+    expect(confirmed.body).toEqual({ ok: true });
+    expect(resendSpy).not.toHaveBeenCalled();
   });
 
   it('reset e verify inválido respondem uniformemente (T3)', async () => {

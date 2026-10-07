@@ -12,6 +12,7 @@ import type { OutboundDecision } from '@hm/shared';
 import { handleOutboundEnvelope } from './worker';
 import type { ConsentGatePort, OutboundDeps } from './ports';
 import { allowAllConsentGate } from './consent-gate';
+import { allowAllSubscriptionGate } from '../lib/subscription-gate';
 import { purposeOf } from './job';
 
 beforeEach(() => {
@@ -130,6 +131,7 @@ describe('o portão está no caminho, não ao lado dele', () => {
       deps: d.deps,
       logger,
       consentGate: gate,
+      subscriptionGate: allowAllSubscriptionGate,
     });
 
     expect(d.sendText).not.toHaveBeenCalled();
@@ -144,7 +146,7 @@ describe('o portão está no caminho, não ao lado dele', () => {
       timezone: 'America/Sao_Paulo',
     });
 
-    await handleOutboundEnvelope(envelopeTexto(), { deps: d.deps, logger, consentGate: gate });
+    await handleOutboundEnvelope(envelopeTexto(), { deps: d.deps, logger, consentGate: gate, subscriptionGate: allowAllSubscriptionGate });
 
     expect(d.persist).toHaveBeenCalledOnce();
     expect(d.persist.mock.calls[0]?.[0]).toMatchObject({
@@ -167,7 +169,7 @@ describe('o portão está no caminho, não ao lado dele', () => {
         usedFallbackTimezone: false,
         timezone: 'UTC',
       });
-      await handleOutboundEnvelope(envelopeTexto(), { deps: d.deps, logger, consentGate: gate });
+      await handleOutboundEnvelope(envelopeTexto(), { deps: d.deps, logger, consentGate: gate, subscriptionGate: allowAllSubscriptionGate });
       expect(d.persist.mock.calls[0]?.[0]).toMatchObject({ errorCode: `consent_${reason}` });
     }
   });
@@ -182,6 +184,7 @@ describe('o portão está no caminho, não ao lado dele', () => {
       deps: d.deps,
       logger,
       consentGate: { check },
+      subscriptionGate: allowAllSubscriptionGate,
     });
 
     expect(check).toHaveBeenCalledWith(
@@ -197,7 +200,8 @@ describe('o portão está no caminho, não ao lado dele', () => {
       async () => ({ allowed: true, usedFallbackTimezone: false, timezone: 'UTC' }) as OutboundDecision,
     );
 
-    await handleOutboundEnvelope(envelopeTexto(), { deps: d.deps, logger, consentGate: { check } });
+    await handleOutboundEnvelope(envelopeTexto(), { deps: d.deps, logger, consentGate: { check },
+      subscriptionGate: allowAllSubscriptionGate });
 
     expect(check).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'transactional' }));
   });
@@ -208,6 +212,7 @@ describe('o portão está no caminho, não ao lado dele', () => {
       deps: d.deps,
       logger,
       consentGate: allowAllConsentGate,
+        subscriptionGate: allowAllSubscriptionGate,
     });
     expect(d.sendText).toHaveBeenCalledOnce();
     expect(d.persist.mock.calls[0]?.[0]).toMatchObject({ status: 'sent' });
@@ -240,7 +245,7 @@ describe('presença não é mensagem', () => {
           presence: 'typing',
         },
       },
-      { deps: d.deps, logger, consentGate: gate },
+      { deps: d.deps, logger, consentGate: gate, subscriptionGate: allowAllSubscriptionGate },
     );
 
     // Presença não carrega conteúdo e não é marketing: bloqueá-la degradaria a

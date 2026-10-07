@@ -37,8 +37,12 @@ export function useRequestReset() {
 }
 
 /** Payload do signup self-serve: form + token do Turnstile + plano da venda. */
-export interface SignupPayload extends SignupInput {
+export interface SignupPayload extends Omit<SignupInput, 'acceptTerms'> {
   turnstileToken: string;
+  /** Aceite dos termos (sempre `true` aqui: o formulário bloqueia antes). */
+  acceptTerms: true;
+  /** Versão aceita (`AAAA-MM-DD`) — ver `TERMS_VERSION`. */
+  termsVersion: string;
   /** KEY do plano escolhido na página de venda (?plan=). Intenção — a API valida. */
   plan?: string;
 }
@@ -59,5 +63,17 @@ export function useSignup() {
 export function useVerifyEmail() {
   return useMutation({
     mutationFn: (token: string) => api.post<{ ok: true }>('/auth/verify', { token }),
+  });
+}
+
+/**
+ * Reenvia o email de confirmação (F71-S04). POST /auth/resend-verification →
+ * `200 { ok:true }` SEMPRE (não revela se a conta existe), com ~1,2 s de piso de
+ * tempo por design. 400 `captcha_failed`/`invalid_payload`, 429 `rate_limited`.
+ */
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: (input: { email: string; turnstileToken: string }) =>
+      api.post<{ ok: true }>('/auth/resend-verification', input),
   });
 }

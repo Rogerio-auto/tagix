@@ -35,6 +35,7 @@ import {
   type AgentRunStore,
 } from './run';
 import { handleAgentEnvelope, type AgentWorkerOptions } from './worker';
+import { subscriptionGate } from '../lib/subscription-gate';
 
 const url = process.env['DATABASE_URL'];
 
@@ -75,6 +76,8 @@ describe.skipIf(!url)('turno da IA idempotente por envelope (DB, F70-S26)', () =
         cancel: vi.fn(),
       } as unknown as AgentRunDeps['client'],
       logger: logger as unknown as AgentRunDeps['logger'],
+      // F71-S06: portão real — as empresas destes testes estão em trial sem data (ativas).
+      subscription: subscriptionGate,
     };
     return { deps, logger: deps.logger, aggregation: false };
   }

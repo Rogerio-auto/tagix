@@ -36,8 +36,8 @@ export function ResetPasswordForm() {
         <div className="flex gap-3 rounded-md border border-border bg-surface-2 p-3">
           <MailCheck className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden />
           <p className="font-body text-text-mid">
-            Se houver uma conta com esse email, enviamos as instruções de redefinição.
-            Verifique sua caixa de entrada.
+            Se houver uma conta com esse email, enviamos as instruções de redefinição. Verifique sua
+            caixa de entrada.
           </p>
         </div>
         <Link
@@ -59,9 +59,7 @@ export function ResetPasswordForm() {
         >
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-danger" aria-hidden />
           <div className="flex flex-col gap-0.5">
-            <p className="font-head text-sm font-semibold text-text">
-              Não foi possível enviar
-            </p>
+            <p className="font-head text-sm font-semibold text-text">Não foi possível enviar</p>
             <p className="font-body text-sm text-text-mid">
               Algo deu errado na solicitação. Tente novamente em instantes.
             </p>

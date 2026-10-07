@@ -88,6 +88,25 @@ export {
   workspaceRequiresProvenOriginSql,
   type AiOriginGateInput,
 } from './ai-origin-gate';
+// F70-S34 — respostas rápidas da cadência ("Quero…" / "Agora não"): classificação e o
+// predicado "o contato recusou", consultados pelo inbound, pelo ponto de envio do flow e
+// pelo port que liga a IA.
+export {
+  QUICK_REPLY_INTENTS,
+  QUICK_REPLY_METADATA_KEY,
+  classifyQuickReply,
+  contactDeclinedSql,
+  hasContactDeclined,
+  matchQuickReply,
+  normalizeQuickReplyText,
+  quickReplyClickSchema,
+  type QuickReplyClick,
+  type QuickReplyInput,
+  type QuickReplyIntent,
+  type QuickReplyMatch,
+  type QuickReplyRecord,
+} from './quick-replies';
+export { FlowSendSuppressedError, isFlowSendSuppressedError } from './send-suppressed';
 export {
   validateFlow,
   type FlowValidationInput,

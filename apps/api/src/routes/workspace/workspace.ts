@@ -3,22 +3,30 @@
  *
  *   GET    /api/workspace                 info atual (workspace.edit)
  *   PATCH  /api/workspace                 info/marca/horário/auto-assign (workspace.edit)
- *   GET    /api/members                   lista membros (workspace.edit)
- *   POST   /api/members                   convida (member.invite)
+ *   GET    /api/members                   lista membros (member.invite)
+ *   POST   /api/members                   410 Gone — convite agora é /api/members/invites (F71-S05)
  *   PATCH  /api/members/:id               troca role / status (member.promote)
  *   DELETE /api/members/:id               remove membro (member.remove)
  *
  * Guard de role-change (§5.1): só OWNER pode promover a/destituir OWNER. Ninguém
  * pode rebaixar/remover o último OWNER (workspace ficaria sem dono). RLS por scoped.
+ *
+ * F71-S05: reativar (`status: 'active'`) ocupa um assento de `max_members` (402
+ * `seat_limit` se não cabe) e nunca promove linha `invited` — essa só sai pelo aceite do
+ * convite ou pelo verify do dono (T6). Bloquear ou remover um membro revoga os convites
+ * pendentes do email dele na empresa (auditado), para nenhum link antigo trazê-lo de volta.
+ * `:id` fora do formato UUID → 404 (inclui `PATCH/DELETE /api/members/invites`, que não
+ * existem e não podem virar 500 no Postgres).
  */
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, eq, ne } from 'drizzle-orm';
-import { randomUUID } from 'node:crypto';
 import { schema } from '@hm/db';
 import { ROLES } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
 import { param } from '../conversions/types';
+import { disconnectMemberSockets } from '../../socket/member-disconnect';
+import { revokePendingInvitesFor, seatUsage, seatsAvailable } from './invites';
 
 const { workspaces, members } = schema;
 
@@ -58,11 +66,7 @@ const updateWorkspaceSchema = z
   })
   .strict();
 
-const inviteSchema = z.object({
-  email: z.string().trim().email().max(200),
-  name: z.string().trim().max(120).nullish(),
-  role: z.enum(ROLES).default('AGENT'),
-});
+const memberIdSchema = z.string().uuid();
 
 const updateMemberSchema = z
   .object({
@@ -134,7 +138,9 @@ export function createWorkspaceRouter(): Router {
   });
 
   // ─── GET /api/members ──────────────────────────────────────────────────────
-  router.get('/api/members', ...editGuard, async (req: Request, res: Response) => {
+  // `member.invite`: é a seção da UI que convida/gerencia (F71-S05). `legacyInvite` marca
+  // um "convite" antigo (`invited` com `invited_by`) que a migração da S01 não moveu.
+  router.get('/api/members', ...inviteGuard, async (req: Request, res: Response) => {
     const rows = await req.scoped!((tx) =>
       tx
         .select({
@@ -147,64 +153,37 @@ export function createWorkspaceRouter(): Router {
           isOnline: members.isOnline,
           lastSeenAt: members.lastSeenAt,
           createdAt: members.createdAt,
+          invitedBy: members.invitedBy,
         })
         .from(members),
     );
-    res.json({ members: rows });
+    res.json({
+      members: rows.map(({ invitedBy, ...row }) => ({
+        ...row,
+        legacyInvite: row.status === 'invited' && invitedBy !== null,
+      })),
+    });
   });
 
-  // ─── POST /api/members — convida ───────────────────────────────────────────
-  router.post('/api/members', ...inviteGuard, async (req: Request, res: Response) => {
-    const parsed = inviteSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: 'invalid_payload', issues: parsed.error.issues });
-      return;
-    }
-    const { email, name, role } = parsed.data;
-    const workspaceId = req.auth!.workspace.id;
-    const invitedBy = req.auth!.member.id;
-
-    // Só OWNER pode convidar diretamente como OWNER.
-    if (role === 'OWNER' && req.auth!.member.role !== 'OWNER') {
-      res.status(403).json({ error: 'forbidden_owner', message: 'Apenas OWNER pode designar OWNER.' });
-      return;
-    }
-
-    try {
-      const [created] = await req.scoped!((tx) =>
-        tx
-          .insert(members)
-          .values({
-            workspaceId,
-            // Placeholder até o primeiro login casar por email no provider.
-            authUserId: randomUUID(),
-            email,
-            name: name ?? null,
-            role,
-            status: 'invited',
-            invitedBy,
-            invitedAt: new Date(),
-          })
-          .returning({
-            id: members.id,
-            email: members.email,
-            name: members.name,
-            role: members.role,
-            status: members.status,
-          }),
-      );
-      res.status(201).json({ member: created });
-    } catch (err: unknown) {
-      if (typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505') {
-        res.status(409).json({ error: 'duplicate_email', message: 'Já existe um membro com esse e-mail.' });
-        return;
-      }
-      throw err;
-    }
+  // ─── POST /api/members — legado (F71-S05) ──────────────────────────────────
+  // 410 em vez de delegar: o contrato antigo aceitava `name` e OWNER, devolvia `{ member }`
+  // (uma linha `invited` com `authUserId` falso) e não mandava email. Delegar manteria um
+  // segundo contrato com outra semântica e enganaria o cliente antigo; o 410 falha alto e
+  // aponta o substituto. Guard antes do 410: anônimo continua 401, sem permissão 403.
+  router.post('/api/members', ...inviteGuard, (_req: Request, res: Response) => {
+    res.status(410).json({
+      error: 'gone',
+      message: 'Convites agora são criados em /api/members/invites.',
+      replacement: '/api/members/invites',
+    });
   });
 
   // ─── PATCH /api/members/:id — troca role/status ────────────────────────────
   router.patch('/api/members/:id', ...promoteGuard, async (req: Request, res: Response) => {
+    if (!memberIdSchema.safeParse(param(req, 'id')).success) {
+      res.sendStatus(404);
+      return;
+    }
     const parsed = updateMemberSchema.safeParse(req.body);
     if (!parsed.success || (parsed.data.role === undefined && parsed.data.status === undefined)) {
       res.status(400).json({ error: 'invalid_payload', issues: parsed.success ? [] : parsed.error.issues });
@@ -212,10 +191,21 @@ export function createWorkspaceRouter(): Router {
     }
     const id = param(req, 'id');
     const actorRole = req.auth!.member.role;
+    const workspaceId = req.auth!.workspace.id;
+    // Reativar ocupa assento: conferido antes da transação (o uso conta convites vivos,
+    // que o repo lê em outra conexão).
+    const seats = parsed.data.status === 'active' ? await seatUsage(workspaceId) : null;
 
     const outcome = await req.scoped!(async (tx) => {
       const [target] = await tx.select().from(members).where(eq(members.id, id)).limit(1);
       if (!target) return { kind: 'not_found' as const };
+
+      const activating = parsed.data.status === 'active' && target.status !== 'active';
+      // `invited` só vira `active` pelo aceite do convite ou pelo verify do dono (T6).
+      if (activating && target.status === 'invited') return { kind: 'invite_pending' as const };
+      if (activating && seats && !seatsAvailable(seats, 1)) {
+        return { kind: 'seat_limit' as const, seats };
+      }
 
       const nextRole = parsed.data.role ?? target.role;
 
@@ -265,7 +255,31 @@ export function createWorkspaceRouter(): Router {
       case 'last_owner':
         res.status(409).json({ error: 'last_owner', message: 'O workspace precisa de ao menos um OWNER.' });
         return;
+      case 'invite_pending':
+        res.status(409).json({
+          error: 'invite_pending',
+          message: 'Este membro ainda não aceitou o convite.',
+        });
+        return;
+      case 'seat_limit':
+        res.status(402).json({
+          error: 'seat_limit',
+          message: 'O plano atingiu o limite de membros. Remova alguém ou mude de plano.',
+          used: outcome.seats.used,
+          limit: outcome.seats.limit,
+        });
+        return;
       default:
+        if (outcome.member && (parsed.data.status === 'blocked' || parsed.data.status === 'inactive')) {
+          // F-03: sessão em tempo real do membro cai junto (após o commit).
+          await disconnectMemberSockets(id);
+          await revokePendingInvitesFor(
+            req,
+            workspaceId,
+            outcome.member.email,
+            parsed.data.status === 'blocked' ? 'member_blocked' : 'member_removed',
+          );
+        }
         res.json({ member: outcome.member });
     }
   });
@@ -273,6 +287,10 @@ export function createWorkspaceRouter(): Router {
   // ─── DELETE /api/members/:id — remove ──────────────────────────────────────
   router.delete('/api/members/:id', ...removeGuard, async (req: Request, res: Response) => {
     const id = param(req, 'id');
+    if (!memberIdSchema.safeParse(id).success) {
+      res.sendStatus(404);
+      return;
+    }
     const actorMemberId = req.auth!.member.id;
     if (id === actorMemberId) {
       res.status(409).json({ error: 'cannot_remove_self', message: 'Você não pode remover a si mesmo.' });
@@ -295,7 +313,7 @@ export function createWorkspaceRouter(): Router {
         .update(members)
         .set({ status: 'inactive', updatedAt: new Date() })
         .where(eq(members.id, id));
-      return { kind: 'ok' as const };
+      return { kind: 'ok' as const, email: target.email };
     });
 
     switch (outcome.kind) {
@@ -309,6 +327,8 @@ export function createWorkspaceRouter(): Router {
         res.status(409).json({ error: 'last_owner', message: 'O workspace precisa de ao menos um OWNER.' });
         return;
       default:
+        await disconnectMemberSockets(id);
+        await revokePendingInvitesFor(req, req.auth!.workspace.id, outcome.email, 'member_removed');
         res.sendStatus(204);
     }
   });

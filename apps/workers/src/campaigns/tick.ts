@@ -28,6 +28,11 @@ import type { ChannelHealth } from '@hm/channels';
 import { mapCampaignError, type CampaignErrorAction } from '@hm/channels';
 import { effectiveRatePerMinute, batchSizeForTick } from './rate';
 import { isInSendWindow, nextWindowStart, type SendWindows } from './windows';
+import {
+  recordSubscriptionSkip,
+  SKIPPED_SUBSCRIPTION_INACTIVE,
+  type SubscriptionGateDecision,
+} from '../lib/subscription-gate';
 
 /** TTL do lock por campanha (cobre um tick com folga). */
 export const CAMPAIGN_LOCK_TTL_MS = 50000;
@@ -94,6 +99,11 @@ export interface ReapResult {
 /** Ports do tick — injetadas pelo bootstrap, mockadas em teste. */
 export interface CampaignTickPorts {
   listDueCampaigns(now: Date): Promise<RunningCampaign[]>;
+  /**
+   * F71-S06 — a empresa da campanha pode disparar AGORA? Lido do banco a cada tick da
+   * campanha (sem cache): `expired`/`canceled`/trial vencido → nada sai.
+   */
+  checkSubscription(campaign: RunningCampaign): Promise<SubscriptionGateDecision>;
   fetchQuality(campaign: RunningCampaign): Promise<ChannelHealth>;
   /**
    * Reaper (roda antes do batch): devolve a `pending` os claims `sending` mais
@@ -179,6 +189,8 @@ export interface CampaignTickResult {
   denied: number;
   /** F59-S05: recipients adiados por janela horaria (tentam no proximo tick). */
   deferred: number;
+  /** F71-S06: campanhas pausadas por assinatura inativa (nada enviado). */
+  subscriptionInactive: number;
 }
 
 export interface ProcessCampaignResult {
@@ -191,6 +203,8 @@ export interface ProcessCampaignResult {
   rescheduled: boolean;
   completed: boolean;
   quotaExhausted: boolean;
+  /** F71-S06: pausada porque a assinatura da empresa esta inativa. */
+  subscriptionInactive: boolean;
 }
 
 function emptyResult(): ProcessCampaignResult {
@@ -204,6 +218,7 @@ function emptyResult(): ProcessCampaignResult {
     rescheduled: false,
     completed: false,
     quotaExhausted: false,
+    subscriptionInactive: false,
   };
 }
 
@@ -215,6 +230,20 @@ export async function processCampaign(
 ): Promise<ProcessCampaignResult> {
   const { ports, logger } = deps;
   const result = emptyResult();
+
+  // F71-S06: empresa sem assinatura ativa nao dispara. Primeiro de tudo (nem consulta a
+  // Meta). A campanha vai para `paused` (sai do loop de tick e fica visivel na UI); depois
+  // de assinar, o cliente retoma quando quiser — nada sai sozinho semanas depois.
+  const subscription = await ports.checkSubscription(campaign);
+  if (!subscription.active) {
+    await ports.pauseCampaign(campaign.id, SKIPPED_SUBSCRIPTION_INACTIVE);
+    recordSubscriptionSkip(logger, 'campaign-tick', campaign.workspaceId, subscription.status, {
+      campaignId: campaign.id,
+    });
+    result.paused = true;
+    result.subscriptionInactive = true;
+    return result;
+  }
 
   const health = await ports.fetchQuality(campaign);
   const rate = effectiveRatePerMinute({
@@ -381,6 +410,7 @@ export async function runCampaignTick(
     invalid: 0,
     denied: 0,
     deferred: 0,
+    subscriptionInactive: 0,
   };
 
   for (const campaign of due) {
@@ -397,6 +427,7 @@ export async function runCampaignTick(
           if (r.rescheduled) result.rescheduled += 1;
           if (r.completed) result.completed += 1;
           if (r.quotaExhausted) result.quotaExhausted += 1;
+          if (r.subscriptionInactive) result.subscriptionInactive += 1;
         },
       );
     } catch (err: unknown) {

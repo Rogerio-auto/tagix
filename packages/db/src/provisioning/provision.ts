@@ -16,10 +16,20 @@
  * scoped subsequente (não há nenhum neste esqueleto; o blueprint de nicho é aplicado
  * depois, via `instantiateNicheBlueprint` sob `withWorkspace`) corre sob RLS.
  *
- * IDEMPOTÊNCIA (T13): re-rodar com o mesmo email/slug não duplica — retorna o existente
- * com `created:false`. O lookup é por (a) member por email global, (b) workspace por slug.
+ * IDEMPOTÊNCIA (T13, refeita na F71-S01): "esta PESSOA (`authUserId`) já é OWNER de alguma
+ * empresa" → devolve essa empresa com `created:false`. Antes era "o email existe em qualquer
+ * empresa", o que fazia quem foi CONVIDADO para outra empresa nunca conseguir criar a própria
+ * (o signup devolvia a empresa de quem convidou). Agora o convidado ganha a empresa dele. A
+ * checagem roda dentro da transação, depois de um advisory lock por `authUserId`: dois signups
+ * simultâneos da mesma pessoa não criam duas empresas.
+ *
+ * TRIAL (F71-S01): `trial_ends_at = now() + 15 dias` em `workspaces` e `subscriptions`, com o
+ * relógio do banco (o mesmo instante nas duas, o mesmo que a expiração da S06 compara).
+ *
+ * TERMOS (F71-S01, consumido pela S04): `termsAcceptedAt` + `termsVersion` opcionais, gravados
+ * no OWNER. Os dois juntos ou nenhum (`members_terms_chk`).
  */
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { getDb } from '../client';
 import { members, plans, subscriptions, workspaces } from '../schema';
 import { slugCandidate, slugifyWorkspaceName } from './slug';
@@ -42,6 +52,10 @@ export interface ProvisionWorkspaceInput {
    * checkout pós-login e limpa o campo. Nunca libera plano pago sem pagamento.
    */
   pendingPlanKey?: string;
+  /** Quando o dono aceitou termos e privacidade no cadastro (LGPD). Exige `termsVersion`. */
+  termsAcceptedAt?: Date;
+  /** Versão do texto aceito (1..64 caracteres). Exige `termsAcceptedAt`. */
+  termsVersion?: string;
 }
 
 export interface ProvisionWorkspaceResult {
@@ -54,12 +68,17 @@ export interface ProvisionWorkspaceResult {
 
 const MAX_SLUG_ATTEMPTS = 50;
 
+/** Duração do trial de toda empresa nova (CONTAS_E_CONVITES §3.3). */
+export const TRIAL_DAYS = 15;
+const trialEndsAtSql = sql`now() + make_interval(days => ${TRIAL_DAYS})`;
+
 export async function provisionWorkspaceWithOwner(
   input: ProvisionWorkspaceInput,
 ): Promise<ProvisionWorkspaceResult> {
   const ownerEmail = input.ownerEmail.trim().toLowerCase();
   const ownerName = input.ownerName.trim() || 'Owner';
   const wsName = input.workspaceName.trim() || 'Meu workspace';
+  const terms = resolveTerms(input);
 
   const db = getDb();
 
@@ -73,21 +92,6 @@ export async function provisionWorkspaceWithOwner(
   // PAGO e ativo no catálogo. 'free'/inexistente/inativo → null (sem checkout). A
   // decisão é data-driven (não hardcode de keys) — admin pode criar novos planos.
   const pendingPlanKey = await resolvePendingPlanKey(db, input.pendingPlanKey);
-
-  // ─── Idempotência: member já existe por email? → tenant já provisionado.
-  const [existingMember] = await db.select().from(members).where(eq(members.email, ownerEmail));
-  if (existingMember) {
-    const [ws] = await db
-      .select({ slug: workspaces.slug })
-      .from(workspaces)
-      .where(eq(workspaces.id, existingMember.workspaceId));
-    return {
-      workspaceId: existingMember.workspaceId,
-      memberId: existingMember.id,
-      slug: ws?.slug ?? '',
-      created: false,
-    };
-  }
 
   // ─── Slug livre (explícito ou derivado com dedupe — slug é UNIQUE).
   const base = input.workspaceSlug
@@ -113,6 +117,26 @@ export async function provisionWorkspaceWithOwner(
   // ─── Passo privilegiado isolado (fora de RLS): workspace + member + subscription.
   // Tudo numa transação para não deixar tenant órfão (atomicidade local).
   return db.transaction(async (tx) => {
+    // ─── Idempotência: esta pessoa já é OWNER de alguma empresa? Serializa por pessoa.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`hm:provision:${input.authUserId}`}, 0))`,
+    );
+    const [owned] = await tx
+      .select({ workspaceId: members.workspaceId, memberId: members.id, slug: workspaces.slug })
+      .from(members)
+      .innerJoin(workspaces, eq(workspaces.id, members.workspaceId))
+      .where(and(eq(members.authUserId, input.authUserId), eq(members.role, 'OWNER')))
+      .orderBy(asc(members.createdAt))
+      .limit(1);
+    if (owned) {
+      return {
+        workspaceId: owned.workspaceId,
+        memberId: owned.memberId,
+        slug: owned.slug,
+        created: false,
+      };
+    }
+
     const [workspace] = await tx
       .insert(workspaces)
       .values({
@@ -120,6 +144,7 @@ export async function provisionWorkspaceWithOwner(
         slug,
         planId: freePlan.id,
         subscriptionStatus: 'trial',
+        trialEndsAt: trialEndsAtSql,
       })
       .returning({ id: workspaces.id, slug: workspaces.slug });
     if (!workspace) throw new Error('Falha ao criar workspace.');
@@ -136,31 +161,41 @@ export async function provisionWorkspaceWithOwner(
         role: 'OWNER',
         status: 'invited',
         isPlatformAdmin: false,
+        termsAcceptedAt: terms?.acceptedAt ?? null,
+        termsVersion: terms?.version ?? null,
       })
-      .onConflictDoNothing()
       .returning({ id: members.id });
-
+    // Empresa recém-criada nesta transação: não há linha com que conflitar. A corrida entre
+    // signups da mesma pessoa é fechada pelo advisory lock acima.
     const memberId = member?.id;
-    if (!memberId) {
-      // Corrida rara: outro request criou o member entre o lookup e o insert.
-      const [raced] = await tx
-        .select({ id: members.id })
-        .from(members)
-        .where(and(eq(members.workspaceId, workspace.id), eq(members.email, ownerEmail)));
-      if (!raced) throw new Error('Falha ao criar member OWNER.');
-      return { workspaceId: workspace.id, memberId: raced.id, slug: workspace.slug, created: true };
-    }
+    if (!memberId) throw new Error('Falha ao criar member OWNER.');
 
     await tx.insert(subscriptions).values({
       workspaceId: workspace.id,
       planId: freePlan.id,
       status: 'trial',
       billingCycle: 'monthly',
+      // Mesmo instante de workspaces.trial_ends_at: now() é fixo na transação.
+      trialEndsAt: trialEndsAtSql,
       pendingPlanKey,
     });
 
     return { workspaceId: workspace.id, memberId, slug: workspace.slug, created: true };
   });
+}
+
+/** Termos aceitos no cadastro: os dois campos juntos, ou nenhum. */
+function resolveTerms(
+  input: ProvisionWorkspaceInput,
+): { acceptedAt: Date; version: string } | null {
+  const { termsAcceptedAt, termsVersion } = input;
+  if (termsAcceptedAt === undefined && termsVersion === undefined) return null;
+  const version = termsVersion?.trim();
+  if (!termsAcceptedAt || Number.isNaN(termsAcceptedAt.getTime()) || !version) {
+    throw new Error('termsAcceptedAt e termsVersion vão juntos (data válida e versão não vazia).');
+  }
+  if (version.length > 64) throw new Error('termsVersion passa de 64 caracteres.');
+  return { acceptedAt: termsAcceptedAt, version };
 }
 
 /**

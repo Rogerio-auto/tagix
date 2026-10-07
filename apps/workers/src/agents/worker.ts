@@ -44,6 +44,7 @@ import {
 import { CHANNEL_PROVIDERS } from '@hm/shared';
 import { createAgentsClient } from '@hm/agents-client';
 import type { Logger } from '@hm/logger';
+import { subscriptionGate } from '../lib/subscription-gate';
 import {
   DbAgentRunStore,
   runAgent,
@@ -322,6 +323,8 @@ export function createAgentDeps(
     socket: new MqAgentRunSocketEmit(channel),
     client: createAgentsClient({ baseUrl: runtime.baseUrl, token: runtime.token }),
     logger,
+    // F71-S06: lê `workspaces` a cada turno (sem cache) — ver lib/subscription-gate.ts.
+    subscription: subscriptionGate,
   };
 }
 

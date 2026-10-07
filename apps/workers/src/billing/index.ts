@@ -131,6 +131,7 @@ export {
   createBillingDbPort,
   dunningPolicyFromEnv,
   dunningStage,
+  expireTrials,
   pixChargeEventId,
   runRecurrenceTick,
   systemClock,
@@ -138,8 +139,10 @@ export {
   type Clock,
   type DunningPolicy,
   type DunningStage,
+  type ExpiredTrial,
   type PixSubscription,
   type RecurrenceDeps,
   type RecurrenceTickOptions,
   type RecurrenceTickResult,
+  type TrialExpiryOptions,
 } from './recurrence';

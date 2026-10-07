@@ -22,6 +22,10 @@ export const signupSchema = z.object({
       message: 'Use letras e números na senha',
     }),
   workspaceName: z.string().trim().min(1, 'Informe o nome do workspace'),
+  /** Aceite obrigatório dos Termos e da Política (a API exige `true` + `termsVersion`). */
+  acceptTerms: z.boolean().refine((v) => v === true, {
+    message: 'Aceite os Termos de uso e a Política de privacidade para continuar',
+  }),
 });
 export type SignupInput = z.infer<typeof signupSchema>;
 

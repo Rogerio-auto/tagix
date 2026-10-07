@@ -46,6 +46,8 @@ function makePorts(over: Partial<CampaignTickPorts> = {}): CampaignTickPorts {
       timezone: 'America/Sao_Paulo',
     })),
     denyRecipient: vi.fn(async () => undefined),
+    // F71-S06: assinatura ativa por padrao; o caso inativo tem teste proprio.
+    checkSubscription: vi.fn(async () => ({ active: true as const, status: 'active' })),
     listDueCampaigns: vi.fn(async () => [CAMP]),
     fetchQuality: vi.fn(async () => green()),
     reapRecipients: vi.fn(async () => ({ recovered: 0, finalized: 0 })),
@@ -77,6 +79,33 @@ describe('deliveryIdempotencyKey', () => {
 });
 
 describe('processCampaign', () => {
+  it('F71-S06: assinatura inativa → pausa a campanha e nao envia nada (nem consulta a Meta)', async () => {
+    const ports = makePorts({
+      checkSubscription: vi.fn(async () => ({ active: false as const, status: 'expired' })),
+      pendingRecipients: vi.fn(async () => [D]),
+    });
+    const r = await processCampaign(CAMP, { ports, logger: makeLogger() }, new Date());
+    expect(r.subscriptionInactive).toBe(true);
+    expect(r.paused).toBe(true);
+    expect(r.dispatched).toBe(0);
+    expect(ports.checkSubscription).toHaveBeenCalledWith(CAMP);
+    expect(ports.pauseCampaign).toHaveBeenCalledWith('camp1', 'skipped_subscription_inactive');
+    expect(ports.fetchQuality).not.toHaveBeenCalled();
+    expect(ports.pendingRecipients).not.toHaveBeenCalled();
+    expect(ports.enqueueDelivery).not.toHaveBeenCalled();
+    expect(ports.scheduleNextTick).not.toHaveBeenCalled();
+  });
+
+  it('F71-S06: runCampaignTick conta a campanha pulada por assinatura', async () => {
+    const ports = makePorts({
+      checkSubscription: vi.fn(async () => ({ active: false as const, status: 'canceled' })),
+    });
+    const res = await runCampaignTick({ ports, logger: makeLogger() });
+    expect(res.subscriptionInactive).toBe(1);
+    expect(res.dispatched).toBe(0);
+    expect(ports.enqueueDelivery).not.toHaveBeenCalled();
+  });
+
   it('despacha recipients pendentes (caminho feliz)', async () => {
     const ports = makePorts({ pendingRecipients: vi.fn(async () => [D]) });
     const r = await processCampaign(CAMP, { ports, logger: makeLogger() }, new Date());

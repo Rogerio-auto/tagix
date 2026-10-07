@@ -25,6 +25,7 @@ import { handleOutboundEnvelope } from './worker';
 // conformidade — então injetam explicitamente o permissivo. A conformidade tem
 // suíte própria em `consent-gate.test.ts`.
 import { allowAllConsentGate } from './consent-gate';
+import { allowAllSubscriptionGate } from '../lib/subscription-gate';
 import {
   MAX_SEND_ATTEMPTS,
   TransientSendError,
@@ -313,6 +314,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
         deps: d.deps,
         logger,
         consentGate: allowAllConsentGate,
+        subscriptionGate: allowAllSubscriptionGate,
         attempts,
         sendGuard: guard(null),
       }),
@@ -340,6 +342,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
       deps: d.deps,
       logger,
       consentGate: allowAllConsentGate,
+        subscriptionGate: allowAllSubscriptionGate,
       attempts,
       sendGuard: guard(null),
     });
@@ -369,6 +372,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
       deps: d.deps,
       logger,
       consentGate: allowAllConsentGate,
+        subscriptionGate: allowAllSubscriptionGate,
       attempts,
       sendGuard: guard(null),
     });
@@ -389,6 +393,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
         deps: d.deps,
         logger,
         consentGate: allowAllConsentGate,
+        subscriptionGate: allowAllSubscriptionGate,
         attempts,
         sendGuard: guard(null),
       }),
@@ -409,7 +414,8 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
     const attempts = attemptStore(1);
 
     await expect(
-      handleOutboundEnvelope(envelope, { deps: d.deps, logger, consentGate: allowAllConsentGate, attempts, sendGuard: guard(null) }),
+      handleOutboundEnvelope(envelope, { deps: d.deps, logger, consentGate: allowAllConsentGate,
+        subscriptionGate: allowAllSubscriptionGate, attempts, sendGuard: guard(null) }),
     ).rejects.toBe(boom);
 
     expect(attempts.record).not.toHaveBeenCalled();
@@ -431,6 +437,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
         deps: d.deps,
         logger,
         consentGate: allowAllConsentGate,
+        subscriptionGate: allowAllSubscriptionGate,
         attempts: attemptStore(1),
         sendGuard: guard(null),
       }),
@@ -442,6 +449,7 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
       deps: d.deps,
       logger,
       consentGate: allowAllConsentGate,
+        subscriptionGate: allowAllSubscriptionGate,
       attempts: attemptStore(2),
       sendGuard: guard('wamid.PRIOR'),
     });
@@ -478,7 +486,8 @@ describe('handleOutboundEnvelope — retry durável (F56-S14)', () => {
           presence: 'typing',
         },
       },
-      { deps: d.deps, logger, consentGate: allowAllConsentGate, attempts, sendGuard: guard(null) },
+      { deps: d.deps, logger, consentGate: allowAllConsentGate,
+        subscriptionGate: allowAllSubscriptionGate, attempts, sendGuard: guard(null) },
     );
 
     expect(attempts.record).not.toHaveBeenCalled();

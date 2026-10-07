@@ -56,7 +56,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 8   | 0   | 0   | 0   | 3   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 32     | 0   | 2   | 0   | 0   | 2   | 28   |
+| F70   | 35     | 1   | 2   | 0   | 0   | 3   | 29   |
+| F71   | 19     | 9   | 0   | 0   | 0   | 0   | 10   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -763,40 +764,67 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 70 — Central de Operação — Atendimento da Arcada no Leadium
 
-| ID      | Titulo                                                                                                          | Status     | Prioridade | Depende de                |
-| ------- | --------------------------------------------------------------------------------------------------------------- | ---------- | ---------- | ------------------------- |
-| F70-S01 | Restaurar o working tree e corrigir o worktree-clean que atravessa junctions                                    | ✅ done     | critical   | —                         |
-| F70-S02 | Backup e limpeza da conta do Rogério                                                                            | ⏸️ blocked | high       | F70-S01                   |
-| F70-S03 | Canal de teste agora; número real em coexistência quando tudo estiver pronto                                    | ⏸️ blocked | critical   | F70-S02                   |
-| F70-S04 | Eco do app vira mensagem humana e pausa a IA                                                                    | ✅ done     | high       | F70-S03                   |
-| F70-S05 | Atribuição de anúncio no contato e no deal                                                                      | ✅ done     | high       | F70-S03                   |
-| F70-S06 | Agente de atendimento da Arcada                                                                                 | 🟣 review   | high       | F70-S04, F70-S05, F70-S07 |
-| F70-S07 | Ligar origem, atribuição e eco do IG no pipeline; IA só com origem comprovada                                   | ✅ done     | critical   | F70-S04, F70-S05          |
-| F70-S08 | Defesa em profundidade da trava da IA e teste permanente da atribuição no deal                                  | ✅ done     | high       | F70-S07                   |
-| F70-S09 | Ligar os webhooks de saída                                                                                      | ✅ done     | high       | F70-S01                   |
-| F70-S10 | Agentes recebem as tools (transfer_to_human, base de conhecimento e workflow)                                   | ✅ done     | critical   | F70-S08                   |
-| F70-S11 | Bloquear referências cruzadas entre workspaces nas rotas de escrita                                             | ✅ done     | critical   | F70-S08                   |
-| F70-S12 | FKs compostas por workspace nas referências de deals e stages                                                   | ✅ done     | high       | F70-S10, F70-S11          |
-| F70-S13 | conversation.opened em todos os caminhos de criação e handoff de campanha honesto                               | ✅ done     | medium     | F70-S09                   |
-| F70-S14 | Origem real no conversation.opened, eventos de lead ads e outbound da campanha depois do commit                 | ✅ done     | medium     | F70-S13                   |
-| F70-S15 | Tools dos agentes — endpoint confere habilitação, log correto e tools de contato                                | ✅ done     | high       | F70-S10                   |
-| F70-S16 | Outbox transacional para eventos de domínio e jobs, com dedup indexado dos webhooks                             | ✅ done     | high       | F70-S14, F70-S12          |
-| F70-S17 | Produtores da API publicam pelo outbox                                                                          | ✅ done     | medium     | F70-S16, F70-S11          |
-| F70-S18 | Achados baixos da auditoria pré-deploy — marcadores de origem, referências restantes e guarda do seed           | ✅ done     | medium     | F70-S11                   |
-| F70-S19 | Achados da auditoria que dependem da S15 e da S16 — IA legada, eco, assinatura com timestamp e consumer estrito | ✅ done     | high       | F70-S15, F70-S16          |
-| F70-S20 | Restos da outbox — envios da API v1, message.sent atômico, mídia da coexistência e emissor morto                | ✅ done     | medium     | F70-S17, F70-S19          |
-| F70-S21 | Últimos publicadores pós-commit pela outbox e limpeza do emissor antigo                                         | ✅ done     | medium     | F70-S20                   |
-| F70-S22 | deploy.sh migra antes de subir o código novo                                                                    | ✅ done     | critical   | F70-S20                   |
-| F70-S23 | Tools de contato com allowlist de escrita, auditoria sem PII e execução com prazo                               | ✅ done     | high       | F70-S15                   |
-| F70-S24 | Outbox confere envelope e fila contra o workspace, retenção configurável e event_id por workspace               | ✅ done     | medium     | F70-S25                   |
-| F70-S25 | Gatilhos da IA e passos de flow pela outbox, lembrete da agenda com conversa real                               | ✅ done     | high       | F70-S21                   |
-| F70-S26 | Turno da IA idempotente por envelope                                                                            | ✅ done     | high       | F70-S25                   |
-| F70-S27 | Falha de storage visível e mídia reprocessável depois de corrigida                                              | ✅ done     | critical   | F70-S25                   |
-| F70-S28 | Sessão expirada volta ao login, no navegador e no PWA                                                           | ✅ done     | critical   | F70-S01                   |
-| F70-S29 | e2e do CI verde de novo (gate do deploy)                                                                        | ✅ done     | critical   | F70-S28                   |
-| F70-S30 | Trava de origem da IA como configuração do workspace                                                            | ✅ done     | high       | F70-S28                   |
-| F70-S31 | Sonnet 5 na lista de modelos e no agente da Arcada                                                              | ✅ done     | medium     | F70-S06                   |
-| F70-S32 | Wizard do WhatsApp preserva o signup ao voltar e painéis fechados saem da acessibilidade                        | 🟣 review   | medium     | F70-S29                   |
+| ID      | Titulo                                                                                                          | Status      | Prioridade | Depende de                |
+| ------- | --------------------------------------------------------------------------------------------------------------- | ----------- | ---------- | ------------------------- |
+| F70-S01 | Restaurar o working tree e corrigir o worktree-clean que atravessa junctions                                    | ✅ done      | critical   | —                         |
+| F70-S02 | Backup e limpeza da conta do Rogério                                                                            | ⏸️ blocked  | high       | F70-S01                   |
+| F70-S03 | Canal de teste agora; número real em coexistência quando tudo estiver pronto                                    | ⏸️ blocked  | critical   | F70-S02                   |
+| F70-S04 | Eco do app vira mensagem humana e pausa a IA                                                                    | ✅ done      | high       | F70-S03                   |
+| F70-S05 | Atribuição de anúncio no contato e no deal                                                                      | ✅ done      | high       | F70-S03                   |
+| F70-S06 | Agente de atendimento da Arcada                                                                                 | 🟣 review    | high       | F70-S04, F70-S05, F70-S07 |
+| F70-S07 | Ligar origem, atribuição e eco do IG no pipeline; IA só com origem comprovada                                   | ✅ done      | critical   | F70-S04, F70-S05          |
+| F70-S08 | Defesa em profundidade da trava da IA e teste permanente da atribuição no deal                                  | ✅ done      | high       | F70-S07                   |
+| F70-S09 | Ligar os webhooks de saída                                                                                      | ✅ done      | high       | F70-S01                   |
+| F70-S10 | Agentes recebem as tools (transfer_to_human, base de conhecimento e workflow)                                   | ✅ done      | critical   | F70-S08                   |
+| F70-S11 | Bloquear referências cruzadas entre workspaces nas rotas de escrita                                             | ✅ done      | critical   | F70-S08                   |
+| F70-S12 | FKs compostas por workspace nas referências de deals e stages                                                   | ✅ done      | high       | F70-S10, F70-S11          |
+| F70-S13 | conversation.opened em todos os caminhos de criação e handoff de campanha honesto                               | ✅ done      | medium     | F70-S09                   |
+| F70-S14 | Origem real no conversation.opened, eventos de lead ads e outbound da campanha depois do commit                 | ✅ done      | medium     | F70-S13                   |
+| F70-S15 | Tools dos agentes — endpoint confere habilitação, log correto e tools de contato                                | ✅ done      | high       | F70-S10                   |
+| F70-S16 | Outbox transacional para eventos de domínio e jobs, com dedup indexado dos webhooks                             | ✅ done      | high       | F70-S14, F70-S12          |
+| F70-S17 | Produtores da API publicam pelo outbox                                                                          | ✅ done      | medium     | F70-S16, F70-S11          |
+| F70-S18 | Achados baixos da auditoria pré-deploy — marcadores de origem, referências restantes e guarda do seed           | ✅ done      | medium     | F70-S11                   |
+| F70-S19 | Achados da auditoria que dependem da S15 e da S16 — IA legada, eco, assinatura com timestamp e consumer estrito | ✅ done      | high       | F70-S15, F70-S16          |
+| F70-S20 | Restos da outbox — envios da API v1, message.sent atômico, mídia da coexistência e emissor morto                | ✅ done      | medium     | F70-S17, F70-S19          |
+| F70-S21 | Últimos publicadores pós-commit pela outbox e limpeza do emissor antigo                                         | ✅ done      | medium     | F70-S20                   |
+| F70-S22 | deploy.sh migra antes de subir o código novo                                                                    | ✅ done      | critical   | F70-S20                   |
+| F70-S23 | Tools de contato com allowlist de escrita, auditoria sem PII e execução com prazo                               | ✅ done      | high       | F70-S15                   |
+| F70-S24 | Outbox confere envelope e fila contra o workspace, retenção configurável e event_id por workspace               | ✅ done      | medium     | F70-S25                   |
+| F70-S25 | Gatilhos da IA e passos de flow pela outbox, lembrete da agenda com conversa real                               | ✅ done      | high       | F70-S21                   |
+| F70-S26 | Turno da IA idempotente por envelope                                                                            | ✅ done      | high       | F70-S25                   |
+| F70-S27 | Falha de storage visível e mídia reprocessável depois de corrigida                                              | ✅ done      | critical   | F70-S25                   |
+| F70-S28 | Sessão expirada volta ao login, no navegador e no PWA                                                           | ✅ done      | critical   | F70-S01                   |
+| F70-S29 | e2e do CI verde de novo (gate do deploy)                                                                        | ✅ done      | critical   | F70-S28                   |
+| F70-S30 | Trava de origem da IA como configuração do workspace                                                            | ✅ done      | high       | F70-S28                   |
+| F70-S31 | Sonnet 5 na lista de modelos e no agente da Arcada                                                              | ✅ done      | medium     | F70-S06                   |
+| F70-S32 | Wizard do WhatsApp preserva o signup ao voltar e painéis fechados saem da acessibilidade                        | 🟣 review    | medium     | F70-S29                   |
+| F70-S33 | Agente da Arcada com preço de lançamento, pagamento por nível e prazo de 5 dias úteis                           | 🟣 review    | critical   | F70-S06, F70-S31          |
+| F70-S34 | Respostas rápidas da cadência da Arcada — "Agora não" encerra, "Quero…" reabre com a IA                         | ✅ done      | high       | F70-S06, F70-S30          |
+| F70-S35 | Teto de custo por conversa, custo médio medido e handoff testado nos 4 gatilhos                                 | 🟢 available | high       | F70-S26                   |
+
+## Fase 71
+
+| ID      | Titulo                                                                                                         | Status      | Prioridade | Depende de                |
+| ------- | -------------------------------------------------------------------------------------------------------------- | ----------- | ---------- | ------------------------- |
+| F71-S01 | Schema de convites, membership por pessoa e trial de 15 dias no provisionador                                  | ✅ done      | critical   | —                         |
+| F71-S02 | Provider de auth envia convite, define senha e acha usuário por email exato; runbook dos templates do Supabase | ✅ done      | critical   | —                         |
+| F71-S03 | Sessão por pessoa e empresa ativa — troca de empresa, login escolhe a última usada                             | ✅ done      | critical   | F71-S01, F71-S02          |
+| F71-S04 | Cadastro sem beco sem saída — reenviar confirmação, login diz "confirme seu email", aceite de termos           | ✅ done      | high       | F71-S02, F71-S03          |
+| F71-S05 | Convite de verdade — criar, enviar, reenviar, revogar, copiar link e aceitar, com limite de membros            | ✅ done      | critical   | F71-S01, F71-S02, F71-S03 |
+| F71-S06 | Trial expira em 15 dias e empresa sem assinatura ativa fica só leitura                                         | ✅ done      | high       | F71-S01, F71-S03          |
+| F71-S07 | Tela de aceitar convite e gestão de membros com convites pendentes                                             | ✅ done      | high       | F71-S05                   |
+| F71-S08 | Seletor de empresa no shell e aviso de trial, convite pendente e modo só leitura                               | ✅ done      | high       | F71-S03, F71-S06          |
+| F71-S09 | Telas de cadastro sem beco sem saída — reenviar confirmação, login de não confirmado e aceite de termos        | ✅ done      | high       | F71-S04                   |
+| F71-S10 | Auditoria de segurança da F71 e teste do fluxo inteiro de contas                                               | ✅ done      | high       | F71-S07, F71-S08, F71-S09 |
+| F71-S11 | Web com headers de segurança reais, Sentry sem token e token_hash fora da query                                | 🟢 available | high       | F71-S10                   |
+| F71-S12 | Empresa ativa por aba com X-Workspace-Id e 409 workspace_mismatch                                              | 🟢 available | medium     | F71-S10                   |
+| F71-S13 | Preview de convite sem oráculo de conta e aceite inline autenticado                                            | 🟢 available | medium     | F71-S10, F71-S14          |
+| F71-S14 | Convite não reativa bloqueado, logger com redact e papéis do Postgres                                          | 🟢 available | medium     | F71-S10                   |
+| F71-S15 | Verify de cadastro define a senha e fecha o pre-hijack                                                         | 🟢 available | high       | F71-S11, F71-S13          |
+| F71-S16 | Tokens de status legíveis no tema claro, TopBar sob a faixa e bottom-nav no claro                              | 🟢 available | medium     | F71-S10, F70-S32          |
+| F71-S17 | Botões de escrita desabilitados com tooltip no modo só leitura, por feature                                    | 🟢 available | medium     | F71-S16                   |
+| F71-S18 | Hardening menor da fase (Origin do socket, rate limit atômico, isenções do guard)                              | 🟢 available | low        | F71-S12, F71-S13, F71-S14 |
+| F71-S19 | Criar empresa própria estando autenticado                                                                      | 🟢 available | medium     | F71-S10                   |
 
 ## Fase 8 — Permissions & Settings
 

@@ -906,3 +906,58 @@ A liberação é só `atendimento-humano`. Etiqueta de conversão não entra nun
 - **Sonnet 5 entra na lista de modelos** e passa a ser o modelo da Arcada (F70-S31).
 - **Toque de 30 dias da cadência conta a partir de `esfriou`** (dia 37 desde a última mensagem): já é o comportamento da F70-S06.
 - **CI:** o job `e2e` falha desde 22/09 e pula o `deploy`; o hotfix `d774835a` foi para `origin/main` mas não para produção. Correção na F70-S29.
+
+## Decisões do Rogério — 2026-09-29 (Arcada: preço de lançamento)
+
+- **Preço de lançamento:** Essencial R$ 297, Estúdio R$ 397, Cinema R$ 999 (antes R$ 1.000 / 2.500 / 5.000). É condição verdadeira; os valores sobem quando houver casos entregues e depoimentos. Rogério OS e Hermes já atualizados; o agente do Leadium entra na **F70-S33**.
+- **Pagamento:** sem desconto em nenhum nível. Essencial e Estúdio só à vista; Cinema à vista ou 2 × R$ 499,50, nunca mais que 2x. Pedido fora disso → handoff `out_of_limits`.
+- **Prazo:** até 5 dias úteis em todos os níveis, contados do recebimento do material completo, com o CRO do responsável técnico.
+- **Tom:** "valor de lançamento, enquanto a Arcada monta os primeiros casos". Sem urgência, escassez ou prazo de promoção.
+- **Cadência:** modelos `arcada_lembrete_dia_3`, `arcada_lembrete_dia_7` e `arcada_toque_30_dias` (Marketing, pt_BR, sem variáveis, 2 respostas rápidas cada) em aprovação na Meta. "Agora não" encerra a cadência; "Quero…" reabre com a IA se a origem estiver comprovada → **F70-S34**.
+- **Pendências registradas:** teto de custo por conversa, custo médio e handoff nos 4 gatilhos → **F70-S35**. F70-S32 segue aberta. Direct do Instagram continua fora (F69-S08, sem `instagram_manage_messages` no app).
+- **WhatsApp:** o número real (+55 69 9967-0030, WABA `395375790331443`) está conectado em coexistência no workspace Leadium desde 25/09, sem histórico importado. Detalhes na F70-S03.
+- **Produção:** a v2 do prompt e da KB entra pelo seed idempotente depois do deploy, com o agente inativo até a aprovação e as 10 conversas de teste. Commit e push só com o ok do Rogério.
+
+## F71 — Orchestrator — 2026-10-05
+
+- **Onda 1 despachada:** F71-S01 (db-engineer, `packages/db/**`) ‖ F71-S02 (backend-engineer, `packages/shared/src/auth/**` + provider em `apps/api/src/auth/{supabase,mock}-provider.ts`, `provider.ts` + runbook). Paths disjuntos. Workers escrevem na mesma árvore (sem git); integração 1 por vez via stash por slot → claim → validate → finish → merge --no-ff → done.
+- Regra da fase: só a S01 toca `packages/db/**`. Qualquer necessidade de banco em S02–S10 volta para cá.
+
+### F71 — Orchestrator — onda 1 integrada (2026-10-05)
+
+- **Incidente de despacho:** a primeira leva da onda 1 foi em background e um redespacho em primeiro plano rodou junto; por alguns minutos houve 2 workers por slot na mesma árvore. Os de background detectaram e pararam; o estado final é do worker de primeiro plano, revisado no diff antes do merge (sem colunas duplicadas). Daqui em diante: workers só em primeiro plano.
+- **F71-S01 done** (merge f2369855). Backfill do trial no dev atingiu 8 empresas de teste; query de prévia para produção nas Notas de execução do slot. PENDÊNCIA HUMANA: Rogério roda a query em produção e estende as empresas reais antes do deploy.
+- **F71-S02 done.** Desvio de files_allowed autorizado pelo orchestrator: `apps/api/src/routes/members/me.ts` + `me-password.test.ts` (dono: S03, ainda não iniciada). Motivo: o novo `updatePassword(authUserId)` quebrava o typecheck e, em runtime, a rota passaria o email no lugar do id. Correção: chamada tipada com `authUserId`, `false` → 502 `password_update_failed`. A S03 herda o arquivo já corrigido (item "fim do 501" do escopo dela já está feito).
+- PENDÊNCIA HUMANA: aplicar `docs/runbooks/supabase-auth-emails.md` no painel do Supabase de produção (SMTP próprio, Redirect URLs, 4 templates) e conferir `AUTH_EMAIL_REDIRECT_URL`/`SUPABASE_SERVICE_KEY` na API.
+- **Onda 2 despachada:** F71-S03 (backend-engineer).
+
+### F71 — Orchestrator — onda 2 integrada (2026-10-05)
+
+- **F71-S03 done.** Helper para a S05: `setActiveWorkspaceCookie(res, workspaceId)` / `clearActiveWorkspaceCookie(res)` em `apps/api/src/auth/session.ts` (reexportados por `auth/index.ts`). Ponto de montagem para a S05: `apps/api/src/routes/members/index.ts` → `createMemberSubrouters()` (S05 adiciona `router.use(createInvitesMeRouter())`). 206 testes verdes; zero `findByEmail` em `apps/api/src`.
+- Pontos para a S10: (1) anti-tamper do view-as compara `req.auth.member.id` com `adminMemberId`; admin com outra empresa ativa tem o claim recusado (falha segura). (2) `is_platform_admin` é por linha de `members`: se a empresa ativa não tem a flag, o painel de plataforma some até trocar de volta (decisão de produto, registrar).
+- **Onda 3 despachada:** F71-S04 ‖ F71-S05 ‖ F71-S06 (backend-engineer). Disjunção: S04 dona de `auth/routes.ts`/`signup.ts`/`resend.ts`/`rate-limit.ts`/`flow.integration.test.ts`; S05 de `routes/workspace/**`, `auth/invite.ts`, `app.ts` (só montar) e `routes/members/{invites-me.ts,index.ts (1 linha)}`; S06 de `middlewares/auth.ts`, `subscription-guard.ts` e `apps/workers/**` listados. Overlap a vigiar: `rate-limit.ts` (S04) — S05 cria seus limitadores localmente, sem tocar o arquivo.
+
+### F71 — Orchestrator — onda 3 integrada (2026-10-06)
+
+- **F71-S04 done**, **F71-S06 done**, **F71-S05 done** (3 merges --no-ff em main).
+- **S05:** security-auditor reprovou a 1a versao (A1 alto: link copiado criava conta confirmada sem prova de posse do email). Corrigido com prova de posse via `token_hash` do Supabase no FRAGMENTO do link (`#token_hash=...&type=invite|magiclink`), nova rota `POST /auth/invite/send-email`, preview virou POST, cotas atomicas no Redis, link vira POST, uuid-params corrigido. Re-auditoria: APROVADO COM RESSALVAS; M1 (hash na query) corrigido depois. Desvios autorizados de files_allowed: `middlewares/uuid-params.ts(+test)`, `observability/sentry.ts(+test)`, providers/mock, `packages/shared/src/auth/index.ts`, runbook.
+- **Contrato para a S07 (UI):** `/convite/[token]` le `location.hash` (`token_hash`, `type`), guarda so em memoria, `history.replaceState` imediato, envia `emailProof` no `POST /auth/invite/accept`. Preview: `POST /auth/invite/preview {token}` -> `requiresEmailProof`. Link copiado: `POST /api/members/invites/:id/link`. Detalhes nas Notas do slot S05.
+- **S06 lacuna:** `/api/v1/**` (API key, sem withRLS) e o worker de outbound nao tem guarda de assinatura. Decisao: tratar na S10 (ou slot novo se tocar `packages/`/api-key).
+- **PENDENCIAS HUMANAS:** (1) templates "Invite user" e "Magic link" no Supabase com FRAGMENTO (runbook §4.3/4.4), sem isso convidado sem conta nao cria senha; (2) desligar "Allow new users to sign up" no Supabase (L3); (3) confirmar lista de empresas em trial do backfill.
+- **Onda 4 despachada:** S07 || S08 || S09 (frontend-engineer, ui:true).
+
+### F71 — Orchestrator — onda 4 integrada (2026-10-06)
+
+- **F71-S07, S09, S08 done** (3 merges --no-ff, nesta ordem). Revisao de design (/hm-designer) feita por revisor dedicado: APROVADO COM RESSALVAS nos 3; subsecao "Revisao de design" em cada slot.
+- Desvios de files_allowed (autorizados): S07 -> `apps/web/shared/auth/route-guard.ts(+test)` (`postLoginPath` preserva `/convite/<token>`; `/convite` virou publico e descartava o `?next=`); S09 -> `apps/web/app/(auth)/layout.tsx` (padding lateral mobile: `pl-safe/pr-safe` anulava `px-5`). Integracao S07<->S09: `from=invite` anexado pela tela de convite ao `next` da API.
+- Ressalvas abertas (nao bloqueiam): (1) tokens `--danger/--warn/--success` sem variante no tema claro em `packages/design-tokens` (erro do `Input` do `@hm/ui` 3,03:1 no claro) -> slot novo de design-tokens; (2) `TopBar` mobile soma `pt-safe` sob a faixa de conta (TopBar e da F70-S32); (3) bottom-nav ativo no claro 1,36:1 (anterior a F71); (4) peso: First Load JS 255-274 kB nas rotas auth, acima do teto 200 kB do canone por causa da base compartilhada de 213 kB (preexistente, MOBILE_AUDIT); (5) banner de convite sem "Aceitar" inline: follow-up sugerido `POST /api/me/invites/:id/accept`; (6) `useIsReadOnly`/tooltip nao aplicados nos botoes de escrita das features (fora dos files_allowed).
+- **Onda 5 (S10) despachada:** security-auditor (threat model §6 + lacuna `/api/v1` e worker outbound sem guarda de assinatura + riscos S03: view-as com outra empresa ativa, `is_platform_admin` por linha) + qa-engineer (jornada integrada + e2e).
+
+### F71 — Orchestrator — onda 5 integrada; fase F71 (S01-S10) fechada (2026-10-07)
+
+- **F71-S10 done.** Auditoria de seguranca de fim de fase: 1a passada REPROVADO (F-01 ALTO: `/api/v1` ignorava so-leitura, PoC 200 em empresa expired); apos correcoes, re-verificacao APROVADO COM RESSALVAS (sem CRITICAL/HIGH abertos). Relatorio: `docs/security/f71-contas-e-convites.md`. Jornada de integracao (6 passos, banco real) e e2e (30 verdes contra build de producao) passaram.
+- Corrigidos na S10 (desvios de files_allowed autorizados, registrados no slot): F-01 api-key 402 em escrita, F-02 portao no worker de outbound, F-03 revalidacao/disconnect de socket, F-09 senha forte + rate limit, F-10 balde signup_ip, F-13 view-as por authUserId, F-16 auditoria de aceites negados.
+- Decisao de produto (orchestrator, base: spec §1 item 3): F-07-adj revertido; convidado que faz signup ganha a propria empresa. Endurecimento no F71-S19.
+- Riscos S03: view-as com outra empresa ativa = fail-closed, corrigido (F-13); `is_platform_admin` por linha = sem escalada, aceito (flag por conta virou item do S14/produto).
+- **Slots novos F71-S11..S19** (headers web + Sentry web + token_hash em fragmento; X-Workspace-Id por aba; preview sem oraculo + aceite inline; packages: convite bloqueado/redact/papeis PG/regra em @hm/shared; verify define senha; tokens de status no claro/TopBar/bottom-nav/H1; so-leitura nos botoes; hardening menor; empresa propria autenticada).
+- **Go-live publico do cadastro/web depende de S11 e S15** (parecer do auditor).

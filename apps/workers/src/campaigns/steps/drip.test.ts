@@ -107,6 +107,8 @@ function makeDb(init: {
       timezone: 'America/Sao_Paulo',
     }),
     denyRecipient: async () => undefined,
+    // F71-S06: assinatura ativa — o portao tem teste proprio em tick.test.ts.
+    checkSubscription: async () => ({ active: true as const, status: 'active' }),
     listDueCampaigns: async () => [],
     fetchQuality: async (): Promise<ChannelHealth> => ({
       qualityRating: 'GREEN',
