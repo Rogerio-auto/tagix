@@ -2,7 +2,7 @@
 id: F72-S02
 title: Componentes do @hm/ui no DS 3.0 — botões, campos, status, tabela operacional e camadas
 phase: F72
-status: review
+status: done
 priority: critical
 estimated_size: M
 ui: true
