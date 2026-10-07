@@ -35,9 +35,11 @@ export function TopBar({ compact = false }: { compact?: boolean }) {
           <span className="font-display text-base text-brand" aria-hidden>
             ◢
           </span>
-          <h1 className="truncate font-head text-base font-semibold text-text">
+          {/* Contexto da rota, não o título da página: o `<h1>` é do `PageHeader`, um por
+              tela (F70-S32). */}
+          <p className="truncate font-head text-base font-semibold text-text">
             {title ?? 'Leadium'}
-          </h1>
+          </p>
         </div>
       ) : (
         <div className="flex-1" />
