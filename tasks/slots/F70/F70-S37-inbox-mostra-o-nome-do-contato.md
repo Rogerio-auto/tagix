@@ -2,7 +2,7 @@
 id: F70-S37
 title: Lista e cabeçalho da conversa mostram o nome do contato, não o número
 phase: F70
-status: blocked
+status: in-progress
 priority: high
 estimated_size: S
 ui: true
@@ -11,6 +11,9 @@ blocks: []
 source_docs:
   - tasks/slots/F70/F70-S36-nome-do-perfil-do-contato.md
   - docs/UX_PRINCIPLES.md
+agent_id: backend-engineer
+claimed_at: 2026-10-07T17:41:11Z
+
 ---
 # F70-S37 — Lista e cabeçalho da conversa mostram o nome do contato
 
