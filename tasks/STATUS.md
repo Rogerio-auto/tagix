@@ -49,7 +49,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
 | F57   | 14     | 12   | 0   | 0   | 0   | 0   | 2   |
-| F58   | 14     | 6   | 0   | 0   | 0   | 1   | 7   |
+| F58   | 14     | 5   | 0   | 0   | 0   | 1   | 8   |
 | F59   | 9     | 1   | 0   | 0   | 0   | 0   | 8   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F60   | 9     | 4   | 0   | 0   | 0   | 0   | 5   |
@@ -670,7 +670,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F58-S06 | Preparar opções, prévias e teste do novo criador          | ✅ done      | critical   | F58-S01, F58-S04, F57-S01                   |
 | F58-S07 | Tornar o início da campanha fácil de entender             | ✅ done      | high       | F58-S06                                     |
 | F58-S08 | Facilitar a escolha dos destinatários                     | ✅ done      | high       | F58-S06                                     |
-| F58-S09 | Escolher a mensagem com prévia e variáveis                | 🟢 available | critical   | F58-S05, F58-S06                            |
+| F58-S09 | Escolher a mensagem com prévia e variáveis                | ✅ done      | critical   | F58-S05, F58-S06                            |
 | F58-S10 | Configurar quando e como enviar sem termos técnicos       | 🟢 available | high       | F58-S06                                     |
 | F58-S11 | Fazer o agendamento começar e respeitar o ritmo escolhido | 🟢 available | critical   | F58-S06                                     |
 | F58-S12 | Garantir que nenhuma mensagem da campanha se perca        | 🟢 available | critical   | F58-S02, F58-S11                            |
