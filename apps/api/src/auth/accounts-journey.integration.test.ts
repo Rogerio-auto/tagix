@@ -18,6 +18,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -39,8 +40,14 @@ const { closeRateLimit } = await import('../middlewares/rate-limit');
 const { closeInviteQuota } = await import('../routes/workspace/invite-quota');
 const { loadConfig } = await import('../config');
 
-const { workspaces, subscriptions, members, memberInvites, auditLogs, workspaceEntitlementOverrides } =
-  schema;
+const {
+  workspaces,
+  subscriptions,
+  members,
+  memberInvites,
+  auditLogs,
+  workspaceEntitlementOverrides,
+} = schema;
 
 const DAY = 86_400_000;
 
@@ -53,11 +60,13 @@ function runExpireTrials(workspaceId: string): number {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const apiRoot = path.resolve(here, '../..');
   const repoRoot = path.resolve(apiRoot, '../..');
+  // No CI não há `.env` (as variáveis vêm do ambiente, que o processo filho herda).
+  const envFile = path.join(repoRoot, '.env');
   const out = execFileSync(
     process.execPath,
     [
       path.join(apiRoot, 'node_modules/tsx/dist/cli.mjs'),
-      `--env-file=${path.join(repoRoot, '.env')}`,
+      ...(existsSync(envFile) ? [`--env-file=${envFile}`] : []),
       path.join(apiRoot, 'test/run-expire-trials.ts'),
       workspaceId,
     ],
@@ -209,7 +218,11 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
 
     const db = getDb();
     const [owner] = await db.select().from(members).where(eq(members.email, emailA));
-    expect(owner).toMatchObject({ role: 'OWNER', termsVersion: '2026-09-14', isPlatformAdmin: false });
+    expect(owner).toMatchObject({
+      role: 'OWNER',
+      termsVersion: '2026-09-14',
+      isPlatformAdmin: false,
+    });
     expect(owner?.status).not.toBe('active');
     if (!owner) throw new Error('owner');
     state.wsA = owner.workspaceId;
@@ -218,7 +231,10 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
 
     // Trial: 15 dias a partir do provisionamento, em workspace e subscription.
     const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, state.wsA));
-    const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.workspaceId, state.wsA));
+    const [sub] = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.workspaceId, state.wsA));
     expect(ws?.subscriptionStatus).toBe('trial');
     expect(sub?.status).toBe('trial');
     for (const ends of [ws?.trialEndsAt, sub?.trialEndsAt]) {
@@ -227,12 +243,17 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
     }
 
     // Antes de confirmar: 403 e nenhum cookie.
-    const blocked = await request(app).post('/auth/login').send({ email: emailA, password: PASSWORD_A });
+    const blocked = await request(app)
+      .post('/auth/login')
+      .send({ email: emailA, password: PASSWORD_A });
     expect(blocked.status).toBe(403);
     expect(blocked.body.error).toBe('email_unverified');
     expect(blocked.headers['set-cookie']).toBeUndefined();
 
-    await request(app).post('/auth/verify').send({ token: mockVerifyToken(emailA) }).expect(200);
+    await request(app)
+      .post('/auth/verify')
+      .send({ token: mockVerifyToken(emailA) })
+      .expect(200);
 
     const a = await login(emailA);
     expect(a.workspaceId).toBe(state.wsA);
@@ -274,8 +295,14 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
     expect(noProof.body.error).toBe('email_proof_required');
     // Escalada de papel pelo corpo → 400 (strict).
     expect(
-      (await accept({ token: mail.token, password: PASSWORD_B, emailProof: mail.proof, role: 'OWNER' }))
-        .status,
+      (
+        await accept({
+          token: mail.token,
+          password: PASSWORD_B,
+          emailProof: mail.proof,
+          role: 'OWNER',
+        })
+      ).status,
     ).toBe(400);
 
     const ok = await accept({
@@ -294,13 +321,21 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
       .select()
       .from(members)
       .where(and(eq(members.workspaceId, state.wsA), eq(members.email, emailB)));
-    expect(bInA).toMatchObject({ status: 'active', role: 'SUPERVISOR', authUserId: account?.authUserId });
+    expect(bInA).toMatchObject({
+      status: 'active',
+      role: 'SUPERVISOR',
+      authUserId: account?.authUserId,
+    });
     if (!bInA) throw new Error('bInA');
     state.bInAMemberId = bInA.id;
 
     // Token reusado → 404 uniforme (preview e aceite).
     const reusedPv = await preview(mail.token);
-    const reusedAc = await accept({ token: mail.token, password: PASSWORD_B, emailProof: mail.proof });
+    const reusedAc = await accept({
+      token: mail.token,
+      password: PASSWORD_B,
+      emailProof: mail.proof,
+    });
     expect(reusedPv.status).toBe(404);
     expect(reusedAc.status).toBe(404);
     expect(reusedAc.body).toEqual(reusedPv.body);
@@ -344,7 +379,10 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
     // A empresa nova só vale depois do verify; até lá só A aparece.
     const before = await get('/api/me', cookieHeader(state.cookieB, state.wsA));
     expect(before.body.memberships).toHaveLength(1);
-    await request(app).post('/auth/verify').send({ token: mockVerifyToken(emailB) }).expect(200);
+    await request(app)
+      .post('/auth/verify')
+      .send({ token: mockVerifyToken(emailB) })
+      .expect(200);
 
     const me = await get('/api/me', cookieHeader(state.cookieB, state.wsA));
     expect(me.status).toBe(200);
@@ -419,7 +457,9 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
     expect(leak).not.toContain(`Contato A ${run}`);
     expect((await get(`/api/contacts/${state.contactA}`, cBA)).status).toBe(404);
     // Troca de volta para A → 404 uniforme.
-    expect((await post('/api/me/workspace', state.cookieB, { workspaceId: state.wsA })).status).toBe(404);
+    expect(
+      (await post('/api/me/workspace', state.cookieB, { workspaceId: state.wsA })).status,
+    ).toBe(404);
     // Segue operando na própria.
     const own = await post('/api/contacts', cookieHeader(state.cookieB, state.wsB), {
       displayName: `Contato B2 ${run}`,
@@ -429,8 +469,14 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
     expect((await login(emailB)).workspaceId).toBe(state.wsB);
 
     // T6 — verify (mesmo token válido do email de B) NÃO reativa a linha removida em A.
-    await request(app).post('/auth/verify').send({ token: mockVerifyToken(emailB) }).expect(200);
-    const [stillOut] = await getDb().select().from(members).where(eq(members.id, state.bInAMemberId));
+    await request(app)
+      .post('/auth/verify')
+      .send({ token: mockVerifyToken(emailB) })
+      .expect(200);
+    const [stillOut] = await getDb()
+      .select()
+      .from(members)
+      .where(eq(members.id, state.bInAMemberId));
     expect(stillOut?.status).toBe('inactive');
 
     // Reconvidar o removido é permitido → convite pendente; bloquear a linha o revoga.
@@ -442,13 +488,19 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
     const block = await patch(`/api/members/${state.bInAMemberId}`, cA, { status: 'blocked' });
     expect(block.status).toBe(200);
     expect((await preview(pending.token)).status).toBe(404);
-    const [row] = await getDb().select().from(memberInvites).where(eq(memberInvites.id, re.body.invite.id));
+    const [row] = await getDb()
+      .select()
+      .from(memberInvites)
+      .where(eq(memberInvites.id, re.body.invite.id));
     expect(row?.revokedAt).toBeInstanceOf(Date);
     const revokedAudit = await getDb()
       .select({ id: auditLogs.id })
       .from(auditLogs)
       .where(
-        and(eq(auditLogs.resourceId, re.body.invite.id), eq(auditLogs.action, 'member.invite_revoked')),
+        and(
+          eq(auditLogs.resourceId, re.body.invite.id),
+          eq(auditLogs.action, 'member.invite_revoked'),
+        ),
       );
     expect(revokedAudit).toHaveLength(1);
     // Bloqueado: nem convidar de novo.
@@ -473,20 +525,28 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
     // Vence o trial de A (só A) e roda o tick REAL do worker de cobrança.
     const past = new Date(Date.now() - DAY);
     await db.update(workspaces).set({ trialEndsAt: past }).where(eq(workspaces.id, state.wsA));
-    await db.update(subscriptions).set({ trialEndsAt: past }).where(eq(subscriptions.workspaceId, state.wsA));
+    await db
+      .update(subscriptions)
+      .set({ trialEndsAt: past })
+      .where(eq(subscriptions.workspaceId, state.wsA));
 
     expect(runExpireTrials(state.wsA)).toBe(1);
     // Idempotente: rodar de novo não faz nada.
     expect(runExpireTrials(state.wsA)).toBe(0);
 
     const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, state.wsA));
-    const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.workspaceId, state.wsA));
+    const [sub] = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.workspaceId, state.wsA));
     expect(ws?.subscriptionStatus).toBe('expired');
     expect(sub?.status).toBe('expired');
     const trialAudit = await db
       .select({ id: auditLogs.id })
       .from(auditLogs)
-      .where(and(eq(auditLogs.workspaceId, state.wsA), eq(auditLogs.action, 'billing.trial_expired')));
+      .where(
+        and(eq(auditLogs.workspaceId, state.wsA), eq(auditLogs.action, 'billing.trial_expired')),
+      );
     expect(trialAudit).toHaveLength(1);
     // A empresa de B não foi tocada.
     const [wsB] = await db.select().from(workspaces).where(eq(workspaces.id, state.wsB));
@@ -504,13 +564,18 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
     expect(me.status).toBe(200);
     expect(me.body.workspace.subscriptionStatus).toBe('expired');
     // Gestão de membros também é escrita: barrada.
-    expect((await patch(`/api/members/${state.bInAMemberId}`, cA, { role: 'AGENT' })).status).toBe(402);
+    expect((await patch(`/api/members/${state.bInAMemberId}`, cA, { role: 'AGENT' })).status).toBe(
+      402,
+    );
     expect(
-      (await post('/api/members/invites', cA, { email: `x-${run}@empresa.com`, role: 'AGENT' })).status,
+      (await post('/api/members/invites', cA, { email: `x-${run}@empresa.com`, role: 'AGENT' }))
+        .status,
     ).toBe(402);
 
     // B com A ativa: escrita 402, mas a troca de empresa é liberada e a própria tem acesso pleno.
-    expect((await post('/api/contacts', cBA, { displayName: `Bloqueado B ${run}` })).status).toBe(402);
+    expect((await post('/api/contacts', cBA, { displayName: `Bloqueado B ${run}` })).status).toBe(
+      402,
+    );
     const toOwn = await post('/api/me/workspace', cBA, { workspaceId: state.wsB });
     expect(toOwn.status).toBe(200);
     expect(toOwn.body.workspace.id).toBe(state.wsB);
@@ -518,10 +583,9 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
     expect((await post('/api/contacts', cB, { displayName: `Livre B ${run}` })).status).toBe(201);
     // memberships mostra o estado de cada empresa (o seletor/aviso usa).
     const statuses = Object.fromEntries(
-      (toOwn.body.memberships as Array<{ workspaceId: string; subscriptionStatus: string }>).map((m) => [
-        m.workspaceId,
-        m.subscriptionStatus,
-      ]),
+      (toOwn.body.memberships as Array<{ workspaceId: string; subscriptionStatus: string }>).map(
+        (m) => [m.workspaceId, m.subscriptionStatus],
+      ),
     );
     expect(statuses).toEqual({ [state.wsA]: 'expired', [state.wsB]: 'trial' });
   }, 90_000); // dois processos tsx (cold start) para o tick do worker
@@ -546,7 +610,10 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
     const cC = cookieHeader(`hm_session=${encodeURIComponent(session)}`, wsC);
 
     // OWNER não convidável.
-    const owner = await post('/api/members/invites', cC, { email: `o-${run}@empresa.com`, role: 'OWNER' });
+    const owner = await post('/api/members/invites', cC, {
+      email: `o-${run}@empresa.com`,
+      role: 'OWNER',
+    });
     expect(owner.status).toBe(400);
     expect(owner.body.error).toBe('owner_not_invitable');
 
@@ -563,7 +630,8 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
     expect(expPv.status).toBe(404);
     expect(expPv.body).toEqual(unknown.body);
     expect(
-      (await accept({ token: expMail.token, password: PASSWORD_B, emailProof: expMail.proof })).status,
+      (await accept({ token: expMail.token, password: PASSWORD_B, emailProof: expMail.proof }))
+        .status,
     ).toBe(404);
 
     const revAddr = `rev-${run}@empresa.com`;
@@ -574,7 +642,8 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
     expect(revPv.status).toBe(404);
     expect(revPv.body).toEqual(unknown.body);
     expect(
-      (await accept({ token: revMail.token, password: PASSWORD_B, emailProof: revMail.proof })).status,
+      (await accept({ token: revMail.token, password: PASSWORD_B, emailProof: revMail.proof }))
+        .status,
     ).toBe(404);
 
     // Prova da caixa de OUTRO email com o token de uma vítima → 403, sem criar conta/membro.
@@ -603,8 +672,13 @@ describe.skipIf(!process.env['DATABASE_URL'] || !isMock)('jornada de contas (F71
     // max_members: ativos + pendentes contam; estourou → 402 seat_limit.
     const seats = await get('/api/members/invites', cC);
     const used: number = seats.body.seats.used;
-    await db.insert(workspaceEntitlementOverrides).values({ workspaceId: wsC, limits: { max_members: used } });
-    const full = await post('/api/members/invites', cC, { email: `seat-${run}@empresa.com`, role: 'AGENT' });
+    await db
+      .insert(workspaceEntitlementOverrides)
+      .values({ workspaceId: wsC, limits: { max_members: used } });
+    const full = await post('/api/members/invites', cC, {
+      email: `seat-${run}@empresa.com`,
+      role: 'AGENT',
+    });
     expect(full.status).toBe(402);
     expect(full.body).toMatchObject({ error: 'seat_limit', used, limit: used });
   });
