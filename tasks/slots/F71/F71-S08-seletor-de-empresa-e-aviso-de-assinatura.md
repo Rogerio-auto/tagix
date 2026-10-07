@@ -2,7 +2,7 @@
 id: F71-S08
 title: Seletor de empresa no shell e aviso de trial, convite pendente e modo só leitura
 phase: F71
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 ui: true
@@ -12,6 +12,9 @@ source_docs:
   - docs/features/CONTAS_E_CONVITES.md
   - docs/UX_PRINCIPLES.md
   - docs/DESIGN_SYSTEM.md
+agent_id: backend-engineer
+claimed_at: 2026-10-07T01:31:16Z
+
 ---
 # F71-S08 — Seletor de empresa e avisos de conta
 
