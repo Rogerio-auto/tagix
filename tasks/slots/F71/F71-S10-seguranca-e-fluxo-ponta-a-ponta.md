@@ -2,7 +2,7 @@
 id: F71-S10
 title: Auditoria de segurança da F71 e teste do fluxo inteiro de contas
 phase: F71
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: [F71-S07, F71-S08, F71-S09]
