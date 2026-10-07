@@ -2,7 +2,7 @@
 id: F70-S32
 title: Wizard do WhatsApp preserva o signup ao voltar e painéis fechados saem da acessibilidade
 phase: F70
-status: review
+status: done
 priority: medium
 estimated_size: S
 depends_on: [F70-S29]
