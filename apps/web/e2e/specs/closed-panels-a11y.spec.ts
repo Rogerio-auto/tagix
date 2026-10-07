@@ -14,6 +14,13 @@ test.describe('F70-S32 — painel de ajuda fechado sai da acessibilidade', () =>
   test('/agents: o painel "Agentes" só existe para o leitor de tela enquanto aberto', async ({
     page,
   }) => {
+    // O fallback genérico do mock (`{}`) não é uma lista de agentes: a tela quebrava e
+    // remontava, e o botão `?` se desprendia do DOM no meio do clique.
+    await page.route('**/api/agents', (route) =>
+      route.request().method() === 'GET'
+        ? route.fulfill({ status: 200, contentType: 'application/json', body: '{"agents":[]}' })
+        : route.fallback(),
+    );
     await page.goto('/agents');
     const panel = page.getByRole('complementary', { name: 'Agentes' });
 
