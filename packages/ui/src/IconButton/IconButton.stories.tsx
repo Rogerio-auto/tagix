@@ -1,3 +1,4 @@
+import { ThemePair } from '../lib/ThemePair';
 import { Trash2, Pencil, MoreVertical, X, Star } from 'lucide-react';
 import { IconButton } from './IconButton';
 
@@ -23,4 +24,19 @@ export const States = () => (
     <IconButton aria-label="Salvando" icon={<Star />} loading />
     <IconButton aria-label="Indisponível" icon={<Trash2 />} variant="danger" disabled />
   </div>
+);
+
+export const BothThemes = () => (
+  <ThemePair>
+    <div className="flex flex-col gap-4">
+      {(['ghost', 'solid', 'danger', 'link'] as const).map((variant) => (
+        <div key={variant} className="flex items-center gap-3">
+          <IconButton aria-label={`${variant} padrão`} icon={<Pencil />} variant={variant} />
+          <IconButton aria-label={`${variant} carregando`} icon={<Pencil />} variant={variant} loading />
+          <IconButton aria-label={`${variant} desabilitado`} icon={<Pencil />} variant={variant} disabled />
+          <span className="text-sm text-text-mid">{variant}</span>
+        </div>
+      ))}
+    </div>
+  </ThemePair>
 );

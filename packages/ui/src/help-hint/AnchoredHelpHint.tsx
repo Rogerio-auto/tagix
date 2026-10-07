@@ -85,7 +85,7 @@ export function AnchoredHelpHint({
         className={cn(
           'inline-flex size-5 items-center justify-center rounded-pill text-text-low outline-none',
           'transition-colors duration-150 hover:bg-surface-2 hover:text-text',
-          'focus-visible:shadow-glow-md',
+          'focus-visible:focus-ring',
           className,
         )}
       >

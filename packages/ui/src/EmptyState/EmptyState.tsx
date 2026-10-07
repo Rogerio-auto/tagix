@@ -7,7 +7,7 @@ import { cn } from '../lib/cn';
  * Tom do badge do ícone. `error-adjacent` sinaliza um vazio causado por erro
  * (ex.: lista que não carregou) sem escalar para o ErrorState de página inteira.
  */
-const iconBadge = cva('flex shrink-0 items-center justify-center rounded-pill border', {
+const iconBadge = cva('flex shrink-0 items-center justify-center rounded-md border', {
   variants: {
     variant: {
       'first-run': 'size-16 border-border-2 bg-surface-2 text-text-low',
@@ -61,6 +61,7 @@ export function EmptyState({
     <div
       className={cn(
         'flex flex-col items-center justify-center gap-4 px-6 py-16 text-center',
+        'motion-safe:animate-[hm-rise_320ms_var(--ease-spring)_both]',
         className,
       )}
       {...props}

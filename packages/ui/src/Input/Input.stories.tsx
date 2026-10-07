@@ -1,3 +1,4 @@
+import { ThemePair } from '../lib/ThemePair';
 import { Input } from './Input';
 
 export const Default = () => (
@@ -30,4 +31,23 @@ export const Sizes = () => (
     <Input size="md" placeholder="Medium" />
     <Input size="lg" placeholder="Large" />
   </div>
+);
+
+export const WithSuccess = () => (
+  <div className="max-w-sm">
+    <Input label="Domínio" defaultValue="sunrise.com.br" success="Domínio verificado" />
+  </div>
+);
+
+/** Todos os estados do campo (maquete: foco, erro, sucesso, desabilitado, ajuda) nos dois temas. */
+export const BothThemes = () => (
+  <ThemePair>
+    <div className="flex flex-col gap-4">
+      <Input label="Padrão" placeholder="Digite aqui" hint="Visível para membros do cliente." />
+      <Input label="Foco (forçado)" defaultValue="Sunrise Remodeling" className="border-brand shadow-glow-sm" />
+      <Input label="Erro" defaultValue="invalido" error="Email inválido" />
+      <Input label="Sucesso" defaultValue="sunrise.com.br" success="Domínio verificado" />
+      <Input label="Desabilitado" defaultValue="Acme" disabled />
+    </div>
+  </ThemePair>
 );

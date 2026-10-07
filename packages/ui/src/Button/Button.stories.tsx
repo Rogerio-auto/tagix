@@ -1,3 +1,4 @@
+import { ThemePair } from '../lib/ThemePair';
 import { ArrowRight } from 'lucide-react';
 import { Button } from './Button';
 
@@ -26,5 +27,34 @@ export const States = () => (
     <Button disabled>Disabled</Button>
     <Button loading>Loading</Button>
     <Button rightIcon={<ArrowRight className="size-4" />}>Com ícone</Button>
+  </div>
+);
+
+/** Matriz de estados x variantes nos dois temas (DoD: default/hover/focus/loading/disabled). */
+export const BothThemes = () => (
+  <ThemePair>
+    <div className="flex flex-col gap-4">
+      {(['primary', 'secondary', 'outline', 'ghost', 'danger', 'link'] as const).map((variant) => (
+        <div key={variant} className="flex flex-wrap items-center gap-3">
+          <Button variant={variant}>{variant}</Button>
+          <Button variant={variant} loading>
+            loading
+          </Button>
+          <Button variant={variant} disabled>
+            disabled
+          </Button>
+        </div>
+      ))}
+    </div>
+  </ThemePair>
+);
+
+/** Foco de teclado forçado visível para revisão (o real aparece com Tab). */
+export const FocusRing = () => (
+  <div className="flex gap-3">
+    <Button className="shadow-glow-md">Primary</Button>
+    <Button variant="secondary" className="shadow-glow-md">
+      Secondary
+    </Button>
   </div>
 );

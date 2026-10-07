@@ -1,3 +1,4 @@
+import { ThemePair } from '../lib/ThemePair';
 import { Inbox, SearchX, WifiOff } from 'lucide-react';
 import { EmptyState } from './EmptyState';
 import { Button } from '../Button/Button';
@@ -29,4 +30,23 @@ export const ErrorAdjacent = () => (
     description="Verifique sua conexão. A lista volta assim que a rede se restabelecer."
     action={<Button variant="secondary">Tentar de novo</Button>}
   />
+);
+
+export const BothThemes = () => (
+  <ThemePair>
+    <EmptyState
+      icon={Inbox}
+      title="Nenhuma conversa ainda"
+      description="Quando um contato mandar mensagem, ela aparece aqui."
+      action={<Button variant="primary">Conectar canal</Button>}
+      secondaryAction={<Button variant="ghost">Ver como funciona</Button>}
+    />
+    <EmptyState
+      variant="error-adjacent"
+      icon={WifiOff}
+      title="Não foi possível carregar"
+      description="Verifique sua conexão."
+      action={<Button variant="secondary">Tentar de novo</Button>}
+    />
+  </ThemePair>
 );

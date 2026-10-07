@@ -23,6 +23,8 @@ import { useState } from 'react';
 import { cn } from '../lib/cn';
 
 export type AvatarSize = 'sm' | 'md' | 'lg';
+/** `soft` = quadrado de cantos DS 3.0 (padrão, maquete); `circle` = pessoa/foto em lista densa. */
+export type AvatarShape = 'soft' | 'circle';
 
 export interface AvatarProps {
   /** URL da foto. Quando ausente/inválida, renderiza as iniciais. */
@@ -31,6 +33,7 @@ export interface AvatarProps {
   name?: string | null;
   /** sm=24px · md=40px (casa com a ChatList) · lg=56px. */
   size?: AvatarSize;
+  shape?: AvatarShape;
   className?: string;
 }
 
@@ -42,8 +45,14 @@ const dimensionClasses: Record<AvatarSize, string> = {
 };
 
 /** Tamanho do texto das iniciais por tamanho do avatar. */
+/** Raio proporcional ao tamanho (DS 3.0: 7 / 10 / 14px). */
+const shapeClasses: Record<AvatarShape, Record<AvatarSize, string>> = {
+  soft: { sm: 'rounded-xs', md: 'rounded-sm', lg: 'rounded-md' },
+  circle: { sm: 'rounded-pill', md: 'rounded-pill', lg: 'rounded-pill' },
+};
+
 const textClasses: Record<AvatarSize, string> = {
-  sm: 'text-[10px]',
+  sm: 'text-[11px]',
   md: 'text-sm',
   lg: 'text-lg',
 };
@@ -61,7 +70,7 @@ function initialsFrom(name?: string | null): string {
   return derived.slice(0, 2).toUpperCase();
 }
 
-export function Avatar({ src, name, size = 'md', className }: AvatarProps): ReactElement {
+export function Avatar({ src, name, size = 'md', shape = 'soft', className }: AvatarProps): ReactElement {
   const [failed, setFailed] = useState(false);
   const label = name?.trim() ? name.trim() : undefined;
   const showImage = Boolean(src) && !failed;
@@ -73,7 +82,7 @@ export function Avatar({ src, name, size = 'md', className }: AvatarProps): Reac
         alt={label ?? ''}
         loading="lazy"
         onError={() => setFailed(true)}
-        className={cn('shrink-0 rounded-pill object-cover', dimensionClasses[size], className)}
+        className={cn('shrink-0 border border-border-2 object-cover', shapeClasses[shape][size], dimensionClasses[size], className)}
       />
     );
   }
@@ -82,7 +91,8 @@ export function Avatar({ src, name, size = 'md', className }: AvatarProps): Reac
     <span
       {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
       className={cn(
-        'inline-flex shrink-0 select-none items-center justify-center rounded-pill bg-surface-3 font-head text-text-mid',
+        'inline-flex shrink-0 select-none items-center justify-center border border-border-2 bg-surface-3 font-head font-semibold text-text-mid',
+        shapeClasses[shape][size],
         dimensionClasses[size],
         textClasses[size],
         className,

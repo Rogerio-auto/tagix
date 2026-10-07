@@ -1,3 +1,4 @@
+import { ThemePair } from '../lib/ThemePair';
 import { HelpHint } from './HelpHint';
 
 export const InlineNextToSection = () => (
@@ -39,4 +40,16 @@ export const WithoutLink = () => (
       }
     />
   </div>
+);
+
+export const BothThemes = () => (
+  <ThemePair>
+    <div className="flex items-center gap-2">
+      <span className="font-head text-text">Janela de 24h</span>
+      <HelpHint
+        title="Janela de atendimento de 24h"
+        body={<p>Fora da janela, use um <strong>template aprovado</strong>.</p>}
+      />
+    </div>
+  </ThemePair>
 );

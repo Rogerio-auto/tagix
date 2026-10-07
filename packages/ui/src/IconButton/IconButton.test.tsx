@@ -13,9 +13,9 @@ describe('IconButton — contrato a11y', () => {
     expect(wrapper?.querySelector('svg')).not.toBeNull();
   });
 
-  it('aplica a classe de foco de teclado visível (focus-visible:shadow-glow-md)', () => {
+  it('aplica a classe de foco de teclado visível (focus-visible:focus-ring)', () => {
     render(<IconButton aria-label="Editar" icon={<X />} />);
-    expect(screen.getByRole('button')).toHaveClass('focus-visible:shadow-glow-md');
+    expect(screen.getByRole('button')).toHaveClass('focus-visible:focus-ring');
   });
 
   it('dispara onClick ao clicar', () => {

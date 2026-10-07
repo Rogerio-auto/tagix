@@ -10,7 +10,13 @@ export function Skeleton({ className, ...props }: HTMLAttributes<HTMLDivElement>
   return (
     <div
       aria-hidden
-      className={cn('animate-pulse rounded-sm bg-surface-3 motion-reduce:animate-none', className)}
+      className={cn(
+        // Varredura de luz (hm-shimmer) sobre surface-3; parado sob prefers-reduced-motion.
+        'rounded-xs bg-surface-3',
+        'motion-safe:animate-[hm-shimmer_1.8s_linear_infinite] motion-safe:bg-[length:200%_100%]',
+        'motion-safe:bg-[linear-gradient(90deg,var(--surface-3)_30%,var(--surface-2)_50%,var(--surface-3)_70%)]',
+        className,
+      )}
       {...props}
     />
   );
@@ -78,7 +84,7 @@ export function SkeletonCard({
       )}
       {...props}
     >
-      {media && <Skeleton className="size-10 shrink-0 rounded-pill" />}
+      {media && <Skeleton className="size-10 shrink-0 rounded-sm" />}
       <div className="flex flex-1 flex-col gap-2">
         {Array.from({ length: Math.max(1, lines) }).map((_, i, arr) => (
           <Skeleton key={i} className={cn('h-3', i === arr.length - 1 ? 'w-4/5' : 'w-2/5')} />

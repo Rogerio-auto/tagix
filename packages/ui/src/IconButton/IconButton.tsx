@@ -8,20 +8,20 @@ const iconButtonVariants = cva(
   [
     // `relative` + pseudo-alvo garantem área de toque ≥40px mesmo no tamanho `sm`
     // (WCAG 2.5.8 / DESIGN_SYSTEM §6): o clique vale no ::before invisível.
-    'relative inline-flex shrink-0 items-center justify-center rounded-md',
+    'relative inline-flex shrink-0 items-center justify-center rounded-sm border border-transparent',
     "before:absolute before:left-1/2 before:top-1/2 before:size-10 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']",
-    'outline-none transition-[color,background-color,box-shadow] duration-200 ease-out',
+    'outline-none transition-[color,background-color,border-color,box-shadow,transform] duration-(--dur-base) ease-ds',
     // Foco de teclado SEMPRE visível — o pecado que a auditoria apontou em 34 arquivos.
-    'focus-visible:shadow-glow-md active:scale-[0.96]',
-    'disabled:cursor-not-allowed disabled:opacity-40 disabled:pointer-events-none',
+    'focus-visible:focus-ring motion-safe:active:scale-[0.96]',
+    'disabled:cursor-not-allowed disabled:not-aria-busy:opacity-40 disabled:pointer-events-none aria-busy:cursor-progress',
   ],
   {
     variants: {
       variant: {
         ghost: 'bg-transparent text-text-low hover:bg-surface-2 hover:text-text',
-        solid: 'bg-surface-2 text-text hover:bg-surface-3',
+        solid: 'border-border bg-surface-2 text-text hover:border-border-2 hover:bg-surface-3',
         danger: 'bg-transparent text-text-low hover:bg-danger/10 hover:text-danger',
-        link: 'bg-transparent text-text-low hover:text-brand',
+        link: 'bg-transparent text-text-low hover:text-brand-text',
       },
       size: {
         // O quadrado é o alvo visual; o ::before completa 40px quando menor.
@@ -71,7 +71,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
     >
       {/* Ícone é decorativo: o nome acessível vem do aria-label do botão (WCAG 1.1.1). */}
       <span className="inline-flex" aria-hidden>
-        {loading ? <Loader2 className="animate-spin" /> : icon}
+        {loading ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : icon}
       </span>
     </button>
   );

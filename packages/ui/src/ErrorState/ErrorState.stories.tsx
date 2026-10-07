@@ -1,3 +1,4 @@
+import { ThemePair } from '../lib/ThemePair';
 import { ErrorState } from './ErrorState';
 import { Button } from '../Button/Button';
 
@@ -24,4 +25,16 @@ export const WithReferenceOnly = () => (
     reason="Nosso servidor demorou a responder."
     reference="hm_err_9f21c7"
   />
+);
+
+export const BothThemes = () => (
+  <ThemePair>
+    <ErrorState
+      title="Falha ao enviar mensagem"
+      reason="A janela de 24h da Meta fechou para este contato."
+      whatToDo="Use um template aprovado para reabrir a conversa."
+      reference="hm_err_abc123"
+      action={<Button variant="secondary">Tentar de novo</Button>}
+    />
+  </ThemePair>
 );

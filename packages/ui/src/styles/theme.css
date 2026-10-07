@@ -9,7 +9,12 @@
 @import '@hm/design-tokens/tokens.css';
 @import 'tailwindcss';
 
-@theme {
+/*
+ * `inline`: cada utilitário carrega `var(--bg)` (o token) em vez de `var(--color-bg)`.
+ * Sem isso o valor é resolvido em :root e um subtree com `data-theme` próprio
+ * (preview lado a lado, e-mail, embed) herdaria sempre o tema da raiz.
+ */
+@theme inline {
   --color-bg: var(--bg);
   --color-bg-alt: var(--bg-alt);
   --color-surface: var(--surface);
@@ -41,10 +46,16 @@
   --color-success: var(--success);
   --color-success-bg: var(--success-bg);
 
-  --font-display: var(--font-display);
-  --font-head: var(--font-head);
-  --font-body: var(--font-body);
-  --font-price: var(--font-price);
+  /* Tokens novos do DS 3.0 (F72-S01) — mesmos nomes do tokens.css, aqui também `inline`. */
+  --color-bg-elevated: var(--bg-elevated);
+  --color-surface-glass: var(--surface-glass);
+  --color-violet: var(--violet);
+  --color-brand-text: var(--brand-text);
+  --shadow-ds-1: var(--shadow-1);
+  --shadow-ds-2: var(--shadow-2);
+  --shadow-ds-3: var(--shadow-3);
+  --shadow-glow: var(--glow);
+  --radius-xl: var(--r-xl);
 
   --radius-xs: var(--r-xs);
   --radius-sm: var(--r-sm);
@@ -59,6 +70,47 @@
   --shadow-glow-sm: var(--glow-sm);
   --shadow-glow-md: var(--glow-md);
   --shadow-glow-lg: var(--glow-lg);
+}
+
+/*
+ * Curvas como utilitários (`ease-ds`, `ease-ds-spring`). Nomes distintos dos tokens
+ * (`--ease`, `--ease-spring`), então não há auto-referência.
+ */
+@theme inline {
+  --ease-ds: var(--ease);
+  --ease-ds-spring: var(--ease-spring);
+}
+
+/*
+ * Famílias de fonte como utilitários `font-head/body/display/price`. NÃO declarar
+ * `--font-head: var(--font-head)` em @theme: o Tailwind emite essa declaração em :root
+ * (mesmo com `inline`), ela é auto-referente (cíclica) e invalida a fonte — o bug da
+ * F72-S01. `@utility` gera só a regra `font-family: var(--font-*)`, e os valores reais
+ * continuam em `@hm/design-tokens/tokens.css`.
+ */
+@utility font-display {
+  font-family: var(--font-display);
+}
+@utility font-head {
+  font-family: var(--font-head);
+}
+@utility font-body {
+  font-family: var(--font-body);
+}
+@utility font-price {
+  font-family: var(--font-price);
+}
+
+/*
+ * Anel de foco de teclado (contraste >= 3:1 vs. fundo, WCAG 1.4.11). Uso: `focus-visible:focus-ring`.
+ * `--focus-ring-color` permite trocar a cor (ex.: danger em campo com erro). Declara
+ * `outline-style` explícito, então vence o `outline-none` do reset quando aplicado depois.
+ */
+@utility focus-ring {
+  outline-style: solid;
+  outline-width: 2px;
+  outline-offset: 2px;
+  outline-color: var(--focus-ring-color, var(--brand-text));
 }
 
 /* Animações do DS v2 (§7) — curtas e intencionais; aplicadas via motion-safe. */
@@ -88,6 +140,37 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* DS 3.0 §05 — entrada = fade + 4–10px (nunca transformar navegação em apresentação). */
+@keyframes hm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* Signal pulse — SÓ para estado vivo (Badge `live`). Anel que expande e some. */
+@keyframes hm-signal {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 0%, transparent);
+  }
+}
+/* Skeleton shimmer — luz que varre o bloco (substitui o pulse seco). */
+@keyframes hm-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
   }
 }
 

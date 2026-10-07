@@ -50,11 +50,12 @@ export function ErrorState({
       role="alert"
       className={cn(
         'mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-16 text-center',
+        'motion-safe:animate-[hm-rise_320ms_var(--ease-spring)_both]',
         className,
       )}
       {...props}
     >
-      <span className="flex size-14 items-center justify-center rounded-pill border border-danger/25 bg-danger/10">
+      <span className="flex size-14 items-center justify-center rounded-md border border-danger/25 bg-danger/10">
         <AlertCircle className="size-7 text-danger" aria-hidden strokeWidth={1.75} />
       </span>
       <div className="flex flex-col gap-1.5">
@@ -67,7 +68,7 @@ export function ErrorState({
         <button
           type="button"
           onClick={copy}
-          className="mt-1 inline-flex items-center gap-1.5 rounded-sm px-2 py-1 font-price text-xs text-text-low outline-none transition-colors hover:text-text focus-visible:shadow-glow-md"
+          className="mt-1 inline-flex items-center gap-1.5 rounded-sm px-2 py-1 font-price text-xs text-text-low outline-none transition-colors hover:text-text focus-visible:focus-ring"
         >
           {copied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
           {copied ? 'Copiado' : `Ref: ${reference}`}

@@ -32,3 +32,23 @@ export const Confirmation = () => {
     </>
   );
 };
+
+/** Já aberto, para revisão visual/captura (portal segue o toggle de tema do Ladle). */
+export const OpenByDefault = () => (
+  <Modal
+    open
+    onClose={() => undefined}
+    title="Excluir agente?"
+    description="Esta ação não pode ser desfeita."
+    footer={
+      <>
+        <Button variant="ghost">Cancelar</Button>
+        <Button variant="danger">Excluir</Button>
+      </>
+    }
+  >
+    <p className="font-body text-sm text-text-mid">
+      O agente e seu histórico de execuções serão removidos permanentemente.
+    </p>
+  </Modal>
+);

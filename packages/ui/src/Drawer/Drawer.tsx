@@ -40,9 +40,9 @@ const panelBySide: Record<DrawerSide, string> = {
     'inset-y-0 right-0 h-dvh w-full max-w-md border-l border-border',
     // Colapsa para bottom-sheet no mobile.
     'max-sm:inset-x-0 max-sm:inset-y-auto max-sm:bottom-0 max-sm:h-auto max-sm:max-h-[85dvh]',
-    'max-sm:max-w-none max-sm:rounded-t-2xl max-sm:border-l-0 max-sm:border-t',
+    'max-sm:max-w-none max-sm:rounded-t-xl max-sm:border-l-0 max-sm:border-t',
   ),
-  bottom: 'inset-x-0 bottom-0 max-h-[85dvh] w-full rounded-t-2xl border-t border-border',
+  bottom: 'inset-x-0 bottom-0 max-h-[85dvh] w-full rounded-t-xl border-t border-border',
 };
 
 const hiddenBySide: Record<DrawerSide, string> = {
@@ -139,7 +139,7 @@ export function Drawer({
         aria-hidden
         onMouseDown={dismissible ? onClose : undefined}
         className={cn(
-          'absolute inset-0 bg-black/60 transition-opacity duration-200 ease-out',
+          'absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-(--dur-base) ease-ds',
           'motion-reduce:transition-none',
           visible ? 'opacity-100' : 'opacity-0',
         )}
@@ -153,15 +153,15 @@ export function Drawer({
         aria-describedby={description ? descId : undefined}
         onKeyDown={trapTab}
         className={cn(
-          'absolute z-10 flex flex-col bg-surface shadow-elev-4',
-          'transition-transform duration-200 ease-out motion-reduce:transition-none',
+          'absolute z-10 flex flex-col bg-surface shadow-ds-3',
+          'transition-transform duration-(--dur-base) ease-ds-spring motion-reduce:transition-none',
           panelBySide[side],
           visible ? visibleBySide[side] : hiddenBySide[side],
           className,
         )}
       >
         {(title || description || showClose) && (
-          <div className="flex items-start justify-between gap-4 border-b border-border-2 px-5 py-4">
+          <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
             <div className="min-w-0 flex-1">
               {title && (
                 <h2 id={titleId} className="truncate font-head text-lg font-semibold text-text">
@@ -187,7 +187,7 @@ export function Drawer({
         )}
         <div className="flex-1 overflow-y-auto px-5 py-4 font-body text-text">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-border-2 px-5 py-4">{footer}</div>
+          <div className="flex justify-end gap-2 border-t border-border px-5 py-4">{footer}</div>
         )}
       </div>
     </div>,

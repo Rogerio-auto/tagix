@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import { createPortal } from 'react-dom';
 import { AlertTriangle, CheckCircle2, Info, X, XCircle, type LucideIcon } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { IconButton } from '../IconButton/IconButton';
 
 export type ToastVariant = 'success' | 'error' | 'warn' | 'info';
 export type ToastPosition = 'top-right' | 'bottom';
@@ -29,11 +30,12 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+/* DS 3.0: vidro + chip de ícone tingido; a cor do estado está no chip e na borda, não numa barra lateral. */
 const variantConfig: Record<ToastVariant, { icon: LucideIcon; accent: string; iconColor: string }> = {
-  success: { icon: CheckCircle2, accent: 'border-l-success', iconColor: 'text-success' },
-  error: { icon: XCircle, accent: 'border-l-danger', iconColor: 'text-danger' },
-  warn: { icon: AlertTriangle, accent: 'border-l-warn', iconColor: 'text-warn' },
-  info: { icon: Info, accent: 'border-l-info', iconColor: 'text-info' },
+  success: { icon: CheckCircle2, accent: 'border-success/25', iconColor: 'bg-success/12 text-success' },
+  error: { icon: XCircle, accent: 'border-danger/30', iconColor: 'bg-danger/12 text-danger' },
+  warn: { icon: AlertTriangle, accent: 'border-warn/30', iconColor: 'bg-warn/12 text-warn' },
+  info: { icon: Info, accent: 'border-info/25', iconColor: 'bg-info/12 text-info' },
 };
 
 const positionClass: Record<ToastPosition, string> = {
@@ -109,26 +111,27 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                         aria-live={t.variant === 'error' ? 'assertive' : 'polite'}
                         aria-atomic="true"
                         className={cn(
-                          'pointer-events-auto flex w-80 items-start gap-3 rounded-md border border-border border-l-4 bg-surface-2 p-3 shadow-elev-3',
-                          'motion-safe:animate-[hm-toast-in_240ms_ease-out]',
+                          'pointer-events-auto flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-md border bg-surface-2 p-3 shadow-ds-2 supports-[backdrop-filter]:bg-surface-glass supports-[backdrop-filter]:backdrop-blur-md [@media(prefers-reduced-transparency:reduce)]:bg-surface-2 [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none',
+                          'motion-safe:animate-[hm-toast-in_250ms_var(--ease-spring)_both]',
                           accent,
                         )}
                       >
-                        <Icon className={cn('mt-0.5 size-5 shrink-0', iconColor)} aria-hidden />
+                        <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-xs', iconColor)}>
+                          <Icon className="size-4" aria-hidden />
+                        </span>
                         <div className="min-w-0 flex-1">
                           <p className="font-head text-sm font-semibold text-text">{t.title}</p>
                           {t.description && (
                             <p className="mt-0.5 font-body text-sm text-text-mid">{t.description}</p>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => dismiss(t.id)}
+                        <IconButton
                           aria-label="Fechar notificação"
-                          className="rounded-sm p-0.5 text-text-low outline-none hover:text-text focus-visible:shadow-glow-md"
-                        >
-                          <X className="size-4" />
-                        </button>
+                          icon={<X />}
+                          size="sm"
+                          onClick={() => dismiss(t.id)}
+                          className="-mr-1 -mt-1 shrink-0"
+                        />
                       </div>
                     );
                   })}
