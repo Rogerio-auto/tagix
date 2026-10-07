@@ -45,6 +45,13 @@ export const contacts = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     displayName: text('display_name'),
+    /**
+     * Nome de perfil do contato no canal (pushname, F70-S36). Atualizado pelo inbound a cada
+     * mudança; NUNCA substitui `displayName` (decisão de quem atende). A interface resolve:
+     * nome no sistema → nome do perfil → telefone.
+     */
+    profileName: text('profile_name'),
+    profileNameUpdatedAt: ts('profile_name_updated_at'),
     phone: text('phone'),
     email: citext('email'),
     avatarUrl: text('avatar_url'),

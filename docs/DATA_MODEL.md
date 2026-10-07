@@ -252,7 +252,9 @@ CREATE INDEX idx_team_members_member ON team_members(member_id);
 CREATE TABLE contacts (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id        uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  display_name        text,
+  display_name        text,                            -- nome no sistema (decisão de quem atende); o inbound só preenche se vazio
+  profile_name        text,                            -- F70-S36: nome de perfil no canal (pushname); atualizado a cada mudança, nunca sobrescreve display_name
+  profile_name_updated_at timestamptz,                 -- F70-S36: quando profile_name mudou pela última vez
   phone               text,                            -- MSISDN E.164 normalized
   email               citext,
   avatar_url          text,                            -- R2 key
