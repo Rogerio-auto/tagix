@@ -39,6 +39,12 @@ O produto inteiro passa a falar o DS 3.0: superfícies silenciosas, marca precis
 
 O nome atual de cada token (ex.: `--text-mid`, `--text-low`) é conferido no `tokens.css` pela S01. A tabela mostra a intenção.
 
+**Resultado da S01 (2026-10-07).** Valores finais, contraste medido nos dois temas e tokens novos estão
+em `DESIGN_SYSTEM.md` §2.4/§3.1 e em `packages/design-tokens/src/tokens.test.ts` (o teste é o contrato).
+Dois pontos que a tabela acima não mostra: `--text-low` escuro ficou em `#7E897E` (mínimo medido 4,57:1 em
+`--surface-3`); `--border-2` passou a ser **mais forte** que `--border` nos dois temas, como na maquete (no v2
+era mais sutil), e a varredura (S07/S08) deve rever os usos de `border-2` como hairline.
+
 ## 4. Slots (ondas)
 
 - **Onda 1:** S01 (tokens, fontes, tipografia e docs).

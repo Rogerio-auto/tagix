@@ -1,5 +1,5 @@
 /**
- * @hm/design-tokens — fonte única dos tokens do Design System v2 (dark-first).
+ * @hm/design-tokens — fonte única dos tokens do Design System 3.0 (dark-first).
  *
  * - Tokens CSS (runtime): `import '@hm/design-tokens/tokens.css'`.
  * - Preset Tailwind: `import { tailwindPreset } from '@hm/design-tokens/tailwind-preset'`.
@@ -29,10 +29,11 @@ export const brandColors = {
 
 /** Raios (DESIGN_SYSTEM §2.1). */
 export const radii = {
-  xs: '6px',
+  xs: '7px',
   sm: '10px',
   md: '14px',
-  lg: '20px',
+  lg: '18px',
+  xl: '24px',
   pill: '999px',
 } as const;
 

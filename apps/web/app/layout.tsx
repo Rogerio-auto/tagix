@@ -1,14 +1,16 @@
 import type { ReactNode } from 'react';
 import type { Metadata, Viewport } from 'next';
-import { Chakra_Petch, Manrope, Orbitron, Rajdhani } from 'next/font/google';
+import { IBM_Plex_Mono, Manrope, Space_Grotesk } from 'next/font/google';
 import { Providers } from './providers';
 import { RegisterServiceWorker } from '@/shared/pwa';
 import './globals.css';
 
-const head = Rajdhani({ subsets: ['latin'], weight: ['500', '600', '700'], variable: '--font-head-next', display: 'swap' });
+// DS 3.0 (ADR-002): três famílias, só o subset latin, display:swap. Os `variable`
+// alimentam `--font-{head,body,mono}` em @hm/design-tokens/tokens.css; Orbitron,
+// Rajdhani e Chakra Petch saíram.
+const head = Space_Grotesk({ subsets: ['latin'], weight: ['500', '600', '700'], variable: '--font-head-next', display: 'swap' });
 const body = Manrope({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-body-next', display: 'swap' });
-const price = Chakra_Petch({ subsets: ['latin'], weight: ['500', '600', '700'], variable: '--font-price-next', display: 'swap' });
-const display = Orbitron({ subsets: ['latin'], weight: ['600', '700', '800'], variable: '--font-display-next', display: 'swap' });
+const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-mono-next', display: 'swap' });
 
 export const metadata: Metadata = {
   title: 'Leadium',
@@ -39,8 +41,8 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
   // theme-color por esquema: pinta a barra do navegador/standalone com --bg.
   themeColor: [
-    { media: '(prefers-color-scheme: dark)', color: '#050505' },
-    { media: '(prefers-color-scheme: light)', color: '#f4f7f4' },
+    { media: '(prefers-color-scheme: dark)', color: '#070907' },
+    { media: '(prefers-color-scheme: light)', color: '#f3f6f1' },
   ],
 };
 
@@ -52,7 +54,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html
       lang="pt-BR"
       suppressHydrationWarning
-      className={`${head.variable} ${body.variable} ${price.variable} ${display.variable}`}
+      className={`${head.variable} ${body.variable} ${mono.variable}`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />

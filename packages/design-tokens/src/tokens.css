@@ -1,5 +1,9 @@
 /*
- * @hm/design-tokens — Design System v2 (dark-first).
+ * @hm/design-tokens — Design System 3.0 "Agency OS" (dark-first), traduzido para
+ * os nomes semânticos do v2 (F72-S01; docs/features/DS3_ADOCAO.md §3).
+ * Nenhum token do v2 foi renomeado ou removido: mudam valores, entram nomes novos.
+ * A maquete docs/design/ds-3.0-agency-os.html é referência de aparência; seu :root
+ * NÃO é colado aqui (DESIGN_SYSTEM_V3_DELTA §3.1).
  * Fonte única dos tokens CSS. Componentes consomem var(--token); NUNCA hex em JSX.
  * Import: `import '@hm/design-tokens/tokens.css'` no globals.css do app.
  */
@@ -11,32 +15,39 @@
   /* Marca (verde-neon precioso — 1 por tela) */
   --brand: #1fff13;
   --brand-strong: #16e00a; /* hover / pressed */
-  --brand-bright: #5bff51; /* highlights, métricas */
+  --brand-bright: #72ff69; /* highlights, métricas (DS 3.0) */
   --brand-price: #25f018; /* preços (landing) */
-  --brand-soft: #7feb7b; /* destaque em títulos */
+  --brand-soft: #b1ffaa; /* destaque em títulos, eyebrow (DS 3.0) */
   --brand-faint: #abffa7; /* highlights claros */
 
-  /* Estados */
-  --danger: #ff4d4d;
+  /* Estados (tons do DARK; o claro redefine em [data-theme='light'], com
+   * contraste ≥4,5:1 como texto — o verde/vermelho/âmbar do dark não servem no claro). */
+  --danger: #ff625f;
   --danger-bg: #2a0e0e;
-  --warn: #ffc53d;
+  --warn: #f6c85f;
   --warn-bg: #2b1d00;
-  --info: #3da8ff;
+  --info: #67b7ff;
   --info-bg: #0a1a2a;
   --success: #25f018;
   --success-bg: #08200a;
 
-  /* Tipografia */
-  --font-display: 'Orbitron', system-ui, sans-serif;
-  --font-price: 'Chakra Petch', monospace, sans-serif;
-  --font-head: 'Rajdhani', system-ui, sans-serif;
-  --font-body: 'Manrope', system-ui, sans-serif;
+  /* Tipografia (ADR-002). `--font-*-next` são injetados por `next/font` no <html>;
+   * fora do Next (Ladle, e-mail, docs) cai no nome da família. `--font-price` e
+   * `--font-display` são aliases: o número vive em mono, o display na família de head. */
+  --font-head: var(--font-head-next, 'Space Grotesk'), 'Manrope', system-ui, sans-serif;
+  --font-body: var(--font-body-next, 'Manrope'), system-ui, sans-serif;
+  --font-mono:
+    var(--font-mono-next, 'IBM Plex Mono'), ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+  --font-price: var(--font-mono);
+  --font-display: var(--font-head);
 
   /* Raio */
-  --r-xs: 6px;
+  --r-xs: 7px;
   --r-sm: 10px;
   --r-md: 14px;
-  --r-lg: 20px;
+  --r-lg: 18px;
+  --r-xl: 24px;
   --r-pill: 999px;
 
   /* Espaçamento (base-8 + extras) */
@@ -63,15 +74,15 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Escala tipográfica editorial (DESIGN_SYSTEM §3) — namespace Tailwind 4
+ * Escala tipográfica editorial (DESIGN_SYSTEM §3, ADR-002) — namespace Tailwind 4
  * `--text-*`. Gera os utilitários `text-h1 … text-display`, cada um aplicando
  * size + line-height + tracking + weight numa única classe. Espelha
- * `src/typography.ts` (fonte única): manter os dois em sincronia.
+ * `src/typography.ts` (fonte única) e o teste `tokens.test.ts` falha se os dois
+ * divergirem: manter em sincronia.
  *
- * Escala editorial (Linear/Stripe/Vercel), não a genérica do Tailwind: heads
- * apertadas (rítmo cinematográfico), corpo arejado (17px/1.6) para leitura
- * longa, preço/kicker travados. Coexiste com `text-sm`/`text-xs` — a adoção
- * nas telas é gradual (follow-up).
+ * Heads em Space Grotesk 600 com tracking negativo (−4,5% no h1, −3,5% nos
+ * demais); corpo Manrope 500 · 16px · 1,65 (piso de 16px do iOS, MOBILE_UX §1.5);
+ * número em IBM Plex Mono com `tabular-nums` (ver `.text-price` abaixo).
  *
  * Inerte fora do pipeline Tailwind (at-rule desconhecida é ignorada pelo
  * browser); os valores só viram utilitários quando compilados com `tailwindcss`.
@@ -79,28 +90,28 @@
 @theme {
   --text-h1: 60px;
   --text-h1--line-height: 1.04;
-  --text-h1--letter-spacing: -0.5px;
+  --text-h1--letter-spacing: -0.045em;
   --text-h1--font-weight: 600;
 
   --text-h2: 40px;
   --text-h2--line-height: 1.08;
-  --text-h2--letter-spacing: -0.3px;
+  --text-h2--letter-spacing: -0.035em;
   --text-h2--font-weight: 600;
 
   --text-h3: 28px;
   --text-h3--line-height: 1.15;
-  --text-h3--letter-spacing: -0.2px;
+  --text-h3--letter-spacing: -0.035em;
   --text-h3--font-weight: 600;
 
   --text-h4: 21px;
   --text-h4--line-height: 1.25;
-  --text-h4--letter-spacing: -0.1px;
+  --text-h4--letter-spacing: -0.035em;
   --text-h4--font-weight: 600;
 
-  --text-body: 17px;
-  --text-body--line-height: 1.6;
+  --text-body: 16px;
+  --text-body--line-height: 1.65;
   --text-body--letter-spacing: 0;
-  --text-body--font-weight: 400;
+  --text-body--font-weight: 500;
 
   --text-small: 13px;
   --text-small--line-height: 1.5;
@@ -110,44 +121,87 @@
   --text-price: 40px;
   --text-price--line-height: 1;
   --text-price--letter-spacing: 0;
-  --text-price--font-weight: 600;
+  --text-price--font-weight: 500;
 
   --text-display: 16px;
   --text-display--line-height: 1.1;
-  --text-display--letter-spacing: 1.5px;
+  --text-display--letter-spacing: -0.02em;
   --text-display--font-weight: 700;
 }
 
+/* Família e numeração que um `--text-*` do Tailwind não carrega: `text-price`
+ * é mono e tabular (coluna numérica alinha); `text-display` usa a família de head. */
+.text-price {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.text-display {
+  font-family: var(--font-head);
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
- * Semânticos — DARK (default) (DESIGN_SYSTEM §2.2)
+ * Utilitários dos tokens NOVOS do DS 3.0 (`bg-bg-elevated`, `bg-surface-glass`,
+ * `text-violet`, `text-brand-text`, `shadow-ds-1..3`, `shadow-glow`,
+ * `rounded-xl`). Os valores vivem nos blocos de tema abaixo; aqui só o espelho
+ * Tailwind (mesmo padrão de `@hm/ui/styles/theme.css`). `font-mono` já usa o
+ * `--font-mono` do :root (IBM Plex Mono).
+ * ───────────────────────────────────────────────────────────────────────── */
+@theme {
+  --color-bg-elevated: var(--bg-elevated);
+  --color-surface-glass: var(--surface-glass);
+  --color-violet: var(--violet);
+  --color-brand-text: var(--brand-text);
+
+  --shadow-ds-1: var(--shadow-1);
+  --shadow-ds-2: var(--shadow-2);
+  --shadow-ds-3: var(--shadow-3);
+  --shadow-glow: var(--glow);
+
+  --radius-xl: var(--r-xl);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Semânticos — DARK (default) (DESIGN_SYSTEM §2.2; valores DS 3.0)
  * ───────────────────────────────────────────────────────────────────────── */
 :root,
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #050505;
-  --bg-alt: #0a0a0a;
-  --surface: #101311;
-  --surface-2: #161a17;
-  --surface-3: #1e231f;
-  --surface-inset: #0c0e0d;
+  --bg: #070907;
+  --bg-alt: #0a0d0b;
+  --bg-elevated: #0a0d0b; /* DS 3.0; mesmo valor de --bg-alt (o nome do v2 permanece) */
+  --surface: #0e120f;
+  --surface-2: #131814;
+  --surface-3: #192019;
+  --surface-inset: #0a0e0b; /* entre --bg e --surface */
+  --surface-glass: rgba(17, 22, 18, 0.78); /* topbar/overlay com backdrop-blur */
 
-  --text: #f2f5f2;
-  --text-mid: #b9c2ba;
-  /* A11y (F10-S05): de #7e867f (4.26:1 em surface-3 — falhava AA) para #a3aca4,
-     que atinge AA em toda superfície (≥6.84:1) e AAA em bg/bg-alt/surface-inset.
-     Mesma matiz verde-acinzentada; só mais luminoso. */
-  --text-low: #a3aca4;
-  --text-on-brand: #04210a;
+  --text: #f4f7f3;
+  --text-mid: #c3cbc1;
+  /* A11y: valor do DS 3.0. Mínimo medido 4,57:1 (em --surface-3): AA em toda
+     superfície; o #a3aca4 do F10-S05 (AAA) cedeu lugar à hierarquia do DS 3.0. */
+  --text-low: #7e897e;
+  --text-on-brand: #071108;
 
-  --border: #243026;
-  --border-2: #161c17;
-  --border-brand: #2bff1f40;
+  /* Texto/ícone de marca. A marca (--brand) é fundo/acento; quando precisa ser
+     LETRA, usa este token (≥4,5:1 nos dois temas). */
+  --brand-text: #72ff69;
+  --violet: #a58bff;
+
+  --border: #202920;
+  --border-2: #2a352a;
+  --border-brand: rgba(31, 255, 19, 0.32);
 
   --elev-1: 0 1px 2px rgba(0, 0, 0, 0.35);
   --elev-2: 0 2px 6px rgba(0, 0, 0, 0.45);
   --elev-3: 0 4px 12px rgba(0, 0, 0, 0.55);
   --elev-4: 0 8px 24px rgba(0, 0, 0, 0.65);
+
+  /* DS 3.0: 1 = hairline, 2 = card flutuante, 3 = overlay/modal. */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-2: 0 12px 32px rgba(0, 0, 0, 0.2);
+  --shadow-3: 0 24px 70px rgba(0, 0, 0, 0.35);
+  --glow: 0 0 0 1px rgba(31, 255, 19, 0.1), 0 0 32px rgba(31, 255, 19, 0.08);
 
   --glow-sm: 0 0 0 2px rgba(31, 255, 19, 0.18);
   --glow-md:
@@ -163,35 +217,57 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
- * Semânticos — LIGHT (DESIGN_SYSTEM §2.2; elev/glow ajustados para fundo claro)
+ * Semânticos — LIGHT (DESIGN_SYSTEM §2.2; DS 3.0 com a correção de AA do
+ * DESIGN_SYSTEM_V3_DELTA §4). Todo texto ≥4,5:1 (tokens.test.ts).
  * ───────────────────────────────────────────────────────────────────────── */
 [data-theme='light'] {
   color-scheme: light;
 
-  --bg: #f4f7f4;
-  --bg-alt: #ecf1ec;
+  --bg: #f3f6f1;
+  --bg-alt: #eef2ec;
+  --bg-elevated: #eef2ec;
   --surface: #ffffff;
-  --surface-2: #f4f7f4;
-  --surface-3: #e5ebe5;
-  --surface-inset: #ecf1ec;
+  --surface-2: #f8faf7;
+  --surface-3: #eef3ec;
+  --surface-inset: #eef2ec;
+  --surface-glass: rgba(255, 255, 255, 0.82);
 
-  --text: #0c140d;
-  /* A11y (F10-S05): de #4b5b4d (5.98:1 em surface-3 — só AA) para #414e42,
-     elevando o texto secundário/labels a AAA (≥7.25:1 em toda superfície). */
-  --text-mid: #414e42;
-  /* A11y (F10-S05): de #7e867f (3.10:1 em surface-3 — falhava até AA no claro)
-     para #4e584f, atingindo AA em toda superfície (≥6.12:1) e AAA em surface. */
-  --text-low: #4e584f;
-  --text-on-brand: #04210a;
+  --text: #111811;
+  --text-mid: #465045;
+  /* DS 3.0 trazia #788277 (3,99:1, só texto grande). Corrigido para #5f6a5e:
+     mínimo 5,00:1 (em --bg-alt). */
+  --text-low: #5f6a5e;
+  --text-on-brand: #071108;
 
-  --border: #d3dcd4;
-  --border-2: #e5ebe5;
-  --border-brand: #1fff1340;
+  /* A marca no claro (#16e00a sobre branco = 1,79:1) NUNCA é cor de texto:
+     texto/ícone de marca usa este verde profundo. */
+  --brand-text: #0b6e08;
+  --violet: #6b4fd8;
+
+  --border: #dde5da;
+  --border-2: #cfd9cc;
+  --border-brand: rgba(22, 224, 10, 0.3);
+
+  /* Estados no claro: tons escuros o bastante para texto (≥4,5:1 sobre as
+     superfícies e sobre o próprio -bg). */
+  --danger: #b42318;
+  --danger-bg: #fdecea;
+  --warn: #8a5300;
+  --warn-bg: #fff3d1;
+  --info: #0b5fb0;
+  --info-bg: #e5f1fd;
+  --success: #12700d;
+  --success-bg: #e3f6e1;
 
   --elev-1: 0 1px 2px rgba(16, 24, 18, 0.06);
   --elev-2: 0 2px 6px rgba(16, 24, 18, 0.1);
   --elev-3: 0 4px 12px rgba(16, 24, 18, 0.12);
   --elev-4: 0 8px 24px rgba(16, 24, 18, 0.16);
+
+  --shadow-1: 0 1px 3px rgba(31, 42, 31, 0.08);
+  --shadow-2: 0 12px 32px rgba(31, 42, 31, 0.08);
+  --shadow-3: 0 24px 70px rgba(31, 42, 31, 0.12);
+  --glow: 0 0 0 1px rgba(22, 224, 10, 0.1), 0 10px 40px rgba(22, 224, 10, 0.1);
 
   --glow-sm: 0 0 0 2px rgba(31, 255, 19, 0.22);
   --glow-md:

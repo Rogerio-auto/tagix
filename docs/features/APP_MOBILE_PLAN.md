@@ -110,7 +110,7 @@ atendente. Ele abre o telefone entre uma tarefa e outra e quer responder três p
 
 ### 3.1 As telas do app
 
-**Quatro abas fixas + "Mais".** A v0.1 deste documento propunha cinco abas; a proposta DS 3.0
+**Quatro abas fixas + "Mais"** (Home, Inbox, Agenda, Mais; decisão travada na F72, [`DS3_ADOCAO.md`](./DS3_ADOCAO.md) §2.3). A v0.1 deste documento propunha cinco abas; a proposta DS 3.0
 (ver [`../DESIGN_SYSTEM_V3_DELTA.md`](../DESIGN_SYSTEM_V3_DELTA.md) §6) propõe quatro, e está certa:
 quatro é a convenção iOS, cabe na zona do polegar, e Resultado é conteúdo da Home, não destino.
 
