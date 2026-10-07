@@ -5,6 +5,7 @@ import {
   type UserResponse,
 } from '@supabase/supabase-js';
 import { z } from 'zod';
+import { createLogger } from '@hm/logger';
 import {
   AuthError,
   resolveEmailRedirect,
@@ -17,6 +18,8 @@ import {
   type InviteResult,
   type SignUpResult,
 } from '@hm/shared';
+
+const log = createLogger('info', { svc: '@hm/api', mod: 'auth.supabase' });
 
 /**
  * Falha de INFRA na verificação de token (rede/timeout/5xx do Supabase) — distinta
@@ -416,7 +419,10 @@ export class SupabaseAuthProvider implements IAccountAuthProvider {
    *
    * 4xx (expirado, já usado, inexistente) → `null`. Rede, 429 e 5xx → `provider_error`.
    */
-  async verifyEmailOwnership(tokenHash: string, type: EmailProofType): Promise<AuthIdentity | null> {
+  async verifyEmailOwnership(
+    tokenHash: string,
+    type: EmailProofType,
+  ): Promise<AuthIdentity | null> {
     if (!/^[A-Za-z0-9_-]{8,256}$/.test(tokenHash)) return null;
     let res: Response;
     try {
@@ -492,14 +498,26 @@ export class SupabaseAuthProvider implements IAccountAuthProvider {
 
   /** Reenvia/dispara o email de confirmação (anti-enumeração: sempre resolve). */
   private async dispatchVerificationEmail(email: string): Promise<void> {
+    // best-effort e sem sinal para o cliente (anti-enumeração), mas nunca mudo para nós:
+    // o supabase-js devolve a recusa em `error` (SMTP, limite de envio, template) em vez
+    // de lançar. Sem este log, "o email não chegou" não deixava rastro. Nunca loga o email.
     try {
-      await this.client.auth.resend({
+      const { error } = await this.client.auth.resend({
         type: 'signup',
         email,
         options: { emailRedirectTo: this.redirectFor('/verify') },
       });
-    } catch {
-      // best-effort; não revela existência do email.
+      if (error) {
+        log.warn('supabase recusou o email de confirmação', {
+          status: error.status ?? null,
+          code: error.code ?? null,
+          reason: error.message,
+        });
+      }
+    } catch (err) {
+      log.warn('falha de rede ao pedir o email de confirmação', {
+        reason: err instanceof Error ? err.message : 'unknown',
+      });
     }
   }
 

@@ -11,6 +11,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as SupabaseModule from '@supabase/supabase-js';
+import type * as LoggerModule from '@hm/logger';
 import { AuthError } from '@hm/shared';
 
 const getUserMock = vi.fn<() => Promise<unknown>>();
@@ -18,6 +19,15 @@ const signInWithPasswordMock = vi.fn<() => Promise<unknown>>();
 const signInWithOtpMock = vi.fn<(args: unknown) => Promise<unknown>>();
 const resendMock = vi.fn<() => Promise<unknown>>();
 const verifyOtpMock = vi.fn<() => Promise<unknown>>();
+const { logWarnMock } = vi.hoisted(() => ({ logWarnMock: vi.fn() }));
+
+vi.mock('@hm/logger', async (importOriginal) => {
+  const actual = await importOriginal<typeof LoggerModule>();
+  return {
+    ...actual,
+    createLogger: () => ({ warn: logWarnMock, info: vi.fn(), error: vi.fn(), debug: vi.fn() }),
+  };
+});
 
 vi.mock('@supabase/supabase-js', async (importOriginal) => {
   const actual = await importOriginal<typeof SupabaseModule>();
@@ -336,6 +346,38 @@ describe('SupabaseAuthProvider.signUp — idempotência usa o lookup exato', () 
   });
 });
 
+describe('SupabaseAuthProvider.resendVerification — recusa do Supabase não some', () => {
+  beforeEach(() => logWarnMock.mockReset());
+
+  it('error devolvido (SMTP/limite) → resolve sem lançar e registra status e código, sem o email', async () => {
+    resendMock.mockResolvedValue({
+      data: {},
+      error: {
+        status: 429,
+        code: 'over_email_send_rate_limit',
+        message: 'email rate limit exceeded',
+      },
+    });
+    await expect(makeProvider().resendVerification('ana@x.com')).resolves.toBeUndefined();
+    expect(logWarnMock).toHaveBeenCalledTimes(1);
+    const [, fields] = logWarnMock.mock.calls[0] as [string, Record<string, unknown>];
+    expect(fields).toMatchObject({ status: 429, code: 'over_email_send_rate_limit' });
+    expect(JSON.stringify(logWarnMock.mock.calls)).not.toContain('ana@x.com');
+  });
+
+  it('rede falhou → resolve e registra', async () => {
+    resendMock.mockRejectedValue(new Error('fetch failed'));
+    await expect(makeProvider().resendVerification('ana@x.com')).resolves.toBeUndefined();
+    expect(logWarnMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('sucesso → nada no log', async () => {
+    resendMock.mockResolvedValue({ data: {}, error: null });
+    await makeProvider().resendVerification('ana@x.com');
+    expect(logWarnMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('SupabaseAuthProvider.sendInvite', () => {
   it('sem conta → POST /invite com redirect_to no app', async () => {
     fetchMock.mockResolvedValueOnce(json(goTrueUser(ID_A, 'ana@x.com', { invited_at: 'x' })));
@@ -508,9 +550,7 @@ describe('SupabaseAuthProvider.verifyEmailOwnership (F71-S05, prova de posse)', 
 
   it('invite → POST /verify type=invite com a anon key; devolve a conta; revoga a sessão', async () => {
     fetchMock
-      .mockResolvedValueOnce(
-        json({ access_token: 'sess-1', user: goTrueUser(ID_A, 'Ana@X.com') }),
-      )
+      .mockResolvedValueOnce(json({ access_token: 'sess-1', user: goTrueUser(ID_A, 'Ana@X.com') }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     await expect(makeProvider().verifyEmailOwnership(HASH, 'invite')).resolves.toEqual({
       authUserId: ID_A,
@@ -552,7 +592,9 @@ describe('SupabaseAuthProvider.verifyEmailOwnership (F71-S05, prova de posse)', 
       code: 'provider_error',
     });
     fetchMock.mockResolvedValueOnce(json({ msg: 'slow down' }, 429));
-    await expect(makeProvider().verifyEmailOwnership(HASH, 'invite')).rejects.toBeInstanceOf(AuthError);
+    await expect(makeProvider().verifyEmailOwnership(HASH, 'invite')).rejects.toBeInstanceOf(
+      AuthError,
+    );
     fetchMock.mockResolvedValueOnce(json({ msg: 'boom' }, 503));
     await expect(makeProvider().verifyEmailOwnership(HASH, 'magiclink')).rejects.toBeInstanceOf(
       AuthError,
