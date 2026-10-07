@@ -27,6 +27,12 @@
  * `delaySeconds` nunca era lido; a campanha nunca chegava a `completed`; e o
  * teto diario (`daily_limit`/`messages_sent_today`) existia so no schema.
  *
+ * F58-S12: antes de gravar, o modelo do passo passa pelo catalogo sincronizado (pausado/
+ * recusado => nenhum job, campanha pausada com orientacao) e as variaveis sao resolvidas
+ * com os dados DO contato (`campaigns/outbox/bindings.ts`): o job ja nasce com os
+ * componentes da Graph daquele destinatario. Pausa/cancelamento posteriores seguram o que
+ * ainda nao saiu da outbox (trigger `campaign_outbox_gate`, migracao 0095).
+ *
  * F70-S13: conversa que o disparo ABRIU anuncia `conversation.opened` (construtor do
  * catalogo, eventId canonico `<conversa>:opened`). A criacao e upsert por
  * `(channel_id, remote_id)`: o perdedor de uma corrida com o inbound reusa a
@@ -65,6 +71,12 @@ import { decideDispatchGate, type DispatchGateDecision } from './rate';
 import type { SendWindows } from './windows';
 import { subscriptionGate, type SubscriptionGate } from '../lib/subscription-gate';
 import {
+  TEMPLATE_PAUSE_GUIDANCE,
+  catalogBlockReason,
+  renderRecipientComponents,
+  type TemplatePauseReason,
+} from './outbox';
+import {
   advanceAfterDispatch,
   afterDispatchFailure,
   campaignIsExhausted,
@@ -84,6 +96,7 @@ const {
   campaignDeliveries,
   channels,
   channelSecrets,
+  channelMessageTemplates,
   contacts,
   conversations,
   messages,
@@ -195,6 +208,22 @@ class TxAbort<T> extends Error {
   }
 }
 
+/**
+ * F58-S12: o modelo de mensagem do passo nao pode sair (catalogo diz pausado/recusado,
+ * ou as variaveis nao batem com o modelo). Desfaz o disparo inteiro; quem pega pausa a
+ * campanha com o motivo, numa transacao propria.
+ */
+class TemplateBlocked extends Error {
+  constructor(
+    readonly reason: TemplatePauseReason,
+    readonly detail: readonly string[],
+    readonly templateName: string | null,
+  ) {
+    super(`campaign template blocked: ${reason}`);
+    this.name = 'TemplateBlocked';
+  }
+}
+
 /** Acoes de ciclo de vida gravadas em `audit_logs` (motivo observavel). */
 type CampaignStatusAction = 'campaign.started' | 'campaign.paused' | 'campaign.completed';
 
@@ -209,6 +238,8 @@ async function recordStatusChange(
     readonly campaignId: string;
     readonly action: CampaignStatusAction;
     readonly reason: string;
+    /** Orientacao propria do motivo (default: `describeStopReason`). */
+    readonly message?: string;
     readonly extra?: Record<string, unknown>;
   },
 ): Promise<void> {
@@ -218,7 +249,40 @@ async function recordStatusChange(
     action: args.action,
     resourceType: 'campaign',
     resourceId: args.campaignId,
-    metadata: { reason: args.reason, message: describeStopReason(args.reason), ...args.extra },
+    metadata: {
+      reason: args.reason,
+      message: args.message ?? describeStopReason(args.reason),
+      ...args.extra,
+    },
+  });
+}
+
+/**
+ * F58-S12: pausa por modelo de mensagem (so se `running`), com motivo + orientacao. O
+ * UPDATE de status dispara o trigger `campaign_outbox_gate`, que retem na mesma
+ * transacao os jobs da campanha ainda nao publicados.
+ */
+async function pauseForTemplate(
+  campaign: RunningCampaign,
+  blocked: TemplateBlocked,
+  now: Date,
+): Promise<boolean> {
+  return withWorkspace(campaign.workspaceId, async (tx) => {
+    const updated = await tx
+      .update(campaigns)
+      .set({ status: 'paused', nextTickAt: null, updatedAt: now })
+      .where(and(eq(campaigns.id, campaign.id), eq(campaigns.status, 'running')))
+      .returning({ id: campaigns.id });
+    if (updated.length === 0) return false;
+    await recordStatusChange(tx, {
+      workspaceId: campaign.workspaceId,
+      campaignId: campaign.id,
+      action: 'campaign.paused',
+      reason: blocked.reason,
+      message: TEMPLATE_PAUSE_GUIDANCE[blocked.reason],
+      extra: { templateName: blocked.templateName, detail: [...blocked.detail] },
+    });
+    return true;
   });
 }
 
@@ -677,7 +741,12 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
         }
 
         const [contact] = await tx
-          .select({ phone: contacts.phone })
+          .select({
+            phone: contacts.phone,
+            displayName: contacts.displayName,
+            email: contacts.email,
+            customFields: contacts.customFields,
+          })
           .from(contacts)
           .where(eq(contacts.id, dispatch.contactId));
         if (!contact || !contact.phone) {
@@ -685,6 +754,46 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           return settled({ kind: 'invalid', reason: 'missing_phone' });
         }
         const phone = contact.phone;
+
+        // F58-S12 — modelo e variaveis ANTES de qualquer gravacao. (a) O catalogo
+        // sincronizado diz que a Meta nao aceita mais o modelo: nenhum job sai e a
+        // campanha pausa com orientacao. (b) As variaveis viram componentes da Graph com
+        // os dados DESTE contato (fallback obrigatorio); o job ja nasce resolvido.
+        const [catalog] =
+          step.templateName === null
+            ? []
+            : await tx
+                .select({
+                  status: channelMessageTemplates.status,
+                  isAvailable: channelMessageTemplates.isAvailable,
+                  components: channelMessageTemplates.components,
+                })
+                .from(channelMessageTemplates)
+                .where(
+                  and(
+                    eq(channelMessageTemplates.channelId, campaign.channelId),
+                    eq(channelMessageTemplates.name, step.templateName),
+                    eq(channelMessageTemplates.language, step.languageCode),
+                  ),
+                )
+                .limit(1);
+        const blockedBy = catalogBlockReason(catalog ?? null);
+        if (blockedBy !== null) {
+          throw new TemplateBlocked(blockedBy, [catalog?.status ?? ''], step.templateName);
+        }
+        const rendered = renderRecipientComponents({
+          stepComponents: step.templateComponents,
+          catalogComponents: catalog?.components ?? null,
+          contact: {
+            displayName: contact.displayName,
+            phone: contact.phone,
+            email: contact.email,
+            customFields: contact.customFields,
+          },
+        });
+        if (!rendered.ok) {
+          throw new TemplateBlocked(rendered.reason, rendered.detail, step.templateName);
+        }
 
         // (2) Idempotencia: a UNIQUE decide se este step ja saiu alguma vez.
         const inserted = await tx
@@ -811,7 +920,8 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
           chatId: phone,
           templateName: step.templateName,
           languageCode: step.languageCode,
-          components: step.templateComponents ?? [],
+          // F58-S12: componentes ja resolvidos para este contato (nunca o contrato cru).
+          components: rendered.components,
         };
         // F70-S16: o job vai para a outbox junto com o resto, nesta transacao.
         return {
@@ -829,6 +939,18 @@ export function createCampaignTickPorts(deps: CampaignDbDeps): CampaignTickPorts
         });
       } catch (err: unknown) {
         if (err instanceof TxAbort) return err.value as DispatchOutcome;
+        if (err instanceof TemplateBlocked) {
+          // Nada do disparo ficou gravado (rollback). Pausa com o motivo; o tick ve
+          // `not_running` e para o lote sem reagendar — quem retoma e a pessoa.
+          const pausedNow = await pauseForTemplate(campaign, err, now);
+          deps.logger.warn('campaigns: modelo de mensagem bloqueia o envio — campanha pausada', {
+            campaignId: campaign.id,
+            reason: err.reason,
+            detail: err.detail,
+            pausedNow,
+          });
+          return { kind: 'gate_closed', reason: 'not_running', retryAt: null };
+        }
         throw err;
       }
     },

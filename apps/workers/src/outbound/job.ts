@@ -35,9 +35,24 @@ export const outboundMediaKindSchema = z.enum([
   'sticker',
 ]);
 
-/** Componente de template HSM (estrutura validada de fato no serializer WA). */
+/**
+ * Componente de template HSM (estrutura validada de fato no serializer WA).
+ *
+ * F58-S12: botão com variável carrega `sub_type` + `index` (0-based, string) — sem os
+ * dois a Graph não sabe qual botão recebe o parâmetro e recusa o envio. Antes o
+ * `z.object` os descartava em silêncio no consumo do job.
+ *
+ * Opcionais de propósito: o nó `template` do Flow Builder ainda produz botão sem os dois.
+ * Recusar aqui mandaria o job para a DLQ com a mensagem presa em `pending`; deixando
+ * passar, a Meta recusa e a mensagem vira `failed` visível, como antes.
+ */
 export const templateComponentSchema = z.object({
   type: z.enum(['header', 'body', 'button']),
+  sub_type: z.string().min(1).max(40).optional(),
+  index: z
+    .string()
+    .regex(/^\d{1,2}$/u)
+    .optional(),
   parameters: z.array(z.unknown()).optional(),
 });
 

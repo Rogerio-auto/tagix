@@ -666,6 +666,13 @@
       "when": 1781452855000,
       "tag": "0094_f71_member_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1781452856000,
+      "tag": "0095_f58_campaign_outbox",
+      "breakpoints": true
     }
   ]
 }

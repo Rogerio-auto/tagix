@@ -8,7 +8,7 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { reliableQueues, isReliableQueue, defaultPolicyForQueue } from './retry';
 import { QUEUES } from './topology';
-import { sendToQueueWithBackpressure } from './publish';
+import { MqChannelClosedError, sendToQueueWithBackpressure } from './publish';
 import { mqStats, resetMqStats } from './stats';
 
 describe('reliableQueues (INF-03/DB-07)', () => {
@@ -70,5 +70,34 @@ describe('sendToQueueWithBackpressure (INF-12)', () => {
     ch.emit('drain');
     await pending;
     expect(mqStats().publishBackpressure).toBe(1);
+  });
+
+  // F58-S12: canal que cai com o buffer cheio nunca emite `drain` — a espera não pode
+  // ficar pendurada para sempre nem parecer sucesso.
+  it('rejeita com MqChannelClosedError quando o canal fecha antes de drenar', async () => {
+    const ch = new FakeChannel(false);
+    const pending = sendToQueueWithBackpressure(ch as never, QUEUES.flows, { type: 't' } as never);
+    ch.emit('close');
+    await expect(pending).rejects.toBeInstanceOf(MqChannelClosedError);
+    expect(ch.listenerCount('drain')).toBe(0);
+    expect(ch.listenerCount('close')).toBe(0);
+  });
+
+  it('propaga o erro do canal e não deixa ouvintes para trás', async () => {
+    const ch = new FakeChannel(false);
+    const pending = sendToQueueWithBackpressure(ch as never, QUEUES.flows, { type: 't' } as never);
+    ch.emit('error', new Error('conexão perdida'));
+    await expect(pending).rejects.toThrow('conexão perdida');
+    expect(ch.listenerCount('drain')).toBe(0);
+    expect(ch.listenerCount('close')).toBe(0);
+  });
+
+  it('drain normal remove o ouvinte de close (sem vazamento a cada publicação)', async () => {
+    const ch = new FakeChannel(false);
+    const pending = sendToQueueWithBackpressure(ch as never, QUEUES.flows, { type: 't' } as never);
+    ch.emit('drain');
+    await pending;
+    expect(ch.listenerCount('close')).toBe(0);
+    expect(ch.listenerCount('drain')).toBe(0);
   });
 });

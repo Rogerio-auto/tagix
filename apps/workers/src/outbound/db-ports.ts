@@ -17,6 +17,7 @@ import { decryptSecret, enqueueOutbox, schema, withWorkspace, type DbTx } from '
 import type { ChannelProvider } from '@hm/shared';
 import { previewFor } from '@hm/shared';
 import { nextViewStatus } from '../inbound/status';
+import { applyCampaignDeliveryOutcome } from '../campaigns/outbox/outcome';
 import type { RecordAttemptInput, SendAttemptStore } from './retry-policy';
 import type {
   ChannelResolver,
@@ -201,8 +202,10 @@ export const defaultSendAttemptStore: SendAttemptStore = new DbSendAttemptStore(
  *  - UPDATE `messages.view_status`/`external_id`/`failed_reason` casando por id e
  *    carimba `updated_at`;
  *  - no `sent`, bumpa `conversation.last_message_*`;
- *  - grava `input.outbox` (o `message.sent`, F70-S20). Commit leva os três; qualquer
- *    falha desfaz os três. A policy `outbox_tenant_insert` exige que o evento seja do
+ *  - mensagem de campanha: grava o desfecho na `campaign_deliveries` (e pausa a campanha
+ *    se a Meta recusou o MODELO) — F58-S12, `campaigns/outbox/outcome.ts`;
+ *  - grava `input.outbox` (o `message.sent`, F70-S20). Commit leva tudo; qualquer
+ *    falha desfaz tudo. A policy `outbox_tenant_insert` exige que o evento seja do
  *    workspace da transação: evento de outro tenant derruba a gravação (fail-closed).
  *
  * O evento é gravado mesmo se a linha da mensagem não estiver visível (apagada entre
@@ -235,6 +238,7 @@ async function applyStatus(
       type: messages.type,
       senderType: messages.senderType,
       createdAt: messages.createdAt,
+      metadata: messages.metadata,
     })
     .from(messages)
     .where(eq(messages.id, input.messageId))
@@ -259,6 +263,20 @@ async function applyStatus(
       updatedAt: new Date(),
     })
     .where(eq(messages.id, current.id));
+
+  // F58-S12: mensagem de campanha devolve o desfecho DIRETO à delivery (e, se a Meta
+  // recusou o modelo, pausa a campanha) — na mesma transação do status, sem esperar o
+  // webhook, que não existe para envio que falhou. Mensagem comum não toca em nada.
+  await applyCampaignDeliveryOutcome(tx, {
+    workspaceId: input.workspaceId,
+    messageId: current.id,
+    metadata: current.metadata,
+    status: input.status,
+    ...(input.externalId !== undefined ? { externalId: input.externalId } : {}),
+    ...(input.errorCode !== undefined ? { errorCode: input.errorCode } : {}),
+    ...(input.errorMessage !== undefined ? { errorMessage: input.errorMessage } : {}),
+    at: new Date(),
+  });
 
   // Realtime da ChatList (paridade com o inbound `bumpConversation`): ao ENVIAR
   // (status 'sent'), bumpa `conversation.last_message_*` para a lista reordenar

@@ -35,6 +35,14 @@ export interface SendWindows {
 
 export type TemplateComponents = ReadonlyArray<Record<string, unknown>>;
 
+/**
+ * F58-S12 (migração 0095): o trigger `trg_campaign_outbox_gate` (AFTER UPDATE OF status)
+ * aplica, na transação de QUALQUER mudança de status, a regra sobre os jobs de outbound
+ * da campanha que ainda estão na outbox: `paused` retém, `paused -> running` libera,
+ * `cancelled` (ou sair de `paused` para outro status) descarta e marca delivery/mensagem
+ * `failed campaign_cancelled`. Os jobs que já estavam no broker ficam quantificados em
+ * audit_logs (`campaign.outbox_gated`, `inFlight`).
+ */
 export const campaigns = pgTable(
   'campaigns',
   {
@@ -187,6 +195,12 @@ export const campaignDeliveries = pgTable(
   },
   (t) => [
     index('idx_campaign_deliveries_campaign_status').on(t.campaignId, t.status),
+    // F58-S12 (0095): o worker outbound grava o desfecho do envio direto na delivery, e a
+    // trava de pausa/cancelamento (trigger `campaign_outbox_gate`) correlaciona job -> delivery
+    // pela mensagem.
+    index('idx_campaign_deliveries_message')
+      .on(t.messageId)
+      .where(sql`${t.messageId} is not null`),
     check('campaign_deliveries_status_chk', sql`${t.status} in ('queued','sent','delivered','read','failed','blocked')`),
   ],
 );
