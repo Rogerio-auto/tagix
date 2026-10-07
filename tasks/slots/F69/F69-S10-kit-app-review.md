@@ -2,7 +2,7 @@
 id: F69-S10
 title: Kit de App Review — justificativa, roteiro de screencast e conta de teste por permissão
 phase: F69
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: [F69-S01, F69-S02, F69-S03, F69-S04, F69-S05, F69-S06, F69-S07, F69-S08, F69-S09]
@@ -10,6 +10,7 @@ blocks: []
 source_docs: 
   - docs/features/META_INTEGRACAO_PLAN.md
 agent_id: backend-engineer
+claimed_at: 2026-10-07T14:09:55Z
 
 ---
 # F69-S10 — Kit de App Review — justificativa, roteiro de screencast e conta de teste por permissão
