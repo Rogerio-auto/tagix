@@ -61,7 +61,14 @@ export function Sheet({ open, onClose, title, children, widthClass = 'w-[420px]'
   if (!mounted) return null;
 
   return createPortal(
-    <div className={cn('fixed inset-0 z-50', open ? 'pointer-events-auto' : 'pointer-events-none')}>
+    // Fechado, o painel segue montado só para a transição de saída: `inert` o tira do Tab
+    // e dos cliques, `aria-hidden` da árvore de acessibilidade (F70-S32, mesmo bug do
+    // `Sheet` corrigido na F70-S29).
+    <div
+      inert={!open}
+      aria-hidden={open ? undefined : true}
+      className={cn('fixed inset-0 z-50', open ? 'pointer-events-auto' : 'pointer-events-none')}
+    >
       <div
         onClick={onClose}
         aria-hidden

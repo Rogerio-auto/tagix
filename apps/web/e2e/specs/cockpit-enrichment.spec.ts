@@ -115,9 +115,12 @@ test.describe('F47 — Catálogo de Produtos (Settings)', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Produtos' })).toBeVisible();
     await expect(page.getByText('Nenhum produto ainda')).toBeVisible();
 
+    // Fechado, o drawer segue montado para a transição, mas fora da acessibilidade (F70-S32).
+    const form = page.getByRole('dialog', { name: 'Novo produto' });
+    await expect(form).toHaveCount(0);
+
     // CTA "Novo produto" abre o painel de criação.
     await page.getByRole('button', { name: 'Novo produto' }).first().click();
-    const form = page.getByRole('dialog', { name: 'Novo produto' });
     await expect(form).toBeVisible();
 
     // Preenche e salva (o mock stateful o adiciona ao catálogo). O botão de envio
@@ -125,8 +128,9 @@ test.describe('F47 — Catálogo de Produtos (Settings)', () => {
     await form.getByRole('textbox', { name: 'Nome' }).fill('Plano Pro');
     await form.getByRole('button', { name: 'Adicionar produto' }).click();
 
-    // A lista reflete o produto recém-criado.
+    // A lista reflete o produto recém-criado, e o drawer fechado sai da acessibilidade.
     await expect(page.getByText('Plano Pro')).toBeVisible();
+    await expect(form).toHaveCount(0);
     expect(catalog.some((p) => p.name === 'Plano Pro')).toBe(true);
   });
 
