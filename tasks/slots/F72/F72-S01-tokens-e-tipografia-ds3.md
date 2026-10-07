@@ -2,7 +2,7 @@
 id: F72-S01
 title: Tokens, fontes e escala tipográfica do DS 3.0, com tema claro corrigido
 phase: F72
-status: available
+status: in-progress
 priority: critical
 estimated_size: M
 ui: true
@@ -13,6 +13,9 @@ source_docs:
   - docs/decisions/ADR-002-tipografia-ds3.md
   - docs/DESIGN_SYSTEM_V3_DELTA.md
   - docs/design/ds-3.0-agency-os.html
+agent_id: backend-engineer
+claimed_at: 2026-10-07T18:30:43Z
+
 ---
 # F72-S01 — Tokens, fontes e escala tipográfica do DS 3.0
 
