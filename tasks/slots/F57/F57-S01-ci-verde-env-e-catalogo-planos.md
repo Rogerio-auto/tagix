@@ -2,7 +2,7 @@
 id: F57-S01
 title: CI verde — ENCRYPTION_KEY no job + catálogo de planos self-contained nos testes
 phase: F57
-status: in-progress
+status: review
 priority: critical
 estimated_size: S
 depends_on: []
@@ -11,8 +11,8 @@ agent_id: agent-f57-s01
 source_docs:
   - .github/workflows/ci.yml
   - docs/audits/2026-08-08-fundacao-hm-init.md
-claimed_at: 2026-08-10T16:00:31Z
-completed_at: 2026-08-11T14:18:49Z
+claimed_at: 2026-10-07T13:15:38Z
+completed_at: 2026-10-07T13:21:35Z
 
 ---
 # F57-S01 — CI verde: env de teste completo + catálogo de planos self-contained
@@ -84,6 +84,7 @@ Duas causas independentes, ambas de ambiente — **nenhum bug de produto**:
 - `apps/api/src/auth/flow.integration.test.ts`
 - `apps/api/src/auth/routes.test.ts`
 - `apps/workers/src/dashboard-refresh/dashboard-refresh.test.ts`
+- `apps/workers/src/agents/followup.outbox.test.ts` *(adicionado em 2026-10-07: mesma classe de falha — dependia do seed global)*
 
 ## Arquivos proibidos
 
@@ -97,7 +98,7 @@ Duas causas independentes, ambas de ambiente — **nenhum bug de produto**:
 - [x] Em clone limpo, com infra de pé + `pnpm --filter @hm/db migrate`, o comando — **verificado em 2026-09-14:** é exatamente o que o job `ci` faz (checkout limpo, serviços, `migrate`, `pnpm -r test`), e passou.
       `pnpm -r --if-present test` sai **0**, sem nenhum seed manual.
 - [x] `gh run list --branch main --limit 1` → `conclusion: success` no job `ci`. — **verificado em 2026-09-14:** run `34919576283` (commit `d9f5012b`), job `ci` com `conclusion: success` — o primeiro desde 2026-06-09.
-- [ ] Nenhum teste depende de ordem entre packages (rodar `@hm/api` isolado passa). — **auditoria 2026-09-14:** não verificado: o `pnpm -r test` do CI parava no primeiro pacote que falhava (`@hm/db`), então `@hm/api`, `@hm/workers` e `@hm/web` não rodaram no CI desde junho.
+- [x] Nenhum teste depende de ordem entre packages (rodar `@hm/api` isolado passa). — **verificado em 2026-10-07:** com infra de pé e banco migrado até a `0093`, sem `pnpm seed`: `pnpm --filter @hm/api test` → 153 arquivos / 1411 testes ✅; `pnpm --filter @hm/workers test` → 76 / 724 ✅.
 - [x] `ENCRYPTION_KEY` documentado como pré-requisito da suíte no `.env.example`.
 
 ## Validação
@@ -143,3 +144,15 @@ justamente o erro que a auditoria corrigiu.
 
 O job `e2e` continua vermelho pelo proxy para `:3001`, que é a **F57-S02** — fora do escopo deste slot.
 
+
+### Atualização de 2026-10-07 — main vermelha de novo, mesma causa
+
+O `ci` da `main` voltou a falhar desde 2026-09-22 (último run: `11b9b9d9`). Única falha:
+`apps/workers/src/agents/followup.outbox.test.ts` (F70-S25) lia o template **global** `follow_up`
+e abortava com `fixture: template global follow_up ausente (seed)` — o CI não roda `pnpm seed`.
+É a mesma classe de bug que este slot existe para eliminar, então o arquivo entrou em
+`files_allowed`.
+
+**Correção:** o teste cria o próprio template `follow_up` no workspace dele. O tick casa o template
+por `agent_templates.key` via `agents.template_id`, então a prova é a mesma; o template some em cascata
+com o workspace no `afterAll`. Nenhum código de produto mudou.
