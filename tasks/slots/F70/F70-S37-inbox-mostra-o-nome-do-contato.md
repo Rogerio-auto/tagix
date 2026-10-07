@@ -2,7 +2,7 @@
 id: F70-S37
 title: Lista e cabeçalho da conversa mostram o nome do contato, não o número
 phase: F70
-status: review
+status: done
 priority: high
 estimated_size: S
 ui: true
