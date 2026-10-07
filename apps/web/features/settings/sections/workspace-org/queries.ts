@@ -25,7 +25,12 @@ export interface Member {
   isOnline: boolean;
   lastSeenAt: string | null;
   createdAt: string;
+  /** F71-S05: linha `invited` criada pelo fluxo antigo, sem convite vivo — convidar de novo. */
+  legacyInvite?: boolean;
 }
+
+/** Estado do membro como a API devolve (`members.status`). */
+export type MemberStatus = 'active' | 'invited' | 'inactive' | 'blocked';
 
 export interface Department {
   id: string;
@@ -114,13 +119,8 @@ export function useMembers() {
   });
 }
 
-export function useInviteMember() {
-  const qc = useQueryClient();
-  return useMutation<{ member: Member }, Error, { email: string; name?: string | null; role: string }>({
-    mutationFn: (input) => api.post<{ member: Member }>('/api/members', input),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: orgKeys.members }),
-  });
-}
+// Convites (criar, reenviar, revogar, copiar link) vivem em `features/invites/queries.ts`:
+// o contrato antigo `POST /api/members` responde 410 desde a F71-S05.
 
 export function useUpdateMember() {
   const qc = useQueryClient();

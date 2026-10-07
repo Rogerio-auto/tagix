@@ -27,7 +27,7 @@
  * Edge-safe: só `fetch`, `URL` e `Headers`.
  */
 import { safeNextPath } from '@/shared/lib/safe-redirect';
-import { isPublicPath } from '@/shared/lib/public-routes';
+import { isPublicPath, isReturnablePublicPath } from '@/shared/lib/public-routes';
 
 /** Valor de `?motivo=` que faz o login explicar por que a pessoa está ali. */
 export const SESSION_EXPIRED_REASON = 'sessao-expirada';
@@ -58,6 +58,8 @@ export function loginUrl(intended: string | null, expired: boolean): string {
 export function postLoginPath(rawNext: string | null): string {
   const next = safeNextPath(rawNext);
   const nextPath = next.split(/[?#]/, 1)[0] ?? '/';
+  // O convite é público, mas é para onde quem acabou de entrar precisa voltar (F71-S07).
+  if (isReturnablePublicPath(nextPath)) return next;
   return isPublicPath(nextPath) ? '/' : next;
 }
 
