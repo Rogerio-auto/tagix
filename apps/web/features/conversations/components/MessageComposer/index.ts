@@ -11,4 +11,20 @@ export type { EmojiPickerProps } from './EmojiPicker';
 export { WindowNotice } from './WindowNotice';
 export type { WindowNoticeProps } from './WindowNotice';
 export { useWindowState, windowKey } from './useWindowState';
-export type { WindowState, WindowProvider, WindowMessageTag } from './useWindowState';
+export type {
+  WindowState,
+  WindowProvider,
+  WindowMessageTag,
+  WindowResponse,
+  SendRestriction,
+  SendRestrictionReason,
+} from './useWindowState';
+export { RestrictionNotice, RestrictionCheckError } from './RestrictionNotice';
+export type { RestrictionNoticeProps, RestrictionCheckErrorProps } from './RestrictionNotice';
+export { composerGate, restrictionCopy, formatRetryAt, untilLine } from './sendRestriction';
+export type {
+  ComposerGate,
+  BlockingReason,
+  RestrictionCopy,
+  RestrictionTone,
+} from './sendRestriction';

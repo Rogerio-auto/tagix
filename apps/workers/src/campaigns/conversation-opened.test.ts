@@ -101,6 +101,8 @@ describe.skipIf(!url)('F70-S13/S16 campanha: conversa aberta e job pela outbox',
     sendWindows: null,
     rateLimitPerMinute: 60,
     deliveryRate: null,
+    endAt: null,
+    nextTickAt: null,
   });
 
   /** Contato + recipient pendente. Telefone único por teste. */
@@ -125,6 +127,8 @@ describe.skipIf(!url)('F70-S13/S16 campanha: conversa aberta e job pela outbox',
       { recipientId: d.recipientId, contactId: d.contactId, stepId, stepIndex: 0 },
       `f70s13:${d.recipientId}:0`,
       new Date(),
+      // Ritmo alto: este arquivo cobre outbox/conversa, nao o compasso (F58-S11).
+      { ratePerMinute: 600, windowMs: 60_000 },
     );
   }
 

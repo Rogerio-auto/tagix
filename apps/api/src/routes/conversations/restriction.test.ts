@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { OutboundDecision } from '@hm/shared';
-import { toRestriction, type WindowState } from './window';
+import { computeWindow, toRestriction, type WindowState } from './window';
 
 const permitido: OutboundDecision = {
   allowed: true,
@@ -132,6 +132,83 @@ describe('toda recusa é exibível', () => {
       expect(r.canSend).toBe(false);
       expect(r.message.length).toBeGreaterThan(0);
       expect(r.reason).toBe(reason);
+    }
+  });
+});
+
+describe('F60-S11 — texto pronto para o atendente', () => {
+  const recusa = (message: string): OutboundDecision => ({
+    allowed: false,
+    reason: 'suppressed',
+    message,
+    usedFallbackTimezone: false,
+    timezone: 'America/Sao_Paulo',
+  });
+
+  it('troca o identificador técnico do canal pelo nome que o atendente conhece', () => {
+    const r = toRestriction(
+      janela({ provider: 'meta_whatsapp' }),
+      recusa('Contato pediu para não receber mensagens por meta_whatsapp.'),
+    );
+    expect(r.message).toBe('Contato pediu para não receber mensagens por WhatsApp.');
+    expect(r.reason).toBe('suppressed');
+  });
+
+  it('e-mail e Instagram também saem legíveis', () => {
+    const email = toRestriction(
+      janela({ provider: 'email' }),
+      recusa('Contato pediu para não receber mensagens por email.'),
+    );
+    expect(email.message).toBe('Contato pediu para não receber mensagens por e-mail.');
+
+    const ig = toRestriction(
+      janela({ provider: 'meta_instagram' }),
+      recusa('Contato pediu para não receber mensagens por meta_instagram.'),
+    );
+    expect(ig.message).toContain('por Instagram');
+  });
+
+  it('frase sem o identificador do canal passa intacta', () => {
+    const r = toRestriction(
+      janela(),
+      recusa('Contato pediu para não receber mais mensagens desta empresa.'),
+    );
+    expect(r.message).toBe('Contato pediu para não receber mais mensagens desta empresa.');
+  });
+});
+
+describe('computeWindow — regressão da janela de 24h do WhatsApp', () => {
+  const agora = new Date('2026-10-07T12:00:00Z');
+  const horasAtras = (h: number) => new Date(agora.getTime() - h * 60 * 60 * 1000);
+
+  it('inbound há 23h: janela aberta, expira 24h depois do inbound', () => {
+    const w = computeWindow('meta_whatsapp', horasAtras(23), agora);
+    expect(w.isOpen).toBe(true);
+    expect(w.requiresTemplate).toBe(false);
+    expect(w.expiresAt).toBe(new Date(horasAtras(23).getTime() + 24 * 3_600_000).toISOString());
+  });
+
+  it('inbound há exatamente 24h: janela fechada, só modelo aprovado', () => {
+    const w = computeWindow('meta_whatsapp', horasAtras(24), agora);
+    expect(w.isOpen).toBe(false);
+    expect(w.requiresTemplate).toBe(true);
+    expect(toRestriction(w, null).reason).toBe('provider_window');
+  });
+
+  it('sem inbound nenhum: exige modelo aprovado', () => {
+    const w = computeWindow('meta_whatsapp', null, agora);
+    expect(w).toMatchObject({ isOpen: false, requiresTemplate: true, expiresAt: null });
+  });
+
+  it('Instagram fora da janela usa a tag, não modelo', () => {
+    const w = computeWindow('meta_instagram', horasAtras(30), agora);
+    expect(w).toMatchObject({ isOpen: false, requiresTemplate: false, messageTag: 'HUMAN_AGENT' });
+  });
+
+  it('WAHA e e-mail não têm janela', () => {
+    for (const provider of ['waha', 'email'] as const) {
+      const w = computeWindow(provider, null, agora);
+      expect(w).toMatchObject({ isOpen: true, requiresTemplate: false, messageTag: null });
     }
   });
 });

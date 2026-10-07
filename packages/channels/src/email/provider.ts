@@ -67,6 +67,37 @@ export type SendEmailResult =
   | { readonly ok: true; readonly messageId: string }
   | { readonly ok: false; readonly errorCode: string; readonly errorMessage: string };
 
+/**
+ * Anexo de um e-mail recebido (F60-S10).
+ *
+ * Provedores entregam o anexo de dois jeitos, e o tipo diz qual:
+ *
+ * - `inline` — o binário vem no próprio webhook (Postmark manda em base64).
+ * - `remote` — o webhook traz só uma URL e o binário é buscado depois. **Essa
+ *   URL é dado de terceiro**: quem a busca precisa da guarda anti-SSRF, senão um
+ *   e-mail forjado vira um `GET` para `169.254.169.254` de dentro da nossa rede.
+ *
+ * `contentType` e `filename` são declarados pelo remetente — não confie neles
+ * para decidir o que o arquivo é. Quem ingere confere os bytes.
+ */
+export type InboundEmailAttachment =
+  | {
+      readonly kind: 'inline';
+      readonly filename: string;
+      readonly contentType: string;
+      readonly content: Buffer;
+      readonly contentId?: string;
+    }
+  | {
+      readonly kind: 'remote';
+      readonly filename: string;
+      readonly contentType: string;
+      readonly url: string;
+      /** Tamanho anunciado pelo provedor, quando houver. Só para recusa antecipada. */
+      readonly sizeBytes?: number;
+      readonly contentId?: string;
+    };
+
 /** Um e-mail recebido, já normalizado a partir do MIME. */
 export interface InboundEmail {
   readonly messageId: string;
@@ -78,7 +109,7 @@ export interface InboundEmail {
   readonly inReplyTo: string | null;
   readonly references: readonly string[];
   readonly receivedAt: Date;
-  readonly attachments: readonly EmailAttachment[];
+  readonly attachments: readonly InboundEmailAttachment[];
 }
 
 /** Tipos de retorno assíncrono que mudam o estado da mensagem ou suprimem o contato. */

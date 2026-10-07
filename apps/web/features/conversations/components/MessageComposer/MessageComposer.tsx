@@ -7,7 +7,11 @@ import { useToast } from '@hm/ui';
 import { cn } from '@/shared/lib/cn';
 import { ApiError } from '@/shared/lib/api-client';
 import { useSendMessage } from '../../queries';
-import { ComposerActionBar, ComposerActionButton, type ComposerActionItem } from './ComposerActionBar';
+import {
+  ComposerActionBar,
+  ComposerActionButton,
+  type ComposerActionItem,
+} from './ComposerActionBar';
 import { AttachmentMenu, type AttachmentOption } from './AttachmentMenu';
 import { StickerPicker } from './StickerPicker';
 import { LocationSender } from './LocationSender';
@@ -17,6 +21,8 @@ import { useVoiceRecorder } from './useVoiceRecorder';
 import { VoiceRecorder } from './VoiceRecorder';
 import { useWindowState } from './useWindowState';
 import { WindowNotice } from './WindowNotice';
+import { RestrictionCheckError, RestrictionNotice } from './RestrictionNotice';
+import { composerGate } from './sendRestriction';
 
 const MAX_TEXTAREA_HEIGHT = 160; // px — ~7 linhas antes de virar scroll interno.
 
@@ -45,11 +51,16 @@ export function MessageComposer({
   const voice = useVoiceRecorder();
   const windowQuery = useWindowState(conversationId);
 
-  // Estado da janela 24h por provider (F1-S17). Enquanto carrega, não bloqueia
-  // (otimista: a maioria das conversas está dentro da janela); o backend é a
-  // autoridade final no envio. WhatsApp fora da janela trava o composer.
+  // Restrição de envio decidida pela API (janela do provider + portão de
+  // consentimento, F60-S02/S11). A tela só lê — nenhuma regra recalculada aqui.
+  // Enquanto carrega ou se a consulta falhar, não trava: a API confere de novo no
+  // envio e é a autoridade final. WhatsApp fora das 24h trava o texto livre (só
+  // modelo aprovado reabre); recusa do portão trava tudo, com motivo e prazo.
   const windowState = windowQuery.data?.window;
-  const windowBlocked = windowState?.requiresTemplate ?? false;
+  const gate = composerGate(windowQuery.data);
+  const windowBlocked = gate.kind === 'template';
+  const gateBlocked = gate.kind === 'blocked';
+  const checkFailed = windowQuery.isError && windowQuery.data === undefined;
 
   const [text, setText] = useState('');
   const [media, setMedia] = useState<PendingMedia | null>(null);
@@ -68,8 +79,9 @@ export function MessageComposer({
   const pendingCaretRef = useRef<number | null>(null);
 
   const busy = send.isPending || uploading;
-  // `disabled` = override manual; `windowBlocked` = WhatsApp fora da janela 24h.
-  const inputBlocked = disabled || windowBlocked;
+  // `disabled` = override manual; `windowBlocked` = WhatsApp fora da janela 24h;
+  // `gateBlocked` = portão de consentimento recusou (ex.: contato suprimido).
+  const inputBlocked = disabled || windowBlocked || gateBlocked;
   const blocked = inputBlocked || busy;
   const canSend = !blocked && (text.trim().length > 0 || media !== null);
 
@@ -197,11 +209,7 @@ export function MessageComposer({
     try {
       const blob = await voice.stop();
       if (!blob || blob.size === 0) return;
-      const ext = blob.type.includes('ogg')
-        ? 'ogg'
-        : blob.type.includes('mp4')
-          ? 'm4a'
-          : 'webm';
+      const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'm4a' : 'webm';
       const file = new File([blob], `nota-de-voz-${Date.now()}.${ext}`, {
         type: blob.type || 'audio/webm',
       });
@@ -270,11 +278,7 @@ export function MessageComposer({
     {
       id: 'attachment-menu',
       node: (
-        <AttachmentMenu
-          options={attachmentOptions}
-          disabled={blocked}
-          onClosed={focusTextarea}
-        />
+        <AttachmentMenu options={attachmentOptions} disabled={blocked} onClosed={focusTextarea} />
       ),
     },
     {
@@ -300,8 +304,19 @@ export function MessageComposer({
       aria-busy={busy || undefined}
       className={cn('border-t border-border bg-surface p-3', className)}
     >
-      {windowState && (
-        <WindowNotice window={windowState} onReopenWithTemplate={onReopenWithTemplate} />
+      {gate.kind === 'blocked' ? (
+        // O portão vence a janela: contato suprimido não mostra CTA de modelo.
+        <RestrictionNotice gate={gate} />
+      ) : (
+        windowState && (
+          <WindowNotice window={windowState} onReopenWithTemplate={onReopenWithTemplate} />
+        )
+      )}
+      {checkFailed && (
+        <RestrictionCheckError
+          onRetry={() => void windowQuery.refetch()}
+          retrying={windowQuery.isFetching}
+        />
       )}
 
       {media && (
@@ -383,11 +398,13 @@ export function MessageComposer({
               disabled={blocked}
               rows={1}
               placeholder={
-                windowBlocked
-                  ? 'Janela de 24h encerrada — reabra com um template'
-                  : disabled
-                    ? 'Envio indisponível para esta conversa'
-                    : 'Escreva uma mensagem…'
+                gateBlocked
+                  ? 'Envio travado — veja o motivo acima'
+                  : windowBlocked
+                    ? 'Janela de 24h encerrada — reabra com um template'
+                    : disabled
+                      ? 'Envio indisponível para esta conversa'
+                      : 'Escreva uma mensagem…'
               }
               className="max-h-40 flex-1 resize-none bg-transparent py-1.5 font-body text-sm text-text outline-none placeholder:text-text-low disabled:cursor-not-allowed disabled:opacity-60"
             />

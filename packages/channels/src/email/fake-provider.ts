@@ -9,10 +9,12 @@
  * Também serve de referência executável para quem for escrever o adapter real: o
  * que este faz é o mínimo que o provedor precisa entregar.
  */
+import { Buffer } from 'node:buffer';
 import {
   type EmailEvent,
   type IEmailProvider,
   type InboundEmail,
+  type InboundEmailAttachment,
   type SendEmailInput,
   type SendEmailResult,
 } from './provider';
@@ -36,6 +38,52 @@ interface RawInbound {
   inReplyTo?: unknown;
   references?: unknown;
   receivedAt?: unknown;
+  attachments?: unknown;
+}
+
+/** Base64 estrito (com ou sem padding). `Buffer.from` aceita lixo em silêncio. */
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/**
+ * Anexos do inbound simulado. Espelha os dois formatos reais: binário em base64
+ * no próprio payload (`content`) ou URL para buscar depois (`url`). Item
+ * malformado é descartado — o payload inteiro não cai por causa de um anexo.
+ */
+function parseAttachments(raw: unknown): InboundEmailAttachment[] {
+  if (!Array.isArray(raw)) return [];
+  const out: InboundEmailAttachment[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) continue;
+    const a = item as Record<string, unknown>;
+    const filename = str(a['filename']) ?? 'anexo';
+    const contentType = str(a['contentType']) ?? 'application/octet-stream';
+    const contentId = str(a['contentId']);
+    const extra = contentId === null ? {} : { contentId: normalizeMessageId(contentId) };
+    const content = a['content'];
+    const url = str(a['url']);
+    if (typeof content === 'string') {
+      const limpo = content.replace(/\s+/g, '');
+      if (!BASE64.test(limpo)) continue;
+      out.push({
+        kind: 'inline',
+        filename,
+        contentType,
+        content: Buffer.from(limpo, 'base64'),
+        ...extra,
+      });
+    } else if (url !== null) {
+      const tamanho = a['sizeBytes'];
+      out.push({
+        kind: 'remote',
+        filename,
+        contentType,
+        url,
+        ...(typeof tamanho === 'number' && Number.isFinite(tamanho) ? { sizeBytes: tamanho } : {}),
+        ...extra,
+      });
+    }
+  }
+  return out;
 }
 
 function str(v: unknown): string | null {
@@ -116,7 +164,7 @@ export class FakeEmailProvider implements IEmailProvider {
       inReplyTo: str(raw.inReplyTo) === null ? null : normalizeMessageId(str(raw.inReplyTo) as string),
       references: parseReferences(typeof raw.references === 'string' ? raw.references : null),
       receivedAt: Number.isNaN(receivedAt.getTime()) ? new Date() : receivedAt,
-      attachments: [],
+      attachments: parseAttachments(raw.attachments),
     };
   }
 

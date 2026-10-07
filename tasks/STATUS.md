@@ -49,10 +49,10 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
 | F57   | 14     | 12   | 0   | 0   | 0   | 0   | 2   |
-| F58   | 14     | 6   | 0   | 0   | 0   | 1   | 7   |
+| F58   | 14     | 4   | 0   | 0   | 0   | 1   | 9   |
 | F59   | 9     | 1   | 0   | 0   | 0   | 0   | 8   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
-| F60   | 9     | 4   | 0   | 0   | 0   | 0   | 5   |
+| F60   | 9     | 2   | 0   | 0   | 0   | 0   | 7   |
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 7   | 0   | 0   | 0   | 4   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
@@ -670,9 +670,9 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F58-S06 | Preparar opções, prévias e teste do novo criador          | ✅ done      | critical   | F58-S01, F58-S04, F57-S01                   |
 | F58-S07 | Tornar o início da campanha fácil de entender             | ✅ done      | high       | F58-S06                                     |
 | F58-S08 | Facilitar a escolha dos destinatários                     | ✅ done      | high       | F58-S06                                     |
-| F58-S09 | Escolher a mensagem com prévia e variáveis                | 🟢 available | critical   | F58-S05, F58-S06                            |
+| F58-S09 | Escolher a mensagem com prévia e variáveis                | ✅ done      | critical   | F58-S05, F58-S06                            |
 | F58-S10 | Configurar quando e como enviar sem termos técnicos       | 🟢 available | high       | F58-S06                                     |
-| F58-S11 | Fazer o agendamento começar e respeitar o ritmo escolhido | 🟢 available | critical   | F58-S06                                     |
+| F58-S11 | Fazer o agendamento começar e respeitar o ritmo escolhido | ✅ done      | critical   | F58-S06                                     |
 | F58-S12 | Garantir que nenhuma mensagem da campanha se perca        | 🟢 available | critical   | F58-S02, F58-S11                            |
 | F58-S13 | Integrar o novo criador e revisar antes de iniciar        | 🟢 available | critical   | F58-S07, F58-S08, F58-S09, F58-S10, F58-S12 |
 | F58-S14 | Validar o fluxo completo com 1.000 contatos               | 🟢 available | critical   | F58-S13, F57-S02                            |
@@ -716,8 +716,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F60-S07 | Campanhas para os outros canais                                                       | ✅ done      | critical   | F60-S03          |
 | F60-S08 | E-mail — recebimento, retorno e supressão por bounce                                  | ✅ done      | critical   | F60-S03          |
 | F60-S09 | Campanha multicanal na interface — passos por capacidade, público e métrica por canal | 🟢 available | high       | F60-S07, F58-S12 |
-| F60-S10 | E-mail recebido completo — anexo no R2, anti-SSRF e reuso de thread                   | 🟢 available | high       | F60-S08          |
-| F60-S11 | Composer mostra a restrição de envio — por quê e quando volta a poder                 | 🟢 available | medium     | F60-S02          |
+| F60-S10 | E-mail recebido completo — anexo no R2, anti-SSRF e reuso de thread                   | ✅ done      | high       | F60-S08          |
+| F60-S11 | Composer mostra a restrição de envio — por quê e quando volta a poder                 | ✅ done      | medium     | F60-S02          |
 
 ## Fase 61
 

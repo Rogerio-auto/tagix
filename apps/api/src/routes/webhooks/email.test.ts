@@ -4,11 +4,12 @@
  * O que importa aqui é o que acontece com payload de terceiro: assinatura
  * recusada, HTML sanitizado antes de sair, e bounce decidindo supressão.
  */
+import { Buffer } from 'node:buffer';
 import express from 'express';
 import request from 'supertest';
 import { FakeEmailProvider } from '@hm/channels';
 import { describe, expect, it, vi } from 'vitest';
-import { createEmailWebhookRouter, normalizeInbound } from './email';
+import { createEmailWebhookRouter, normalizeInbound, safeAttachmentName } from './email';
 
 const SEGREDO = 'segredo-do-webhook';
 
@@ -231,5 +232,100 @@ describe('eventos de retorno', () => {
 
     expect(r.body.processed).toBe(2);
     expect(onEvent).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('anexos na borda (F60-S10)', () => {
+  it('anexo em base64 atravessa como base64, com o tamanho real', async () => {
+    const { a, onInbound } = app();
+    const conteudo = Buffer.from('%PDF-1.4 orçamento');
+    await request(a)
+      .post('/webhooks/email/inbound')
+      .set('x-signature', SEGREDO)
+      .send({
+        ...inbound,
+        attachments: [
+          {
+            filename: 'orcamento.pdf',
+            contentType: 'application/pdf',
+            content: conteudo.toString('base64'),
+          },
+        ],
+      });
+
+    const arg = onInbound.mock.calls[0]?.[0];
+    expect(arg?.attachments).toEqual([
+      {
+        kind: 'inline',
+        filename: 'orcamento.pdf',
+        contentType: 'application/pdf',
+        contentId: null,
+        contentBase64: conteudo.toString('base64'),
+        sizeBytes: conteudo.length,
+      },
+    ]);
+    expect(arg?.rejectedAttachments).toEqual([]);
+  });
+
+  it.each([
+    'http://169.254.169.254/latest/meta-data/iam/security-credentials/',
+    'https://169.254.169.254/latest/meta-data/',
+    'https://127.0.0.1/x',
+    'https://localhost/x',
+    'https://[::1]/x',
+    'https://10.1.2.3/x',
+    'https://user:pw@files.provedor.com/x',
+    'file:///etc/passwd',
+    'gopher://127.0.0.1:6379/_FLUSHALL',
+  ])('anexo por URL interna/insegura é recusado na borda: %s', async (url) => {
+    const { a, onInbound } = app();
+    await request(a)
+      .post('/webhooks/email/inbound')
+      .set('x-signature', SEGREDO)
+      .send({
+        ...inbound,
+        attachments: [{ filename: 'x.pdf', contentType: 'application/pdf', url }],
+      });
+
+    const arg = onInbound.mock.calls[0]?.[0];
+    expect(arg?.attachments).toEqual([]);
+    // Recusado, mas registrado: o atendente vê que o cliente mandou algo.
+    expect(arg?.rejectedAttachments).toEqual([{ filename: 'x.pdf', reason: 'unsafe_url' }]);
+  });
+
+  it('URL pública https segue para o worker, que revalida no connect', async () => {
+    const { a, onInbound } = app();
+    await request(a)
+      .post('/webhooks/email/inbound')
+      .set('x-signature', SEGREDO)
+      .send({
+        ...inbound,
+        attachments: [
+          { filename: 'foto.jpg', contentType: 'image/jpeg', url: 'https://files.provedor.com/a/1' },
+        ],
+      });
+    const arg = onInbound.mock.calls[0]?.[0];
+    expect(arg?.attachments[0]).toMatchObject({
+      kind: 'remote',
+      url: 'https://files.provedor.com/a/1',
+    });
+  });
+});
+
+describe('safeAttachmentName', () => {
+  it('tira caminho, controle e marcador bidirecional', () => {
+    expect(safeAttachmentName('../../etc/passwd')).toBe('passwd');
+    expect(safeAttachmentName('C:\\Windows\\system32\\x.dll')).toBe('x.dll');
+    // U+202E faria `fatura\u202Efdp.exe` aparecer como "faturaexe.pdf".
+    expect(safeAttachmentName('fatura\u202Efdp.exe')).toBe('faturafdp.exe');
+    expect(safeAttachmentName('a\u0000b.txt')).toBe('ab.txt');
+  });
+
+  it('nome vazio ou só pontos vira "anexo"; nome gigante é cortado mantendo a extensão', () => {
+    expect(safeAttachmentName('')).toBe('anexo');
+    expect(safeAttachmentName('...')).toBe('anexo');
+    const longo = safeAttachmentName(`${'a'.repeat(500)}.pdf`);
+    expect(longo.length).toBe(180);
+    expect(longo.endsWith('.pdf')).toBe(true);
   });
 });

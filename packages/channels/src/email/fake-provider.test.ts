@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
 import { FakeEmailProvider } from './fake-provider';
 import type { SendEmailInput } from './provider';
@@ -137,5 +138,48 @@ describe('assinatura do webhook', () => {
     expect(p.verifyWebhook('{}', { 'x-signature': 'segredo' })).toBe(true);
     expect(p.verifyWebhook('{}', { 'x-signature': 'errado' })).toBe(false);
     expect(p.verifyWebhook('{}', {})).toBe(false);
+  });
+});
+
+describe('anexos do inbound (F60-S10)', () => {
+  it('lê anexo em base64 e anexo por URL, e normaliza o content-id', () => {
+    const p = new FakeEmailProvider();
+    const email = p.parseInbound({
+      messageId: '<a@b>',
+      from: 'x@y.com',
+      attachments: [
+        {
+          filename: 'orcamento.pdf',
+          contentType: 'application/pdf',
+          content: Buffer.from('%PDF-1.4').toString('base64'),
+          contentId: '<logo@x>',
+        },
+        { filename: 'foto.jpg', contentType: 'image/jpeg', url: 'https://files.x/1', sizeBytes: 10 },
+      ],
+    });
+    const [pdf, foto] = email?.attachments ?? [];
+    expect(pdf?.kind).toBe('inline');
+    if (pdf?.kind === 'inline') {
+      expect(pdf.content.toString()).toBe('%PDF-1.4');
+      expect(pdf.contentId).toBe('logo@x');
+    }
+    expect(foto).toEqual({
+      kind: 'remote',
+      filename: 'foto.jpg',
+      contentType: 'image/jpeg',
+      url: 'https://files.x/1',
+      sizeBytes: 10,
+    });
+  });
+
+  it('base64 inválido e item sem conteúdo nem URL são descartados, sem derrubar o e-mail', () => {
+    const p = new FakeEmailProvider();
+    const email = p.parseInbound({
+      messageId: '<a@b>',
+      from: 'x@y.com',
+      attachments: [{ filename: 'x', content: '%%%não é base64' }, { filename: 'y' }, 'lixo'],
+    });
+    expect(email).not.toBeNull();
+    expect(email?.attachments).toEqual([]);
   });
 });

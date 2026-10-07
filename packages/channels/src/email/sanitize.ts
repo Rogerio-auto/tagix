@@ -17,6 +17,8 @@
  * `srcdoc` com CSP), porque um sanitizador é código e código tem defeito.
  */
 
+import { checkEmailNetworkUrl } from './url-policy';
+
 /** Tags que podem existir no corpo de um e-mail sem virar vetor. */
 const TAGS_PERMITIDAS = new Set([
   'a', 'b', 'blockquote', 'br', 'caption', 'code', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'h5',
@@ -53,7 +55,15 @@ const ESQUEMAS_PERMITIDOS = ['http:', 'https:', 'mailto:', 'tel:', 'cid:'];
 /** Comentário HTML pode esconder marcação condicional que alguns clientes executam. */
 const COMENTARIOS = /<!--[\s\S]*?-->/g;
 
-function urlSegura(valor: string): boolean {
+/**
+ * Decide se uma URL de `href`/`src` sobrevive.
+ *
+ * Além do esquema, olha o DESTINO (F60-S10): link ou imagem apontando para rede
+ * interna, loopback ou metadados de nuvem sai, porque o navegador logado do
+ * atendente faria o pedido sozinho — `<img>` nem precisa de clique. Ver
+ * `url-policy.ts`.
+ */
+function urlSegura(valor: string, atributo: 'href' | 'src'): boolean {
   const limpo = valor
     .trim()
     // Entidades e caracteres de controle são usados para disfarçar `javascript:`
@@ -69,11 +79,25 @@ function urlSegura(valor: string): boolean {
     })
     .join('');
 
-  // URL relativa é segura: não carrega esquema.
-  if (/^[^a-z]/i.test(limpo) || !limpo.includes(':')) return true;
+  // `//host/x` (e as variantes com barra invertida, que o navegador normaliza)
+  // NÃO é relativa: é URL de rede com o esquema da página. Tratar como relativa
+  // deixaria `//169.254.169.254/` passar pela porta dos fundos.
+  if (/^[/\\]{2}/.test(limpo)) {
+    return checkEmailNetworkUrl(`https://${limpo.slice(2).replace(/\\/g, '/')}`).ok;
+  }
+
+  // URL relativa: não carrega esquema nem host.
+  if (/^[^a-z]/i.test(limpo) || !limpo.includes(':')) {
+    // Em `src`, relativa resolve contra a ORIGEM DO PRODUTO e é buscada sozinha,
+    // com o cookie do atendente — um `GET` forjado na nossa própria API. Em
+    // `href` exige clique e é inofensiva.
+    return atributo === 'href';
+  }
 
   const esquema = limpo.slice(0, limpo.indexOf(':') + 1).toLowerCase();
-  return ESQUEMAS_PERMITIDOS.includes(esquema);
+  if (!ESQUEMAS_PERMITIDOS.includes(esquema)) return false;
+  if (esquema === 'http:' || esquema === 'https:') return checkEmailNetworkUrl(limpo).ok;
+  return true;
 }
 
 /** Remove atributos não permitidos e URLs com esquema perigoso. */
@@ -90,7 +114,7 @@ function limparAtributos(tag: string, bruto: string): string {
     if (!permitidos.includes(nome)) continue;
 
     const valor = m[3] ?? m[4] ?? m[5] ?? '';
-    if ((nome === 'href' || nome === 'src') && !urlSegura(valor)) continue;
+    if ((nome === 'href' || nome === 'src') && !urlSegura(valor, nome)) continue;
 
     saida.push(`${nome}="${valor.replace(/"/g, '&quot;')}"`);
   }

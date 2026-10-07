@@ -145,3 +145,58 @@ describe('htmlToText', () => {
     expect(htmlToText('<p>a &amp; b &quot;c&quot;</p>')).toBe('a & b "c"');
   });
 });
+
+describe('F60-S10 — URL para dentro da rede é recusada', () => {
+  // O navegador logado do atendente busca `<img>` sozinho, sem clique. Uma imagem
+  // apontando para a rede interna é um GET forjado a partir de dentro.
+  it.each([
+    'http://169.254.169.254/latest/meta-data/',
+    'http://metadata.google.internal/computeMetadata/v1/',
+    'http://127.0.0.1:8080/admin',
+    'http://localhost/api/v1/members',
+    'http://192.168.0.1/reboot',
+    'http://[::1]/',
+    'http://2130706433/',
+    'https://user:pw@cliente.com/',
+  ])('img src %s sai', (url) => {
+    const r = sanitizeEmailHtml(`<img src="${url}" alt="x">`);
+    expect(r).not.toContain('src=');
+    expect(r).toContain('alt="x"');
+  });
+
+  it.each(['http://10.0.0.1/painel', 'http://169.254.169.254/', 'http://intranet/rh'])(
+    'a href %s sai (o texto do link fica)',
+    (url) => {
+      const r = sanitizeEmailHtml(`<a href="${url}">clique</a>`);
+      expect(r).not.toContain('href');
+      expect(r).toContain('clique');
+    },
+  );
+
+  it('URL de rede sem esquema (`//host`) não passa como relativa', () => {
+    for (const url of ['//169.254.169.254/x', '\\\\127.0.0.1\\x', '/\\localhost/x']) {
+      expect(sanitizeEmailHtml(`<img src="${url}">`)).toBe('<img>');
+      expect(sanitizeEmailHtml(`<a href="${url}">l</a>`)).toBe('<a>l</a>');
+    }
+  });
+
+  it('`//host` público continua valendo', () => {
+    expect(sanitizeEmailHtml('<img src="//cdn.cliente.com/logo.png">')).toContain(
+      'src="//cdn.cliente.com/logo.png"',
+    );
+  });
+
+  it('src relativo sai — resolveria contra a origem do produto, com o cookie do atendente', () => {
+    expect(sanitizeEmailHtml('<img src="/api/v1/workspace/delete">')).toBe('<img>');
+  });
+
+  it('entidade disfarçando o host interno não engana', () => {
+    // `&#49;27.0.0.1` → `127.0.0.1` depois de decodificar.
+    expect(sanitizeEmailHtml('<img src="http://&#49;27.0.0.1/">')).toBe('<img>');
+  });
+
+  it('imagem pública e anexo embutido (cid:) seguem', () => {
+    expect(sanitizeEmailHtml('<img src="https://cdn.cliente.com/a.png">')).toContain('src=');
+    expect(sanitizeEmailHtml('<img src="cid:logo@x">')).toContain('src="cid:logo@x"');
+  });
+});

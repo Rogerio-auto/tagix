@@ -63,3 +63,11 @@ pnpm lint
 ## Notas
 
 - O passe com Meta real é uma etapa operacional manual e exige canal de staging; ausência dessa infraestrutura mantém o resultado em `NO-GO` para produção em massa.
+
+### Herdado da F58-S11 (2026-10-07)
+
+As mudanças de API da F58-S11 não têm teste commitado (os testes da API estavam fora da fronteira
+dela; foram conferidas com um supertest temporário, 5/5). Este slot cobre com teste permanente:
+`activate`/`resume` recusam campanha com prazo vencido (`campaign_ended`); `endAt <= startAt` recusado
+na criação e na edição; `pause` só em `running`/`scheduled`; `resume` com início futuro volta a
+`scheduled`; `GET /api/campaigns/:id` traz `statusReason`.
