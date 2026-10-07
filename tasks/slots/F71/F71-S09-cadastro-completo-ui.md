@@ -2,7 +2,7 @@
 id: F71-S09
 title: Telas de cadastro sem beco sem saída — reenviar confirmação, login de não confirmado e aceite de termos
 phase: F71
-status: blocked
+status: in-progress
 priority: high
 estimated_size: S
 ui: true
@@ -12,6 +12,9 @@ source_docs:
   - docs/features/CONTAS_E_CONVITES.md
   - docs/features/SELF_SERVE_SIGNUP.md
   - docs/UX_PRINCIPLES.md
+agent_id: backend-engineer
+claimed_at: 2026-10-07T01:30:55Z
+
 ---
 # F71-S09 — Cadastro completo (UI)
 
