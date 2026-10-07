@@ -8,6 +8,8 @@ import { Search } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { useUIStore } from '@/shared/stores/ui.store';
 import { useKeyboardShortcuts } from '@/shared/hooks/useKeyboardShortcuts';
+import { useAuthStore } from '@/shared/stores/auth.store';
+import { visibleNavItems } from '@/shared/components/layout/nav';
 
 export interface Command {
   id: string;
@@ -15,17 +17,6 @@ export interface Command {
   hint?: string;
   run: () => void;
 }
-
-// Navegação padrão. Features registram comandos extras via prop `commands`.
-const NAV: ReadonlyArray<{ label: string; href: string }> = [
-  { label: 'Dashboard', href: '/' },
-  { label: 'Conversas', href: '/conversations' },
-  { label: 'Contatos', href: '/contacts' },
-  { label: 'Pipeline', href: '/pipeline' },
-  { label: 'Campanhas', href: '/campaigns' },
-  { label: 'Agenda', href: '/calendar' },
-  { label: 'Configurações', href: '/settings' },
-];
 
 /**
  * Paleta de comandos global (UX §2.10 — Cmd/Ctrl+K). Monte uma vez no
@@ -36,15 +27,19 @@ export function CommandPalette({ commands = [] }: { commands?: Command[] }) {
   const setOpen = useUIStore((s) => s.setCommandOpen);
   const toggle = useUIStore((s) => s.toggleCommand);
   const router = useRouter();
+  const role = useAuthStore((st) => st.auth?.role);
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useKeyboardShortcuts(useMemo(() => [{ key: 'k', ctrlOrMeta: true, handler: () => toggle() }], [toggle]));
+  useKeyboardShortcuts(
+    useMemo(() => [{ key: 'k', ctrlOrMeta: true, handler: () => toggle() }], [toggle]),
+  );
 
   const all = useMemo<Command[]>(
     () => [
-      ...NAV.map((n) => ({
+      // Destinos vêm do `nav.ts` já filtrados por papel: quem não pode agir não vê.
+      ...visibleNavItems(role).map((n) => ({
         id: `nav:${n.href}`,
         label: n.label,
         hint: 'Ir para',
@@ -52,7 +47,7 @@ export function CommandPalette({ commands = [] }: { commands?: Command[] }) {
       })),
       ...commands,
     ],
-    [commands, router],
+    [commands, router, role],
   );
 
   const filtered = useMemo(
@@ -81,7 +76,12 @@ export function CommandPalette({ commands = [] }: { commands?: Command[] }) {
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') setOpen(false);
-    else if (e.key === 'ArrowDown') {
+    else if (e.key === 'Tab') {
+      // Trap de foco: a paleta é um diálogo modal de um campo só; Tab não vaza para a
+      // página atrás (WCAG 2.4.3). A navegação entre opções é por setas.
+      e.preventDefault();
+      inputRef.current?.focus();
+    } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       setIndex((i) => Math.min(i + 1, filtered.length - 1));
     } else if (e.key === 'ArrowUp') {
@@ -104,13 +104,13 @@ export function CommandPalette({ commands = [] }: { commands?: Command[] }) {
         if (e.target === e.currentTarget) setOpen(false);
       }}
     >
-      <div className="absolute inset-0 bg-black/60" aria-hidden />
+      <div className="absolute inset-0 bg-bg/70 backdrop-blur-sm" aria-hidden />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Paleta de comandos"
         onKeyDown={onKeyDown}
-        className="relative z-10 w-full max-w-lg overflow-hidden rounded-lg border border-border bg-surface shadow-elev-4"
+        className="relative z-10 w-full max-w-lg overflow-hidden rounded-md border border-border-2 bg-surface-glass shadow-ds-3 backdrop-blur-xl"
       >
         <div className="flex items-center gap-2 border-b border-border-2 px-4">
           <Search className="size-4 text-text-low" aria-hidden />
@@ -130,9 +130,16 @@ export function CommandPalette({ commands = [] }: { commands?: Command[] }) {
             className="h-12 w-full bg-transparent font-body text-text outline-none placeholder:text-text-low"
           />
         </div>
-        <ul id="hm-command-list" role="listbox" aria-label="Comandos" className="max-h-80 overflow-y-auto p-2">
+        <ul
+          id="hm-command-list"
+          role="listbox"
+          aria-label="Comandos"
+          className="max-h-80 overflow-y-auto p-2"
+        >
           {filtered.length === 0 && (
-            <li className="px-3 py-6 text-center font-body text-sm text-text-low">Nenhum comando</li>
+            <li className="px-3 py-6 text-center font-body text-sm text-text-low">
+              Nenhum comando
+            </li>
           )}
           {filtered.map((c, i) => (
             <li key={c.id} id={`hm-cmd-${c.id}`} role="option" aria-selected={i === index}>
@@ -146,7 +153,9 @@ export function CommandPalette({ commands = [] }: { commands?: Command[] }) {
                 }}
                 className={cn(
                   'flex w-full items-center justify-between gap-3 rounded-sm px-3 py-2 text-left font-body text-sm transition-colors',
-                  i === index ? 'bg-surface-3 text-text' : 'text-text-mid',
+                  i === index
+                    ? 'bg-surface-3 text-text shadow-[inset_2px_0_0_var(--brand-text)]'
+                    : 'text-text-mid',
                 )}
               >
                 <span>{c.label}</span>
@@ -155,6 +164,11 @@ export function CommandPalette({ commands = [] }: { commands?: Command[] }) {
             </li>
           ))}
         </ul>
+        <div className="flex items-center gap-4 border-t border-border px-4 py-2 font-mono text-[0.6875rem] text-text-low">
+          <span>↑↓ navegar</span>
+          <span>↵ abrir</span>
+          <span>esc fechar</span>
+        </div>
       </div>
     </div>,
     document.body,

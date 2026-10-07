@@ -93,7 +93,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             // página inteira scrollar). Demais rotas mantêm o gutter + scroll.
             fullBleed
               ? 'flex flex-col overflow-hidden'
-              : 'overflow-y-auto px-4 py-6 lg:px-8',
+              : 'overflow-y-auto px-4 py-5 md:px-8 md:py-8',
           )}
         >
           {children}
