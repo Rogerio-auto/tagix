@@ -8,6 +8,7 @@ import { useUIStore } from '@/shared/stores/ui.store';
 import { cn } from '@/shared/lib/cn';
 import { visibleNavItems, type NavItem } from './nav';
 import { UserMenu } from './UserMenu';
+import { WorkspaceSwitcher } from '@/shared/components/workspace-switcher';
 
 /**
  * Navegação principal do desktop (`md+`). No mobile (`< md`) o app usa a
@@ -43,19 +44,9 @@ export function Sidebar() {
         collapsed ? 'w-16' : 'w-60',
       )}
     >
-      <div className={cn('flex h-14 items-center', collapsed ? 'justify-center px-0' : 'px-5')}>
-        <span className="font-display text-lg text-brand" aria-hidden>
-          ◢
-        </span>
-        <span
-          className={cn(
-            'overflow-hidden whitespace-nowrap font-head text-lg font-semibold text-text transition-all duration-200',
-            collapsed ? 'ml-0 max-w-0 opacity-0' : 'ml-2 max-w-[140px] opacity-100',
-          )}
-        >
-          Leadium
-        </span>
-      </div>
+      {/* Marca + empresa ativa (F71-S08): o nome da empresa é sempre visível; com
+          2+ empresas o bloco vira o seletor. */}
+      <WorkspaceSwitcher collapsed={collapsed} />
 
       <nav className="flex-1 overflow-y-auto px-3 py-2">
         <ul className="space-y-1">

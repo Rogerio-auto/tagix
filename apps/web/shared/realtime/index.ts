@@ -12,3 +12,4 @@ export type {
   HmSocket,
 } from './SocketProvider';
 export { useSocket } from './useSocket';
+export { reconnectSocket } from './reconnect';
