@@ -2,7 +2,7 @@
 id: F71-S09
 title: Telas de cadastro sem beco sem saída — reenviar confirmação, login de não confirmado e aceite de termos
 phase: F71
-status: review
+status: done
 priority: high
 estimated_size: S
 ui: true
