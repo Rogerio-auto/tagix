@@ -2,7 +2,7 @@
 id: F71-S07
 title: Tela de aceitar convite e gestão de membros com convites pendentes
 phase: F71
-status: review
+status: done
 priority: high
 estimated_size: M
 ui: true
