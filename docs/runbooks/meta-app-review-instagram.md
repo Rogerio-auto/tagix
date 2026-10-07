@@ -1,5 +1,11 @@
 # Runbook — Meta App Review (Instagram Messaging)
 
+> **2026-10-07 — substituído pelo kit da F69-S10:** [`docs/app-review/`](../app-review/README.md)
+> (fichas, roteiros, conta de teste) e [`meta-app-review.md`](meta-app-review.md) (submissão).
+> Este arquivo fica como histórico e pela lista de motivos de reprovação (§5).
+> **Correção:** `pages_messaging` (tabela abaixo) **não** deve ser pedida — o código responde pelo
+> Instagram com `instagram_manage_messages` e não pede `pages_messaging` no login.
+
 > **Quando:** antes de tirar o canal Instagram do Dev Mode (pré-disparo comercial — F1.5).
 > **Postura:** Highermind como **Tech Provider** único (mesmo Meta App de WhatsApp).
 > **Pré-requisitos:** app já em produção para WhatsApp; webhook único `/webhooks/meta` no ar;
@@ -22,7 +28,7 @@ para contas de teste (Dev Mode) — inviável para clientes reais.
 | `instagram_manage_comments` | Listar, responder (público/DM), ocultar e excluir comentários em posts/reels. | Moderação de comentários sob posts do próprio cliente, por operadores autorizados. |
 | `pages_show_list` | Listar as Páginas FB do usuário no wizard de conexão. | Selecionar a Página vinculada à IG Business Account. |
 | `pages_manage_metadata` | Inscrever a Página + IGBA no webhook do app (subscription). | Habilitar recebimento de eventos IG no webhook unificado. |
-| `pages_messaging` | Enviar mensagens via a Página vinculada (Messenger Platform underlying IG). | Entregar respostas do operador/agente ao usuário. |
+| ~~`pages_messaging`~~ | **Não pedir** (ver nota no topo). | — |
 | `business_management` | Operar sob o Business do cliente (Tech Provider). | Conexão multi-tenant gerida pelo Highermind. |
 
 > **`instagram_manage_comments` é o item mais escrutinado.** Preparar screencast dedicado
