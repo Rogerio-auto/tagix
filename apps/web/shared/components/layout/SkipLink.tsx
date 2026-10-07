@@ -14,7 +14,7 @@ export function SkipLink({ targetId = 'main-content' }: { targetId?: string }) {
         'shadow-elev-3 outline-none',
         // Vira visível e ancorado no topo-esquerdo apenas quando focado.
         'focus-visible:not-sr-only focus-visible:fixed focus-visible:left-4 focus-visible:top-4',
-        'focus-visible:shadow-glow-md',
+        'focus-visible:focus-ring',
       )}
     >
       Pular para o conteúdo

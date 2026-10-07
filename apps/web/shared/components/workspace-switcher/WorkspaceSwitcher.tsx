@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
+import { workspaceInitial } from './labels';
 import { WorkspaceList } from './WorkspaceList';
 import { useWorkspaceSwitcher } from './useWorkspaceSwitcher';
 
@@ -43,15 +44,18 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
   }, [open]);
 
   const mark = (
-    <span className="font-display text-lg text-brand" aria-hidden>
-      ◢
+    <span
+      aria-hidden
+      className="grid size-7 shrink-0 place-items-center rounded-xs bg-surface-3 font-head text-xs font-semibold text-text"
+    >
+      {activeName ? workspaceInitial(activeName) : null}
     </span>
   );
   const name = (
     <span
       className={cn(
-        'min-w-0 overflow-hidden whitespace-nowrap text-left font-head text-base font-semibold text-text transition-all duration-200',
-        collapsed ? 'ml-0 max-w-0 opacity-0' : 'ml-2 max-w-[140px] flex-1 opacity-100',
+        'min-w-0 overflow-hidden whitespace-nowrap text-left font-head text-sm font-semibold text-text transition-all duration-200 motion-reduce:transition-none',
+        collapsed ? 'ml-0 max-w-0 opacity-0' : 'ml-2.5 flex-1 opacity-100',
       )}
     >
       {activeName ? (
@@ -64,7 +68,11 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
       )}
     </span>
   );
-  const rowClass = cn('flex h-14 w-full items-center', collapsed ? 'justify-center px-0' : 'px-5');
+  // Cartão da empresa (maquete `.workspace-switch`): borda hairline + `surface-2`.
+  const rowClass = cn(
+    'flex h-11 w-full items-center rounded-sm border border-border bg-surface-2',
+    collapsed ? 'justify-center px-0' : 'px-2',
+  );
 
   if (!canSwitch) {
     return (
@@ -88,12 +96,14 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
         title={activeName || undefined}
         className={cn(
           rowClass,
-          'outline-none transition-colors duration-200 hover:bg-surface-2 focus-visible:shadow-glow-md',
+          'outline-none transition-colors duration-200 hover:border-border-2 hover:bg-surface-3 focus-visible:focus-ring',
         )}
       >
         {mark}
         {name}
-        {!collapsed && <ChevronsUpDown className="ml-1 size-4 shrink-0 text-text-low" aria-hidden />}
+        {!collapsed && (
+          <ChevronsUpDown className="ml-1 size-4 shrink-0 text-text-low" aria-hidden />
+        )}
       </button>
       {open && (
         <div
@@ -101,8 +111,8 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
           role="menu"
           aria-label="Trocar de empresa"
           className={cn(
-            'absolute top-full z-30 mt-1 rounded-sm border border-border bg-surface-2 p-1 shadow-lg',
-            collapsed ? 'left-2 w-64' : 'inset-x-2',
+            'absolute top-full z-30 mt-1 rounded-sm border border-border-2 bg-surface-2 p-1 shadow-ds-2',
+            collapsed ? 'left-0 w-64' : 'inset-x-0',
           )}
         >
           <p className="px-2 pb-1 pt-1.5 font-head text-xs font-medium uppercase tracking-wide text-text-low">

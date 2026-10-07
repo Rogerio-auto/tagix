@@ -100,7 +100,7 @@ export function WorkspaceList({ onSelected, autoFocus = false, className }: Work
               onClick={() => void choose(m.workspaceId)}
               className={cn(
                 'flex w-full items-center gap-3 rounded-sm px-2 py-2 text-left outline-none',
-                'transition-colors duration-150 focus-visible:shadow-glow-md',
+                'transition-colors duration-150 focus-visible:focus-ring',
                 'hover:bg-surface-3 focus-visible:bg-surface-3 disabled:cursor-wait disabled:opacity-60',
                 active && 'bg-surface-3',
               )}
@@ -149,7 +149,7 @@ export function WorkspaceList({ onSelected, autoFocus = false, className }: Work
           <button
             type="button"
             onClick={clearError}
-            className="shrink-0 rounded-xs font-medium text-text-mid underline-offset-2 outline-none hover:text-text hover:underline focus-visible:shadow-glow-md"
+            className="shrink-0 rounded-xs font-medium text-text-mid underline-offset-2 outline-none hover:text-text hover:underline focus-visible:focus-ring"
           >
             Ok
           </button>

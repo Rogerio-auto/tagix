@@ -103,7 +103,7 @@ export function AccountBanner() {
   const hitArea = 'relative after:absolute after:-inset-1.5';
   const actionClass = cn(
     hitArea,
-    'inline-flex h-8 shrink-0 items-center rounded-sm border border-border bg-surface px-3 font-head text-xs font-medium text-text outline-none transition-colors duration-150 hover:bg-surface-2 focus-visible:shadow-glow-md',
+    'inline-flex h-8 shrink-0 items-center rounded-sm border border-border bg-surface px-3 font-head text-xs font-medium text-text outline-none transition-colors duration-150 hover:bg-surface-2 focus-visible:focus-ring',
   );
 
   // `pt-safe`: a faixa é o topo da tela no mobile; com `viewport-fit=cover` ficaria sob
@@ -143,7 +143,7 @@ export function AccountBanner() {
             type="button"
             aria-label="Dispensar aviso"
             onClick={() => dismiss(dismissKey)}
-            className={cn(hitArea, 'grid size-8 shrink-0 place-items-center rounded-sm text-text-mid outline-none transition-colors duration-150 hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md')}
+            className={cn(hitArea, 'grid size-8 shrink-0 place-items-center rounded-sm text-text-mid outline-none transition-colors duration-150 hover:bg-surface-2 hover:text-text focus-visible:focus-ring')}
           >
             <X className="size-4" aria-hidden />
           </button>

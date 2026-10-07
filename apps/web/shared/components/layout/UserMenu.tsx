@@ -3,19 +3,21 @@
 import Link from 'next/link';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronUp, LogOut, Settings } from 'lucide-react';
+import { ChevronUp, LogOut, Moon, Settings, Sun } from 'lucide-react';
 import type { Role } from '@hm/shared';
 import { api } from '@/shared/lib/api-client';
 import { useAuthStore } from '@/shared/stores/auth.store';
+import { useThemeStore } from '@/shared/stores/theme.store';
 import { cn } from '@/shared/lib/cn';
-import { ROLE_LABEL, WorkspaceList, useWorkspaceSwitcher } from '@/shared/components/workspace-switcher';
+import {
+  ROLE_LABEL,
+  WorkspaceList,
+  useWorkspaceSwitcher,
+} from '@/shared/components/workspace-switcher';
 
 /** Iniciais a partir do nome (sem avatar no store — UX §2.4: identidade legível). */
 export function initialsFromName(name: string): string {
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+  const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';
   const first = parts[0]?.[0] ?? '';
   const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '';
@@ -78,6 +80,8 @@ export function UserMenu({
   const [signingOut, setSigningOut] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const theme = useThemeStore((st) => st.theme);
+  const toggleTheme = useThemeStore((st) => st.toggle);
 
   const { activeName, canSwitch } = useWorkspaceSwitcher();
   const initials = initialsFromName(name);
@@ -117,7 +121,7 @@ export function UserMenu({
   const Avatar = (
     <span
       aria-hidden
-      className="grid size-8 shrink-0 place-items-center rounded-full bg-surface-3 font-head text-xs font-semibold text-text"
+      className="grid size-8 shrink-0 place-items-center rounded-sm border border-border-2 bg-surface-3 font-head text-xs font-semibold text-text"
     >
       {initials}
     </span>
@@ -134,7 +138,7 @@ export function UserMenu({
         title={collapsed ? `${name} · ${roleLabel}` : undefined}
         aria-label={variant === 'compact' || collapsed ? `Conta de ${name}` : undefined}
         className={cn(
-          'group flex items-center rounded-sm outline-none transition-colors duration-200 focus-visible:shadow-glow-md',
+          'group flex items-center rounded-sm outline-none transition-colors duration-200 focus-visible:focus-ring',
           collapsed
             ? 'w-full justify-center py-2 hover:bg-surface-2'
             : variant === 'block'
@@ -166,11 +170,15 @@ export function UserMenu({
           role="menu"
           aria-label="Conta"
           className={cn(
-            'absolute right-0 z-20 overflow-hidden rounded-sm border border-border bg-surface-2 py-1 shadow-lg',
+            'absolute right-0 z-20 overflow-hidden rounded-sm border border-border-2 bg-surface-2 py-1 shadow-ds-2',
             // `block` ocupa a largura do gatilho (rodapé da Sidebar); `compact`
             // abre um popover de largura fixa ancorado à direita (TopBar mobile).
             // `collapsed` (sidebar recolhida) ancora à esquerda e abre p/ a direita.
-            collapsed ? 'left-0 w-56' : variant === 'block' ? 'left-0' : 'w-72 max-w-[calc(100vw-1rem)]',
+            collapsed
+              ? 'left-0 w-56'
+              : variant === 'block'
+                ? 'left-0'
+                : 'w-72 max-w-[calc(100vw-1rem)]',
             'max-h-[75dvh] overflow-y-auto',
             placement === 'up' ? 'bottom-full mb-2' : 'top-full mt-2',
           )}
@@ -195,11 +203,26 @@ export function UserMenu({
               )}
             </div>
           )}
+          {variant === 'compact' && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={toggleTheme}
+              className="flex w-full items-center gap-3 px-3 py-2 font-head text-sm text-text-mid outline-none transition-colors duration-150 hover:bg-surface-3 hover:text-text focus-visible:bg-surface-3 focus-visible:text-text focus-visible:focus-ring focus-visible:-outline-offset-2"
+            >
+              {theme === 'dark' ? (
+                <Sun className="size-4 shrink-0" aria-hidden />
+              ) : (
+                <Moon className="size-4 shrink-0" aria-hidden />
+              )}
+              {theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+            </button>
+          )}
           <Link
             href="/settings"
             role="menuitem"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-3 px-3 py-2 font-head text-sm text-text-mid outline-none transition-colors duration-150 hover:bg-surface-3 hover:text-text focus-visible:bg-surface-3 focus-visible:text-text focus-visible:shadow-glow-md"
+            className="flex items-center gap-3 px-3 py-2 font-head text-sm text-text-mid outline-none transition-colors duration-150 hover:bg-surface-3 hover:text-text focus-visible:bg-surface-3 focus-visible:text-text focus-visible:focus-ring focus-visible:-outline-offset-2"
           >
             <Settings className="size-4 shrink-0" aria-hidden />
             Perfil e configurações
@@ -210,7 +233,7 @@ export function UserMenu({
             onClick={handleLogout}
             disabled={signingOut}
             aria-busy={signingOut}
-            className="flex w-full items-center gap-3 px-3 py-2 font-head text-sm text-text-mid outline-none transition-colors duration-150 hover:bg-surface-3 hover:text-text focus-visible:bg-surface-3 focus-visible:text-text focus-visible:shadow-glow-md disabled:cursor-wait disabled:opacity-70"
+            className="flex w-full items-center gap-3 px-3 py-2 font-head text-sm text-text-mid outline-none transition-colors duration-150 hover:bg-surface-3 hover:text-text focus-visible:bg-surface-3 focus-visible:text-text focus-visible:focus-ring focus-visible:-outline-offset-2 disabled:cursor-wait disabled:opacity-70"
           >
             <LogOut className="size-4 shrink-0" aria-hidden />
             {signingOut ? 'Saindo…' : 'Sair'}
