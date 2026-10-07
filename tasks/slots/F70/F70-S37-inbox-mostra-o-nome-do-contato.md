@@ -2,7 +2,7 @@
 id: F70-S37
 title: Lista e cabeçalho da conversa mostram o nome do contato, não o número
 phase: F70
-status: blocked
+status: review
 priority: high
 estimated_size: S
 ui: true
@@ -11,6 +11,10 @@ blocks: []
 source_docs:
   - tasks/slots/F70/F70-S36-nome-do-perfil-do-contato.md
   - docs/UX_PRINCIPLES.md
+agent_id: backend-engineer
+claimed_at: 2026-10-07T17:41:11Z
+completed_at: 2026-10-07T18:10:05Z
+
 ---
 # F70-S37 — Lista e cabeçalho da conversa mostram o nome do contato
 
@@ -57,3 +61,7 @@ pnpm --filter @hm/web exec vitest run features/conversations --maxWorkers=1
 ## Notas
 
 - Agente: `frontend-engineer`.
+
+## Revisão de design (/hm-designer, revisor delegado)
+
+APROVADO COM RESSALVAS. B1 (aviso não sumia após "Usar este nome": cache de conversas/detalhe) corrigido, junto com F1 (iniciais ignoram preposições) e F5 (comparação de nome sem caixa/acento). Follow-ups abertos: F2 ícone de pessoa no avatar sem nome (hoje '#'); F3 cor determinística de avatar (slot de DS); F4 telefone visível na lista para homônimos; F7 contraste do selo "IA" no claro; a11y `nested-interactive` (serious, preexistente: `li role=option` com `<a>`; trocar para nav/ul). Fixture de e2e: `contactDisplayName` espelha o remoteId para não quebrar specs que acham o item pelo número (pom.ts/seed.ts fora de files_allowed). Capturas 375/1440 dark+light na scratchpad da sessão; axe sem violação nova.

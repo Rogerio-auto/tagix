@@ -27,6 +27,7 @@ import { MessageBubble } from './MessageBubble';
 import { MessageStatusReceipts } from './MessageBubble/status';
 import { IgCommentActions, type IgComment } from './IgComments';
 import { can } from '@hm/shared';
+import { contactLabel } from '../contact-label';
 import { useAuthStore } from '@/shared/stores/auth.store';
 
 
@@ -236,7 +237,14 @@ function MobileThread({
 
         <div className="min-w-0 flex-1">
           <p className="truncate font-head text-sm font-semibold text-text">
-            {detail?.remoteId ?? 'Conversa'}
+            {detail
+              ? contactLabel({
+                  displayName: detail.contact?.displayName,
+                  profileName: detail.contact?.profileName,
+                  remoteId: detail.remoteId,
+                  channel: detail.channelProvider ?? detail.kind,
+                }).label
+              : 'Conversa'}
           </p>
         </div>
 

@@ -111,8 +111,8 @@ export function ChatListFilters({
           type="search"
           value={filters.search}
           onChange={(e) => onChange('search', e.target.value)}
-          placeholder="Buscar conversa…"
-          aria-label="Buscar conversa"
+          placeholder="Buscar por nome ou telefone…"
+          aria-label="Buscar conversa por nome ou telefone"
           className={cn(
             'h-9 w-full rounded-md border border-border-2 bg-surface-inset pl-9 pr-3',
             'font-body text-sm text-text placeholder:text-text-low',

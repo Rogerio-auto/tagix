@@ -44,6 +44,7 @@ import { AgentSelector } from './AgentSelector';
 import { ActiveExecutionsSection } from './ActiveExecutionsSection';
 import { SnoozeMenu } from './SnoozeMenu';
 import { CollapsibleSection } from './CollapsibleSection';
+import { ProfileNameNotice } from './ProfileNameNotice';
 import { useConversationDetail, useChangeStatus, useChangeAiMode } from '../queries';
 
 // ── Helpers de formatação ─────────────────────────────────────────────────────
@@ -311,7 +312,13 @@ export function ContactInfoPanel({
               <Skeleton className="h-16 w-full" />
             </div>
           ) : detail?.contact ? (
-            <ContactPanel contactId={detail.contact.id} editable />
+            <>
+              <ProfileNameNotice
+                contact={detail.contact}
+                channel={detail.channelProvider ?? detail.kind}
+              />
+              <ContactPanel contactId={detail.contact.id} editable />
+            </>
           ) : (
             <p className="font-body text-sm text-text-low">
               Esta conversa ainda não tem um contato vinculado.

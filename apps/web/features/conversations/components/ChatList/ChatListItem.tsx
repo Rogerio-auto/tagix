@@ -18,6 +18,7 @@ import { cn } from '@/shared/lib/cn';
 import { FlowExecutionsBadge } from '@/features/flow-builder/livechat';
 import { ConversationKindBadge } from '../IgComments/ConversationKindBadge';
 import { MessagePreview } from './MessagePreview';
+import { contactLabel } from '../../contact-label';
 import type { ConversationSummary } from '../../types';
 
 export interface ChatListItemProps {
@@ -38,10 +39,6 @@ export interface ChatListItemProps {
   tabIndex: number;
   /** Marca o item focado logicamente quando navegado por teclado. */
   focused: boolean;
-}
-
-function initials(remoteId: string): string {
-  return (remoteId || '?').slice(0, 2).toUpperCase();
 }
 
 /**
@@ -112,6 +109,12 @@ export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(fun
   const hasUnread = conversation.unreadCount > 0;
   const time = relativeTime(conversation.lastMessageAt);
   const timeFull = fullTimestamp(conversation.lastMessageAt);
+  const who = contactLabel({
+    displayName: conversation.contactDisplayName,
+    profileName: conversation.contactProfileName,
+    remoteId: conversation.remoteId,
+    channel: conversation.kind,
+  });
 
   return (
     <li role="option" aria-selected={active}>
@@ -121,6 +124,7 @@ export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(fun
         aria-current={active ? 'true' : undefined}
         tabIndex={tabIndex}
         data-conversation-id={conversation.id}
+        title={who.secondary ?? undefined}
         className={cn(
           'relative flex items-center gap-3 rounded-lg px-3 py-3 outline-none',
           // Transição fluida do estado de seleção (glow + fundo + recuo dos
@@ -150,7 +154,7 @@ export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(fun
         )}
       >
         <div className="flex size-10 shrink-0 items-center justify-center rounded-pill bg-surface-3 font-head text-sm text-text-mid">
-          {initials(conversation.remoteId)}
+          <span aria-hidden>{who.initials}</span>
         </div>
 
         <div className="min-w-0 flex-1">
@@ -161,7 +165,7 @@ export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(fun
                 hasUnread ? 'font-semibold text-text' : 'text-text',
               )}
             >
-              {conversation.remoteId}
+              {who.label}
             </p>
             <div className="flex shrink-0 items-center gap-1.5">
               <ConversationKindBadge kind={conversation.kind} />
