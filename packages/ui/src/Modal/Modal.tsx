@@ -1,7 +1,8 @@
-import type { ReactNode, KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { ReactNode, RefObject, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useCallback, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { IconButton } from '../IconButton/IconButton';
 import { cn } from '../lib/cn';
 
 const FOCUSABLE =
@@ -15,13 +16,15 @@ export interface ModalProps {
   children?: ReactNode;
   footer?: ReactNode;
   className?: string;
+  /** Elemento que recebe o foco ao abrir (ex.: o botão seguro de um diálogo destrutivo). Padrão: 1º focável. */
+  initialFocusRef?: RefObject<HTMLElement | null>;
 }
 
 /**
  * Modal acessível (portal + backdrop + focus trap + Esc/click-out).
  * UX §2.3: reservado a CONFIRMAÇÃO e WIZARD — detalhe de item usa Drawer, não Modal.
  */
-export function Modal({ open, onClose, title, description, children, footer, className }: ModalProps) {
+export function Modal({ open, onClose, title, description, children, footer, className, initialFocusRef }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descId = useId();
@@ -36,13 +39,13 @@ export function Modal({ open, onClose, title, description, children, footer, cla
     document.body.style.overflow = 'hidden';
     // Guarda o gatilho para devolver o foco ao fechar (WCAG 2.4.3 — ordem de foco).
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    (initialFocusRef?.current ?? dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE))?.focus();
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
       previouslyFocused?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open, onClose, initialFocusRef]);
 
   const trapTab = useCallback((e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Tab') return;
@@ -70,7 +73,7 @@ export function Modal({ open, onClose, title, description, children, footer, cla
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="absolute inset-0 bg-black/60 motion-safe:animate-[hm-fade-in_180ms_ease-out]" aria-hidden />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm motion-safe:animate-[hm-fade-in_var(--dur-base)_var(--ease)_both]" aria-hidden />
       <div
         ref={dialogRef}
         role="dialog"
@@ -80,8 +83,8 @@ export function Modal({ open, onClose, title, description, children, footer, cla
         aria-describedby={description ? descId : undefined}
         onKeyDown={trapTab}
         className={cn(
-          'relative z-10 w-full max-w-md rounded-lg border border-border bg-surface shadow-elev-4',
-          'motion-safe:animate-[hm-modal-in_200ms_ease-out]',
+          'relative z-10 w-full max-w-md rounded-xl border border-border bg-surface shadow-ds-3',
+          'motion-safe:animate-[hm-modal-in_240ms_var(--ease-spring)_both]',
           className,
         )}
       >
@@ -91,14 +94,7 @@ export function Modal({ open, onClose, title, description, children, footer, cla
               {title}
             </h2>
           )}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="ml-auto rounded-sm p-1 text-text-low outline-none transition-colors duration-200 hover:text-text focus-visible:shadow-glow-md"
-          >
-            <X className="size-5" />
-          </button>
+          <IconButton aria-label="Fechar" icon={<X />} size="sm" onClick={onClose} className="-mr-1 -mt-1 ml-auto shrink-0" />
         </div>
         {description && (
           <p id={descId} className="px-5 pt-2 font-body text-sm text-text-mid">
@@ -107,7 +103,7 @@ export function Modal({ open, onClose, title, description, children, footer, cla
         )}
         <div className="px-5 py-4 font-body text-text">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-border-2 px-5 py-4">{footer}</div>
+          <div className="flex justify-end gap-2 border-t border-border px-5 py-4">{footer}</div>
         )}
       </div>
     </div>,

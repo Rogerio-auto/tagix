@@ -1,3 +1,4 @@
+import { ThemePair } from '../lib/ThemePair';
 import { Skeleton, SkeletonCard, SkeletonText } from './Skeleton';
 
 export const Base = () => (
@@ -20,4 +21,14 @@ export const Cards = () => (
     <SkeletonCard />
     <SkeletonCard media={false} lines={3} />
   </div>
+);
+
+export const BothThemes = () => (
+  <ThemePair>
+    <div className="flex flex-col gap-3">
+      <SkeletonText lines={3} />
+      <SkeletonCard />
+      <SkeletonCard media={false} lines={3} />
+    </div>
+  </ThemePair>
 );

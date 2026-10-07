@@ -167,6 +167,16 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
+  /* Estados redeclarados: bloco escuro aninhado em claro herdaria os tons do claro. */
+  --danger: #ff625f;
+  --danger-bg: #2a0e0e;
+  --warn: #f6c85f;
+  --warn-bg: #2b1d00;
+  --info: #67b7ff;
+  --info-bg: #0a1a2a;
+  --success: #25f018;
+  --success-bg: #08200a;
+
   --bg: #070907;
   --bg-alt: #0a0d0b;
   --bg-elevated: #0a0d0b; /* DS 3.0; mesmo valor de --bg-alt (o nome do v2 permanece) */

@@ -48,3 +48,15 @@ export const BottomSheet = () => {
     </div>
   );
 };
+
+export const OpenByDefault = () => (
+  <Drawer
+    open
+    onClose={() => undefined}
+    title="Detalhe do negócio"
+    description="Acme Corp — R$ 12.400"
+    footer={<Button variant="primary">Salvar</Button>}
+  >
+    <p className="text-sm text-text-mid">Painel lateral para detalhe de item (UX §2.3).</p>
+  </Drawer>
+);

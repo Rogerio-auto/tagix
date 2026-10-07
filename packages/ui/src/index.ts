@@ -5,7 +5,24 @@
 import type { ButtonVariant, ButtonSize } from './Button/Button';
 
 export { Avatar } from './Avatar/Avatar';
-export type { AvatarProps, AvatarSize } from './Avatar/Avatar';
+export type { AvatarProps, AvatarSize, AvatarShape } from './Avatar/Avatar';
+
+export { Badge, StatusPill } from './Badge/Badge';
+export type { BadgeProps, BadgeTone, BadgeSize, StatusPillProps } from './Badge/Badge';
+
+export { Switch } from './Switch/Switch';
+export type { SwitchProps } from './Switch/Switch';
+
+export { DataTable } from './DataTable/DataTable';
+export type {
+  DataTableProps,
+  DataTableColumn,
+  DataTableAlign,
+  DataTableDensity,
+  DataTableRowState,
+  DataTableSort,
+  DataTableSortDirection,
+} from './DataTable/DataTable';
 
 export { Button } from './Button/Button';
 export type { ButtonProps, ButtonVariant, ButtonSize } from './Button/Button';

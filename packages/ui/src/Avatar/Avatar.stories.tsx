@@ -1,3 +1,4 @@
+import { ThemePair } from '../lib/ThemePair';
 import { Avatar } from './Avatar';
 
 const PHOTO = 'https://i.pravatar.cc/120?img=12';
@@ -25,4 +26,26 @@ export const BrokenImageFallsBack = () => (
     <Avatar src="https://invalid.example/broken.png" name="Bruno Castro" size="md" />
     <Avatar src="https://invalid.example/broken.png" name="Carla Dias" size="lg" />
   </div>
+);
+
+export const Shapes = () => (
+  <div className="flex items-end gap-4">
+    <Avatar name="Ana Lima" size="sm" />
+    <Avatar name="Ana Lima" size="md" />
+    <Avatar name="Ana Lima" size="lg" />
+    <Avatar name="Ana Lima" size="sm" shape="circle" />
+    <Avatar name="Ana Lima" size="md" shape="circle" />
+    <Avatar name="Ana Lima" size="lg" shape="circle" />
+  </div>
+);
+
+export const BothThemes = () => (
+  <ThemePair>
+    <div className="flex items-end gap-4">
+      <Avatar name="Maria Santos" size="sm" />
+      <Avatar name="John Lewis" size="md" />
+      <Avatar name="Carla Reis" size="lg" />
+      <Avatar name="Robert Brown" size="md" shape="circle" />
+    </div>
+  </ThemePair>
 );

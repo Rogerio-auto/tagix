@@ -7,7 +7,9 @@ describe('Skeleton — contrato', () => {
     const { container } = render(<Skeleton />);
     const el = container.firstElementChild;
     expect(el).toHaveAttribute('aria-hidden', 'true');
-    expect(el).toHaveClass('animate-pulse', 'motion-reduce:animate-none');
+    // Animação só existe sob `motion-safe:` — com prefers-reduced-motion o bloco fica parado.
+    expect(el).toHaveClass('motion-safe:animate-[hm-shimmer_1.8s_linear_infinite]');
+    expect(el?.className).not.toMatch(/(^|\s)animate-/);
   });
 
   it('SkeletonText anuncia carregamento (role=status, aria-busy) e respeita o número de linhas', () => {

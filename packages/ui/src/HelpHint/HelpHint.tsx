@@ -103,7 +103,7 @@ export function HelpPanel({
         onClick={onClose}
         aria-hidden
         className={cn(
-          'absolute inset-0 bg-black/50 transition-opacity duration-200',
+          'absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-(--dur-base) motion-reduce:transition-none',
           open ? 'opacity-100' : 'opacity-0',
         )}
       />
@@ -114,12 +114,12 @@ export function HelpPanel({
         aria-labelledby={titleId}
         onKeyDown={trapTab}
         className={cn(
-          'absolute inset-y-0 right-0 flex w-[440px] max-w-full flex-col border-l border-border bg-surface shadow-elev-4',
-          'transition-transform duration-200 ease-out',
+          'absolute inset-y-0 right-0 flex w-[440px] max-w-full flex-col border-l border-border bg-surface shadow-ds-3',
+          'transition-transform duration-(--dur-base) ease-ds-spring motion-reduce:transition-none',
           open ? 'translate-x-0' : 'translate-x-full',
         )}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-border-2 px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
             <HelpCircle className="size-5 shrink-0 text-text-mid" aria-hidden />
             <h2 id={titleId} className="font-head text-lg font-semibold text-text">
@@ -130,23 +130,23 @@ export function HelpPanel({
             type="button"
             onClick={onClose}
             aria-label="Fechar ajuda"
-            className="rounded-sm p-1 text-text-low outline-none transition-colors duration-200 hover:text-text focus-visible:shadow-glow-md"
+            className="rounded-sm p-1 text-text-low outline-none transition-colors duration-200 hover:text-text focus-visible:focus-ring"
           >
             <X className="size-5" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          <div className="font-body text-sm leading-relaxed text-text-mid [&_a]:text-brand [&_a]:underline-offset-4 [&_a:hover]:underline [&_code]:rounded-xs [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-price [&_code]:text-text [&_li]:ml-4 [&_li]:list-disc [&_p+p]:mt-3 [&_strong]:font-semibold [&_strong]:text-text [&_ul]:mt-2 [&_ul]:space-y-1">
+          <div className="font-body text-sm leading-relaxed text-text-mid [&_a]:text-brand-text [&_a]:underline-offset-4 [&_a:hover]:underline [&_code]:rounded-xs [&_code]:bg-surface-2 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-price [&_code]:text-text [&_li]:ml-4 [&_li]:list-disc [&_p+p]:mt-3 [&_strong]:font-semibold [&_strong]:text-text [&_ul]:mt-2 [&_ul]:space-y-1">
             {body}
           </div>
         </div>
 
         {link && (
-          <div className="border-t border-border-2 px-5 py-4">
+          <div className="border-t border-border px-5 py-4">
             <a
               href={link.href}
-              className="inline-flex items-center gap-1.5 rounded-sm font-head text-sm font-semibold text-brand outline-none transition-colors duration-150 hover:text-brand-strong focus-visible:shadow-glow-md"
+              className="inline-flex items-center gap-1.5 rounded-sm font-head text-sm font-semibold text-brand-text outline-none transition-colors duration-(--dur-fast) hover:text-text focus-visible:focus-ring"
             >
               {link.label}
               <ArrowUpRight className="size-4" aria-hidden />
@@ -179,8 +179,8 @@ export function HelpHint({ triggerLabel, className, ...content }: HelpHintProps)
         aria-label={triggerLabel ?? `Ajuda: ${content.title}`}
         className={cn(
           'inline-flex size-5 items-center justify-center rounded-pill text-text-low outline-none',
-          'transition-colors duration-150 hover:bg-surface-2 hover:text-text',
-          'focus-visible:shadow-glow-md',
+          'transition-colors duration-(--dur-fast) hover:bg-surface-2 hover:text-text',
+          'focus-visible:focus-ring',
           className,
         )}
       >

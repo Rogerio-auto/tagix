@@ -6,6 +6,11 @@ import { Input } from './Input/Input';
 import { Modal } from './Modal/Modal';
 import { ToastProvider, useToast } from './Toast/Toast';
 import { HelpHint } from './HelpHint/HelpHint';
+import { Badge, StatusPill } from './Badge/Badge';
+import { Switch } from './Switch/Switch';
+import { DataTable } from './DataTable/DataTable';
+import { Card } from './Card/Card';
+import { Avatar } from './Avatar/Avatar';
 
 /**
  * Contratos de acessibilidade do @hm/ui (F10-S05). Cada teste trava uma garantia
@@ -116,5 +121,64 @@ describe('HelpHint — a11y', () => {
     fireEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('dialog')).toHaveAccessibleName('Como funciona');
+  });
+});
+
+describe('Input — sucesso (DS 3.0)', () => {
+  it('sucesso não vira alert, é descrito pelo campo e não depende só de cor (ícone)', () => {
+    const { container } = render(<Input label="Domínio" success="Domínio verificado" />);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByLabelText('Domínio')).toHaveAccessibleDescription('Domínio verificado');
+    expect(container.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it('erro tem precedência sobre sucesso e hint', () => {
+    render(<Input label="X" error="Ruim" success="Bom" hint="Dica" />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Ruim');
+    expect(screen.queryByText('Bom')).toBeNull();
+  });
+});
+
+describe('Badge / Switch / DataTable — contratos de a11y', () => {
+  it('StatusPill comunica por texto, não só por cor', () => {
+    render(<StatusPill tone="warning">Revisão</StatusPill>);
+    expect(screen.getByText('Revisão')).toBeVisible();
+  });
+
+  it('Badge live é decorativo para leitor de tela (ponto aria-hidden)', () => {
+    const { container } = render(<Badge live>Ao vivo</Badge>);
+    expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it('Switch tem nome acessível e estado exposto', () => {
+    render(<Switch label="Agente ativo" />);
+    const sw = screen.getByRole('switch', { name: 'Agente ativo' });
+    fireEvent.click(sw);
+    expect(sw).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('DataTable expõe região rotulada e focável (rolagem por teclado)', () => {
+    render(
+      <DataTable
+        caption="Leads"
+        columns={[{ id: 'n', header: 'Nome', cell: (r: { n: string }) => r.n }]}
+        rows={[{ n: 'Ana' }]}
+        getRowId={(r) => r.n}
+        maxHeight="200px"
+      />,
+    );
+    expect(screen.getByRole('group', { name: 'Leads' })).toHaveAttribute('tabindex', '0');
+  });
+});
+
+describe('Card interativo / Avatar', () => {
+  it('Card interactive ganha foco visível por teclado', () => {
+    render(<Card interactive tabIndex={0} role="button" aria-label="Abrir" />);
+    expect(screen.getByRole('button', { name: 'Abrir' })).toHaveClass('focus-visible:focus-ring');
+  });
+
+  it('Avatar com nome expõe role img rotulado; forma circle troca o raio', () => {
+    render(<Avatar name="Ana Lima" shape="circle" />);
+    expect(screen.getByRole('img', { name: 'Ana Lima' })).toHaveClass('rounded-pill');
   });
 });

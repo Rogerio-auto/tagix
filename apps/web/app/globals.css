@@ -5,23 +5,6 @@
 @import '../../../packages/ui/src/styles/theme.css';
 @source '../**/*.tsx';
 
-/* F72-S01 — famílias de fonte do DS 3.0 (ADR-002).
- * `@hm/ui/styles/theme.css` declara no seu @theme `--font-head: var(--font-head)`
- * (e o mesmo para body/display/price): auto-referência cíclica que, ordenada depois
- * de tokens.css, invalida a variável e devolve a fonte do sistema (bug anterior à
- * F72: Rajdhani/Manrope nunca chegaram a renderizar). Reafirmamos aqui, depois do
- * import, os mesmos valores de @hm/design-tokens/tokens.css. REMOVER este bloco
- * quando o theme.css do @hm/ui perder as 4 linhas `--font-*: var(--font-*)` (S02). */
-:root {
-  --font-head: var(--font-head-next, 'Space Grotesk'), 'Manrope', system-ui, sans-serif;
-  --font-body: var(--font-body-next, 'Manrope'), system-ui, sans-serif;
-  --font-mono:
-    var(--font-mono-next, 'IBM Plex Mono'), ui-monospace, SFMono-Regular, Menlo, Consolas,
-    monospace;
-  --font-price: var(--font-mono);
-  --font-display: var(--font-head);
-}
-
 body {
   background-color: var(--bg);
   color: var(--text);
