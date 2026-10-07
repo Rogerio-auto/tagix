@@ -46,7 +46,10 @@ export function NewPasswordForm() {
   if (!token) {
     return (
       <div className="flex flex-col gap-4">
-        <div role="alert" className="flex gap-3 rounded-md border border-danger/40 bg-danger/10 p-3">
+        <div
+          role="alert"
+          className="flex gap-3 rounded-md border border-danger/40 bg-danger/10 p-3"
+        >
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-danger" aria-hidden />
           <p className="font-body text-sm text-text-mid">
             Link de redefinição inválido. Solicite um novo na tela de recuperação.
@@ -67,9 +70,7 @@ export function NewPasswordForm() {
       <div className="flex flex-col gap-4">
         <div className="flex gap-3 rounded-md border border-border bg-surface-2 p-3">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden />
-          <p className="font-body text-text-mid">
-            Senha redefinida. Faça login com a nova senha.
-          </p>
+          <p className="font-body text-text-mid">Senha redefinida. Faça login com a nova senha.</p>
         </div>
         <Link
           href="/login"
@@ -84,7 +85,10 @@ export function NewPasswordForm() {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
       {failed && (
-        <div role="alert" className="flex gap-3 rounded-md border border-danger/40 bg-danger/10 p-3">
+        <div
+          role="alert"
+          className="flex gap-3 rounded-md border border-danger/40 bg-danger/10 p-3"
+        >
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-danger" aria-hidden />
           <div className="flex flex-col gap-0.5">
             <p className="font-head text-sm font-semibold text-text">Não foi possível redefinir</p>

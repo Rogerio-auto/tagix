@@ -15,8 +15,11 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     <main
       className={[
         'flex min-h-dvh w-full flex-col bg-bg',
-        // Mobile: conteúdo no topo (espaço pro teclado), com safe-area por lado.
-        'justify-start pt-safe-4 pb-safe-4 pl-safe pr-safe px-5',
+        // Mobile: conteúdo no topo (espaço pro teclado). Lateral = o MAIOR entre o
+        // respiro de 20 px e a safe-area: `pl-safe`/`pr-safe` sozinhos zeravam o `px-5`
+        // fora de notch e colavam o formulário na borda a 375 px.
+        'justify-start pt-safe-4 pb-safe-4',
+        'pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))]',
         // md+: volta ao card centrado, sem o offset do topo.
         'md:items-center md:justify-center md:p-6',
       ].join(' ')}
