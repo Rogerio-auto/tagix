@@ -2,7 +2,7 @@
 id: F70-S36
 title: Nome do perfil do canal salvo à parte e devolvido na lista de conversas
 phase: F70
-status: review
+status: done
 priority: high
 estimated_size: M
 depends_on: []
