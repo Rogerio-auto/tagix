@@ -2,7 +2,7 @@
 id: F57-S01
 title: CI verde — ENCRYPTION_KEY no job + catálogo de planos self-contained nos testes
 phase: F57
-status: review
+status: done
 priority: critical
 estimated_size: S
 depends_on: []

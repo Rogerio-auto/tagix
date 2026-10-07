@@ -48,7 +48,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F54   | 5     | 0   | 0   | 0   | 0   | 0   | 5   |
 | F55   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
 | F56   | 31     | 0   | 0   | 0   | 0   | 0   | 31   |
-| F57   | 14     | 12   | 0   | 0   | 0   | 1   | 1   |
+| F57   | 14     | 12   | 0   | 0   | 0   | 0   | 2   |
 | F58   | 14     | 6   | 0   | 0   | 0   | 1   | 7   |
 | F59   | 9     | 1   | 0   | 0   | 0   | 0   | 8   |
 | F6   | 9     | 0   | 0   | 0   | 0   | 0   | 9   |
@@ -642,7 +642,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID      | Titulo                                                                           | Status      | Prioridade | Depende de       |
 | ------- | -------------------------------------------------------------------------------- | ----------- | ---------- | ---------------- |
-| F57-S01 | CI verde — ENCRYPTION_KEY no job + catálogo de planos self-contained nos testes  | 🟣 review    | critical   | —                |
+| F57-S01 | CI verde — ENCRYPTION_KEY no job + catálogo de planos self-contained nos testes  | ✅ done      | critical   | —                |
 | F57-S02 | e2e determinístico — fechar o proxy SSR do Next (ECONNREFUSED :3001)             | 🟢 available | critical   | —                |
 | F57-S03 | Supply chain — zerar HIGH do pnpm audit e travar o gate no CI                    | 🟢 available | critical   | F57-S01          |
 | F57-S04 | Hardening do workflow — permissions mínimas, actions por SHA, host key pinado    | 🟢 available | high       | —                |
