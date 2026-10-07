@@ -23,12 +23,50 @@ import {
   type IEmailProvider,
   type InboundEmail,
 } from '@hm/channels';
+import { checkWebhookUrlSyntax } from '@hm/shared/net';
 import { rateLimit } from '../../middlewares/rate-limit';
+
+/** Anexo como o provedor entregou (o tipo não é reexportado pelo barrel). */
+type InboundAttachment = InboundEmail['attachments'][number];
+
+/**
+ * Anexo pronto para atravessar a fila até o worker (F60-S10).
+ *
+ * Serializável de propósito: o binário vai em base64, nunca como `Buffer` — o
+ * envelope é JSON. Quem decide se o anexo vira mídia (tipo, tamanho, bytes de
+ * verdade) é o worker, que é onde o binário é inspecionado; aqui só sai o que
+ * não pode atravessar a fronteira de jeito nenhum.
+ */
+export type NormalizedInboundAttachment =
+  | {
+      readonly kind: 'inline';
+      readonly filename: string;
+      readonly contentType: string;
+      readonly contentId: string | null;
+      readonly contentBase64: string;
+      readonly sizeBytes: number;
+    }
+  | {
+      readonly kind: 'remote';
+      readonly filename: string;
+      readonly contentType: string;
+      readonly contentId: string | null;
+      /** Já passou pela guarda sintática; o worker revalida no connect. */
+      readonly url: string;
+      readonly sizeBytes: number | null;
+    };
+
+/** Anexo recusado na borda. Vai junto para o atendente ver que existiu. */
+export interface RejectedInboundAttachment {
+  readonly filename: string;
+  readonly reason: 'unsafe_url';
+}
 
 /** Payload já normalizado, pronto para o pipeline inbound. */
 export interface NormalizedInboundEmail {
   readonly messageId: string;
   readonly from: string;
+  readonly fromName: string | null;
   readonly to: readonly string[];
   readonly subject: string;
   /** Texto puro, para prévia e busca. */
@@ -38,6 +76,74 @@ export interface NormalizedInboundEmail {
   readonly inReplyTo: string | null;
   readonly references: readonly string[];
   readonly receivedAt: string;
+  readonly attachments: readonly NormalizedInboundAttachment[];
+  readonly rejectedAttachments: readonly RejectedInboundAttachment[];
+}
+
+/**
+ * Nome de arquivo exibível: sem caminho, sem caractere de controle, com teto.
+ *
+ * O nome é escolhido pelo remetente e aparece na conversa e no download.
+ * `../../etc/passwd` e `fatura<U+202E>fdp.exe` (o caractere que inverte a
+ * direção do texto e faz `.exe` parecer `.pdf`) são os dois truques clássicos.
+ */
+export function safeAttachmentName(bruto: string): string {
+  const semCaminho = bruto.split(/[\\/]/).pop() ?? '';
+  const limpo = semCaminho
+    .split('')
+    .filter((c) => {
+      const code = c.charCodeAt(0);
+      // Controles C0/C1 e os marcadores bidirecionais (U+200E/F, U+202A–E, U+2066–9).
+      return (
+        code > 0x1f &&
+        !(code >= 0x7f && code <= 0x9f) &&
+        code !== 0x200e &&
+        code !== 0x200f &&
+        !(code >= 0x202a && code <= 0x202e) &&
+        !(code >= 0x2066 && code <= 0x2069)
+      );
+    })
+    .join('')
+    .trim()
+    .replace(/^\.+/, '');
+  const curto = limpo.length > 180 ? limpo.slice(limpo.length - 180) : limpo;
+  return curto.length > 0 ? curto : 'anexo';
+}
+
+/**
+ * Anexo para a fila — ou recusa, se a URL aponta para onde não devia.
+ *
+ * A guarda sintática (`checkWebhookUrlSyntax` da F56-S07) já derruba aqui
+ * `http:`, credencial embutida, `localhost` e IP literal interno ou de metadados.
+ * A allowlist de operador é forçada a vazia: ela existe para webhook de dev, e
+ * URL de e-mail é escrita por um desconhecido. O que resolve para IP interno via
+ * DNS só dá para pegar no connect — o worker faz isso.
+ */
+function normalizeAttachment(
+  a: InboundAttachment,
+): NormalizedInboundAttachment | RejectedInboundAttachment {
+  const filename = safeAttachmentName(a.filename);
+  const contentId = a.contentId ?? null;
+  if (a.kind === 'inline') {
+    return {
+      kind: 'inline',
+      filename,
+      contentType: a.contentType,
+      contentId,
+      contentBase64: a.content.toString('base64'),
+      sizeBytes: a.content.length,
+    };
+  }
+  const check = checkWebhookUrlSyntax(a.url, { allowHttpHosts: [] });
+  if (!check.ok) return { filename, reason: 'unsafe_url' };
+  return {
+    kind: 'remote',
+    filename,
+    contentType: a.contentType,
+    contentId,
+    url: check.url.toString(),
+    sizeBytes: a.sizeBytes ?? null,
+  };
 }
 
 /**
@@ -46,9 +152,17 @@ export interface NormalizedInboundEmail {
  */
 export function normalizeInbound(email: InboundEmail): NormalizedInboundEmail {
   const htmlSeguro = sanitizeEmailHtml(email.html);
+  const attachments: NormalizedInboundAttachment[] = [];
+  const rejectedAttachments: RejectedInboundAttachment[] = [];
+  for (const a of email.attachments) {
+    const n = normalizeAttachment(a);
+    if ('kind' in n) attachments.push(n);
+    else rejectedAttachments.push(n);
+  }
   return {
     messageId: email.messageId,
     from: email.from.email,
+    fromName: email.from.name ?? null,
     to: email.to.map((t) => t.email),
     subject: email.subject,
     // Texto: o que o provedor mandou, ou o extraído do HTML já limpo. Nunca o
@@ -58,6 +172,8 @@ export function normalizeInbound(email: InboundEmail): NormalizedInboundEmail {
     inReplyTo: email.inReplyTo,
     references: email.references,
     receivedAt: email.receivedAt.toISOString(),
+    attachments,
+    rejectedAttachments,
   };
 }
 
