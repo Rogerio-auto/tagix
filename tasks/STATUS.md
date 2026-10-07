@@ -56,7 +56,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F61   | 8     | 0   | 0   | 0   | 0   | 0   | 8   |
 | F69   | 13     | 7   | 0   | 0   | 0   | 4   | 2   |
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
-| F70   | 35     | 1   | 2   | 0   | 0   | 2   | 30   |
+| F70   | 37     | 2   | 3   | 0   | 0   | 2   | 30   |
 | F71   | 19     | 9   | 0   | 0   | 0   | 0   | 10   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
@@ -801,6 +801,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70-S33 | Agente da Arcada com preço de lançamento, pagamento por nível e prazo de 5 dias úteis                           | 🟣 review    | critical   | F70-S06, F70-S31          |
 | F70-S34 | Respostas rápidas da cadência da Arcada — "Agora não" encerra, "Quero…" reabre com a IA                         | ✅ done      | high       | F70-S06, F70-S30          |
 | F70-S35 | Teto de custo por conversa, custo médio medido e handoff testado nos 4 gatilhos                                 | 🟢 available | high       | F70-S26                   |
+| F70-S36 | Nome do perfil do canal salvo à parte e devolvido na lista de conversas                                         | 🟢 available | high       | —                         |
+| F70-S37 | Lista e cabeçalho da conversa mostram o nome do contato, não o número                                           | ⏸️ blocked  | high       | F70-S36                   |
 
 ## Fase 71
 
