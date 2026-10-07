@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Dispara o deploy de produção da Leadium na VPS (Windows -> SSH -> deploy.sh).
 
