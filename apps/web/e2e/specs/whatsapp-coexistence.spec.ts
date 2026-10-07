@@ -229,11 +229,8 @@ test.describe('Conectar WhatsApp oficial (Cloud API × coexistência)', () => {
   test('Voltar no passo final preserva o que foi digitado no signup (UX §2.8)', async ({
     page,
   }) => {
-    // BUG CONHECIDO (F70-S29, ver slot): o `WaSignupStep` guarda os campos em estado
-    // local e remonta ao voltar, então tudo o que foi digitado some. `test.fail` roda o
-    // teste e exige que ele falhe: quando o wizard for corrigido, este teste acusa e a
-    // marcação sai. Não é `skip` — o comportamento continua sendo exercitado.
-    test.fail(true, 'WaSignupStep perde os dados ao voltar do passo final (UX §2.8)');
+    // O rascunho do "Inserir manualmente" vive no fluxo, não no passo, que desmonta ao
+    // avançar (F70-S32; antes era `test.fail`, achado da F70-S29).
     await mockWhatsAppConnect(page);
     await openWhatsAppWizard(page);
     await page.getByRole('button', { name: 'Continuar' }).click();

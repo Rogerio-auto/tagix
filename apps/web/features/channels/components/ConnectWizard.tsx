@@ -241,6 +241,23 @@ type WaStep = 'mode' | 'signup' | 'finish';
  * Sem app da Meta configurado no build, o fluxo inteiro é substituído pelo estado
  * indisponível (UX-01): o `code` não é obtenível, então não é pedido.
  */
+/** Campos do "Inserir manualmente" do signup. Vivem no fluxo, não no passo: o passo
+ *  desmonta ao avançar e "Voltar" do passo final não pode apagar o que foi digitado
+ *  (UX §2.8, F70-S32). */
+interface WaManualDraft {
+  code: string;
+  phoneNumberId: string;
+  wabaId: string;
+  phoneNumber: string;
+}
+
+const EMPTY_MANUAL_DRAFT: WaManualDraft = {
+  code: '',
+  phoneNumberId: '',
+  wabaId: '',
+  phoneNumber: '',
+};
+
 function MetaWhatsAppFlow({
   onDone,
   onSwitchProvider,
@@ -259,6 +276,8 @@ function MetaWhatsAppFlow({
   const [step, setStep] = useState<WaStep>('mode');
   const [mode, setMode] = useState<WaConnectMode>('cloud_api');
   const [signup, setSignup] = useState<WaSignupResult | null>(null);
+  const [manualDraft, setManualDraft] = useState<WaManualDraft>(EMPTY_MANUAL_DRAFT);
+  const [manualOpen, setManualOpen] = useState(false);
 
   const submit = async (input: WaConnectInput) => {
     try {
@@ -303,6 +322,10 @@ function MetaWhatsAppFlow({
     return (
       <WaSignupStep
         mode={mode}
+        draft={manualDraft}
+        onDraftChange={setManualDraft}
+        manualOpen={manualOpen}
+        onManualOpen={() => setManualOpen(true)}
         onBack={() => setStep('mode')}
         onCaptured={(result) => {
           setSignup(result);
@@ -488,22 +511,28 @@ function WaModeStep({
  */
 function WaSignupStep({
   mode,
+  draft,
+  onDraftChange,
+  manualOpen,
+  onManualOpen,
   onBack,
   onCaptured,
 }: {
   mode: WaConnectMode;
+  draft: WaManualDraft;
+  onDraftChange: (draft: WaManualDraft) => void;
+  manualOpen: boolean;
+  onManualOpen: () => void;
   onBack: () => void;
   onCaptured: (result: WaSignupResult) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [slow, setSlow] = useState(false);
   const [failure, setFailure] = useState<SignupFailureCopy | null>(null);
-  const [manualOpen, setManualOpen] = useState(false);
 
-  const [code, setCode] = useState('');
-  const [phoneNumberId, setPhoneNumberId] = useState('');
-  const [wabaId, setWabaId] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const { code, phoneNumberId, wabaId, phoneNumber } = draft;
+  const setField = (field: keyof WaManualDraft, value: string) =>
+    onDraftChange({ ...draft, [field]: value });
 
   const manualRef = useRef<HTMLFormElement | null>(null);
 
@@ -533,7 +562,7 @@ function WaSignupStep({
       onCaptured(result);
     } catch (err) {
       const copy = describeSignupFailure(err);
-      if (copy.canFallbackManual) setManualOpen(true);
+      if (copy.canFallbackManual) onManualOpen();
       setFailure(copy);
     } finally {
       setLoading(false);
@@ -565,7 +594,7 @@ function WaSignupStep({
         {loading && slow && (
           <button
             type="button"
-            onClick={() => setManualOpen(true)}
+            onClick={onManualOpen}
             className="mt-2 inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 font-head text-xs text-text-mid underline-offset-2 outline-none hover:text-text hover:underline focus-visible:shadow-glow-md"
           >
             A janela da Meta não abriu? Inserir os dados manualmente
@@ -599,7 +628,7 @@ function WaSignupStep({
       {!manualOpen && (
         <button
           type="button"
-          onClick={() => setManualOpen(true)}
+          onClick={onManualOpen}
           className="self-start rounded-sm px-1 py-0.5 font-head text-xs text-text-low underline-offset-2 outline-none hover:text-text hover:underline focus-visible:shadow-glow-md"
         >
           Inserir manualmente
@@ -625,21 +654,26 @@ function WaSignupStep({
           <Input
             label="Token de acesso ou authorization code"
             value={code}
-            onChange={(e) => setCode(e.target.value)}
+            onChange={(e) => setField('code', e.target.value)}
             hint="Token de um usuário do sistema do Business Manager (começa com EAA), com acesso à conta do WhatsApp. Também aceita o code da janela da Meta, que vale por poucos minutos. Fica só no servidor, cifrado, e nunca é exibido de volta."
             required
           />
           <Input
             label="Phone Number ID (opcional)"
             value={phoneNumberId}
-            onChange={(e) => setPhoneNumberId(e.target.value)}
+            onChange={(e) => setField('phoneNumberId', e.target.value)}
             hint="Deixe em branco se a conta tiver um número só: o servidor descobre pela WABA."
           />
-          <Input label="WABA ID" value={wabaId} onChange={(e) => setWabaId(e.target.value)} required />
+          <Input
+            label="WABA ID"
+            value={wabaId}
+            onChange={(e) => setField('wabaId', e.target.value)}
+            required
+          />
           <Input
             label="Telefone (opcional)"
             value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
+            onChange={(e) => setField('phoneNumber', e.target.value)}
           />
           <div className="mt-1 flex justify-end">
             <Button type="submit" variant="primary" disabled={!manualValid}>

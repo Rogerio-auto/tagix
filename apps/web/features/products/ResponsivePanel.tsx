@@ -76,7 +76,11 @@ function DesktopDrawer({ open, onClose, title, children, footer }: ResponsivePan
   if (!mounted) return null;
 
   return createPortal(
+    // Fechado, o drawer segue montado só para a transição de saída: `inert` o tira do Tab
+    // e dos cliques, `aria-hidden` da árvore de acessibilidade (F70-S32).
     <div
+      inert={!open}
+      aria-hidden={open ? undefined : true}
       className={cn(
         'fixed inset-0 z-50 flex justify-end',
         open ? 'pointer-events-auto' : 'pointer-events-none',
