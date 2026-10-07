@@ -1031,17 +1031,31 @@ async function ensureConversation(
 }
 
 /**
- * Preenche `display_name` do contato com o nome de perfil do provider (F61-S12).
+ * Nome de perfil do remetente num evento: o campo próprio (Meta WhatsApp) ou, no WAHA, o
+ * `notifyName` que o parser guarda em `metadata.contactName`.
+ */
+function profileNameOf(event: InboundMessageEvent): string | undefined {
+  const raw = event.contactName ?? event.metadata?.['contactName'];
+  if (typeof raw !== 'string') return undefined;
+  const nome = raw.trim();
+  return nome === '' ? undefined : nome;
+}
+
+/**
+ * Grava o nome de perfil do contato (F70-S36) e preenche `display_name` quando vazio (F61-S12).
  *
- * Por que existe: o WhatsApp manda o perfil do remetente em
- * `value.contacts[].profile.name`, fora do objeto da mensagem — e o parser nunca
- * lia. Resultado em produção: 199 dos 200 contatos sem nome, e a tela "Hoje"
- * mostrando "Contato sem nome" em quase toda linha.
+ * `profile_name` é o pushname: muda quando a pessoa troca o nome no app, então acompanha a
+ * mensagem MAIS RECENTE do lote, e só escreve quando difere do atual
+ * (`profile_name IS DISTINCT FROM`) — reentrega e mensagens seguintes com o mesmo nome não
+ * geram escrita nem movem `profile_name_updated_at`.
  *
- * **Só preenche vazio.** O nome de perfil é palpite do dono do aparelho ("Eu",
- * "Casa", um emoji); o nome no CRM é decisão de quem atende. Decisão ganha de
- * palpite, então o `WHERE display_name IS NULL` não é otimização — é a regra.
- * Ele também torna a operação idempotente e imune a corrida entre consumidores.
+ * `display_name` segue a regra de antes: só preenche vazio (`coalesce`). O nome de perfil é
+ * palpite do dono do aparelho ("Eu", "Casa", um emoji); o nome no CRM é decisão de quem
+ * atende, e agente, campanhas, API v1 e flows leem `display_name`. Decisão ganha de palpite.
+ * Um único UPDATE condicional é idempotente e imune a corrida entre consumidores.
+ *
+ * Eco de coexistência (mensagem enviada do app) não passa por aqui: o nome seria o do
+ * próprio negócio, não o do contato.
  */
 async function fillContactName(
   tx: DbTx,
@@ -1049,13 +1063,32 @@ async function fillContactName(
   events: readonly InboundMessageEvent[],
 ): Promise<void> {
   const { contacts } = schema;
-  const nome = events.find((e) => e.contactName !== undefined)?.contactName?.trim();
-  if (nome === undefined || nome === '') return;
+  let nome: string | undefined;
+  let maisRecente = Number.NEGATIVE_INFINITY;
+  for (const event of events) {
+    const candidato = profileNameOf(event);
+    if (candidato === undefined) continue;
+    const quando = toDate(event.rawTimestamp).getTime();
+    if (nome === undefined || quando >= maisRecente) {
+      nome = candidato;
+      maisRecente = quando;
+    }
+  }
+  if (nome === undefined) return;
 
   await tx
     .update(contacts)
-    .set({ displayName: nome })
-    .where(and(eq(contacts.id, contactId), isNull(contacts.displayName)));
+    .set({
+      profileName: nome,
+      profileNameUpdatedAt: sql`case when ${contacts.profileName} is distinct from ${nome} then now() else ${contacts.profileNameUpdatedAt} end`,
+      displayName: sql`coalesce(${contacts.displayName}, ${nome})`,
+    })
+    .where(
+      and(
+        eq(contacts.id, contactId),
+        sql`(${contacts.profileName} is distinct from ${nome} or ${contacts.displayName} is null)`,
+      ),
+    );
 }
 
 /**

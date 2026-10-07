@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { and, desc, eq, ilike, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { assertConversationVisible, buildVisibilityPredicate, schema } from '@hm/db';
 import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
@@ -86,7 +86,18 @@ export function createConversationsRouter(): Router {
         // ── Filtros existentes ────────────────────────────────────────────────────
         if (status) conds.push(eq(schema.conversations.status, status));
         if (provider) conds.push(eq(schema.channels.provider, provider));
-        if (search) conds.push(ilike(schema.conversations.lastMessagePreview, `%${search}%`));
+        if (search) {
+          // F70-S36: a busca casa também o nome no sistema e o nome do perfil do contato.
+          // `%`/`_`/`\` do termo são literais (sem curinga injetado pelo usuário).
+          const escaped = search.replace(/[\\%_]/g, (m) => `\\${m}`);
+          const term = `%${escaped}%`;
+          const found = or(
+            ilike(schema.conversations.lastMessagePreview, term),
+            ilike(schema.contacts.displayName, term),
+            ilike(schema.contacts.profileName, term),
+          );
+          if (found) conds.push(found);
+        }
 
         // ── Filtros de distribuição (F30-S07) ─────────────────────────────────────
         if (department) conds.push(eq(schema.conversations.departmentId, department));
@@ -107,13 +118,26 @@ export function createConversationsRouter(): Router {
         const where = and(...conds);
 
         return tx
-          .select({ conversation: schema.conversations })
+          .select({
+            conversation: schema.conversations,
+            // F70-S36: os dois nomes vêm no mesmo SELECT (join 1:1 por PK, sem N+1); a
+            // interface aplica nome no sistema → nome do perfil → telefone.
+            contactDisplayName: schema.contacts.displayName,
+            contactProfileName: schema.contacts.profileName,
+          })
           .from(schema.conversations)
           .innerJoin(schema.channels, eq(schema.conversations.channelId, schema.channels.id))
+          .leftJoin(schema.contacts, eq(schema.conversations.contactId, schema.contacts.id))
           .where(where)
           .orderBy(desc(schema.conversations.lastMessageAt))
           .limit(limit)
-          .then((r) => r.map((x) => x.conversation));
+          .then((r) =>
+            r.map((x) => ({
+              ...x.conversation,
+              contactDisplayName: x.contactDisplayName,
+              contactProfileName: x.contactProfileName,
+            })),
+          );
       }),
     );
 
@@ -226,6 +250,7 @@ export function createConversationsRouter(): Router {
             .select({
               id: schema.contacts.id,
               displayName: schema.contacts.displayName,
+              profileName: schema.contacts.profileName,
               phone: schema.contacts.phone,
               email: schema.contacts.email,
               document: schema.contacts.document,
