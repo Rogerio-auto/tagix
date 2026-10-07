@@ -1,5 +1,5 @@
 /**
- * Escala tipográfica hierárquica do DS v2 (DESIGN_SYSTEM §3).
+ * Escala tipográfica hierárquica do DS 3.0 (DESIGN_SYSTEM §3 e §3-v3; ADR-002).
  *
  * FONTE ÚNICA da escala editorial (Linear/Stripe/Vercel): tamanhos, pesos,
  * line-heights e tracking. Consumida em dois lugares:
@@ -7,14 +7,15 @@
  *   - `tokens.css` (`@theme`) espelha estes valores para gerar os mesmos
  *     utilitários no pipeline CSS-first do app (Tailwind 4). Mantê-los em sincronia.
  *
- * `family` referencia o token de fonte (`--font-<family>`). Corpo NUNCA em
- * uppercase; caixa-alta condensada só em heads e kickers curtos.
+ * `family` referencia o token de fonte (`--font-<family>`). `price` é alias de
+ * `mono` e `display` de `head` (ADR-002). Corpo e heads NUNCA em uppercase; caixa-alta
+ * só em kicker/eyebrow mono curtos, aplicada no componente.
  *
  * `lineHeight` é unitless (proporção): heads apertadas (rítmo editorial),
  * corpo arejado para legibilidade longa, preços/kickers travados.
  */
 
-export type FontFamilyToken = 'display' | 'price' | 'head' | 'body';
+export type FontFamilyToken = 'display' | 'price' | 'head' | 'body' | 'mono';
 
 export interface TypeStyle {
   readonly family: FontFamilyToken;
@@ -23,26 +24,26 @@ export interface TypeStyle {
   /** proporção unitless (line-height CSS) */
   readonly lineHeight: string;
   readonly tracking: string;
-  /** caixa-alta (apenas display/kickers) */
-  readonly uppercase?: boolean;
+  /** `font-variant-numeric: tabular-nums` (número/dado em coluna) */
+  readonly tabularNums?: boolean;
 }
 
 export const typography = {
-  h1: { family: 'head', size: '60px', weight: 600, lineHeight: '1.04', tracking: '-0.5px' },
-  h2: { family: 'head', size: '40px', weight: 600, lineHeight: '1.08', tracking: '-0.3px' },
-  h3: { family: 'head', size: '28px', weight: 600, lineHeight: '1.15', tracking: '-0.2px' },
-  h4: { family: 'head', size: '21px', weight: 600, lineHeight: '1.25', tracking: '-0.1px' },
-  body: { family: 'body', size: '17px', weight: 400, lineHeight: '1.6', tracking: '0' },
+  h1: { family: 'head', size: '60px', weight: 600, lineHeight: '1.04', tracking: '-0.045em' },
+  h2: { family: 'head', size: '40px', weight: 600, lineHeight: '1.08', tracking: '-0.035em' },
+  h3: { family: 'head', size: '28px', weight: 600, lineHeight: '1.15', tracking: '-0.035em' },
+  h4: { family: 'head', size: '21px', weight: 600, lineHeight: '1.25', tracking: '-0.035em' },
+  body: { family: 'body', size: '16px', weight: 500, lineHeight: '1.65', tracking: '0' },
   small: { family: 'body', size: '13px', weight: 400, lineHeight: '1.5', tracking: '0.1px' },
-  price: { family: 'price', size: '40px', weight: 600, lineHeight: '1', tracking: '0' },
-  display: {
-    family: 'display',
-    size: '16px',
-    weight: 700,
-    lineHeight: '1.1',
-    tracking: '1.5px',
-    uppercase: true,
+  price: {
+    family: 'mono',
+    size: '40px',
+    weight: 500,
+    lineHeight: '1',
+    tracking: '0',
+    tabularNums: true,
   },
+  display: { family: 'head', size: '16px', weight: 700, lineHeight: '1.1', tracking: '-0.02em' },
 } as const satisfies Record<string, TypeStyle>;
 
 export type TypeScaleToken = keyof typeof typography;

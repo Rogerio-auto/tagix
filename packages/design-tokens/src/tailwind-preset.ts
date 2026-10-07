@@ -1,5 +1,5 @@
 /**
- * Preset Tailwind 4 do DS v2 (DESIGN_SYSTEM §2.3, §3).
+ * Preset Tailwind 4 do DS 3.0 (DESIGN_SYSTEM §2.3, §3).
  *
  * Mapeia utilitários Tailwind (bg-*, text-*, border-*, font-*, rounded-*,
  * shadow-*) para as CSS variables de `tokens.css`. Consumido por
@@ -50,13 +50,18 @@ export const tailwindPreset: TailwindPreset = {
           bright: 'var(--brand-bright)',
           soft: 'var(--brand-soft)',
           faint: 'var(--brand-faint)',
+          /** texto/ícone de marca (≥4,5:1 nos dois temas); `brand` é fundo/acento */
+          text: 'var(--brand-text)',
         },
+        violet: 'var(--violet)',
         bg: 'var(--bg)',
         'bg-alt': 'var(--bg-alt)',
+        'bg-elevated': 'var(--bg-elevated)',
         surface: 'var(--surface)',
         'surface-2': 'var(--surface-2)',
         'surface-3': 'var(--surface-3)',
         'surface-inset': 'var(--surface-inset)',
+        'surface-glass': 'var(--surface-glass)',
         text: 'var(--text)',
         'text-mid': 'var(--text-mid)',
         'text-low': 'var(--text-low)',
@@ -74,6 +79,7 @@ export const tailwindPreset: TailwindPreset = {
         price: 'var(--font-price)',
         head: 'var(--font-head)',
         body: 'var(--font-body)',
+        mono: 'var(--font-mono)',
       },
       // Escala tipográfica editorial (DESIGN_SYSTEM §3) — derivada de typography.ts.
       // Gera text-h1, text-h2, text-h3, text-h4, text-body, text-small,
@@ -85,6 +91,7 @@ export const tailwindPreset: TailwindPreset = {
         sm: 'var(--r-sm)',
         md: 'var(--r-md)',
         lg: 'var(--r-lg)',
+        xl: 'var(--r-xl)',
         pill: 'var(--r-pill)',
       },
       boxShadow: {
@@ -92,6 +99,10 @@ export const tailwindPreset: TailwindPreset = {
         'elev-2': 'var(--elev-2)',
         'elev-3': 'var(--elev-3)',
         'elev-4': 'var(--elev-4)',
+        'ds-1': 'var(--shadow-1)',
+        'ds-2': 'var(--shadow-2)',
+        'ds-3': 'var(--shadow-3)',
+        glow: 'var(--glow)',
         'glow-sm': 'var(--glow-sm)',
         'glow-md': 'var(--glow-md)',
         'glow-lg': 'var(--glow-lg)',

@@ -4,6 +4,9 @@
 > **Versão:** 0.1 — 2026-06-06
 > **Base canônica:** `docs/design-system/DESIGN_SYSTEM.html` (showcase v1) + `docs/design-system/README.md` (v1)
 > **Diferença vs v1:** v2 nasce com o sistema integrado ao código. Sem coexistência com tema legado.
+> **DS 3.0 (F72-S01, 2026-10-07):** os valores de cor, raio, sombra e tipografia abaixo são os do v2 e estão
+> **superados** pelo §2.4 (tokens v3) e pelo §3.1 (tipografia v3). Os **nomes** dos tokens não mudaram.
+> Fonte de verdade dos valores: `packages/design-tokens/src/tokens.css` (testado em `tokens.test.ts`).
 
 ---
 
@@ -11,7 +14,7 @@
 
 1. **Dark-first.** Default `data-theme="dark"`. Light é igual de polido, não inferior.
 2. **Verde-neon é precioso no produto.** Um por tela. Botão de ação principal + status + marca. Nunca decorativo.
-3. **Tipografia editorial.** Rajdhani (heads), Manrope (corpo), Chakra Petch (preços/números), Orbitron (logo/selos).
+3. **Tipografia editorial.** Space Grotesk (heads), Manrope (corpo), IBM Plex Mono (números/dado). A marca vive no logotipo, não numa família (ADR-002; v2 usava Rajdhani, Chakra Petch e Orbitron).
 4. **Tokens semânticos em CSS.** Componentes consomem `--bg`, `--surface`, `--text`, `--brand`. Nunca hex hardcoded em JSX/TSX.
 5. **Estados obrigatórios em todo interativo.** default, hover, active, focus, loading, disabled. Focus ring sempre presente.
 6. **Animação respeita `prefers-reduced-motion`.**
@@ -171,9 +174,40 @@ export default preset;
 
 Cada app (`apps/web`) importa esse preset no `tailwind.config.ts`.
 
+### 2.4 Tokens v3 (DS 3.0, F72-S01)
+
+Adoção do DS 3.0 "Agency OS" **por tradução**: a paleta da maquete
+([`design/ds-3.0-agency-os.html`](./design/ds-3.0-agency-os.html)) foi mapeada para os nomes
+semânticos do v2. Nenhum token existente foi renomeado ou removido (o teste `tokens.test.ts` falha
+se isso acontecer). Mapa completo e decisões: [`features/DS3_ADOCAO.md`](./features/DS3_ADOCAO.md) §3.
+
+| Token | Escuro | Claro |
+|---|---|---|
+| `--bg` / `--bg-alt` / `--bg-elevated` (novo) | `#070907` / `#0A0D0B` / `#0A0D0B` | `#F3F6F1` / `#EEF2EC` / `#EEF2EC` |
+| `--surface` / `-2` / `-3` | `#0E120F` / `#131814` / `#192019` | `#FFFFFF` / `#F8FAF7` / `#EEF3EC` |
+| `--surface-inset` | `#0A0E0B` | `#EEF2EC` |
+| `--surface-glass` (novo) | `rgba(17,22,18,.78)` | `rgba(255,255,255,.82)` |
+| `--text` / `--text-mid` / `--text-low` | `#F4F7F3` / `#C3CBC1` / `#7E897E` | `#111811` / `#465045` / `#5F6A5E` |
+| `--text-on-brand` | `#071108` | `#071108` |
+| `--brand-text` (novo) | `#72FF69` | `#0B6E08` |
+| `--violet` (novo) | `#A58BFF` | `#6B4FD8` |
+| `--border` / `--border-2` / `--border-brand` | `#202920` / `#2A352A` / `rgba(31,255,19,.32)` | `#DDE5DA` / `#CFD9CC` / `rgba(22,224,10,.30)` |
+| `--danger` / `--warn` / `--info` / `--success` | `#FF625F` / `#F6C85F` / `#67B7FF` / `#25F018` | `#B42318` / `#8A5300` / `#0B5FB0` / `#12700D` |
+| `--shadow-1..3`, `--glow` (novos) | ver `tokens.css` | ver `tokens.css` |
+
+- `--brand-bright` passa a `#72FF69` e `--brand-soft` a `#B1FFAA` (rampa do DS 3.0). `--brand`, `--brand-strong`, `--brand-faint` e `--brand-price` não mudam.
+- Raios: `--r-xs 7` · `--r-sm 10` · `--r-md 14` · `--r-lg 18` · **`--r-xl 24`** (novo) · `--r-pill`.
+- **A marca no tema claro nunca é cor de texto** (`#16E00A` sobre branco = 1,79:1). Texto e ícone de marca usam `--brand-text`, que passa AA nos dois temas.
+- **Contraste é contrato:** `pnpm --filter @hm/design-tokens test` mede todos os pares texto × superfície nos dois temas (texto ≥ 4,5:1, UI ≥ 3:1). `TOKENS_REPORT=1` imprime a tabela.
+- `--border-2` ficou **mais forte** que `--border` nos dois temas (no v2 era mais sutil). Componentes que usavam `border-2` como hairline devem migrar para `--border` na varredura (S07/S08).
+- Utilitários Tailwind novos: `bg-bg-elevated`, `bg-surface-glass`, `text-violet`, `text-brand-text`, `shadow-ds-1..3`, `shadow-glow`, `rounded-xl` (24px, antes 12px do Tailwind), `font-mono`.
+
+
 ---
 
 ## 3. Tipografia hierárquica
+
+> **Superada pelo §3.1 (DS 3.0, ADR-002).** A tabela abaixo é o v2, mantida como histórico.
 
 | Token | Família | Size | Weight | Tracking |
 |---|---|---|---|---|
@@ -187,6 +221,29 @@ Cada app (`apps/web`) importa esse preset no `tailwind.config.ts`.
 | display | display (Orbitron) | 16px | 700 | 1.5px (caps) |
 
 Corpo **nunca** em uppercase. Caixa-alta condensada só em heads e kickers curtos.
+
+### 3.1 Tipografia v3 (vigente — [ADR-002](./decisions/ADR-002-tipografia-ds3.md))
+
+Três famílias: **Space Grotesk** (`--font-head`), **Manrope** (`--font-body`), **IBM Plex Mono**
+(`--font-mono`). `--font-price` é alias de `--font-mono` e `--font-display` é alias de `--font-head`,
+então nenhum componente quebra por nome. Orbitron, Rajdhani e Chakra Petch saíram.
+
+| Token | Família | Size | Weight | LH | Tracking |
+|---|---|---|---|---|---|
+| H1 | head (Space Grotesk) | 60px | 600 | 1,04 | −4,5% |
+| H2 | head | 40px | 600 | 1,08 | −3,5% |
+| H3 | head | 28px | 600 | 1,15 | −3,5% |
+| H4 | head | 21px | 600 | 1,25 | −3,5% |
+| body | body (Manrope) | **16px** | **500** | **1,65** | 0 |
+| small | body | 13px | 400 | 1,5 | 0,1px |
+| price | mono (IBM Plex Mono) + `tabular-nums` | 40px | 500 | 1 | 0 |
+| display | head | 16px | 700 | 1,1 | −2% (sem caixa-alta) |
+
+- Corpo em 16px, não os 15px da maquete: respeita o piso de 16px de input no iOS (`MOBILE_UX` §1.5). Corpos de 6–9px da maquete são a maquete reduzida, **não valores de UI**.
+- Número em coluna, preço e KPI: `text-price` ou `font-mono` com `tabular-nums` (alinha o dígito).
+- Kicker/eyebrow: mono, caixa-alta, tracking aberto, aplicado pelo componente (S02), nunca pelo token.
+- Escala em `packages/design-tokens/src/typography.ts` (fonte única), espelhada no `@theme` do `tokens.css`; o teste falha se divergirem.
+- Carga: `next/font` em `apps/web/app/layout.tsx` (Space Grotesk 500/600/700, Manrope 400–700, IBM Plex Mono 400/500/600), `display: swap`, só subset latin.
 
 ---
 
@@ -730,7 +787,7 @@ Stories são fonte de testes visuais via Chromatic ou Percy (fase 2).
 |---|---|
 | `--color-bg`, `--color-surface`, `--color-primary` | `--bg`, `--surface`, `--brand` |
 | `.dark` (classe) | `data-theme="dark"` (atributo) |
-| Inter, Space Grotesk | Manrope, Rajdhani, Chakra Petch, Orbitron |
+| Inter, Space Grotesk | Manrope, Rajdhani, Chakra Petch, Orbitron (v2) → **Space Grotesk, Manrope, IBM Plex Mono (v3, F72; reversão declarada no [ADR-002](./decisions/ADR-002-tipografia-ds3.md))** |
 | Verde médio `#2fb463` | Verde neon `#1FFF13` |
 | `components/ui/*` (com cor legada) | `packages/ui/*` (tokens v2) |
 | 2 ToastContainer | 1 Toast em `packages/ui/Toast` |
@@ -740,6 +797,8 @@ Stories são fonte de testes visuais via Chromatic ou Percy (fase 2).
 ---
 
 ## 15. Fontes (carregadas em `index.html`)
+
+> **v3:** o app carrega Space Grotesk, Manrope e IBM Plex Mono via `next/font` (§3.1). O `<link>` abaixo é o v2 e só vale como referência histórica; `googleFontsHref` em `@hm/design-tokens` já devolve as três famílias do v3 para contextos fora do Next.
 
 ```html
 <link rel="preconnect" href="https://fonts.googleapis.com">
