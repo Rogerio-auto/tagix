@@ -2,7 +2,7 @@
 id: F72-S02
 title: Componentes do @hm/ui no DS 3.0 — botões, campos, status, tabela operacional e camadas
 phase: F72
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: M
 ui: true
@@ -11,6 +11,9 @@ blocks: [F72-S04, F72-S05, F72-S06, F72-S07, F72-S08]
 source_docs:
   - docs/features/DS3_ADOCAO.md
   - docs/design/ds-3.0-agency-os.html
+agent_id: backend-engineer
+claimed_at: 2026-10-07T20:07:51Z
+
 ---
 # F72-S02 — Componentes do @hm/ui no DS 3.0
 
