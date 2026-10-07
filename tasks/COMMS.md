@@ -961,3 +961,9 @@ A liberação é só `atendimento-humano`. Etiqueta de conversão não entra nun
 - Riscos S03: view-as com outra empresa ativa = fail-closed, corrigido (F-13); `is_platform_admin` por linha = sem escalada, aceito (flag por conta virou item do S14/produto).
 - **Slots novos F71-S11..S19** (headers web + Sentry web + token_hash em fragmento; X-Workspace-Id por aba; preview sem oraculo + aceite inline; packages: convite bloqueado/redact/papeis PG/regra em @hm/shared; verify define senha; tokens de status no claro/TopBar/bottom-nav/H1; so-leitura nos botoes; hardening menor; empresa propria autenticada).
 - **Go-live publico do cadastro/web depende de S11 e S15** (parecer do auditor).
+
+### F72 — Orchestrator — inicio (2026-10-07)
+
+- Fase F72 (Adocao do DS 3.0) iniciada. Ondas: S01 | S02 ‖ S03 | S04..S08 (2-3 por vez se houver pressao de memoria) | S09.
+- **F71-S16 e F71-S17 ficam OBSOLETOS**, absorvidos por F72-S01 (tokens de status no claro, brand-text) e F72-S07 (so-leitura nos botoes de escrita). Nao executar.
+- Sem push, sem deploy. Workers em primeiro plano; integracao 1 por vez.
