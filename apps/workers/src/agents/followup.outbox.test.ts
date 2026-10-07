@@ -5,7 +5,8 @@
  *  - rollback forçado antes do COMMIT: nenhum job, e a marca é desfeita — o tick seguinte
  *    segue a mesma janela.
  *
- * Usa o template global `follow_up` (seed) e um agente ativo do workspace. Redis é fake.
+ * Cria o próprio template `follow_up` no workspace do teste (o tick casa pela `key`), sem
+ * depender de `pnpm seed` nem da ordem dos packages, e um agente ativo. Redis é fake.
  * Pula sem `DATABASE_URL`.
  */
 import { randomUUID } from 'node:crypto';
@@ -99,15 +100,20 @@ async function closeConversation(id: string): Promise<void> {
 beforeAll(async () => {
   if (!ready) return;
   const db = getDb();
-  const [template] = await db
-    .select({ id: schema.agentTemplates.id })
-    .from(schema.agentTemplates)
-    .where(eq(schema.agentTemplates.key, 'follow_up'))
-    .limit(1);
-  if (template === undefined) throw new Error('fixture: template global follow_up ausente (seed)');
   await db
     .insert(schema.workspaces)
     .values({ id: WS, name: 'F70S25 followup', slug: `f70s25-fu-${sfx}` });
+  const [template] = await db
+    .insert(schema.agentTemplates)
+    .values({
+      workspaceId: WS,
+      key: 'follow_up',
+      name: 'Follow Up F70-S25',
+      promptTemplate: 'x',
+      defaultModel: 'test/model',
+    })
+    .returning({ id: schema.agentTemplates.id });
+  if (template === undefined) throw new Error('fixture: template follow_up não criado');
   await db.insert(schema.channels).values({
     id: CHANNEL,
     workspaceId: WS,
