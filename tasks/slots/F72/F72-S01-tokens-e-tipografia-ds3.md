@@ -2,7 +2,7 @@
 id: F72-S01
 title: Tokens, fontes e escala tipográfica do DS 3.0, com tema claro corrigido
 phase: F72
-status: review
+status: done
 priority: critical
 estimated_size: M
 ui: true
