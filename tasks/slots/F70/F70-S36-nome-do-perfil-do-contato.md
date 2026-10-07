@@ -2,7 +2,7 @@
 id: F70-S36
 title: Nome do perfil do canal salvo à parte e devolvido na lista de conversas
 phase: F70
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 depends_on: []
@@ -10,6 +10,9 @@ blocks: [F70-S37]
 source_docs:
   - apps/workers/src/inbound/db-ports.ts
   - docs/DATA_MODEL.md
+agent_id: backend-engineer
+claimed_at: 2026-10-07T17:27:13Z
+
 ---
 # F70-S36 — Nome do perfil do canal salvo à parte e devolvido na lista de conversas
 
