@@ -2,7 +2,11 @@
 
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { onApiErrorMaybeExpire } from '@/shared/auth/session-expiry';
-import { setUnauthorizedListener } from './api-client';
+import {
+  isSubscriptionInactiveError,
+  notifySubscriptionInactive,
+  setUnauthorizedListener,
+} from './api-client';
 
 export function makeQueryClient(): QueryClient {
   // Handler GLOBAL de 401 (F46-S01 → F70-S28). Duas entradas, um só destino
@@ -16,6 +20,9 @@ export function makeQueryClient(): QueryClient {
   const ref: { client: QueryClient | null } = { client: null };
   const onError = (error: unknown): void => {
     onApiErrorMaybeExpire(error, ref.client);
+    // 402 `subscription_inactive` lançado por `fetch` cru dentro de query/mutation
+    // (o `api.*` já avisa sozinho; o handler é idempotente por tela). Nunca desloga.
+    if (isSubscriptionInactiveError(error)) notifySubscriptionInactive(error);
   };
 
   const client = new QueryClient({
