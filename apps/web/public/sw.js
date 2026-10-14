@@ -30,7 +30,12 @@
  * do navegador, nunca deste worker. `POST` idem.
  */
 
-import { chooseStrategy, describeRequest, isCacheable } from './sw-strategy.js';
+import {
+  chooseStrategy,
+  describeRequest,
+  isCacheable,
+  safeNotificationTarget,
+} from './sw-strategy.js';
 
 /**
  * Versão do cache. Trocar esta string invalida TODO o cache anterior no próximo
@@ -180,7 +185,7 @@ self.addEventListener('fetch', (event) => {
 // app.
 
 /** Texto de último caso: push sem payload legível ainda precisa avisar alguém. */
-const AVISO_PADRAO = { title: 'Leadium', origin: 'Novidade no seu atendimento', url: '/hoje' };
+const AVISO_PADRAO = { title: 'Leadium', origin: 'Novidade no seu atendimento', url: '/' };
 
 self.addEventListener('push', (event) => {
   event.waitUntil(
@@ -200,7 +205,7 @@ self.addEventListener('push', (event) => {
         // `tag` agrupa: cinco avisos de "lead novo" viram um, em vez de uma
         // pilha que o dono desliga no terceiro dia.
         tag: dados.tag || 'leadium',
-        data: { url: dados.url || '/hoje' },
+        data: { url: dados.url || '/' },
       });
     })(),
   );
@@ -208,7 +213,11 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const destino = (event.notification.data && event.notification.data.url) || '/hoje';
+  // Mesma origem, URL absoluta (ver `safeNotificationTarget` em `sw-strategy.js`).
+  const destino = safeNotificationTarget(
+    event.notification.data && event.notification.data.url,
+    self.location.origin,
+  );
 
   event.waitUntil(
     (async () => {

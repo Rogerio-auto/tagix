@@ -20,12 +20,15 @@ import {
   CONVERSATION,
   DASHBOARD,
   DEAL,
+  HOME_OWNER,
   INBOUND_MESSAGE,
   MANUAL_FLOW,
   ME,
+  ONBOARDING_CHECKLIST_DONE,
   ONBOARDING_STATE,
   PIPELINE,
   STAGES,
+  TODAY,
   WINDOW_OPEN,
 } from './seed';
 
@@ -157,9 +160,15 @@ export async function installApiMocks(page: Page): Promise<MockState> {
     if (path === '/api/onboarding/state' && method === 'GET') {
       return json(route, ONBOARDING_STATE);
     }
+    if (path === '/api/onboarding/checklist' && method === 'GET') {
+      return json(route, ONBOARDING_CHECKLIST_DONE);
+    }
 
     // ── Dashboard ────────────────────────────────────────────────────────
     if (path === '/api/dashboard/me') return json(route, DASHBOARD);
+    // Home (F72-S04): sem estes dois a Home caía no fallback `{}` e quebrava.
+    if (path === '/api/dashboard/home' && method === 'GET') return json(route, HOME_OWNER);
+    if (path === '/api/dashboard/today' && method === 'GET') return json(route, TODAY);
 
     // ── Canais ───────────────────────────────────────────────────────────
     if (path === '/api/channels' && method === 'GET') {

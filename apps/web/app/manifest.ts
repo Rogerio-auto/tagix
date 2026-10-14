@@ -14,11 +14,11 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'Leadium',
     description: 'Atendimento ao cliente, vendas conversacionais e automação.',
     id: '/',
-    // F61-S01: o app instalado abre na tela do DONO, não no dashboard de quem
-    // opera o dia inteiro. Quem instala no celular é quem quer três respostas
-    // rápidas, não quem vai navegar. `id` continua '/' — mudá-lo faria o
+    // F72-S04: a Home unificou o dashboard e a tela Hoje; o app instalado abre nela.
+    // Instalações anteriores (F61-S01) ainda têm `/hoje` gravado e seguem funcionando
+    // porque `/hoje` redireciona para `/`. `id` continua '/': mudá-lo faria o
     // navegador tratar como um app diferente e perder a instalação existente.
-    start_url: '/hoje',
+    start_url: '/',
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',

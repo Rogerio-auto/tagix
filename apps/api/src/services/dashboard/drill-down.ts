@@ -12,6 +12,7 @@ import type { DbTx } from '@hm/db';
 import { getMetricModule, metricVisibleTo } from './metrics/registry';
 import type { MetricCtx } from './metrics/types';
 import type { MetricValue } from './queries';
+import { applyDashboardStatementTimeout } from './viewer-scope';
 
 export type DrillResult =
   | { kind: 'ok'; metricKey: string; detail: MetricValue }
@@ -43,6 +44,9 @@ export async function drillDown(tx: DbTx, args: DrillArgs): Promise<DrillResult>
     role: args.role,
     scope: mod.def.scope,
   };
+  // 1ª instrução que toca o banco (as saídas acima não consultam nada): mesmo teto
+  // da Home/Hoje (segurança M-1).
+  await applyDashboardStatementTimeout(tx);
   const outcome = await mod.drill(ctx, { param: args.param });
   switch (outcome.kind) {
     case 'ok':

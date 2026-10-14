@@ -5,7 +5,6 @@ import {
   DatabaseBackup,
   GitBranch,
   House,
-  LayoutDashboard,
   LifeBuoy,
   Megaphone,
   MessagesSquare,
@@ -60,8 +59,9 @@ export interface NavItem {
 
 // UX §2.4: toda entrada de nav tem LABEL visível, não só ícone.
 export const NAV: readonly NavItem[] = [
-  { href: '/hoje', label: 'Home', icon: House, group: 'today', tab: 'home' },
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard, group: 'today' },
+  // F72-S04: a Home unificou o antigo Dashboard (`/`) e a tela Hoje (`/hoje`). Um
+  // destino só; `/hoje` continua existindo apenas como redirect para o PWA antigo.
+  { href: '/', label: 'Home', icon: House, group: 'today', tab: 'home' },
   {
     href: '/conversations',
     label: 'Inbox',
@@ -123,7 +123,6 @@ export const MOBILE_TAB_ORDER: readonly MobileTab[] = ['home', 'inbox', 'agenda'
  */
 export const MORE_ORDER: readonly string[] = [
   '/pipeline',
-  '/',
   '/contacts',
   '/campaigns',
   '/agents',

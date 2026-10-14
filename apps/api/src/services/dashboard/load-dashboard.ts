@@ -32,6 +32,7 @@ import type {
 } from './metrics/types';
 import { hasConversionType, type MetricValue } from './queries';
 import { buildAlerts, type DashboardAlert } from './alerts';
+import { applyDashboardStatementTimeout } from './viewer-scope';
 
 const { members } = schema;
 
@@ -98,6 +99,9 @@ function readLayout(raw: Record<string, unknown>): DashboardLayoutPreferences {
 }
 
 export async function loadDashboard(tx: DbTx, args: LoadDashboardArgs): Promise<DashboardPayload> {
+  // Mesmo teto da Home/Hoje (segurança M-1): o painel faz dezenas de leituras em
+  // paralelo; plano degenerado erra rápido em vez de segurar conexão do pool.
+  await applyDashboardStatementTimeout(tx);
   const conversionGate = await hasConversionType(tx);
   const visible = metricsForRole(args.role, conversionGate);
 

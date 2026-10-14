@@ -12,7 +12,11 @@
 import { describe, expect, it } from 'vitest';
 // Módulo JS puro em `public/` — o mesmo arquivo que o service worker importa em
 // runtime. Testar a cópia real, e não uma reimplementação, é o ponto.
-import { chooseStrategy, isCacheable } from '../../public/sw-strategy.js';
+import {
+  chooseStrategy,
+  isCacheable,
+  safeNotificationTarget,
+} from '../../public/sw-strategy.js';
 
 const ORIGEM = 'https://app.leadium.com.br';
 
@@ -147,5 +151,40 @@ describe('F70-S28 — redirect nunca entra no cache', () => {
     expect(isCacheable({ ok: false, type: 'basic', redirected: false })).toBe(false);
     expect(isCacheable(null)).toBe(false);
     expect(isCacheable(undefined)).toBe(false);
+  });
+});
+
+describe('toque na notificação nunca sai da origem (L-1)', () => {
+  const HOME = `${ORIGEM}/`;
+
+  it('caminho relativo e URL da própria origem viram URL absoluta da origem', () => {
+    expect(safeNotificationTarget('/conversations/c1?x=1#m', ORIGEM)).toBe(
+      `${ORIGEM}/conversations/c1?x=1#m`,
+    );
+    expect(safeNotificationTarget(`${ORIGEM}/pipeline`, ORIGEM)).toBe(`${ORIGEM}/pipeline`);
+  });
+
+  it('pathname com // não vira protocol-relative (open redirect)', () => {
+    const destino = safeNotificationTarget(`${ORIGEM}//evil.com`, ORIGEM);
+    expect(destino.startsWith('//')).toBe(false);
+    expect(new URL(destino).origin).toBe(ORIGEM);
+    // O que o `navigate`/`openWindow` faz com o destino: resolve contra a origem.
+    expect(new URL(destino, ORIGEM).origin).toBe(ORIGEM);
+  });
+
+  it('outra origem, protocol-relative, javascript:, data: e lixo viram a Home', () => {
+    for (const bruto of [
+      'https://evil.com/x',
+      '//evil.com',
+      '/\\evil.com',
+      'javascript:alert(1)',
+      'data:text/html,oi',
+      'http://app.leadium.com.br/',
+      '',
+      null,
+      42,
+    ]) {
+      expect(safeNotificationTarget(bruto, ORIGEM)).toBe(HOME);
+    }
   });
 });

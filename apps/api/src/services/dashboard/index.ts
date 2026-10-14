@@ -31,6 +31,26 @@ export {
   type DashboardLayoutPreferences,
   type LoadDashboardArgs,
 } from './load-dashboard';
+export { loadHome, type LoadHomeArgs } from './home';
+export {
+  buildHomePayload,
+  homeScopeForRole,
+  canSeeChannelHealth,
+  HOME_PERIOD_DAYS,
+  HOME_PERIOD_OPTIONS,
+  type HomePayload,
+  type HomePeriodDays,
+  type HomeKpi,
+  type HomeKpiKey,
+  type HomeKpiSample,
+  type HomeAttentionItem,
+  type HomeAttentionKind,
+  type HomeJourney,
+  type HomeRevenuePoint,
+  type HomeScope,
+  type HomeThresholds,
+  type HomeWindow,
+} from './home-model';
 export { drillDown, type DrillResult, type DrillArgs } from './drill-down';
 export { buildAlerts, type DashboardAlert, type AlertSeverity } from './alerts';
 export {

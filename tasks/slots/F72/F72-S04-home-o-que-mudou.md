@@ -2,7 +2,7 @@
 id: F72-S04
 title: Home no DS 3.0 — o que mudou, precisa da sua atenção e resultado no topo
 phase: F72
-status: in-progress
+status: review
 priority: critical
 estimated_size: L
 ui: true
@@ -14,6 +14,7 @@ source_docs:
   - docs/design/ds-3.0-agency-os.html
 agent_id: backend-engineer
 claimed_at: 2026-10-14T17:56:07Z
+completed_at: 2026-10-14T19:26:34Z
 
 ---
 # F72-S04 — Home: o que mudou e o que precisa da sua atenção
@@ -72,3 +73,29 @@ node --env-file=.env apps/api/node_modules/vitest/vitest.mjs run --root apps/api
 ## Notas
 
 - Agente: `frontend-engineer` (+ `backend-engineer` se precisar de agregação nova).
+
+## Notas de execução (orchestrator, 2026-10-14)
+
+Retomado do stash "F72-S04 parcial" (Home, today, API home). Concluído por backend-engineer (API) e frontend-engineer (web), com três rodadas de correção depois dos portões.
+
+- **API:** `services/dashboard/home-model.ts` (contrato + funções puras), `home.ts` (agregações), `viewer-scope.ts` (predicado de visibilidade F30 para não OWNER/ADMIN; `SET LOCAL statement_timeout = 5000` em Home, Today, loadDashboard e drillDown), `routes/dashboard/{home-query.ts,today-scope.ts}`. `GET /api/dashboard/home?period=7d|30d|90d`. Speed-to-lead = mediana até a 1ª saída `member`/`agent` após a 1ª mensagem do contato (`system` não conta). Delta contra a janela anterior do mesmo tamanho ("desde a última visita" não existe no modelo, não foi inventado). Papel validado com Zod (403 fail-closed) em /home, /today, /me e /metrics; `Cache-Control: private, no-store` nas 4.
+- **Escopo por papel:** OWNER/ADMIN = workspace; SUPERVISOR = workspace nos agregados (receita, conversões, leads, jornada) e departamentos que lidera na fila/atenção/speed-to-lead; AGENT/READONLY = pessoal (fila dele, sem receita/jornada/série). Nenhum custo de IA/infra no contrato. Agenda da Today = `accessibleCalendarIds` para todos os papéis.
+- **Web:** Home em `features/dashboard/home/**` (KPIs em subgrid, seletor 7/30/90, atenção com ação direta, fila e agenda da antiga Hoje, estados vazio/carregando/erro, painel F8 preservado em "Painel completo"), throttle de 3s nas invalidações por socket (`realtime-batch.ts`, `metric-changed-listener.ts`).
+- **Pendências da S03:** (a) mock padrão do e2e responde `/api/dashboard/home` e `/today`; (b) Home = `/`, `/hoje` faz redirect 307 para `/`, `start_url: '/'`, `nav.ts` Home -> `/` e "Dashboard" saiu do "Mais"; (c) `e2e/mobile-navigation.spec.ts` já havia sido removido em 5dea8f30.
+- **Desvios de files_allowed (autorizados, ver COMMS):** `shared/components/layout/nav.ts(+test)`, `e2e/specs/{mobile-nav,shell,auth,journey}.spec.ts`, `e2e/fixtures/{seed,api-mock}.ts`, `public/sw.js`, `public/sw-strategy.js`, `shared/pwa/strategy.test.ts`, `services/dashboard/{load-dashboard,drill-down}.ts`.
+
+### Validação (orchestrator, números reais)
+
+- `pnpm --filter @hm/web typecheck`: 0 erros. `pnpm --filter @hm/api typecheck`: 0 erros.
+- vitest web `features/dashboard features/today shared`: 21 arquivos, 260/260.
+- vitest api `src/routes/dashboard src/services/dashboard`: 6 arquivos sem banco verdes (78 testes). **Não executados (requer infra, ECONNREFUSED :5442):** `home.test.ts`, `today.test.ts`, `load-dashboard.test.ts`, `queries.test.ts`, `negocio-metrics.test.ts`, `cycle-metric-queries.integration.test.ts`. O SQL novo (speed-to-lead, predicado F30 sem alias) **nunca rodou contra Postgres**: rodar antes do deploy.
+- eslint: api 0 problemas; web 0 erros, 9 avisos preexistentes.
+- Playwright (worker, `E2E_SERVER=start`, sem Docker): home + mobile-nav + shell + auth + journey = 55 verdes. axe não existe no repo; contraste medido no e2e.
+
+### Revisão de design
+
+1ª: REPROVADO (KPIs fora da linha de base; capturas sem provar o DoD). 2ª: REPROVADO (ReservedSlots quebrando em 768). Corrigido e conferido na captura `home-768-*-2-inteira.png`: **APROVADO COM RESSALVAS** ("parece resultado acontecendo, não painel"). Ressalvas fora do slot: "Leadium" vs "tagix" em PushToggle/InstallPrompt; faixa cinza na borda direita do main no claro (shell); locale do produto segue o navegador.
+
+### Segurança (security-auditor)
+
+1ª: REPROVADO (H1 SUPERVISOR via fila/agenda sem visibilidade F30; M1 cache; M2 carga). Re-verificação: **APROVADO COM RESSALVAS**. M-1 e L-1 residuais corrigidos depois. Abertos: L-2 falta teste de integração com RLS real do predicado F30; L-3 `attentionStalledDeals` do SUPERVISOR no nível do workspace (igual a `GET /api/deals`); micro-cache e rate limit em `/api/dashboard/*` como follow-up.

@@ -28,19 +28,19 @@ describe('nav.ts — fonte única dos destinos', () => {
     expect(mobileTabItems(owner).map(mobileLabelOf)).toEqual(['Home', 'Inbox', 'Agenda']);
   });
 
-  it('o sheet "Mais" abre com Pipeline, Dashboard, Contatos, Campanhas, Agentes, Flows', () => {
+  it('o sheet "Mais" abre com Pipeline, Contatos, Campanhas, Agentes, Flows', () => {
     const labels = moreNavItems(visibleNavItems('OWNER')).map(mobileLabelOf);
-    expect(labels.slice(0, 6)).toEqual([
-      'Pipeline',
-      'Dashboard',
-      'Contatos',
-      'Campanhas',
-      'Agentes',
-      'Flows',
-    ]);
-    expect(labels).toEqual(
-      expect.arrayContaining(['Conversões', 'Configurações', 'Ajuda', 'Dashboard']),
-    );
+    expect(labels.slice(0, 5)).toEqual(['Pipeline', 'Contatos', 'Campanhas', 'Agentes', 'Flows']);
+    expect(labels).toEqual(expect.arrayContaining(['Conversões', 'Configurações', 'Ajuda']));
+  });
+
+  it('F72-S04: Home é `/` (aba home) e não existe mais um "Dashboard" separado', () => {
+    const home = NAV.find((i) => i.tab === 'home');
+    expect(home?.href).toBe('/');
+    expect(home?.label).toBe('Home');
+    expect(NAV.map((i) => i.href)).not.toContain('/hoje');
+    expect(NAV.map((i) => i.label)).not.toContain('Dashboard');
+    expect(moreNavItems(visibleNavItems('OWNER')).map((i) => i.href)).not.toContain('/');
   });
 
   it('MORE_ORDER cobre todo destino que não é aba (nada fica sem caminho no celular)', () => {
@@ -85,9 +85,10 @@ describe('item ativo', () => {
     expect(activeNavItem(items, '/flows/abc/edit')?.href).toBe('/flows');
   });
 
-  it('"/" só casa exato; "/hoje" é a Home', () => {
+  it('"/" é a Home e só casa exato', () => {
     expect(activeNavItem(items, '/')?.href).toBe('/');
-    expect(activeNavItem(items, '/hoje')?.href).toBe('/hoje');
+    expect(activeNavItem(items, '/')?.label).toBe('Home');
+    expect(activeNavItem(items, '/hoje')).toBeUndefined();
   });
 
   it('não confunde prefixos de nome parecido', () => {
