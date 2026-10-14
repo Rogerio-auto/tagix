@@ -2,7 +2,7 @@
 id: F72-S05
 title: Inbox no DS 3.0, com a lista acessível e o avatar sem número
 phase: F72
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 ui: true
@@ -12,6 +12,9 @@ source_docs:
   - docs/features/DS3_ADOCAO.md
   - docs/design/ds-3.0-agency-os.html
   - tasks/slots/F70/F70-S37-inbox-mostra-o-nome-do-contato.md
+agent_id: backend-engineer
+claimed_at: 2026-10-14T19:27:00Z
+
 ---
 # F72-S05 — Inbox no DS 3.0
 
