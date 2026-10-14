@@ -967,3 +967,8 @@ A liberação é só `atendimento-humano`. Etiqueta de conversão não entra nun
 - Fase F72 (Adocao do DS 3.0) iniciada. Ondas: S01 | S02 ‖ S03 | S04..S08 (2-3 por vez se houver pressao de memoria) | S09.
 - **F71-S16 e F71-S17 ficam OBSOLETOS**, absorvidos por F72-S01 (tokens de status no claro, brand-text) e F72-S07 (so-leitura nos botoes de escrita). Nao executar.
 - Sem push, sem deploy. Workers em primeiro plano; integracao 1 por vez.
+
+### F72 — sessao encerrada por limite de uso (2026-10-14)
+
+- F72-S01, S02 e S03 done e mergeadas. A onda 3 (S04/S05/S06) foi interrompida no meio: o trabalho parcial de cada slot ficou num stash nomeado (`F72-S0x parcial ...`). Ha tambem o stash `incidente-flow-midia-2026-10-09 (nao F72)` de outra sessao.
+- Estado completo, pendencias humanas e ordem para continuar: `tasks/HANDOFF.md`.
