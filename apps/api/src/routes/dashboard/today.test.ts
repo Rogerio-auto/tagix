@@ -20,6 +20,11 @@ let canalA = '';
 let canalC = '';
 let suffix = '';
 const AGORA = new Date('2026-09-15T18:00:00Z');
+/**
+ * Visão de dono (F72-S04: `viewer` é obrigatório). OWNER não passa pelo predicado da
+ * inbox; um id avulso basta porque estes casos não criam agenda de time.
+ */
+const DONO = { memberId: randomUUID(), role: 'OWNER' } as const;
 
 async function conversa(input: {
   workspaceId: string;
@@ -133,7 +138,7 @@ describe('aguardando resposta — o número que fecha venda', () => {
       minutosAtras: 5,
     });
 
-    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA }));
+    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA, viewer: DONO }));
     const nomes = r.waiting.map((w) => w.contactName ?? '');
     expect(nomes.some((n) => n.startsWith('Esperando'))).toBe(true);
     expect(nomes.some((n) => n.startsWith('Ja respondido'))).toBe(false);
@@ -141,7 +146,7 @@ describe('aguardando resposta — o número que fecha venda', () => {
 
   it('ordena do MAIS ANTIGO para o mais novo', async () => {
     // Quem espera há mais tempo está mais perto de fechar com o concorrente.
-    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA }));
+    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA, viewer: DONO }));
     const minutos = r.waiting.map((w) => w.waitingMinutes);
     expect([...minutos].sort((a, b) => b - a)).toEqual(minutos);
   });
@@ -156,7 +161,7 @@ describe('aguardando resposta — o número que fecha venda', () => {
       minutosAtras: 200,
       snoozed: true,
     });
-    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA }));
+    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA, viewer: DONO }));
     expect(r.waiting.map((w) => w.contactName ?? '').some((n) => n.startsWith('Adiada'))).toBe(
       false,
     );
@@ -171,7 +176,7 @@ describe('aguardando resposta — o número que fecha venda', () => {
       minutosAtras: 300,
       status: 'closed',
     });
-    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA }));
+    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA, viewer: DONO }));
     expect(r.waiting.map((w) => w.contactName ?? '').some((n) => n.startsWith('Fechada'))).toBe(
       false,
     );
@@ -180,21 +185,21 @@ describe('aguardando resposta — o número que fecha venda', () => {
   it('os minutos vêm calculados do SERVIDOR', async () => {
     // O relógio do celular pode estar errado, e é este número que decide se o
     // dono para o que está fazendo.
-    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA }));
+    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA, viewer: DONO }));
     const esperando = r.waiting.find((w) => (w.contactName ?? '').startsWith('Esperando'));
     expect(esperando?.waitingMinutes).toBe(20);
     expect(r.serverTime).toBe(AGORA.toISOString());
   });
 
   it('waitingTotal reflete o total, não só a página exibida', async () => {
-    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA }));
+    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA, viewer: DONO }));
     expect(r.waitingTotal).toBeGreaterThanOrEqual(r.waiting.length);
   });
 });
 
 describe('isolamento por workspace', () => {
   it('workspace B não vê nada do A', async () => {
-    const r = await withWorkspace(wsB, (tx) => loadToday(tx, { workspaceId: wsB, now: AGORA }));
+    const r = await withWorkspace(wsB, (tx) => loadToday(tx, { workspaceId: wsB, now: AGORA, viewer: DONO }));
     expect(r.waiting).toHaveLength(0);
     expect(r.waitingTotal).toBe(0);
   });
@@ -202,12 +207,12 @@ describe('isolamento por workspace', () => {
 
 describe('workspace sem dado nenhum', () => {
   it('devolve zeros, não erro nem nulo — vazio não pode parecer defeito', async () => {
-    const r = await withWorkspace(wsB, (tx) => loadToday(tx, { workspaceId: wsB, now: AGORA }));
+    const r = await withWorkspace(wsB, (tx) => loadToday(tx, { workspaceId: wsB, now: AGORA, viewer: DONO }));
     expect(r.waiting).toEqual([]);
     expect(r.appointments).toEqual([]);
-    expect(r.month.leads).toBe(0);
-    expect(r.month.leadsPrevious).toBe(0);
-    expect(r.month.appointments).toBe(0);
+    expect(r.month?.leads).toBe(0);
+    expect(r.month?.leadsPrevious).toBe(0);
+    expect(r.month?.appointments).toBe(0);
     expect(typeof r.serverTime).toBe('string');
   });
 });
@@ -227,9 +232,9 @@ describe('resultado do mês', () => {
       createdAt: new Date('2026-09-10T12:00:00Z'),
     });
 
-    const r = await withWorkspace(wsB, (tx) => loadToday(tx, { workspaceId: wsB, now: AGORA }));
-    expect(r.month.leads).toBe(1);
-    expect(r.month.leadsPrevious).toBe(1);
+    const r = await withWorkspace(wsB, (tx) => loadToday(tx, { workspaceId: wsB, now: AGORA, viewer: DONO }));
+    expect(r.month?.leads).toBe(1);
+    expect(r.month?.leadsPrevious).toBe(1);
   });
 });
 
@@ -249,7 +254,7 @@ describe('identidade — nunca "Contato sem nome"', () => {
       lastMessageFrom: 'contact',
       minutosAtras: 5,
     });
-    const r = await withWorkspace(wsC, (tx) => loadToday(tx, { workspaceId: wsC, now: AGORA }));
+    const r = await withWorkspace(wsC, (tx) => loadToday(tx, { workspaceId: wsC, now: AGORA, viewer: DONO }));
     const lead = r.waiting.find((w) => w.contactName === '(66) 99934-2444');
     expect(lead).toBeDefined();
   });
@@ -263,7 +268,7 @@ describe('identidade — nunca "Contato sem nome"', () => {
       lastMessageFrom: 'contact',
       minutosAtras: 6,
     });
-    const r = await withWorkspace(wsC, (tx) => loadToday(tx, { workspaceId: wsC, now: AGORA }));
+    const r = await withWorkspace(wsC, (tx) => loadToday(tx, { workspaceId: wsC, now: AGORA, viewer: DONO }));
     const nomes = r.waiting.map((w) => w.contactName ?? '');
     expect(nomes.some((n) => n.startsWith('Ana'))).toBe(true);
     expect(nomes).not.toContain('(66) 99934-2445');
@@ -280,14 +285,14 @@ describe('prévia — o cliente nunca lê sintaxe de máquina', () => {
       lastMessageFrom: 'contact',
       minutosAtras: 7,
     });
-    const r = await withWorkspace(wsC, (tx) => loadToday(tx, { workspaceId: wsC, now: AGORA }));
+    const r = await withWorkspace(wsC, (tx) => loadToday(tx, { workspaceId: wsC, now: AGORA, viewer: DONO }));
     const previas = r.waiting.map((w) => w.preview ?? '');
     expect(previas).not.toContain('[voice]');
     expect(previas.some((p) => p.includes('Mensagem de voz'))).toBe(true);
   });
 
   it('nenhuma prévia devolvida contém colchetes de tipo', async () => {
-    const r = await withWorkspace(wsC, (tx) => loadToday(tx, { workspaceId: wsC, now: AGORA }));
+    const r = await withWorkspace(wsC, (tx) => loadToday(tx, { workspaceId: wsC, now: AGORA, viewer: DONO }));
     for (const w of r.waiting) {
       expect(w.preview ?? '').not.toMatch(/^\[[a-z_]+\]$/);
     }
@@ -296,7 +301,7 @@ describe('prévia — o cliente nunca lê sintaxe de máquina', () => {
 
 describe('distribuição — faixas de urgência', () => {
   it('classifica cada lead e conta a fila INTEIRA, não só a página', async () => {
-    const r = await withWorkspace(wsC, (tx) => loadToday(tx, { workspaceId: wsC, now: AGORA }));
+    const r = await withWorkspace(wsC, (tx) => loadToday(tx, { workspaceId: wsC, now: AGORA, viewer: DONO }));
     const soma = r.waitingBands.esfriando + r.waitingBands.atencao + r.waitingBands.agora;
     // A soma das faixas é o total: nenhum lead fica fora de uma faixa.
     expect(soma).toBe(r.waitingTotal);
@@ -310,7 +315,7 @@ describe('distribuição — faixas de urgência', () => {
       lastMessageFrom: 'contact',
       minutosAtras: 120,
     });
-    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA }));
+    const r = await withWorkspace(wsA, (tx) => loadToday(tx, { workspaceId: wsA, now: AGORA, viewer: DONO }));
     const fria = r.waiting.find((w) => (w.contactName ?? '').startsWith('Fria'));
     expect(fria?.urgency).toBe('esfriando');
 
@@ -320,7 +325,7 @@ describe('distribuição — faixas de urgência', () => {
 
   it('workspace vazio devolve faixas zeradas, não undefined', async () => {
     const r = await withWorkspace(wsVazio, (tx) =>
-      loadToday(tx, { workspaceId: wsVazio, now: AGORA }),
+      loadToday(tx, { workspaceId: wsVazio, now: AGORA, viewer: DONO }),
     );
     expect(r.waitingBands).toEqual({ esfriando: 0, atencao: 0, agora: 0 });
   });

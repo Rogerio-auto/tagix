@@ -175,7 +175,9 @@ export const DASHBOARD = {
       category: 'atendimento',
       cardType: 'stat',
       cadence: 'snapshot_5min',
-      value: { total: 42 },
+      // `count` é o campo que `formatMetricDisplay` lê num card `stat` (com `total` o
+      // Painel completo mostrava "—").
+      value: { count: 42 },
       drillHref: null,
     },
   ],
@@ -210,4 +212,159 @@ export const ONBOARDING_STATE = {
     setup_completed: true,
   },
   tourState: Object.fromEntries(TOUR_IDS.map((id) => [id, { dismissed: true }])),
+} as const;
+
+/**
+ * `GET /api/onboarding/checklist` de quem já concluiu os primeiros passos (F43-S06):
+ * todos `done`, então o widget "Primeiros passos" some da Home. Explícito, em vez de
+ * depender do fallback `{}`: o cenário destes specs é o do uso diário.
+ */
+export const ONBOARDING_CHECKLIST_DONE = {
+  steps: [
+    { key: 'connect_channel', label: 'Conectar o WhatsApp', done: true, href: '/settings/channels' },
+    { key: 'activate_agent', label: 'Ativar um agente', done: true, href: '/agents' },
+    { key: 'publish_flow', label: 'Publicar um fluxo', done: true, href: '/flows' },
+  ],
+} as const;
+
+/** Receita atribuída da janela atual do OWNER (centavos). KPI e série dizem o mesmo. */
+const HOME_REVENUE_CENTS = 18_420_000;
+
+/**
+ * Série diária de receita que soma EXATAMENTE o KPI (o servidor garante essa
+ * igualdade: a série e o total saem da mesma consulta). Forma determinística e
+ * crescente, com respiro a cada 4 dias, a "linha que sobe" da maquete; o arredondamento
+ * acumulado cai no último dia.
+ */
+function revenueSeries(totalCents: number, days: number): { day: string; valueCents: number }[] {
+  const weights = Array.from(
+    { length: days },
+    (_, i) => (120_000 + i * 18_000) * (i % 4 === 0 ? 0.6 : 1),
+  );
+  const sum = weights.reduce((a, b) => a + b, 0);
+  let acc = 0;
+  return weights.map((w, i) => {
+    const valueCents = i === days - 1 ? totalCents - acc : Math.round((w / sum) * totalCents);
+    acc += valueCents;
+    return {
+      day: new Date(Date.UTC(2026, 4, 13 + i)).toISOString().slice(0, 10),
+      valueCents,
+    };
+  });
+}
+
+/**
+ * `GET /api/dashboard/home` de um OWNER (F72-S04 — contrato em
+ * `apps/api/src/services/dashboard/home-model.ts`). Escopo `workspace`: resultado com
+ * janela anterior, jornada e série de receita. Sem isto a Home caía no fallback `{}`.
+ * Specs que precisam do recorte de AGENT (`scope: 'personal'`) sobrescrevem a rota.
+ */
+export const HOME_OWNER = {
+  scope: 'workspace',
+  role: 'OWNER',
+  periodDays: 30,
+  window: {
+    from: '2026-05-13T12:00:00.000Z',
+    to: '2026-06-12T12:00:00.000Z',
+    previousFrom: '2026-04-13T12:00:00.000Z',
+    previousTo: '2026-05-13T12:00:00.000Z',
+  },
+  thresholds: { slaMinutes: 15, slaSource: 'default', stalledDays: 7, mediaFailedDays: 7 },
+  kpis: [
+    {
+      key: 'revenue',
+      unit: 'cents',
+      value: HOME_REVENUE_CENTS,
+      previous: 15_560_000,
+      betterWhen: 'higher',
+      href: '/conversions',
+      sample: null,
+    },
+    {
+      key: 'leads',
+      unit: 'count',
+      value: 89,
+      previous: 78,
+      betterWhen: 'higher',
+      href: '/contacts',
+      sample: null,
+    },
+    {
+      key: 'speed_to_lead',
+      unit: 'seconds',
+      value: 41,
+      previous: 59,
+      betterWhen: 'lower',
+      href: '/conversations',
+      sample: { answered: 84, unanswered: 5 },
+    },
+    {
+      key: 'conversions',
+      unit: 'count',
+      value: 31,
+      previous: 27,
+      betterWhen: 'higher',
+      href: '/conversions',
+      sample: null,
+    },
+  ],
+  attention: [
+    {
+      kind: 'waiting_sla',
+      severity: 'warning',
+      count: 1,
+      oldestMinutes: 22,
+      href: `/conversations/${CONVERSATION.id}`,
+      targetId: CONVERSATION.id,
+    },
+    {
+      kind: 'deals_stalled',
+      severity: 'warning',
+      count: 1,
+      oldestMinutes: null,
+      href: '/pipeline',
+      targetId: DEAL.id,
+    },
+  ],
+  journey: { leads: 89, conversations: 74, booked: 31, won: 12 },
+  revenueSeries: revenueSeries(HOME_REVENUE_CENTS, 31),
+  serverTime: '2026-06-12T12:00:00.000Z',
+} as const;
+
+/**
+ * `GET /api/dashboard/today` (fila "Aguardando resposta" + agenda do dia). A conversa
+ * do seed espera há 22 min (faixa "atenção"). `month` é `null` para AGENT/READONLY.
+ */
+export const TODAY = {
+  waiting: [
+    {
+      conversationId: CONVERSATION.id,
+      contactId: CONVERSATION.contactId,
+      contactName: 'Ana Souza',
+      preview: CONVERSATION.lastMessagePreview,
+      waitingSince: '2026-06-12T11:38:00.000Z',
+      waitingMinutes: 22,
+      channel: 'whatsapp',
+      urgency: 'atencao',
+    },
+  ],
+  waitingTotal: 1,
+  waitingBands: { esfriando: 0, atencao: 1, agora: 0 },
+  appointments: [
+    {
+      id: 'appt_e2e_1',
+      title: 'Avaliação',
+      startsAt: '2026-06-12T17:00:00.000Z',
+      contactName: 'Ana Souza',
+    },
+  ],
+  month: {
+    leads: 89,
+    leadsPrevious: 78,
+    appointments: 31,
+    appointmentsPrevious: 27,
+    conversations: 74,
+    conversationsPrevious: 70,
+  },
+  serverTime: '2026-06-12T12:00:00.000Z',
 } as const;

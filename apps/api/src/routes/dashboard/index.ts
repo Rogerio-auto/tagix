@@ -3,18 +3,22 @@
  * por role (§8); o front nunca filtra por role (anti-padrão v1 §10).
  *
  *   GET /api/dashboard/me            cards/alerts/layout do member autenticado
+ *   GET /api/dashboard/home          Home (F72-S04): KPIs + delta + atenção, por papel
+ *   GET /api/dashboard/today         Hoje (F61-S02): fila + agenda; recorte pessoal p/ AGENT/READONLY
  *   GET /api/dashboard/metrics/:key  drill-down detalhado (série/tabela), role-gated
  *
  * Guard: requireAuth + withRLS (toda query roda na tx com RLS do workspace). Sem
  * requireRole específico — o GET é permitido a qualquer member; a filtragem do
  * conteúdo por role acontece no serviço (loadDashboard / drillDown), não no guard.
+ * O papel da sessão passa por `parseRole` em TODAS as rotas: fora da matriz é 403
+ * (fail-closed), nunca um cast. Toda resposta com dado do tenant sai com `private, no-store`.
  * Montado em app.ts pelo orchestrator (gap-fill de wiring).
  */
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import type { Role } from '@hm/shared';
 import { requireAuth, withRLS } from '../../middlewares/auth';
-import { drillDown, loadDashboard } from '../../services/dashboard';
+import { drillDown, loadDashboard, loadHome } from '../../services/dashboard';
+import { homeQuerySchema, parseRole } from './home-query';
 import { loadToday } from './today';
 import { createTodayActionsRouter } from './today-actions';
 
@@ -42,20 +46,69 @@ export function createDashboardRouter(): Router {
   // segundo a mais e três chances de a tela ficar pela metade.
   router.get('/api/dashboard/today', ...guard, async (req: Request, res: Response) => {
     const auth = req.auth!;
-    const payload = await req.scoped!((tx) => loadToday(tx, { workspaceId: auth.workspace.id }));
+    const role = parseRole(auth.member.role);
+    if (!role) {
+      res.status(403).json({ error: 'forbidden' });
+      return;
+    }
+    // F72-S04: o recorte (fila pessoal, visibilidade da inbox F30, calendários
+    // acessíveis, mês só para gestão) é resolvido no servidor a partir do papel da
+    // sessão — `resolveTodayScope`. A tela não filtra por papel.
+    const payload = await req.scoped!((tx) =>
+      loadToday(tx, {
+        workspaceId: auth.workspace.id,
+        viewer: { memberId: auth.member.id, role },
+      }),
+    );
+    // Fila com nome/telefone de lead: dado do tenant, nunca em cache compartilhado.
+    res.set('Cache-Control', 'private, no-store');
+    res.json(payload);
+  });
+
+  // GET /api/dashboard/home — a Home (F72-S04): resultado + o que precisa de atenção.
+  // O papel decide o escopo no servidor (workspace x pessoal); não há custo de IA/infra
+  // neste payload para papel nenhum. Contrato: `services/dashboard/home-model.ts`.
+  router.get('/api/dashboard/home', ...guard, async (req: Request, res: Response) => {
+    const query = homeQuerySchema.safeParse(req.query);
+    if (!query.success) {
+      res.status(400).json({ error: 'invalid_query' });
+      return;
+    }
+    const auth = req.auth!;
+    const role = parseRole(auth.member.role);
+    if (!role) {
+      res.status(403).json({ error: 'forbidden' });
+      return;
+    }
+    const payload = await req.scoped!((tx) =>
+      loadHome(tx, {
+        workspaceId: auth.workspace.id,
+        memberId: auth.member.id,
+        role,
+        periodDays: query.data.periodDays,
+      }),
+    );
+    // Número do workspace é dado do tenant: nunca em cache compartilhado.
+    res.set('Cache-Control', 'private, no-store');
     res.json(payload);
   });
 
   // GET /api/dashboard/me — payload role-aware completo.
   router.get('/api/dashboard/me', ...guard, async (req: Request, res: Response) => {
     const auth = req.auth!;
+    const role = parseRole(auth.member.role);
+    if (!role) {
+      res.status(403).json({ error: 'forbidden' });
+      return;
+    }
     const payload = await req.scoped!((tx) =>
       loadDashboard(tx, {
         workspaceId: auth.workspace.id,
         memberId: auth.member.id,
-        role: auth.member.role as Role,
+        role,
       }),
     );
+    res.set('Cache-Control', 'private, no-store');
     res.json(payload);
   });
 
@@ -67,6 +120,11 @@ export function createDashboardRouter(): Router {
       return;
     }
     const auth = req.auth!;
+    const role = parseRole(auth.member.role);
+    if (!role) {
+      res.status(403).json({ error: 'forbidden' });
+      return;
+    }
     const rawParam = req.query['param'] ?? req.query['category'];
     const paramParsed =
       typeof rawParam === 'string' ? drillParamSchema.safeParse(rawParam) : null;
@@ -78,11 +136,12 @@ export function createDashboardRouter(): Router {
       drillDown(tx, {
         workspaceId: auth.workspace.id,
         memberId: auth.member.id,
-        role: auth.member.role as Role,
+        role,
         metricKey: parsed.data,
         param: paramParsed?.success ? paramParsed.data : undefined,
       }),
     );
+    res.set('Cache-Control', 'private, no-store');
     switch (result.kind) {
       case 'ok':
         res.json({ metricKey: result.metricKey, detail: result.detail });

@@ -17,10 +17,10 @@ import { test, expect } from '../fixtures/test';
 test.use({ viewport: { width: 375, height: 812 } });
 
 /** Todos os destinos do `nav.ts` que um OWNER enxerga — cada um precisa de caminho no celular. */
-const OWNER_TABS = ['/hoje', '/conversations', '/calendar'];
+// F72-S04: Home = `/` (o antigo Dashboard e a tela Hoje viraram um destino só).
+const OWNER_TABS = ['/', '/conversations', '/calendar'];
 const OWNER_MORE = [
   '/pipeline',
-  '/',
   '/contacts',
   '/campaigns',
   '/agents',
@@ -138,9 +138,11 @@ test.describe('Mobile — sheet Mais', () => {
       .evaluateAll((els) => els.map((el) => el.getAttribute('href')));
     expect(moreHrefs).toEqual(OWNER_MORE);
 
+    // O antigo "Dashboard" não existe mais: é a própria Home.
+    await expect(sheet.getByRole('link', { name: 'Dashboard', exact: true })).toHaveCount(0);
+
     for (const label of [
       'Pipeline',
-      'Dashboard',
       'Contatos',
       'Campanhas',
       'Agentes',

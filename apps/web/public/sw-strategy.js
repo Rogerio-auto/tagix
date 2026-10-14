@@ -116,3 +116,31 @@ export function describeRequest(request, origin) {
     sameOrigin: request.url.startsWith(origin),
   };
 }
+
+/**
+ * Destino do toque na notificação, sempre na MESMA origem do app (F72-S04, L-1).
+ *
+ * O `url` vem do payload do push; um payload forjado ou um bug no servidor não pode
+ * transformar a notificação num redirecionamento para fora (phishing com o ícone do
+ * produto). Aceita caminho relativo ou URL absoluta da própria origem; qualquer outra
+ * coisa (outra origem, `javascript:`, `data:`, lixo) vira a Home.
+ *
+ * Devolve a URL ABSOLUTA (`href`), nunca `pathname + search + hash`: para
+ * `https://<origem>//evil.com` o pathname é `//evil.com`, que o `navigate`/`openWindow`
+ * resolveria como protocol-relative, ou seja, para `https://evil.com`.
+ *
+ * @param {unknown} bruto
+ * @param {string} origin `self.location.origin` do worker
+ * @returns {string}
+ */
+export function safeNotificationTarget(bruto, origin) {
+  const home = new URL('/', origin).href;
+  if (typeof bruto !== 'string' || bruto === '') return home;
+  try {
+    const url = new URL(bruto, origin);
+    if (url.origin !== origin) return home;
+    return url.href;
+  } catch {
+    return home;
+  }
+}

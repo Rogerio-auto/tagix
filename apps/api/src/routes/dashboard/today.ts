@@ -14,9 +14,11 @@
  * pelo mais antigo — quem está esperando há mais tempo é quem está mais perto de
  * fechar com o concorrente.
  */
-import { and, asc, count, eq, gte, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gte, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
 import { schema, type DbTx } from '@hm/db';
-import { formatPhoneForDisplay, humanizePreview } from '@hm/shared';
+import { formatPhoneForDisplay, humanizePreview, type Role } from '@hm/shared';
+import { applyDashboardStatementTimeout } from '../../services/dashboard/viewer-scope';
+import { resolveTodayScope } from './today-scope';
 
 /** Faixa de urgência — a tela agrupa por isto em vez de mostrar uma fila plana. */
 export type UrgencyBand = 'esfriando' | 'atencao' | 'agora';
@@ -71,7 +73,11 @@ export interface TodayPayload {
   readonly waitingTotal: number;
   readonly waitingBands: WaitingBands;
   readonly appointments: readonly TodayAppointment[];
-  readonly month: MonthResult;
+  /**
+   * Resultado da empresa no mês. `null` no recorte pessoal (AGENT/READONLY — F72-S04):
+   * número de dono não é calculado para quem não é dono, nem descartado depois.
+   */
+  readonly month: MonthResult | null;
   /** Instante do servidor — a UI calcula "há X min" a partir daqui, não do relógio local. */
   readonly serverTime: string;
 }
@@ -114,12 +120,36 @@ function startOfMonth(at: Date, monthsBack = 0): Date {
   return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() - monthsBack, 1));
 }
 
+/** Quem está olhando: o papel vem da sessão validada (`parseRole`), nunca do cliente. */
+export interface TodayViewer {
+  readonly memberId: string;
+  readonly role: Role;
+}
+
 export async function loadToday(
   tx: DbTx,
-  input: { readonly workspaceId: string; readonly now?: Date },
+  input: {
+    readonly workspaceId: string;
+    readonly now?: Date;
+    /**
+     * F72-S04: obrigatório (fail-closed — não existe "sem recorte"). O recorte da fila,
+     * da agenda e do mês sai daqui (`resolveTodayScope`): AGENT/READONLY veem a fila
+     * deles; quem não é OWNER/ADMIN passa pela visibilidade da inbox (F30); a agenda é
+     * sempre a dos calendários que o membro acessa.
+     */
+    readonly viewer: TodayViewer;
+  },
 ): Promise<TodayPayload> {
   const now = input.now ?? new Date();
   const { conversations, contacts, channels, events } = schema;
+
+  // Orçamento antes de qualquer leitura (inclusive a resolução do recorte).
+  await applyDashboardStatementTimeout(tx);
+  const scope = await resolveTodayScope(tx, {
+    workspaceId: input.workspaceId,
+    memberId: input.viewer.memberId,
+    role: input.viewer.role,
+  });
 
   const inicioMes = startOfMonth(now);
   const inicioMesAnterior = startOfMonth(now, 1);
@@ -142,6 +172,9 @@ export async function loadToday(
     isNotNull(conversations.lastMessageAt),
     // Conversa adiada não está esperando: alguém decidiu que ela espera.
     isNull(conversations.snoozedUntil),
+    scope.assignedTo ? eq(conversations.assignedTo, scope.assignedTo) : undefined,
+    // F30: o que a inbox esconde do membro não entra na fila nem nas contagens.
+    scope.inboxVisibility ?? undefined,
   );
 
   // Cortes das faixas, calculados uma vez e usados na query de contagem.
@@ -215,13 +248,20 @@ export async function loadToday(
           lt(events.startAt, fimDia),
           // Compromisso cancelado nao e "o que eu tenho hoje".
           ne(events.status, 'cancelled'),
+          // Todos os papéis: só os calendários que o membro acessa. Lista vazia vira
+          // `false` — sem calendário acessível, sem compromisso (nunca "todos").
+          scope.calendarIds.length > 0
+            ? inArray(events.calendarId, [...scope.calendarIds])
+            : sql`false`,
         ),
       )
       .orderBy(asc(events.startAt))
       .limit(20),
 
-    contagemDoPeriodo(tx, input.workspaceId, inicioMes, now),
-    contagemDoPeriodo(tx, input.workspaceId, inicioMesAnterior, inicioMes),
+    scope.includeMonth ? contagemDoPeriodo(tx, input.workspaceId, inicioMes, now) : null,
+    scope.includeMonth
+      ? contagemDoPeriodo(tx, input.workspaceId, inicioMesAnterior, inicioMes)
+      : null,
   ]);
 
   const esperandoComUrgencia: WaitingLead[] = esperando.map((c) => {
@@ -257,14 +297,17 @@ export async function loadToday(
       startsAt: a.startsAt.toISOString(),
       contactName: a.contactName,
     })),
-    month: {
-      leads: mesAtual.leads,
-      leadsPrevious: mesAnterior.leads,
-      appointments: mesAtual.appointments,
-      appointmentsPrevious: mesAnterior.appointments,
-      conversations: mesAtual.conversations,
-      conversationsPrevious: mesAnterior.conversations,
-    },
+    month:
+      mesAtual && mesAnterior
+        ? {
+            leads: mesAtual.leads,
+            leadsPrevious: mesAnterior.leads,
+            appointments: mesAtual.appointments,
+            appointmentsPrevious: mesAnterior.appointments,
+            conversations: mesAtual.conversations,
+            conversationsPrevious: mesAnterior.conversations,
+          }
+        : null,
     serverTime: now.toISOString(),
   };
 }

@@ -1,18 +1,17 @@
-import { DashboardClient } from '@/features/dashboard';
+import { HomeClient } from '@/features/dashboard';
 import { PageContainer } from '@/shared/components/layout';
 
-export const metadata = { title: 'Dashboard' };
+export const metadata = { title: 'Home' };
 
 /**
- * Dashboard root (F8-S03 / DASHBOARD.md §9.1). Server Component fino que renderiza
- * o shell client `DashboardClient` — este carrega `/dashboard/me` (cards/alerts já
- * filtrados por role pelo servidor), hidrata e escuta o socket. Server-driven: a
- * página nunca decide visibilidade por role.
+ * Home (F72-S04). Server Component fino: o shell client carrega o resumo da Home e o
+ * painel completo. Server-driven: a página nunca decide visibilidade por papel, o
+ * servidor já entrega só o que cada papel pode ver (DASHBOARD.md §8).
  */
-export default function DashboardPage() {
+export default function HomePage() {
   return (
     <PageContainer>
-      <DashboardClient />
+      <HomeClient />
     </PageContainer>
   );
 }

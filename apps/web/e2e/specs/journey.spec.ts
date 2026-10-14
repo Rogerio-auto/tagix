@@ -18,7 +18,12 @@ test.describe('Jornada completa', () => {
     // ── 0) Já autenticado (storageState). Confere que o app abriu. ──────────
     await page.goto('/');
     // O TopBar repete o título num <h1> próprio; o da página é o do <main>.
-    await expect(page.getByRole('main').getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    await expect(
+      page.getByRole('main').getByRole('heading', {
+        level: 1,
+        name: /^(Bom dia|Boa tarde|Boa noite|Boa madrugada)/,
+      }),
+    ).toBeVisible();
 
     // ── 1) Conectar canal (WAHA, sem dependência do SDK da Meta) ────────────
     const channels = new ChannelsPage(page);

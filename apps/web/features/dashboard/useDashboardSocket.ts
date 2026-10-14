@@ -8,11 +8,15 @@
  * workspace e o front reage apenas se a métrica estiver no conjunto atual de cards
  * (que já veio filtrado). Por isso não há `if(role)` aqui — apenas checamos se a
  * métrica mudada pertence ao dashboard renderizado.
+ *
+ * Rajadas viram uma invalidação a cada 3 s (`metric-changed-listener.ts`); a pendente
+ * é descartada na desmontagem.
  */
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DashboardMetricChangedPayload } from '@hm/shared';
 import { useSocket } from '@/shared/realtime';
+import { createMetricChangedListener } from './metric-changed-listener';
 import { dashboardKeys } from './queries';
 
 export function useDashboardSocket(visibleMetricKeys: ReadonlySet<string>): void {
@@ -21,16 +25,12 @@ export function useDashboardSocket(visibleMetricKeys: ReadonlySet<string>): void
 
   useEffect(() => {
     if (!socket) return;
-    const onChanged = (p: DashboardMetricChangedPayload): void => {
-      // Só refetch se a métrica está no dashboard atual (server-driven: o conjunto
-      // de cards já reflete o role; não inferimos visibilidade aqui).
-      if (visibleMetricKeys.has(p.metricKey)) {
-        void qc.invalidateQueries({ queryKey: dashboardKeys.me });
-      }
-    };
+    const listener = createMetricChangedListener(qc, dashboardKeys.me, visibleMetricKeys);
+    const onChanged = (p: DashboardMetricChangedPayload): void => listener.onChanged(p);
     socket.on('dashboard:metric_changed', onChanged);
     return () => {
       socket.off('dashboard:metric_changed', onChanged);
+      listener.cancel();
     };
   }, [socket, qc, visibleMetricKeys]);
 }

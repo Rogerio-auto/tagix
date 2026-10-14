@@ -45,7 +45,7 @@ for (const theme of ['dark', 'light'] as const) {
       page,
     }) => {
       await page.goto('/');
-      const link = sidebar(page).getByRole('link', { name: 'Dashboard' });
+      const link = sidebar(page).getByRole('link', { name: 'Home' });
       await page.keyboard.press('Tab'); // modalidade teclado => :focus-visible
       await link.focus();
       await expect(link).toBeFocused();
@@ -99,7 +99,7 @@ test.describe('Shell — prefers-reduced-motion', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
     const aside = sidebar(page);
-    const link = aside.getByRole('link', { name: 'Dashboard' });
+    const link = aside.getByRole('link', { name: 'Home' });
     // `motion-reduce:transition-none` zera a propriedade (a duração fica declarada).
     const property = await link.evaluate((el) => getComputedStyle(el).transitionProperty);
     expect(property).toBe('none');

@@ -1,24 +1,17 @@
 'use client';
 
 /**
- * Shell client do Dashboard v3 (F55-S06 / DASHBOARD §9). Carrega `/dashboard/me`,
- * escuta o socket e renderiza os cards numa **coluna editorial estilo Stripe**
- * (decisão travada do founder — clareza > densidade):
+ * Painel completo (F55-S06 / DASHBOARD §9), agora como a parte de BAIXO da Home
+ * (F72-S04). Os KPIs do topo e a lista de atenção são da Home; aqui ficam os cards que
+ * o servidor liberou para o papel, em seções editoriais (desempenho, tendências,
+ * rankings, leads e métricas), com o layout pessoal (esconder/reordenar) preservado.
  *
- *   (1) KPIs grandes no topo  →  (2) Desempenho (gráfico largo full-width)  →
- *   (3) Tendências  →  (4) Rankings e equipe  →  (5) Leads e métricas
+ * **Server-driven** (DASHBOARD §10): a lista de cards vem filtrada por papel do
+ * servidor, não há `if (role)` aqui. `buildSections` só REORDENA o que já foi
+ * autorizado; a seção `kpis` é descartada porque a Home já mostra o resultado no topo.
  *
- * **Server-driven** (DASHBOARD §10): a lista de cards/alerts vem filtrada por role do
- * servidor — não há `if (role)` aqui. `buildSections` apenas REORDENA/agrupa o que o
- * servidor já autorizou (nunca revela card de role não autorizado). Respeita o layout
- * pessoal (esconder/reordenar) via `applyLayout` antes de montar as seções; seções
- * vazias não renderizam (UX §2.6).
- *
- * Estados (UX §2.7/§2.11/§2.6): loading = skeleton com a forma do shell; erro = 3 partes
- * (o quê / por quê / o que fazer) com ação de tentar de novo; vazio = convite com CTA.
- *
- * Drill-down: stat cards com `drillHref` navegam (Link). Cards com detalhe próprio
- * abrem o drawer lateral (desktop) / bottom-sheet (mobile) — nunca modal (UX §2.3).
+ * Estados (UX §2.7/§2.11/§2.6): loading = skeleton com a forma das seções; erro = 3
+ * partes com tentar de novo; vazio = convite com CTA. Detalhe abre em Drawer (§2.3).
  */
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -32,18 +25,13 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@hm/ui';
-import { PageHeader } from '@/shared/components/layout/PageHeader';
 import { HelpHint } from '@/shared/components/help';
 import { EmptyState, ErrorState, Skeleton, ChartSkeleton } from '@/shared/components/feedback';
 import { useDashboard } from './queries';
 import { useDashboardSocket } from './useDashboardSocket';
-import { AlertsBanner } from './AlertsBanner';
 import { DrillDownDrawer } from './DrillDownDrawer';
-import { CustomizeDashboardButton } from './customization';
 import { renderCard } from './cards/registry';
-import { HeroCard } from './cards/HeroCard';
 import { buildSections, type DashboardSection, type SectionId } from './sections';
-import { SetupChecklist } from '@/features/onboarding/checklist';
 import type { DashboardCard } from './types';
 
 /** Métricas cujo drill-down é por drawer (têm detalhe compacto), não navegação. */
@@ -114,16 +102,6 @@ function SectionCards({
   section: DashboardSection;
   drawerHandler: (card: DashboardCard) => ((card: DashboardCard) => void) | undefined;
 }) {
-  // Strip de KPIs: HeroCard grande; o 1º card da PÁGINA recebe o único acento neon.
-  if (section.layout === 'kpis') {
-    return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {section.cards.map((card, i) => (
-          <HeroCard key={card.key} card={card} accent={i === 0} onDrill={drawerHandler(card)} />
-        ))}
-      </div>
-    );
-  }
   // Gráfico de destaque: full-width, largo (founder: "gráfico largo").
   if (section.layout === 'feature') {
     return (
@@ -157,18 +135,7 @@ function SectionCards({
 /** Skeleton com a forma do shell (UX §2.7/§3.6 — sem tela branca, sem CLS). */
 function DashboardSkeleton() {
   return (
-    <div className="flex flex-col gap-12" aria-busy aria-label="Carregando dashboard">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="flex flex-col gap-6 rounded-xl border border-border bg-surface-2 p-6">
-            <Skeleton className="size-9 rounded-lg" />
-            <div className="flex flex-col gap-2">
-              <Skeleton className="h-8 w-2/3" />
-              <Skeleton className="h-3 w-1/2" />
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className="flex flex-col gap-12" aria-busy aria-label="Carregando painel completo">
       <div className="rounded-lg border border-border bg-surface p-5">
         <Skeleton className="mb-4 h-4 w-40" />
         <ChartSkeleton />
@@ -185,7 +152,7 @@ function DashboardSkeleton() {
   );
 }
 
-export function DashboardClient() {
+export function DashboardPanels() {
   const router = useRouter();
   const { data, isLoading, isError, isFetching, refetch } = useDashboard();
   const [drillCard, setDrillCard] = useState<DashboardCard | null>(null);
@@ -197,7 +164,8 @@ export function DashboardClient() {
     if (!data) return null;
     const withData = data.cards.filter((c) => c.value !== null);
     const ordered = applyLayout(withData, data.layoutPreferences.hidden, data.layoutPreferences.order);
-    return buildSections(ordered);
+    // Os KPIs do topo são da Home: a seção `kpis` não se repete aqui.
+    return buildSections(ordered).filter((section) => section.id !== 'kpis');
   }, [data]);
 
   const onDrill = (card: DashboardCard): void => setDrillCard(card);
@@ -206,21 +174,12 @@ export function DashboardClient() {
 
   return (
     <>
-      <div className="flex items-center justify-between" data-tour-id="dashboard-header">
-        <PageHeader title="Dashboard" helpSlot={<HelpHint k="dashboard.overview" />} />
-        {data && (
-          <span data-tour-id="dashboard-customize">
-            <CustomizeDashboardButton />
-          </span>
-        )}
-      </div>
-
       {isLoading && <DashboardSkeleton />}
 
       {isError && (
         <div className="rounded-lg border border-border bg-surface">
           <ErrorState
-            title="Não foi possível carregar o dashboard"
+            title="Não foi possível carregar o painel completo"
             reason="A conexão com o servidor falhou ou expirou."
             whatToDo="Verifique sua conexão e tente novamente."
             action={
@@ -239,17 +198,12 @@ export function DashboardClient() {
 
       {data && sections && (
         <div className="flex flex-col gap-12" data-tour-id="dashboard-grid">
-          {/* Onboarding: checklist "Primeiros passos" — só ADMIN/OWNER, some quando
-              tudo concluído ou dispensado (F43-S06). Auto-gated internamente. */}
-          <SetupChecklist />
-          <AlertsBanner alerts={data.alerts} />
-
           {sections.length === 0 ? (
             <div className="rounded-lg border border-border bg-surface">
               <EmptyState
                 icon={LayoutDashboard}
-                title="Seu dashboard está pronto, faltam dados"
-                description="As métricas aparecem aqui assim que houver atividade — conversas, conversões e negócios. Comece atendendo para ver os números ganharem vida."
+                title="O painel completo está pronto, faltam dados"
+                description="As métricas aparecem aqui assim que houver atividade: conversas, conversões e negócios. Comece atendendo para ver os números ganharem vida."
                 action={
                   <Button variant="primary" onClick={() => router.push('/conversations')}>
                     Ir para conversas

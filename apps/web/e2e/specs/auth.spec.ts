@@ -27,7 +27,12 @@ test.describe('Autenticação', () => {
     // O LoginForm faz router.push('/') no sucesso → cai no dashboard.
     await expect(page).toHaveURL((url) => !url.pathname.startsWith('/login'));
     // O TopBar repete o título num <h1> próprio; o da página é o do <main>.
-    await expect(page.getByRole('main').getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    await expect(
+      page.getByRole('main').getByRole('heading', {
+        level: 1,
+        name: /^(Bom dia|Boa tarde|Boa noite|Boa madrugada)/,
+      }),
+    ).toBeVisible();
   });
 
   test('credenciais inválidas mostram erro e mantêm na tela de login', async ({ page }) => {
