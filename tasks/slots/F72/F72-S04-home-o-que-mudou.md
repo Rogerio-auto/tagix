@@ -2,7 +2,7 @@
 id: F72-S04
 title: Home no DS 3.0 — o que mudou, precisa da sua atenção e resultado no topo
 phase: F72
-status: review
+status: done
 priority: critical
 estimated_size: L
 ui: true
