@@ -29,7 +29,7 @@ O contato guarda, num campo próprio, o nome que a pessoa usa no WhatsApp/Instag
 
 ## Escopo (faz)
 
-- Migração `0095_f70_contact_profile_name.sql`:
+- Migração `0096_f70_contact_profile_name.sql`:
   - `contacts.profile_name text null`;
   - `contacts.profile_name_updated_at timestamptz null`;
   - backfill best-effort: se mensagens/eventos guardados tiverem o nome do perfil (conferir onde o `contactName` do parser fica persistido, ex.: metadata da mensagem ou do evento WAHA), preencher `profile_name` com o mais recente. Se não houver fonte confiável, não inventar: registrar no slot.
@@ -86,6 +86,6 @@ node --env-file=.env apps/api/node_modules/vitest/vitest.mjs run --root apps/api
 
 - Agente: `db-engineer` para a migração + `backend-engineer` para worker/API (ou um só, em sequência).
 - Em produção, contatos antigos só ganham `profile_name` na próxima mensagem, a menos que o backfill ache fonte. A UI cai no `display_name`, que já tem o pushname de muitos.
-- Implementação (backend-engineer): migração `0095_f70_contact_profile_name.sql`; `fillContactName` agora faz UPDATE único condicional (`profile_name IS DISTINCT FROM`, `display_name` por `coalesce`); lista devolve `contactDisplayName`/`contactProfileName` (left join em `contacts`, PK 1:1); detalhe devolve `contact.profileName`; busca da lista casa também `display_name`/`profile_name` (ILIKE, curingas do usuário escapados; a query já não usa índice para `ILIKE`, então nenhum índice novo).
+- Implementação (backend-engineer): migração `0096_f70_contact_profile_name.sql`; `fillContactName` agora faz UPDATE único condicional (`profile_name IS DISTINCT FROM`, `display_name` por `coalesce`); lista devolve `contactDisplayName`/`contactProfileName` (left join em `contacts`, PK 1:1); detalhe devolve `contact.profileName`; busca da lista casa também `display_name`/`profile_name` (ILIKE, curingas do usuário escapados; a query já não usa índice para `ILIKE`, então nenhum índice novo).
 - Descoberta: o parser do WAHA NÃO preenchia `event.contactName`; guardava o `notifyName` só em `messages.metadata.contactName`. Por isso WAHA nunca preenchia `display_name`. O worker agora lê `contactName ?? metadata.contactName`.
 - Decisão de backfill: fonte confiável só no WAHA (`messages.metadata->>'contactName'` de mensagens inbound; vale a mais recente). Meta WhatsApp NÃO persiste o nome (vem em `value.contacts[]`, fora da mensagem; o webhook bruto não é guardado) e o Instagram não o expõe: nada foi inventado, esses contatos ganham `profile_name` na próxima mensagem (UI cai no `display_name`). Backfill idempotente (`profile_name IS NULL`), validado em transação com rollback.

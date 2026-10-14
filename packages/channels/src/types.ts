@@ -110,8 +110,16 @@ export interface SendMediaInput {
   readonly email?: EmailSendOptions;
 }
 
+/**
+ * Componente de template no formato da Graph. Botão com variável é um componente POR
+ * botão: `sub_type` (`url`, `quick_reply`…) e `index` (posição 0-based, em string, como a
+ * Graph exige) identificam qual botão recebe os parâmetros. Sem os dois a Meta recusa o
+ * envio (F58-S12) — por isso viajam do disparo até o adapter sem serem descartados.
+ */
 export interface TemplateComponent {
   readonly type: 'header' | 'body' | 'button';
+  readonly sub_type?: string;
+  readonly index?: string;
   readonly parameters?: readonly unknown[];
 }
 

@@ -671,7 +671,14 @@
       "idx": 95,
       "version": "7",
       "when": 1781452856000,
-      "tag": "0095_f70_contact_profile_name",
+      "tag": "0095_f58_campaign_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1781452857000,
+      "tag": "0096_f70_contact_profile_name",
       "breakpoints": true
     }
   ]
