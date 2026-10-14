@@ -9,7 +9,7 @@ import { NumberField, SelectField } from '../inspector-fields';
 import { MediaUploadField, type UploadedMedia } from './MediaUploadField';
 import type { FlowMediaIntent } from './upload';
 import { MessageBubblePreview } from './MessageBubblePreview';
-import { mediaKindForType, type AudioMessageKind, type MessageType } from './types';
+import { patchForMessageTypeChange, type AudioMessageKind, type MessageType } from './types';
 
 /**
  * Teto da pré-ação em segundos. Espelha `MESSAGE_PRE_ACTION_MAX_MS` (30_000ms) do
@@ -142,14 +142,7 @@ export function MessageInspector({ nodeId }: { nodeId: string }) {
 
   const selectType = (type: MessageType) => {
     setPreviewUrl(undefined);
-    const patch: Record<string, unknown> = {
-      messageType: type,
-      mediaKind: mediaKindForType(type),
-    };
-    // Áudio nasce como nota de voz; outros tipos limpam o campo.
-    patch['audioMessageKind'] =
-      type === 'audio' ? ((d['audioMessageKind'] as string) ?? 'voice') : undefined;
-    set(patch);
+    set(patchForMessageTypeChange(messageType, type, audioMessageKind));
   };
 
   const onUploaded = (media: UploadedMedia) => {

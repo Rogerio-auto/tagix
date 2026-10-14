@@ -70,6 +70,35 @@ describe('validateFlow', () => {
     });
     expect(r.issues.some((i) => i.code === 'unknown_var')).toBe(false);
   });
+
+  it('bloqueia publicacao quando tipo do node diverge do MIME do arquivo', () => {
+    const r = validateFlow({
+      nodes: [
+        n('t', 'trigger'),
+        n('m', 'message', {
+          messageType: 'audio',
+          audioMessageKind: 'voice',
+          mediaStorageKey: 'uploads/foto.jpeg',
+          mediaType: 'image/jpeg',
+        }),
+      ],
+      edges: [e('e1', 't', 'm')],
+    });
+    expect(r.valid).toBe(false);
+    expect(r.issues).toContainEqual(
+      expect.objectContaining({ code: 'message_media_type_mismatch', nodeId: 'm' }),
+    );
+  });
+
+  it('bloqueia mensagem de midia sem arquivo', () => {
+    const r = validateFlow({
+      nodes: [n('t', 'trigger'), n('m', 'message', { messageType: 'video' })],
+      edges: [e('e1', 't', 'm')],
+    });
+    expect(r.issues).toContainEqual(
+      expect.objectContaining({ code: 'message_media_required', nodeId: 'm' }),
+    );
+  });
 });
 
 describe('helpers', () => {

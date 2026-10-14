@@ -61,11 +61,27 @@ function resolveDelayMs(data: z.infer<typeof messageSchema>): number {
   return 0;
 }
 
-/** Deriva o `mediaKind` explicito quando possivel (explicito > audio > undefined). */
-function resolveMediaKind(
-  data: z.infer<typeof messageSchema>,
-): FlowOutboundMediaKind | undefined {
+/**
+ * Deriva o tipo efetivo da midia.
+ *
+ * O MIME persistido pelo upload descreve o objeto real e tem precedencia sobre
+ * seletores antigos/inconsistentes do editor. Assim, flows ja publicados que
+ * apontam para `image/jpeg` nao persistem a mensagem como uma falsa nota de voz.
+ */
+function resolveMediaKind(data: z.infer<typeof messageSchema>): FlowOutboundMediaKind | undefined {
+  const mime = data.mediaType?.trim().toLowerCase();
+  if (mime) {
+    if (mime.startsWith('image/')) return data.mediaKind === 'sticker' ? 'sticker' : 'image';
+    if (mime.startsWith('video/')) return 'video';
+    if (mime.startsWith('audio/')) {
+      if (data.audioMessageKind === 'voice' || data.mediaKind === 'voice') return 'voice';
+      return 'audio';
+    }
+    return 'document';
+  }
   if (data.mediaKind) return data.mediaKind;
+  if (data.messageType === 'image' || data.messageType === 'video') return data.messageType;
+  if (data.messageType === 'document') return 'document';
   if (data.audioMessageKind === 'voice') return 'voice';
   if (data.audioMessageKind === 'audio_file') return 'audio';
   return undefined;

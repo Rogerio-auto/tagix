@@ -38,9 +38,9 @@ const PRESENCE_BEFORE_KINDS = new Set<OutboundJob['kind']>([
 ]);
 
 /**
- * Resolve o `externalId` alvo do indicador a partir do job. Para os kinds com
- * destinatário direto é o `chatId` (id do contato no provider). Jobs sem
- * destinatário endereçável retornam `undefined` (pré-ação é pulada).
+ * Resolve o alvo do indicador nos providers cujo contrato aceita `chatId`.
+ * WhatsApp Cloud é tratado antes, pois exige o `message_id` de uma inbound.
+ * Jobs sem destinatário endereçável retornam `undefined` (pré-ação é pulada).
  */
 function targetForPresence(job: OutboundJob): string | undefined {
   switch (job.kind) {
@@ -58,7 +58,8 @@ function targetForPresence(job: OutboundJob): string | undefined {
 
 /**
  * Pre-action de presença do outbound. Dispara `sendTypingIndicator` no provider
- * ANTES do envio real, espelhando "digitando…" ao contato.
+ * ANTES do envio real, espelhando "digitando…" ao contato. WhatsApp Cloud é
+ * no-op aqui; o caminho explícito de Flow possui o message_id inbound correto.
  *
  * Contrato:
  * - Best-effort: qualquer erro do adapter é logado em `warn` e engolido — o
@@ -78,6 +79,12 @@ export async function runPresencePreAction(
   presence: ContactPresence = 'typing',
 ): Promise<boolean> {
   if (!PRESENCE_BEFORE_KINDS.has(job.kind)) return false;
+
+  // A Cloud API do WhatsApp atrela `typing_indicator` ao `message_id` de uma
+  // mensagem inbound. O job outbound so possui `chatId` (telefone/remote id);
+  // usa-lo como message_id produz (#100) Invalid parameter em toda mensagem.
+  // Flows com preAction usam o job explicito, que resolve a ultima inbound.
+  if (channel.provider === 'meta_whatsapp') return false;
 
   const target = targetForPresence(job);
   if (target === undefined || target.length === 0) return false;

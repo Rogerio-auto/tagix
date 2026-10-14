@@ -27,3 +27,28 @@ export function mediaKindForType(type: MessageType): string | undefined {
       return undefined;
   }
 }
+
+/**
+ * Patch atomico ao trocar o tipo no inspector. A referencia anterior nao pode
+ * sobreviver a uma troca de familia (imagem -> audio, por exemplo), pois o
+ * preview passaria a prometer uma nota de voz enquanto o storage ainda apontaria
+ * para a imagem antiga.
+ */
+export function patchForMessageTypeChange(
+  previous: MessageType,
+  next: MessageType,
+  currentAudioKind: AudioMessageKind = 'voice',
+): Record<string, unknown> {
+  const patch: Record<string, unknown> = {
+    messageType: next,
+    mediaKind: mediaKindForType(next),
+    audioMessageKind: next === 'audio' ? currentAudioKind : undefined,
+  };
+  if (previous !== next) {
+    patch['mediaStorageKey'] = undefined;
+    patch['mediaUrl'] = undefined;
+    patch['mediaType'] = undefined;
+    patch['mediaFilename'] = undefined;
+  }
+  return patch;
+}

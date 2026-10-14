@@ -126,6 +126,78 @@ function collectRefs(value: unknown, acc: string[]): void {
   }
 }
 
+type MessageMediaType = 'image' | 'video' | 'document' | 'audio';
+
+function recordOf(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function mediaTypeFromMime(mime: string): MessageMediaType {
+  const normalized = mime.trim().toLowerCase();
+  if (normalized.startsWith('image/')) return 'image';
+  if (normalized.startsWith('video/')) return 'video';
+  if (normalized.startsWith('audio/')) return 'audio';
+  return 'document';
+}
+
+/** Impede publicar nodes cujo seletor visual nao corresponde ao arquivo persistido. */
+function validateMessageMedia(node: FlowNode, issues: FlowValidationIssue[]): void {
+  if (node.type !== 'message') return;
+  const data = recordOf(node.data);
+  if (data === null) return;
+
+  const messageType = data['messageType'];
+  if (
+    messageType !== 'text' &&
+    messageType !== 'image' &&
+    messageType !== 'video' &&
+    messageType !== 'document' &&
+    messageType !== 'audio'
+  ) {
+    return;
+  }
+
+  const mediaKey = data['mediaStorageKey'] ?? data['mediaUrl'];
+  const hasMedia = typeof mediaKey === 'string' && mediaKey.trim().length > 0;
+  if (messageType === 'text') {
+    if (hasMedia) {
+      issues.push({
+        severity: 'error',
+        code: 'message_stale_media',
+        nodeId: node.id,
+        message:
+          'Mensagem de texto ainda possui uma midia anexada. Remova-a ou escolha o tipo correto.',
+      });
+    }
+    return;
+  }
+
+  if (!hasMedia) {
+    issues.push({
+      severity: 'error',
+      code: 'message_media_required',
+      nodeId: node.id,
+      message: `Mensagem do tipo ${messageType} precisa de um arquivo.`,
+    });
+    return;
+  }
+
+  const mime = data['mediaType'];
+  if (typeof mime === 'string' && mime.trim().length > 0) {
+    const actualType = mediaTypeFromMime(mime);
+    if (actualType !== messageType) {
+      issues.push({
+        severity: 'error',
+        code: 'message_media_type_mismatch',
+        nodeId: node.id,
+        message: `O node esta configurado como ${messageType}, mas o arquivo e ${actualType} (${mime}). Selecione o arquivo novamente.`,
+      });
+    }
+  }
+}
+
 /**
  * Valida um flow (secao 9.3). Determinismo total — mesma entrada, mesma saida. `valid` e
  * false se houver QUALQUER issue de severidade `error`.
@@ -170,7 +242,10 @@ export function validateFlow(input: FlowValidationInput): FlowValidationResult {
     issues.push({ severity: 'error', code: 'cycle', message: 'Ciclo detectado no grafo' });
   }
 
-  // 4) Variaveis desconhecidas.
+  // 4) Configuracao interna dos nodes.
+  for (const node of nodes) validateMessageMedia(node, issues);
+
+  // 5) Variaveis desconhecidas.
   for (const node of nodes) {
     const refs: string[] = [];
     collectRefs(node.data, refs);

@@ -42,6 +42,21 @@ describe('message handler', () => {
       expect.objectContaining({ text: 'Ola Ana', conversationId: 'c1' }),
     );
   });
+  it('flow legado incoerente usa o MIME real em vez de enviar imagem como voz', async () => {
+    const ctx = makeCtx();
+    await messageHandler.execute(
+      node({
+        messageType: 'audio',
+        audioMessageKind: 'voice',
+        mediaStorageKey: 'uploads/foto.jpeg',
+        mediaType: 'image/jpeg',
+      }),
+      ctx,
+    );
+    expect(ctx.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ mediaKind: 'image', mediaType: 'image/jpeg' }),
+    );
+  });
   it('preAction dispara presenca E espera a duração ANTES de enviar', async () => {
     const ctx = makeCtx();
     const order: string[] = [];
