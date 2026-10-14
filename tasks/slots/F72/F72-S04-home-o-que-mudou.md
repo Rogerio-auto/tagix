@@ -2,7 +2,7 @@
 id: F72-S04
 title: Home no DS 3.0 — o que mudou, precisa da sua atenção e resultado no topo
 phase: F72
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: L
 ui: true
@@ -12,6 +12,9 @@ source_docs:
   - docs/features/DS3_ADOCAO.md
   - docs/features/DASHBOARD.md
   - docs/design/ds-3.0-agency-os.html
+agent_id: backend-engineer
+claimed_at: 2026-10-14T17:56:07Z
+
 ---
 # F72-S04 — Home: o que mudou e o que precisa da sua atenção
 
