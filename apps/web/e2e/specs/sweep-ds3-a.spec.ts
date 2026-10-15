@@ -341,7 +341,13 @@ const SCREENS: Screen[] = [
     path: '/conversions',
     ready: async (page) => {
       await expect(h1(page, 'Conversões')).toBeVisible();
-      await expect(page.getByText('Visita agendada').first()).toBeVisible();
+      // O dado renderizado, não o `<option>` homônimo do filtro de tipo: célula da tabela no
+      // desktop; no mobile (cards do `ResponsiveTable`), o texto fora de qualquer `<option>`.
+      const desktop = (page.viewportSize()?.width ?? 0) >= 1024;
+      const row = desktop
+        ? page.getByRole('table', { name: 'Conversões' }).getByRole('cell', { name: /Visita agendada/ })
+        : page.getByText('Visita agendada').and(page.locator(':not(option)'));
+      await expect(row.first()).toBeVisible();
     },
   },
   {
@@ -500,7 +506,9 @@ test.describe('Varredura DS 3.0 (a) — empresa em só leitura', () => {
 
       const create = page.getByRole('button', { name: 'Novo contato' });
       await expect(create).toHaveAttribute('aria-disabled', 'true');
-      await expect(create).toBeEnabled(); // `aria-disabled`, nunca `disabled`: continua no Tab.
+      // `aria-disabled`, nunca `disabled`: continua no Tab. (O `toBeEnabled` do Playwright
+      // conta `aria-disabled` como desabilitado, então a prova é o atributo + o foco abaixo.)
+      await expect(create).not.toHaveAttribute('disabled');
       await expect(create).toHaveAccessibleDescription(READ_ONLY_TOOLTIP);
 
       // Foco por teclado mostra a explicação (não só para leitor de tela).
@@ -511,7 +519,8 @@ test.describe('Varredura DS 3.0 (a) — empresa em só leitura', () => {
       await capture(page, SHOTS, 'contatos-so-leitura', theme, { full: false });
 
       // Clique e Enter não abrem o formulário.
-      await create.click();
+      // `force`: o Playwright recusa clicar em `aria-disabled`; a pessoa, não.
+      await create.click({ force: true });
       await page.keyboard.press('Enter');
       await expect(page.getByRole('dialog', { name: 'Novo contato' })).toHaveCount(0);
 
@@ -531,9 +540,11 @@ test.describe('Varredura DS 3.0 (a) — empresa em só leitura', () => {
       page.getByRole('button', { name: 'Arquivar Plano Pro anual' }),
     ]) {
       await expect(button).toHaveAttribute('aria-disabled', 'true');
+      await expect(button).not.toHaveAttribute('disabled');
       await expect(button).toHaveAccessibleDescription(READ_ONLY_TOOLTIP);
     }
-    await page.getByRole('button', { name: 'Arquivar Plano Pro anual' }).click();
+    // `force`: o Playwright recusa clicar em `aria-disabled`; a pessoa, não.
+    await page.getByRole('button', { name: 'Arquivar Plano Pro anual' }).click({ force: true });
     await expect(page.getByRole('dialog', { name: 'Arquivar produto?' })).toHaveCount(0);
   });
 

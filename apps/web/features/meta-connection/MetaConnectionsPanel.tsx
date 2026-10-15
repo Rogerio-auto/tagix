@@ -100,7 +100,7 @@ export function MetaConnectionsPanel(): React.JSX.Element {
               Falta a configuração do Facebook Login for Business do app. Peça ao administrador da
               plataforma.
             </p>
-            <p className="mt-1 font-mono text-xs text-text-low">Ausente: {config.missing.join(', ')}</p>
+            <p className="mt-1 font-mono text-xs text-text-mid">Ausente: {config.missing.join(', ')}</p>
           </div>
         </div>
       </div>
