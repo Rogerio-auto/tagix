@@ -18,7 +18,7 @@
  * com CTA), §2.7 (botões em loading + toast; valor do servidor), §2.11 (erro em
  * 3 partes). §8 mobile: inputs ≥16px (globals), alvos ≥44px.
  *
- * DS v2: zero hex; tokens border-border-2 / bg-surface-2/-3 / text-text/-mid/-low.
+ * DS v2: zero hex; tokens border-border / bg-surface-2/-3 / text-text/-mid/-low.
  */
 
 import { useState } from 'react';
@@ -110,7 +110,7 @@ function ItemRow({
 
   if (editing) {
     return (
-      <div className="flex flex-col gap-2 rounded-md border border-border-2 bg-surface-2 p-2.5">
+      <div className="flex flex-col gap-2 rounded-md border border-border bg-surface-2 p-2.5">
         <span className="truncate font-body text-sm font-medium text-text">{item.nameSnapshot}</span>
         <div className="flex items-end gap-2">
           <div className="w-16 shrink-0">
@@ -154,7 +154,7 @@ function ItemRow({
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-md border border-border-2 bg-surface-2 px-3 py-2">
+    <div className="flex items-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-2">
       <div className="min-w-0 flex-1">
         <p className="truncate font-body text-sm font-medium text-text">{item.nameSnapshot}</p>
         <p className="font-body text-xs text-text-low">
@@ -171,7 +171,7 @@ function ItemRow({
             type="button"
             onClick={startEdit}
             aria-label={`Editar ${item.nameSnapshot}`}
-            className="flex size-11 items-center justify-center rounded-sm text-text-low outline-none hover:text-text focus-visible:shadow-glow-md"
+            className="flex size-11 items-center justify-center rounded-sm text-text-low outline-none hover:text-text focus-visible:focus-ring"
           >
             <Pencil className="size-4" aria-hidden />
           </button>
@@ -181,7 +181,7 @@ function ItemRow({
               onClick={handleRemove}
               disabled={remove.isPending}
               aria-label={`Confirmar remoção de ${item.nameSnapshot}`}
-              className="flex h-11 items-center justify-center rounded-sm px-2 font-body text-xs font-semibold text-danger outline-none hover:underline focus-visible:shadow-glow-md disabled:opacity-50"
+              className="flex h-11 items-center justify-center rounded-sm px-2 font-body text-xs font-semibold text-danger outline-none hover:underline focus-visible:focus-ring disabled:opacity-50"
             >
               Confirmar
             </button>
@@ -190,7 +190,7 @@ function ItemRow({
               type="button"
               onClick={() => setConfirmRemove(true)}
               aria-label={`Remover ${item.nameSnapshot}`}
-              className="flex size-11 items-center justify-center rounded-sm text-text-low outline-none hover:text-danger focus-visible:shadow-glow-md"
+              className="flex size-11 items-center justify-center rounded-sm text-text-low outline-none hover:text-danger focus-visible:focus-ring"
             >
               <Trash2 className="size-4" aria-hidden />
             </button>
@@ -253,7 +253,7 @@ export function AddItemForm({
       : name.trim().length > 0 && parseToCents(price) !== null;
 
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border-2 bg-surface-2 p-3">
+    <div className="flex flex-col gap-3 rounded-md border border-border bg-surface-2 p-3">
       {/* Alternador produto / avulso */}
       <div className="flex gap-1 rounded-md bg-surface-3 p-0.5" role="tablist">
         <button
@@ -262,7 +262,7 @@ export function AddItemForm({
           aria-selected={mode === 'product'}
           onClick={() => setMode('product')}
           className={cn(
-            'flex-1 rounded-sm px-2 py-1.5 font-body text-xs font-medium outline-none transition-colors focus-visible:shadow-glow-md',
+            'flex-1 rounded-sm px-2 py-1.5 font-body text-xs font-medium outline-none transition-colors focus-visible:focus-ring',
             mode === 'product' ? 'bg-surface text-text shadow-sm' : 'text-text-low hover:text-text',
           )}
         >
@@ -277,7 +277,7 @@ export function AddItemForm({
             setSelected(null);
           }}
           className={cn(
-            'flex-1 rounded-sm px-2 py-1.5 font-body text-xs font-medium outline-none transition-colors focus-visible:shadow-glow-md',
+            'flex-1 rounded-sm px-2 py-1.5 font-body text-xs font-medium outline-none transition-colors focus-visible:focus-ring',
             mode === 'adhoc' ? 'bg-surface text-text shadow-sm' : 'text-text-low hover:text-text',
           )}
         >
@@ -287,7 +287,7 @@ export function AddItemForm({
 
       {mode === 'product' ? (
         selected ? (
-          <div className="flex items-center gap-2 rounded-md border border-border-2 bg-surface px-3 py-2">
+          <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2">
             <Package className="size-4 shrink-0 text-text-low" aria-hidden />
             <div className="min-w-0 flex-1">
               <p className="truncate font-body text-sm font-medium text-text">{selected.name}</p>
@@ -299,7 +299,7 @@ export function AddItemForm({
               type="button"
               onClick={() => setSelected(null)}
               aria-label="Trocar produto"
-              className="flex size-11 items-center justify-center rounded-sm text-text-low outline-none hover:text-text focus-visible:shadow-glow-md"
+              className="flex size-11 items-center justify-center rounded-sm text-text-low outline-none hover:text-text focus-visible:focus-ring"
             >
               <X className="size-4" aria-hidden />
             </button>
@@ -312,7 +312,7 @@ export function AddItemForm({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <div className="max-h-44 overflow-y-auto rounded-md border border-border-2">
+            <div className="max-h-44 overflow-y-auto rounded-md border border-border">
               {picker.isLoading ? (
                 <div className="flex flex-col gap-1.5 p-2">
                   <Skeleton className="h-9 w-full" />
@@ -335,7 +335,7 @@ export function AddItemForm({
                       <button
                         type="button"
                         onClick={() => setSelected(p)}
-                        className="flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2 text-left outline-none hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:shadow-glow-md"
+                        className="flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2 text-left outline-none hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:focus-ring"
                       >
                         <span className="min-w-0 flex-1 truncate font-body text-sm text-text">
                           {p.name}

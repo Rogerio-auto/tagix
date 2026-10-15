@@ -14,13 +14,15 @@ export function ConversationKindBadge({ kind, className }: { kind: string; class
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-1 rounded-pill bg-surface px-1.5 py-0.5 text-[0.625rem] font-medium text-text-mid',
+          'inline-flex items-center gap-1 rounded-pill bg-surface px-1.5 py-0.5 text-xs font-medium text-text-mid',
           className,
         )}
-        title="Comentarios"
+        title="Comentários do Instagram"
       >
         <MessageCircle className="size-3" aria-hidden />
-        Coment.
+        {/* O selo de canal do avatar é suprimido nestas threads: o canal vem daqui. */}
+        <span className="sr-only">Instagram: comentários</span>
+        <span aria-hidden>Coment.</span>
       </span>
     );
   }
@@ -28,13 +30,14 @@ export function ConversationKindBadge({ kind, className }: { kind: string; class
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-1 rounded-pill bg-surface px-1.5 py-0.5 text-[0.625rem] font-medium text-text-mid',
+          'inline-flex items-center gap-1 rounded-pill bg-surface px-1.5 py-0.5 text-xs font-medium text-text-mid',
           className,
         )}
-        title="Story"
+        title="Story do Instagram"
       >
         <Sparkles className="size-3" aria-hidden />
-        Story
+        <span className="sr-only">Instagram: story</span>
+        <span aria-hidden>Story</span>
       </span>
     );
   }
@@ -49,7 +52,7 @@ export function InstagramChannelMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        'flex size-4 items-center justify-center rounded-pill bg-surface-3 text-brand',
+        'flex size-4 items-center justify-center rounded-pill bg-surface-3 text-brand-text',
         className,
       )}
       aria-label="Instagram"

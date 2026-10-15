@@ -12,7 +12,7 @@
  *
  * DS v2: zero hex, só tokens semânticos (mesma superfície do antigo `Section`/
  * `Card` do cockpit). Acessível: `<button aria-expanded/aria-controls>` + foco
- * visível (`focus-visible:shadow-glow-md`). SSR-safe: inicia tudo expandido
+ * visível (`focus-visible:focus-ring`). SSR-safe: inicia tudo expandido
  * (igual no servidor e no 1º render do client → sem hydration mismatch) e
  * hidrata o estado salvo após o mount.
  */
@@ -98,7 +98,7 @@ export function CollapsibleSection({
   const bodyId = `cockpit-section-${sectionKey}`;
 
   return (
-    <div className="rounded-md border border-border-2 bg-surface-2 p-4 shadow-elev-1">
+    <div className="rounded-md border border-border bg-surface-2 p-4 shadow-elev-1">
       <button
         type="button"
         onClick={() => toggle(sectionKey)}
@@ -106,7 +106,7 @@ export function CollapsibleSection({
         aria-controls={bodyId}
         className={cn(
           'flex w-full items-center gap-2 rounded-sm text-left outline-none',
-          'focus-visible:shadow-glow-md',
+          'focus-visible:focus-ring',
           collapsed ? '' : 'mb-3',
         )}
       >

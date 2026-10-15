@@ -100,7 +100,7 @@ export function ChatListFilters({
   const hasExtraFilters = Boolean(selectedDept || selectedTeam);
 
   return (
-    <div className="flex flex-col gap-2 border-b border-border-2 px-3 py-3">
+    <div className="flex flex-col gap-2 border-b border-border px-3 py-3">
       {/* Busca */}
       <div className="relative">
         <Search
@@ -114,9 +114,9 @@ export function ChatListFilters({
           placeholder="Buscar por nome ou telefone…"
           aria-label="Buscar conversa por nome ou telefone"
           className={cn(
-            'h-9 w-full rounded-md border border-border-2 bg-surface-inset pl-9 pr-3',
+            'h-9 w-full rounded-md border border-border bg-surface-inset pl-9 pr-3',
             'font-body text-sm text-text placeholder:text-text-low',
-            'outline-none transition-colors focus-visible:border-border focus-visible:shadow-glow-md',
+            'outline-none transition-colors focus-visible:border-brand-text focus-visible:focus-ring',
           )}
         />
       </div>
@@ -134,10 +134,10 @@ export function ChatListFilters({
               aria-label={f.label}
               className={cn(
                 'h-8 rounded-pill border px-3 font-body text-xs outline-none transition-colors',
-                'focus-visible:shadow-glow-md',
+                'focus-visible:focus-ring',
                 active
                   ? 'border-brand bg-surface-3 text-text'
-                  : 'border-border-2 bg-surface-2 text-text-mid hover:text-text',
+                  : 'border-border bg-surface-2 text-text-mid hover:text-text',
               )}
             >
               {f.options.map((opt) => (
@@ -157,10 +157,10 @@ export function ChatListFilters({
             aria-label="Departamento"
             className={cn(
               'h-8 rounded-pill border px-3 font-body text-xs outline-none transition-colors',
-              'focus-visible:shadow-glow-md',
+              'focus-visible:focus-ring',
               selectedDept
                 ? 'border-brand bg-surface-3 text-text'
-                : 'border-border-2 bg-surface-2 text-text-mid hover:text-text',
+                : 'border-border bg-surface-2 text-text-mid hover:text-text',
             )}
           >
             <option value="" className="bg-surface text-text">
@@ -182,10 +182,10 @@ export function ChatListFilters({
             aria-label="Time"
             className={cn(
               'h-8 rounded-pill border px-3 font-body text-xs outline-none transition-colors',
-              'focus-visible:shadow-glow-md',
+              'focus-visible:focus-ring',
               selectedTeam
                 ? 'border-brand bg-surface-3 text-text'
-                : 'border-border-2 bg-surface-2 text-text-mid hover:text-text',
+                : 'border-border bg-surface-2 text-text-mid hover:text-text',
             )}
           >
             <option value="" className="bg-surface text-text">
@@ -210,7 +210,7 @@ export function ChatListFilters({
             className={cn(
               'inline-flex h-8 items-center gap-1 rounded-pill px-2.5',
               'font-body text-xs text-text-low outline-none transition-colors',
-              'hover:text-text focus-visible:shadow-glow-md',
+              'hover:text-text focus-visible:focus-ring',
             )}
           >
             <X className="size-3.5" aria-hidden />

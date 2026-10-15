@@ -12,7 +12,7 @@
  *
  * DS v2: zero hex — a onda lê a cor computada de um token (`text-text-mid`) para
  * pintar o canvas; o verde-neon `--brand` aparece UMA vez (botão enviar). Alvos
- * ≥44px; foco `focus-visible:shadow-glow-md`. `prefers-reduced-motion` respeitado
+ * ≥44px; foco `focus-visible:focus-ring`. `prefers-reduced-motion` respeitado
  * (sem rAF contínuo e sem pulso).
  */
 
@@ -151,7 +151,7 @@ export function VoiceRecorder({
           onClick={onCancel}
           aria-label="Fechar e voltar à mensagem"
           title="Fechar"
-          className="touch-target flex items-center justify-center rounded-md text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md"
+          className="touch-target flex items-center justify-center rounded-md text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:focus-ring"
         >
           <X className="size-5" aria-hidden />
         </button>
@@ -188,7 +188,7 @@ export function VoiceRecorder({
         disabled={busy}
         aria-label="Cancelar gravação"
         title="Cancelar"
-        className="touch-target flex items-center justify-center rounded-md text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md disabled:cursor-not-allowed disabled:opacity-40"
+        className="touch-target flex items-center justify-center rounded-md text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-40"
       >
         <X className="size-5" aria-hidden />
       </button>
@@ -202,14 +202,14 @@ export function VoiceRecorder({
         aria-busy={busy || undefined}
         className={cn(
           'flex size-9 shrink-0 items-center justify-center rounded-md outline-none transition-colors',
-          'focus-visible:shadow-glow-md disabled:cursor-not-allowed disabled:opacity-40',
+          'focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-40',
           isRecording && !busy
             ? 'bg-brand text-text-on-brand hover:bg-brand-strong'
             : 'bg-surface-3 text-text-low',
         )}
       >
         {busy ? (
-          <Loader2 className="size-5 animate-spin" aria-hidden />
+          <Loader2 className="size-5 animate-spin motion-reduce:animate-none" aria-hidden />
         ) : (
           <SendHorizontal className="size-5" aria-hidden />
         )}

@@ -84,7 +84,7 @@ export function RoutingHistoryList({
         return (
           <li
             key={entry.id}
-            className="rounded-md border border-border-2 bg-surface-2 p-3"
+            className="rounded-md border border-border bg-surface-2 p-3"
           >
             <div className="mb-1 flex items-center justify-between gap-2">
               <span className="truncate font-head text-xs font-semibold text-text-mid">
@@ -112,7 +112,7 @@ export function RoutingHistoryList({
         <button
           type="button"
           onClick={() => void refetch()}
-          className="font-body text-xs text-text-low underline-offset-4 outline-none hover:text-text-mid focus-visible:shadow-glow-md"
+          className="font-body text-xs text-text-low underline-offset-4 outline-none hover:text-text-mid focus-visible:focus-ring"
         >
           Atualizar histórico
         </button>

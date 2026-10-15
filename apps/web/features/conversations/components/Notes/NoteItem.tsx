@@ -15,7 +15,7 @@ function renderBody(body: string): React.ReactNode {
   const parts = body.split(/(@[a-z0-9_]+)/gi);
   return parts.map((part, i) =>
     /^@[a-z0-9_]+$/i.test(part) ? (
-      <span key={i} className="font-medium text-brand">
+      <span key={i} className="font-medium text-brand-text">
         {part}
       </span>
     ) : (
@@ -36,7 +36,7 @@ export function NoteItem({
   const when = useMemo(() => timeFmt.format(new Date(note.createdAt)), [note.createdAt]);
 
   return (
-    <li className="rounded-md border border-border-2 bg-surface-2 p-3">
+    <li className="rounded-md border border-border bg-surface-2 p-3">
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="truncate font-head text-xs font-semibold text-text-mid">{authorLabel}</span>
         <time dateTime={note.createdAt} className="shrink-0 font-body text-xs text-text-low">

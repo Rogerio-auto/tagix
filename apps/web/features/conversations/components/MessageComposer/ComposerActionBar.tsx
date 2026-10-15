@@ -9,7 +9,7 @@
  * UX: ações ricas ficam VISÍVEIS numa barra explícita (evita o anti-padrão
  * *gear-only entry*, UX §3); cada ação é um ícone `lucide` com tooltip + `aria-label`.
  * DS v2: zero hex, só tokens; alvo de toque ≥44px (`touch-target`); foco
- * `focus-visible:shadow-glow-md`.
+ * `focus-visible:focus-ring`.
  */
 
 import { forwardRef, Fragment, type ButtonHTMLAttributes, type ReactNode } from 'react';
@@ -73,7 +73,7 @@ export const ComposerActionButton = forwardRef<HTMLButtonElement, ComposerAction
         title={label}
         className={cn(
           'touch-target flex items-center justify-center rounded-md outline-none transition-colors',
-          'hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md',
+          'hover:bg-surface-2 hover:text-text focus-visible:focus-ring',
           'disabled:cursor-not-allowed disabled:opacity-40',
           active ? 'bg-surface-2 text-text' : 'text-text-mid',
           className,

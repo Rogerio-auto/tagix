@@ -6,7 +6,7 @@
  * espelho (`ConversationHeader`, variant 'icon'). Dispara o `/status` com
  * `snoozedUntil` calculado por opção.
  *
- * DS v2: zero hex, só tokens; focus ring `focus-visible:shadow-glow-md`;
+ * DS v2: zero hex, só tokens; focus ring `focus-visible:focus-ring`;
  * click-outside fecha; `motion-safe` no chevron.
  */
 
@@ -115,7 +115,7 @@ export function SnoozeMenu({ conversationId, variant = 'button', disabled }: Sno
           onClick={() => setOpen((v) => !v)}
           className={cn(
             'rounded-sm p-2 text-text-low outline-none transition-colors',
-            'hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md',
+            'hover:bg-surface-2 hover:text-text focus-visible:focus-ring',
             'disabled:cursor-not-allowed disabled:opacity-50',
           )}
         >
@@ -150,7 +150,7 @@ export function SnoozeMenu({ conversationId, variant = 'button', disabled }: Sno
                   onClick={() => pick(option)}
                   className={cn(
                     'touch-target flex w-full items-center rounded-md px-3 text-left font-body text-base text-text outline-none',
-                    'hover:bg-surface-2 focus-visible:shadow-glow-md',
+                    'hover:bg-surface-2 focus-visible:focus-ring',
                     'disabled:cursor-not-allowed disabled:opacity-50',
                   )}
                 >
@@ -167,7 +167,7 @@ export function SnoozeMenu({ conversationId, variant = 'button', disabled }: Sno
             role="menu"
             aria-label="Adiar por"
             className={cn(
-              'absolute right-0 z-20 mt-1 min-w-44 rounded-md border border-border bg-surface-2 p-1 shadow-glow-md',
+              'absolute right-0 z-20 mt-1 min-w-44 rounded-md border border-border bg-surface-2 p-1 shadow-ds-2',
               variant === 'icon' ? 'top-full' : 'bottom-full mb-1',
             )}
           >
@@ -180,7 +180,7 @@ export function SnoozeMenu({ conversationId, variant = 'button', disabled }: Sno
                 onClick={() => pick(option)}
                 className={cn(
                   'flex w-full items-center rounded-sm px-2 py-1.5 text-left font-body text-sm text-text-mid outline-none',
-                  'hover:bg-surface-3 hover:text-text focus-visible:shadow-glow-md',
+                  'hover:bg-surface-3 hover:text-text focus-visible:focus-ring',
                   'disabled:cursor-not-allowed disabled:opacity-50',
                 )}
               >

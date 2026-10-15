@@ -12,7 +12,7 @@
  * Regras DS:
  * - Zero hex hardcoded — só tokens semânticos.
  * - `prefers-reduced-motion` respeitado via Tailwind (`motion-safe:`).
- * - Focus ring visível (`focus-visible:shadow-glow-md`).
+ * - Focus ring visível (`focus-visible:focus-ring`).
  */
 
 import { Bot, CheckCheck, Info, RefreshCw } from 'lucide-react';
@@ -23,7 +23,8 @@ import { useAuthStore } from '@/shared/stores/auth.store';
 import { FlowExecutionsBadge } from '@/features/flow-builder/livechat';
 import { SnoozeMenu } from '../SnoozeMenu';
 import { useChangeStatus, useChangeAiMode } from '../../queries';
-import { contactLabel } from '../../contact-label';
+import { avatarKeyOf, contactLabel } from '../../contact-label';
+import { ContactAvatar } from '../ContactAvatar';
 import type { ConversationDetail } from '../../types';
 
 export interface ConversationHeaderProps {
@@ -43,7 +44,7 @@ function statusMeta(status: string): { label: string; className: string } {
     case 'open':
       return { label: 'Aberta', className: 'text-success' };
     case 'pending':
-      return { label: 'Pendente', className: 'text-warning' };
+      return { label: 'Pendente', className: 'text-warn' };
     case 'resolved':
       return { label: 'Resolvida', className: 'text-text-low' };
     case 'snoozed':
@@ -130,9 +131,12 @@ export function ConversationHeader({
     : null;
 
   return (
-    <header className="flex h-14 items-center justify-between gap-3 border-b border-border px-4">
+    <header className="flex h-16 items-center justify-between gap-3 border-b border-border px-4">
       {/* Identidade + status */}
       <div className="flex min-w-0 items-center gap-3">
+        {who && (
+          <ContactAvatar who={who} colorKey={avatarKeyOf(detail ?? {})} />
+        )}
         <div className="min-w-0">
           <p className="truncate font-head font-semibold text-text">
             {who?.label ?? 'Conversa'}
@@ -156,16 +160,16 @@ export function ConversationHeader({
       {/* Ações do espelho — visíveis APENAS quando painel fechado (UX §2.3) */}
       <div
         className={cn(
-          'flex items-center gap-2 transition-opacity motion-safe:transition-opacity',
+          'flex items-center gap-2 motion-safe:transition-opacity',
           panelOpen ? 'pointer-events-none opacity-0' : 'opacity-100',
         )}
-        aria-hidden={panelOpen}
+        inert={panelOpen}
       >
         <FlowExecutionsBadge conversationId={conversationId} />
 
         {/* Indicador de IA pausada (handoff) */}
         {isAiPaused && (
-          <span className="flex items-center gap-1 rounded-pill border border-warning/30 bg-warning/10 px-2 py-0.5 font-body text-xs text-warning">
+          <span className="flex items-center gap-1 rounded-pill border border-warn/30 bg-warn/10 px-2 py-0.5 font-body text-xs text-warn">
             <Bot className="size-3.5" aria-hidden />
             IA pausada
           </span>
@@ -181,10 +185,10 @@ export function ConversationHeader({
             title={isAiOn ? 'Desativar IA' : 'Ativar IA'}
             className={cn(
               'flex items-center gap-1.5 rounded-pill border px-2.5 py-1 font-body text-xs outline-none transition-colors',
-              'focus-visible:shadow-glow-md disabled:cursor-not-allowed disabled:opacity-50',
+              'focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-50',
               isAiOn
-                ? 'border-brand/30 bg-brand/10 text-brand hover:bg-brand/15'
-                : 'border-border-2 bg-surface-2 text-text-low hover:text-text',
+                ? 'border-brand/30 bg-brand/10 text-brand-text hover:bg-brand/15'
+                : 'border-border bg-surface-2 text-text-low hover:text-text',
             )}
           >
             <Bot className="size-3.5" aria-hidden />
@@ -238,7 +242,7 @@ export function ConversationHeader({
         aria-pressed={panelOpen}
         className={cn(
           'shrink-0 rounded-sm p-2 outline-none transition-colors',
-          'hover:bg-surface-2 focus-visible:shadow-glow-md',
+          'hover:bg-surface-2 focus-visible:focus-ring',
           panelOpen ? 'text-text' : 'text-text-mid hover:text-text',
         )}
       >

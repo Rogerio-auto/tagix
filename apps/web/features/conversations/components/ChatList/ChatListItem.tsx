@@ -3,38 +3,38 @@
 /**
  * Item da ChatList — conversa na sidebar (F1-S14 / F30-S03).
  *
- * F30-S03: badge de IA (on/paused) visível no item.
- *  - `aiMode='on'`    → ponto verde com ícone Bot (IA ativa).
- *  - `aiMode='paused'`→ ponto amarelo com ícone Bot (atendente assumiu).
+ * F72-S05 (DS 3.0 "Inbox"): linha densa, avatar sem número (ícone de pessoa) com cor
+ * determinística, selo de canal sobre o avatar, não lido em mono, seleção ativa
+ * silenciosa (superfície + barra de 2px; sem o neon animado — movimento contínuo só
+ * em estado vivo). Telefone como 2ª linha quando há homônimos (`showPhone`).
  *
- * UX §2.10: roving tabindex; §3.5: focus ring nunca suprimido.
- * DS v2: zero hex hardcoded, tokens semânticos.
+ * A11y: o item é um `<a>` dentro de `<li>` de uma `<ul>` em `<nav>` (sem `role=option`
+ * com link aninhado: `nested-interactive`). UX §2.10: roving tabindex; §3.5: focus
+ * ring nunca suprimido.
  */
 
 import { forwardRef } from 'react';
 import Link from 'next/link';
-import { Bot } from 'lucide-react';
+import { Bot, Instagram, MessageCircle } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { FlowExecutionsBadge } from '@/features/flow-builder/livechat';
 import { ConversationKindBadge } from '../IgComments/ConversationKindBadge';
 import { MessagePreview } from './MessagePreview';
-import { contactLabel } from '../../contact-label';
+import { ContactAvatar } from '../ContactAvatar';
+import { avatarKeyOf, channelOf, contactLabel, type ChannelFamily } from '../../contact-label';
 import type { ConversationSummary } from '../../types';
 
 export interface ChatListItemProps {
   conversation: ConversationSummary;
   active: boolean;
   /**
-   * `true` quando há OUTRA conversa selecionada e este item não é o ativo —
-   * recua visualmente (opacidade + leve queda de luminosidade + véu escuro) para
-   * dar profundidade e conduzir o olhar ao chat ativo. Volta ao normal no
-   * hover/foco. Nunca aplicado ao item ativo.
+   * Mostra o telefone como segunda linha. A lista liga quando há outro contato com o
+   * mesmo nome visível (homônimos): o número é o que os diferencia.
    */
-  dimmed?: boolean;
+  showPhone?: boolean;
   /**
-   * Roving tabindex (UX §2.10 / WAI-ARIA list pattern): apenas o item com foco
-   * lógico participa da tab order; os demais recebem `-1` e são alcançados pelas
-   * setas ↑/↓.
+   * Roving tabindex (UX §2.10 / WAI-ARIA): apenas o item com foco lógico participa da
+   * tab order; os demais recebem `-1` e são alcançados pelas setas ↑/↓.
    */
   tabIndex: number;
   /** Marca o item focado logicamente quando navegado por teclado. */
@@ -79,90 +79,106 @@ function fullTimestamp(iso: string | null): string | undefined {
   });
 }
 
-/** Badge de estado da IA — on (verde) ou paused (âmbar). */
+/** Selo de canal sobre o avatar (WhatsApp / Instagram). Ícone com nome acessível. */
+function ChannelMark({ channel, active }: { channel: ChannelFamily | null; active: boolean }) {
+  if (channel === null) return null;
+  const isIg = channel === 'instagram';
+  return (
+    <span
+      role="img"
+      aria-label={isIg ? 'Instagram' : 'WhatsApp'}
+      className={cn(
+        'absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-pill',
+        // O anel acompanha o fundo da linha (ativo / hover), senão vira um halo.
+        'border-2 bg-surface-3 transition-colors duration-150 motion-reduce:transition-none',
+        active ? 'border-surface-2' : 'border-surface group-hover:border-surface-2',
+        isIg ? 'text-violet' : 'text-success',
+      )}
+    >
+      {isIg ? (
+        <Instagram className="size-2.5" aria-hidden />
+      ) : (
+        <MessageCircle className="size-2.5" aria-hidden />
+      )}
+    </span>
+  );
+}
+
+/** Selo de IA: ativa (sucesso) ou pausada (atendente assumiu). Tons de status ≥4,5:1 nos dois temas. */
 function AiBadge({ aiMode }: { aiMode: string }) {
   if (aiMode !== 'on' && aiMode !== 'paused') return null;
 
   const isPaused = aiMode === 'paused';
+  const label = isPaused ? 'IA pausada — atendente assumiu' : 'IA ativa';
   return (
     <span
-      aria-label={isPaused ? 'IA pausada — atendente assumiu' : 'IA ativa'}
-      title={isPaused ? 'IA pausada — atendente assumiu' : 'IA ativa'}
+      role="img"
+      aria-label={label}
+      title={label}
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-pill px-1.5 py-0.5',
-        'font-body text-[10px] font-medium leading-none',
-        isPaused
-          ? 'bg-warning/15 text-warning'
-          : 'bg-success/15 text-success',
+        'inline-flex items-center gap-1 rounded-pill px-1.5 py-0.5',
+        'font-body text-xs leading-none font-bold',
+        isPaused ? 'bg-warn-bg text-warn' : 'bg-success-bg text-success',
       )}
     >
-      <Bot className="size-2.5" aria-hidden />
+      <Bot className="size-3" aria-hidden />
       {isPaused ? 'Pausada' : 'IA'}
     </span>
   );
 }
 
 export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(function ChatListItem(
-  { conversation, active, dimmed = false, tabIndex, focused },
+  { conversation, active, showPhone = false, tabIndex, focused },
   ref,
 ) {
   const hasUnread = conversation.unreadCount > 0;
   const time = relativeTime(conversation.lastMessageAt);
   const timeFull = fullTimestamp(conversation.lastMessageAt);
+  const channel = channelOf(conversation);
   const who = contactLabel({
     displayName: conversation.contactDisplayName,
     profileName: conversation.contactProfileName,
     remoteId: conversation.remoteId,
-    channel: conversation.kind,
+    channel: channel ?? conversation.kind,
   });
+  // Com nome, o telefone vai pra 2ª linha só entre homônimos; sem nome o título já é o telefone.
+  const phoneLine = showPhone && who.source !== 'phone' ? who.secondary : null;
+  // Threads de comentário/story já dizem "Instagram" pelo selo de tipo: sem selo duplicado.
+  const kindShowsChannel = conversation.kind === 'comment_thread' || conversation.kind === 'story_thread';
 
   return (
-    <li role="option" aria-selected={active}>
+    <li>
       <Link
         ref={ref}
         href={`/conversations/${conversation.id}`}
-        aria-current={active ? 'true' : undefined}
+        aria-current={active ? 'page' : undefined}
         tabIndex={tabIndex}
         data-conversation-id={conversation.id}
+        data-active={active ? 'true' : undefined}
+        data-unread={hasUnread ? 'true' : undefined}
+        data-roving={focused ? 'true' : undefined}
         title={who.secondary ?? undefined}
         className={cn(
-          'relative flex items-center gap-3 rounded-lg px-3 py-3 outline-none',
-          // Transição fluida do estado de seleção (glow + fundo + recuo dos
-          // demais) — premium e discreta; respeita prefers-reduced-motion.
-          'transition-[background-color,background-image,box-shadow,opacity,filter] duration-300 ease-out',
-          'motion-reduce:transition-none',
-          active
-            ? // Estado "ativo/vivo": linha neon animada percorrendo a borda
-              // (.hm-chat-neon) + halo ambiente discreto + iluminação sutil
-              // vinda do canto superior-esquerdo.
-              'hm-chat-neon bg-surface-3 bg-gradient-to-br from-brand/10 via-transparent to-transparent shadow-glow-active'
-            : 'hover:bg-surface-2',
-          // Hierarquia de foco: quando OUTRA conversa está aberta, os demais
-          // itens recuam para o segundo plano. Véu escuro em degradê (::after,
-          // sempre presente nos não-ativos para a transição ser fluida nos dois
-          // sentidos) + leve queda de opacidade/luminosidade. Hover e foco por
-          // teclado restauram 100% — nunca fica "desabilitado", só discreto.
-          !active &&
-            'after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:bg-gradient-to-t after:from-bg/15 after:to-transparent after:opacity-0 after:transition-opacity after:duration-300',
-          !active && dimmed && 'opacity-[0.7] [filter:brightness(0.94)] after:opacity-100',
-          !active &&
-            'hover:opacity-100 hover:[filter:none] hover:after:opacity-0 focus-visible:opacity-100 focus-visible:[filter:none] focus-visible:after:opacity-0',
-          // Foco real (focus-visible) e foco lógico do roving tabindex pintam o
-          // mesmo anel — §3.5 (focus nunca suprimido).
-          'focus-visible:bg-surface-2 focus-visible:shadow-glow-md',
-          focused && !active && 'bg-surface-2',
+          'group relative flex items-center gap-3 rounded-lg px-3 py-2 outline-none',
+          'transition-colors duration-150 motion-reduce:transition-none',
+          active ? 'bg-surface-2' : 'hover:bg-surface-2/60',
+          // Seleção ativa: barra de 2px em brand-text — o estado não depende só do fundo.
+          active &&
+            "before:absolute before:top-2 before:bottom-2 before:left-0 before:w-0.5 before:rounded-pill before:bg-brand-text before:content-['']",
+          'focus-visible:focus-ring',
         )}
       >
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-pill bg-surface-3 font-head text-sm text-text-mid">
-          <span aria-hidden>{who.initials}</span>
-        </div>
+        <span className="relative shrink-0">
+          <ContactAvatar who={who} colorKey={avatarKeyOf(conversation)} size="sm" />
+          <ChannelMark channel={kindShowsChannel ? null : channel} active={active} />
+        </span>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
             <p
               className={cn(
-                'truncate font-head text-sm',
-                hasUnread ? 'font-semibold text-text' : 'text-text',
+                'truncate font-head text-sm text-text',
+                hasUnread ? 'font-semibold' : 'font-medium',
               )}
             >
               {who.label}
@@ -170,32 +186,39 @@ export const ChatListItem = forwardRef<HTMLAnchorElement, ChatListItemProps>(fun
             <div className="flex shrink-0 items-center gap-1.5">
               <ConversationKindBadge kind={conversation.kind} />
               {time && (
-                <time className="font-body text-xs text-text-low" title={timeFull}>
+                <time
+                  className={cn(
+                    'font-mono text-xs tabular-nums',
+                    hasUnread ? 'text-text-mid' : 'text-text-low',
+                  )}
+                  title={timeFull}
+                >
                   {time}
                 </time>
               )}
             </div>
           </div>
+          {phoneLine && (
+            <p className="truncate font-mono text-xs tabular-nums text-text-low">{phoneLine}</p>
+          )}
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
               <MessagePreview preview={conversation.lastMessagePreview} unread={hasUnread} />
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              {/* F30-S03: badge de IA (on/paused) */}
               <AiBadge aiMode={conversation.aiMode} />
               <FlowExecutionsBadge conversationId={conversation.id} interactive={false} />
+              {hasUnread && (
+                <span
+                  className="inline-flex min-w-5 items-center justify-center rounded-pill bg-brand-text/15 px-1.5 py-0.5 font-mono text-xs leading-none font-semibold tabular-nums text-brand-text"
+                  aria-label={`${conversation.unreadCount} não lidas`}
+                >
+                  {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
+                </span>
+              )}
             </div>
           </div>
         </div>
-
-        {hasUnread && (
-          <span
-            className="ml-1 inline-flex min-w-5 shrink-0 items-center justify-center rounded-pill bg-brand px-1.5 py-0.5 font-head text-xs font-semibold text-text-on-brand"
-            aria-label={`${conversation.unreadCount} não lidas`}
-          >
-            {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
-          </span>
-        )}
       </Link>
     </li>
   );

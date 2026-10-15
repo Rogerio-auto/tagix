@@ -71,8 +71,8 @@ export function IgCommentActions({ comment, mediaId, canModerate, className }: I
       </div>
 
       {replyOpen && (
-        <div className="flex flex-col gap-2 rounded-md border border-border-2 bg-surface-inset p-3">
-          <div className="inline-flex rounded-pill border border-border-2 bg-surface-2 p-0.5 text-xs">
+        <div className="flex flex-col gap-2 rounded-md border border-border bg-surface-inset p-3">
+          <div className="inline-flex rounded-pill border border-border bg-surface-2 p-0.5 text-xs">
             <ToggleOption active={mode === 'public'} onClick={() => setMode('public')} label="Publico" />
             <ToggleOption active={mode === 'private'} onClick={() => setMode('private')} label="Por DM" />
           </div>
@@ -86,9 +86,9 @@ export function IgCommentActions({ comment, mediaId, canModerate, className }: I
             placeholder="Escreva a resposta..."
             aria-label="Resposta ao comentario"
             className={cn(
-              'w-full resize-none rounded-md border border-border-2 bg-surface px-3 py-2',
+              'w-full resize-none rounded-md border border-border bg-surface px-3 py-2',
               'font-body text-sm text-text placeholder:text-text-low outline-none',
-              'focus-visible:border-border focus-visible:shadow-glow-md',
+              'focus-visible:border-brand-text focus-visible:focus-ring',
             )}
           />
           <div className="flex justify-end gap-2">
@@ -101,10 +101,10 @@ export function IgCommentActions({ comment, mediaId, canModerate, className }: I
       )}
 
       {confirmDelete && (
-        <div role="alertdialog" aria-label="Confirmar exclusao do comentario" className="flex items-center justify-between gap-3 rounded-md border border-danger bg-[var(--danger-bg)] p-3">
+        <div role="alertdialog" aria-label="Confirmar exclusao do comentario" className="flex items-center justify-between gap-3 rounded-md border border-danger bg-danger-bg p-3">
           <p className="font-body text-xs text-text">Excluir este comentario? A acao nao pode ser desfeita.</p>
           <div className="flex shrink-0 gap-2">
-            <button type="button" onClick={() => setConfirmDelete(false)} className="inline-flex items-center gap-1 rounded-sm px-2 py-1 font-body text-xs text-text-low outline-none hover:text-text focus-visible:shadow-glow-md">
+            <button type="button" onClick={() => setConfirmDelete(false)} className="inline-flex items-center gap-1 rounded-sm px-2 py-1 font-body text-xs text-text-low outline-none hover:text-text focus-visible:focus-ring">
               <X className="size-3.5" aria-hidden />
               Cancelar
             </button>
@@ -138,12 +138,12 @@ function ActionButton({
       disabled={disabled}
       className={cn(
         'inline-flex items-center gap-1 rounded-pill border px-2.5 py-1 font-body text-xs outline-none transition-colors',
-        'focus-visible:shadow-glow-md disabled:cursor-not-allowed disabled:opacity-50',
+        'focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-50',
         tone === 'danger'
-          ? 'border-border-2 text-danger hover:border-danger hover:bg-[var(--danger-bg)]'
+          ? 'border-border text-danger hover:border-danger hover:bg-danger-bg'
           : active
             ? 'border-brand bg-surface-3 text-text'
-            : 'border-border-2 bg-surface-2 text-text-mid hover:text-text',
+            : 'border-border bg-surface-2 text-text-mid hover:text-text',
       )}
     >
       <Icon className="size-3.5" aria-hidden />
@@ -158,7 +158,7 @@ function ToggleOption({ active, onClick, label }: { active: boolean; onClick: ()
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded-pill px-3 py-1 font-body outline-none transition-colors focus-visible:shadow-glow-md',
+        'rounded-pill px-3 py-1 font-body outline-none transition-colors focus-visible:focus-ring',
         active ? 'bg-brand text-text-on-brand' : 'text-text-mid hover:text-text',
       )}
     >

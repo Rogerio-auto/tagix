@@ -14,9 +14,9 @@ import {
 type BlockedGate = Extract<ComposerGate, { kind: 'blocked' }>;
 
 const TONE_SURFACE: Readonly<Record<RestrictionTone, string>> = {
-  neutral: 'border-border-2 bg-surface-2',
-  warn: 'border-warn bg-[var(--warn-bg)]',
-  info: 'border-info bg-[var(--info-bg)]',
+  neutral: 'border-border bg-surface-2',
+  warn: 'border-warn bg-warn-bg',
+  info: 'border-info bg-info-bg',
 };
 
 const TONE_ICON: Readonly<Record<RestrictionTone, string>> = {
@@ -104,7 +104,7 @@ export function RestrictionCheckError({
     <div
       role="status"
       className={cn(
-        'mb-2 flex items-start gap-3 rounded-md border border-border-2 bg-surface-2 p-3',
+        'mb-2 flex items-start gap-3 rounded-md border border-border bg-surface-2 p-3',
         className,
       )}
     >
@@ -124,8 +124,8 @@ export function RestrictionCheckError({
         disabled={retrying}
         aria-busy={retrying || undefined}
         className={cn(
-          'flex shrink-0 items-center gap-1.5 rounded-sm border border-border-2 px-3 py-1.5 font-body text-xs font-medium text-text outline-none transition-colors',
-          'hover:bg-surface-3 focus-visible:shadow-glow-md disabled:cursor-not-allowed disabled:opacity-60',
+          'flex shrink-0 items-center gap-1.5 rounded-sm border border-border px-3 py-1.5 font-body text-xs font-medium text-text outline-none transition-colors',
+          'hover:bg-surface-3 focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-60',
         )}
       >
         {retrying ? (

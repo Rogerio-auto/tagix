@@ -41,7 +41,7 @@ test.describe('Inbox — nome do contato (F70-S37)', () => {
     page,
   }) => {
     await page.goto('/conversations');
-    const list = page.getByRole('listbox', { name: 'Conversas' });
+    const list = page.getByRole('navigation', { name: 'Conversas' });
     await expect(list.getByText('Maria Souza')).toBeVisible();
     await expect(list.getByText('João do Perfil')).toBeVisible();
     await expect(list.getByText('+55 (48) 99111-2222')).toBeVisible();

@@ -28,8 +28,8 @@ const STATUS_META: Record<
   ActiveStatus,
   { label: string; icon: React.ComponentType<{ className?: string }>; dot: string; text: string }
 > = {
-  running: { label: 'Executando', icon: Activity, dot: 'bg-accent', text: 'text-accent' },
-  waiting: { label: 'Agendado', icon: Timer, dot: 'bg-warning', text: 'text-warning' },
+  running: { label: 'Executando', icon: Activity, dot: 'bg-violet', text: 'text-violet' },
+  waiting: { label: 'Agendado', icon: Timer, dot: 'bg-warn', text: 'text-warn' },
 };
 
 function fmtTime(iso: string | null): string {
@@ -66,7 +66,7 @@ function ExecutionCard({
 
   return (
     // hm-flow-neon: borda neon + glow + animação percorrendo (respeita prefers-reduced-motion).
-    <div className="hm-flow-neon relative rounded-md border border-border-2 bg-surface-2 px-3 py-2.5 shadow-elev-1">
+    <div className="hm-flow-neon relative rounded-md border border-border bg-surface-2 px-3 py-2.5 shadow-elev-1">
       {/* Linha 1: nome + status */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -81,17 +81,17 @@ function ExecutionCard({
             {exec.flowName ?? 'Flow'}
           </span>
         </div>
-        <span className={cn('inline-flex shrink-0 items-center gap-1 text-[11px] font-medium', meta.text)}>
+        <span className={cn('inline-flex shrink-0 items-center gap-1 text-xs font-medium', meta.text)}>
           <Icon className="size-3 motion-safe:animate-pulse" aria-hidden />
           {meta.label}
         </span>
       </div>
 
       {/* Linha 2: countdown + horário previsto do próximo passo */}
-      <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
+      <div className="mt-1 flex items-center justify-between gap-2 text-xs">
         <span className="text-text-low">Iniciado {fmtTime(exec.startedAt)}</span>
         {isWaiting ? (
-          <span className="font-medium text-warning">
+          <span className="font-medium text-warn">
             {isExpired ? 'Retomando…' : `Conclui ${fmtTime(exec.nextStepAt)} · ${fmtRemaining(remainingMs)}`}
           </span>
         ) : (
@@ -104,7 +104,7 @@ function ExecutionCard({
         <div
           className={cn(
             'h-full w-full rounded-pill motion-safe:animate-pulse',
-            isWaiting ? 'bg-warning/70' : 'bg-accent/70',
+            isWaiting ? 'bg-warn/70' : 'bg-violet/70',
           )}
         />
       </div>
@@ -166,11 +166,11 @@ export function ActiveExecutionsSection({ conversationId }: { conversationId: st
   };
 
   return (
-    <section className="rounded-md border border-border-2 bg-surface-1 p-3 shadow-elev-1">
+    <section className="rounded-md border border-border bg-surface p-3 shadow-elev-1">
       <header className="mb-2.5 flex items-center gap-2">
-        <Zap className="size-4 text-accent" aria-hidden />
+        <Zap className="size-4 text-violet" aria-hidden />
         <h3 className="font-head text-sm font-semibold text-text">Execuções Ativas</h3>
-        <span className="ml-auto inline-flex items-center gap-1 rounded-pill bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent">
+        <span className="ml-auto inline-flex items-center gap-1 rounded-pill bg-violet/15 px-2 py-0.5 text-xs font-medium text-violet">
           <Activity className="size-3" aria-hidden />
           {active.length}
         </span>

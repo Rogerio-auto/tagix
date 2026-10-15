@@ -14,9 +14,11 @@
  *  §3 — estados loading/empty/error em todas as seções de dados.
  *
  * DS v2: zero hex hardcoded, só tokens semânticos. Dark + light. Focus ring
- * via `focus-visible:shadow-glow-md`. Verde-neon (`brand`) usado no máximo 1×.
+ * via `focus-visible:focus-ring`. Verde-neon (`brand`) usado no máximo 1×.
  */
 
+import { ContactAvatar } from './ContactAvatar';
+import { avatarKeyOf, contactLabel } from '../contact-label';
 import {
   ArrowRightLeft,
   Bot,
@@ -62,7 +64,7 @@ function statusLabel(status: string): string {
 function statusDotClass(status: string): string {
   switch (status) {
     case 'open': return 'bg-success';
-    case 'pending': return 'bg-warning';
+    case 'pending': return 'bg-warn';
     case 'resolved': return 'bg-text-low';
     case 'snoozed': return 'bg-text-mid';
     default: return 'bg-text-low';
@@ -219,8 +221,32 @@ export function ContactInfoPanel({
     );
   }
 
+  const who = detail
+    ? contactLabel({
+        displayName: detail.contact?.displayName,
+        profileName: detail.contact?.profileName,
+        remoteId: detail.remoteId,
+        channel: detail.channelProvider ?? detail.kind,
+      })
+    : null;
+
   const sections = (
     <>
+        {/* ── Identidade do contato (F72-S05): avatar sem número + nome + telefone em mono. ── */}
+        {who && detail && (
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2 px-3 py-3">
+            <ContactAvatar who={who} colorKey={avatarKeyOf(detail)} size="lg" />
+            <div className="min-w-0">
+              <p className="truncate font-head text-base font-semibold text-text">{who.label}</p>
+              {who.secondary && who.source !== 'phone' && (
+                <p className="truncate font-mono text-xs tabular-nums text-text-low">
+                  {who.secondary}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── Execuções Ativas (F51): primeiro elemento do cockpit (monitor em ──
             tempo real). A seção se esconde sozinha quando não há flow ativo. ─── */}
         <ActiveExecutionsSection conversationId={conversationId} />
@@ -235,7 +261,7 @@ export function ContactInfoPanel({
           ) : (
             <div className="flex flex-col gap-2">
               {/* Badge de status atual */}
-              <div className="flex items-center gap-2 rounded-md border border-border-2 bg-surface-2 px-3 py-2">
+              <div className="flex items-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-2">
                 <span
                   className={cn('size-2 shrink-0 rounded-full', statusDotClass(status))}
                   aria-hidden
@@ -382,7 +408,7 @@ export function ContactInfoPanel({
               ) : detail?.agentName ? (
                 <div className="flex flex-col gap-1">
                   <span className="font-body text-xs text-text-low">Agente responsável</span>
-                  <div className="flex items-center gap-2 rounded-md border border-border-2 bg-surface-2 px-3 py-2">
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-2">
                     <Bot className="size-4 shrink-0 text-text-low" aria-hidden />
                     <span className="truncate font-body text-sm font-medium text-text">
                       {detail.agentName}
@@ -393,10 +419,10 @@ export function ContactInfoPanel({
 
               {/* Indicador de handoff — destaque quando pausada (atendente assumiu) */}
               {isAiPaused && (
-                <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
-                  <Bot className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+                <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn/10 px-3 py-2">
+                  <Bot className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
                   <div className="min-w-0">
-                    <p className="font-body text-xs font-semibold text-warning">
+                    <p className="font-body text-xs font-semibold text-warn">
                       IA pausada — atendente assumiu
                     </p>
                     {detail?.aiPausedAt && (
@@ -422,7 +448,7 @@ export function ContactInfoPanel({
                       disabled={changeAiMode.isPending}
                       className={cn(
                         'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent',
-                        'outline-none transition-colors focus-visible:shadow-glow-md',
+                        'outline-none transition-colors focus-visible:focus-ring',
                         'disabled:cursor-not-allowed disabled:opacity-50',
                         isAiOn ? 'bg-brand' : 'bg-surface-3',
                       )}
@@ -539,7 +565,7 @@ export function ContactInfoPanel({
       className="flex w-80 shrink-0 flex-col border-l border-border bg-surface motion-safe:animate-[hm-cockpit-in_280ms_cubic-bezier(0.22,1,0.36,1)]"
     >
       {/* Cabeçalho do painel */}
-      <div className="flex h-14 items-center justify-between border-b border-border-2 px-4">
+      <div className="flex h-14 items-center justify-between border-b border-border px-4">
         <div className="flex items-center gap-2">
           <Info className="size-4 text-text-low" aria-hidden />
           <span className="font-head text-sm font-semibold text-text">Cockpit</span>
@@ -548,7 +574,7 @@ export function ContactInfoPanel({
           type="button"
           onClick={onClose}
           aria-label="Fechar painel"
-          className="rounded-sm p-1.5 text-text-low outline-none hover:text-text focus-visible:shadow-glow-md"
+          className="rounded-sm p-1.5 text-text-low outline-none hover:text-text focus-visible:focus-ring"
         >
           <X className="size-5" />
         </button>

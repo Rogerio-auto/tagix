@@ -104,7 +104,7 @@ export function ReactionPicker({ current, onSelect, onClose, align }: ReactionPi
               className={cn(
                 'grid size-11 shrink-0 place-items-center rounded-md text-text-mid outline-none sm:size-9',
                 'motion-safe:transition-colors hover:bg-surface-2 hover:text-text',
-                'focus-visible:shadow-glow-md',
+                'focus-visible:focus-ring',
               )}
             >
               <Plus className="size-5" aria-hidden />
@@ -113,14 +113,14 @@ export function ReactionPicker({ current, onSelect, onClose, align }: ReactionPi
         )}
 
         {expanded && (
-          <div className="mt-1 flex justify-end border-t border-border-2 pt-1">
+          <div className="mt-1 flex justify-end border-t border-border pt-1">
             <button
               type="button"
               aria-label="Recolher reações"
               onClick={() => setExpanded(false)}
               className={cn(
                 'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs text-text-mid outline-none',
-                'motion-safe:transition-colors hover:text-text focus-visible:shadow-glow-md',
+                'motion-safe:transition-colors hover:text-text focus-visible:focus-ring',
               )}
             >
               <X className="size-3.5" aria-hidden />
@@ -153,7 +153,7 @@ function EmojiButton({
       className={cn(
         'grid size-11 shrink-0 place-items-center rounded-md text-xl leading-none outline-none sm:size-9',
         'motion-safe:transition-transform hover:bg-surface-2 motion-safe:hover:scale-110',
-        'focus-visible:shadow-glow-md',
+        'focus-visible:focus-ring',
         active && 'bg-surface-2 ring-1 ring-border',
       )}
     >

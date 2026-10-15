@@ -42,6 +42,13 @@ export interface ConversationSummary {
   contactDisplayName: string | null;
   /** Nome do perfil do WhatsApp/Instagram (F70-S36). */
   contactProfileName: string | null;
+  /**
+   * Provider do canal (`meta_whatsapp` / `meta_instagram` / `waha`). Opcional: o
+   * `GET /api/conversations` ainda não o devolve (F72-S05 — follow-up de API); sem ele
+   * o selo de canal da lista só aparece quando o `kind` já denuncia o canal.
+   */
+  channelProvider?: string | null;
+  /** `direct` | `group` | `story_thread` | `comment_thread` (CHECK do schema). */
   kind: string;
   status: string;
   aiMode: string;

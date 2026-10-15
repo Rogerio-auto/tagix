@@ -19,7 +19,7 @@
  * valor e itens, mas sem controles de mutação.
  *
  * UX: §2.4 (CTA com label e path óbvio, não menu escondido), §2.6, §2.7, §8 mobile.
- * DS v2: zero hex; tokens border-border-2 / bg-surface-2 / text-text/-mid/-low.
+ * DS v2: zero hex; tokens border-border / bg-surface-2 / text-text/-mid/-low.
  * Sem neon brand aqui (o teto de 1×/tela fica reservado ao toggle de IA e ao
  * resumo financeiro do contato). Alvos ≥44px. Apenas o valor em destaque tipográfico.
  */
@@ -134,7 +134,7 @@ export function DealSection({
 
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex items-start gap-2 rounded-md border border-border-2 bg-surface-2 px-3 py-2.5">
+        <div className="flex items-start gap-2 rounded-md border border-border bg-surface-2 px-3 py-2.5">
           <FileText className="mt-0.5 size-4 shrink-0 text-text-low" aria-hidden />
           <p className="font-body text-xs text-text-mid">
             Materialize esta conversa como um card na pipeline para acompanhar o negócio e
@@ -150,7 +150,7 @@ export function DealSection({
               value={pipelineId}
               onChange={(e) => setPipelineId(e.target.value)}
               disabled={busy}
-              className="touch-target rounded-md border border-border bg-surface px-3 font-body text-sm text-text outline-none focus-visible:shadow-glow-md disabled:opacity-50"
+              className="touch-target rounded-md border border-border bg-surface px-3 font-body text-sm text-text outline-none focus-visible:focus-ring disabled:opacity-50"
             >
               {pipelines.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -197,7 +197,7 @@ export function DealSection({
   // ── Com deal: estágio + valor + link + itens ─────────────────────────────────
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2 rounded-md border border-border-2 bg-surface-2 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-3 py-2.5">
         <div className="min-w-0">
           <p className="font-body text-xs text-text-low">Estágio</p>
           <p className="truncate font-body text-sm font-medium text-text">
@@ -214,13 +214,13 @@ export function DealSection({
 
       <Link
         href={`/pipeline?deal=${deal.id}`}
-        className="inline-flex min-h-11 items-center gap-1.5 self-start rounded-sm font-body text-sm font-medium text-text-mid outline-none hover:text-text focus-visible:shadow-glow-md"
+        className="inline-flex min-h-11 items-center gap-1.5 self-start rounded-sm font-body text-sm font-medium text-text-mid outline-none hover:text-text focus-visible:focus-ring"
       >
         Abrir card no board
         <ArrowUpRight className="size-4" aria-hidden />
       </Link>
 
-      <div className="border-t border-border-2 pt-3">
+      <div className="border-t border-border pt-3">
         <p className="mb-2 font-body text-xs font-medium text-text-low">Itens</p>
         <DealItemsEditor dealId={deal.id} conversationId={conversationId} canEdit={canEdit} />
       </div>

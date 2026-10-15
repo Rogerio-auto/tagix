@@ -11,7 +11,7 @@
  * Sem dependência externa: lista curada + busca por substring (pt-BR), suficiente
  * para o caso de uso e tree-shake-friendly por padrão.
  *
- * DS v2: zero hex, só tokens; foco `focus-visible:shadow-glow-md`; alvo ≥44px no trigger.
+ * DS v2: zero hex, só tokens; foco `focus-visible:focus-ring`; alvo ≥44px no trigger.
  */
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -193,7 +193,7 @@ export function EmojiPicker({ onSelect, disabled = false, onClosed }: EmojiPicke
           }}
           className={cn(
             'absolute bottom-full left-0 z-30 mb-2 w-72 rounded-lg border border-border',
-            'bg-surface-2 p-2 shadow-glow-md',
+            'bg-surface-2 p-2 shadow-ds-2',
           )}
         >
           <div className="relative mb-2">
@@ -209,9 +209,9 @@ export function EmojiPicker({ onSelect, disabled = false, onClosed }: EmojiPicke
               placeholder="Buscar emoji…"
               aria-label="Buscar emoji"
               className={cn(
-                'w-full rounded-md border border-border-2 bg-surface-inset py-1.5 pl-8 pr-2',
+                'w-full rounded-md border border-border bg-surface-inset py-1.5 pl-8 pr-2',
                 'font-body text-sm text-text outline-none placeholder:text-text-low',
-                'focus-visible:border-border focus-visible:shadow-glow-md',
+                'focus-visible:border-brand-text focus-visible:focus-ring',
               )}
             />
           </div>
@@ -233,7 +233,7 @@ export function EmojiPicker({ onSelect, disabled = false, onClosed }: EmojiPicke
                         onClick={() => onSelect(emoji.char)}
                         className={cn(
                           'flex aspect-square items-center justify-center rounded-md text-xl leading-none outline-none',
-                          'transition-colors hover:bg-surface-3 focus-visible:shadow-glow-md',
+                          'transition-colors hover:bg-surface-3 focus-visible:focus-ring',
                         )}
                       >
                         <span aria-hidden>{emoji.char}</span>

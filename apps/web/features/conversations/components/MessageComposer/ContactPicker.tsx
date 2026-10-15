@@ -17,7 +17,7 @@
  *
  * UX: busca dentro do popover; confirma antes de enviar (seleção → botão dedicado);
  * loading/empty/error com saída; feedback imediato (botão em loading).
- * DS v2: zero hex, só tokens; foco `focus-visible:shadow-glow-md`; alvos ≥44px.
+ * DS v2: zero hex, só tokens; foco `focus-visible:focus-ring`; alvos ≥44px.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -129,8 +129,8 @@ export function ContactPicker({ onSent }: ContactPickerProps) {
           aria-label="Buscar contato"
           autoFocus
           className={cn(
-            'w-full rounded-md border border-border-2 bg-surface-inset py-2 pr-2 pl-8 font-body text-sm text-text outline-none',
-            'placeholder:text-text-low focus-visible:border-border focus-visible:shadow-glow-md',
+            'w-full rounded-md border border-border bg-surface-inset py-2 pr-2 pl-8 font-body text-sm text-text outline-none',
+            'placeholder:text-text-low focus-visible:border-brand-text focus-visible:focus-ring',
           )}
         />
         {search !== '' && (
@@ -141,7 +141,7 @@ export function ContactPicker({ onSent }: ContactPickerProps) {
               setSelectedId(null);
             }}
             aria-label="Limpar busca"
-            className="absolute top-1/2 right-2 grid size-6 -translate-y-1/2 place-items-center rounded-sm text-text-mid outline-none transition-colors hover:text-text focus-visible:shadow-glow-md"
+            className="absolute top-1/2 right-2 grid size-6 -translate-y-1/2 place-items-center rounded-sm text-text-mid outline-none transition-colors hover:text-text focus-visible:focus-ring"
           >
             <X className="size-3.5" aria-hidden />
           </button>
@@ -151,7 +151,7 @@ export function ContactPicker({ onSent }: ContactPickerProps) {
       <div className="max-h-56 overflow-y-auto" role="listbox" aria-label="Contatos">
         {query.isLoading ? (
           <ListNotice>
-            <Loader2 className="size-4 animate-spin" aria-hidden />
+            <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
             Carregando contatos…
           </ListNotice>
         ) : query.isError ? (
@@ -162,7 +162,7 @@ export function ContactPicker({ onSent }: ContactPickerProps) {
               onClick={() => void query.refetch()}
               className={cn(
                 'rounded-sm px-1.5 py-0.5 font-body text-xs text-text-mid outline-none transition-colors',
-                'hover:text-text hover:underline focus-visible:shadow-glow-md',
+                'hover:text-text hover:underline focus-visible:focus-ring',
               )}
             >
               Tentar novamente
@@ -174,12 +174,13 @@ export function ContactPicker({ onSent }: ContactPickerProps) {
             {debounced ? 'Nenhum contato encontrado.' : 'Nenhum contato cadastrado.'}
           </ListNotice>
         ) : (
-          <ul className="flex flex-col gap-0.5">
+          // `ul`/`li` sem papel: o listbox possui direto os `option` (aria-required-children).
+          <ul role="none" className="flex flex-col gap-0.5">
             {contacts.map((contact) => {
               const isSelected = contact.id === selectedId;
               const phone = contactPhone(contact);
               return (
-                <li key={contact.id}>
+                <li key={contact.id} role="none">
                   <button
                     type="button"
                     role="option"
@@ -187,7 +188,7 @@ export function ContactPicker({ onSent }: ContactPickerProps) {
                     onClick={() => setSelectedId(contact.id)}
                     className={cn(
                       'touch-target flex w-full items-center gap-2.5 rounded-md px-2 text-left outline-none',
-                      'transition-colors hover:bg-surface-3 focus-visible:shadow-glow-md',
+                      'transition-colors hover:bg-surface-3 focus-visible:focus-ring',
                       isSelected && 'bg-surface-3',
                     )}
                   >
@@ -200,7 +201,7 @@ export function ContactPicker({ onSent }: ContactPickerProps) {
                         {phone ?? 'Sem telefone'}
                       </span>
                     </span>
-                    {isSelected && <Check className="ml-auto size-4 shrink-0 text-brand" aria-hidden />}
+                    {isSelected && <Check className="ml-auto size-4 shrink-0 text-brand-text" aria-hidden />}
                   </button>
                 </li>
               );
@@ -211,7 +212,7 @@ export function ContactPicker({ onSent }: ContactPickerProps) {
 
       {/* Confirmação antes de enviar (UX §2): cartão do contato + ação dedicada. */}
       {selected && (
-        <div className="flex flex-col gap-2 rounded-md border border-border-2 bg-surface-inset p-2">
+        <div className="flex flex-col gap-2 rounded-md border border-border bg-surface-inset p-2">
           <span className="inline-flex items-center gap-1.5 truncate font-body text-sm font-medium text-text">
             <User className="size-4 shrink-0 text-text-mid" aria-hidden />
             {contactName(selected)}
@@ -242,12 +243,12 @@ export function ContactPicker({ onSent }: ContactPickerProps) {
         aria-busy={send.isPending || undefined}
         className={cn(
           'flex items-center justify-center gap-1.5 rounded-md px-3 py-2 font-body text-sm outline-none',
-          'transition-colors focus-visible:shadow-glow-md disabled:cursor-not-allowed disabled:opacity-40',
+          'transition-colors focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-40',
           canSend ? 'bg-brand text-text-on-brand hover:bg-brand-strong' : 'bg-surface-3 text-text-low',
         )}
       >
         {send.isPending ? (
-          <Loader2 className="size-4 animate-spin" aria-hidden />
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
         ) : (
           <SendHorizontal className="size-4" aria-hidden />
         )}

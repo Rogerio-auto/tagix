@@ -225,7 +225,7 @@ export function RoutingMenu({
       )}
 
       {/* Estado atual */}
-      <div className="rounded-md border border-border-2 bg-surface-2 p-3 font-body text-sm">
+      <div className="rounded-md border border-border bg-surface-2 p-3 font-body text-sm">
         <div className="flex items-center justify-between gap-2">
           <span className="text-text-low">Responsável</span>
           <span className="truncate font-medium text-text">
@@ -295,7 +295,7 @@ export function RoutingMenu({
               canTransfer && (
                 <div
                   role="menu"
-                  className="z-10 flex flex-col gap-1 rounded-md border border-border bg-surface-2 p-1 shadow-glow-md"
+                  className="z-10 flex flex-col gap-1 rounded-md border border-border bg-surface-2 p-1 shadow-ds-2"
                 >
                   {transferContent}
                 </div>
@@ -311,7 +311,7 @@ export function RoutingMenu({
           onClick={() => setShowHistory((v) => !v)}
           className={cn(
             'flex items-center gap-1.5 self-start rounded-sm font-body text-xs text-text-low outline-none',
-            'hover:text-text-mid focus-visible:shadow-glow-md',
+            'hover:text-text-mid focus-visible:focus-ring',
           )}
         >
           <History className="size-3.5" aria-hidden />
@@ -353,7 +353,7 @@ function MenuButton({
       className={cn(
         'flex w-full items-center gap-2 rounded-sm text-left font-body outline-none',
         touch ? 'touch-target rounded-md px-3 text-base' : 'px-2 py-1.5 text-sm',
-        'text-text-mid hover:bg-surface-3 hover:text-text focus-visible:shadow-glow-md',
+        'text-text-mid hover:bg-surface-3 hover:text-text focus-visible:focus-ring',
         'disabled:cursor-not-allowed disabled:opacity-50',
       )}
     >
@@ -389,7 +389,7 @@ function TransferList({
         type="button"
         onClick={onBack}
         className={cn(
-          'self-start font-body text-text-low underline-offset-4 outline-none hover:text-text-mid focus-visible:shadow-glow-md',
+          'self-start font-body text-text-low underline-offset-4 outline-none hover:text-text-mid focus-visible:focus-ring',
           touch ? 'py-2 text-sm' : 'text-xs',
         )}
       >
@@ -403,17 +403,18 @@ function TransferList({
         aria-label="Motivo da transferência"
         onChange={(e) => onReasonChange(e.target.value)}
         className={cn(
-          'w-full rounded-sm border border-border bg-surface-inset px-2 font-body text-text outline-none placeholder:text-text-low focus:border-brand focus:shadow-glow-sm',
+          'w-full rounded-sm border border-border bg-surface-inset px-2 font-body text-text outline-none placeholder:text-text-low focus-visible:border-brand-text focus-visible:focus-ring',
           touch ? 'py-2.5 text-base' : 'py-1.5 text-sm',
         )}
       />
+      {/* Lista de botões (não listbox/option): um `option` com `<button>` dentro é
+          `nested-interactive` (F72-S05). Cada destino é uma ação direta. */}
       <ul
-        role="listbox"
         aria-label={ariaLabel}
         className={cn('overflow-y-auto', touch ? 'max-h-[50dvh]' : 'max-h-48')}
       >
         {options.map((opt) => (
-          <li key={opt.id} role="option" aria-selected={false}>
+          <li key={opt.id}>
             <button
               type="button"
               disabled={pending}
@@ -421,7 +422,7 @@ function TransferList({
               className={cn(
                 'flex w-full items-center gap-2 rounded-sm text-left font-body outline-none',
                 touch ? 'touch-target rounded-md px-3 text-base' : 'px-2 py-1.5 text-sm',
-                'text-text-mid hover:bg-surface-3 hover:text-text focus-visible:shadow-glow-md',
+                'text-text-mid hover:bg-surface-3 hover:text-text focus-visible:focus-ring',
                 'disabled:cursor-not-allowed disabled:opacity-50',
               )}
             >
