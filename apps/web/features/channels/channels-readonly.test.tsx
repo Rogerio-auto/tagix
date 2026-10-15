@@ -176,7 +176,7 @@ describe('MessageTemplatesCatalog (F72-S07)', () => {
   it('catálogo em DataTable: nome técnico em mono e total formatado pelo idioma', () => {
     const html = renderToStaticMarkup(<MessageTemplatesCatalog channel={CHANNELS[0] as Channel} />);
     expect(html).toContain('<caption class="sr-only">Modelos de mensagem</caption>');
-    expect(html).toMatch(/font-mono text-xs text-text-low">lembrete_consulta</);
+    expect(html).toMatch(/font-mono text-xs text-text-mid">lembrete_consulta</);
     expect(html).toMatch(/1[.,\s]?240/);
   });
 

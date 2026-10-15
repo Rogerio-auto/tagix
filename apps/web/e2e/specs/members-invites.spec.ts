@@ -219,13 +219,13 @@ test.describe('Membros — convites (admin)', () => {
   test('revogar: pede confirmação, cancelar não chama a API, confirmar remove a linha', async ({ page }) => {
     const calls = await mockMembers(page);
     await page.goto(OPEN_MEMBERS);
-    await page.getByRole('button', { name: /Revogar convite de bia@acme.com|Revogar/ }).first().click();
+    await page.getByRole('button', { name: 'Revogar convite de bia@acme.com' }).click();
     const dialog = page.getByRole('dialog', { name: 'Revogar convite' });
     await dialog.getByRole('button', { name: 'Cancelar' }).click();
     expect(calls.revoked).toEqual([]);
     await expect(page.getByText('bia@acme.com', { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: /Revogar/ }).first().click();
+    await page.getByRole('button', { name: 'Revogar convite de bia@acme.com' }).click();
     await page.getByRole('dialog', { name: 'Revogar convite' }).getByRole('button', { name: 'Revogar convite' }).click();
     await expect(page.getByText('Convite revogado')).toBeVisible();
     expect(calls.revoked).toEqual(['inv_1']);

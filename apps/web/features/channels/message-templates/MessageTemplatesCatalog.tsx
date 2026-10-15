@@ -205,7 +205,8 @@ export function MessageTemplatesCatalog({ channel }: { channel: Channel }) {
       cell: (t) => (
         <span className="flex min-w-0 flex-col">
           <span className="truncate font-semibold text-text">{displayTemplateName(t.name)}</span>
-          <span className="truncate font-mono text-xs text-text-low">{t.name}</span>
+          {/* `text-mid`, não `low`: a linha aberta no drawer ganha o tinte da marca e o `low` cai abaixo de 4,5:1 no escuro. */}
+          <span className="truncate font-mono text-xs text-text-mid">{t.name}</span>
         </span>
       ),
     },

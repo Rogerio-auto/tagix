@@ -14,18 +14,28 @@ import {
 } from '@hm/ui';
 import { ReadOnlyGuard, useIsReadOnly } from '@/shared/components/account-banner';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
+import { cn } from '@/shared/lib/cn';
 import { formatNumber } from '@/shared/lib/locale';
 import { ColorSwatchInput } from '../../lib/ColorField';
+import { isHexColor } from '../../lib/token-color';
 import { SectionLoading } from '../personal/components';
 import { useCreateTag, useDeleteTag, useTags, useUpdateTag, type Tag } from './queries';
 
-/** Pastilha da cor da tag. A cor é DADO do cliente (`#RRGGBB` validado pela API), não estilo do DS. */
+/**
+ * Pastilha da cor da tag. A cor é DADO do cliente (`#RRGGBB` validado pela API), não estilo
+ * do DS — e só vira `style` se passar no formato aqui também (nada arbitrário chega ao CSS);
+ * fora do formato, a pastilha cai no token neutro.
+ */
 function Swatch({ color }: { color: string }): React.JSX.Element {
+  const valid = isHexColor(color);
   return (
     <span
       aria-hidden
-      className="size-3 shrink-0 rounded-pill ring-1 ring-border-2 ring-offset-1 ring-offset-surface"
-      style={{ backgroundColor: color }}
+      className={cn(
+        'size-3 shrink-0 rounded-pill ring-1 ring-border-2 ring-offset-1 ring-offset-surface',
+        !valid && 'bg-text-low',
+      )}
+      style={valid ? { backgroundColor: color } : undefined}
     />
   );
 }
@@ -85,13 +95,13 @@ export default function TagsManager(): React.JSX.Element {
   const openEdit = (t: Tag) => {
     setEditing(t);
     setEditName(t.name);
-    setEditColor(t.color);
+    setEditColor(isHexColor(t.color) ? t.color : '');
   };
 
   const saveEdit = async () => {
     if (!editing) return;
     try {
-      await update.mutateAsync({ id: editing.id, name: editName.trim(), color: editColor });
+      await update.mutateAsync({ id: editing.id, name: editName.trim(), ...(editColor ? { color: editColor } : {}) });
       setEditing(null);
       toast({ variant: 'success', title: 'Tag atualizada.' });
     } catch (err) {
