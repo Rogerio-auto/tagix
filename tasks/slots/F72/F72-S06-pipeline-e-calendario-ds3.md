@@ -2,7 +2,7 @@
 id: F72-S06
 title: Pipeline e calendário unificado no DS 3.0
 phase: F72
-status: review
+status: done
 priority: high
 estimated_size: M
 ui: true
