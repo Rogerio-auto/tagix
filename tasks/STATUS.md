@@ -58,7 +58,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F70   | 37     | 1   | 2   | 0   | 0   | 2   | 32   |
 | F71   | 19     | 9   | 0   | 0   | 0   | 0   | 10   |
-| F72   | 9     | 0   | 4   | 0   | 0   | 1   | 4   |
+| F72   | 9     | 0   | 4   | 0   | 0   | 0   | 5   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -838,7 +838,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F72-S02 | Componentes do @hm/ui no DS 3.0 — botões, campos, status, tabela operacional e camadas                     | ✅ done     | critical   | F72-S01                                     |
 | F72-S03 | Shell do produto no DS 3.0 e navegação mobile com 4 abas mais Mais                                         | ✅ done     | critical   | F72-S01                                     |
 | F72-S04 | Home no DS 3.0 — o que mudou, precisa da sua atenção e resultado no topo                                   | ✅ done     | critical   | F72-S02, F72-S03                            |
-| F72-S05 | Inbox no DS 3.0, com a lista acessível e o avatar sem número                                               | 🟣 review   | high       | F72-S02, F72-S03                            |
+| F72-S05 | Inbox no DS 3.0, com a lista acessível e o avatar sem número                                               | ✅ done     | high       | F72-S02, F72-S03                            |
 | F72-S06 | Pipeline e calendário unificado no DS 3.0                                                                  | ⏸️ blocked | high       | F72-S02, F72-S03                            |
 | F72-S07 | Varredura do app no DS 3.0 — contatos, campanhas, agentes, flows, conhecimento, conversões e configurações | ⏸️ blocked | high       | F72-S02, F72-S03                            |
 | F72-S08 | Varredura de auth, painel de plataforma, ajuda e páginas públicas no DS 3.0                                | ⏸️ blocked | medium     | F72-S02, F72-S03                            |

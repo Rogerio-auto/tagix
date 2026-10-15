@@ -2,7 +2,7 @@
 id: F72-S05
 title: Inbox no DS 3.0, com a lista acessível e o avatar sem número
 phase: F72
-status: review
+status: done
 priority: high
 estimated_size: M
 ui: true
