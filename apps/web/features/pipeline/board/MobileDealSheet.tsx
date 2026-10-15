@@ -2,6 +2,8 @@
 
 import { ExternalLink } from 'lucide-react';
 import { Sheet } from '@/shared/components/Sheet';
+import { Skeleton } from '@/shared/components/feedback';
+import { formatMoney } from './format';
 import { MarkConversionButton } from '@/features/conversions';
 import { ContactPanel } from '@/features/contacts/components/ContactPanel';
 import {
@@ -24,14 +26,10 @@ export interface MobileDealSheetProps {
   onClose: () => void;
 }
 
-function formatBRL(cents: number): string {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
-}
-
 function Section({ title, children }: { title: string; children: React.ReactNode }): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-3 border-t border-border-subtle py-4 first:border-t-0 first:pt-0">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-text-low">{title}</h3>
+    <section className="flex flex-col gap-3 border-t border-border py-4 first:border-t-0 first:pt-0">
+      <h3 className="font-mono text-xs font-semibold uppercase tracking-wider text-text-low">{title}</h3>
       {children}
     </section>
   );
@@ -61,11 +59,15 @@ export function MobileDealSheet({
   return (
     <Sheet open={dealId !== null} onClose={onClose} variant="full" title={title}>
       {deal && deal.valueCents > 0 ? (
-        <p className="-mt-2 mb-4 text-sm text-text-mid">{formatBRL(deal.valueCents)}</p>
+        <p className="-mt-2 mb-4 font-mono text-sm font-semibold tabular-nums text-brand-text">
+          {formatMoney(deal.valueCents, deal.currency)}
+        </p>
       ) : null}
 
       {dealQuery.isError ? (
-        <p className="py-4 text-sm text-danger">Não foi possível carregar o negócio.</p>
+        <p role="alert" className="py-4 font-body text-sm text-danger">
+          Não foi possível carregar o negócio. Feche e abra de novo; se persistir, recarregue a página.
+        </p>
       ) : null}
 
       {deal?.contactId ? (
@@ -101,7 +103,7 @@ export function MobileDealSheet({
 
       <Section title="Histórico">
         {historyQuery.isLoading ? (
-          <div className="h-16 animate-pulse rounded bg-surface-raised" />
+          <Skeleton className="h-16" />
         ) : (
           <HistoryTimeline entries={historyQuery.data?.history ?? []} />
         )}
@@ -111,10 +113,10 @@ export function MobileDealSheet({
         <Section title="Conversa">
           <a
             href={`/conversations?contactId=${deal.contactId}`}
-            className="touch-target inline-flex w-fit items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-text-mid hover:border-border-strong hover:text-text focus-visible:shadow-glow-md"
+            className="touch-target inline-flex w-fit items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-text-mid hover:border-border-brand hover:text-text focus-visible:focus-ring"
           >
             Abrir conversa
-            <ExternalLink className="size-4" />
+            <ExternalLink className="size-4" aria-hidden />
           </a>
         </Section>
       ) : null}

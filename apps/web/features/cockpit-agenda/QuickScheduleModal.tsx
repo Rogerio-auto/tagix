@@ -179,9 +179,9 @@ export function QuickScheduleModal(props: QuickScheduleModalProps): React.JSX.El
                 aria-pressed={active}
                 onClick={() => applyShortcut(opt.id)}
                 className={cn(
-                  'inline-flex min-h-11 items-center rounded-pill border px-3.5 text-sm outline-none transition-colors duration-200 focus-visible:shadow-glow-md',
+                  'inline-flex min-h-11 items-center rounded-pill border px-3.5 text-sm outline-none transition-colors duration-200 focus-visible:focus-ring',
                   active
-                    ? 'border-border-brand bg-brand-soft text-text'
+                    ? 'border-border-brand bg-brand-text/15 font-bold text-text'
                     : 'border-border bg-surface-2 text-text-mid hover:text-text',
                 )}
               >
@@ -241,7 +241,7 @@ export function QuickScheduleModal(props: QuickScheduleModalProps): React.JSX.El
                 aria-pressed={active}
                 onClick={() => setPriority(o.value)}
                 className={cn(
-                  'inline-flex min-h-11 flex-1 items-center justify-center rounded-md border px-3 text-sm outline-none transition-colors duration-200 focus-visible:shadow-glow-md',
+                  'inline-flex min-h-11 flex-1 items-center justify-center rounded-md border px-3 text-sm outline-none transition-colors duration-200 focus-visible:focus-ring',
                   active
                     ? 'border-border-brand bg-surface-3 text-text'
                     : 'border-border bg-surface-2 text-text-mid hover:text-text',

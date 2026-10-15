@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/shared/lib/api-client';
+import { applyMove, revertMove } from './stageMove';
 import type { CreateDealInput, Deal, Pipeline, Stage } from './types';
 
 /**
@@ -59,10 +60,21 @@ export interface MoveDealVars {
 }
 
 /**
+ * Callbacks POR MOVIMENTO, registrados no hook. No TanStack Query v5 os callbacks passados
+ * a `mutate()` só disparam para a última chamada: dois movimentos rápidos engoliriam o erro
+ * do primeiro. Aqui cada chamada recebe o próprio erro/fim, identificada por `vars`.
+ */
+export interface MoveDealCallbacks {
+  readonly onError?: (error: Error, vars: MoveDealVars) => void;
+  readonly onSettled?: (vars: MoveDealVars) => void;
+}
+
+/**
  * Move um deal de stage com OPTIMISTIC update + revert em erro (PIPELINE.md §6.2).
  * O socket `deal:stage_changed` (F5-S07) reconcilia via invalidação no listener.
+ * O revert desfaz só o deal que falhou: outro movimento em voo continua de pé.
  */
-export function useMoveDeal(pipelineId: string) {
+export function useMoveDeal(pipelineId: string, callbacks: MoveDealCallbacks = {}) {
   const qc = useQueryClient();
   const key = pipelineKeys.deals(pipelineId);
   return useMutation<{ deal: Deal }, Error, MoveDealVars, { previous?: { deals: Deal[] } }>({
@@ -72,17 +84,27 @@ export function useMoveDeal(pipelineId: string) {
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<{ deals: Deal[] }>(key);
       if (previous) {
+        // `updatedAt` agora: o "tempo na etapa" do card zera junto com o movimento, sem
+        // esperar o refetch; `position` igual à que o servidor grava (topo da etapa).
+        const movedAt = new Date().toISOString();
         qc.setQueryData<{ deals: Deal[] }>(key, {
-          deals: previous.deals.map((d) => (d.id === dealId ? { ...d, stageId } : d)),
+          deals: applyMove(previous.deals, dealId, stageId, movedAt),
         });
       }
       return { previous };
     },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) qc.setQueryData(key, ctx.previous);
+    onError: (err, vars, ctx) => {
+      const previous = ctx?.previous;
+      if (previous) {
+        qc.setQueryData<{ deals: Deal[] }>(key, (cur) =>
+          cur ? { deals: revertMove(cur.deals, previous.deals, vars.dealId, vars.stageId) } : previous,
+        );
+      }
+      callbacks.onError?.(err, vars);
     },
-    onSettled: () => {
+    onSettled: (_data, _err, vars) => {
       void qc.invalidateQueries({ queryKey: key });
+      callbacks.onSettled?.(vars);
     },
   });
 }

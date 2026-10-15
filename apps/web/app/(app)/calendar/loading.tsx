@@ -6,7 +6,7 @@ import { CalendarSkeleton } from '@/shared/components/feedback';
  */
 export default function Loading(): React.JSX.Element {
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
+    <div className="flex h-full flex-col gap-4">
       <CalendarSkeleton />
     </div>
   );

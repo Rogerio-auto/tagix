@@ -12,6 +12,7 @@ import {
   useSaveAvailabilityRules,
 } from './queries';
 import type { RuleInput } from './types';
+import { uiLocale } from '../locale';
 
 const DAY_LABELS = [
   'Domingo',
@@ -158,7 +159,7 @@ export function AvailabilityRulesSettings(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-6 p-6">
       <div className="flex items-center gap-2">
-        <CalendarClock className="size-5 text-brand" />
+        <CalendarClock className="size-5 text-brand-text" aria-hidden />
         <h1 className="text-lg font-semibold text-text">Disponibilidade</h1>
       </div>
 
@@ -187,7 +188,7 @@ export function AvailabilityRulesSettings(): React.JSX.Element {
             return (
               <div
                 key={label}
-                className="flex flex-wrap items-center gap-3 border-b border-border-subtle py-2 last:border-0"
+                className="flex flex-wrap items-center gap-3 border-b border-border py-2 last:border-0"
               >
                 <label className="flex w-32 items-center gap-2 text-sm text-text">
                   <input
@@ -344,7 +345,7 @@ function ExceptionsSection(props: ExceptionsSectionProps): React.JSX.Element {
           ))
         )}
 
-        <div className="flex flex-wrap items-end gap-2 border-t border-border-subtle pt-3">
+        <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs text-text-low" htmlFor="ex-start">
               De
@@ -424,9 +425,9 @@ function SlotsPreview(): React.JSX.Element {
             {slots.map((s) => (
               <span
                 key={s.startAt}
-                className="rounded-md border border-border-subtle bg-surface-raised px-2.5 py-1 text-xs text-text"
+                className="rounded-md border border-border bg-surface-3 px-2.5 py-1 text-xs text-text"
               >
-                {new Date(s.startAt).toLocaleTimeString('pt-BR', {
+                {new Date(s.startAt).toLocaleTimeString(uiLocale(), {
                   hour: '2-digit',
                   minute: '2-digit',
                 })}

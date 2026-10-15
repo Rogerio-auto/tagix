@@ -40,10 +40,14 @@ import { Button } from '@hm/ui';
 import { cn } from '@hm/ui/cn';
 import { can } from '@hm/shared';
 import { useAuthStore } from '@/shared/stores/auth.store';
+import { Skeleton } from '@/shared/components/feedback';
+import { READ_ONLY_TOOLTIP, useIsReadOnly } from '@/shared/components/account-banner/useIsReadOnly';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useCalendars, useEvents } from '@/features/calendar/queries';
 import type { EventRow } from '@/features/calendar/types';
 import { CollapsibleSection } from '@/features/conversations/components/CollapsibleSection';
+import { eventTone } from '@/features/calendar/eventTone';
+import { uiLocale } from '@/features/calendar/locale';
 import { QuickScheduleModal } from './QuickScheduleModal';
 import { AppointmentDetail } from './AppointmentDetail';
 
@@ -296,12 +300,12 @@ export function formatRelativeDay(date: Date, now: Date): string {
   if (diff === 0) return 'Hoje';
   if (diff === 1) return 'Amanhã';
   if (diff === -1) return 'Ontem';
-  if (diff > 1 && diff < 7) return capitalize(date.toLocaleDateString('pt-BR', { weekday: 'long' }));
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  if (diff > 1 && diff < 7) return capitalize(date.toLocaleDateString(uiLocale(), { weekday: 'long' }));
+  return date.toLocaleDateString(uiLocale(), { day: '2-digit', month: 'short' });
 }
 
 function formatClock(date: Date): string {
-  return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit' });
 }
 
 /** "Amanhã • 09:00" — base do rótulo do item (o título vem depois). */
@@ -333,7 +337,10 @@ export interface AgendaSectionProps {
 export function AgendaSection({ contactId, conversationId }: AgendaSectionProps): React.JSX.Element | null {
   const role = useAuthStore((s) => s.auth?.role ?? null);
   const canView = role ? can(role, 'calendar.view') : false;
-  const canEdit = role ? can(role, 'event.edit') : false;
+  const readOnly = useIsReadOnly();
+  // Trial vencido: o histórico segue legível; criar/editar fica indisponível (guarda real = 402).
+  const roleCanEdit = role ? can(role, 'event.edit') : false;
+  const canEdit = roleCanEdit && !readOnly;
   const { isMobile } = useBreakpoint();
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -389,8 +396,8 @@ export function AgendaSection({ contactId, conversationId }: AgendaSectionProps)
     <SectionShell>
       {isLoading ? (
         <div className="space-y-2" aria-hidden>
-          <div className="h-12 w-full animate-pulse rounded-md bg-surface-3" />
-          <div className="h-12 w-full animate-pulse rounded-md bg-surface-3" />
+          <Skeleton className="h-12 w-full rounded-md" />
+          <Skeleton className="h-12 w-full rounded-md" />
         </div>
       ) : isError ? (
         // Erro em 3 partes (o quê / porquê / o que fazer) — UX §2.11.
@@ -407,7 +414,7 @@ export function AgendaSection({ contactId, conversationId }: AgendaSectionProps)
           <button
             type="button"
             onClick={() => void eventsQ.refetch()}
-            className="mt-1 self-start rounded-sm font-body text-xs font-medium text-text underline-offset-2 outline-none hover:underline focus-visible:shadow-glow-md"
+            className="mt-1 self-start rounded-sm font-body text-xs font-medium text-text underline-offset-2 outline-none hover:underline focus-visible:focus-ring"
           >
             Tentar novamente
           </button>
@@ -416,11 +423,13 @@ export function AgendaSection({ contactId, conversationId }: AgendaSectionProps)
         <div className="flex flex-col items-center gap-3 py-4 text-center">
           <CalendarClock className="size-8 text-text-low" aria-hidden />
           <p className="font-body text-sm text-text-mid">Nenhum compromisso agendado</p>
-          {canEdit ? (
+          {roleCanEdit ? (
             <Button
               type="button"
               size={isMobile ? 'lg' : 'sm'}
               variant="secondary"
+              disabled={readOnly}
+              title={readOnly ? READ_ONLY_TOOLTIP : undefined}
               leftIcon={<CalendarPlus className="size-3.5" aria-hidden />}
               onClick={() => setModalOpen(true)}
             >
@@ -444,12 +453,14 @@ export function AgendaSection({ contactId, conversationId }: AgendaSectionProps)
           )}
 
           {/* + Novo Agendamento (gated event.edit) */}
-          {canEdit ? (
+          {roleCanEdit ? (
             <Button
               type="button"
               size="sm"
               variant="secondary"
               className="self-start"
+              disabled={readOnly}
+              title={readOnly ? READ_ONLY_TOOLTIP : undefined}
               leftIcon={<CalendarPlus className="size-3.5" aria-hidden />}
               onClick={() => setModalOpen(true)}
             >
@@ -496,6 +507,7 @@ function UpcomingItem({
   onOpen: () => void;
 }): React.JSX.Element {
   const Icon = TYPE_ICON[event.type];
+  const tone = eventTone(event.type);
   const when = formatWhen(event.startAt, now);
   return (
     <button
@@ -503,17 +515,25 @@ function UpcomingItem({
       onClick={onOpen}
       aria-label={`${when} • ${event.title} — abrir detalhe`}
       className={cn(
-        'flex w-full items-start gap-3 rounded-md border border-border-2 bg-surface px-3 py-2.5 text-left',
-        'outline-none transition-colors duration-200 hover:border-border hover:bg-surface-3',
-        'focus-visible:shadow-glow-md',
+        'flex w-full items-start gap-3 rounded-md border border-border bg-surface px-3 py-2.5 text-left',
+        'outline-none transition-[border-color,box-shadow,transform] duration-(--dur-base) ease-ds hover:border-border-brand hover:shadow-ds-2 motion-safe:hover:-translate-y-px motion-reduce:transition-none',
+        'focus-visible:focus-ring',
       )}
     >
-      <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-surface-3 text-text-mid">
+      <span
+        data-event-tone={tone.name}
+        className={cn(
+          // Mesmo chip da grade/lista do calendário: tinta + barra à esquerda no tom do tipo.
+          'mt-0.5 grid size-8 shrink-0 place-items-center rounded-md border-l-[3px]',
+          tone.chip,
+          tone.text,
+        )}
+      >
         <Icon className="size-4" aria-hidden />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-body text-xs text-text-low">{when}</span>
-        <span className="block truncate font-body text-sm font-medium text-text">{event.title}</span>
+        <span className="block truncate font-mono text-xs tabular-nums text-text-low">{when}</span>
+        <span className="block truncate font-body text-sm font-bold text-text">{event.title}</span>
         <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <Badge className={statusBadgeClass(event.status)}>{statusLabel(event.status)}</Badge>
           {event.priority !== 'low' ? (
@@ -567,10 +587,10 @@ function HistoryTimeline({
                 type="button"
                 onClick={() => onOpen(event)}
                 aria-label={`${when} • ${event.title} — abrir detalhe`}
-                className="flex w-full flex-col rounded-sm text-left outline-none focus-visible:shadow-glow-md"
+                className="flex w-full flex-col rounded-sm text-left outline-none focus-visible:focus-ring"
               >
                 <span className="truncate font-body text-sm text-text-mid">{event.title}</span>
-                <span className="font-body text-xs text-text-low">
+                <span className="font-mono text-xs tabular-nums text-text-low">
                   {when} • {statusLabel(event.status)}
                 </span>
               </button>

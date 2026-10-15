@@ -17,7 +17,7 @@ const CalendarPageLazy = lazyClient<Record<string, never>>(
   () => import('./CalendarPage').then((m) => m.CalendarPage),
   {
   loading: () => (
-    <div className="flex h-full flex-col gap-4 p-6">
+    <div className="flex h-full flex-col gap-4">
       <CalendarSkeleton />
     </div>
   ),

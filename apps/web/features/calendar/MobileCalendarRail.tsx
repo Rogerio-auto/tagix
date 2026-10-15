@@ -90,7 +90,7 @@ export function MobileCalendarRail({
                       className={cn(
                         'group touch-target flex w-full items-center gap-3 rounded-md px-1 text-left',
                         'outline-none transition-colors duration-200',
-                        'hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:shadow-glow-md',
+                        'hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:focus-ring',
                       )}
                     >
                       {/* Caixa de cor: preenchida quando visível, contorno quando oculta. */}
@@ -105,7 +105,7 @@ export function MobileCalendarRail({
                           borderColor: calendar.color,
                         }}
                       >
-                        {checked ? <Check className="size-3.5 text-black/80" strokeWidth={3} /> : null}
+                        {checked ? <Check className="size-3.5 text-text-on-brand" strokeWidth={3} /> : null}
                       </span>
                       <span
                         className={cn(

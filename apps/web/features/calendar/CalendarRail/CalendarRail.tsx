@@ -55,7 +55,7 @@ export function CalendarRail({
                     className={cn(
                       'group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left',
                       'outline-none transition-colors duration-200',
-                      'hover:bg-surface-2 focus-visible:shadow-glow-md',
+                      'hover:bg-surface-2 focus-visible:focus-ring',
                     )}
                   >
                     {/* Caixa de cor: preenchida quando visível, contorno quando oculta. */}
@@ -70,7 +70,7 @@ export function CalendarRail({
                         borderColor: calendar.color,
                       }}
                     >
-                      {checked ? <Check className="size-3 text-black/80" strokeWidth={3} /> : null}
+                      {checked ? <Check className="size-3 text-text-on-brand" strokeWidth={3} /> : null}
                     </span>
                     <span
                       className={cn(

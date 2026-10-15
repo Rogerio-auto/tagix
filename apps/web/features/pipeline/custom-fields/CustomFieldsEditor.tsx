@@ -80,7 +80,7 @@ export function CustomFieldsEditor({
       {defs.map((def, index) => (
         <div
           key={def.key}
-          className="flex flex-col gap-2 rounded-lg border border-border bg-surface-raised p-3"
+          className="flex flex-col gap-2 rounded-lg border border-border bg-surface-2 p-3"
         >
           <div className="flex items-center gap-2">
             <div className="flex flex-col">
@@ -132,7 +132,7 @@ export function CustomFieldsEditor({
                 checked={def.required}
                 disabled={disabled}
                 onChange={(e) => update(index, { required: e.target.checked })}
-                className="size-4 accent-[var(--color-accent)]"
+                className="size-4 accent-brand-text"
               />
               Obrigatório
             </label>

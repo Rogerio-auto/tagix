@@ -340,9 +340,9 @@ export function EventForm(props: EventFormProps): React.JSX.Element {
                   title={WEEKDAY_FULL[code]}
                   onClick={() => toggleWeekDay(code)}
                   className={cn(
-                    'flex size-9 items-center justify-center rounded-full text-sm outline-none transition-colors duration-200 focus-visible:shadow-glow-md',
+                    'flex size-9 items-center justify-center rounded-full text-sm outline-none transition-colors duration-200 focus-visible:focus-ring',
                     on
-                      ? 'bg-brand-soft text-text'
+                      ? 'border border-border-brand bg-brand-text/15 font-bold text-text'
                       : 'border border-border bg-surface-2 text-text-low hover:text-text',
                   )}
                 >
@@ -383,14 +383,14 @@ export function EventForm(props: EventFormProps): React.JSX.Element {
                     aria-checked={on}
                     onClick={() => toggleParticipant(m.id)}
                     className={cn(
-                      'flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm outline-none transition-colors duration-200 focus-visible:shadow-glow-md',
+                      'flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm outline-none transition-colors duration-200 focus-visible:focus-ring',
                       on ? 'bg-surface-3 text-text' : 'text-text-mid hover:bg-surface-3/60',
                     )}
                   >
                     <span
                       className={cn(
                         'flex size-4 items-center justify-center rounded border',
-                        on ? 'border-border-brand bg-brand-soft' : 'border-border',
+                        on ? 'border-border-brand bg-brand-text/15 text-brand-text' : 'border-border',
                       )}
                     >
                       {on ? '✓' : ''}
