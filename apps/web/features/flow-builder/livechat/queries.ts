@@ -49,7 +49,7 @@ export function useManualFlows() {
   });
 }
 
-/** Execucoes ATIVAS de uma conversa (badge). Poll leve + invalidacao por socket. */
+/** Execuções ATIVAS de uma conversa (badge). Poll leve + invalidacao por socket. */
 export function useConversationExecutions(conversationId: string) {
   return useQuery({
     queryKey: ['flow-executions', 'conversation', conversationId],

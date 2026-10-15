@@ -4,7 +4,7 @@
 // Substitui o TextField de chave crua por ConversionTypePicker que consome
 // GET /api/conversion-types via useFlowHelpers() (ja carregado pelo
 // FlowHelpersAutoProvider do editor). Salva conversionTypeKey (a key do tipo,
-// nao o id — o handler register_conversion usa key para lookup).
+// não o id — o handler register_conversion usa key para lookup).
 import { useMemo } from 'react';
 import { useFlowEditor } from '../../hooks/useFlowEditor';
 import { Field, NumberField, TextField } from '../inspector-fields';
@@ -20,7 +20,7 @@ export function RegisterConversionInspector({ nodeId }: { nodeId: string }) {
   const options = useMemo<ComboboxOption[]>(
     () =>
       conversionTypes.map((ct) => ({
-        // Salva a key (nao o id) — e o que o handler register_conversion espera.
+        // Salva a key (não o id) — e o que o handler register_conversion espera.
         value: ct.key,
         label: ct.name,
         hint: ct.key,

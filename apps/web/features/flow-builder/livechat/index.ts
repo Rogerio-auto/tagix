@@ -1,6 +1,6 @@
 /**
  * Integracao do Flow Builder no LiveChat (F4-S12). Quickbar manual + confirm + badge de
- * execucoes. Montado no ChatHeader/ChatList pelo orchestrator (gap-fill).
+ * execuções. Montado no ChatHeader/ChatList pelo orchestrator (gap-fill).
  */
 export { ManualFlowsQuickbar } from './ManualFlowsQuickbar';
 export { FlowExecutionsBadge } from './FlowExecutionsBadge';

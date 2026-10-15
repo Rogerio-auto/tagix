@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Modal, useToast } from '@hm/ui';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
 import { ApiError } from '@/shared/lib/api-client';
 import { useTriggerFlow, type ManualFlow } from './queries';
 
@@ -10,7 +11,11 @@ interface Props {
   onClose: () => void;
 }
 
-/** Modal curto de confirmacao ao disparar um flow manual (FX-031a). */
+/**
+ * Confirmação curta ao disparar um flow manual (FX-031a; DS 3.0 F72-S07). Disparar tem
+ * efeito imediato na conversa, então pede um clique a mais (UX §2.9) e mostra loading
+ * (UX §2.7). Só leitura (F71-S17): "Disparar" fica `aria-disabled` com a explicação.
+ */
 export function TriggerConfirmModal({ flow, conversationId, onClose }: Props) {
   const { toast } = useToast();
   const trigger = useTriggerFlow();
@@ -23,30 +28,33 @@ export function TriggerConfirmModal({ flow, conversationId, onClose }: Props) {
       onClose();
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Tente novamente.';
-      toast({ variant: 'error', title: 'Falha ao disparar', description: message });
+      toast({ variant: 'error', title: 'Não foi possível disparar', description: message });
     }
   };
 
   return (
-    <Modal open={!!flow} onClose={onClose} title="Disparar flow" className="max-w-md">
-      <div className="space-y-4">
-        <p className="text-sm text-text-low">
-          Disparar o flow <span className="font-medium text-text">{flow?.name}</span> nesta
-          conversa? As acoes do flow serao executadas imediatamente.
-        </p>
-        <div className="flex items-center justify-end gap-2 border-t border-border-2 pt-4">
-          <Button variant="ghost" onClick={onClose}>
+    <Modal
+      open={!!flow}
+      onClose={onClose}
+      title="Disparar flow"
+      className="max-w-md"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={trigger.isPending}>
             Cancelar
           </Button>
-          <Button
-            variant="primary"
-            disabled={trigger.isPending}
-            onClick={() => void handleConfirm()}
-          >
-            {trigger.isPending ? 'Disparando...' : 'Disparar'}
-          </Button>
-        </div>
-      </div>
+          <ReadOnlyGuard>
+            <Button variant="primary" loading={trigger.isPending} onClick={() => void handleConfirm()}>
+              Disparar
+            </Button>
+          </ReadOnlyGuard>
+        </>
+      }
+    >
+      <p className="text-sm leading-relaxed text-text-mid">
+        Disparar <span className="font-medium text-text">{flow?.name}</span> nesta conversa? As
+        ações do flow começam agora.
+      </p>
     </Modal>
   );
 }

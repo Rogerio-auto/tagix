@@ -1,13 +1,33 @@
 'use client';
 
 import Link from 'next/link';
-import { Archive, Pause, Pencil, Play, Trash2 } from 'lucide-react';
-import { Button } from '@hm/ui';
+import { Archive, Pause, Play, Trash2, Workflow } from 'lucide-react';
+import { Button, IconButton } from '@hm/ui';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
 import { cn } from '@/shared/lib/cn';
+import { formatDate } from '@/shared/lib/locale';
 import { FlowStatusBadge } from './FlowStatusBadge';
-import type { Flow } from './types';
+import type { Flow, FlowTriggerType } from './types';
 
-interface Props {
+export const TRIGGER_LABEL: Record<FlowTriggerType, string> = {
+  manual: 'Manual',
+  keyword: 'Palavra-chave',
+  new_message: 'Nova mensagem',
+  new_lead: 'Novo contato',
+  flow_submission: 'Resposta de formulário',
+  stage_change: 'Mudança de etapa',
+  tag_added: 'Tag adicionada',
+  system_event: 'Evento do sistema',
+};
+
+export function triggerLabel(type: string): string {
+  return (TRIGGER_LABEL as Record<string, string>)[type] ?? type;
+}
+
+/** Data compacta (mono, uma linha) da última mudança do flow. */
+export const FLOW_DATE: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' };
+
+export interface FlowRowActionsProps {
   flow: Flow;
   canEdit: boolean;
   canPublish: boolean;
@@ -16,20 +36,17 @@ interface Props {
   onUnpublish: (flow: Flow) => void;
   onArchive: (flow: Flow) => void;
   onDelete: (flow: Flow) => void;
+  /** `card`: botões maiores para o polegar (MOBILE_UX §1). */
+  variant?: 'row' | 'card';
 }
 
-const TRIGGER_LABEL: Record<string, string> = {
-  manual: 'Manual',
-  keyword: 'Palavra-chave',
-  new_message: 'Nova mensagem',
-  new_lead: 'Novo contato',
-  flow_submission: 'Resposta de formulario',
-  stage_change: 'Mudanca de etapa',
-  tag_added: 'Tag adicionada',
-  system_event: 'Evento do sistema',
-};
-
-export function FlowCard({
+/**
+ * Ações de escrita de um flow: publicar ou pausar, arquivar e excluir. Cada uma passa pela
+ * guarda de só leitura (F71-S17): focável, `aria-disabled`, com a explicação. Excluir só
+ * PEDE a confirmação (`onDelete`); quem confirma é o diálogo da página (UX §2.9).
+ * Rótulos acessíveis com o nome do flow: numa tabela há vários "Publicar" iguais.
+ */
+export function FlowRowActions({
   flow,
   canEdit,
   canPublish,
@@ -38,78 +55,119 @@ export function FlowCard({
   onUnpublish,
   onArchive,
   onDelete,
-}: Props) {
+  variant = 'row',
+}: FlowRowActionsProps) {
   const isArchived = flow.status === 'archived';
-  return (
-    <li className="flex items-center justify-between gap-4 px-5 py-4">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2.5">
-          <FlowStatusBadge status={flow.status} />
-          <span className="truncate font-head text-sm font-semibold text-text">{flow.name}</span>
-        </div>
-        <p className="mt-1 truncate text-xs text-text-low">
-          {TRIGGER_LABEL[flow.triggerType] ?? flow.triggerType}
-          {flow.description ? ` · ${flow.description}` : ''}
-        </p>
-      </div>
+  const card = variant === 'card';
+  const size = card ? 'md' : 'sm';
 
-      <div className={cn('flex shrink-0 items-center gap-1.5')}>
-        {canEdit && !isArchived && (
-          <Link
-            href={`/flows/${flow.id}`}
-            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 font-head text-sm font-medium text-text-low transition-colors hover:bg-surface-3 hover:text-text"
-          >
-            <Pencil className="size-3.5" aria-hidden />
-            Editar
-          </Link>
-        )}
-        {canPublish && flow.status !== 'active' && !isArchived && (
+  const lifecycle =
+    canPublish && !isArchived ? (
+      flow.status === 'active' ? (
+        <ReadOnlyGuard className={cn(card && 'flex-1')} align={card ? 'start' : 'end'}>
           <Button
             variant="secondary"
-            size="sm"
-            disabled={busy}
-            leftIcon={<Play className="size-3.5" aria-hidden />}
-            onClick={() => onPublish(flow)}
-          >
-            Publicar
-          </Button>
-        )}
-        {canPublish && flow.status === 'active' && (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={busy}
+            size={size}
+            className={cn(card && 'w-full')}
+            loading={busy}
+            aria-label={`Pausar ${flow.name}`}
             leftIcon={<Pause className="size-3.5" aria-hidden />}
             onClick={() => onUnpublish(flow)}
           >
             Pausar
           </Button>
-        )}
-        {canEdit && !isArchived && (
+        </ReadOnlyGuard>
+      ) : (
+        <ReadOnlyGuard className={cn(card && 'flex-1')} align={card ? 'start' : 'end'}>
           <Button
-            variant="ghost"
-            size="sm"
+            variant="secondary"
+            size={size}
+            className={cn(card && 'w-full')}
+            loading={busy}
+            aria-label={`Publicar ${flow.name}`}
+            leftIcon={<Play className="size-3.5" aria-hidden />}
+            onClick={() => onPublish(flow)}
+          >
+            Publicar
+          </Button>
+        </ReadOnlyGuard>
+      )
+    ) : null;
+
+  if (!lifecycle && !canEdit) return null;
+
+  return (
+    <div className={cn('flex items-center gap-1', card ? 'w-full' : 'justify-end')}>
+      {lifecycle}
+      {canEdit && !isArchived && (
+        <ReadOnlyGuard>
+          <IconButton
+            size={card ? 'md' : 'sm'}
+            variant={card ? 'solid' : 'ghost'}
+            icon={<Archive />}
             disabled={busy}
-            leftIcon={<Archive className="size-3.5" aria-hidden />}
+            title="Arquivar"
+            aria-label={`Arquivar ${flow.name}`}
             onClick={() => onArchive(flow)}
-          >
-            Arquivar
-          </Button>
-        )}
-        {canEdit && (
-          <Button
-            variant="ghost"
-            size="sm"
+          />
+        </ReadOnlyGuard>
+      )}
+      {canEdit && (
+        <ReadOnlyGuard>
+          <IconButton
+            size={card ? 'md' : 'sm'}
+            variant="danger"
+            icon={<Trash2 />}
             disabled={busy}
-            leftIcon={<Trash2 className="size-3.5" aria-hidden />}
+            title="Excluir"
+            aria-label={`Excluir ${flow.name}`}
             onClick={() => onDelete(flow)}
-            className="text-danger hover:bg-danger/10 hover:text-danger"
-            aria-label={`Excluir flow ${flow.name}`}
-          >
-            Excluir
-          </Button>
-        )}
+          />
+        </ReadOnlyGuard>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Card do flow no celular (MOBILE_UX §1/§4): identidade no corpo (link para o editor) e as
+ * ações no rodapé, na zona do polegar. O link e os botões são irmãos, nunca aninhados.
+ * No desktop a lista é o `DataTable` de `FlowsListPage`.
+ */
+export function FlowCard(props: Omit<FlowRowActionsProps, 'variant'>) {
+  const { flow } = props;
+  return (
+    <li
+      className={cn(
+        'flex flex-col gap-3 rounded-lg border border-border bg-surface p-4',
+        flow.status === 'archived' && 'bg-bg-alt',
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden
+          className="flex size-10 shrink-0 items-center justify-center rounded-sm border border-border bg-surface-2 text-text-mid"
+        >
+          <Workflow className="size-5" />
+        </span>
+        <Link
+          href={`/flows/${flow.id}`}
+          className="min-w-0 flex-1 rounded-sm outline-none focus-visible:focus-ring"
+          aria-label={`Abrir flow ${flow.name}`}
+        >
+          <p className="truncate font-head text-base font-medium text-text">{flow.name}</p>
+          <p className="truncate text-sm text-text-low">{triggerLabel(flow.triggerType)}</p>
+        </Link>
+        <FlowStatusBadge status={flow.status} />
       </div>
+
+      {flow.description ? <p className="line-clamp-2 text-sm text-text-mid">{flow.description}</p> : null}
+
+      <p className="font-mono text-xs tabular-nums text-text-low">
+        Atualizado em {formatDate(flow.updatedAt ?? flow.createdAt, FLOW_DATE)}
+      </p>
+
+      <FlowRowActions {...props} variant="card" />
     </li>
   );
 }

@@ -113,7 +113,7 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Requisicao */}
+      {/* Requisição */}
       <section className="flex flex-col gap-3">
         <SelectField
           label="Metodo"
@@ -125,18 +125,18 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
           label="URL"
           value={(d['url'] as string) ?? ''}
           placeholder="https://api.exemplo.com/hook"
-          hint="Aceita variaveis {{...}}. Edges: success / error."
+          hint="Aceita variáveis {{...}}. Edges: success / error."
           onChange={(v) => set({ url: v })}
         />
       </section>
 
       {/* Headers */}
       <section className="flex flex-col gap-2">
-        <SectionHeader title="Cabecalhos">
+        <SectionHeader title="Cabeçalhos">
           <VariablesPicker onPick={insertVariable} flowVariables={mappedVars} />
         </SectionHeader>
         {headers.length === 0 ? (
-          <p className="text-[11px] text-text-low">Nenhum cabecalho. Adicione pares chave/valor.</p>
+          <p className="text-[11px] text-text-low">Nenhum cabeçalho. Adicione pares chave/valor.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {headers.map((h, i) => (
@@ -148,7 +148,7 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
                   onChange={(e) =>
                     setHeaders(headers.map((x, idx) => (idx === i ? { ...x, key: e.target.value } : x)))
                   }
-                  className="w-2/5 rounded-md border border-border-2 bg-surface-2 px-2.5 py-1.5 text-sm text-text focus:border-accent focus:outline-none"
+                  className="w-2/5 rounded-sm border border-border bg-surface-2 hover:border-border-2 px-2.5 py-1.5 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
                 />
                 <input
                   type="text"
@@ -160,10 +160,10 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
                       headers.map((x, idx) => (idx === i ? { ...x, value: e.target.value } : x)),
                     )
                   }
-                  className="flex-1 rounded-md border border-border-2 bg-surface-2 px-2.5 py-1.5 text-sm text-text focus:border-accent focus:outline-none"
+                  className="flex-1 rounded-sm border border-border bg-surface-2 hover:border-border-2 px-2.5 py-1.5 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
                 />
                 <RowRemoveButton
-                  label="Remover cabecalho"
+                  label="Remover cabeçalho"
                   onClick={() => setHeaders(headers.filter((_, idx) => idx !== i))}
                 />
               </div>
@@ -171,7 +171,7 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
           </div>
         )}
         <AddRowButton
-          label="Adicionar cabecalho"
+          label="Adicionar cabeçalho"
           onClick={() => setHeaders([...headers, { key: '', value: '' }])}
         />
       </section>
@@ -189,8 +189,8 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
             label={bodyMode === 'json' ? 'Corpo (JSON)' : 'Corpo (texto)'}
             hint={
               bodyMode === 'json'
-                ? 'JSON com variaveis {{...}}. Validado no envio.'
-                : 'Texto cru com variaveis {{...}}.'
+                ? 'JSON com variáveis {{...}}. Validado no envio.'
+                : 'Texto cru com variáveis {{...}}.'
             }
           >
             <div className="flex flex-col gap-1.5">
@@ -208,7 +208,7 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
                 onFocus={() => setVarTarget({ kind: 'body' })}
                 placeholder={bodyMode === 'json' ? '{\n  "id": "{{contact.phone}}"\n}' : ''}
                 onChange={(e) => set({ body: e.target.value })}
-                className="min-h-[110px] rounded-md border border-border-2 bg-surface-2 px-3 py-2 font-mono text-[13px] text-text focus:border-accent focus:outline-none"
+                className="min-h-[110px] rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 font-mono text-[13px] text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
               />
               {bodyMode === 'json' && body.trim().length > 0 && <JsonValidity value={body} />}
             </div>
@@ -222,19 +222,19 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
         <NumberField
           label="Tentativas (max)"
           value={readNum(d, 'retryPolicy', 'maxAttempts')}
-          hint="Entre 1 e 10. Padrao 3. 5xx retenta; 4xx vai direto p/ error."
+          hint="Entre 1 e 10. Padrão 3. 5xx retenta; 4xx vai direto p/ error."
           onChange={(v) => setRetry(d, set, { maxAttempts: clamp(v, 1, 10) })}
         />
         <NumberField
           label="Backoff inicial (ms)"
           value={readNum(d, 'retryPolicy', 'initialDelayMs')}
-          hint="Atraso da 1a retentativa; dobra a cada tentativa. Padrao 1000."
+          hint="Atraso da 1a retentativa; dobra a cada tentativa. Padrão 1000."
           onChange={(v) => setRetry(d, set, { initialDelayMs: Math.max(0, v) })}
         />
         <NumberField
-          label="Backoff maximo (ms)"
+          label="Backoff máximo (ms)"
           value={readNum(d, 'retryPolicy', 'maxDelayMs')}
-          hint="Teto do atraso exponencial. Padrao 30000."
+          hint="Teto do atraso exponencial. Padrão 30000."
           onChange={(v) => setRetry(d, set, { maxDelayMs: Math.max(0, v) })}
         />
       </section>
@@ -243,7 +243,7 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
       <section className="flex flex-col gap-2">
         <SectionHeader title="Mapear resposta" />
         <p className="text-[11px] text-text-low">
-          JSONPath (relativo ao corpo da resposta) para uma variavel usavel a jusante como{' '}
+          JSONPath (relativo ao corpo da resposta) para uma variável usável a jusante como{' '}
           <span className="font-mono text-text-mid">{'{{nome}}'}</span>.
         </p>
         {mapping.length === 0 ? (
@@ -265,12 +265,12 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
                         )
                       }
                       className={cn(
-                        'w-full rounded-md border bg-surface-2 px-2.5 py-1.5 pr-7 font-mono text-[13px] text-text focus:outline-none',
+                        'w-full rounded-sm border bg-surface-2 px-2.5 py-1.5 pr-7 font-mono text-[13px] text-text outline-none focus-visible:focus-ring',
                         m.path.trim().length === 0
-                          ? 'border-border-2 focus:border-accent'
+                          ? 'border-border focus:border-brand-text'
                           : valid
                             ? 'border-success/50 focus:border-success'
-                            : 'border-danger/60 focus:border-danger',
+                            : 'border-danger/60 focus:border-danger [--focus-ring-color:var(--danger)]',
                       )}
                     />
                     {m.path.trim().length > 0 && (
@@ -297,7 +297,7 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
                         ),
                       )
                     }
-                    className="flex-1 rounded-md border border-border-2 bg-surface-2 px-2.5 py-1.5 font-mono text-[13px] text-text focus:border-accent focus:outline-none"
+                    className="flex-1 rounded-sm border border-border bg-surface-2 hover:border-border-2 px-2.5 py-1.5 font-mono text-[13px] text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
                   />
                   <RowRemoveButton
                     label="Remover mapeamento"
@@ -320,7 +320,7 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
 function SectionHeader({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <h4 className="text-[11px] font-semibold uppercase tracking-wide text-text-low">{title}</h4>
+      <h4 className="font-mono text-[11px] uppercase tracking-[0.08em] text-text-low">{title}</h4>
       {children}
     </div>
   );
@@ -331,7 +331,7 @@ function AddRowButton({ label, onClick }: { label: string; onClick: () => void }
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex w-fit items-center gap-1.5 rounded-md border border-dashed border-border-2 px-2.5 py-1.5 text-[12px] font-medium text-text-low transition-colors hover:border-accent hover:text-text focus:border-accent focus:shadow-glow-sm focus:outline-none"
+      className="inline-flex w-fit items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-[12px] font-medium text-text-low transition-colors hover:border-brand-text hover:text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
     >
       <Plus className="size-3.5" aria-hidden />
       {label}
@@ -346,7 +346,7 @@ function RowRemoveButton({ label, onClick }: { label: string; onClick: () => voi
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="flex size-7 shrink-0 items-center justify-center rounded-md text-text-low transition-colors hover:bg-danger/10 hover:text-danger focus:shadow-glow-sm focus:outline-none"
+      className="flex size-7 shrink-0 items-center justify-center rounded-md text-text-low transition-colors hover:bg-danger/10 hover:text-danger outline-none focus-visible:focus-ring"
     >
       <Trash2 className="size-3.5" aria-hidden />
     </button>
@@ -363,12 +363,12 @@ function JsonValidity({ value }: { value: string }) {
   return ok ? (
     <span className="inline-flex items-center gap-1 text-[11px] text-success">
       <Check className="size-3" aria-hidden />
-      JSON valido
+      JSON válido
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 text-[11px] text-warning">
+    <span className="inline-flex items-center gap-1 text-[11px] text-warn">
       <X className="size-3" aria-hidden />
-      JSON invalido (ainda pode conter variaveis {'{{...}}'})
+      JSON inválido (ainda pode conter variáveis {'{{...}}'})
     </span>
   );
 }

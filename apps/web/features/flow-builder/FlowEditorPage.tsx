@@ -1,11 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { ChevronLeft } from 'lucide-react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { can } from '@hm/shared';
 import { validateFlow, type FlowValidationIssue } from '@hm/flow-engine/validation';
-import { useToast } from '@hm/ui';
-import { CanvasSkeleton, ErrorState, SkeletonList } from '@/shared/components/feedback';
+import { Badge, Button, useToast } from '@hm/ui';
+import { useIsReadOnly } from '@/shared/components/account-banner';
+import { cn } from '@/shared/lib/cn';
+import { CanvasSkeleton, ErrorState } from '@/shared/components/feedback';
 import { lazyClient } from '@/shared/lib/lazy';
 import { ApiError } from '@/shared/lib/api-client';
 import { useAuthStore } from '@/shared/stores/auth.store';
@@ -24,6 +28,8 @@ import { ValidationBanner } from './shared/validation-banner';
 import { FlowHelpersAutoProvider } from './shared/helpers-context';
 import type { FlowNodeKind } from './shared/node-catalog';
 import { readTriggerConfig, readTriggerType } from './nodes/trigger/config';
+import { FlowStatusBadge } from './list/FlowStatusBadge';
+import { EDITOR_BLEED } from './shared/layout';
 
 /**
  * Canvas @xyflow/react (engine de render + CSS + Background/Controls) carregado sob
@@ -41,11 +47,27 @@ const FlowCanvas = lazyClient<{ readOnly?: boolean }>(
   },
 );
 
-/** Editor visual de um flow (F4-S10). Canvas + palette + inspector + toolbar + execucoes. */
+/** O alvo do atalho é um campo de texto (onde Ctrl+Z é do próprio campo). */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+}
+
+/**
+ * Editor visual de um flow (F4-S10) no DS 3.0 (F72-S07). Canvas + palette + inspector +
+ * toolbar + execuções.
+ *
+ * UX: §2.3 propriedades do nó em painel lateral (Sheet no celular); §2.7 salvar e publicar
+ * com loading; §2.10 atalhos Ctrl/⌘+S (salvar), Ctrl/⌘+Z e Ctrl/⌘+Shift+Z (desfazer e
+ * refazer fora de campos de texto); §2.11 erro em 3 partes com "Tentar de novo".
+ * Só leitura (F71-S17): canvas sem edição estrutural, palette dá lugar à explicação,
+ * propriedades travadas e salvar/publicar `aria-disabled` com a explicação.
+ */
 export function FlowEditorPage({ flowId }: { flowId: string }) {
   const role = useAuthStore((s) => s.auth?.role);
   const canPublish = role ? can(role, 'flow.publish') : false;
   const { isMobile } = useBreakpoint();
+  const readOnly = useIsReadOnly();
 
   const { toast } = useToast();
   const flow = useFlow(flowId);
@@ -110,7 +132,7 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
     }).issues as FlowValidationIssue[];
   }, [nodes, edges]);
 
-  // Deriva triggerType/triggerConfig do node `trigger` para o PUT (a API valida ambos).
+  // Deriva triggerType/triggerConfig do node `trigger` para o PUT (a API válida ambos).
   const deriveTrigger = (
     persistableNodes: { type: FlowNodeKind; data: Record<string, unknown> }[],
   ): { triggerType: string; triggerConfig: Record<string, unknown> } | null => {
@@ -154,17 +176,42 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
     } catch (err) {
       let message = err instanceof ApiError ? err.message : 'Tente novamente.';
       if (err instanceof ApiError && err.status === 422) {
-        message = 'O flow tem erros de validacao.';
+        message = 'O flow tem erros de validação.';
         setShowBanner(true);
       }
       toast({ variant: 'error', title: 'Falha ao publicar', description: message });
     }
   };
 
+  // Atalhos de teclado (UX §2.10). A ref mantém o handler atual sem re-registrar o listener.
+  const shortcutRef = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  shortcutRef.current = (e: KeyboardEvent) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const key = e.key.toLowerCase();
+    if (key === 's') {
+      e.preventDefault();
+      if (!readOnly && dirty && !save.isPending) void handleSave();
+      return;
+    }
+    if (key === 'z' && !isTypingTarget(e.target)) {
+      e.preventDefault();
+      if (e.shiftKey) {
+        if (canRedo) redo();
+      } else if (canUndo) {
+        undo();
+      }
+    }
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => shortcutRef.current(e);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   if (flow.isLoading) {
     return (
-      <div className="p-6">
-        <SkeletonList rows={6} />
+      <div className={EDITOR_BLEED}>
+        <CanvasSkeleton />
       </div>
     );
   }
@@ -172,9 +219,22 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
     return (
       <div className="p-6">
         <ErrorState
-          title="Nao foi possivel carregar o flow"
-          reason="A conexao com a API falhou ou o flow nao existe."
-          whatToDo="Volte para a lista e tente novamente."
+          title="Não foi possível carregar o flow"
+          reason="A conexão com a API falhou ou o flow não existe mais."
+          whatToDo="Tente de novo ou volte para a lista de flows."
+          action={
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button variant="secondary" loading={flow.isFetching} onClick={() => void flow.refetch()}>
+                Tentar de novo
+              </Button>
+              <Link
+                href="/flows"
+                className="inline-flex h-10 items-center rounded-sm px-4 text-sm font-bold text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:focus-ring"
+              >
+                Voltar para flows
+              </Link>
+            </div>
+          }
         />
       </div>
     );
@@ -186,50 +246,48 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
     return (
       <ReactFlowProvider>
         <FlowHelpersAutoProvider>
-          <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
-            <header className="flex min-w-0 items-center gap-2 border-b border-border-2 bg-surface-1 px-4 py-2.5">
-              <div className="min-w-0 flex-1">
+          <div className={cn(EDITOR_BLEED, 'flex flex-col')}>
+            <header className="flex min-w-0 items-center gap-1.5 border-b border-border bg-surface px-2 py-2">
+              <Link
+                href="/flows"
+                aria-label="Voltar para flows"
+                className="flex size-10 shrink-0 items-center justify-center rounded-sm text-text-low outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:focus-ring"
+              >
+                <ChevronLeft className="size-5" aria-hidden />
+              </Link>
+              <h1 className="min-w-0 flex-1">
                 <EditableFlowName
                   name={flow.data.flow.name}
                   onRename={handleRename}
                   saving={rename.isPending}
+                  readOnly={readOnly}
                 />
-              </div>
-              <span
-                className={
-                  dirty
-                    ? 'shrink-0 rounded-pill bg-warning/15 px-2 py-0.5 text-[11px] text-warning'
-                    : 'shrink-0 rounded-pill bg-surface-3 px-2 py-0.5 text-[11px] text-text-low'
-                }
-              >
+              </h1>
+              <FlowStatusBadge status={flow.data.flow.status} />
+              <Badge tone={dirty ? 'warning' : 'neutral'} size="sm">
                 {dirty ? 'Não salvo' : 'Salvo'}
-              </span>
+              </Badge>
             </header>
 
             <MobileDegradationBanner />
 
             {showBanner && (
-              <div className="border-b border-border-2 bg-surface-1 px-4 py-2">
+              <div className="border-b border-border bg-surface px-4 py-2">
                 <ValidationBanner issues={issues} />
               </div>
             )}
 
             {/* Canvas read-first: ~55% da altura útil para pan/zoom, lista navegável abaixo. */}
-            <div className="relative min-h-0 basis-[55%] border-b border-border-2">
+            <div className="relative min-h-0 basis-[55%] border-b border-border">
               <FlowCanvas readOnly />
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="border-b border-border-2 bg-surface-1 px-4 py-2">
-                <p className="font-head text-xs font-semibold uppercase tracking-wide text-text-low">
-                  Nodes do flow
-                </p>
+              <div className="border-b border-border bg-surface px-4 py-2">
+                <h2 className="font-mono text-[11px] uppercase tracking-[0.08em] text-text-low">Nós do flow</h2>
               </div>
               <MobileNodeList />
-              <div className="px-4 py-3">
-                <p className="mb-2 font-head text-xs font-semibold uppercase tracking-wide text-text-low">
-                  Execuções
-                </p>
+              <div className="border-t border-border px-4 py-4">
                 <ExecutionsPanel flowId={flowId} />
               </div>
             </div>
@@ -241,25 +299,28 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
               saving={save.isPending}
               publishing={publish.isPending}
               canPublish={canPublish}
+              readOnly={readOnly}
               onSave={() => void handleSave()}
               onPublish={() => void handlePublish()}
             />
           </div>
 
           {/* Inspector como full-sheet no mobile (controlado pelo node selecionado). */}
-          <InspectorPanel />
+          <InspectorPanel readOnly={readOnly} />
         </FlowHelpersAutoProvider>
       </ReactFlowProvider>
     );
   }
 
-  // Desktop (md+): editor inalterado.
+  // Desktop (md+).
   return (
     <ReactFlowProvider>
       <FlowHelpersAutoProvider>
-      <div className="flex h-[calc(100vh-3.5rem)] flex-col">
+      <div className={cn(EDITOR_BLEED, 'flex flex-col bg-bg')}>
         <ToolbarTop
           flowName={flow.data.flow.name}
+          status={flow.data.flow.status}
+          readOnly={readOnly}
           dirty={dirty}
           saving={save.isPending}
           publishing={publish.isPending}
@@ -275,22 +336,17 @@ export function FlowEditorPage({ flowId }: { flowId: string }) {
         />
 
         {showBanner && (
-          <div className="border-b border-border-2 bg-surface-1 px-4 py-2">
+          <div className="border-b border-border bg-surface px-4 py-2">
             <ValidationBanner issues={issues} />
           </div>
         )}
 
         <div className="flex min-h-0 flex-1">
-          <NodePalette />
+          <NodePalette readOnly={readOnly} />
           <div className="relative min-w-0 flex-1">
-            <FlowCanvas />
-            <div className="pointer-events-none absolute right-3 top-3 w-64">
-              <div className="pointer-events-auto rounded-lg border border-border-2 bg-surface-1/95 p-3 backdrop-blur">
-                <ExecutionsPanel flowId={flowId} />
-              </div>
-            </div>
+            <FlowCanvas readOnly={readOnly} />
           </div>
-          <InspectorPanel />
+          <InspectorPanel readOnly={readOnly} idle={<ExecutionsPanel flowId={flowId} />} />
         </div>
       </div>
       </FlowHelpersAutoProvider>

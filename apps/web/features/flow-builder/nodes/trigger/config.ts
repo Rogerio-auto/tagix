@@ -1,9 +1,9 @@
 /**
- * Metadados e helpers do node `trigger` (F31-S07). Fonte unica de verdade para:
+ * Metadados e helpers do node `trigger` (F31-S07). Fonte única de verdade para:
  *   - os 8 tipos de gatilho (espelha `flows.triggerType` + `trigger.handler.ts`);
- *   - as opcoes de cada `trigger_config` (rotulos PT, valores estaveis);
+ *   - as opções de cada `trigger_config` (rotulos PT, valores estaveis);
  *   - leitura tipada de `node.data.{triggerType,triggerConfig}` (zero `any`);
- *   - validacao inline e resumo legivel para o node no canvas.
+ *   - validação inline e resumo legivel para o node no canvas.
  *
  * As CHAVES de config sao o contrato com o dispatcher inbound
  * (`apps/workers/src/flows-triggers/dispatcher.ts`) e com `flow_submissions`:
@@ -38,11 +38,11 @@ export interface TriggerTypeOption {
   readonly description: string;
 }
 
-/** Opcoes do seletor de tipo de gatilho (editavel apos a criacao). */
+/** Opções do seletor de tipo de gatilho (editavel após a criacao). */
 export const TRIGGER_TYPE_OPTIONS: readonly TriggerTypeOption[] = [
   {
     value: 'manual',
-    label: 'Manual (botao na conversa)',
+    label: 'Manual (botão na conversa)',
     description: 'Dispara quando um atendente aciona o flow dentro da conversa.',
   },
   {
@@ -77,7 +77,7 @@ export const TRIGGER_TYPE_OPTIONS: readonly TriggerTypeOption[] = [
   },
   {
     value: 'flow_submission',
-    label: 'Resposta de formulario (Meta Flow)',
+    label: 'Resposta de formulário (Meta Flow)',
     description: 'Dispara quando um Meta Flow especifico e respondido.',
   },
 ];
@@ -156,7 +156,7 @@ export function readStringArray(config: Record<string, unknown>, key: string): s
 
 // ── Validacao inline ──────────────────────────────────────────────────────────
 
-/** Retorna a mensagem de erro de config (DS v2) ou `null` quando valida. */
+/** Retorna a mensagem de erro de config (DS v2) ou `null` quando válida. */
 export function validateTriggerConfig(
   type: TriggerType,
   config: Record<string, unknown>,
@@ -209,7 +209,7 @@ export function summarizeTrigger(
     case 'stage_change': {
       const from = readString(config, 'from_stage_id');
       const to = readString(config, 'to_stage_id');
-      if (!from && !to) return 'Qualquer mudanca';
+      if (!from && !to) return 'Qualquer mudança';
       const fromLabel = from ? (resolvers.stageName?.(from) ?? 'etapa') : 'qualquer';
       const toLabel = to ? (resolvers.stageName?.(to) ?? 'etapa') : 'qualquer';
       return `${fromLabel} → ${toLabel}`;

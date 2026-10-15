@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { Archive, MoreHorizontal, Pause, Save, Send } from 'lucide-react';
-import { Button, useToast } from '@hm/ui';
+import { Button, IconButton, useToast } from '@hm/ui';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
 import { Sheet } from '@/shared/components/Sheet';
 import { ApiError } from '@/shared/lib/api-client';
 import { useFlowLifecycleAction } from '../hooks/useFlow';
@@ -15,6 +16,8 @@ interface Props {
   saving: boolean;
   publishing: boolean;
   canPublish: boolean;
+  /** Empresa em só leitura (F71-S17): escrita `aria-disabled` com a explicação. */
+  readOnly?: boolean;
   onSave: () => void;
   onPublish: () => void;
 }
@@ -23,6 +26,7 @@ interface Props {
  * Rodapé de ciclo de vida do editor no mobile (F36-S11, MOBILE_UX §1 — thumb-first: a ação
  * primária mora na zona do polegar com `pb-safe`). Salvar + Publicar inline; pausar/arquivar num
  * bottom-`Sheet` de "mais ações". Arquivar é destrutivo → confirmação proporcional (UX §2.9).
+ * DS 3.0 (F72-S07): botões com loading (UX §2.7) e guarda de só leitura (F71-S17).
  */
 export function MobileLifecycleBar({
   flowId,
@@ -31,6 +35,7 @@ export function MobileLifecycleBar({
   saving,
   publishing,
   canPublish,
+  readOnly = false,
   onSave,
   onPublish,
 }: Props): React.JSX.Element {
@@ -59,38 +64,42 @@ export function MobileLifecycleBar({
 
   return (
     <>
-      <div className="flex items-center gap-2 border-t border-border-2 bg-surface-1 px-3 py-2.5 pb-safe-4">
-        <Button
-          variant="secondary"
-          size="md"
-          className="flex-1"
-          disabled={saving || !dirty}
-          leftIcon={<Save className="size-4" aria-hidden />}
-          onClick={onSave}
-        >
-          {saving ? 'Salvando...' : 'Salvar'}
-        </Button>
-        {canPublish && !isArchived && (
+      <div className="flex items-center gap-2 border-t border-border bg-surface px-3 py-2.5 pb-safe-4">
+        <ReadOnlyGuard readOnly={readOnly} className="flex-1" align="start">
           <Button
-            variant="primary"
+            variant="secondary"
             size="md"
-            className="flex-1"
-            disabled={publishing || isActive}
-            leftIcon={<Send className="size-4" aria-hidden />}
-            onClick={onPublish}
+            className="w-full"
+            loading={saving}
+            disabled={!readOnly && !dirty}
+            leftIcon={<Save className="size-4" aria-hidden />}
+            onClick={onSave}
           >
-            {publishing ? 'Publicando...' : isActive ? 'Publicado' : 'Publicar'}
+            Salvar
           </Button>
+        </ReadOnlyGuard>
+        {canPublish && !isArchived && (
+          <ReadOnlyGuard readOnly={readOnly} className="flex-1" align="center">
+            <Button
+              variant="primary"
+              size="md"
+              className="w-full"
+              loading={publishing}
+              disabled={!readOnly && isActive}
+              leftIcon={<Send className="size-4" aria-hidden />}
+              onClick={onPublish}
+            >
+              {isActive ? 'Publicado' : 'Publicar'}
+            </Button>
+          </ReadOnlyGuard>
         )}
-        <Button
-          variant="ghost"
-          size="md"
-          className="touch-target shrink-0"
+        <IconButton
+          variant="solid"
+          size="lg"
+          icon={<MoreHorizontal />}
           aria-label="Mais ações do flow"
           onClick={() => setActionsOpen(true)}
-        >
-          <MoreHorizontal className="size-5" aria-hidden />
-        </Button>
+        />
       </div>
 
       <Sheet
@@ -104,32 +113,36 @@ export function MobileLifecycleBar({
       >
         <div className="flex flex-col gap-2 pb-2">
           {canPublish && isActive && (
-            <Button
-              variant="secondary"
-              size="md"
-              className="w-full justify-start"
-              disabled={lifecycle.isPending}
-              leftIcon={<Pause className="size-4" aria-hidden />}
-              onClick={() => void run('unpublish')}
-            >
-              Pausar flow
-            </Button>
+            <ReadOnlyGuard readOnly={readOnly} className="w-full" align="start">
+              <Button
+                variant="secondary"
+                size="md"
+                className="w-full justify-start"
+                loading={lifecycle.isPending && lifecycle.variables === 'unpublish'}
+                leftIcon={<Pause className="size-4" aria-hidden />}
+                onClick={() => void run('unpublish')}
+              >
+                Pausar flow
+              </Button>
+            </ReadOnlyGuard>
           )}
 
           {!isArchived && !confirmArchive && (
-            <Button
-              variant="ghost"
-              size="md"
-              className="w-full justify-start text-danger"
-              leftIcon={<Archive className="size-4" aria-hidden />}
-              onClick={() => setConfirmArchive(true)}
-            >
-              Arquivar flow
-            </Button>
+            <ReadOnlyGuard readOnly={readOnly} className="w-full" align="start">
+              <Button
+                variant="ghost"
+                size="md"
+                className="w-full justify-start text-danger hover:text-danger"
+                leftIcon={<Archive className="size-4" aria-hidden />}
+                onClick={() => setConfirmArchive(true)}
+              >
+                Arquivar flow
+              </Button>
+            </ReadOnlyGuard>
           )}
 
           {!isArchived && confirmArchive && (
-            <div className="rounded-md border border-border-2 bg-surface-2 p-3">
+            <div className="rounded-sm border border-border bg-surface-2 p-3">
               <p className="mb-3 text-sm text-text">
                 Arquivar este flow? Ele para de disparar e sai da lista ativa.
               </p>
@@ -146,10 +159,10 @@ export function MobileLifecycleBar({
                   variant="danger"
                   size="sm"
                   className="flex-1"
-                  disabled={lifecycle.isPending}
+                  loading={lifecycle.isPending}
                   onClick={() => void run('archive')}
                 >
-                  {lifecycle.isPending ? 'Arquivando...' : 'Arquivar'}
+                  Arquivar
                 </Button>
               </div>
             </div>

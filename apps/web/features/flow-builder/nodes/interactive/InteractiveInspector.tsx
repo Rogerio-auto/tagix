@@ -17,9 +17,9 @@ import { VariablesPicker } from '../../inspector/VariablesPicker';
 import { SelectField, TextField } from '../inspector-fields';
 
 /**
- * Inspector rico do node `interactive` (F31-S04). Editor ESTRUTURADO (nao JSON):
- * botoes reply/url/phone e listas com secoes/itens, header/footer, body
- * interpolavel (VariablesPicker), validacao de limites do provider (WhatsApp)
+ * Inspector rico do node `interactive` (F31-S04). Editor ESTRUTURADO (não JSON):
+ * botões reply/url/phone e listas com secoes/itens, header/footer, body
+ * interpolavel (VariablesPicker), validação de limites do provider (WhatsApp)
  * sinalizada inline e preview WYSIWYG.
  *
  * Espelha o shape de `interactive.handler.ts`. Validacao reativa (feedback
@@ -151,7 +151,7 @@ export function InteractiveInspector({ nodeId }: { nodeId: string }) {
   // ---- validation ---------------------------------------------------------
   const replyCount = buttons.filter((b) => b.type === 'reply').length;
   const totalRows = sections.reduce((acc, s) => acc + s.rows.length, 0);
-  const bodyError = body.trim().length === 0 ? 'Corpo obrigatorio' : undefined;
+  const bodyError = body.trim().length === 0 ? 'Corpo obrigatório' : undefined;
 
   return (
     <div className="flex flex-col gap-4">
@@ -159,7 +159,7 @@ export function InteractiveInspector({ nodeId }: { nodeId: string }) {
         label="Tipo"
         value={kind}
         options={[
-          { value: 'buttons', label: 'Botoes' },
+          { value: 'buttons', label: 'Botões' },
           { value: 'list', label: 'Lista' },
         ]}
         onChange={(v) => set({ kind: v })}
@@ -173,10 +173,10 @@ export function InteractiveInspector({ nodeId }: { nodeId: string }) {
       />
 
       <LimitedTextField
-        label="Cabecalho (opcional)"
+        label="Cabeçalho (opcional)"
         value={header}
         max={LIMITS.header}
-        placeholder="Titulo curto"
+        placeholder="Título curto"
         onChange={(v) => set({ header: v })}
       />
       <LimitedTextField
@@ -260,19 +260,19 @@ function BodyField({
       </div>
       <textarea
         value={value}
-        placeholder="Escolha uma opcao {{contact.name}}"
+        placeholder="Escolha uma opção {{contact.name}}"
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={Boolean(error) || over}
         className={cn(
-          'min-h-[90px] rounded-md border bg-surface-2 px-3 py-2 text-sm text-text focus:outline-none',
-          error || over ? 'border-danger focus:border-danger' : 'border-border-2 focus:border-accent',
+          'min-h-[90px] rounded-sm border bg-surface-2 px-3 py-2 text-sm text-text outline-none focus-visible:focus-ring',
+          error || over ? 'border-danger focus:border-danger [--focus-ring-color:var(--danger)]' : 'border-border hover:border-border-2 focus:border-brand-text',
         )}
       />
       <div className="flex items-center justify-between">
         {error ? (
           <span className="text-[11px] text-danger">{error}</span>
         ) : (
-          <span className="text-[11px] text-text-low">Suporta variaveis {`{{...}}`}.</span>
+          <span className="text-[11px] text-text-low">Suporta variáveis {`{{...}}`}.</span>
         )}
         <CharCounter length={value.length} max={LIMITS.body} />
       </div>
@@ -315,8 +315,8 @@ function LimitedTextField({
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={Boolean(error) || over}
         className={cn(
-          'rounded-md border bg-surface-2 px-3 py-2 text-sm text-text focus:outline-none',
-          error || over ? 'border-danger focus:border-danger' : 'border-border-2 focus:border-accent',
+          'rounded-sm border bg-surface-2 px-3 py-2 text-sm text-text outline-none focus-visible:focus-ring',
+          error || over ? 'border-danger focus:border-danger [--focus-ring-color:var(--danger)]' : 'border-border hover:border-border-2 focus:border-brand-text',
         )}
       />
       <div className="flex items-center justify-between">
@@ -354,11 +354,11 @@ function ButtonsEditor({
   const replyFull = replyCount >= LIMITS.replyButtonsMax;
   return (
     <section className="flex flex-col gap-2">
-      <SectionHeader title="Botoes" hint={`${replyCount}/${LIMITS.replyButtonsMax} de resposta`} />
+      <SectionHeader title="Botões" hint={`${replyCount}/${LIMITS.replyButtonsMax} de resposta`} />
 
       {buttons.length === 0 && (
-        <p className="rounded-md border border-dashed border-border-2 px-3 py-3 text-center text-xs text-text-low">
-          Nenhum botao. Adicione abaixo.
+        <p className="rounded-md border border-dashed border-border px-3 py-3 text-center text-xs text-text-low">
+          Nenhum botão. Adicione abaixo.
         </p>
       )}
 
@@ -382,7 +382,7 @@ function ButtonsEditor({
           icon={Reply}
           label="Resposta"
           disabled={replyFull}
-          title={replyFull ? `Maximo ${LIMITS.replyButtonsMax} botoes de resposta` : undefined}
+          title={replyFull ? `Máximo ${LIMITS.replyButtonsMax} botões de resposta` : undefined}
           onClick={() => onAdd('reply')}
         />
         <AddChip icon={ExternalLink} label="Link" onClick={() => onAdd('url')} />
@@ -412,12 +412,12 @@ function ButtonRow({
   const meta = BUTTON_META[button.type];
   const Icon = meta.icon;
   const title = button.title ?? '';
-  const titleError = title.trim().length === 0 ? 'Titulo obrigatorio' : undefined;
+  const titleError = title.trim().length === 0 ? 'Título obrigatório' : undefined;
   return (
     <div
       className={cn(
-        'rounded-md border bg-surface-1 p-2.5',
-        replyOverLimit ? 'border-danger' : 'border-border-2',
+        'rounded-md border bg-surface p-2.5',
+        replyOverLimit ? 'border-danger' : 'border-border',
       )}
     >
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -430,11 +430,11 @@ function ButtonRow({
 
       <div className="flex flex-col gap-2">
         <LimitedTextField
-          label="Titulo"
+          label="Título"
           value={title}
           max={LIMITS.buttonTitle}
           error={titleError}
-          placeholder="Texto do botao"
+          placeholder="Texto do botão"
           onChange={(v) => onUpdate({ title: v })}
         />
         {button.type === 'url' && (
@@ -455,7 +455,7 @@ function ButtonRow({
         )}
         {replyOverLimit && (
           <p className="text-[11px] text-danger">
-            Excede {LIMITS.replyButtonsMax} botoes de resposta permitidos.
+            Excede {LIMITS.replyButtonsMax} botões de resposta permitidos.
           </p>
         )}
       </div>
@@ -493,34 +493,34 @@ function ListEditor({
 }) {
   const rowsFull = totalRows >= LIMITS.rowsTotalMax;
   const sectionsFull = sections.length >= LIMITS.sectionsMax;
-  const labelError = buttonLabel.trim().length === 0 ? 'Rotulo obrigatorio' : undefined;
+  const labelError = buttonLabel.trim().length === 0 ? 'Rótulo obrigatório' : undefined;
   return (
     <section className="flex flex-col gap-2">
       <LimitedTextField
-        label="Rotulo do botao da lista"
+        label="Rótulo do botão da lista"
         value={buttonLabel}
         max={LIMITS.buttonLabel}
         error={labelError}
-        placeholder="Ver opcoes"
+        placeholder="Ver opções"
         onChange={onButtonLabel}
       />
 
       <SectionHeader
         title="Secoes"
-        hint={`${totalRows}/${LIMITS.rowsTotalMax} itens · ${sections.length}/${LIMITS.sectionsMax} secoes`}
+        hint={`${totalRows}/${LIMITS.rowsTotalMax} itens · ${sections.length}/${LIMITS.sectionsMax} seções`}
       />
 
       {sections.length === 0 && (
-        <p className="rounded-md border border-dashed border-border-2 px-3 py-3 text-center text-xs text-text-low">
-          Nenhuma secao. Adicione abaixo.
+        <p className="rounded-md border border-dashed border-border px-3 py-3 text-center text-xs text-text-low">
+          Nenhuma seção. Adicione abaixo.
         </p>
       )}
 
       <div className="flex flex-col gap-2">
         {sections.map((s, si) => (
-          <div key={si} className="rounded-md border border-border-2 bg-surface-1 p-2.5">
+          <div key={si} className="rounded-md border border-border bg-surface p-2.5">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-medium text-text-mid">Secao {si + 1}</span>
+              <span className="text-[11px] font-medium text-text-mid">Seção {si + 1}</span>
               <ItemControls
                 index={si}
                 count={sections.length}
@@ -530,7 +530,7 @@ function ListEditor({
             </div>
 
             <LimitedTextField
-              label="Titulo da secao (opcional)"
+              label="Título da seção (opcional)"
               value={s.title ?? ''}
               max={LIMITS.sectionTitle}
               placeholder="Categoria"
@@ -540,25 +540,25 @@ function ListEditor({
             <div className="mt-2 flex flex-col gap-2">
               {s.rows.map((r, ri) => {
                 const rowTitle = r.title ?? '';
-                const rowTitleError = rowTitle.trim().length === 0 ? 'Titulo obrigatorio' : undefined;
+                const rowTitleError = rowTitle.trim().length === 0 ? 'Título obrigatório' : undefined;
                 return (
-                  <div key={ri} className="rounded-md border border-border-2 bg-surface-2 p-2">
+                  <div key={ri} className="rounded-sm border border-border bg-surface-2 p-2">
                     <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <span className="text-[10px] uppercase tracking-wide text-text-low">
+                      <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-text-low">
                         Item {ri + 1}
                       </span>
                       <button
                         type="button"
                         aria-label="Remover item"
                         onClick={() => onRemoveRow(si, ri)}
-                        className="rounded-sm p-1 text-text-low transition-colors hover:text-danger focus:text-danger focus:shadow-glow-sm focus:outline-none"
+                        className="rounded-sm p-1 text-text-low transition-colors hover:text-danger focus:text-danger outline-none focus-visible:focus-ring"
                       >
                         <Trash2 className="size-3.5" aria-hidden />
                       </button>
                     </div>
                     <div className="flex flex-col gap-2">
                       <LimitedTextField
-                        label="Titulo"
+                        label="Título"
                         value={rowTitle}
                         max={LIMITS.rowTitle}
                         error={rowTitleError}
@@ -566,7 +566,7 @@ function ListEditor({
                         onChange={(v) => onUpdateRow(si, ri, { title: v })}
                       />
                       <LimitedTextField
-                        label="Descricao (opcional)"
+                        label="Descrição (opcional)"
                         value={r.description ?? ''}
                         max={LIMITS.rowDescription}
                         placeholder="Detalhe curto"
@@ -581,7 +581,7 @@ function ListEditor({
                 icon={Plus}
                 label="Item"
                 disabled={rowsFull}
-                title={rowsFull ? `Maximo ${LIMITS.rowsTotalMax} itens no total` : undefined}
+                title={rowsFull ? `Máximo ${LIMITS.rowsTotalMax} itens no total` : undefined}
                 onClick={() => onAddRow(si)}
               />
             </div>
@@ -591,9 +591,9 @@ function ListEditor({
 
       <AddChip
         icon={ListIcon}
-        label="Secao"
+        label="Seção"
         disabled={sectionsFull}
-        title={sectionsFull ? `Maximo ${LIMITS.sectionsMax} secoes` : undefined}
+        title={sectionsFull ? `Máximo ${LIMITS.sectionsMax} seções` : undefined}
         onClick={onAddSection}
       />
     </section>
@@ -624,7 +624,7 @@ function ItemControls({
   onRemove: () => void;
 }) {
   const iconBtn =
-    'rounded-sm p-1 text-text-low transition-colors hover:text-text focus:text-text focus:shadow-glow-sm focus:outline-none disabled:opacity-40 disabled:hover:text-text-low';
+    'rounded-sm p-1 text-text-low transition-colors hover:text-text focus:text-text outline-none focus-visible:focus-ring disabled:opacity-40 disabled:hover:text-text-low';
   return (
     <div className="flex items-center gap-0.5">
       <button
@@ -649,7 +649,7 @@ function ItemControls({
         type="button"
         aria-label="Remover"
         onClick={onRemove}
-        className="rounded-sm p-1 text-text-low transition-colors hover:text-danger focus:text-danger focus:shadow-glow-sm focus:outline-none"
+        className="rounded-sm p-1 text-text-low transition-colors hover:text-danger focus:text-danger outline-none focus-visible:focus-ring"
       >
         <Trash2 className="size-3.5" aria-hidden />
       </button>
@@ -677,8 +677,8 @@ function AddChip({
       disabled={disabled}
       title={title}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-pill border border-border-2 bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-text-mid transition-colors',
-        'hover:border-accent hover:text-text focus:border-accent focus:shadow-glow-sm focus:outline-none',
+        'inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-text-mid transition-colors',
+        'hover:border-brand-text hover:text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring',
         'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border-2 disabled:hover:text-text-mid',
       )}
     >
@@ -711,8 +711,8 @@ function Preview({
   return (
     <section className="flex flex-col gap-2">
       <SectionHeader title="Previa" />
-      <div className="rounded-lg border border-border-2 bg-surface-3 p-3">
-        <div className="max-w-[260px] rounded-lg rounded-tl-sm bg-surface-1 px-3 py-2.5 shadow-sm">
+      <div className="rounded-lg border border-border bg-surface-3 p-3">
+        <div className="max-w-[260px] rounded-lg rounded-tl-sm bg-surface px-3 py-2.5 shadow-ds-1">
           {header.trim() && <p className="mb-1 text-sm font-semibold text-text">{header}</p>}
           <p className="whitespace-pre-wrap break-words text-sm text-text-mid">
             {body.trim() || 'Corpo da mensagem…'}
@@ -720,37 +720,37 @@ function Preview({
           {footer.trim() && <p className="mt-1 text-[11px] text-text-low">{footer}</p>}
 
           {kind === 'buttons' ? (
-            <div className="mt-2 flex flex-col gap-1.5 border-t border-border-2 pt-2">
+            <div className="mt-2 flex flex-col gap-1.5 border-t border-border pt-2">
               {buttons.length === 0 && (
-                <span className="text-center text-[11px] text-text-low">Sem botoes</span>
+                <span className="text-center text-[11px] text-text-low">Sem botões</span>
               )}
               {buttons.map((b, i) => {
                 const Icon = BUTTON_META[b.type].icon;
                 return (
                   <div
                     key={i}
-                    className="flex items-center justify-center gap-1.5 rounded-md border border-border-2 px-2 py-1.5 text-[13px] font-medium text-text"
+                    className="flex items-center justify-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[13px] font-medium text-text"
                   >
                     <Icon className="size-3.5" aria-hidden />
-                    <span className="truncate">{b.title?.trim() || 'Botao'}</span>
+                    <span className="truncate">{b.title?.trim() || 'Botão'}</span>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <div className="mt-2 border-t border-border-2 pt-2">
-              <div className="flex items-center justify-center gap-1.5 rounded-md border border-border-2 px-2 py-1.5 text-[13px] font-medium text-text">
+            <div className="mt-2 border-t border-border pt-2">
+              <div className="flex items-center justify-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[13px] font-medium text-text">
                 <ListIcon className="size-3.5" aria-hidden />
-                <span className="truncate">{buttonLabel.trim() || 'Ver opcoes'}</span>
+                <span className="truncate">{buttonLabel.trim() || 'Ver opções'}</span>
               </div>
               <div className="mt-2 flex flex-col gap-2">
                 {sections.length === 0 && (
-                  <span className="text-center text-[11px] text-text-low">Sem secoes</span>
+                  <span className="text-center text-[11px] text-text-low">Sem seções</span>
                 )}
                 {sections.map((s, si) => (
                   <div key={si} className="flex flex-col gap-1">
                     {s.title?.trim() && (
-                      <span className="text-[10px] font-semibold uppercase tracking-wide text-text-low">
+                      <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-text-low">
                         {s.title}
                       </span>
                     )}

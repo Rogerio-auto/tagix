@@ -7,11 +7,11 @@ import { useCreateFlow } from './queries';
 import type { FlowTriggerType } from './types';
 
 const TRIGGER_OPTIONS: { value: FlowTriggerType; label: string }[] = [
-  { value: 'manual', label: 'Manual (botao na conversa)' },
+  { value: 'manual', label: 'Manual (botão na conversa)' },
   { value: 'keyword', label: 'Palavra-chave na mensagem' },
   { value: 'new_message', label: 'Nova mensagem' },
   { value: 'new_lead', label: 'Novo contato' },
-  { value: 'flow_submission', label: 'Resposta de formulario (Meta Flow)' },
+  { value: 'flow_submission', label: 'Resposta de formulário (Meta Flow)' },
 ];
 
 interface Props {
@@ -20,7 +20,7 @@ interface Props {
   onCreated?: (flowId: string) => void;
 }
 
-/** Drawer/modal de criacao de um flow draft (F4-S09). Cria e direciona ao editor. */
+/** Modal curto de criação de um flow rascunho (F4-S09; DS 3.0 F72-S07). Cria e abre o editor. */
 export function CreateFlowModal({ open, onClose, onCreated }: Props) {
   const { toast } = useToast();
   const createFlow = useCreateFlow();
@@ -72,9 +72,9 @@ export function CreateFlowModal({ open, onClose, onCreated }: Props) {
         />
 
         <label className="flex flex-col gap-1.5">
-          <span className="font-head text-sm font-medium text-text">Gatilho</span>
+          <span className="font-body text-sm font-medium text-text">Gatilho</span>
           <select
-            className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+            className="h-10 rounded-sm border border-border bg-surface-2 px-3 text-sm text-text outline-none transition-colors hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
             value={triggerType}
             onChange={(e) => setTriggerType(e.target.value as FlowTriggerType)}
           >
@@ -86,16 +86,12 @@ export function CreateFlowModal({ open, onClose, onCreated }: Props) {
           </select>
         </label>
 
-        <div className="mt-1 flex items-center justify-end gap-2 border-t border-border-2 pt-4">
+        <div className="mt-1 flex items-center justify-end gap-2 border-t border-border pt-4">
           <Button variant="ghost" onClick={handleClose}>
             Cancelar
           </Button>
-          <Button
-            variant="primary"
-            onClick={() => void handleCreate()}
-            disabled={createFlow.isPending}
-          >
-            {createFlow.isPending ? 'Criando...' : 'Criar flow'}
+          <Button variant="primary" loading={createFlow.isPending} onClick={() => void handleCreate()}>
+            Criar flow
           </Button>
         </div>
       </div>

@@ -2,7 +2,7 @@
 
 /**
  * Registry de inspectors por tipo de node (F4-S11). Consumido pelo InspectorPanel (S10)
- * para renderizar o form de configuracao do node selecionado.
+ * para renderizar o form de configuração do node selecionado.
  */
 import { TriggerInspector } from './trigger/TriggerInspector';
 import { MessageInspector } from './message/MessageInspector';

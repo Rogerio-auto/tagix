@@ -30,7 +30,7 @@ import {
 type ConfigSetter = (patch: Record<string, unknown>) => void;
 
 /**
- * Inspector do node `trigger` (F31-S07). Permite (a) trocar o TIPO de gatilho apos a
+ * Inspector do node `trigger` (F31-S07). Permite (a) trocar o TIPO de gatilho após a
  * criacao e (b) configurar o `trigger_config` dos 8 tipos com pickers pesquisaveis
  * (sem id cru). O estado vive em `node.data.{triggerType,triggerConfig}`; a integracao
  * sincroniza esses campos com as colunas `flows.triggerType/triggerConfig` no save
@@ -65,12 +65,12 @@ export function TriggerInspector({ nodeId }: { nodeId: string }) {
         onChange={setType}
       />
 
-      <div className="flex flex-col gap-3 border-t border-border-2 pt-3">
+      <div className="flex flex-col gap-3 border-t border-border pt-3">
         <TriggerConfigFields type={triggerType} config={config} setConfig={setConfig} />
       </div>
 
       {warning ? (
-        <p className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+        <p className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-warn">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           <span>{warning}</span>
         </p>
@@ -84,7 +84,7 @@ export function TriggerInspector({ nodeId }: { nodeId: string }) {
   );
 }
 
-/** Roteia para o formulario de config do tipo selecionado. */
+/** Roteia para o formulário de config do tipo selecionado. */
 function TriggerConfigFields({
   type,
   config,
@@ -113,7 +113,7 @@ function TriggerConfigFields({
     default:
       return (
         <p className="text-xs text-text-low">
-          Sem configuracao. Acione o flow pelo botao na conversa quando ele estiver ativo.
+          Sem configuração. Acione o flow pelo botão na conversa quando ele estiver ativo.
         </p>
       );
   }
@@ -163,7 +163,7 @@ function KeywordConfig({
         label="Palavras-chave"
         hint="Enter ou vírgula adiciona. Casa com a mensagem do contato."
       >
-        <div className="flex flex-wrap gap-1.5 rounded-md border border-border-2 bg-surface-2 p-1.5 focus-within:border-accent focus-within:shadow-glow-sm">
+        <div className="flex flex-wrap gap-1.5 rounded-sm border border-border bg-surface-2 hover:border-border-2 p-1.5 focus-within:border-brand-text focus-within:shadow-glow-sm">
           {keywords.map((keyword) => (
             <span
               key={keyword}
@@ -174,7 +174,7 @@ function KeywordConfig({
                 type="button"
                 onClick={() => remove(keyword)}
                 aria-label={`Remover ${keyword}`}
-                className="rounded-sm p-0.5 text-text-low transition-colors hover:text-text focus:text-text focus:outline-none focus:shadow-glow-sm"
+                className="rounded-sm p-0.5 text-text-low transition-colors hover:text-text outline-none focus-visible:text-text focus-visible:focus-ring"
               >
                 <X className="size-3" aria-hidden />
               </button>
@@ -372,10 +372,10 @@ function ToggleChip({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        'rounded-md border px-2.5 py-1 text-xs transition-colors focus:outline-none focus:shadow-glow-sm',
+        'rounded-md border px-2.5 py-1 text-xs transition-colors outline-none focus-visible:focus-ring',
         active
-          ? 'border-accent bg-accent/10 text-text'
-          : 'border-border-2 bg-surface-2 text-text-mid hover:text-text',
+          ? 'border-brand-text bg-brand-text/10 text-text'
+          : 'border-border bg-surface-2 text-text-mid hover:text-text',
       )}
     >
       {children}

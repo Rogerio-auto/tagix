@@ -3,7 +3,9 @@
 import { useCallback, useMemo, useRef } from 'react';
 import {
   Background,
+  BackgroundVariant,
   Controls,
+  MiniMap,
   ReactFlow,
   addEdge,
   useReactFlow,
@@ -16,15 +18,19 @@ import '@xyflow/react/dist/style.css';
 import { useFlowEditor, type FlowEditorNode } from '../hooks/useFlowEditor';
 import { nodeTypes } from '../nodes/nodeTypes';
 import { NODE_CATALOG, type FlowNodeKind } from '../shared/node-catalog';
+import { CANVAS_ARIA_LABELS, CANVAS_THEME } from './canvas-theme';
 
-/** Rótulo de SR por node (UX §2.10): tipo legível + nome configurado, se houver. */
+/**
+ * Rótulo de SR por node (UX §2.10): tipo legível + nome configurado, se houver. As
+ * instruções de teclado vêm da descrição do React Flow (`CANVAS_ARIA_LABELS`).
+ */
 function nodeAriaLabel(node: Node<Record<string, unknown>>): string {
   const kind = node.type as FlowNodeKind | undefined;
   const meta = kind ? NODE_CATALOG[kind] : undefined;
   const typeLabel = meta?.label ?? 'Nó';
   const rawName = node.data?.['label'] ?? node.data?.['name'];
   const name = typeof rawName === 'string' && rawName.trim() ? `: ${rawName.trim()}` : '';
-  return `${typeLabel}${name}. Enter ou setas selecionam; o painel lateral edita.`;
+  return `${typeLabel}${name}`;
 }
 
 interface CanvasInnerProps {
@@ -38,8 +44,8 @@ interface CanvasInnerProps {
 }
 
 /**
- * Canvas ReactFlow (FLOW_BUILDER secao 9.1/9.2). DnD do palette cria node no ponto do drop;
- * edges conectam handles; selecao alimenta o inspector. O store (zustand) e a fonte de verdade.
+ * Canvas ReactFlow (FLOW_BUILDER seção 9.1/9.2). DnD do palette cria node no ponto do drop;
+ * edges conectam handles; seleção alimenta o inspector. O store (zustand) e a fonte de verdade.
  */
 function CanvasInner({ readOnly = false }: CanvasInnerProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -49,9 +55,10 @@ function CanvasInner({ readOnly = false }: CanvasInnerProps) {
   const nodes = useFlowEditor((s) => s.nodes);
   const edges = useFlowEditor((s) => s.edges);
 
-  // Injeta `ariaLabel` por node sem mutar o store (fonte de verdade do zustand).
+  // Injeta `ariaLabel` por node sem mutar o store (fonte de verdade do zustand) e a classe
+  // `group/node`: o casco do nó (NodeShell) pinta o anel de foco do invólucro do React Flow.
   const a11yNodes = useMemo<FlowEditorNode[]>(
-    () => nodes.map((n) => ({ ...n, ariaLabel: nodeAriaLabel(n) })),
+    () => nodes.map((n) => ({ ...n, ariaLabel: nodeAriaLabel(n), className: 'group/node' })),
     [nodes],
   );
   const onNodesChange = useFlowEditor((s) => s.onNodesChange);
@@ -104,7 +111,7 @@ function CanvasInner({ readOnly = false }: CanvasInnerProps) {
   );
 
   return (
-    <div ref={wrapperRef} className="h-full w-full">
+    <div ref={wrapperRef} className="h-full w-full" data-flow-canvas="">
       <ReactFlow
         nodes={a11yNodes}
         edges={edges}
@@ -138,12 +145,33 @@ function CanvasInner({ readOnly = false }: CanvasInnerProps) {
                 e.dataTransfer.dropEffect = 'move';
               }
         }
-        aria-label="Canvas do flow. Use Tab para focar os nós, setas para movê-los e Enter para selecionar e abrir o painel de edição."
+        aria-label={
+          readOnly
+            ? 'Canvas do flow, somente leitura. Use Tab para focar os nós e Enter para ver as propriedades.'
+            : 'Canvas do flow. Use Tab para focar os nós, setas para movê-los e Enter para selecionar e abrir o painel de edição.'
+        }
+        ariaLabelConfig={CANVAS_ARIA_LABELS}
+        // Pele do DS 3.0: variáveis --xy-* apontando para os tokens (troca com o tema).
+        style={CANVAS_THEME}
         fitView
+        // Folga embaixo para o grafo enquadrado não nascer sob o minimapa e os controles.
+        fitViewOptions={{ padding: readOnly ? 0.2 : { x: '64px', top: '48px', bottom: '136px' }, maxZoom: 1.1 }}
+        minZoom={0.25}
         proOptions={{ hideAttribution: true }}
       >
-        <Background className="!bg-surface-0" />
-        <Controls className="!bg-surface-2 !text-text" />
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1.25} />
+        {/* Sem o cadeado: em só leitura ele reabriria a edição estrutural. */}
+        <Controls showInteractive={false} className="overflow-hidden rounded-sm border border-border" />
+        {!readOnly && (
+          <MiniMap
+            pannable
+            zoomable
+            nodeBorderRadius={6}
+            // Geometria (não cor): minimapa compacto para não disputar com o grafo.
+            style={{ width: 168, height: 104 }}
+            className="!rounded-sm border border-border"
+          />
+        )}
       </ReactFlow>
     </div>
   );

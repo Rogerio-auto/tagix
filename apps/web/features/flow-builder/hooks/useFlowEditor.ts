@@ -75,11 +75,20 @@ export const useFlowEditor = create<FlowEditorState>((set, get) => ({
       selectedNodeId: null,
     }),
 
+  // Medição (`dimensions`) e seleção (`select`) não alteram o grafo persistido: não sujam o
+  // rascunho. Antes, a medição inicial do React Flow marcava todo flow recém-aberto como
+  // "Alterações não salvas" (F72-S07).
   onNodesChange: (changes) =>
-    set((s) => ({ nodes: applyNodeChanges(changes, s.nodes), dirty: true })),
+    set((s) => ({
+      nodes: applyNodeChanges(changes, s.nodes),
+      dirty: s.dirty || changes.some((c) => c.type !== 'dimensions' && c.type !== 'select'),
+    })),
 
   onEdgesChange: (changes) =>
-    set((s) => ({ edges: applyEdgeChanges(changes, s.edges), dirty: true })),
+    set((s) => ({
+      edges: applyEdgeChanges(changes, s.edges),
+      dirty: s.dirty || changes.some((c) => c.type !== 'select'),
+    })),
 
   connect: (edge) =>
     set((s) => ({

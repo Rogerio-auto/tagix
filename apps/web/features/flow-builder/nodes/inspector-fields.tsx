@@ -42,7 +42,7 @@ export function TextField({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+        className="rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
       />
     </Field>
   );
@@ -67,7 +67,7 @@ export function TextAreaField({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="min-h-[90px] rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+        className="min-h-[90px] rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
       />
     </Field>
   );
@@ -98,7 +98,7 @@ export function NumberField({
         min={min}
         max={max}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+        className="rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
       />
     </Field>
   );
@@ -122,7 +122,7 @@ export function SelectField({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+        className="rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -136,9 +136,9 @@ export function SelectField({
 
 export function DeferredNotice() {
   return (
-    <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-      Este node entra em vigor na F5 (Pipeline). A configuracao fica disponivel, mas a acao ainda
-      nao executa.
+    <div className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-warn">
+      Este node entra em vigor na F5 (Pipeline). A configuração fica disponível, mas a ação ainda
+      não executa.
     </div>
   );
 }

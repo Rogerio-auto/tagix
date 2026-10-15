@@ -22,7 +22,7 @@ function renderInterpolated(text: string): ReactNode {
     /^\{\{[^}]+\}\}$/.test(part) ? (
       <span
         key={`${i}-${part}`}
-        className="rounded-sm bg-accent/15 px-1 font-mono text-[0.85em] text-accent"
+        className="rounded-sm bg-brand-text/10 px-1 font-mono text-[0.85em] text-brand-text"
       >
         {part}
       </span>
@@ -71,13 +71,13 @@ function MediaThumb({ data }: { data: MessagePreviewData }) {
 
   if (key === 'voice') {
     return (
-      <div className="flex items-center gap-2 rounded-md bg-surface-1/60 px-2 py-2">
-        <Icon className="size-4 shrink-0 text-accent" aria-hidden />
+      <div className="flex items-center gap-2 rounded-md bg-surface/60 px-2 py-2">
+        <Icon className="size-4 shrink-0 text-brand-text" aria-hidden />
         <div className="flex flex-1 items-center gap-0.5" aria-hidden>
           {[3, 6, 9, 5, 8, 4, 7, 3, 6, 9, 4].map((h, i) => (
             <span
               key={`${i}-${h}`}
-              className="w-0.5 rounded-full bg-text-low"
+              className="w-0.5 rounded-pill bg-text-low"
               style={{ height: `${h * 2}px` }}
             />
           ))}
@@ -88,7 +88,7 @@ function MediaThumb({ data }: { data: MessagePreviewData }) {
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-md bg-surface-1/60 px-2.5 py-3">
+    <div className="flex items-center gap-2 rounded-md bg-surface/60 px-2.5 py-3">
       <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-surface-3 text-text-mid">
         <Icon className="size-4" aria-hidden />
       </span>
@@ -108,11 +108,11 @@ export function MessageBubblePreview({ data }: { data: MessagePreviewData }) {
   const empty = !hasText && !hasCaption && !isMedia;
 
   return (
-    <div className="rounded-lg border border-border-2 bg-surface-2 p-3">
+    <div className="rounded-lg border border-border bg-surface-2 p-3">
       <div className="ml-auto max-w-[85%]">
         <div
           className={cn(
-            'rounded-2xl rounded-br-sm border border-accent/20 bg-accent/10 px-3 py-2 text-sm text-text shadow-sm',
+            'rounded-2xl rounded-br-sm border border-brand-text/25 bg-brand-text/10 px-3 py-2 text-sm text-text shadow-ds-1',
             empty && 'text-text-low',
           )}
         >

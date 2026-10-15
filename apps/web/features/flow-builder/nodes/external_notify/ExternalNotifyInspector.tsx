@@ -78,7 +78,7 @@ export function ExternalNotifyInspector({ nodeId }: { nodeId: string }) {
           value={text}
           placeholder="Novo lead aguardando: {{contact.name}}"
           onChange={(e) => set({ text: e.target.value })}
-          className="min-h-[90px] rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text focus:border-accent focus:shadow-glow-sm focus:outline-none"
+          className="min-h-[90px] rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
         />
       </div>
 
@@ -87,7 +87,7 @@ export function ExternalNotifyInspector({ nodeId }: { nodeId: string }) {
           type="checkbox"
           checked={waitForResponse}
           onChange={(e) => set({ waitForResponse: e.target.checked })}
-          className="size-4 rounded border-border-2 bg-surface-2 accent-accent focus:shadow-glow-sm focus:outline-none"
+          className="size-4 rounded border-border bg-surface-2 accent-brand-text outline-none focus-visible:focus-ring"
         />
         Aguardar resposta do destinatário
       </label>
@@ -101,7 +101,7 @@ export function ExternalNotifyInspector({ nodeId }: { nodeId: string }) {
         />
       )}
 
-      <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] text-warning">
+      <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[11px] text-warn">
         <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
         <span>
           O roteamento para outra conversa/telefone depende do bridge de saída (publisher S01 ainda

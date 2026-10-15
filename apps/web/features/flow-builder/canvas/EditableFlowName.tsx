@@ -10,6 +10,8 @@ interface Props {
   saving?: boolean;
   /** Classe do texto/título (default = título do editor). */
   className?: string;
+  /** Empresa em só leitura (F71-S17): o nome é só texto, sem convite a renomear. */
+  readOnly?: boolean;
 }
 
 /**
@@ -17,7 +19,7 @@ interface Props {
  * Esc cancela. Renomear é só metadado — PUT /api/flows/:id { name }, sem republicar. Mostra
  * um lápis no hover para sinalizar que é editável (antes não havia como trocar o nome).
  */
-export function EditableFlowName({ name, onRename, saving, className }: Props) {
+export function EditableFlowName({ name, onRename, saving, className, readOnly = false }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -57,12 +59,16 @@ export function EditableFlowName({ name, onRename, saving, className }: Props) {
         maxLength={160}
         aria-label="Nome do flow"
         className={cn(
-          'min-w-0 max-w-[22rem] flex-1 rounded-md border border-accent bg-surface-2 px-2 py-1',
-          'font-head text-sm font-semibold text-text focus:shadow-glow-sm focus:outline-none',
+          'h-8 min-w-0 max-w-[22rem] flex-1 rounded-sm border border-brand-text bg-surface-2 px-2',
+          'font-head text-sm font-semibold text-text shadow-glow-sm outline-none focus-visible:focus-ring',
           className,
         )}
       />
     );
+  }
+
+  if (readOnly) {
+    return <span className={cn('block truncate px-1 font-head text-sm font-semibold text-text', className)}>{name}</span>;
   }
 
   return (
@@ -70,16 +76,16 @@ export function EditableFlowName({ name, onRename, saving, className }: Props) {
       type="button"
       onClick={() => setEditing(true)}
       title="Clique para renomear"
-      className="group flex min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-surface-3/60"
+      className="group flex h-8 min-w-0 items-center gap-1.5 rounded-sm px-1.5 outline-none transition-colors hover:bg-surface-2 focus-visible:focus-ring"
     >
       <span className={cn('truncate font-head text-sm font-semibold text-text', className)}>
         {name}
       </span>
       {saving ? (
-        <span className="shrink-0 text-[11px] text-text-low">salvando…</span>
+        <span className="shrink-0 text-xs text-text-low">salvando…</span>
       ) : (
         <Pencil
-          className="size-3.5 shrink-0 text-text-low opacity-0 transition-opacity group-hover:opacity-100"
+          className="size-3.5 shrink-0 text-text-low opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
           aria-hidden
         />
       )}

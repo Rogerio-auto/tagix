@@ -102,7 +102,7 @@ function TextWithVariables({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="min-h-[90px] rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+        className="min-h-[90px] rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
       />
       {hint && <span className="text-[11px] text-text-low">{hint}</span>}
     </div>
@@ -165,7 +165,7 @@ export function MessageInspector({ nodeId }: { nodeId: string }) {
       {/* Seletor de tipo */}
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-text-low">Tipo de mensagem</span>
-        <div className="grid grid-cols-5 gap-1 rounded-md border border-border-2 bg-surface-2 p-1">
+        <div className="grid grid-cols-5 gap-1 rounded-sm border border-border bg-surface-2 p-1">
           {TYPE_OPTIONS.map(({ value, label, icon: Icon }) => {
             const active = messageType === value;
             return (
@@ -176,8 +176,8 @@ export function MessageInspector({ nodeId }: { nodeId: string }) {
                 aria-pressed={active}
                 title={label}
                 className={cn(
-                  'flex flex-col items-center gap-1 rounded-sm px-1 py-2 text-[10px] font-medium transition-colors',
-                  'focus:shadow-glow-sm focus:outline-none',
+                  'flex flex-col items-center gap-1 rounded-sm px-1 py-2 text-[11px] font-medium transition-colors',
+                  'outline-none focus-visible:focus-ring',
                   active
                     ? 'bg-surface-3 text-text'
                     : 'text-text-low hover:bg-surface-3/60 hover:text-text-mid',
@@ -265,7 +265,7 @@ export function MessageInspector({ nodeId }: { nodeId: string }) {
       </div>
 
       {/* Aguardar antes de enviar (delay não-bloqueante) */}
-      <div className="flex flex-col gap-3 border-t border-border-2 pt-4">
+      <div className="flex flex-col gap-3 border-t border-border pt-4">
         <NumberField
           label="Aguardar antes de enviar (segundos)"
           value={delayMs !== undefined ? delayMs / 1000 : undefined}
@@ -278,7 +278,7 @@ export function MessageInspector({ nodeId }: { nodeId: string }) {
       </div>
 
       {/* Pré-ação (presença) — indicador cosmético, ≤30s */}
-      <div className="flex flex-col gap-3 border-t border-border-2 pt-4">
+      <div className="flex flex-col gap-3 border-t border-border pt-4">
         <SelectField
           label="Pré-ação"
           value={preAction}

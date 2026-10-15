@@ -25,12 +25,12 @@ export function MobileNodeList(): React.JSX.Element {
 
   if (nodes.length === 0) {
     return (
-      <p className="px-4 py-3 text-sm text-text-low">Este flow ainda não tem nodes.</p>
+      <p className="px-4 py-3 text-sm text-text-low">Este flow ainda não tem nós.</p>
     );
   }
 
   return (
-    <ul className="divide-y divide-border-2">
+    <ul className="divide-y divide-border">
       {nodes.map((node) => {
         const kind = (node.type ?? 'message') as FlowNodeKind;
         const meta = NODE_CATALOG[kind];
@@ -44,10 +44,10 @@ export function MobileNodeList(): React.JSX.Element {
               type="button"
               onClick={() => onPick(node.id)}
               aria-current={isSelected ? 'true' : undefined}
-              className="touch-target flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none aria-[current=true]:bg-surface-2"
+              className="touch-target flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2 outline-none focus-visible:bg-surface-2 focus-visible:focus-ring focus-visible:-outline-offset-2 aria-[current=true]:bg-surface-2 aria-[current=true]:shadow-[inset_2px_0_0_0_var(--brand-text)]"
             >
               {Icon && (
-                <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border-2 bg-surface-2 text-text-low">
+                <span className="grid size-8 shrink-0 place-items-center rounded-xs border border-border bg-surface-2 text-text-mid">
                   <Icon className="size-4" aria-hidden />
                 </span>
               )}

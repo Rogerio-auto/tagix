@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Registry de nodeTypes do canvas @xyflow/react (FLOW_BUILDER secao 9.2). Mapeia cada um
+ * Registry de nodeTypes do canvas @xyflow/react (FLOW_BUILDER seção 9.2). Mapeia cada um
  * dos 22 kinds ao componente de node. As pastas nodes/<tipo>/ trazem a UI rica; F31-S08
  * adiciona register_conversion + 6 kinds novos (stubs preenchidos por S09/S10/S11).
  */
