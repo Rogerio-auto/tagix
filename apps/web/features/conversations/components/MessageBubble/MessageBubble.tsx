@@ -188,11 +188,12 @@ function ReactableBubble({
       <div className="relative flex max-w-[78%] min-w-0 flex-col gap-1">
         <div
           className={cn(
-            'min-w-0 rounded-md px-3 py-2 font-body text-sm',
-            // Cauda assimétrica: aponta para o lado do remetente.
+            'min-w-0 rounded-lg border px-3 py-2 font-body text-sm leading-relaxed text-text',
+            // Cauda assimétrica: aponta para o lado do remetente. Enviada = tinta de marca
+            // discreta (maquete: bubble.me); recebida = superfície neutra.
             isOutbound
-              ? 'rounded-br-sm bg-surface-3 text-text'
-              : 'rounded-bl-sm bg-surface-2 text-text',
+              ? 'rounded-br-xs border-brand-text/20 bg-brand-text/10'
+              : 'rounded-bl-xs border-border bg-surface-2',
           )}
           onPointerDown={startLongPress}
           onPointerUp={clearLongPress}
@@ -235,7 +236,7 @@ function ReactableBubble({
             className={cn(
               'absolute top-1 grid size-7 place-items-center rounded-pill border border-border bg-surface-3 text-text-mid outline-none',
               'opacity-0 motion-safe:transition-opacity hover:text-text',
-              'group-hover/bubble:opacity-100 focus-visible:opacity-100 focus-visible:shadow-glow-md',
+              'group-hover/bubble:opacity-100 focus-visible:opacity-100 focus-visible:focus-ring',
               isOutbound ? '-left-9' : '-right-9',
             )}
           >
@@ -275,7 +276,7 @@ function ReactionChip({
       title="Remover reação"
       className={cn(
         '-mt-1.5 inline-flex items-center gap-1 rounded-pill border border-border bg-surface-2 px-2 py-0.5 text-sm leading-none outline-none',
-        'motion-safe:transition-colors hover:border-border-2 focus-visible:shadow-glow-md',
+        'motion-safe:transition-colors hover:border-border focus-visible:focus-ring',
         'disabled:cursor-not-allowed disabled:opacity-60',
       )}
     >
@@ -301,7 +302,7 @@ function BubbleMeta({
   return (
     <div
       className={cn(
-        'flex items-center gap-1.5 px-1 font-body text-[0.6875rem] text-text-low',
+        'flex items-center gap-1.5 px-1 font-mono text-xs tabular-nums text-text-low',
         isOutbound ? 'justify-end' : 'justify-start',
       )}
     >
@@ -443,7 +444,7 @@ export function MediaError({
           onClick={onRetry}
           className={cn(
             'inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-xs font-medium text-text-mid outline-none',
-            'transition-colors hover:bg-surface hover:text-text focus-visible:shadow-glow-md',
+            'transition-colors hover:bg-surface hover:text-text focus-visible:focus-ring',
           )}
         >
           <RefreshCw className="size-3.5" aria-hidden />
@@ -750,7 +751,7 @@ function DocumentBody({ message }: { message: MessageItem }) {
       download
       className={cn(
         'flex items-center gap-2 rounded-sm bg-surface px-2.5 py-2 outline-none',
-        'transition-colors hover:bg-surface-inset focus-visible:shadow-glow-md',
+        'transition-colors hover:bg-surface-inset focus-visible:focus-ring',
       )}
     >
       <FileText className="size-5 shrink-0 text-text-mid" aria-hidden />
@@ -765,7 +766,7 @@ function DocumentBody({ message }: { message: MessageItem }) {
 function LocationBody({ content }: { content: string | null }) {
   return (
     <div className="flex items-start gap-2">
-      <MapPin className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden />
+      <MapPin className="mt-0.5 size-5 shrink-0 text-brand-text" aria-hidden />
       <div className="min-w-0">
         <span className="font-medium">Localização</span>
         {content !== null && content !== '' && (
@@ -832,7 +833,7 @@ function ReactionBody({ content }: { content: string | null }) {
           {content}
         </span>
       ) : (
-        <Heart className="size-4 text-brand" aria-hidden />
+        <Heart className="size-4 text-brand-text" aria-hidden />
       )}
       <span className="text-xs">Reagiu{content !== null && content !== '' ? ` com ${content}` : ''}</span>
     </span>
@@ -842,7 +843,7 @@ function ReactionBody({ content }: { content: string | null }) {
 function PostbackBody({ content }: { content: string | null }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
-      <span className="inline-flex items-center gap-1 rounded-pill bg-brand/15 px-2 py-0.5 text-xs font-medium text-brand">
+      <span className="inline-flex items-center gap-1 rounded-pill bg-brand/15 px-2 py-0.5 text-xs font-medium text-brand-text">
         <MousePointerClick className="size-3.5" aria-hidden />
         Botão clicado
       </span>

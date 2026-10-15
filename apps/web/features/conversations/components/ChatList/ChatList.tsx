@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MessageSquare, SearchX } from 'lucide-react';
 import { Button } from '@hm/ui';
 import { EmptyState, ErrorState, SkeletonList } from '@/shared/components/feedback';
@@ -8,6 +8,9 @@ import { useChatList } from '../../hooks/useChatList';
 import { useDepartments, useTeams } from '@/features/settings/sections/workspace-org/queries';
 import { ChatListFilters } from './ChatListFilters';
 import { ChatListItem } from './ChatListItem';
+import { nextFocusIndex } from './rovingNav';
+import { homonymIds } from './homonyms';
+import { unreadSummary } from './liveSummary';
 
 export interface ChatListProps {
   /** Conversa atualmente aberta (destaca o item ativo). */
@@ -43,10 +46,18 @@ export function ChatList({ activeConversationId }: ChatListProps) {
   const showSkeleton = isLoading || isDebouncing;
   const isEmpty = !showSkeleton && !isError && conversations.length === 0;
 
-  // Hierarquia de foco (F47+): só esmaecemos os demais itens quando há de fato
-  // uma conversa aberta E ela está na lista atual. Sem seleção → todos normais.
-  const hasActiveSelection =
-    !!activeConversationId && conversations.some((c) => c.id === activeConversationId);
+  // Homonimos (F72-S05): quando dois contatos mostram o mesmo nome, o telefone vira a
+  // 2a linha de ambos (e o que os diferencia). Contagem por rotulo normalizado.
+  const homonyms = useMemo(() => homonymIds(conversations), [conversations]);
+
+  // Região viva (UX §3): anuncia só o RESUMO, nunca a lista de links. O texto é uma
+  // string derivada da contagem; o leitor de tela só fala quando ela muda — mensagens
+  // novas numa conversa já não lida, reordenação ou re-render idêntico ficam mudos.
+  const unreadConversations = useMemo(
+    () => conversations.filter((c) => c.unreadCount > 0).length,
+    [conversations],
+  );
+  const liveSummary = unreadSummary(unreadConversations);
 
   // Roving tabindex (UX §2.10): ↑/↓ movem o foco entre conversas, Enter abre
   // (o próprio <Link> focado segue a navegação nativamente). `focusedIndex` é o
@@ -73,47 +84,41 @@ export function ChatList({ activeConversationId }: ChatListProps) {
     if (el) el.focus();
   }, []);
 
+  // Índice efetivo do roving, derivado no render: antes do efeito acima rodar (1º
+  // paint, SSR) a lista já tem exatamente um link na ordem de Tab.
+  const activeIndex = conversations.findIndex((c) => c.id === activeConversationId);
+  const rovingIndex =
+    focusedIndex >= 0 && focusedIndex < conversations.length
+      ? focusedIndex
+      : activeIndex >= 0
+        ? activeIndex
+        : 0;
+
   const onKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLUListElement>) => {
-      const count = conversations.length;
-      if (count === 0) return;
-      switch (event.key) {
-        case 'ArrowDown': {
-          event.preventDefault();
-          const next = focusedIndex < 0 ? 0 : Math.min(focusedIndex + 1, count - 1);
-          setFocusedIndex(next);
-          focusItem(next);
-          break;
-        }
-        case 'ArrowUp': {
-          event.preventDefault();
-          const next = focusedIndex < 0 ? 0 : Math.max(focusedIndex - 1, 0);
-          setFocusedIndex(next);
-          focusItem(next);
-          break;
-        }
-        case 'Home': {
-          event.preventDefault();
-          setFocusedIndex(0);
-          focusItem(0);
-          break;
-        }
-        case 'End': {
-          event.preventDefault();
-          const last = count - 1;
-          setFocusedIndex(last);
-          focusItem(last);
-          break;
-        }
-        default:
-          break;
-      }
+    (event: React.KeyboardEvent<HTMLElement>) => {
+      const next = nextFocusIndex(event.key, rovingIndex, conversations.length);
+      if (next === null) return;
+      event.preventDefault();
+      setFocusedIndex(next);
+      focusItem(next);
     },
-    [conversations.length, focusedIndex, focusItem],
+    [conversations.length, rovingIndex, focusItem],
   );
+
+  // Clique ou Tab num link também move o foco lógico (o roving segue o usuário).
+  const onFocus = useCallback((event: React.FocusEvent<HTMLElement>) => {
+    const target = event.target;
+    if (!(target instanceof HTMLAnchorElement)) return;
+    const idx = itemRefs.current.indexOf(target);
+    if (idx >= 0) setFocusedIndex(idx);
+  }, []);
 
   return (
     <div className="flex h-full flex-col">
+      {/* Sempre montada (antes do conteúdo mudar) para o anúncio funcionar. */}
+      <p role="status" className="sr-only">
+        {showSkeleton || isError ? '' : liveSummary}
+      </p>
       <ChatListFilters
         filters={filters}
         onChange={setFilter}
@@ -163,37 +168,30 @@ export function ChatList({ activeConversationId }: ChatListProps) {
             />
           )
         ) : (
-          <ul
-            role="listbox"
+          // nav + ul de links (sem listbox/option): evita `nested-interactive`. As setas
+          // movem o foco entre os links (roving tabindex); Enter segue o link.
+          <nav
             aria-label="Conversas"
-            aria-live="polite"
-            tabIndex={focusedIndex < 0 ? 0 : -1}
             onKeyDown={onKeyDown}
-            onFocus={(e) => {
-              // Foco entrou no <ul> vazio de roving (sem item focável ainda):
-              // delega ao primeiro item para o teclado fluir.
-              if (e.target === e.currentTarget && conversations.length > 0) {
-                const idx = focusedIndex < 0 ? 0 : focusedIndex;
-                setFocusedIndex(idx);
-                focusItem(idx);
-              }
-            }}
-            className="space-y-0.5 px-2 py-1.5 outline-none"
+            onFocus={onFocus}
+            className="px-2 py-1.5"
           >
-            {conversations.map((conv, index) => (
-              <ChatListItem
-                key={conv.id}
-                ref={(el) => {
-                  itemRefs.current[index] = el;
-                }}
-                conversation={conv}
-                active={conv.id === activeConversationId}
-                dimmed={hasActiveSelection && conv.id !== activeConversationId}
-                tabIndex={index === focusedIndex ? 0 : -1}
-                focused={index === focusedIndex}
-              />
-            ))}
-          </ul>
+            <ul className="space-y-0.5">
+              {conversations.map((conv, index) => (
+                <ChatListItem
+                  key={conv.id}
+                  ref={(el) => {
+                    itemRefs.current[index] = el;
+                  }}
+                  conversation={conv}
+                  active={conv.id === activeConversationId}
+                  showPhone={homonyms.has(conv.id)}
+                  tabIndex={index === rovingIndex ? 0 : -1}
+                  focused={index === rovingIndex}
+                />
+              ))}
+            </ul>
+          </nav>
         )}
       </div>
     </div>

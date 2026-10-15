@@ -55,7 +55,7 @@ export function ConversionSection({
       </p>
 
       {hasInheritedValue ? (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-border-2 bg-surface-2 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-3 py-2.5">
           <span className="font-body text-xs text-text-low">Valor do card (herdado)</span>
           <span className="font-price text-sm font-semibold text-text">
             {currencyFmt.format(valueCents / 100)}

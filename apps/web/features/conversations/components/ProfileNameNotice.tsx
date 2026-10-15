@@ -70,7 +70,7 @@ export function ProfileNameNotice({
   }
 
   return (
-    <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-border-2 bg-surface-2 px-3 py-2">
+    <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-3 py-2">
       <p className="min-w-0 font-body text-xs text-text-low">
         Nome no {channelNameLabel(channel)}:{' '}
         <span className="font-medium text-text">{profile}</span>

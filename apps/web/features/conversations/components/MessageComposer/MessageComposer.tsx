@@ -302,7 +302,7 @@ export function MessageComposer({
     <form
       onSubmit={onSubmit}
       aria-busy={busy || undefined}
-      className={cn('border-t border-border bg-surface p-3', className)}
+      className={cn('border-t border-border bg-surface p-3 md:px-4', className)}
     >
       {gate.kind === 'blocked' ? (
         // O portão vence a janela: contato suprimido não mostra CTA de modelo.
@@ -320,7 +320,7 @@ export function MessageComposer({
       )}
 
       {media && (
-        <div className="mb-2 flex items-center gap-3 rounded-md border border-border-2 bg-surface-inset p-2">
+        <div className="mb-2 flex items-center gap-3 rounded-md border border-border bg-surface-inset p-2">
           {media.kind === 'image' ? (
             // Preview local de object URL (não é recurso remoto → next/image não se aplica).
             <img
@@ -342,7 +342,7 @@ export function MessageComposer({
             onClick={removeMedia}
             disabled={busy}
             aria-label="Remover anexo"
-            className="rounded-sm p-1.5 text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md disabled:opacity-40"
+            className="rounded-sm p-1.5 text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:focus-ring disabled:opacity-40"
           >
             <X className="size-4" aria-hidden />
           </button>
@@ -351,8 +351,10 @@ export function MessageComposer({
 
       <div
         className={cn(
-          'flex gap-2 rounded-md border border-border-2 bg-surface-inset px-2 py-1.5',
-          'focus-within:border-border focus-within:shadow-glow-md',
+          'flex gap-2 rounded-lg border border-border bg-surface-inset px-2 py-1.5',
+          'transition-colors motion-reduce:transition-none',
+          // Anel de 1px em brand-text (>=3:1 nos dois temas) no lugar do glow difuso.
+          'focus-within:border-brand-text focus-within:ring-1 focus-within:ring-brand-text',
           voiceActive ? 'items-center' : 'items-end',
         )}
       >
@@ -415,15 +417,15 @@ export function MessageComposer({
               aria-label="Enviar mensagem"
               aria-busy={busy || undefined}
               className={cn(
-                'mb-0.5 flex size-9 shrink-0 items-center justify-center rounded-md outline-none transition-colors',
-                'focus-visible:shadow-glow-md disabled:cursor-not-allowed disabled:opacity-40',
+                'mb-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg outline-none transition-colors',
+                'focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-40',
                 canSend
                   ? 'bg-brand text-text-on-brand hover:bg-brand-strong'
                   : 'bg-surface-3 text-text-low',
               )}
             >
               {busy ? (
-                <Loader2 className="size-5 animate-spin" aria-hidden />
+                <Loader2 className="size-5 animate-spin motion-reduce:animate-none" aria-hidden />
               ) : (
                 <SendHorizontal className="size-5" aria-hidden />
               )}

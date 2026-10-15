@@ -32,7 +32,7 @@ export function WindowNotice({ window, onReopenWithTemplate, className }: Window
       <div
         role="alert"
         className={cn(
-          'mb-2 flex items-start gap-3 rounded-md border border-warn bg-[var(--warn-bg)] p-3',
+          'mb-2 flex items-start gap-3 rounded-md border border-warn bg-warn-bg p-3',
           className,
         )}
       >
@@ -51,7 +51,7 @@ export function WindowNotice({ window, onReopenWithTemplate, className }: Window
             onClick={onReopenWithTemplate}
             className={cn(
               'shrink-0 rounded-sm border border-warn px-3 py-1.5 font-body text-xs font-medium text-warn outline-none transition-colors',
-              'hover:bg-warn hover:text-text-on-brand focus-visible:shadow-glow-md',
+              'hover:bg-warn hover:text-text-on-brand focus-visible:focus-ring',
             )}
           >
             Reabrir com template
@@ -67,7 +67,7 @@ export function WindowNotice({ window, onReopenWithTemplate, className }: Window
       <div
         role="status"
         className={cn(
-          'mb-2 flex items-start gap-3 rounded-md border border-info bg-[var(--info-bg)] p-3',
+          'mb-2 flex items-start gap-3 rounded-md border border-info bg-info-bg p-3',
           className,
         )}
       >

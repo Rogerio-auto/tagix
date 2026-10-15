@@ -1,5 +1,41 @@
 import { describe, expect, it } from 'vitest';
-import { contactLabel, formatPhoneIntl, initialsOf } from './contact-label';
+import {
+  AVATAR_TONES,
+  avatarKeyOf,
+  avatarTone,
+  channelOf,
+  contactLabel,
+  formatPhoneIntl,
+  initialsOf,
+} from './contact-label';
+
+describe('avatarKeyOf — mesma pessoa, mesma chave em toda tela', () => {
+  it('contactId > contact.id > remoteId', () => {
+    expect(avatarKeyOf({ contactId: 'k1', contact: { id: 'k2' }, remoteId: '55' })).toBe('k1');
+    expect(avatarKeyOf({ contactId: null, contact: { id: 'k2' }, remoteId: '55' })).toBe('k2');
+    expect(avatarKeyOf({ contactId: ' ', contact: null, remoteId: '55' })).toBe('55');
+    expect(avatarKeyOf({})).toBe('');
+  });
+  it('lista (summary) e cabeçalho (detail) do mesmo contato dão a mesma cor', () => {
+    const fromList = avatarKeyOf({ contactId: 'k-42', remoteId: '5569999670030' });
+    const fromDetail = avatarKeyOf({ contactId: 'k-42', contact: { id: 'k-42' }, remoteId: '5569999670030' });
+    expect(avatarTone(fromList)).toBe(avatarTone(fromDetail));
+  });
+});
+
+describe('channelOf — selo de canal sem palpite', () => {
+  it('provider decide', () => {
+    expect(channelOf({ channelProvider: 'meta_whatsapp', kind: 'direct' })).toBe('whatsapp');
+    expect(channelOf({ channelProvider: 'waha', kind: 'direct' })).toBe('whatsapp');
+    expect(channelOf({ channelProvider: 'meta_instagram', kind: 'direct' })).toBe('instagram');
+  });
+  it('sem provider, só comentário/story denunciam o canal', () => {
+    expect(channelOf({ kind: 'comment_thread' })).toBe('instagram');
+    expect(channelOf({ kind: 'story_thread' })).toBe('instagram');
+    expect(channelOf({ kind: 'direct' })).toBeNull();
+    expect(channelOf({ kind: 'group', channelProvider: null })).toBeNull();
+  });
+});
 
 const wa = { remoteId: '5569999670030', channel: 'whatsapp' };
 
@@ -63,5 +99,38 @@ describe('contactLabel — Instagram', () => {
   });
   it('nome de perfil vence', () => {
     expect(contactLabel({ ...ig, profileName: 'Bia' })).toMatchObject({ label: 'Bia', source: 'profile' });
+  });
+});
+
+describe('avatarTone — cor determinística (F72-S05)', () => {
+  it('mesma chave, mesma cor; sempre de dentro do conjunto de tokens', () => {
+    for (const key of ['k1', 'k2', '5569999670030', '@rogerio', '']) {
+      expect(avatarTone(key)).toBe(avatarTone(key));
+      expect(AVATAR_TONES).toContain(avatarTone(key));
+    }
+  });
+  it('distribui chaves diferentes por mais de uma cor', () => {
+    const tones = new Set(Array.from({ length: 60 }, (_, i) => avatarTone(`contato-${i}`)));
+    expect(tones.size).toBe(AVATAR_TONES.length);
+  });
+  it('só tokens, nunca hex', () => {
+    for (const t of AVATAR_TONES) expect(t).not.toMatch(/#|\[/);
+  });
+  it('nunca reusa tons de status (danger/warn/success)', () => {
+    for (const t of AVATAR_TONES) expect(t).not.toMatch(/danger|warn|success/);
+  });
+  it('cor fixa por chave (estável entre versões)', () => {
+    const snapshot = ['k1', 'k2', '5569999670030', '@rogerio', ''].map(avatarTone);
+    expect(['k1', 'k2', '5569999670030', '@rogerio', ''].map(avatarTone)).toEqual(snapshot);
+    expect(avatarTone('')).toBe(AVATAR_TONES[0x811c9dc5 % AVATAR_TONES.length]);
+  });
+});
+
+describe('contactLabel.named', () => {
+  it('true com nome (sistema ou perfil); false sem nome', () => {
+    expect(contactLabel({ remoteId: '5569999670030', displayName: 'Ana' }).named).toBe(true);
+    expect(contactLabel({ remoteId: '5569999670030', profileName: 'Ana' }).named).toBe(true);
+    expect(contactLabel({ remoteId: '5569999670030' }).named).toBe(false);
+    expect(contactLabel({ remoteId: '17841400008460056', channel: 'instagram' }).named).toBe(false);
   });
 });

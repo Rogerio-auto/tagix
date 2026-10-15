@@ -29,7 +29,7 @@ function statusVisual(status: ViewStatus): StatusVisual | null {
     case 'delivered':
       return { Icon: CheckCheck, label: 'Entregue', tone: 'text-text-low' };
     case 'read':
-      return { Icon: CheckCheck, label: 'Lida', tone: 'text-brand' };
+      return { Icon: CheckCheck, label: 'Lida', tone: 'text-brand-text' };
     case 'failed':
       return { Icon: AlertCircle, label: 'Falha no envio', tone: 'text-danger' };
     case 'deleted':

@@ -9,7 +9,7 @@
  * há geocoding de endereço no MVP (sem libs de mapa pesadas).
  *
  * Envia `type:'location'` com `payload:{ latitude, longitude, name?, address? }`.
- * DS v2: zero hex, só tokens; foco `focus-visible:shadow-glow-md`; alvo ≥44px.
+ * DS v2: zero hex, só tokens; foco `focus-visible:focus-ring`; alvo ≥44px.
  */
 
 import { useState } from 'react';
@@ -139,13 +139,13 @@ export function LocationSender({ conversationId, onSent }: LocationSenderProps) 
         disabled={locating || sending}
         aria-busy={locating || undefined}
         className={cn(
-          'flex w-full items-center justify-center gap-2 rounded-md border border-border-2 px-3 py-2.5',
+          'flex w-full items-center justify-center gap-2 rounded-md border border-border px-3 py-2.5',
           'font-body text-sm text-text outline-none transition-colors',
-          'hover:bg-surface-3 focus-visible:shadow-glow-md disabled:cursor-not-allowed disabled:opacity-40',
+          'hover:bg-surface-3 focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-40',
         )}
       >
         {locating ? (
-          <Loader2 className="size-4 animate-spin" aria-hidden />
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
         ) : (
           <LocateFixed className="size-4" aria-hidden />
         )}
@@ -175,7 +175,7 @@ export function LocationSender({ conversationId, onSent }: LocationSenderProps) 
           onClick={() => setManualOpen(true)}
           className={cn(
             'self-start rounded-sm px-1 py-0.5 font-body text-xs text-text-mid underline-offset-2 outline-none',
-            'transition-colors hover:text-text hover:underline focus-visible:shadow-glow-md',
+            'transition-colors hover:text-text hover:underline focus-visible:focus-ring',
           )}
         >
           Inserir coordenadas manualmente
@@ -200,12 +200,12 @@ export function LocationSender({ conversationId, onSent }: LocationSenderProps) 
         aria-busy={sending || undefined}
         className={cn(
           'flex items-center justify-center gap-1.5 rounded-md px-3 py-2 font-body text-sm outline-none',
-          'transition-colors focus-visible:shadow-glow-md disabled:cursor-not-allowed disabled:opacity-40',
+          'transition-colors focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-40',
           canSend ? 'bg-brand text-text-on-brand hover:bg-brand-strong' : 'bg-surface-3 text-text-low',
         )}
       >
         {sending ? (
-          <Loader2 className="size-4 animate-spin" aria-hidden />
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
         ) : (
           <SendHorizontal className="size-4" aria-hidden />
         )}
@@ -236,8 +236,8 @@ function CoordField({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         className={cn(
-          'w-full rounded-md border border-border-2 bg-surface-inset px-2 py-1.5 font-body text-sm text-text outline-none',
-          'placeholder:text-text-low focus-visible:border-border focus-visible:shadow-glow-md',
+          'w-full rounded-md border border-border bg-surface-inset px-2 py-1.5 font-body text-sm text-text outline-none',
+          'placeholder:text-text-low focus-visible:border-brand-text focus-visible:focus-ring',
         )}
       />
     </label>
@@ -264,8 +264,8 @@ function TextField({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         className={cn(
-          'w-full rounded-md border border-border-2 bg-surface-inset px-2 py-1.5 font-body text-sm text-text outline-none',
-          'placeholder:text-text-low focus-visible:border-border focus-visible:shadow-glow-md',
+          'w-full rounded-md border border-border bg-surface-inset px-2 py-1.5 font-body text-sm text-text outline-none',
+          'placeholder:text-text-low focus-visible:border-brand-text focus-visible:focus-ring',
         )}
       />
     </label>

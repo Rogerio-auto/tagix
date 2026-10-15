@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { AtSign, Send } from 'lucide-react';
 import { Button } from '@hm/ui';
+import { cn } from '@/shared/lib/cn';
 import {
   activeMentionQuery,
   applyMention,
@@ -117,33 +118,36 @@ export function NoteComposer({
         <ul
           role="listbox"
           aria-label="Mencionar membro"
-          className="absolute bottom-full left-0 z-10 mb-1 max-h-48 w-full overflow-y-auto rounded-md border border-border bg-surface-2 p-1 shadow-glow-md"
+          className="absolute bottom-full left-0 z-10 mb-1 max-h-48 w-full overflow-y-auto rounded-md border border-border bg-surface-2 p-1 shadow-ds-2"
         >
           {suggestions.map((member, index) => (
-            <li key={member.id} role="option" aria-selected={index === activeIndex}>
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  choose(member);
-                }}
-                onMouseEnter={() => setActiveIndex(index)}
-                className={`flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-body text-sm outline-none ${
-                  index === activeIndex ? 'bg-surface-3 text-text' : 'text-text-mid'
-                }`}
-              >
-                <AtSign className="size-3.5 text-text-low" aria-hidden />
-                <span className="truncate">{memberLabel(member)}</span>
-                <span className="ml-auto truncate font-body text-xs text-text-low">
-                  @{memberHandle(member)}
-                </span>
-              </button>
+            // Combobox (WAI-ARIA APG): o foco fica no textarea, que move `activeIndex` por
+            // setas; a opção não tem `<button>` dentro (nested-interactive, F72-S05).
+            <li
+              key={member.id}
+              role="option"
+              aria-selected={index === activeIndex}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                choose(member);
+              }}
+              onMouseEnter={() => setActiveIndex(index)}
+              className={cn(
+                'flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left font-body text-sm',
+                index === activeIndex ? 'bg-surface-3 text-text' : 'text-text-mid',
+              )}
+            >
+              <AtSign className="size-3.5 text-text-low" aria-hidden />
+              <span className="truncate">{memberLabel(member)}</span>
+              <span className="ml-auto truncate font-body text-xs text-text-low">
+                @{memberHandle(member)}
+              </span>
             </li>
           ))}
         </ul>
       )}
 
-      <div className="flex flex-col gap-2 rounded-md border border-border bg-surface-inset p-2 focus-within:border-brand focus-within:shadow-glow-sm">
+      <div className="flex flex-col gap-2 rounded-md border border-border bg-surface-inset p-2 focus-within:border-brand-text focus-within:ring-1 focus-within:ring-brand-text">
         <textarea
           ref={textareaRef}
           value={value}

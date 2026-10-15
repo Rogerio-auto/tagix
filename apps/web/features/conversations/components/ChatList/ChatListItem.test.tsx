@@ -109,3 +109,116 @@ describe('ConversationHeader — nome do contato', () => {
     expect(html).not.toContain('>5569999670030<');
   });
 });
+
+describe('ChatListItem — acessibilidade e avatar (F72-S05)', () => {
+  it('é um link dentro de li, sem role=option (nested-interactive)', () => {
+    const html = item({ contactDisplayName: 'Maria Souza' });
+    expect(html).toMatch(/^<li><a /);
+    expect(html).not.toContain('role="option"');
+    expect(html).not.toContain('aria-selected');
+  });
+
+  it('item ativo expõe aria-current=page', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatListItem, { conversation: base, active: true, tabIndex: 0, focused: false }),
+    );
+    expect(html).toContain('aria-current="page"');
+  });
+
+  it('contato sem nome: ícone de pessoa no avatar, sem # nem número', () => {
+    const html = item({});
+    expect(html).toContain('lucide-user');
+    expect(html).not.toContain('>#<');
+  });
+
+  it('contato com nome: iniciais, sem ícone de pessoa', () => {
+    const html = item({ contactDisplayName: 'Maria Souza' });
+    expect(html).toContain('>MS<');
+    expect(html).not.toContain('lucide-user');
+  });
+
+  it('cor do avatar é a mesma para o mesmo contato', () => {
+    const tone = (html: string): string | null => /data-avatar-tone="([^"]+)"/.exec(html)?.[1] ?? null;
+    const a = tone(item({ contactId: 'k-42', contactDisplayName: 'Ana' }));
+    const b = tone(item({ contactId: 'k-42', contactDisplayName: 'Ana Maria' }));
+    expect(a).not.toBeNull();
+    expect(a).toBe(b);
+  });
+
+  it('telefone como 2ª linha só quando showPhone (homônimos) e há nome', () => {
+    const withName = { ...base, contactDisplayName: 'Maria Souza' };
+    const on = renderToStaticMarkup(
+      createElement(ChatListItem, { conversation: withName, active: false, tabIndex: 0, focused: false, showPhone: true }),
+    );
+    const off = item({ contactDisplayName: 'Maria Souza' });
+    expect(on).toContain('>+55 (69) 99967-0030<');
+    expect(off).not.toContain('>+55 (69) 99967-0030<');
+  });
+
+  it('selo de IA e não lidas continuam presentes', () => {
+    const html = item({ aiMode: 'on', unreadCount: 3 });
+    expect(html).toContain('aria-label="IA ativa"');
+    expect(html).toContain('aria-label="3 não lidas"');
+  });
+});
+
+describe('ChatListItem — roving e selos (F72-S05)', () => {
+  it('só o item com foco lógico entra na ordem de Tab', () => {
+    const on = renderToStaticMarkup(
+      createElement(ChatListItem, { conversation: base, active: false, tabIndex: 0, focused: true }),
+    );
+    const off = renderToStaticMarkup(
+      createElement(ChatListItem, { conversation: base, active: false, tabIndex: -1, focused: false }),
+    );
+    expect(on).toContain('tabindex="0"');
+    expect(off).toContain('tabindex="-1"');
+  });
+
+  it('selo de canal pelo provider; `direct` sem provider não chuta canal', () => {
+    expect(item({ kind: 'direct', channelProvider: 'meta_whatsapp' })).toContain('aria-label="WhatsApp"');
+    expect(item({ kind: 'direct', channelProvider: 'meta_instagram' })).toContain('aria-label="Instagram"');
+    const unknown = item({ kind: 'direct' });
+    expect(unknown).not.toContain('aria-label="WhatsApp"');
+    expect(unknown).not.toContain('aria-label="Instagram"');
+  });
+
+  it('comment/story thread: canal dito uma vez só (selo de tipo, sem selo no avatar)', () => {
+    for (const kind of ['comment_thread', 'story_thread']) {
+      for (const channelProvider of [null, 'meta_instagram']) {
+        const html = item({ kind, channelProvider });
+        expect(html).not.toContain('aria-label="Instagram"');
+        expect(html.match(/Instagram:/g)).toHaveLength(1);
+      }
+    }
+  });
+
+  it('anel do selo acompanha o fundo da linha', () => {
+    const idle = item({ kind: 'direct', channelProvider: 'meta_whatsapp' });
+    expect(idle).toContain('border-surface group-hover:border-surface-2');
+    const on = renderToStaticMarkup(
+      createElement(ChatListItem, {
+        conversation: { ...base, kind: 'direct', channelProvider: 'meta_whatsapp' },
+        active: true,
+        tabIndex: 0,
+        focused: true,
+      }),
+    );
+    expect(on).toMatch(/border-2 [^"]*border-surface-2/);
+    expect(on).not.toContain('group-hover:border-surface-2');
+  });
+
+  it('densidade da maquete: avatar 32px e py-2', () => {
+    const html = item({ contactDisplayName: 'Maria Souza' });
+    expect(html).toContain('size-8');
+    expect(html).toMatch(/class="group [^"]*py-2[ "]/);
+  });
+
+  it('seleção ativa sem neon nem animação contínua', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatListItem, { conversation: base, active: true, tabIndex: 0, focused: true }),
+    );
+    expect(html).not.toContain('hm-flow-neon');
+    expect(html).not.toMatch(/animate-(?!none)/);
+    expect(html).not.toContain('shadow-glow');
+  });
+});

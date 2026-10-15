@@ -14,7 +14,7 @@
  *  UX §2  — agente atual nomeado e visível.
  *  UX §2.7 — botão em loading durante a mutation; dropdown desabilitado.
  *  §3 — estados loading (skeleton) / empty (sem candidatos) tratados.
- *  DS v2 — zero hex; só tokens semânticos; focus ring `focus-visible:shadow-glow-md`.
+ *  DS v2 — zero hex; só tokens semânticos; focus ring `focus-visible:focus-ring`.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -96,9 +96,9 @@ export function AgentSelector({ conversationId, canAssign }: AgentSelectorProps)
           disabled={assign.isPending}
           onClick={() => setOpen((v) => !v)}
           className={cn(
-            'flex w-full items-center justify-between gap-2 rounded-md border border-border-2 bg-surface-2 px-3 py-2',
+            'flex w-full items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-3 py-2',
             'font-body text-sm outline-none transition-colors',
-            'hover:border-border focus-visible:shadow-glow-md',
+            'hover:border-border focus-visible:focus-ring',
             'disabled:cursor-not-allowed disabled:opacity-60',
           )}
         >
@@ -141,14 +141,14 @@ export function AgentSelector({ conversationId, canAssign }: AgentSelectorProps)
                       onClick={() => handlePick(agent.id)}
                       className={cn(
                         'touch-target flex w-full items-center gap-3 rounded-md px-3 text-left font-body text-base outline-none',
-                        'hover:bg-surface-2 focus-visible:shadow-glow-md',
+                        'hover:bg-surface-2 focus-visible:focus-ring',
                         'disabled:cursor-not-allowed disabled:opacity-50',
                         isCurrent ? 'text-text' : 'text-text-mid',
                       )}
                     >
                       <Check
                         className={cn(
-                          'size-5 shrink-0 text-brand',
+                          'size-5 shrink-0 text-brand-text',
                           isCurrent ? 'opacity-100' : 'opacity-0',
                         )}
                         aria-hidden
@@ -166,7 +166,7 @@ export function AgentSelector({ conversationId, canAssign }: AgentSelectorProps)
           <div
             role="listbox"
             aria-label="Selecionar agente"
-            className="z-10 max-h-56 overflow-y-auto rounded-md border border-border bg-surface-2 p-1 shadow-glow-md"
+            className="z-10 max-h-56 overflow-y-auto rounded-md border border-border bg-surface-2 p-1 shadow-ds-2"
           >
             {candidates.length === 0 ? (
               <p className="px-2 py-2 font-body text-xs text-text-low">
@@ -185,7 +185,7 @@ export function AgentSelector({ conversationId, canAssign }: AgentSelectorProps)
                     onClick={() => handlePick(agent.id)}
                     className={cn(
                       'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-body text-sm outline-none',
-                      'hover:bg-surface-3 focus-visible:shadow-glow-md',
+                      'hover:bg-surface-3 focus-visible:focus-ring',
                       'disabled:cursor-not-allowed disabled:opacity-50',
                       isCurrent ? 'text-text' : 'text-text-mid hover:text-text',
                     )}

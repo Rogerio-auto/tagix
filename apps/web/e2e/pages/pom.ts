@@ -101,10 +101,11 @@ export class ConversationsPage {
   }
 
   chatList(): Locator {
-    return this.page.getByRole('listbox', { name: 'Conversas' });
+    // F72-S05: a lista é `nav` + `ul` de links (sem listbox/option: nested-interactive).
+    return this.page.getByRole('navigation', { name: 'Conversas' });
   }
 
-  /** Item da conversa pelo remoteId exibido (ChatListItem, `option` com link). */
+  /** Item da conversa pelo remoteId exibido (ChatListItem: link dentro de `li`). */
   chatItem(remoteId: string): Locator {
     return this.chatList().getByRole('link').filter({ hasText: remoteId });
   }

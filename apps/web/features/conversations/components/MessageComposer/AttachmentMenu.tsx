@@ -14,7 +14,7 @@
  * lista (e da lista fecha); clique-fora/toggle fecham e devolvem o foco ao
  * composer via `onClosed`. Cada opção é ícone + label (UX §2 — ações nomeadas).
  *
- * DS v2: zero hex, só tokens; foco `focus-visible:shadow-glow-md`; alvo ≥44px.
+ * DS v2: zero hex, só tokens; foco `focus-visible:focus-ring`; alvo ≥44px.
  */
 
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -131,7 +131,7 @@ export function AttachmentMenu({ options, disabled = false, onClosed }: Attachme
           }}
           className={cn(
             'absolute bottom-full left-0 z-30 mb-2 w-72 rounded-lg border border-border',
-            'bg-surface-2 p-2 shadow-glow-md',
+            'bg-surface-2 p-2 shadow-ds-2',
           )}
         >
           {active ? (
@@ -144,7 +144,7 @@ export function AttachmentMenu({ options, disabled = false, onClosed }: Attachme
                   title="Voltar"
                   className={cn(
                     'flex size-8 items-center justify-center rounded-md text-text-mid outline-none',
-                    'transition-colors hover:bg-surface-3 hover:text-text focus-visible:shadow-glow-md',
+                    'transition-colors hover:bg-surface-3 hover:text-text focus-visible:focus-ring',
                   )}
                 >
                   <ChevronLeft className="size-4" aria-hidden />
@@ -164,7 +164,7 @@ export function AttachmentMenu({ options, disabled = false, onClosed }: Attachme
                     onClick={() => setActiveId(option.id)}
                     className={cn(
                       'touch-target flex w-full items-center gap-3 rounded-md px-2 text-left outline-none',
-                      'transition-colors hover:bg-surface-3 focus-visible:shadow-glow-md',
+                      'transition-colors hover:bg-surface-3 focus-visible:focus-ring',
                     )}
                   >
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-surface-inset text-text-mid">

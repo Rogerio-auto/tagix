@@ -7,7 +7,7 @@
  * `type:'sticker'` (mídia, sem legenda). Ver o webp antes de confirmar evita
  * surpresa de recorte/conversão (UX §2 — feedback imediato e honesto).
  *
- * DS v2: zero hex, só tokens; foco `focus-visible:shadow-glow-md`; alvo ≥44px.
+ * DS v2: zero hex, só tokens; foco `focus-visible:focus-ring`; alvo ≥44px.
  */
 
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
@@ -123,8 +123,8 @@ export function StickerPicker({ conversationId, onSent }: StickerPickerProps) {
           onClick={() => fileInputRef.current?.click()}
           className={cn(
             'flex min-h-[7rem] w-full flex-col items-center justify-center gap-2 rounded-md',
-            'border border-dashed border-border-2 bg-surface-inset px-3 py-4 text-text-mid outline-none',
-            'transition-colors hover:border-border hover:text-text focus-visible:shadow-glow-md',
+            'border border-dashed border-border bg-surface-inset px-3 py-4 text-text-mid outline-none',
+            'transition-colors hover:border-border hover:text-text focus-visible:focus-ring',
           )}
         >
           <ImagePlus className="size-6" aria-hidden />
@@ -133,10 +133,10 @@ export function StickerPicker({ conversationId, onSent }: StickerPickerProps) {
         </button>
       ) : (
         <div className="flex flex-col items-center gap-3">
-          <div className="grid size-32 place-items-center rounded-md border border-border-2 bg-surface-inset p-2">
+          <div className="grid size-32 place-items-center rounded-md border border-border bg-surface-inset p-2">
             {uploading ? (
               <span className="flex flex-col items-center gap-2 text-text-mid" role="status" aria-live="polite">
-                <Loader2 className="size-5 animate-spin" aria-hidden />
+                <Loader2 className="size-5 animate-spin motion-reduce:animate-none" aria-hidden />
                 <span className="font-body text-xs">Gerando sticker…</span>
               </span>
             ) : failed ? (
@@ -145,7 +145,7 @@ export function StickerPicker({ conversationId, onSent }: StickerPickerProps) {
                 onClick={() => void runUpload(source)}
                 className={cn(
                   'flex flex-col items-center gap-1.5 rounded-sm px-2 py-1 text-sm text-danger outline-none',
-                  'transition-colors hover:bg-surface focus-visible:shadow-glow-md',
+                  'transition-colors hover:bg-surface focus-visible:focus-ring',
                 )}
               >
                 <RefreshCw className="size-5" aria-hidden />
@@ -167,8 +167,8 @@ export function StickerPicker({ conversationId, onSent }: StickerPickerProps) {
               onClick={() => fileInputRef.current?.click()}
               disabled={sending}
               className={cn(
-                'flex-1 rounded-md border border-border-2 px-3 py-2 font-body text-sm text-text-mid outline-none',
-                'transition-colors hover:bg-surface-3 hover:text-text focus-visible:shadow-glow-md',
+                'flex-1 rounded-md border border-border px-3 py-2 font-body text-sm text-text-mid outline-none',
+                'transition-colors hover:bg-surface-3 hover:text-text focus-visible:focus-ring',
                 'disabled:cursor-not-allowed disabled:opacity-40',
               )}
             >
@@ -181,14 +181,14 @@ export function StickerPicker({ conversationId, onSent }: StickerPickerProps) {
               aria-busy={sending || undefined}
               className={cn(
                 'flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 font-body text-sm outline-none',
-                'transition-colors focus-visible:shadow-glow-md disabled:cursor-not-allowed disabled:opacity-40',
+                'transition-colors focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-40',
                 uploaded && !sending
                   ? 'bg-brand text-text-on-brand hover:bg-brand-strong'
                   : 'bg-surface-3 text-text-low',
               )}
             >
               {sending ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden />
+                <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
               ) : (
                 <SendHorizontal className="size-4" aria-hidden />
               )}

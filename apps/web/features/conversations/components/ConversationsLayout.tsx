@@ -22,12 +22,13 @@ import { MessageComposer } from './MessageComposer';
 import { ManualFlowsQuickbar } from '@/features/flow-builder/livechat';
 import { ContactInfoPanel } from './ContactInfoPanel';
 import { ConversationHeader } from './ConversationHeader';
+import { ContactAvatar } from './ContactAvatar';
 import { TypingIndicator } from './TypingIndicator';
 import { MessageBubble } from './MessageBubble';
 import { MessageStatusReceipts } from './MessageBubble/status';
 import { IgCommentActions, type IgComment } from './IgComments';
 import { can } from '@hm/shared';
-import { contactLabel } from '../contact-label';
+import { avatarKeyOf, contactLabel } from '../contact-label';
 import { useAuthStore } from '@/shared/stores/auth.store';
 
 
@@ -104,10 +105,10 @@ export function ConversationsLayout({ conversationId }: { conversationId?: strin
       {/* Coluna 1 — lista (F1-S14: filtros/busca/unread/real-time) */}
       <aside
         data-tour-id="inbox-list"
-        className="flex w-80 shrink-0 flex-col border-r border-border bg-surface"
+        className="flex w-80 shrink-0 flex-col border-r border-border bg-surface xl:w-96"
       >
-        <div className="flex items-center justify-between border-b border-border-2 px-4 py-3">
-          <span className="font-head text-sm font-semibold text-text">Conversas</span>
+        <div className="flex h-14 items-center justify-between border-b border-border px-4">
+          <h1 className="font-head text-base font-semibold tracking-tight text-text">Conversas</h1>
           <HelpPanel title="Conversas">
             <ConversationsHelp />
           </HelpPanel>
@@ -169,8 +170,8 @@ function MobileConversationsLayout({
         data-tour-id="inbox-list"
         className={cn('flex flex-col bg-surface', FILL)}
       >
-        <div className="flex items-center justify-between border-b border-border-2 px-4 py-3">
-          <span className="font-head text-sm font-semibold text-text">Conversas</span>
+        <div className="flex h-14 items-center justify-between border-b border-border px-4">
+          <h1 className="font-head text-base font-semibold tracking-tight text-text">Conversas</h1>
           <HelpPanel title="Conversas">
             <ConversationsHelp />
           </HelpPanel>
@@ -210,6 +211,14 @@ function MobileThread({
   const { data: detailData } = useConversationDetail(conversationId);
   const { joinConversation, leaveConversation } = useSocket();
   const detail = detailData?.conversation;
+  const who = detail
+    ? contactLabel({
+        displayName: detail.contact?.displayName,
+        profileName: detail.contact?.profileName,
+        remoteId: detail.remoteId,
+        channel: detail.channelProvider ?? detail.kind,
+      })
+    : null;
 
   // Header/identidade vivos: status/aiMode/assignee/department ao vivo (mesmo
   // socket do desktop — fecha o gap de detail stale quando outro operador muda).
@@ -230,29 +239,26 @@ function MobileThread({
           type="button"
           onClick={onBack}
           aria-label="Voltar para a lista de conversas"
-          className="touch-target grid place-items-center rounded-sm text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md"
+          className="touch-target grid place-items-center rounded-sm text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:focus-ring"
         >
           <ArrowLeft className="size-5" aria-hidden />
         </button>
 
+        {who && (
+          <ContactAvatar who={who} colorKey={avatarKeyOf(detail ?? {})} size="sm" />
+        )}
+
         <div className="min-w-0 flex-1">
-          <p className="truncate font-head text-sm font-semibold text-text">
-            {detail
-              ? contactLabel({
-                  displayName: detail.contact?.displayName,
-                  profileName: detail.contact?.profileName,
-                  remoteId: detail.remoteId,
-                  channel: detail.channelProvider ?? detail.kind,
-                }).label
-              : 'Conversa'}
-          </p>
+          <h1 className="truncate font-head text-sm font-semibold text-text">
+            {who?.label ?? 'Conversa'}
+          </h1>
         </div>
 
         <button
           type="button"
           onClick={onOpenInfo}
           aria-label="Abrir cockpit da conversa"
-          className="touch-target grid place-items-center rounded-sm text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md"
+          className="touch-target grid place-items-center rounded-sm text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:focus-ring"
         >
           <Info className="size-5" aria-hidden />
         </button>

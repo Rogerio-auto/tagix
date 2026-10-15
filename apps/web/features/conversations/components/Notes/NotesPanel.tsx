@@ -86,7 +86,7 @@ export function NotesPanel({
             <button
               type="button"
               onClick={() => void refetch()}
-              className="font-body text-xs text-text-low underline-offset-4 outline-none hover:text-text-mid focus-visible:shadow-glow-md"
+              className="font-body text-xs text-text-low underline-offset-4 outline-none hover:text-text-mid focus-visible:focus-ring"
             >
               Atualizar notas
             </button>
