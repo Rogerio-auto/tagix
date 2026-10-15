@@ -1,3 +1,4 @@
+import { formatDateTime, formatTime } from '@/shared/lib/locale';
 import type { AppNotification } from './types';
 
 /**
@@ -35,17 +36,14 @@ export function priorityDotClass(priority: AppNotification['priority']): string 
     case 'high':
       return 'bg-danger';
     case 'medium':
-      return 'bg-warning';
+      return 'bg-warn';
     case 'low':
     default:
       return 'bg-info';
   }
 }
 
-const timeFmt = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
-const dayFmt = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' });
-
-/** Horário do compromisso, legível ("Hoje 14:30" / "27 jun 14:30"). */
+/** Horário do compromisso, legível ("Hoje 14:30" / "27 jun 14:30"), no idioma da interface. */
 export function formatStartAt(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
@@ -54,6 +52,6 @@ export function formatStartAt(iso: string): string {
     d.getFullYear() === now.getFullYear() &&
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate();
-  const time = timeFmt.format(d);
-  return sameDay ? `Hoje ${time}` : `${dayFmt.format(d)} ${time}`;
+  const time = formatTime(d);
+  return sameDay ? `Hoje ${time}` : `${formatDateTime(d, { day: '2-digit', month: 'short' })} ${time}`;
 }

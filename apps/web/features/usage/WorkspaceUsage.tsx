@@ -1,22 +1,32 @@
 'use client';
 
 /**
- * Página de uso e custo de IA do WORKSPACE (DASHBOARD.md §319). Destino de drill dos
- * cards "Custo IA hoje" / "Custo IA no mês" / "Cap mensal consumido" — daí ler
- * `?period=today|mes` da URL como período inicial. KPIs (hoje × mês) + gráfico por
- * dia/modelo. Gráfico (recharts) via lazy boundary — reusa o de plataforma (mesma
- * forma de bucket). DS v2 dark-first, zero hex.
+ * Uso e custo de IA do WORKSPACE (DASHBOARD.md §319; DS 3.0 na F72-S07). Destino de drill
+ * dos cards "Custo IA hoje" / "Custo IA no mês" / "Cap mensal consumido" — daí ler
+ * `?period=today|mes` da URL como período inicial. KPIs (hoje × mês) em mono tabular +
+ * gráfico por dia/modelo. Gráfico (recharts) via lazy boundary — reusa o de plataforma
+ * (mesma forma de bucket). Só leitura de dados: nenhum botão de escrita.
+ *
+ * Moeda: o custo de LLM é cobrado em dólar (`costUsd` no contrato), então a moeda vem do
+ * próprio dado; o idioma da formatação é o da interface (`@/shared/lib/locale`).
  */
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { AnchoredHelpHint, Button, ErrorState } from '@hm/ui';
 import { lazyClient } from '@/shared/lib/lazy';
+import { cn } from '@/shared/lib/cn';
 import { Skeleton } from '@/shared/components/feedback';
+import { PageHeader } from '@/shared/components/layout/PageHeader';
+import { formatMoneyUnits, formatNumber } from '@/shared/lib/locale';
 import { useWorkspaceUsageSummary, useWorkspaceUsageTotals } from './queries';
 import type { UsageGroupBy } from './client';
 
 const LazyUsageChart = lazyClient(() => import('@/features/platform-admin/usage/UsageChart'), {
   loading: () => <Skeleton className="h-56 w-full" />,
 });
+
+/** Moeda do contrato de uso (`costUsd`). */
+const COST_CURRENCY = 'USD';
 
 const PERIODS = [
   { value: 'today', label: 'Hoje' },
@@ -49,14 +59,49 @@ function periodFrom(p: PeriodValue): string {
 }
 
 const money = (n: number): string =>
-  `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  formatMoneyUnits(n, COST_CURRENCY, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function KpiTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function KpiTile({ label, value, hint }: { label: string; value: string; hint: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-border bg-surface p-5">
-      <p className="font-head text-xs font-semibold uppercase tracking-wide text-text-low">{label}</p>
-      <p className="mt-2 font-mono text-2xl font-semibold text-text">{value}</p>
-      {hint && <p className="mt-1 text-xs text-text-low">{hint}</p>}
+    <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface px-5 py-4">
+      <p className="font-mono text-xs font-medium uppercase tracking-widest text-text-low">{label}</p>
+      <p className="truncate font-mono text-h4 font-medium tabular-nums tracking-tight text-text md:text-h3">
+        {value}
+      </p>
+      <p className="font-body text-sm text-text-low">{hint}</p>
+    </div>
+  );
+}
+
+/** Segmentado (botões com `aria-pressed`): um grupo por eixo do gráfico. */
+function Segmented<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex rounded-sm border border-border bg-surface-2 p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={cn(
+            'h-8 rounded-xs px-3 font-body text-xs font-bold outline-none',
+            'transition-colors duration-(--dur-fast) ease-ds focus-visible:focus-ring',
+            value === o.value ? 'bg-surface text-text shadow-ds-1' : 'text-text-mid hover:text-text',
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -75,80 +120,82 @@ export function WorkspaceUsage() {
   const today = totals.data?.today;
   const month = totals.data?.month;
 
+  const requests = (n: number | undefined) => (
+    <>
+      <span className="font-mono tabular-nums text-text-mid">{formatNumber(n ?? 0)}</span>{' '}
+      {(n ?? 0) === 1 ? 'requisição' : 'requisições'}
+    </>
+  );
+
   return (
-    <section className="flex flex-col gap-5">
-      <header>
-        <h1 className="font-head text-xl font-semibold text-text">Uso e custo de IA</h1>
-        <p className="mt-1 text-sm text-text-mid">
-          Gasto com os agentes de IA deste workspace. Não inclui testes do playground.
-        </p>
-      </header>
+    <section className="flex flex-col">
+      <PageHeader
+        title="Uso e custo de IA"
+        description="Gasto com os agentes de IA deste workspace. Não inclui testes do playground."
+        helpSlot={<AnchoredHelpHint anchorKey="settings.usage" />}
+      />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {totals.isLoading ? (
-          <>
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
-          </>
-        ) : (
-          <>
-            <KpiTile label="Custo hoje" value={money(today?.costUsd ?? 0)} hint={`${today?.requests ?? 0} requisições`} />
-            <KpiTile label="Custo no mês" value={money(month?.costUsd ?? 0)} hint={`${month?.requests ?? 0} requisições`} />
-            <KpiTile
-              label="Tokens no mês"
-              value={(month?.totalTokens ?? 0).toLocaleString('pt-BR')}
-              hint="prompt + completion"
-            />
-          </>
-        )}
-      </div>
-
-      <div className="rounded-lg border border-border bg-surface p-5">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h3 className="font-head text-sm font-semibold uppercase tracking-wide text-text-low">
-            Gasto (USD)
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            <div className="flex gap-1 rounded-md border border-border p-0.5">
-              {PERIODS.map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => setPeriod(p.value)}
-                  className={
-                    period === p.value
-                      ? 'rounded-sm bg-surface-3 px-3 py-1 text-xs font-medium text-text'
-                      : 'rounded-sm px-3 py-1 text-xs font-medium text-text-mid hover:text-text'
-                  }
-                >
-                  {p.label}
-                </button>
-              ))}
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-busy={totals.isLoading || undefined}>
+          {totals.isLoading ? (
+            <>
+              <Skeleton className="h-28 w-full rounded-lg" />
+              <Skeleton className="h-28 w-full rounded-lg" />
+              <Skeleton className="h-28 w-full rounded-lg" />
+            </>
+          ) : totals.isError ? (
+            <div className="rounded-lg border border-border bg-surface sm:col-span-3">
+              <ErrorState
+                title="Não foi possível carregar os totais"
+                reason="O resumo de custo não respondeu."
+                whatToDo="Tente de novo em instantes."
+                action={
+                  <Button variant="secondary" size="sm" onClick={() => void totals.refetch()}>
+                    Tentar de novo
+                  </Button>
+                }
+              />
             </div>
-            <div className="flex gap-1 rounded-md border border-border p-0.5">
-              {GROUPS.map((g) => (
-                <button
-                  key={g.value}
-                  type="button"
-                  onClick={() => setGroupBy(g.value)}
-                  className={
-                    groupBy === g.value
-                      ? 'rounded-sm bg-surface-3 px-3 py-1 text-xs font-medium text-text'
-                      : 'rounded-sm px-3 py-1 text-xs font-medium text-text-mid hover:text-text'
-                  }
-                >
-                  {g.label}
-                </button>
-              ))}
+          ) : (
+            <>
+              <KpiTile label="Custo hoje" value={money(today?.costUsd ?? 0)} hint={requests(today?.requests)} />
+              <KpiTile label="Custo no mês" value={money(month?.costUsd ?? 0)} hint={requests(month?.requests)} />
+              <KpiTile
+                label="Tokens no mês"
+                value={formatNumber(month?.totalTokens ?? 0)}
+                hint="prompt + completion"
+              />
+            </>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-mono text-xs font-medium uppercase tracking-widest text-text-low">
+              Gasto <span className="normal-case tracking-normal">({COST_CURRENCY})</span>
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              <Segmented label="Período" options={PERIODS} value={period} onChange={setPeriod} />
+              <Segmented label="Agrupar" options={GROUPS} value={groupBy} onChange={setGroupBy} />
             </div>
           </div>
+          {summary.isLoading ? (
+            <Skeleton className="h-56 w-full" />
+          ) : summary.isError ? (
+            <ErrorState
+              title="Não foi possível carregar o gráfico"
+              reason="A série de custo deste período não respondeu."
+              whatToDo="Tente de novo ou troque o período."
+              action={
+                <Button variant="secondary" size="sm" onClick={() => void summary.refetch()}>
+                  Tentar de novo
+                </Button>
+              }
+            />
+          ) : (
+            <LazyUsageChart buckets={summary.data?.buckets ?? []} />
+          )}
         </div>
-        {summary.isLoading ? (
-          <Skeleton className="h-56 w-full" />
-        ) : (
-          <LazyUsageChart buckets={summary.data?.buckets ?? []} />
-        )}
       </div>
     </section>
   );

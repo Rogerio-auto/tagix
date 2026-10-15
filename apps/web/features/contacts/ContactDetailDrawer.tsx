@@ -1,16 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import Link from 'next/link';
-import { Pencil, Plus, X } from 'lucide-react';
-import { Button, useToast } from '@hm/ui';
+import { ChevronRight, Pencil, Plus, X } from 'lucide-react';
+import { Button, Drawer, ErrorState, SkeletonText, StatusPill, useToast } from '@hm/ui';
 import { can, type Role } from '@hm/shared';
 import { MarkConversionButton } from '@/features/conversions';
-import { ContactPanel } from './components/ContactPanel';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
 import { cn } from '@/shared/lib/cn';
+import { formatDateTime, formatMoney } from '@/shared/lib/locale';
 import { Sheet } from '@/shared/components/Sheet';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
+import { ContactPanel } from './components/ContactPanel';
 import { useAssignTag, useContact, useRemoveTag, useTags } from './queries';
+import { controlClass, eyebrowClass } from './styles';
 import type { ConsentEntry } from './types';
 
 type Tab = 'dados' | 'conversas' | 'deals' | 'conversoes' | 'consentimento';
@@ -18,19 +22,10 @@ type Tab = 'dados' | 'conversas' | 'deals' | 'conversoes' | 'consentimento';
 const TABS: readonly { id: Tab; label: string }[] = [
   { id: 'dados', label: 'Dados' },
   { id: 'conversas', label: 'Conversas' },
-  { id: 'deals', label: 'Deals' },
+  { id: 'deals', label: 'Negócios' },
   { id: 'conversoes', label: 'Conversões' },
   { id: 'consentimento', label: 'Consentimento' },
 ];
-
-function formatBRL(cents: number | null, currency: string): string {
-  if (cents == null) return '—';
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(cents / 100);
-}
-
-function dt(value: string | null): string {
-  return value ? new Date(value).toLocaleString('pt-BR') : '—';
-}
 
 interface ContactDetailDrawerProps {
   contactId: string | null;
@@ -39,7 +34,11 @@ interface ContactDetailDrawerProps {
   onEdit: (id: string) => void;
 }
 
-/** Drawer lateral de detalhe do contato com tabs. */
+/**
+ * Detalhe do contato (UX §2.3: Drawer lateral no desktop, sheet cheio no mobile) com
+ * abas WAI-ARIA (setas, Home/End). Números e datas em mono tabular; escrita guardada
+ * pelo modo só leitura (Editar, adicionar/remover tag).
+ */
 export function ContactDetailDrawer({
   contactId,
   role,
@@ -54,6 +53,8 @@ export function ContactDetailDrawer({
   const assignTag = useAssignTag();
   const removeTag = useRemoveTag();
   const [tagToAdd, setTagToAdd] = useState('');
+  const baseId = useId();
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   if (!contactId) return null;
 
@@ -64,225 +65,327 @@ export function ContactDetailDrawer({
     (t) => !(data?.tags ?? []).some((ct) => ct.id === t.id),
   );
 
-  const actions = (canEdit && c) || c ? (
-    <div className="flex items-center gap-2">
-      {canEdit && c && (
-        <Button variant="secondary" onClick={() => onEdit(c.id)}>
-          <Pencil className="size-4" />
-          Editar
-        </Button>
+  const actions = c ? (
+    <div className="flex flex-wrap items-center gap-2">
+      {canEdit && (
+        <ReadOnlyGuard align="start">
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<Pencil className="size-4" aria-hidden />}
+            onClick={() => onEdit(c.id)}
+          >
+            Editar
+          </Button>
+        </ReadOnlyGuard>
       )}
-      {c && <MarkConversionButton contactId={c.id} variant="secondary" />}
+      <MarkConversionButton contactId={c.id} variant="secondary" size="sm" />
     </div>
   ) : null;
 
+  const onTabKey = (e: ReactKeyboardEvent<HTMLButtonElement>, index: number): void => {
+    const last = TABS.length - 1;
+    const next =
+      e.key === 'ArrowRight'
+        ? index === last
+          ? 0
+          : index + 1
+        : e.key === 'ArrowLeft'
+          ? index === 0
+            ? last
+            : index - 1
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? last
+              : null;
+    if (next === null) return;
+    e.preventDefault();
+    const target = TABS[next];
+    if (!target) return;
+    setTab(target.id);
+    tabRefs.current[next]?.focus();
+  };
+
   const tabsNav = (
-    <nav className="flex gap-1 overflow-x-auto" role="tablist">
-      {TABS.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          role="tab"
-          aria-selected={tab === t.id}
-          onClick={() => setTab(t.id)}
-          className={cn(
-            'shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-            tab === t.id
-              ? 'border-brand text-text'
-              : 'border-transparent text-text-low hover:text-text',
-          )}
-        >
-          {t.label}
-        </button>
-      ))}
-    </nav>
+    <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Seções do contato">
+      {TABS.map((t, i) => {
+        const selected = tab === t.id;
+        return (
+          <button
+            key={t.id}
+            ref={(el) => {
+              tabRefs.current[i] = el;
+            }}
+            id={`${baseId}-tab-${t.id}`}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            aria-controls={`${baseId}-panel`}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => setTab(t.id)}
+            onKeyDown={(e) => onTabKey(e, i)}
+            className={cn(
+              '-mb-px shrink-0 border-b-2 px-3 py-2.5 font-body text-sm font-bold outline-none',
+              'transition-colors duration-(--dur-fast) ease-ds focus-visible:focus-ring',
+              selected
+                ? 'border-brand-text text-text'
+                : 'border-transparent text-text-low hover:text-text',
+            )}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
   );
 
-  const detailBody = (
-    <>
-      {detail.isLoading && <p className="text-sm text-text-low">Carregando…</p>}
-          {detail.isError && (
-            <p className="text-sm text-danger">Falha ao carregar contato.</p>
-          )}
+  const empty = (text: string): ReactNode => (
+    <p className="rounded-md border border-dashed border-border px-4 py-6 text-center font-body text-sm text-text-low">
+      {text}
+    </p>
+  );
 
-          {data && c && tab === 'dados' && (
-            <div className="flex flex-col gap-4">
-              {/* Cadastro vivo (nome/telefone/e-mail/documento/endereço/custom
-                  fields/resumo) reusa o <ContactPanel> — sem duplicar a
-                  renderização. Editável conforme `contact.edit` (§2.3 cadastro no
-                  drawer; §3.1 read-only quando sem permissão). */}
-              <ContactPanel contactId={c.id} editable />
+  const panel = (
+    <div
+      role="tabpanel"
+      id={`${baseId}-panel`}
+      aria-labelledby={`${baseId}-tab-${tab}`}
+      tabIndex={0}
+      className="outline-none focus-visible:focus-ring"
+    >
+      {detail.isLoading && <SkeletonText lines={5} />}
+      {detail.isError && (
+        <ErrorState
+          title="Não foi possível abrir o contato"
+          reason="A consulta ao contato falhou."
+          whatToDo="Verifique a conexão e tente novamente."
+          action={
+            <Button variant="secondary" size="sm" onClick={() => void detail.refetch()}>
+              Tentar de novo
+            </Button>
+          }
+        />
+      )}
 
-              {/* Metadados que o painel não cobre (origem/idioma/criado/marketing). */}
-              <dl className="grid grid-cols-1 gap-3 border-t border-border-2 pt-4 text-sm">
-                <Field label="Origem" value={c.source ?? '—'} />
-                <Field label="Idioma" value={c.language ?? '—'} />
-                <Field label="Criado em" value={dt(c.createdAt ?? null)} />
-                <Field
-                  label="Marketing"
-                  value={data.marketingOptIn ? 'Opt-in ativo' : 'Sem opt-in'}
-                />
-              </dl>
+      {data && c && tab === 'dados' && (
+        <div className="flex flex-col gap-6">
+          {/* Cadastro vivo (nome/telefone/e-mail/documento/endereço/custom fields/resumo)
+              reusa o <ContactPanel>; editável conforme `contact.edit`. */}
+          <ContactPanel contactId={c.id} editable />
 
-              <section>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-low">
-                  Tags
-                </h3>
-                <div className="flex flex-wrap items-center gap-2">
-                  {(data.tags ?? []).map((t) => (
-                    <span
-                      key={t.id}
-                      className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-text"
-                      style={{ borderColor: t.color }}
-                    >
-                      {t.name}
-                      {canEdit && (
-                        <button
-                          type="button"
-                          aria-label={`Remover tag ${t.name}`}
-                          onClick={() =>
-                            removeTag.mutate(
-                              { contactId: c!.id, tagId: t.id },
-                              {
-                                onError: (e) => toast({ variant: 'error', title: e.message }),
-                              },
-                            )
-                          }
-                          className="text-text-low hover:text-danger"
-                        >
-                          <X className="size-3" />
-                        </button>
-                      )}
-                    </span>
-                  ))}
-                  {(data.tags ?? []).length === 0 && (
-                    <span className="text-xs text-text-low">Sem tags.</span>
+          <section aria-labelledby={`${baseId}-meta`} className="border-t border-border pt-5">
+            <h3 id={`${baseId}-meta`} className={cn(eyebrowClass, 'mb-3')}>
+              Origem e consentimento
+            </h3>
+            <dl className="flex flex-col">
+              <Field label="Origem" value={c.source ?? '—'} />
+              <Field label="Idioma" value={c.language ?? '—'} />
+              <Field label="Criado em" value={formatDateTime(c.createdAt)} mono />
+              <Field label="Marketing" value={data.marketingOptIn ? 'Opt-in ativo' : 'Sem opt-in'} />
+            </dl>
+          </section>
+
+          <section aria-labelledby={`${baseId}-tags`}>
+            <h3 id={`${baseId}-tags`} className={cn(eyebrowClass, 'mb-3')}>
+              Tags
+            </h3>
+            <div className="flex flex-wrap items-center gap-2">
+              {(data.tags ?? []).map((t) => (
+                <span
+                  key={t.id}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-pill border border-border bg-surface-2 pl-2.5 pr-1 font-body text-xs font-bold text-text-mid"
+                >
+                  {/* A cor é dado da tag (cadastrada pelo cliente), não estilo: só no ponto. */}
+                  <i aria-hidden className="size-2 rounded-pill" style={{ backgroundColor: t.color }} />
+                  {t.name}
+                  {canEdit && (
+                    <ReadOnlyGuard align="start">
+                      <button
+                        type="button"
+                        aria-label={`Remover tag ${t.name}`}
+                        onClick={() =>
+                          removeTag.mutate(
+                            { contactId: c.id, tagId: t.id },
+                            { onError: (e) => toast({ variant: 'error', title: e.message }) },
+                          )
+                        }
+                        className="grid size-5 place-items-center rounded-pill text-text-low outline-none transition-colors hover:bg-danger/10 hover:text-danger focus-visible:focus-ring"
+                      >
+                        <X className="size-3" aria-hidden />
+                      </button>
+                    </ReadOnlyGuard>
                   )}
-                </div>
-                {canEdit && availableTags.length > 0 && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <select
-                      value={tagToAdd}
-                      onChange={(e) => setTagToAdd(e.target.value)}
-                      aria-label="Adicionar tag"
-                      className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
-                    >
-                      <option value="">Selecionar tag…</option>
-                      {availableTags.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      disabled={!tagToAdd || assignTag.isPending}
-                      onClick={() =>
-                        assignTag.mutate(
-                          { contactId: c!.id, tagId: tagToAdd },
-                          {
-                            onSuccess: () => setTagToAdd(''),
-                            onError: (e) => toast({ variant: 'error', title: e.message }),
-                          },
-                        )
-                      }
-                      className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-text-mid hover:text-text disabled:opacity-50"
-                    >
-                      <Plus className="size-3" />
-                      Adicionar
-                    </button>
-                  </div>
-                )}
-              </section>
-
-              {c?.notes && (
-                <section>
-                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-low">
-                    Notas
-                  </h3>
-                  <p className="whitespace-pre-wrap text-sm text-text-mid">{c.notes}</p>
-                </section>
+                </span>
+              ))}
+              {(data.tags ?? []).length === 0 && (
+                <span className="font-body text-sm text-text-low">Sem tags.</span>
               )}
             </div>
-          )}
-
-          {data && tab === 'conversas' && (
-            <ul className="flex flex-col gap-2">
-              {data.conversations.length === 0 && (
-                <li className="text-sm text-text-low">Nenhuma conversa.</li>
-              )}
-              {data.conversations.map((conv) => (
-                <li key={conv.id}>
-                  <Link
-                    href={`/conversations/${conv.id}`}
-                    className="flex flex-col rounded-md border border-border px-3 py-2 hover:bg-surface-2"
+            {canEdit && availableTags.length > 0 && (
+              <div className="mt-3 flex items-center gap-2">
+                <select
+                  value={tagToAdd}
+                  onChange={(e) => setTagToAdd(e.target.value)}
+                  aria-label="Adicionar tag"
+                  className={cn(controlClass, 'h-8 min-w-0 flex-1')}
+                >
+                  <option value="">Selecionar tag…</option>
+                  {availableTags.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <ReadOnlyGuard>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={<Plus className="size-3.5" aria-hidden />}
+                    disabled={!tagToAdd}
+                    loading={assignTag.isPending}
+                    onClick={() =>
+                      assignTag.mutate(
+                        { contactId: c.id, tagId: tagToAdd },
+                        {
+                          onSuccess: () => setTagToAdd(''),
+                          onError: (e) => toast({ variant: 'error', title: e.message }),
+                        },
+                      )
+                    }
                   >
-                    <span className="text-sm text-text">{conv.lastMessagePreview ?? 'Conversa'}</span>
-                    <span className="text-xs text-text-low">
-                      {conv.status} · {dt(conv.lastMessageAt)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+                    Adicionar
+                  </Button>
+                </ReadOnlyGuard>
+              </div>
+            )}
+          </section>
 
-          {data && tab === 'deals' && (
-            <ul className="flex flex-col gap-2">
-              {data.deals.length === 0 && <li className="text-sm text-text-low">Nenhum deal.</li>}
-              {data.deals.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+          {c.notes && (
+            <section aria-labelledby={`${baseId}-notes`}>
+              <h3 id={`${baseId}-notes`} className={cn(eyebrowClass, 'mb-2')}>
+                Notas
+              </h3>
+              <p className="whitespace-pre-wrap font-body text-sm text-text-mid">{c.notes}</p>
+            </section>
+          )}
+        </div>
+      )}
+
+      {data && tab === 'conversas' &&
+        (data.conversations.length === 0 ? (
+          empty('Nenhuma conversa com este contato.')
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {data.conversations.map((conv) => (
+              <li key={conv.id}>
+                <Link
+                  href={`/conversations/${conv.id}`}
+                  className="group flex items-center gap-3 rounded-md border border-border bg-surface px-3.5 py-3 outline-none transition-colors duration-(--dur-fast) hover:border-border-2 hover:bg-surface-2 focus-visible:focus-ring"
                 >
-                  <div className="flex flex-col">
-                    <span className="text-sm text-text">{d.title}</span>
-                    <span className="text-xs text-text-low">
-                      {d.closedAt
-                        ? d.closedWon
-                          ? 'Ganho'
-                          : 'Perdido'
-                        : 'Em aberto'}
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate font-body text-sm text-text">
+                      {conv.lastMessagePreview ?? 'Conversa'}
                     </span>
-                  </div>
-                  <span className="text-sm text-text-mid">{formatBRL(d.valueCents, d.currency)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+                    <span className="font-mono text-xs tabular-nums text-text-low">
+                      {conv.status} · {formatDateTime(conv.lastMessageAt)}
+                    </span>
+                  </span>
+                  <ChevronRight
+                    className="size-4 shrink-0 text-text-low transition-transform duration-(--dur-fast) motion-safe:group-hover:translate-x-0.5"
+                    aria-hidden
+                  />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ))}
 
-          {data && tab === 'conversoes' && (
-            <ul className="flex flex-col gap-2">
-              {data.conversions.length === 0 && (
-                <li className="text-sm text-text-low">Nenhuma conversão.</li>
-              )}
-              {data.conversions.map((cv) => (
-                <li
-                  key={cv.id}
-                  className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+      {data && tab === 'deals' &&
+        (data.deals.length === 0 ? (
+          empty('Nenhum negócio com este contato.')
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {data.deals.map((d) => (
+              <li
+                key={d.id}
+                className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3.5 py-3"
+              >
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="truncate font-body text-sm text-text">{d.title}</span>
+                  {d.closedAt ? (
+                    d.closedWon ? (
+                      <StatusPill tone="success" size="sm">
+                        Ganho
+                      </StatusPill>
+                    ) : (
+                      <StatusPill tone="danger" size="sm">
+                        Perdido
+                      </StatusPill>
+                    )
+                  ) : (
+                    <StatusPill tone="info" size="sm">
+                      Em aberto
+                    </StatusPill>
+                  )}
+                </span>
+                <span className="shrink-0 font-mono text-sm tabular-nums text-text">
+                  {formatMoney(d.valueCents, d.currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ))}
+
+      {data && tab === 'conversoes' &&
+        (data.conversions.length === 0 ? (
+          empty('Nenhuma conversão registrada para este contato.')
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {data.conversions.map((cv) => (
+              <li
+                key={cv.id}
+                className={cn(
+                  'flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3.5 py-3',
+                  cv.cancelledAt && 'bg-surface-2',
+                )}
+              >
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate font-body text-sm text-text">
+                    {cv.typeLabel ?? 'Conversão'}
+                  </span>
+                  <span className="font-mono text-xs tabular-nums text-text-low">
+                    {formatDateTime(cv.occurredAt)}
+                    {cv.cancelledAt ? ' · cancelada' : ''}
+                  </span>
+                </span>
+                <span
+                  className={cn(
+                    'shrink-0 font-mono text-sm tabular-nums',
+                    cv.cancelledAt ? 'text-text-low line-through' : 'text-text',
+                  )}
                 >
-                  <div className="flex flex-col">
-                    <span className="text-sm text-text">{cv.typeLabel ?? 'Conversão'}</span>
-                    <span className="text-xs text-text-low">
-                      {dt(cv.occurredAt)}
-                      {cv.cancelledAt ? ' · cancelada' : ''}
-                    </span>
-                  </div>
-                  <span className="text-sm text-text-mid">{formatBRL(cv.valueCents, cv.currency)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+                  {formatMoney(cv.valueCents, cv.currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ))}
 
-          {data && tab === 'consentimento' && (
-            <ConsentTimeline entries={data.consent} optIn={data.marketingOptIn} />
-          )}
-    </>
+      {data && tab === 'consentimento' && (
+        <ConsentTimeline entries={data.consent} optIn={data.marketingOptIn} />
+      )}
+    </div>
   );
 
   const heading = c?.displayName ?? (detail.isLoading ? 'Carregando…' : 'Contato');
+  const subtitle = c?.phone ? (
+    <span className="font-mono tabular-nums">{c.phone}</span>
+  ) : (
+    (c?.email ?? undefined)
+  );
 
-  // Mobile (< md): detalhe em full-`Sheet` (UX §2.3 — drawer vira sheet).
+  // Mobile (< md): sheet cheio (UX §2.3 — o drawer vira sheet).
   if (isMobile) {
     return (
       <Sheet
@@ -293,51 +396,43 @@ export function ContactDetailDrawer({
         ariaLabel="Detalhe do contato"
         footer={actions}
       >
-        <div className="-mx-5 mb-3 border-b border-border px-3">{tabsNav}</div>
-        {detailBody}
+        <div className="-mx-5 mb-4 border-b border-border px-3">{tabsNav}</div>
+        {panel}
       </Sheet>
     );
   }
 
-  // Desktop (md+): drawer lateral inalterado.
   return (
-    <>
-      <div className="fixed inset-0 z-40 bg-black/60" onClick={onClose} aria-hidden />
-      <aside
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-surface"
-        role="dialog"
-        aria-label="Detalhe do contato"
-      >
-        <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-          <div className="min-w-0">
-            <h2 className="truncate font-head text-base font-semibold text-text">{heading}</h2>
-            {c?.phone && <p className="truncate text-xs text-text-low">{c.phone}</p>}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="rounded-sm p-1 text-text-low hover:text-text"
-          >
-            <X className="size-5" />
-          </button>
-        </header>
-
-        {actions && <div className="border-b border-border px-5 py-3">{actions}</div>}
-
-        <div className="border-b border-border px-3">{tabsNav}</div>
-
-        <div className="flex-1 overflow-y-auto px-5 py-4">{detailBody}</div>
-      </aside>
-    </>
+    <Drawer
+      open
+      onClose={onClose}
+      title={heading}
+      description={subtitle}
+      ariaLabel="Detalhe do contato"
+      className="max-w-lg"
+      footer={actions}
+    >
+      <div className="-mx-5 mb-5 border-b border-border px-3">{tabsNav}</div>
+      {panel}
+    </Drawer>
   );
 }
 
-function Field({ label, value }: { label: string; value: string }): React.JSX.Element {
+function Field({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}): React.JSX.Element {
   return (
-    <div className="flex justify-between gap-3 border-b border-border/40 pb-2">
-      <dt className="text-text-low">{label}</dt>
-      <dd className="text-right text-text">{value}</dd>
+    <div className="flex items-baseline justify-between gap-4 border-b border-border py-2.5 last:border-b-0">
+      <dt className="font-body text-sm text-text-low">{label}</dt>
+      <dd className={cn('text-right text-sm text-text', mono ? 'font-mono tabular-nums' : 'font-body')}>
+        {value}
+      </dd>
     </div>
   );
 }
@@ -350,31 +445,42 @@ function ConsentTimeline({
   optIn: boolean;
 }): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm text-text-mid">
-        Status atual:{' '}
-        <span className={optIn ? 'text-success' : 'text-text-low'}>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-body text-sm text-text-mid">Status atual</span>
+        <StatusPill tone={optIn ? 'success' : 'neutral'}>
           {optIn ? 'Opt-in ativo' : 'Sem consentimento'}
-        </span>
-      </p>
+        </StatusPill>
+      </div>
       {entries.length === 0 ? (
-        <p className="text-sm text-text-low">Sem histórico de consentimento.</p>
+        <p className="rounded-md border border-dashed border-border px-4 py-6 text-center font-body text-sm text-text-low">
+          Sem histórico de consentimento.
+        </p>
       ) : (
-        <ol className="flex flex-col gap-2">
+        <ol className="relative flex flex-col gap-3 border-l border-border pl-4">
           {entries.map((e, i) => (
-            <li key={`${e.kind}-${i}`} className="rounded-md border border-border px-3 py-2">
-              <div className="flex items-center justify-between">
+            <li key={`${e.kind}-${i}`} className="relative">
+              <i
+                aria-hidden
+                className={cn(
+                  'absolute -left-5.25 top-1.5 size-2 rounded-pill ring-4 ring-surface',
+                  e.kind === 'opt_in' ? 'bg-success' : 'bg-danger',
+                )}
+              />
+              <div className="flex items-center justify-between gap-3">
                 <span
                   className={cn(
-                    'text-sm font-medium',
+                    'font-body text-sm font-bold',
                     e.kind === 'opt_in' ? 'text-success' : 'text-danger',
                   )}
                 >
                   {e.kind === 'opt_in' ? 'Opt-in' : 'Opt-out'}
                 </span>
-                <span className="text-xs text-text-low">{dt(e.at)}</span>
+                <span className="font-mono text-xs tabular-nums text-text-low">
+                  {formatDateTime(e.at)}
+                </span>
               </div>
-              <p className="mt-0.5 text-xs text-text-low">
+              <p className="mt-0.5 font-body text-xs text-text-low">
                 {e.kind === 'opt_in'
                   ? `Método: ${e.method ?? '—'}${e.source ? ` · ${e.source}` : ''}`
                   : `Motivo: ${e.reason ?? '—'}`}

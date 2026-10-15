@@ -1,32 +1,26 @@
 /**
- * Helpers de apresentação do billing portal (F41-S06). Sem dependência de React —
- * puro, testável. Dinheiro em centavos BRL (PAYMENTS_ABACATEPAY.md §1).
+ * Helpers de apresentação do billing portal (F41-S06; F72-S07 sem locale literal e com
+ * tons do DS 3.0). Sem dependência de React — puro, testável.
+ *
+ * Moeda: a cobrança da plataforma é em reais (AbacatePay, PAYMENTS_ABACATEPAY.md §1) e o
+ * contrato de `/api/billing/*` não carrega `currency`; o código fica numa constante única
+ * aqui. O idioma da formatação é o da interface (`@/shared/lib/locale`).
  */
+import type { BadgeTone } from '@hm/ui';
+import { formatDate as formatUiDate, formatMoney } from '@/shared/lib/locale';
 import type { BillingCycle, PaymentMethod, SubscriptionStatus } from './queries';
 
-const brl = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-});
+/** Moeda única da cobrança da plataforma (o contrato não envia `currency`). */
+export const BILLING_CURRENCY = 'BRL';
 
-/** Centavos BRL → "R$ 99,00". `null` → "—". */
+/** Centavos da cobrança → "R$ 99,00" (pt-BR). `null` → "—". */
 export function formatBRL(cents: number | null | undefined): string {
-  if (cents == null) return '—';
-  return brl.format(cents / 100);
+  return formatMoney(cents, BILLING_CURRENCY);
 }
 
-const dateFmt = new Intl.DateTimeFormat('pt-BR', {
-  day: '2-digit',
-  month: 'short',
-  year: 'numeric',
-});
-
-/** ISO → "19 de jun. de 2026". `null`/inválido → "—". */
+/** ISO → "19 de jun. de 2026" (pt-BR). `null`/inválido → "—". */
 export function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return dateFmt.format(d);
+  return formatUiDate(iso);
 }
 
 export const CYCLE_LABEL: Record<BillingCycle, string> = {
@@ -41,25 +35,25 @@ export const METHOD_LABEL: Record<PaymentMethod, string> = {
 
 export interface StatusPresentation {
   readonly label: string;
-  /** Classe de cor de fundo/texto do badge (tokens semânticos, zero hex). */
-  readonly badgeClass: string;
+  /** Tom do `StatusPill` (tokens de estado do DS 3.0, ≥4,5:1 nos dois temas). */
+  readonly tone: BadgeTone;
 }
 
-/** Apresentação visual do status da assinatura (tokens semânticos do DS v2). */
+/** Apresentação visual do status da assinatura. */
 export function statusPresentation(status: SubscriptionStatus): StatusPresentation {
   switch (status) {
     case 'active':
-      return { label: 'Ativa', badgeClass: 'bg-success/15 text-success' };
+      return { label: 'Ativa', tone: 'success' };
     case 'trial':
-      return { label: 'Em teste', badgeClass: 'bg-info/15 text-info' };
+      return { label: 'Em teste', tone: 'info' };
     case 'past_due':
-      return { label: 'Pagamento pendente', badgeClass: 'bg-warn/15 text-warn' };
+      return { label: 'Pagamento pendente', tone: 'warning' };
     case 'canceled':
-      return { label: 'Cancelada', badgeClass: 'bg-surface-3 text-text-mid' };
+      return { label: 'Cancelada', tone: 'neutral' };
     case 'expired':
-      return { label: 'Expirada', badgeClass: 'bg-danger/15 text-danger' };
+      return { label: 'Expirada', tone: 'danger' };
     default:
-      return { label: status, badgeClass: 'bg-surface-3 text-text-mid' };
+      return { label: status, tone: 'neutral' };
   }
 }
 
@@ -77,25 +71,22 @@ export function eventTypeLabel(eventType: string): string {
   return map[eventType] ?? eventType;
 }
 
-export interface EventStatusPresentation {
-  readonly label: string;
-  readonly badgeClass: string;
-}
+export type EventStatusPresentation = StatusPresentation;
 
 export function eventStatusPresentation(status: string): EventStatusPresentation {
   switch (status) {
     case 'paid':
     case 'completed':
     case 'succeeded':
-      return { label: 'Pago', badgeClass: 'bg-success/15 text-success' };
+      return { label: 'Pago', tone: 'success' };
     case 'pending':
     case 'processing':
-      return { label: 'Pendente', badgeClass: 'bg-warn/15 text-warn' };
+      return { label: 'Pendente', tone: 'warning' };
     case 'failed':
     case 'refunded':
     case 'disputed':
-      return { label: status === 'refunded' ? 'Estornado' : 'Falhou', badgeClass: 'bg-danger/15 text-danger' };
+      return { label: status === 'refunded' ? 'Estornado' : 'Falhou', tone: 'danger' };
     default:
-      return { label: status, badgeClass: 'bg-surface-3 text-text-mid' };
+      return { label: status, tone: 'neutral' };
   }
 }

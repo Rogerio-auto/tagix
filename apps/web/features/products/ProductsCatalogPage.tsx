@@ -20,10 +20,10 @@ export function ProductsCatalogPage(): React.JSX.Element {
 
   if (status === 'idle' || status === 'loading') {
     return (
-      <div className="flex flex-col gap-4 p-6" aria-busy aria-label="Carregando">
+      <div className="flex flex-col gap-4" aria-busy aria-label="Carregando">
         <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-11 w-full" />
-        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-64 w-full rounded-lg" />
       </div>
     );
   }

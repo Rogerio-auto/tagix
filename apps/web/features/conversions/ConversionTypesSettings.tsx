@@ -1,9 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
-import { AnchoredHelpHint, Button, Card, CardBody, Input, useToast } from '@hm/ui';
+import { AlertTriangle, Plus, Target, Trash2 } from 'lucide-react';
+import {
+  AnchoredHelpHint,
+  Badge,
+  Button,
+  EmptyState,
+  ErrorState,
+  IconButton,
+  Input,
+  Modal,
+  Switch,
+  useToast,
+} from '@hm/ui';
+import { ReadOnlyGuard, useIsReadOnly } from '@/shared/components/account-banner';
+import { Skeleton } from '@/shared/components/feedback';
+import { PageHeader } from '@/shared/components/layout/PageHeader';
 import { useConversionTypes, useCreateConversionType, useDeleteConversionType } from './queries';
+import type { ConversionType } from './types';
 
 function slugify(label: string): string {
   return label
@@ -16,107 +31,195 @@ function slugify(label: string): string {
 }
 
 /**
- * Settings de tipos de conversão (F5-S13, /settings/conversions): CRUD de
- * conversion_types. Gatilhos por stage/tag são editados nas automações de stage
- * (F5-S09) e em conversion_tag_triggers — aqui focamos no catálogo de tipos.
+ * Settings de tipos de conversão (F5-S13, /settings/conversions; DS 3.0 na F72-S07):
+ * catálogo de `conversion_types`. Gatilhos por etapa/tag são editados nas automações.
+ *
+ * UX: §2.6 vazio com convite; §2.7 "Adicionar" com loading e erro inline; §2.9 remover
+ * pede confirmação; §2.10 Enter no campo adiciona. Só leitura: adicionar e remover ficam
+ * `aria-disabled` com a explicação.
  */
 export function ConversionTypesSettings(): React.JSX.Element {
   const { toast } = useToast();
+  const readOnly = useIsReadOnly();
   const typesQuery = useConversionTypes();
   const create = useCreateConversionType();
   const remove = useDeleteConversionType();
 
   const [label, setLabel] = useState('');
   const [valueRequired, setValueRequired] = useState(false);
+  const [toRemove, setToRemove] = useState<ConversionType | null>(null);
 
   function add(): void {
     const trimmed = label.trim();
-    if (!trimmed) return;
+    if (!trimmed || readOnly) return;
     create.mutate(
       { key: slugify(trimmed) || `tipo_${Date.now()}`, label: trimmed, valueRequired },
       {
         onSuccess: () => {
           setLabel('');
           setValueRequired(false);
+          toast({ variant: 'success', title: 'Tipo de conversão criado.' });
         },
         onError: (e) => toast({ variant: 'error', title: e.message }),
       },
     );
   }
 
+  function confirmRemove(): void {
+    if (!toRemove) return;
+    remove.mutate(toRemove.id, {
+      onSuccess: () => setToRemove(null),
+      onError: (e) => toast({ variant: 'error', title: e.message }),
+    });
+  }
+
   const types = (typesQuery.data?.conversionTypes ?? []).filter((t) => t.isActive);
 
   return (
-    <div className="flex flex-col gap-4 p-6">
-      <div className="flex items-center gap-2">
-        <h1 className="text-lg font-semibold text-text">Tipos de conversão</h1>
-        <AnchoredHelpHint anchorKey="conversions.types" />
-      </div>
+    <div className="flex flex-col">
+      <PageHeader
+        title="Tipos de conversão"
+        description="O que conta como resultado para a empresa. Cada tipo vira uma linha no painel de conversões."
+        helpSlot={<AnchoredHelpHint anchorKey="conversions.types" />}
+      />
 
-      <Card elevation={1}>
-        <CardBody className="flex flex-col gap-3">
-          {types.length === 0 ? (
-            <p className="text-sm text-text-low">Nenhum tipo de conversão ainda.</p>
+      <div className="flex flex-col gap-4">
+        <section
+          aria-label="Tipos cadastrados"
+          className="overflow-hidden rounded-lg border border-border bg-surface"
+        >
+          {typesQuery.isLoading ? (
+            <ul aria-busy aria-label="Carregando tipos" className="divide-y divide-border">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <li key={i} className="flex items-center gap-3 px-5 py-4">
+                  <Skeleton className="size-2 rounded-pill" />
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="ml-auto h-4 w-24" />
+                </li>
+              ))}
+            </ul>
+          ) : typesQuery.isError ? (
+            <ErrorState
+              title="Não foi possível carregar os tipos"
+              reason="A lista de tipos de conversão não respondeu."
+              whatToDo="Verifique a conexão e tente novamente."
+              action={
+                <Button variant="secondary" size="sm" onClick={() => void typesQuery.refetch()}>
+                  Tentar de novo
+                </Button>
+              }
+            />
+          ) : types.length === 0 ? (
+            <EmptyState
+              icon={Target}
+              title="Nenhum tipo de conversão ainda"
+              description="Crie o primeiro abaixo: por exemplo, “Venda fechada” ou “Visita agendada”."
+            />
           ) : (
-            types.map((t) => (
-              <div key={t.id} className="flex items-center justify-between gap-3">
-                <div className="flex flex-col">
-                  <span className="text-sm text-text">{t.label}</span>
-                  <span className="text-xs text-text-low">
-                    {t.key}
-                    {t.valueRequired ? ' · valor obrigatório' : ''}
+            <ul className="divide-y divide-border">
+              {types.map((t) => (
+                <li key={t.id} className="flex items-center gap-3 px-5 py-3.5">
+                  {/* A cor é dado do tipo (cadastrada pelo cliente): só no ponto. */}
+                  <i
+                    aria-hidden
+                    className="size-2.5 shrink-0 rounded-pill bg-text-low"
+                    style={t.color ? { backgroundColor: t.color } : undefined}
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate font-body text-sm font-bold text-text">{t.label}</span>
+                    <span className="truncate font-mono text-xs text-text-low">{t.key}</span>
                   </span>
-                </div>
-                <button
-                  type="button"
-                  disabled={remove.isPending}
-                  onClick={() =>
-                    remove.mutate(t.id, {
-                      onError: (e) => toast({ variant: 'error', title: e.message }),
-                    })
-                  }
-                  aria-label="Remover tipo"
-                  className="touch-target grid place-items-center rounded-md text-text-low outline-none hover:text-danger focus-visible:shadow-glow-md"
-                >
-                  <Trash2 className="size-4" />
-                </button>
-              </div>
-            ))
+                  <span className="flex shrink-0 items-center gap-2">
+                    {t.isDefault && (
+                      <Badge tone="brand" size="sm">
+                        Padrão
+                      </Badge>
+                    )}
+                    {t.valueRequired && (
+                      <Badge tone="neutral" size="sm">
+                        Exige valor
+                      </Badge>
+                    )}
+                    <ReadOnlyGuard>
+                      <IconButton
+                        variant="danger"
+                        size="sm"
+                        aria-label={`Remover tipo ${t.label}`}
+                        icon={<Trash2 aria-hidden />}
+                        onClick={() => setToRemove(t)}
+                      />
+                    </ReadOnlyGuard>
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
+        </section>
 
-          <div className="flex flex-col gap-3 border-t border-border-subtle pt-3 sm:flex-row sm:items-end">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <label className="text-xs text-text-low" htmlFor="ct-label">
-                Novo tipo
-              </label>
-              <Input
-                id="ct-label"
-                value={label}
-                placeholder="Ex.: Visita agendada"
-                onChange={(e) => setLabel(e.target.value)}
-              />
-            </div>
-            <label className="flex items-center gap-1.5 text-sm text-text-mid sm:pb-2 sm:text-xs">
-              <input
-                type="checkbox"
-                checked={valueRequired}
-                onChange={(e) => setValueRequired(e.target.checked)}
-                className="size-4 accent-[var(--color-accent)]"
-              />
-              Exige valor
-            </label>
+        <form
+          aria-label="Novo tipo de conversão"
+          className="flex flex-col gap-4 rounded-lg border border-border bg-surface px-5 py-4 sm:flex-row sm:items-end"
+          onSubmit={(e) => {
+            e.preventDefault();
+            add();
+          }}
+        >
+          <div className="min-w-0 flex-1">
+            <Input
+              label="Novo tipo"
+              value={label}
+              placeholder="Ex.: Visita agendada"
+              onChange={(e) => setLabel(e.target.value)}
+            />
+          </div>
+          <div className="flex h-10 items-center sm:pb-0">
+            <Switch checked={valueRequired} onCheckedChange={setValueRequired} label="Exige valor" />
+          </div>
+          <ReadOnlyGuard className="w-full sm:w-auto">
             <Button
+              type="submit"
               variant="secondary"
               className="w-full sm:w-auto"
-              disabled={!label.trim() || create.isPending}
-              onClick={add}
+              leftIcon={<Plus className="size-4" aria-hidden />}
+              disabled={!label.trim()}
+              loading={create.isPending}
             >
-              <Plus className="size-4" />
               Adicionar
             </Button>
-          </div>
-        </CardBody>
-      </Card>
+          </ReadOnlyGuard>
+        </form>
+      </div>
+
+      <Modal
+        open={toRemove !== null}
+        onClose={() => setToRemove(null)}
+        title="Remover tipo de conversão?"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setToRemove(null)} disabled={remove.isPending}>
+              Manter
+            </Button>
+            <ReadOnlyGuard>
+              <Button variant="danger" loading={remove.isPending} onClick={confirmRemove}>
+                Remover
+              </Button>
+            </ReadOnlyGuard>
+          </>
+        }
+      >
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden
+            className="grid size-9 shrink-0 place-items-center rounded-sm border border-danger/25 bg-danger/10 text-danger"
+          >
+            <AlertTriangle className="size-5" />
+          </span>
+          <p className="font-body text-sm text-text-mid">
+            <span className="font-bold text-text">{toRemove?.label}</span> deixa de aparecer para
+            marcar novas conversões. As conversões já registradas com este tipo continuam no histórico.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -3,19 +3,21 @@
 /**
  * View de chat de um thread de suporte (F38-S09). Mensagens em tempo real (S08
  * via useSupportSocket), envio, e acao de resolver. Bolhas alinhadas por
- * sender_type (member = direita/brand, platform = esquerda/surface).
+ * sender_type (member = direita/tinta de marca, platform = esquerda/surface) — o mesmo
+ * desenho das bolhas da inbox (DS 3.0: neon cheio nunca vira fundo de mensagem).
  */
 import { useEffect, useRef, useState } from 'react';
 import { Check, Send } from 'lucide-react';
 import type { SupportMessageDTO } from '@hm/shared';
-import { Button } from '@hm/ui';
+import { Button, IconButton } from '@hm/ui';
+import { formatTime } from '@/shared/lib/locale';
 import { StatusBadge } from './StatusBadge';
 import { useResolveThread, useSendMessage, useSupportThread } from './queries';
 import { useSupportSocket } from './useSupportSocket';
 
 function timeOf(iso: string | null): string {
   if (!iso) return '';
-  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return formatTime(iso);
 }
 
 export function ThreadView({ threadId }: { threadId: string }) {
@@ -44,8 +46,8 @@ export function ThreadView({ threadId }: { threadId: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {thread && (
-        <div className="flex items-center gap-2 border-b border-border-2 px-4 py-2.5">
-          <span className="flex-1 truncate font-head text-sm font-medium text-text">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
+          <span className="flex-1 truncate font-body text-sm font-bold text-text">
             {thread.subject}
           </span>
           <StatusBadge status={thread.status} />
@@ -54,9 +56,10 @@ export function ThreadView({ threadId }: { threadId: string }) {
               variant="ghost"
               size="sm"
               loading={resolve.isPending}
+              leftIcon={<Check className="size-4" aria-hidden />}
               onClick={() => resolve.mutate()}
             >
-              <Check className="size-4" aria-hidden /> Resolver
+              Resolver
             </Button>
           )}
         </div>
@@ -65,20 +68,17 @@ export function ThreadView({ threadId }: { threadId: string }) {
       <div className="flex-1 overflow-y-auto px-4 py-4" aria-live="polite" aria-label="Mensagens">
         {isLoading && (
           <div className="flex flex-col gap-3">
-            <div className="h-10 w-2/3 animate-pulse rounded-lg bg-surface-2" />
-            <div className="ml-auto h-10 w-1/2 animate-pulse rounded-lg bg-surface-2" />
+            <div className="h-10 w-2/3 rounded-lg bg-surface-2 motion-safe:animate-pulse" />
+            <div className="ml-auto h-10 w-1/2 rounded-lg bg-surface-2 motion-safe:animate-pulse" />
           </div>
         )}
         {isError && (
-          <div className="text-center">
-            <p className="text-sm text-danger">Falha ao carregar a conversa.</p>
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              className="mt-2 font-head text-sm font-semibold text-brand outline-none hover:text-brand-strong focus-visible:shadow-glow-md"
-            >
-              Tentar novamente
-            </button>
+          <div role="alert" className="flex flex-col items-center gap-2 py-6 text-center">
+            <p className="font-head text-base font-semibold text-text">Não foi possível carregar a conversa.</p>
+            <p className="font-body text-sm text-text-mid">Verifique a conexão e tente de novo.</p>
+            <Button variant="secondary" size="sm" onClick={() => void refetch()}>
+              Tentar de novo
+            </Button>
           </div>
         )}
         <ul className="flex flex-col gap-3">
@@ -92,18 +92,18 @@ export function ThreadView({ threadId }: { threadId: string }) {
                 <div
                   className={
                     mine
-                      ? 'max-w-[80%] rounded-2xl rounded-br-sm bg-brand px-3.5 py-2 text-text-on-brand'
-                      : 'max-w-[80%] rounded-2xl rounded-bl-sm bg-surface-2 px-3.5 py-2 text-text'
+                      ? 'max-w-[80%] rounded-lg rounded-br-xs border border-brand-text/20 bg-brand-text/10 px-3.5 py-2 text-text'
+                      : 'max-w-[80%] rounded-lg rounded-bl-xs border border-border bg-surface-2 px-3.5 py-2 text-text'
                   }
                 >
                   {!mine && (
-                    <span className="mb-0.5 block font-head text-[11px] font-semibold uppercase tracking-wide text-text-low">
+                    <span className="mb-0.5 block font-mono text-xs font-medium uppercase tracking-wider text-text-low">
                       Equipe Leadium
                     </span>
                   )}
                   <span className="whitespace-pre-wrap break-words font-body text-sm">{m.body}</span>
                 </div>
-                <span className="mt-0.5 font-body text-[11px] text-text-low">
+                <span className="mt-1 font-mono text-xs tabular-nums text-text-low">
                   {timeOf(m.createdAt)}
                 </span>
               </li>
@@ -113,7 +113,7 @@ export function ThreadView({ threadId }: { threadId: string }) {
         <div ref={endRef} />
       </div>
 
-      <div className="border-t border-border-2 p-3">
+      <div className="border-t border-border p-3">
         {resolved ? (
           <p className="text-center font-body text-sm text-text-low">
             Esta conversa foi resolvida. Abra uma nova se precisar de mais ajuda.
@@ -138,11 +138,16 @@ export function ThreadView({ threadId }: { threadId: string }) {
               rows={1}
               placeholder="Escreva uma mensagem..."
               aria-label="Mensagem para o suporte"
-              className="max-h-32 min-h-[40px] flex-1 resize-none rounded-md border border-border bg-surface-2 px-3 py-2 font-body text-sm text-text outline-none transition-colors placeholder:text-text-low focus-visible:border-border-2 focus-visible:shadow-glow-md"
+              className="max-h-32 min-h-10 flex-1 resize-none rounded-sm border border-border bg-surface-2 px-3 py-2 font-body text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds placeholder:text-text-low hover:border-border-2 focus:border-brand-text focus-visible:focus-ring sm:text-sm"
             />
-            <Button type="submit" variant="primary" size="sm" loading={send.isPending} disabled={draft.trim() === ''}>
-              <Send className="size-4" aria-hidden />
-            </Button>
+            <IconButton
+              type="submit"
+              variant="solid"
+              aria-label="Enviar mensagem ao suporte"
+              icon={<Send aria-hidden />}
+              loading={send.isPending}
+              disabled={draft.trim() === ''}
+            />
           </form>
         )}
       </div>

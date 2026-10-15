@@ -41,6 +41,8 @@ import { can } from '@hm/shared';
 import { cn } from '@/shared/lib/cn';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { ApiError } from '@/shared/lib/api-client';
+import { formatNumber, formatTotals, sumByCurrency } from '@/shared/lib/locale';
+import { ReadOnlyGuard, useIsReadOnly } from '@/shared/components/account-banner';
 import { ErrorState, Skeleton } from '@/shared/components/feedback';
 import type { ContactAddress, ContactDeal, ContactConversion } from '../types';
 import { useContact, useUpdateContact } from '../queries';
@@ -81,22 +83,8 @@ function describeSaveError(err: unknown): string {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const currencyFmt = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-  maximumFractionDigits: 0,
-});
-
-function formatCents(cents: number, currency = 'BRL'): string {
-  if (currency !== 'BRL') {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 0,
-    }).format(cents / 100);
-  }
-  return currencyFmt.format(cents / 100);
-}
+/** Resumo sem centavos: é um painel de leitura rápida, não um extrato. */
+const SUMMARY_MONEY = { maximumFractionDigits: 0 } as const;
 
 function isAddressEmpty(a: ContactAddress | undefined | null): boolean {
   if (!a) return true;
@@ -124,20 +112,28 @@ function normalizeAddress(a: ContactAddress): ContactAddress {
   };
 }
 
-/** Resumo financeiro: total fechado/ganho, nº de deals e ticket médio. */
+/**
+ * Resumo financeiro: total convertido, nº de negócios e ticket médio. Somas por moeda
+ * (nunca mistura moedas); a moeda vem de cada deal/conversão, não do componente.
+ */
 function financialSummary(deals: ContactDeal[], conversions: ContactConversion[]) {
   // Total convertido = soma das conversões válidas (não canceladas) com valor.
-  const convertedCents = conversions
-    .filter((c) => c.cancelledAt === null && typeof c.valueCents === 'number')
-    .reduce((sum, c) => sum + (c.valueCents ?? 0), 0);
+  const converted = sumByCurrency(
+    conversions
+      .filter((c) => c.cancelledAt === null && typeof c.valueCents === 'number')
+      .map((c) => ({ cents: c.valueCents, currency: c.currency })),
+  );
 
-  // Deals ganhos (closed won) — base do ticket médio do cliente.
+  // Deals ganhos (closed won) — base do ticket médio do cliente, por moeda.
   const wonDeals = deals.filter((d) => d.closedWon === true);
-  const wonCents = wonDeals.reduce((sum, d) => sum + d.valueCents, 0);
-  const dealCount = deals.length;
-  const avgTicketCents = wonDeals.length > 0 ? Math.round(wonCents / wonDeals.length) : 0;
+  const wonTotals = sumByCurrency(wonDeals.map((d) => ({ cents: d.valueCents, currency: d.currency })));
+  const avgTicket = new Map<string, number>();
+  for (const [currency, cents] of wonTotals) {
+    const n = wonDeals.filter((d) => d.currency === currency).length;
+    if (n > 0) avgTicket.set(currency, Math.round(cents / n));
+  }
 
-  return { convertedCents, dealCount, wonCount: wonDeals.length, avgTicketCents };
+  return { converted, dealCount: deals.length, wonCount: wonDeals.length, avgTicket };
 }
 
 // ── Linha de campo (read-only) ─────────────────────────────────────────────────
@@ -156,13 +152,13 @@ function FieldRow({
     <div className="flex items-center gap-3">
       {/* Tile de ícone — identifica o tipo da informação num relance (scan rápido). */}
       <span
-        className="grid size-8 shrink-0 place-items-center rounded-md bg-surface-3 text-text-mid"
+        className="grid size-8 shrink-0 place-items-center rounded-sm border border-border bg-surface-2 text-text-mid"
         aria-hidden
       >
         <Icon className="size-4" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-body text-[0.65rem] uppercase tracking-wide text-text-low">{label}</p>
+        <p className="font-mono text-xs uppercase tracking-wider text-text-low">{label}</p>
         <p
           className={cn(
             'truncate font-body text-sm font-medium',
@@ -182,7 +178,7 @@ function CustomFields({ fields }: { fields: Record<string, unknown> }) {
   const entries = Object.entries(fields).filter(([, v]) => v != null && v !== '');
   if (entries.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2.5 border-t border-border-2 pt-3">
+    <div className="flex flex-col gap-2.5 border-t border-border pt-4">
       {entries.map(([key, raw]) => (
         <FieldRow key={key} icon={Tag} label={key} value={String(raw)} />
       ))}
@@ -219,6 +215,7 @@ export function ContactPanel({ contactId, editable = false }: ContactPanelProps)
   const role = auth?.role ?? null;
   const canEdit = editable && (role ? can(role, 'contact.edit') : false);
 
+  const readOnly = useIsReadOnly();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<DraftState | null>(null);
 
@@ -275,7 +272,7 @@ export function ContactPanel({ contactId, editable = false }: ContactPanelProps)
   }
 
   function save(): void {
-    if (!draft || update.isPending) return;
+    if (!draft || update.isPending || readOnly) return;
     update.mutate(
       {
         id: contactId,
@@ -336,8 +333,8 @@ export function ContactPanel({ contactId, editable = false }: ContactPanelProps)
           onChange={(e) => setDraft({ ...draft, document: e.target.value })}
         />
 
-        <div className="border-t border-border-2 pt-3">
-          <p className="mb-2 font-body text-xs font-medium text-text-low">Endereço</p>
+        <div className="border-t border-border pt-4">
+          <p className="mb-2 font-mono text-xs uppercase tracking-wider text-text-low">Endereço</p>
           <AddressForm
             value={draft.address}
             onChange={(address) => setDraft({ ...draft, address })}
@@ -345,15 +342,17 @@ export function ContactPanel({ contactId, editable = false }: ContactPanelProps)
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="primary"
-            size="sm"
-            loading={update.isPending}
-            leftIcon={<Check className="size-3.5" aria-hidden />}
-            onClick={save}
-          >
-            Salvar
-          </Button>
+          <ReadOnlyGuard align="start">
+            <Button
+              variant="primary"
+              size="sm"
+              loading={update.isPending}
+              leftIcon={<Check className="size-3.5" aria-hidden />}
+              onClick={save}
+            >
+              Salvar
+            </Button>
+          </ReadOnlyGuard>
           <Button
             variant="ghost"
             size="sm"
@@ -374,14 +373,16 @@ export function ContactPanel({ contactId, editable = false }: ContactPanelProps)
       {/* Header + ação de edição no corpo da seção (§2.1) */}
       {canEdit && (
         <div className="flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={<Pencil className="size-3.5" aria-hidden />}
-            onClick={() => startEdit()}
-          >
-            Editar
-          </Button>
+          <ReadOnlyGuard>
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<Pencil className="size-3.5" aria-hidden />}
+              onClick={() => startEdit()}
+            >
+              Editar cadastro
+            </Button>
+          </ReadOnlyGuard>
         </div>
       )}
 
@@ -394,22 +395,24 @@ export function ContactPanel({ contactId, editable = false }: ContactPanelProps)
       </div>
 
       {/* Endereço */}
-      <div className="border-t border-border-2 pt-3">
+      <div className="border-t border-border pt-4">
         <div className="mb-2 flex items-center gap-1.5">
           <MapPin className="size-3.5 text-text-low" aria-hidden />
-          <span className="font-body text-xs font-medium text-text-low">Endereço</span>
+          <span className="font-mono text-xs uppercase tracking-wider text-text-low">Endereço</span>
         </div>
         {addressEmpty ? (
           canEdit ? (
             // Empty state com CTA (§2.6)
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<MapPin className="size-3.5" aria-hidden />}
-              onClick={() => startEdit({})}
-            >
-              Adicionar endereço
-            </Button>
+            <ReadOnlyGuard align="start">
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<MapPin className="size-3.5" aria-hidden />}
+                onClick={() => startEdit({})}
+              >
+                Adicionar endereço
+              </Button>
+            </ReadOnlyGuard>
           ) : (
             <p className="font-body text-sm text-text-low">Sem endereço cadastrado.</p>
           )
@@ -422,10 +425,10 @@ export function ContactPanel({ contactId, editable = false }: ContactPanelProps)
       <CustomFields fields={contact.customFields} />
 
       {/* Resumo financeiro */}
-      <div className="border-t border-border-2 pt-3">
-        <p className="mb-2 font-body text-xs font-medium text-text-low">Resumo financeiro</p>
-        {summary.dealCount === 0 && summary.convertedCents === 0 ? (
-          <div className="flex items-start gap-2 rounded-sm border border-border-2 bg-surface-2 px-3 py-2">
+      <div className="border-t border-border pt-4">
+        <p className="mb-2 font-mono text-xs uppercase tracking-wider text-text-low">Resumo financeiro</p>
+        {summary.dealCount === 0 && summary.converted.size === 0 ? (
+          <div className="flex items-start gap-2 rounded-sm border border-border bg-surface-2 px-3 py-2">
             <AlertCircle className="mt-0.5 size-4 shrink-0 text-text-low" aria-hidden />
             <p className="font-body text-xs text-text-mid">
               Ainda sem negócios ou conversões para este cliente.
@@ -435,11 +438,11 @@ export function ContactPanel({ contactId, editable = false }: ContactPanelProps)
           <div className="grid grid-cols-3 gap-2">
             <FinancialStat
               label="Convertido"
-              value={formatCents(summary.convertedCents)}
+              value={formatTotals(summary.converted, SUMMARY_MONEY)}
               highlight
             />
-            <FinancialStat label="Negócios" value={String(summary.dealCount)} />
-            <FinancialStat label="Ticket médio" value={formatCents(summary.avgTicketCents)} />
+            <FinancialStat label="Negócios" value={formatNumber(summary.dealCount)} />
+            <FinancialStat label="Ticket médio" value={formatTotals(summary.avgTicket, SUMMARY_MONEY)} />
           </div>
         )}
       </div>
@@ -459,16 +462,15 @@ function FinancialStat({
   highlight?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-sm border border-border-2 bg-surface-2 px-2.5 py-2">
-      <span className="font-body text-[0.65rem] uppercase tracking-wide text-text-low">
+    <div className="flex min-w-0 flex-col gap-1 rounded-sm border border-border bg-surface-2 px-2.5 py-2">
+      <span className="truncate font-mono text-xs uppercase tracking-wider text-text-low">
         {label}
       </span>
       <span
-        className={
-          highlight
-            ? 'font-price text-sm font-semibold text-brand'
-            : 'font-price text-sm font-semibold text-text'
-        }
+        className={cn(
+          'break-words font-mono text-sm font-semibold tabular-nums',
+          highlight ? 'text-brand-text' : 'text-text',
+        )}
       >
         {value}
       </span>

@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { Button, Input, Modal, useToast } from '@hm/ui';
+import { ReadOnlyGuard, useIsReadOnly } from '@/shared/components/account-banner';
 import { useCreateContact, useUpdateContact } from './queries';
+import { textareaClass } from './styles';
 import type { Contact } from './types';
 
 interface ContactFormModalProps {
@@ -30,27 +32,35 @@ function fromContact(c?: Contact | null): FormState {
   };
 }
 
-/** Form de criar/editar contato. */
+/**
+ * Form de criar/editar contato (Modal: criação é um passo curto e focado, UX §2.3).
+ * Erro de validação inline no campo (§2.7); "Salvar" com loading e guarda de só leitura.
+ */
 export function ContactFormModal({ open, onClose, contact }: ContactFormModalProps): React.JSX.Element {
   const { toast } = useToast();
   const create = useCreateContact();
   const update = useUpdateContact();
   const [form, setForm] = useState<FormState>(fromContact(contact));
+  const [nameError, setNameError] = useState<string | undefined>(undefined);
   const editing = contact != null;
+  const readOnly = useIsReadOnly();
 
   useEffect(() => {
-    if (open) setForm(fromContact(contact));
+    if (open) {
+      setForm(fromContact(contact));
+      setNameError(undefined);
+    }
   }, [open, contact]);
 
-  const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]): void =>
     setForm((s) => ({ ...s, [k]: v }));
 
   const pending = create.isPending || update.isPending;
 
-  const submit = async () => {
+  const submit = async (): Promise<void> => {
     const name = form.displayName.trim();
     if (!name) {
-      toast({ variant: 'error', title: 'Nome é obrigatório.' });
+      setNameError('Informe o nome do contato.');
       return;
     }
     const payload = {
@@ -84,57 +94,69 @@ export function ContactFormModal({ open, onClose, contact }: ContactFormModalPro
           <Button variant="ghost" onClick={onClose} disabled={pending}>
             Cancelar
           </Button>
-          <Button variant="primary" onClick={() => void submit()} disabled={pending}>
-            {pending ? 'Salvando…' : 'Salvar'}
-          </Button>
+          <ReadOnlyGuard>
+            <Button variant="primary" loading={pending} onClick={() => void submit()}>
+              Salvar
+            </Button>
+          </ReadOnlyGuard>
         </div>
       }
     >
-      <div className="flex flex-col gap-3">
-        <label className="flex flex-col gap-1 text-sm text-text-mid">
-          Nome
-          <Input
-            value={form.displayName}
-            onChange={(e) => set('displayName', e.target.value)}
-            placeholder="Nome do contato"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm text-text-mid">
-          Telefone
-          <Input
-            value={form.phone}
-            onChange={(e) => set('phone', e.target.value)}
-            placeholder="+55 11 90000-0000"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm text-text-mid">
-          E-mail
-          <Input
-            type="email"
-            value={form.email}
-            onChange={(e) => set('email', e.target.value)}
-            placeholder="contato@exemplo.com"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm text-text-mid">
-          Origem
-          <Input
-            value={form.source}
-            onChange={(e) => set('source', e.target.value)}
-            placeholder="manual, import, whatsapp…"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm text-text-mid">
-          Notas
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!readOnly) void submit();
+        }}
+      >
+        <Input
+          label="Nome"
+          value={form.displayName}
+          onChange={(e) => {
+            set('displayName', e.target.value);
+            if (nameError) setNameError(undefined);
+          }}
+          placeholder="Nome do contato"
+          error={nameError}
+          autoComplete="off"
+        />
+        <Input
+          label="Telefone"
+          inputMode="tel"
+          value={form.phone}
+          onChange={(e) => set('phone', e.target.value)}
+          placeholder="+55 11 90000-0000"
+          className="font-mono tabular-nums"
+        />
+        <Input
+          label="E-mail"
+          type="email"
+          value={form.email}
+          onChange={(e) => set('email', e.target.value)}
+          placeholder="contato@exemplo.com"
+        />
+        <Input
+          label="Origem"
+          value={form.source}
+          onChange={(e) => set('source', e.target.value)}
+          placeholder="manual, import, whatsapp…"
+        />
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="contact-notes" className="font-body text-sm font-bold text-text-mid">
+            Notas
+          </label>
           <textarea
+            id="contact-notes"
             value={form.notes}
             onChange={(e) => set('notes', e.target.value)}
             rows={3}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus-visible:shadow-glow-md"
+            className={textareaClass}
             placeholder="Observações internas"
           />
-        </label>
-      </div>
+        </div>
+        {/* Enter no último campo de texto envia o form (atalho natural, UX §2.10). */}
+        <button type="submit" hidden aria-hidden tabIndex={-1} />
+      </form>
     </Modal>
   );
 }

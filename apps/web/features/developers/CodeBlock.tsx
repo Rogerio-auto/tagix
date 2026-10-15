@@ -21,9 +21,9 @@ export function CodeBlock({ code, label }: { code: string; label?: string }) {
   }
 
   return (
-    <div className="relative overflow-hidden rounded-md border border-border-2 bg-surface-2">
+    <div className="relative overflow-hidden rounded-md border border-border bg-surface-inset">
       {label && (
-        <div className="border-b border-border-2 px-4 py-1.5 font-head text-[11px] font-semibold uppercase tracking-wide text-text-low">
+        <div className="border-b border-border px-4 py-2 font-mono text-xs font-medium uppercase tracking-wider text-text-low">
           {label}
         </div>
       )}
@@ -31,12 +31,16 @@ export function CodeBlock({ code, label }: { code: string; label?: string }) {
         type="button"
         onClick={() => void copy()}
         aria-label="Copiar codigo"
-        className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-sm border border-border bg-surface px-2 py-1 font-head text-xs text-text-mid outline-none transition-colors hover:text-text focus-visible:shadow-glow-md"
+        className="absolute right-2 top-1.5 inline-flex items-center gap-1 rounded-xs border border-border bg-surface px-2 py-1 font-body text-xs font-bold text-text-mid outline-none transition-colors duration-(--dur-fast) ease-ds hover:border-border-2 hover:text-text focus-visible:focus-ring"
       >
-        {copied ? <Check className="size-3.5 text-brand" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
+        {copied ? <Check className="size-3.5 text-success" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
         {copied ? 'Copiado' : 'Copiar'}
       </button>
-      <pre className="overflow-x-auto px-4 py-3 font-price text-[13px] leading-relaxed text-text-mid">
+      {/* Rolagem horizontal focável por teclado (WCAG 2.1.1 / axe scrollable-region-focusable). */}
+      <pre
+        tabIndex={0}
+        className="overflow-x-auto px-4 py-3 font-mono text-sm leading-relaxed text-text outline-none focus-visible:focus-ring"
+      >
         <code>{code}</code>
       </pre>
     </div>

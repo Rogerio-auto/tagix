@@ -9,11 +9,11 @@
  *
  * Seam: o catálogo de planos voltado ao tenant ainda não é exposto pela S04;
  * sem planos, mostra estado honesto (EmptyState) em vez de inventar preço.
- * DS v2: Button de @hm/ui, tokens semânticos, verde-neon `--brand` só no plano
- * selecionado (1 destaque/tela).
+ * DS 3.0 (F72-S07): preço em mono tabular; o neon cheio fica só no CTA (1 destaque por
+ * tela) — o plano escolhido é marcado com a borda e o selo em `brand-text`.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, useToast } from '@hm/ui';
+import { Badge, Button, useToast } from '@hm/ui';
 import { Check, CreditCard, PackageSearch, QrCode } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { EmptyState } from '@/shared/components/feedback';
@@ -111,20 +111,19 @@ export function PlanSelector({
       {/* Toggle de ciclo */}
       <div className="flex items-center gap-3">
         <div
-          role="tablist"
+          role="group"
           aria-label="Ciclo de cobrança"
-          className="inline-flex rounded-md border border-border bg-surface-2 p-1"
+          className="inline-flex rounded-sm border border-border bg-surface-2 p-0.5"
         >
           {(['monthly', 'yearly'] as const).map((c) => (
             <button
               key={c}
               type="button"
-              role="tab"
-              aria-selected={cycle === c}
+              aria-pressed={cycle === c}
               onClick={() => setCycle(c)}
               className={cn(
-                'rounded-sm px-4 py-1.5 font-head text-sm font-semibold outline-none transition-colors focus-visible:shadow-glow-md',
-                cycle === c ? 'bg-surface text-text shadow-elev-1' : 'text-text-mid hover:text-text',
+                'h-9 rounded-xs px-4 font-body text-sm font-bold outline-none transition-colors duration-(--dur-fast) ease-ds focus-visible:focus-ring',
+                cycle === c ? 'bg-surface text-text shadow-ds-1' : 'text-text-mid hover:text-text',
               )}
             >
               {CYCLE_LABEL[c]}
@@ -132,7 +131,7 @@ export function PlanSelector({
           ))}
         </div>
         {cycle === 'yearly' && (
-          <span className="font-body text-xs text-text-low">Cobrança única anual</span>
+          <span className="font-body text-sm text-text-low">Cobrança única anual</span>
         )}
       </div>
 
@@ -150,33 +149,36 @@ export function PlanSelector({
               aria-pressed={selected}
               onClick={() => setSelectedId(plan.id)}
               className={cn(
-                'group relative flex flex-col items-start gap-2 rounded-lg border p-4 text-left outline-none transition-colors focus-visible:shadow-glow-md',
+                'group relative flex flex-col items-start gap-3 rounded-lg border p-5 text-left outline-none',
+                'transition-[border-color,background-color,transform,box-shadow] duration-(--dur-base) ease-ds focus-visible:focus-ring',
                 selected
-                  ? 'border-brand bg-brand/5'
-                  : 'border-border bg-surface hover:border-border-2 hover:bg-surface-2',
+                  ? 'border-brand-text bg-brand-text/[0.06] shadow-ds-1'
+                  : 'border-border bg-surface hover:border-border-2 hover:bg-surface-2 motion-safe:hover:-translate-y-px',
               )}
             >
               <div className="flex w-full items-center justify-between gap-2">
-                <span className="font-head text-base font-semibold text-text">{plan.name}</span>
+                <span className="font-head text-lg font-semibold text-text">{plan.name}</span>
                 {selected && (
                   <span
-                    className="inline-flex size-5 items-center justify-center rounded-pill bg-brand text-text-on-brand"
+                    className="inline-flex size-5 items-center justify-center rounded-pill bg-brand-text text-bg"
                     aria-hidden
                   >
-                    <Check className="size-3.5" />
+                    <Check className="size-3.5" strokeWidth={2.5} />
                   </span>
                 )}
               </div>
               <div className="flex items-baseline gap-1">
-                <span className="font-price text-2xl font-semibold text-text">{formatBRL(price)}</span>
+                <span className="font-mono text-h4 font-medium tabular-nums tracking-tight text-text">
+                  {formatBRL(price)}
+                </span>
                 <span className="font-body text-sm text-text-low">
                   {cycle === 'yearly' ? '/ ano' : '/ mês'}
                 </span>
               </div>
               {savings > 0 && (
-                <span className="rounded-pill bg-success/15 px-2 py-0.5 font-head text-xs font-semibold text-success">
-                  Economize {savings}%
-                </span>
+                <Badge tone="success" size="sm">
+                  Economize <span className="font-mono tabular-nums">{savings}%</span>
+                </Badge>
               )}
               {current && (
                 <span className="font-body text-xs text-text-low">Seu plano atual</span>
@@ -188,7 +190,7 @@ export function PlanSelector({
 
       {/* Método de pagamento */}
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 font-head text-sm font-semibold text-text">
+        <legend className="mb-2 font-mono text-xs font-medium uppercase tracking-widest text-text-low">
           Forma de pagamento
         </legend>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -207,15 +209,15 @@ export function PlanSelector({
                 aria-pressed={active}
                 onClick={() => setMethod(opt.value)}
                 className={cn(
-                  'flex items-center gap-3 rounded-md border p-3 text-left outline-none transition-colors focus-visible:shadow-glow-md',
+                  'flex items-center gap-3 rounded-md border p-3.5 text-left outline-none transition-colors duration-(--dur-fast) ease-ds focus-visible:focus-ring',
                   active
-                    ? 'border-text bg-surface-2'
+                    ? 'border-text-mid bg-surface-2'
                     : 'border-border bg-surface hover:border-border-2 hover:bg-surface-2',
                 )}
               >
                 <Icon className={cn('size-5 shrink-0', active ? 'text-text' : 'text-text-mid')} aria-hidden />
                 <span className="flex flex-col">
-                  <span className="font-head text-sm font-medium text-text">{opt.label}</span>
+                  <span className="font-body text-sm font-bold text-text">{opt.label}</span>
                   <span className="font-body text-xs text-text-low">{opt.hint}</span>
                 </span>
               </button>
@@ -224,7 +226,7 @@ export function PlanSelector({
         </div>
       </fieldset>
 
-      <div className="flex flex-col gap-2 border-t border-border-2 pt-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
         <p className="font-body text-sm text-text-mid">
           Você será levado a um checkout seguro para concluir o pagamento.
         </p>
