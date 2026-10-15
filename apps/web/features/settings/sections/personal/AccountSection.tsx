@@ -1,5 +1,9 @@
 'use client';
 
+import { ShieldCheck } from 'lucide-react';
+import { Badge } from '@hm/ui';
+import { roleLabel } from '@/features/invites/types';
+import { Panel, SectionLoading } from './components';
 import { useMe } from './queries';
 
 /** Conta: e-mail, MFA (futuro), exclusão de conta (futuro). Read-only no MVP. */
@@ -7,30 +11,44 @@ export default function AccountSection(): React.JSX.Element {
   const meQuery = useMe();
   const m = meQuery.data?.member;
 
-  if (meQuery.isLoading) return <p className="text-sm text-text-low">Carregando…</p>;
+  if (meQuery.isLoading) return <SectionLoading rows={2} label="Carregando conta" />;
 
   return (
-    <div className="flex max-w-md flex-col gap-4">
-      <div className="flex justify-between gap-3 border-b border-border/40 pb-3">
-        <span className="text-sm text-text-low">E-mail</span>
-        <span className="text-sm text-text">{m?.email ?? '—'}</span>
+    <div className="flex flex-col gap-5">
+      <Panel title="Identidade" body="flush">
+        <dl className="divide-y divide-border px-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 py-4">
+            <dt className="font-body text-sm text-text-low">E-mail</dt>
+            <dd className="font-mono text-sm text-text">{m?.email ?? '—'}</dd>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 py-4">
+            <dt className="font-body text-sm text-text-low">Papel neste workspace</dt>
+            <dd>
+              {m?.role ? (
+                <Badge tone="neutral" size="sm">
+                  {roleLabel(m.role)}
+                </Badge>
+              ) : (
+                <span className="text-sm text-text">—</span>
+              )}
+            </dd>
+          </div>
+        </dl>
+      </Panel>
+
+      <div className="flex gap-3 rounded-lg border border-dashed border-border-2 p-5">
+        <ShieldCheck className="mt-0.5 size-5 shrink-0 text-text-low" aria-hidden />
+        <div>
+          <p className="font-body text-sm font-bold text-text">Verificação em duas etapas</p>
+          <p className="mt-0.5 font-body text-sm text-text-low">Chega em uma fase futura.</p>
+        </div>
       </div>
-      <div className="flex justify-between gap-3 border-b border-border/40 pb-3">
-        <span className="text-sm text-text-low">Papel</span>
-        <span className="text-sm text-text">{m?.role ?? '—'}</span>
-      </div>
-      <div className="rounded-md border border-dashed border-border p-4">
-        <p className="text-sm font-medium text-text">MFA</p>
-        <p className="text-xs text-text-low">
-          Autenticação em dois fatores chega em uma fase futura.
-        </p>
-      </div>
-      <div className="rounded-md border border-danger/40 p-4">
-        <p className="text-sm font-medium text-danger">Excluir conta</p>
-        <p className="text-xs text-text-low">
+
+      <Panel tone="danger" title="Excluir conta">
+        <p className="font-body text-sm text-text-mid">
           A exclusão de conta é uma ação irreversível gerenciada pelo administrador do workspace.
         </p>
-      </div>
+      </Panel>
     </div>
   );
 }

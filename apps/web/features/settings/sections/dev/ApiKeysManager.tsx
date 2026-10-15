@@ -1,13 +1,23 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Input, Modal, useToast } from '@hm/ui';
+import { Copy, KeyRound, Plus } from 'lucide-react';
 import {
-  useApiKeys,
-  useCreateApiKey,
-  useRevokeApiKey,
-  type ApiKey,
-} from './queries';
+  Badge,
+  Button,
+  DataTable,
+  EmptyState,
+  ErrorState,
+  Input,
+  Modal,
+  useToast,
+  type DataTableColumn,
+} from '@hm/ui';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
+import { formatDateTime, formatNumber } from '@/shared/lib/locale';
+import { Panel, SectionLoading } from '../personal/components';
+import { useApiKeys, useCreateApiKey, useRevokeApiKey, type ApiKey } from './queries';
 
 /** Scopes oferecidos — espelham `API_SCOPES` da API v1 (apps/api). */
 const SCOPES: ReadonlyArray<{ value: string; label: string }> = [
@@ -18,14 +28,24 @@ const SCOPES: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'write:flows', label: 'Disparar flows' },
 ];
 
-function fmtDate(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+/** "Último uso": data e hora no idioma da interface; nunca usada → texto, não traço. */
+function lastUsed(iso: string | null): string {
+  return iso ? formatDateTime(iso) : 'Nunca usada';
 }
 
-/** Gestão de API keys: criar (show-once + copiar), listar, revogar (typing-to-confirm). */
+/**
+ * Gestão de API keys (F9-S06) no DS 3.0 (F72-S07): criar (show-once + copiar), listar,
+ * revogar (digitar o nome para confirmar, UX §2.9). Desktop em `DataTable` (prefixo, limite
+ * e último uso em mono), celular em cards.
+ *
+ * Segredo: o token continua aparecendo UMA vez, só no modal pós-criação; a lista mostra só
+ * o prefixo (`keyPrefix…`), como antes. Nada novo é exposto.
+ *
+ * Só leitura (F71-S17): "Nova chave" e "Revogar" ficam `aria-disabled` com a explicação.
+ */
 export default function ApiKeysManager(): React.JSX.Element {
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const keysQuery = useApiKeys();
   const create = useCreateApiKey();
   const revoke = useRevokeApiKey();
@@ -90,60 +110,140 @@ export default function ApiKeysManager(): React.JSX.Element {
     }
   };
 
-  if (keysQuery.isLoading) return <p className="text-sm text-text-low">Carregando…</p>;
+  if (keysQuery.isLoading) return <SectionLoading label="Carregando API keys" />;
+
+  const createButton = (
+    <ReadOnlyGuard>
+      <Button variant="secondary" leftIcon={<Plus className="size-4" aria-hidden />} onClick={() => setCreating(true)}>
+        Nova chave
+      </Button>
+    </ReadOnlyGuard>
+  );
+
+  const revokeButton = (k: ApiKey) =>
+    k.isActive ? (
+      <ReadOnlyGuard>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="hover:text-danger max-md:h-11"
+          aria-label={`Revogar a chave ${k.name}`}
+          onClick={() => {
+            setRevokeTarget(k);
+            setConfirmText('');
+          }}
+        >
+          Revogar
+        </Button>
+      </ReadOnlyGuard>
+    ) : null;
+
+  const nameCell = (k: ApiKey) => (
+    <span className="flex min-w-0 flex-col gap-0.5">
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="truncate font-semibold text-text">{k.name}</span>
+        {!k.isActive && (
+          <Badge tone="danger" size="sm">
+            Revogada
+          </Badge>
+        )}
+      </span>
+      <span className="truncate font-mono text-xs text-text-low">{k.scopes.join(' · ') || 'sem scopes'}</span>
+    </span>
+  );
+
+  const columns: DataTableColumn<ApiKey>[] = [
+    { id: 'name', header: 'Chave', cell: nameCell },
+    {
+      id: 'prefix',
+      header: 'Prefixo',
+      width: '9rem',
+      cell: (k) => <code className="font-mono text-sm text-text-mid">{k.keyPrefix}…</code>,
+    },
+    {
+      id: 'rate',
+      header: 'Limite',
+      numeric: true,
+      width: '7rem',
+      cell: (k) => `${formatNumber(k.rateLimitPerMinute)}/min`,
+    },
+    { id: 'lastUsed', header: 'Último uso', numeric: true, width: '10rem', cell: (k) => lastUsed(k.lastUsedAt) },
+    {
+      id: 'actions',
+      header: <span className="sr-only">Ações</span>,
+      headerLabel: 'Ações',
+      align: 'right',
+      width: '7rem',
+      cell: revokeButton,
+    },
+  ];
+
+  const empty = (
+    <EmptyState
+      className="py-8"
+      icon={KeyRound}
+      title="Nenhuma API key"
+      description="Crie uma chave para integrar n8n, seu CRM ou um script à API pública."
+    />
+  );
+  const error = (
+    <ErrorState
+      title="Não foi possível carregar as chaves"
+      reason="A lista de API keys não respondeu."
+      whatToDo="Tente de novo em instantes."
+      action={
+        <Button variant="secondary" loading={keysQuery.isFetching} onClick={() => void keysQuery.refetch()}>
+          Tentar de novo
+        </Button>
+      }
+    />
+  );
 
   return (
-    <section className="flex flex-col gap-4">
-      <header className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-medium text-text">API keys</h3>
-          <p className="text-xs text-text-low">
-            Autenticam a API pública (`Authorization: Bearer hm_...`). O token só aparece na criação.
-          </p>
-        </div>
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          Nova chave
-        </Button>
-      </header>
-
-      <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
-        {keys.length === 0 && (
-          <li className="px-4 py-6 text-center text-sm text-text-low">Nenhuma API key.</li>
-        )}
-        {keys.map((k) => (
-          <li key={k.id} className="flex items-center justify-between gap-4 px-4 py-3">
-            <div className="min-w-0">
-              <p className="flex items-center gap-2 text-sm text-text">
-                <span className="truncate">{k.name}</span>
-                <code className="rounded bg-surface px-1.5 py-0.5 text-xs text-text-mid">
-                  {k.keyPrefix}…
-                </code>
-                {!k.isActive && (
-                  <span className="rounded-full bg-danger/15 px-2 py-0.5 text-xs text-danger">
-                    revogada
-                  </span>
-                )}
-              </p>
-              <p className="mt-0.5 text-xs text-text-low">
-                {k.scopes.join(', ') || 'sem scopes'} · {k.rateLimitPerMinute}/min · último uso{' '}
-                {fmtDate(k.lastUsedAt)}
-              </p>
-            </div>
-            {k.isActive && (
-              <button
-                type="button"
-                onClick={() => {
-                  setRevokeTarget(k);
-                  setConfirmText('');
-                }}
-                className="shrink-0 text-xs text-text-low hover:text-danger"
-              >
-                Revogar
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
+    <Panel
+      title="API keys"
+      description={
+        <>
+          Autenticam a API pública (<code className="font-mono text-text-mid">Authorization: Bearer hm_…</code>). O
+          token só aparece na criação.
+        </>
+      }
+      action={createButton}
+      body="flush"
+    >
+      {isMobile ? (
+        keysQuery.isError ? (
+          error
+        ) : keys.length === 0 ? (
+          empty
+        ) : (
+          <ul aria-label="API keys" className="divide-y divide-border">
+            {keys.map((k) => (
+              <li key={k.id} className="flex flex-col gap-2 px-5 py-3">
+                {nameCell(k)}
+                <p className="flex flex-wrap gap-x-3 font-mono text-xs tabular-nums text-text-mid">
+                  <span>{k.keyPrefix}…</span>
+                  <span>{formatNumber(k.rateLimitPerMinute)}/min</span>
+                  <span>{lastUsed(k.lastUsedAt)}</span>
+                </p>
+                {k.isActive && <div className="-ml-3">{revokeButton(k)}</div>}
+              </li>
+            ))}
+          </ul>
+        )
+      ) : (
+        <DataTable<ApiKey>
+          caption="API keys"
+          columns={columns}
+          rows={keys}
+          getRowId={(k) => k.id}
+          density="compact"
+          getRowState={(k) => (k.isActive ? undefined : 'muted')}
+          error={keysQuery.isError ? error : undefined}
+          empty={empty}
+          className="rounded-none border-0"
+        />
+      )}
 
       {/* Criar chave */}
       <Modal
@@ -164,45 +264,48 @@ export default function ApiKeysManager(): React.JSX.Element {
             >
               Cancelar
             </Button>
-            <Button
-              variant="primary"
-              disabled={!name.trim() || scopes.length === 0 || create.isPending}
-              onClick={() => void submitCreate()}
-            >
-              Criar
-            </Button>
+            <ReadOnlyGuard>
+              <Button
+                variant="primary"
+                disabled={!name.trim() || scopes.length === 0}
+                loading={create.isPending}
+                onClick={() => void submitCreate()}
+              >
+                Criar chave
+              </Button>
+            </ReadOnlyGuard>
           </div>
         }
       >
-        <div className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-text-low">Nome</span>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Integração n8n" />
-          </label>
-          <fieldset className="flex flex-col gap-2">
-            <legend className="text-xs text-text-low">Scopes</legend>
+        <div className="flex flex-col gap-5">
+          <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Integração n8n" />
+          <fieldset className="flex flex-col gap-1">
+            <legend className="mb-2 font-body text-sm font-bold text-text-mid">Scopes</legend>
             {SCOPES.map((s) => (
-              <label key={s.value} className="flex items-center gap-2 text-sm text-text">
+              <label
+                key={s.value}
+                className="flex cursor-pointer items-center gap-3 rounded-sm px-2 py-1.5 font-body text-sm text-text transition-colors duration-(--dur-fast) hover:bg-surface-2"
+              >
                 <input
                   type="checkbox"
                   checked={scopes.includes(s.value)}
                   onChange={() => toggleScope(s.value)}
-                  className="accent-brand"
+                  className="size-4 accent-brand-text"
                 />
-                {s.label}
-                <code className="text-xs text-text-low">{s.value}</code>
+                <span className="flex-1">{s.label}</span>
+                <code className="font-mono text-xs text-text-low">{s.value}</code>
               </label>
             ))}
           </fieldset>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-text-low">Rate limit (req/min)</span>
-            <Input
-              type="number"
-              value={rateLimit}
-              onChange={(e) => setRateLimit(e.target.value)}
-              min={1}
-            />
-          </label>
+          <Input
+            label="Rate limit (req/min)"
+            type="number"
+            inputMode="numeric"
+            className="font-mono tabular-nums"
+            value={rateLimit}
+            onChange={(e) => setRateLimit(e.target.value)}
+            min={1}
+          />
         </div>
       </Modal>
 
@@ -217,18 +320,18 @@ export default function ApiKeysManager(): React.JSX.Element {
             <Button variant="ghost" onClick={() => setCreatedToken(null)}>
               Fechar
             </Button>
-            <Button variant="primary" onClick={() => void copyToken()}>
+            <Button variant="primary" leftIcon={<Copy className="size-4" aria-hidden />} onClick={() => void copyToken()}>
               Copiar token
             </Button>
           </div>
         }
       >
-        <code className="block break-all rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text">
+        <code className="block break-all rounded-sm border border-border-2 bg-surface-inset px-3 py-2.5 font-mono text-sm text-text">
           {createdToken}
         </code>
       </Modal>
 
-      {/* Revogar (typing-to-confirm) */}
+      {/* Revogar (digitar o nome para confirmar) */}
       <Modal
         open={revokeTarget !== null}
         onClose={() => {
@@ -250,10 +353,11 @@ export default function ApiKeysManager(): React.JSX.Element {
             </Button>
             <Button
               variant="danger"
-              disabled={confirmText !== revokeTarget?.name || revoke.isPending}
+              disabled={confirmText !== revokeTarget?.name}
+              loading={revoke.isPending}
               onClick={() => void doRevoke()}
             >
-              Revogar
+              Revogar chave
             </Button>
           </div>
         }
@@ -265,6 +369,6 @@ export default function ApiKeysManager(): React.JSX.Element {
           aria-label="Confirmação do nome da chave"
         />
       </Modal>
-    </section>
+    </Panel>
   );
 }

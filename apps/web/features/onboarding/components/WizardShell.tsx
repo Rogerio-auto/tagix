@@ -10,6 +10,8 @@ export interface WizardShellProps {
   onClose: () => void;
   /** Rótulo de acessibilidade do diálogo. */
   ariaLabel: string;
+  /** Rótulo visível curto no topo do diálogo (desktop). Padrão: o próprio `ariaLabel`. */
+  eyebrow?: string;
   /** Header fixo (boas-vindas/stepper). */
   header?: ReactNode;
   /** Corpo rolável do passo atual. */
@@ -24,8 +26,11 @@ export interface WizardShellProps {
  * um bottom-Sheet com rodapé fixo na zona do polegar. O conteúdo dos passos é o
  * mesmo nos dois — só a moldura muda. Sem `onClose` em pontos onde abandonar
  * perderia trabalho: o controle de fechamento fica nos botões internos.
+ *
+ * DS 3.0 (F72-S07): no desktop o título do diálogo é o rótulo de contexto em mono
+ * ("Configuração inicial") — o nome acessível do diálogo é o `ariaLabel` completo.
  */
-export function WizardShell({ open, onClose, ariaLabel, header, children, footer }: WizardShellProps): ReactNode {
+export function WizardShell({ open, onClose, ariaLabel, eyebrow, header, children, footer }: WizardShellProps): ReactNode {
   const { isMobile } = useBreakpoint();
 
   if (isMobile) {
@@ -39,12 +44,23 @@ export function WizardShell({ open, onClose, ariaLabel, header, children, footer
     );
   }
 
+  // Rótulo visível curto (decorativo) + o nome completo em `sr-only`: o nome acessível do
+  // diálogo (aria-labelledby → título) é exatamente o `ariaLabel`.
+  const title = (
+    <>
+      <span aria-hidden className="block font-mono text-xs font-medium uppercase tracking-widest text-text-low">
+        {eyebrow ?? ariaLabel}
+      </span>
+      <span className="sr-only">{ariaLabel}</span>
+    </>
+  );
+
   return (
-    <Modal open={open} onClose={onClose} className="max-w-2xl">
-      <div className="flex flex-col gap-6" role="group" aria-label={ariaLabel}>
+    <Modal open={open} onClose={onClose} title={title} className="max-w-2xl">
+      <div className="flex flex-col gap-6">
         {header}
         <div className="max-h-[60vh] overflow-y-auto pr-1">{children}</div>
-        {footer && <div className="flex items-center justify-between gap-3 border-t border-border-2 pt-4">{footer}</div>}
+        {footer && <div className="flex items-center justify-between gap-3 border-t border-border pt-4">{footer}</div>}
       </div>
     </Modal>
   );

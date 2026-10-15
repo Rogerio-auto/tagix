@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { Button, useToast } from '@hm/ui';
-import { Row, Toggle } from '../personal/components';
+import { ReadOnlyGuard, useIsReadOnly } from '@/shared/components/account-banner';
+import { cn } from '@/shared/lib/cn';
+import { Panel, Row, SaveFooter, SectionLoading, Toggle, controlClass, textareaClass } from '../personal/components';
 import { useUpdateWorkspace, useWorkspace } from './queries';
 
 interface DayCfg {
@@ -46,11 +48,18 @@ function readBusinessHours(settings: Record<string, unknown> | undefined): Busin
   return { enabled: false, days: defaultDays(), awayMessage: '' };
 }
 
-/** Horário comercial: janelas por dia + mensagem fora do horário. */
+/**
+ * Horário comercial: janelas por dia + mensagem fora do horário, no DS 3.0 (F72-S07):
+ * a semana como grade (dia, aberto, das, até) com horários em mono. Só leitura (F71-S17):
+ * "Salvar" fica `aria-disabled` com a explicação.
+ */
 export default function BusinessHoursSection(): React.JSX.Element {
   const { toast } = useToast();
   const wsQuery = useWorkspace();
   const update = useUpdateWorkspace();
+  // Só leitura: o botão fica focável (aria-disabled + explicação) mesmo sem alterações;
+  // `disabled` tiraria o botão do Tab e a explicação nunca seria encontrada.
+  const readOnly = useIsReadOnly();
   const [bh, setBh] = useState<BusinessHours>({ enabled: false, days: defaultDays(), awayMessage: '' });
   const [initial, setInitial] = useState(bh);
 
@@ -81,53 +90,84 @@ export default function BusinessHoursSection(): React.JSX.Element {
     }
   };
 
-  if (wsQuery.isLoading) return <p className="text-sm text-text-low">Carregando…</p>;
+  if (wsQuery.isLoading) return <SectionLoading rows={7} label="Carregando horário comercial" />;
+
+  const timeClass = cn(controlClass, 'w-28 px-2 font-mono tabular-nums');
 
   return (
-    <div className="flex max-w-lg flex-col gap-3">
-      <Row title="Ativar horário comercial" description="Define janelas de atendimento por dia.">
-        <Toggle checked={bh.enabled} onChange={(v) => setBh((s) => ({ ...s, enabled: v }))} label="Ativar horário comercial" />
-      </Row>
-      <div className="flex flex-col gap-2">
-        {bh.days.map((d, i) => (
-          <div key={DAY_LABELS[i]} className="flex items-center gap-3 border-b border-border/40 py-2">
-            <span className="w-10 text-sm text-text-mid">{DAY_LABELS[i]}</span>
-            <Toggle checked={d.open} onChange={(v) => setDay(i, { open: v })} label={`${DAY_LABELS[i]} aberto`} />
-            <input
-              type="time"
-              value={d.from}
-              disabled={!d.open || !bh.enabled}
-              onChange={(e) => setDay(i, { from: e.target.value })}
-              aria-label={`${DAY_LABELS[i]} início`}
-              className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-text disabled:opacity-40"
-            />
-            <span className="text-text-low">–</span>
-            <input
-              type="time"
-              value={d.to}
-              disabled={!d.open || !bh.enabled}
-              onChange={(e) => setDay(i, { to: e.target.value })}
-              aria-label={`${DAY_LABELS[i]} fim`}
-              className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-text disabled:opacity-40"
-            />
-          </div>
-        ))}
+    <Panel
+      body="flush"
+      footer={
+        <SaveFooter dirty={dirty}>
+          <ReadOnlyGuard>
+            <Button variant="primary" disabled={!readOnly && !dirty} loading={update.isPending} onClick={() => void save()}>
+              Salvar horário
+            </Button>
+          </ReadOnlyGuard>
+        </SaveFooter>
+      }
+    >
+      <div className="border-b border-border px-5">
+        <Row title="Ativar horário comercial" description="Define janelas de atendimento por dia.">
+          <Toggle
+            checked={bh.enabled}
+            onChange={(v) => setBh((s) => ({ ...s, enabled: v }))}
+            label="Ativar horário comercial"
+          />
+        </Row>
       </div>
-      <label className="flex flex-col gap-1 text-sm text-text-mid">
-        Mensagem fora do horário
-        <textarea
-          value={bh.awayMessage}
-          onChange={(e) => setBh((s) => ({ ...s, awayMessage: e.target.value }))}
-          rows={2}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus-visible:shadow-glow-md"
-          placeholder="Estamos fora do horário de atendimento. Retornaremos em breve."
-        />
-      </label>
-      <div>
-        <Button variant="primary" disabled={!dirty || update.isPending} onClick={() => void save()}>
-          {update.isPending ? 'Salvando…' : 'Salvar'}
-        </Button>
+      <ul
+        aria-label="Janelas por dia da semana"
+        className="divide-y divide-border px-5"
+      >
+        {bh.days.map((d, i) => {
+          const day = DAY_LABELS[i] ?? '';
+          const off = !d.open || !bh.enabled;
+          return (
+            <li key={day} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
+              <span className="w-10 font-mono text-sm font-semibold uppercase tracking-wider text-text-mid">{day}</span>
+              <Toggle checked={d.open} onChange={(v) => setDay(i, { open: v })} label={`${day} aberto`} disabled={!bh.enabled} />
+              {d.open ? (
+                <span className="flex items-center gap-2">
+                  <input
+                    type="time"
+                    value={d.from}
+                    disabled={off}
+                    onChange={(e) => setDay(i, { from: e.target.value })}
+                    aria-label={`${day} início`}
+                    className={timeClass}
+                  />
+                  <span className="text-text-low" aria-hidden>
+                    –
+                  </span>
+                  <input
+                    type="time"
+                    value={d.to}
+                    disabled={off}
+                    onChange={(e) => setDay(i, { to: e.target.value })}
+                    aria-label={`${day} fim`}
+                    className={timeClass}
+                  />
+                </span>
+              ) : (
+                <span className="font-body text-sm text-text-low">Fechado</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <div className="border-t border-border px-5 py-5">
+        <label className="flex flex-col gap-1.5 font-body text-sm font-bold text-text-mid">
+          Mensagem fora do horário
+          <textarea
+            value={bh.awayMessage}
+            onChange={(e) => setBh((s) => ({ ...s, awayMessage: e.target.value }))}
+            rows={3}
+            className={cn(textareaClass, 'font-normal')}
+            placeholder="Estamos fora do horário de atendimento. Retornaremos em breve."
+          />
+        </label>
       </div>
-    </div>
+    </Panel>
   );
 }

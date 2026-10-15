@@ -5,6 +5,7 @@ import { ArrowRight, Check, Sparkles, X } from 'lucide-react';
 import { can } from '@hm/shared';
 import { Card } from '@hm/ui';
 import { cn } from '@/shared/lib/cn';
+import { formatNumber } from '@/shared/lib/locale';
 import { Skeleton } from '@/shared/components/feedback';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { useChecklist } from './queries';
@@ -24,6 +25,10 @@ import { useChecklistDismissed } from './useChecklistDismissed';
  * Gating: só ADMIN/OWNER (têm `workspace.edit`) — coerente com o resto do onboarding;
  * para os demais a query nem dispara, sem ruído. Dispensa persistida em localStorage
  * por workspace (preferência de UI de baixo risco; ver `useChecklistDismissed`).
+ *
+ * DS 3.0 (F72-S07): contagem em mono, trilho de progresso em `brand-text` (o verde cheio é
+ * só do CTA), passos pendentes com Lift e seta que avança no hover (só com movimento
+ * permitido). Ler e seguir os links não escreve nada: funciona igual em só leitura.
  */
 export function SetupChecklist() {
   const auth = useAuthStore((s) => s.auth);
@@ -67,15 +72,18 @@ export function SetupChecklist() {
         {/* Cabeçalho: título + progresso + dispensar */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-3 text-brand">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-brand-text/25 bg-brand-text/10 text-brand-text">
               <Sparkles size={16} aria-hidden />
             </span>
             <div className="flex flex-col">
               <h2 id="setup-checklist-title" className="font-head text-base font-semibold text-text">
                 Primeiros passos
               </h2>
-              <p className="font-body text-xs text-text-low">
-                {doneCount} de {total} concluídos
+              <p className="font-body text-sm text-text-low">
+                <span className="font-mono tabular-nums text-text-mid">
+                  {formatNumber(doneCount)}/{formatNumber(total)}
+                </span>{' '}
+                concluídos
               </p>
             </div>
           </div>
@@ -83,7 +91,7 @@ export function SetupChecklist() {
             type="button"
             onClick={dismiss}
             aria-label="Dispensar primeiros passos"
-            className="rounded-md p-1 text-text-low transition-colors hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:shadow-glow-md"
+            className="grid size-8 place-items-center rounded-sm text-text-low outline-none transition-colors duration-(--dur-base) hover:bg-surface-2 hover:text-text focus-visible:focus-ring max-md:size-11"
           >
             <X size={16} aria-hidden />
           </button>
@@ -99,7 +107,7 @@ export function SetupChecklist() {
           aria-label={`${doneCount} de ${total} passos concluídos`}
         >
           <div
-            className="h-full rounded-pill bg-brand transition-[width] duration-500 ease-out motion-reduce:transition-none"
+            className="h-full rounded-pill bg-brand-text motion-safe:transition-[width] motion-safe:duration-500 motion-safe:ease-ds"
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -110,32 +118,32 @@ export function SetupChecklist() {
             <li key={step.key}>
               {step.done ? (
                 <div className="flex items-center gap-3 rounded-md px-3 py-2.5">
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-pill bg-success text-text-on-brand">
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-pill bg-success text-bg">
                     <Check size={12} strokeWidth={3} aria-hidden />
                   </span>
                   <span className="flex-1 font-body text-sm text-text-low line-through">
                     {step.label}
                   </span>
-                  <span className="font-body text-xs text-success">Feito</span>
+                  <span className="font-mono text-xs uppercase tracking-wider text-success">Feito</span>
                 </div>
               ) : (
                 <Link
                   href={step.href}
                   className={cn(
-                    'group flex items-center gap-3 rounded-md border border-border-2 px-3 py-2.5',
-                    'transition-colors hover:border-border-brand hover:bg-surface-2',
-                    'focus-visible:outline-none focus-visible:shadow-glow-md',
+                    'group flex min-h-11 items-center gap-3 rounded-md border border-border bg-surface px-3 py-2.5 outline-none',
+                    'transition-[border-color,background-color,transform] duration-(--dur-base) ease-ds',
+                    'hover:border-border-brand hover:bg-surface-2 motion-safe:hover:translate-x-0.5 focus-visible:focus-ring',
                   )}
                 >
                   <span
-                    className="size-5 shrink-0 rounded-pill border border-border-2 transition-colors group-hover:border-border-brand"
+                    className="size-5 shrink-0 rounded-pill border border-border-2 transition-colors duration-(--dur-base) group-hover:border-brand-text"
                     aria-hidden
                   />
                   <span className="flex-1 font-body text-sm font-medium text-text">{step.label}</span>
                   <ArrowRight
                     size={16}
                     aria-hidden
-                    className="text-text-low transition-transform group-hover:translate-x-0.5 group-hover:text-text motion-reduce:transition-none"
+                    className="text-text-low transition-[transform,color] duration-(--dur-base) group-hover:text-brand-text motion-safe:group-hover:translate-x-0.5"
                   />
                 </Link>
               )}

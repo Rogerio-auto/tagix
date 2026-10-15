@@ -1,7 +1,26 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Input, Modal, useToast } from '@hm/ui';
+import { Copy, Pencil, Plus, ScrollText, Send, Trash2, Webhook } from 'lucide-react';
+import {
+  Badge,
+  Button,
+  DataTable,
+  Drawer,
+  EmptyState,
+  ErrorState,
+  Input,
+  Modal,
+  Skeleton,
+  StatusPill,
+  useToast,
+  type BadgeTone,
+  type DataTableColumn,
+} from '@hm/ui';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
+import { formatDateTime, formatNumber } from '@/shared/lib/locale';
+import { Panel, SectionLoading } from '../personal/components';
 import {
   useCreateWebhook,
   useDeleteWebhook,
@@ -10,23 +29,30 @@ import {
   useWebhookDeliveries,
   useWebhooks,
   type OutboundWebhook,
+  type WebhookDelivery,
 } from './queries';
 
-const STATUS_TONE: Record<string, string> = {
-  sent: 'text-success',
-  failed: 'text-danger',
-  retrying: 'text-warn',
-  pending: 'text-text-low',
+const STATUS: Record<WebhookDelivery['status'], { label: string; tone: BadgeTone }> = {
+  sent: { label: 'Entregue', tone: 'success' },
+  failed: { label: 'Falhou', tone: 'danger' },
+  retrying: { label: 'Repetindo', tone: 'warning' },
+  pending: { label: 'Na fila', tone: 'neutral' },
 };
 
-function fmtDate(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-}
-
-/** Gestão de webhooks outbound: CRUD + seletor de eventos, testar e log de entregas. */
+/**
+ * Gestão de webhooks outbound (F9-S06) no DS 3.0 (F72-S07): CRUD + seletor de eventos,
+ * testar e log de entregas. Lista em `DataTable` (URL e eventos em mono), log de entregas
+ * num Drawer (detalhe lateral, UX §2.3) com status em selo e HTTP/tentativa em mono.
+ *
+ * Segredo: o segredo de assinatura continua aparecendo UMA vez, só no modal pós-criação.
+ * Nada novo é exposto.
+ *
+ * Só leitura (F71-S17): novo, editar, testar (dispara uma entrega) e remover ficam
+ * `aria-disabled` com a explicação; o log de entregas é leitura e segue livre.
+ */
 export default function WebhooksManager(): React.JSX.Element {
   const { toast } = useToast();
+  const { isMobile } = useBreakpoint();
   const webhooksQuery = useWebhooks();
   const create = useCreateWebhook();
   const update = useUpdateWebhook();
@@ -41,11 +67,11 @@ export default function WebhooksManager(): React.JSX.Element {
 
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OutboundWebhook | null>(null);
-  const [logTarget, setLogTarget] = useState<string | null>(null);
+  const [logTarget, setLogTarget] = useState<OutboundWebhook | null>(null);
 
   const availableEvents = webhooksQuery.data?.availableEvents ?? [];
   const webhooks = webhooksQuery.data?.webhooks ?? [];
-  const deliveries = useWebhookDeliveries(logTarget);
+  const deliveries = useWebhookDeliveries(logTarget?.id ?? null);
 
   const openCreate = () => {
     setEditing(null);
@@ -118,61 +144,195 @@ export default function WebhooksManager(): React.JSX.Element {
     }
   };
 
-  if (webhooksQuery.isLoading) return <p className="text-sm text-text-low">Carregando…</p>;
+  if (webhooksQuery.isLoading) return <SectionLoading label="Carregando webhooks" />;
+
+  const createButton = (
+    <ReadOnlyGuard>
+      <Button variant="secondary" leftIcon={<Plus className="size-4" aria-hidden />} onClick={openCreate}>
+        Novo webhook
+      </Button>
+    </ReadOnlyGuard>
+  );
+
+  const rowActions = (w: OutboundWebhook) => (
+    <div className="flex flex-wrap items-center gap-1 md:justify-end">
+      <ReadOnlyGuard>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="max-md:h-11"
+          leftIcon={<Send className="size-3.5" aria-hidden />}
+          loading={test.isPending && test.variables === w.id}
+          aria-label={`Testar o webhook ${w.name}`}
+          onClick={() => void runTest(w.id)}
+        >
+          Testar
+        </Button>
+      </ReadOnlyGuard>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="max-md:h-11"
+        leftIcon={<ScrollText className="size-3.5" aria-hidden />}
+        aria-label={`Ver o log de entregas de ${w.name}`}
+        onClick={() => setLogTarget(w)}
+      >
+        Log
+      </Button>
+      <ReadOnlyGuard>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="max-md:h-11"
+          leftIcon={<Pencil className="size-3.5" aria-hidden />}
+          aria-label={`Editar o webhook ${w.name}`}
+          onClick={() => openEdit(w)}
+        >
+          Editar
+        </Button>
+      </ReadOnlyGuard>
+      <ReadOnlyGuard>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="hover:text-danger max-md:h-11 max-sm:w-11 max-sm:px-0"
+          leftIcon={<Trash2 className="size-3.5 text-danger" aria-hidden />}
+          aria-label={`Remover o webhook ${w.name}`}
+          onClick={() => setDeleteTarget(w)}
+        >
+          {/* Celular: só o ícone (o nome acessível segue completo) para as 4 ações caberem numa linha. */}
+          <span className="max-sm:sr-only">Remover</span>
+        </Button>
+      </ReadOnlyGuard>
+    </div>
+  );
+
+  const nameCell = (w: OutboundWebhook) => (
+    <span className="flex min-w-0 flex-col gap-0.5">
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="truncate font-semibold text-text">{w.name}</span>
+        {!w.isActive && (
+          <Badge tone="neutral" size="sm">
+            Inativo
+          </Badge>
+        )}
+      </span>
+      <span className="truncate font-mono text-xs text-text-low">{w.url}</span>
+    </span>
+  );
+
+  const eventsCell = (w: OutboundWebhook) => (
+    <span className="block truncate font-mono text-xs text-text-mid" title={w.events.join(', ')}>
+      {w.events.join(' · ')}
+    </span>
+  );
+
+  const columns: DataTableColumn<OutboundWebhook>[] = [
+    { id: 'name', header: 'Webhook', cell: nameCell },
+    { id: 'events', header: 'Eventos', width: '14rem', cell: eventsCell },
+    {
+      id: 'actions',
+      header: <span className="sr-only">Ações</span>,
+      headerLabel: 'Ações',
+      align: 'right',
+      width: '22rem',
+      cell: rowActions,
+    },
+  ];
+
+  const empty = (
+    <EmptyState
+      className="py-8"
+      icon={Webhook}
+      title="Nenhum webhook"
+      description="Receba os eventos do workspace numa URL sua, assinados para você verificar a origem."
+    />
+  );
+  const error = (
+    <ErrorState
+      title="Não foi possível carregar os webhooks"
+      reason="A lista não respondeu."
+      whatToDo="Tente de novo em instantes."
+      action={
+        <Button variant="secondary" loading={webhooksQuery.isFetching} onClick={() => void webhooksQuery.refetch()}>
+          Tentar de novo
+        </Button>
+      }
+    />
+  );
+
+  const deliveryList = deliveries.data?.deliveries ?? [];
+  const deliveryColumns: DataTableColumn<WebhookDelivery>[] = [
+    {
+      id: 'event',
+      header: 'Evento',
+      cell: (d) => <span className="block truncate font-mono text-xs text-text">{d.event}</span>,
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      width: '7.5rem',
+      cell: (d) => (
+        <StatusPill tone={STATUS[d.status].tone} size="sm">
+          {STATUS[d.status].label}
+        </StatusPill>
+      ),
+    },
+    { id: 'http', header: 'HTTP', numeric: true, width: '4.5rem', cell: (d) => d.responseStatus ?? '—' },
+    { id: 'attempt', header: 'Tent.', numeric: true, width: '4rem', cell: (d) => formatNumber(d.attempt) },
+    {
+      id: 'when',
+      header: 'Quando',
+      numeric: true,
+      width: '8.5rem',
+      cell: (d) => formatDateTime(d.sentAt ?? d.createdAt),
+    },
+  ];
 
   return (
-    <section className="flex flex-col gap-4">
-      <header className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-medium text-text">Webhooks outbound</h3>
-          <p className="text-xs text-text-low">
-            Recebem eventos do workspace em uma URL sua. Cada entrega é assinada com
-            HMAC-SHA256 de <code className="font-mono text-text">timestamp.corpo</code>{' '}
-            (headers <code className="font-mono text-text">x-hm-timestamp</code> e{' '}
-            <code className="font-mono text-text">x-hm-signature-256</code>); recuse
-            entregas com mais de 5 minutos.
-          </p>
-        </div>
-        <Button variant="primary" onClick={openCreate}>
-          Novo webhook
-        </Button>
-      </header>
-
-      <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
-        {webhooks.length === 0 && (
-          <li className="px-4 py-6 text-center text-sm text-text-low">Nenhum webhook.</li>
-        )}
-        {webhooks.map((w) => (
-          <li key={w.id} className="flex items-center justify-between gap-4 px-4 py-3">
-            <div className="min-w-0">
-              <p className="flex items-center gap-2 text-sm text-text">
-                <span className="truncate">{w.name}</span>
-                {!w.isActive && (
-                  <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-text-low">
-                    inativo
-                  </span>
-                )}
-              </p>
-              <p className="mt-0.5 truncate text-xs text-text-low">{w.url}</p>
-              <p className="mt-0.5 text-xs text-text-low">{w.events.join(', ')}</p>
-            </div>
-            <div className="flex shrink-0 items-center gap-3 text-xs">
-              <button type="button" onClick={() => void runTest(w.id)} className="text-text-low hover:text-text">
-                Testar
-              </button>
-              <button type="button" onClick={() => setLogTarget(w.id)} className="text-text-low hover:text-text">
-                Log
-              </button>
-              <button type="button" onClick={() => openEdit(w)} className="text-text-low hover:text-text">
-                Editar
-              </button>
-              <button type="button" onClick={() => setDeleteTarget(w)} className="text-text-low hover:text-danger">
-                Remover
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+    <Panel
+      title="Webhooks outbound"
+      description={
+        <>
+          Recebem eventos do workspace numa URL sua. Cada entrega é assinada com HMAC-SHA256 de{' '}
+          <code className="font-mono text-text-mid">timestamp.corpo</code> (headers{' '}
+          <code className="font-mono text-text-mid">x-hm-timestamp</code> e{' '}
+          <code className="font-mono text-text-mid">x-hm-signature-256</code>); recuse entregas com mais de 5
+          minutos.
+        </>
+      }
+      action={createButton}
+      body="flush"
+    >
+      {isMobile ? (
+        webhooksQuery.isError ? (
+          error
+        ) : webhooks.length === 0 ? (
+          empty
+        ) : (
+          <ul aria-label="Webhooks" className="divide-y divide-border">
+            {webhooks.map((w) => (
+              <li key={w.id} className="flex flex-col gap-2 px-5 py-3">
+                {nameCell(w)}
+                {eventsCell(w)}
+                <div className="-ml-3">{rowActions(w)}</div>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : (
+        <DataTable<OutboundWebhook>
+          caption="Webhooks outbound"
+          columns={columns}
+          rows={webhooks}
+          getRowId={(w) => w.id}
+          density="compact"
+          getRowState={(w) => (w.isActive ? undefined : 'muted')}
+          error={webhooksQuery.isError ? error : undefined}
+          empty={empty}
+          className="rounded-none border-0"
+        />
+      )}
 
       {/* Criar / editar */}
       <Modal
@@ -184,36 +344,43 @@ export default function WebhooksManager(): React.JSX.Element {
             <Button variant="ghost" onClick={() => setFormOpen(false)}>
               Cancelar
             </Button>
-            <Button
-              variant="primary"
-              disabled={!name.trim() || !url.trim() || events.length === 0 || create.isPending || update.isPending}
-              onClick={() => void submit()}
-            >
-              {editing ? 'Salvar' : 'Criar'}
-            </Button>
+            <ReadOnlyGuard>
+              <Button
+                variant="primary"
+                disabled={!name.trim() || !url.trim() || events.length === 0}
+                loading={create.isPending || update.isPending}
+                onClick={() => void submit()}
+              >
+                {editing ? 'Salvar webhook' : 'Criar webhook'}
+              </Button>
+            </ReadOnlyGuard>
           </div>
         }
       >
-        <div className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-text-low">Nome</span>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: CRM externo" />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-text-low">URL de destino</span>
-            <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://seu-endpoint.com/webhook" />
-          </label>
-          <fieldset className="flex flex-col gap-2">
-            <legend className="text-xs text-text-low">Eventos</legend>
+        <div className="flex flex-col gap-5">
+          <Input label="Nome" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: CRM externo" />
+          <Input
+            label="URL de destino"
+            type="url"
+            className="font-mono"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://seu-endpoint.com/webhook"
+          />
+          <fieldset className="flex flex-col gap-1">
+            <legend className="mb-2 font-body text-sm font-bold text-text-mid">Eventos</legend>
             {availableEvents.map((e) => (
-              <label key={e} className="flex items-center gap-2 text-sm text-text">
+              <label
+                key={e}
+                className="flex cursor-pointer items-center gap-3 rounded-sm px-2 py-1.5 transition-colors duration-(--dur-fast) hover:bg-surface-2"
+              >
                 <input
                   type="checkbox"
                   checked={events.includes(e)}
                   onChange={() => toggleEvent(e)}
-                  className="accent-brand"
+                  className="size-4 accent-brand-text"
                 />
-                <code className="text-xs">{e}</code>
+                <code className="font-mono text-sm text-text">{e}</code>
               </label>
             ))}
           </fieldset>
@@ -231,39 +398,59 @@ export default function WebhooksManager(): React.JSX.Element {
             <Button variant="ghost" onClick={() => setCreatedSecret(null)}>
               Fechar
             </Button>
-            <Button variant="primary" onClick={() => void copySecret()}>
+            <Button variant="primary" leftIcon={<Copy className="size-4" aria-hidden />} onClick={() => void copySecret()}>
               Copiar segredo
             </Button>
           </div>
         }
       >
-        <code className="block break-all rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text">
+        <code className="block break-all rounded-sm border border-border-2 bg-surface-inset px-3 py-2.5 font-mono text-sm text-text">
           {createdSecret}
         </code>
       </Modal>
 
-      {/* Delivery log */}
-      <Modal open={logTarget !== null} onClose={() => setLogTarget(null)} title="Log de entregas">
+      {/* Log de entregas: detalhe lateral (UX §2.3) */}
+      <Drawer
+        open={logTarget !== null}
+        onClose={() => setLogTarget(null)}
+        title="Log de entregas"
+        description={logTarget ? logTarget.name : undefined}
+        className="sm:max-w-2xl"
+      >
         {deliveries.isLoading ? (
-          <p className="text-sm text-text-low">Carregando…</p>
-        ) : (deliveries.data?.deliveries.length ?? 0) === 0 ? (
-          <p className="text-sm text-text-low">Nenhuma entrega ainda.</p>
+          <div role="status" aria-busy="true" aria-label="Carregando entregas" className="flex flex-col gap-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
         ) : (
-          <ul className="flex max-h-80 flex-col divide-y divide-border overflow-auto">
-            {deliveries.data?.deliveries.map((d) => (
-              <li key={d.id} className="flex items-center justify-between gap-3 py-2 text-xs">
-                <span className="text-text">{d.event}</span>
-                <span className="flex items-center gap-3 text-text-low">
-                  <span className={STATUS_TONE[d.status] ?? 'text-text-low'}>{d.status}</span>
-                  <span>HTTP {d.responseStatus ?? '—'}</span>
-                  <span>tent. {d.attempt}</span>
-                  <span>{fmtDate(d.sentAt ?? d.createdAt)}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+          <DataTable<WebhookDelivery>
+            caption="Entregas do webhook"
+            columns={deliveryColumns}
+            rows={deliveryList}
+            getRowId={(d) => d.id}
+            density="compact"
+            getRowState={(d) => (d.status === 'failed' ? 'attention' : undefined)}
+            error={
+              deliveries.isError ? (
+                <ErrorState
+                  title="Não foi possível carregar as entregas"
+                  reason="O log não respondeu."
+                  whatToDo="Feche e abra o log de novo em instantes."
+                />
+              ) : undefined
+            }
+            empty={
+              <EmptyState
+                className="py-8"
+                icon={ScrollText}
+                title="Nenhuma entrega ainda"
+                description="Use “Testar” para enviar uma entrega de exemplo."
+              />
+            }
+          />
         )}
-      </Modal>
+      </Drawer>
 
       {/* Remover */}
       <Modal
@@ -276,14 +463,16 @@ export default function WebhooksManager(): React.JSX.Element {
             <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
               Cancelar
             </Button>
-            <Button variant="danger" disabled={remove.isPending} onClick={() => void doDelete()}>
-              Remover
+            <Button variant="danger" loading={remove.isPending} onClick={() => void doDelete()}>
+              Remover webhook
             </Button>
           </div>
         }
       >
-        <p className="text-sm text-text-mid">Remover “{deleteTarget?.name}”?</p>
+        <p className="text-sm text-text-mid">
+          Remover <span className="font-semibold text-text">{deleteTarget?.name}</span>?
+        </p>
       </Modal>
-    </section>
+    </Panel>
   );
 }

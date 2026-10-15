@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { Check } from 'lucide-react';
 import { Input } from '@hm/ui';
 import { cn } from '@/shared/lib/cn';
 import { getNicheOption } from '../niches';
@@ -24,12 +25,12 @@ export function SurveyStep({ value, onChange, suggestedNiche }: SurveyStepProps)
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h2 className="font-head text-xl font-semibold text-text">Conte um pouco sobre você</h2>
-        <p className="text-sm text-text-mid">Usamos isso para sugerir a melhor configuração. Pode pular o que quiser.</p>
+        <h2 className="font-head text-xl font-semibold tracking-tight text-text">Conte um pouco sobre você</h2>
+        <p className="font-body text-sm text-text-mid">Usamos isso para sugerir a melhor configuração. Pode pular o que quiser.</p>
       </div>
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="onboarding-business" className="text-sm font-medium text-text">
+        <label htmlFor="onboarding-business" className="font-body text-sm font-bold text-text-mid">
           Que tipo de negócio você tem?
         </label>
         <Input
@@ -42,7 +43,7 @@ export function SurveyStep({ value, onChange, suggestedNiche }: SurveyStepProps)
       </div>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-sm font-medium text-text">Qual o tamanho do seu time?</legend>
+        <legend className="mb-2 font-body text-sm font-bold text-text-mid">Qual o tamanho do seu time?</legend>
         <div className="flex flex-wrap gap-2">
           {TEAM_SIZE_OPTIONS.map((opt) => (
             <Chip<TeamSize>
@@ -57,7 +58,7 @@ export function SurveyStep({ value, onChange, suggestedNiche }: SurveyStepProps)
       </fieldset>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-sm font-medium text-text">Qual seu principal objetivo?</legend>
+        <legend className="mb-2 font-body text-sm font-bold text-text-mid">Qual seu principal objetivo?</legend>
         <div className="flex flex-wrap gap-2">
           {GOAL_OPTIONS.map((opt) => (
             <Chip<SurveyGoal>
@@ -70,8 +71,8 @@ export function SurveyStep({ value, onChange, suggestedNiche }: SurveyStepProps)
           ))}
         </div>
         {suggestedNiche && (
-          <p className="mt-1 text-xs text-text-low" aria-live="polite">
-            Com base nisso, vamos sugerir o nicho <span className="text-text">{getNicheOption(suggestedNiche).name}</span> no
+          <p className="mt-1 font-body text-sm text-text-low" aria-live="polite">
+            Com base nisso, vamos sugerir o nicho <span className="font-semibold text-brand-text">{getNicheOption(suggestedNiche).name}</span> no
             próximo passo — você pode trocar.
           </p>
         )}
@@ -94,12 +95,14 @@ function Chip<T extends string>({ label, value, selected, onToggle }: ChipProps<
       aria-pressed={selected}
       onClick={() => onToggle(value)}
       className={cn(
-        'rounded-pill border px-3 py-1.5 text-sm outline-none transition-colors focus-visible:shadow-glow-md',
+        'inline-flex min-h-9 items-center gap-1.5 rounded-pill border px-3.5 font-body text-sm font-semibold outline-none',
+        'transition-[background-color,border-color,color] duration-(--dur-base) ease-ds focus-visible:focus-ring max-md:min-h-11',
         selected
-          ? 'border-accent bg-accent/10 text-accent'
-          : 'border-border-2 text-text-mid hover:border-border-strong hover:text-text',
+          ? 'border-brand-text/50 bg-brand-text/10 text-brand-text'
+          : 'border-border bg-surface-2 text-text-mid hover:border-border-2 hover:text-text',
       )}
     >
+      {selected && <Check className="size-3.5" strokeWidth={3} aria-hidden />}
       {label}
     </button>
   );

@@ -5,14 +5,17 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { z } from 'zod';
 import { Button, Input, Modal } from '@hm/ui';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
 import { describeInviteError, outcomeForDelivery, type Outcome } from '../actions';
 import { useCreateInvite } from '../queries';
 import { INVITABLE_ROLES, ROLE_HINTS, roleLabel, type InvitableRole } from '../types';
 
 const emailSchema = z.string().trim().toLowerCase().email();
 
+/** `<select>` no mesmo desenho do `Input` do DS 3.0 (16px abaixo de `sm`: o iOS não dá zoom). */
 const fieldClass =
-  'h-11 md:h-10 w-full rounded-sm border border-border bg-surface-inset px-3 font-body text-sm text-text outline-none transition-[border-color,box-shadow] duration-200 hover:border-border-2 focus:border-brand focus:shadow-glow-sm';
+  'h-11 md:h-10 w-full rounded-sm border border-border bg-surface-2 px-3 font-body text-base text-text outline-none sm:text-sm ' +
+  'transition-[border-color,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 focus:border-brand-text focus-visible:focus-ring';
 
 export interface InviteDialogProps {
   open: boolean;
@@ -86,9 +89,11 @@ export function InviteDialog({
           <Button variant="ghost" onClick={onClose}>
             Cancelar
           </Button>
-          <Button variant="primary" loading={create.isPending} onClick={() => void submit()}>
-            Enviar convite
-          </Button>
+          <ReadOnlyGuard>
+            <Button variant="primary" loading={create.isPending} onClick={() => void submit()}>
+              Enviar convite
+            </Button>
+          </ReadOnlyGuard>
         </div>
       }
     >
@@ -101,17 +106,17 @@ export function InviteDialog({
         }}
       >
         {failure && (
-          <div role="alert" className="flex gap-3 rounded-md border border-danger/40 bg-danger/10 p-3">
+          <div role="alert" className="flex gap-3 rounded-md border border-danger/30 bg-danger/10 p-3">
             <AlertTriangle className="mt-0.5 size-5 shrink-0 text-danger" aria-hidden />
             <div className="flex flex-col gap-1">
-              <p className="font-head text-sm font-semibold text-text">{failure.title}</p>
+              <p className="font-body text-sm font-bold text-text">{failure.title}</p>
               {failure.description && (
                 <p className="font-body text-sm text-text-mid">{failure.description}</p>
               )}
               {failure.billingCta && (
                 <Link
                   href="/settings/billing"
-                  className="mt-1 w-fit rounded-sm font-head text-sm font-semibold text-text underline underline-offset-4 outline-none focus-visible:shadow-glow-md"
+                  className="mt-1 w-fit rounded-xs font-body text-sm font-bold text-text underline underline-offset-4 outline-none focus-visible:focus-ring"
                 >
                   Ver planos
                 </Link>
@@ -135,7 +140,7 @@ export function InviteDialog({
           error={emailError}
         />
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="invite-role" className="font-head text-sm font-medium text-text-mid">
+          <label htmlFor="invite-role" className="font-body text-sm font-bold text-text-mid">
             Papel
           </label>
           <select
@@ -150,11 +155,11 @@ export function InviteDialog({
               </option>
             ))}
           </select>
-          <p className="font-body text-xs text-text-low">{ROLE_HINTS[role]}</p>
+          <p className="font-body text-sm text-text-low">{ROLE_HINTS[role]}</p>
         </div>
         {departments.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="invite-dept" className="font-head text-sm font-medium text-text-mid">
+            <label htmlFor="invite-dept" className="font-body text-sm font-bold text-text-mid">
               Departamento <span className="font-normal text-text-low">(opcional)</span>
             </label>
             <select

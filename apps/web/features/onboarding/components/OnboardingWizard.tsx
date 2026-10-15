@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Sparkles } from 'lucide-react';
 import { Button, useToast } from '@hm/ui';
+import { ReadOnlyGuard, useIsReadOnly } from '@/shared/components/account-banner';
 import { ErrorState } from '@/shared/components/feedback';
 import { ApiError } from '@/shared/lib/api-client';
 import { WizardShell } from './WizardShell';
@@ -37,6 +38,11 @@ export interface OnboardingWizardProps {
  * e confirmar o nicho → aplicar o blueprint. Estado preservado entre passos (voltar
  * não perde dados). A pesquisa é salva ao avançar (`PUT /survey`); aplicar dispara
  * `POST /apply` com feedback de loading + toast e erro em 3 partes (UX §2.7/§2.11).
+ *
+ * DS 3.0 (F72-S07): rótulo de contexto em mono, passos com a marca em `brand-text` e o
+ * verde cheio só no CTA do passo. Só leitura (F71-S17): "Configurar meu espaço" fica
+ * `aria-disabled` com a explicação, e a pesquisa não é salva (seria recusada com 402);
+ * navegar entre os passos continua livre.
  */
 export function OnboardingWizard({ open, initialSurvey, onDismiss, onApplied }: OnboardingWizardProps): ReactNode {
   const [stepIndex, setStepIndex] = useState(0);
@@ -45,6 +51,7 @@ export function OnboardingWizard({ open, initialSurvey, onDismiss, onApplied }: 
   const [applyError, setApplyError] = useState<ApiError | null>(null);
 
   const { toast } = useToast();
+  const readOnly = useIsReadOnly();
   const saveSurvey = useSaveSurvey();
   const applyNiche = useApplyNiche();
 
@@ -74,7 +81,7 @@ export function OnboardingWizard({ open, initialSurvey, onDismiss, onApplied }: 
     // Salva a pesquisa (best-effort): a API exige ao menos uma resposta. Se o
     // usuário não respondeu nada, pula o PUT e segue — a pesquisa é opcional.
     const hasAnswer = survey.businessType != null || survey.teamSize != null || survey.goal != null;
-    if (hasAnswer) {
+    if (hasAnswer && !readOnly) {
       try {
         await saveSurvey.mutateAsync(survey);
       } catch {
@@ -113,7 +120,14 @@ export function OnboardingWizard({ open, initialSurvey, onDismiss, onApplied }: 
   const footer = renderFooter();
 
   return (
-    <WizardShell open={open} onClose={onDismiss} ariaLabel="Configuração inicial da Leadium" header={header} footer={footer}>
+    <WizardShell
+      open={open}
+      onClose={onDismiss}
+      ariaLabel="Configuração inicial da Leadium"
+      eyebrow="Configuração inicial"
+      header={header}
+      footer={footer}
+    >
       {step === 'welcome' && <WelcomeBody />}
       {step === 'survey' && (
         <SurveyStep
@@ -142,7 +156,7 @@ export function OnboardingWizard({ open, initialSurvey, onDismiss, onApplied }: 
     if (step === 'welcome') {
       return (
         <>
-          <span className="text-xs text-text-low">Leva menos de um minuto.</span>
+          <span className="font-body text-sm text-text-low">Leva menos de um minuto.</span>
           <Button variant="primary" onClick={goToSurvey} rightIcon={<ArrowRight className="size-4" aria-hidden />}>
             Começar
           </Button>
@@ -171,14 +185,16 @@ export function OnboardingWizard({ open, initialSurvey, onDismiss, onApplied }: 
         <Button variant="ghost" onClick={goBack} leftIcon={<ArrowLeft className="size-4" aria-hidden />}>
           Voltar
         </Button>
-        <Button
-          variant="primary"
-          disabled={!selectedNiche}
-          loading={applyNiche.isPending}
-          onClick={() => void handleApply()}
-        >
-          {applyNiche.isPending ? 'Configurando…' : 'Configurar meu espaço'}
-        </Button>
+        <ReadOnlyGuard>
+          <Button
+            variant="primary"
+            disabled={!selectedNiche}
+            loading={applyNiche.isPending}
+            onClick={() => void handleApply()}
+          >
+            {applyNiche.isPending ? 'Configurando…' : 'Configurar meu espaço'}
+          </Button>
+        </ReadOnlyGuard>
       </>
     );
   }
@@ -186,32 +202,36 @@ export function OnboardingWizard({ open, initialSurvey, onDismiss, onApplied }: 
 
 /** Tela de boas-vindas (anti-empty-state, UX §2.6). */
 function WelcomeBody(): ReactNode {
+  const points = [
+    'Responda 3 perguntas rápidas sobre o seu negócio.',
+    'Escolha o seu nicho e nós montamos o resto.',
+    'Comece a atender em minutos, não em dias.',
+  ];
   return (
-    <div className="flex flex-col items-start gap-4">
-      <span className="flex size-12 items-center justify-center rounded-xl bg-accent/10 text-accent">
+    <div className="flex flex-col items-start gap-5">
+      <span className="flex size-12 items-center justify-center rounded-lg border border-brand-text/25 bg-brand-text/10 text-brand-text">
         <Sparkles className="size-6" aria-hidden />
       </span>
       <div className="flex flex-col gap-2">
-        <h2 className="font-head text-2xl font-semibold text-text">Bem-vindo à Leadium</h2>
-        <p className="text-text-mid">
+        <h2 className="font-head text-2xl font-semibold tracking-tight text-text">Bem-vindo à Leadium</h2>
+        <p className="max-w-prose font-body text-text-mid">
           Vamos deixar seu espaço pronto para o seu negócio. Em poucos passos criamos seu funil, seu
           agente de IA, etiquetas e fluxos — tudo já configurado para o seu nicho.
         </p>
       </div>
-      <ul className="flex flex-col gap-2 text-sm text-text-mid">
-        <li className="flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-accent" aria-hidden />
-          Responda 3 perguntas rápidas sobre o seu negócio.
-        </li>
-        <li className="flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-accent" aria-hidden />
-          Escolha o seu nicho e nós montamos o resto.
-        </li>
-        <li className="flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-accent" aria-hidden />
-          Comece a atender em minutos, não em dias.
-        </li>
-      </ul>
+      <ol className="flex flex-col gap-2.5 font-body text-sm text-text-mid">
+        {points.map((point, i) => (
+          <li key={point} className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="flex size-6 shrink-0 items-center justify-center rounded-pill border border-border-2 font-mono text-xs tabular-nums text-text-mid"
+            >
+              {i + 1}
+            </span>
+            {point}
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }

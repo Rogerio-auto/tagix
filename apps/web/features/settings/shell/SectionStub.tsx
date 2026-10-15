@@ -8,10 +8,11 @@
  */
 export function SectionStub({ sectionId, title }: { sectionId: string; title: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-border bg-surface p-8">
-      <h3 className="font-head text-text">{title}</h3>
+    <div className="rounded-lg border border-dashed border-border-2 bg-surface p-8">
+      <h3 className="font-head text-base font-semibold text-text">{title}</h3>
       <p className="mt-2 font-body text-sm text-text-low">
-        Esta seção será entregue em um slot dedicado da F8 (<code>{sectionId}</code>).
+        Esta seção será entregue em um slot dedicado da F8 (
+        <code className="font-mono text-text-mid">{sectionId}</code>).
       </p>
     </div>
   );

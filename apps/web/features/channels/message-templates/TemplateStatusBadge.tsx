@@ -1,19 +1,20 @@
-import { cn } from '@/shared/lib/cn';
+import { StatusPill, type BadgeTone } from '@hm/ui';
 import { templateStatus } from './format';
 import type { MessageTemplate } from './types';
 
+/** Tom da apresentação do status → tom do `StatusPill` do DS 3.0 (F72-S07). */
 const TONE = {
-  success: 'bg-success/15 text-success',
-  warn: 'bg-warn/15 text-warn',
-  danger: 'bg-danger/15 text-danger',
-  neutral: 'bg-surface-3 text-text-mid',
-} as const;
+  success: 'success',
+  warn: 'warning',
+  danger: 'danger',
+  neutral: 'neutral',
+} as const satisfies Record<string, BadgeTone>;
 
 export function TemplateStatusBadge({ template }: { template: Pick<MessageTemplate, 'status' | 'isAvailable'> }) {
   const presentation = templateStatus(template);
   return (
-    <span className={cn('inline-flex rounded-pill px-2.5 py-1 font-head text-xs font-medium', TONE[presentation.tone])}>
+    <StatusPill tone={TONE[presentation.tone]} size="sm">
       {presentation.label}
-    </span>
+    </StatusPill>
   );
 }

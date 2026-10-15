@@ -126,7 +126,7 @@ function ProviderStep({ onPick }: { onPick: (p: ChannelProvider) => void }) {
             onClick={() => onPick(p)}
             className={cn(
               'flex items-center gap-3 rounded-md border border-border bg-surface-inset px-4 py-3 text-left outline-none',
-              'transition-colors duration-200 hover:border-border-2 hover:bg-surface-2 focus-visible:shadow-glow-md',
+              'transition-colors duration-200 hover:border-border-2 hover:bg-surface-2 focus-visible:focus-ring',
             )}
           >
             <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-surface text-text-mid">
@@ -178,7 +178,7 @@ function ConnectStep({
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center gap-1.5 self-start rounded-sm px-1 py-0.5 font-head text-xs text-text-low outline-none hover:text-text focus-visible:shadow-glow-md"
+        className="inline-flex items-center gap-1.5 self-start rounded-sm px-1 py-0.5 font-body text-sm font-semibold text-text-low outline-none hover:text-text focus-visible:focus-ring"
       >
         <ArrowLeft className="size-3.5" aria-hidden />
         Trocar tipo
@@ -385,7 +385,7 @@ function WaUnavailableStep({
         <button
           type="button"
           onClick={() => setAdvancedOpen(true)}
-          className="inline-flex items-center gap-1.5 self-start rounded-sm px-1 py-0.5 font-head text-xs text-text-low outline-none transition-colors duration-200 hover:text-text focus-visible:shadow-glow-md"
+          className="inline-flex items-center gap-1.5 self-start rounded-sm px-1 py-0.5 font-body text-sm font-semibold text-text-low outline-none transition-colors duration-200 hover:text-text focus-visible:focus-ring"
         >
           <KeyRound className="size-3.5" aria-hidden />
           Tenho um token permanente da Meta
@@ -467,9 +467,9 @@ function WaModeStep({
               className={cn(
                 'flex items-center gap-3 rounded-md border px-4 py-3 text-left outline-none transition-colors duration-200',
                 active
-                  ? 'border-accent bg-surface-2'
+                  ? 'border-brand-text/60 bg-surface-2'
                   : 'border-border bg-surface-inset hover:border-border-2 hover:bg-surface-2',
-                'focus-visible:shadow-glow-md',
+                'focus-visible:focus-ring',
               )}
             >
               <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-surface text-text-mid">
@@ -479,7 +479,7 @@ function WaModeStep({
                 <span className="block font-head text-sm font-semibold text-text">{m.label}</span>
                 <span className="block font-body text-xs text-text-low">{m.blurb}</span>
               </span>
-              {active && <Check className="ml-auto size-4 text-accent" aria-hidden />}
+              {active && <Check className="ml-auto size-4 text-brand-text" aria-hidden />}
             </button>
           );
         })}
@@ -577,7 +577,7 @@ function WaSignupStep({
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center gap-1.5 self-start rounded-sm px-1 py-0.5 font-head text-xs text-text-low outline-none hover:text-text focus-visible:shadow-glow-md"
+        className="inline-flex items-center gap-1.5 self-start rounded-sm px-1 py-0.5 font-body text-sm font-semibold text-text-low outline-none hover:text-text focus-visible:focus-ring"
       >
         <ArrowLeft className="size-3.5" aria-hidden />
         Trocar modo
@@ -595,7 +595,7 @@ function WaSignupStep({
           <button
             type="button"
             onClick={onManualOpen}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 font-head text-xs text-text-mid underline-offset-2 outline-none hover:text-text hover:underline focus-visible:shadow-glow-md"
+            className="mt-2 inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 font-body text-sm font-semibold text-text-mid underline-offset-2 outline-none hover:text-text hover:underline focus-visible:focus-ring"
           >
             A janela da Meta não abriu? Inserir os dados manualmente
           </button>
@@ -629,7 +629,7 @@ function WaSignupStep({
         <button
           type="button"
           onClick={onManualOpen}
-          className="self-start rounded-sm px-1 py-0.5 font-head text-xs text-text-low underline-offset-2 outline-none hover:text-text hover:underline focus-visible:shadow-glow-md"
+          className="self-start rounded-sm px-1 py-0.5 font-body text-sm font-semibold text-text-low underline-offset-2 outline-none hover:text-text hover:underline focus-visible:focus-ring"
         >
           Inserir manualmente
         </button>
@@ -728,7 +728,7 @@ function WaFinishStep({
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center gap-1.5 self-start rounded-sm px-1 py-0.5 font-head text-xs text-text-low outline-none hover:text-text focus-visible:shadow-glow-md"
+        className="inline-flex items-center gap-1.5 self-start rounded-sm px-1 py-0.5 font-body text-sm font-semibold text-text-low outline-none hover:text-text focus-visible:focus-ring"
       >
         <ArrowLeft className="size-3.5" aria-hidden />
         Voltar
@@ -875,9 +875,9 @@ function MetaInstagramForm({
                 className={cn(
                   'flex items-center gap-3 rounded-md border px-4 py-3 text-left outline-none transition-colors duration-200',
                   active
-                    ? 'border-accent bg-surface-2'
+                    ? 'border-brand-text/60 bg-surface-2'
                     : 'border-border bg-surface-inset hover:border-border-2 hover:bg-surface-2',
-                  'focus-visible:shadow-glow-md',
+                  'focus-visible:focus-ring',
                 )}
               >
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-surface text-text-mid">
@@ -892,7 +892,7 @@ function MetaInstagramForm({
                     {acc.igAccountType ? ' - ' + acc.igAccountType : ''}
                   </span>
                 </span>
-                {active && <Check className="ml-auto size-4 text-accent" aria-hidden />}
+                {active && <Check className="ml-auto size-4 text-brand-text" aria-hidden />}
               </button>
             );
           })}

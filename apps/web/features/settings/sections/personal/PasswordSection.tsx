@@ -3,16 +3,23 @@
 import { useState } from 'react';
 import { Button, Input, useToast } from '@hm/ui';
 import { ApiError } from '@/shared/lib/api-client';
-import { FieldLabel } from './components';
+import { Panel } from './components';
 import { useChangePassword } from './queries';
 
-/** Senha: troca com re-auth (senha atual). Provider sem suporte → aviso honesto. */
+/**
+ * Senha: troca com re-auth (senha atual). Provider sem suporte → aviso honesto.
+ * Segurança da PRÓPRIA conta: liberada mesmo com a empresa em só leitura (o servidor
+ * isenta `POST /api/members/me/password`).
+ */
 export default function PasswordSection(): React.JSX.Element {
   const { toast } = useToast();
   const change = useChangePassword();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
+
+  const tooShort = next.length > 0 && next.length < 8;
+  const mismatch = confirm.length > 0 && next !== confirm;
 
   const submit = async () => {
     if (next.length < 8) {
@@ -44,21 +51,52 @@ export default function PasswordSection(): React.JSX.Element {
   const ready = current.length > 0 && next.length > 0 && confirm.length > 0;
 
   return (
-    <div className="flex max-w-md flex-col gap-4">
-      <FieldLabel label="Senha atual">
-        <Input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
-      </FieldLabel>
-      <FieldLabel label="Nova senha">
-        <Input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
-      </FieldLabel>
-      <FieldLabel label="Confirmar nova senha">
-        <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
-      </FieldLabel>
-      <div>
-        <Button variant="primary" disabled={!ready || change.isPending} onClick={() => void submit()}>
-          {change.isPending ? 'Trocando…' : 'Trocar senha'}
+    <Panel
+      title="Trocar senha"
+      description="Pedimos a senha atual para confirmar que é você."
+      footer={
+        <Button variant="primary" disabled={!ready} loading={change.isPending} onClick={() => void submit()}>
+          Trocar senha
         </Button>
-      </div>
-    </div>
+      }
+    >
+      <form
+        className="flex flex-col gap-5"
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (ready) void submit();
+        }}
+      >
+        <Input
+          label="Senha atual"
+          type="password"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+          autoComplete="current-password"
+        />
+        <Input
+          label="Nova senha"
+          type="password"
+          value={next}
+          onChange={(e) => setNext(e.target.value)}
+          autoComplete="new-password"
+          hint={tooShort ? undefined : 'Pelo menos 8 caracteres.'}
+          error={tooShort ? 'Use pelo menos 8 caracteres.' : undefined}
+        />
+        <Input
+          label="Confirmar nova senha"
+          type="password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          autoComplete="new-password"
+          error={mismatch ? 'As senhas não conferem.' : undefined}
+        />
+        {/* Enter envia: o botão do rodapé fica fora do <form>. */}
+        <button type="submit" className="sr-only" tabIndex={-1} aria-hidden>
+          Trocar senha
+        </button>
+      </form>
+    </Panel>
   );
 }
