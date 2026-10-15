@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, Copy, CopyPlus } from 'lucide-react';
 import { Button, Drawer, IconButton, useToast } from '@hm/ui';
 import { ReadOnlyGuard } from '@/shared/components/account-banner';
@@ -28,6 +28,7 @@ export function TemplateDetailDrawer({
 }) {
   const status = template ? templateStatus(template) : null;
   const { toast } = useToast();
+  const router = useRouter();
 
   // O nome técnico é o que a API e as integrações usam para enviar o modelo: copiável.
   const copyName = async (name: string): Promise<void> => {
@@ -56,12 +57,18 @@ export function TemplateDetailDrawer({
               </ReadOnlyGuard>
             ) : null}
             {status.canUse && canUseInCampaign ? (
-              <Link
-                href={`/campaigns/new?channelId=${encodeURIComponent(channelId)}&messageTemplateId=${encodeURIComponent(template.id)}`}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-sm bg-brand px-4 font-body text-sm font-bold text-text-on-brand shadow-glow outline-none transition-[background-color,transform] duration-(--dur-base) ease-ds hover:bg-brand-bright focus-visible:focus-ring motion-safe:hover:-translate-y-px"
+              // Primário do DS (o único neon da tela): abre a campanha nova já com o modelo.
+              <Button
+                variant="primary"
+                rightIcon={<ArrowRight className="size-4" aria-hidden />}
+                onClick={() =>
+                  router.push(
+                    `/campaigns/new?channelId=${encodeURIComponent(channelId)}&messageTemplateId=${encodeURIComponent(template.id)}`,
+                  )
+                }
               >
-                Usar em campanha <ArrowRight className="size-4" aria-hidden />
-              </Link>
+                Usar em campanha
+              </Button>
             ) : null}
           </div>
         ) : undefined

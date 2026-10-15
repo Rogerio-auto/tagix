@@ -88,7 +88,7 @@ export default function AuditLogViewer(): React.JSX.Element {
       width: '9rem',
       cell: (log) => <span className="font-mono text-sm tabular-nums text-text-mid">{log.ipAddress ?? '—'}</span>,
     },
-    { id: 'when', header: 'Quando', numeric: true, width: '10rem', cell: (log) => formatDateTime(log.createdAt) },
+    { id: 'when', header: 'Quando', numeric: true, width: '10rem', cell: (log) => <span className="whitespace-nowrap">{formatDateTime(log.createdAt)}</span> },
   ];
 
   const cardColumns: readonly ResponsiveColumn<AuditLog>[] = [

@@ -17,6 +17,7 @@ import {
 import { ReadOnlyGuard, useIsReadOnly } from '@/shared/components/account-banner';
 import { Skeleton } from '@/shared/components/feedback';
 import { PageHeader } from '@/shared/components/layout/PageHeader';
+import { dotColorStyle } from './color';
 import { useConversionTypes, useCreateConversionType, useDeleteConversionType } from './queries';
 import type { ConversionType } from './types';
 
@@ -119,11 +120,12 @@ export function ConversionTypesSettings(): React.JSX.Element {
             <ul className="divide-y divide-border">
               {types.map((t) => (
                 <li key={t.id} className="flex items-center gap-3 px-5 py-3.5">
-                  {/* A cor é dado do tipo (cadastrada pelo cliente): só no ponto. */}
+                  {/* A cor é dado do tipo (cadastrada pelo cliente): só no ponto e só se for
+                      `#RRGGBB` válido (senão fica o token `bg-text-low`). */}
                   <i
                     aria-hidden
                     className="size-2.5 shrink-0 rounded-pill bg-text-low"
-                    style={t.color ? { backgroundColor: t.color } : undefined}
+                    style={dotColorStyle(t.color)}
                   />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate font-body text-sm font-bold text-text">{t.label}</span>

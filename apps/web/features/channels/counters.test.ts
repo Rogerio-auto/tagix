@@ -24,13 +24,14 @@ describe('summarizeChannels', () => {
   });
 
   it('conta pelo isActive — o bug do UX-06 era ler um campo que a API nunca mandou', () => {
-    expect(summarizeChannels([wa(true)])).toEqual({ label: '1 ativo', alert: false });
-    expect(summarizeChannels([wa(true), wa(true)])).toEqual({ label: '2 ativos', alert: false });
+    expect(summarizeChannels([wa(true)])).toEqual({ label: '1 ativo', short: '1 ativo', alert: false });
+    expect(summarizeChannels([wa(true), wa(true)])).toEqual({ label: '2 ativos', short: '2 ativos', alert: false });
   });
 
   it('mostra os inativos e não alerta enquanto houver canal recebendo', () => {
     expect(summarizeChannels([wa(true), wa(false)])).toEqual({
       label: '1 ativo · 1 inativo',
+      short: '1 ativo',
       alert: false,
     });
   });
@@ -38,6 +39,7 @@ describe('summarizeChannels', () => {
   it('nenhum canal ativo = nada entra no inbox → alerta', () => {
     expect(summarizeChannels([wa(false), wa(false)])).toEqual({
       label: '0 ativos · 2 inativos',
+      short: '0 ativos',
       alert: true,
     });
   });
@@ -45,6 +47,7 @@ describe('summarizeChannels', () => {
   it('WAHA ativo sem sessão = desautorizado → alerta (mesma regra do badge da lista)', () => {
     expect(summarizeChannels([wa(true), waha(true, null)])).toEqual({
       label: '2 ativos · 1 desautorizado',
+      short: '1 desaut.',
       alert: true,
     });
   });
@@ -52,11 +55,12 @@ describe('summarizeChannels', () => {
   it('WAHA desativado não conta como desautorizado (o usuário desligou de propósito)', () => {
     expect(summarizeChannels([wa(true), waha(false, null)])).toEqual({
       label: '1 ativo · 1 inativo',
+      short: '1 ativo',
       alert: false,
     });
   });
 
   it('WAHA com sessão viva é apenas um canal ativo', () => {
-    expect(summarizeChannels([waha(true, 'sess_1')])).toEqual({ label: '1 ativo', alert: false });
+    expect(summarizeChannels([waha(true, 'sess_1')])).toEqual({ label: '1 ativo', short: '1 ativo', alert: false });
   });
 });

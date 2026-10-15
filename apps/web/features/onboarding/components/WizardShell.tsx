@@ -35,7 +35,15 @@ export function WizardShell({ open, onClose, ariaLabel, eyebrow, header, childre
 
   if (isMobile) {
     return (
-      <Sheet open={open} onClose={onClose} variant="full" ariaLabel={ariaLabel} hideCloseButton footer={footer}>
+      <Sheet
+        open={open}
+        onClose={onClose}
+        variant="full"
+        ariaLabel={ariaLabel}
+        hideCloseButton
+        // Mesmo arranjo do rodapé do desktop: dica/voltar à esquerda, ação à direita.
+        footer={footer ? <div className="flex w-full items-center justify-between gap-3">{footer}</div> : undefined}
+      >
         <div className="flex flex-col gap-6 pt-2">
           {header}
           {children}

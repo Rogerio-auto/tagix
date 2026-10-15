@@ -82,6 +82,9 @@ const latency = (r: AgentMetric): string =>
   r.avgLatencyMs === null ? EMPTY : `${formatNumber(Math.round(r.avgLatencyMs))} ms`;
 
 /** Chave estável de uma linha de métrica agregada. */
+/** Data compacta de lista (uma linha, mesmo padrão das outras tabelas). */
+const LIST_DATE: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' };
+
 const metricRowId = (r: AgentMetric) => `${r.period}-${r.periodStart}`;
 
 function tableColumns(showCost: boolean): DataTableColumn<AgentMetric>[] {
@@ -89,7 +92,9 @@ function tableColumns(showCost: boolean): DataTableColumn<AgentMetric>[] {
     {
       id: 'period',
       header: 'Período',
-      cell: (r) => <span className="font-mono tabular-nums text-text">{formatDate(r.periodStart)}</span>,
+      cell: (r) => (
+        <span className="whitespace-nowrap font-mono tabular-nums text-text">{formatDate(r.periodStart, LIST_DATE)}</span>
+      ),
     },
     ...(showCost
       ? [{ id: 'cost', header: 'Custo', numeric: true, cell: (r: AgentMetric) => usd(r.totalCostUsd) }]
@@ -124,7 +129,7 @@ function tableColumns(showCost: boolean): DataTableColumn<AgentMetric>[] {
 function cardColumns(showCost: boolean): ResponsiveColumn<AgentMetric>[] {
   const mono = 'font-mono tabular-nums';
   return [
-    { id: 'period', card: 'primary', cell: (r) => <span className={mono}>{formatDate(r.periodStart)}</span> },
+    { id: 'period', card: 'primary', cell: (r) => <span className={mono}>{formatDate(r.periodStart, LIST_DATE)}</span> },
     ...(showCost
       ? [{ id: 'cost', card: 'badge' as const, cell: (r: AgentMetric) => <span className={mono}>{usd(r.totalCostUsd)}</span> }]
       : []),

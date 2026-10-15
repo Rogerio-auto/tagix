@@ -151,7 +151,11 @@ export function CampaignsPage(): React.JSX.Element {
     {
       id: 'createdAt',
       card: 'meta',
-      cell: (c) => <span className="font-mono tabular-nums">Criada em {formatDate(c.createdAt)}</span>,
+      cell: (c) => (
+        <span className="whitespace-nowrap font-mono tabular-nums">
+          Criada em {formatDate(c.createdAt, TABLE_DATE)}
+        </span>
+      ),
     },
   ];
 

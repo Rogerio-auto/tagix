@@ -155,7 +155,8 @@ export default function WebhooksManager(): React.JSX.Element {
   );
 
   const rowActions = (w: OutboundWebhook) => (
-    <div className="flex flex-wrap items-center gap-1 md:justify-end">
+    // Telas largas: as 4 ações numa linha só (a destrutiva nunca cai sozinha embaixo).
+    <div className="flex flex-wrap items-center gap-1 md:justify-end xl:flex-nowrap">
       <ReadOnlyGuard>
         <Button
           variant="ghost"
@@ -235,7 +236,7 @@ export default function WebhooksManager(): React.JSX.Element {
       header: <span className="sr-only">Ações</span>,
       headerLabel: 'Ações',
       align: 'right',
-      width: '22rem',
+      width: '23rem',
       cell: rowActions,
     },
   ];
@@ -284,8 +285,8 @@ export default function WebhooksManager(): React.JSX.Element {
       id: 'when',
       header: 'Quando',
       numeric: true,
-      width: '8.5rem',
-      cell: (d) => formatDateTime(d.sentAt ?? d.createdAt),
+      width: '10rem',
+      cell: (d) => <span className="whitespace-nowrap">{formatDateTime(d.sentAt ?? d.createdAt)}</span>,
     },
   ];
 

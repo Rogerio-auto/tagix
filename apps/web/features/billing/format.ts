@@ -18,9 +18,12 @@ export function formatBRL(cents: number | null | undefined): string {
   return formatMoney(cents, BILLING_CURRENCY);
 }
 
-/** ISO → "19 de jun. de 2026" (pt-BR). `null`/inválido → "—". */
-export function formatDate(iso: string | null | undefined): string {
-  return formatUiDate(iso);
+/**
+ * ISO → "19 de jun. de 2026" (pt-BR; texto corrido e detalhe). Passe `options` para o
+ * formato de lista ("19/06/2026"). `null`/inválido → "—".
+ */
+export function formatDate(iso: string | null | undefined, options?: Intl.DateTimeFormatOptions): string {
+  return formatUiDate(iso, options);
 }
 
 export const CYCLE_LABEL: Record<BillingCycle, string> = {

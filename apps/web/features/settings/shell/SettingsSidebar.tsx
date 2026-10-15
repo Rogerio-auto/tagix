@@ -71,17 +71,22 @@ function itemClass(active: boolean, mobile: boolean): string {
 }
 
 function Counter({ counter }: { counter: CounterState }) {
+  const visible = counter.short ?? counter.label;
+  const compact = visible !== counter.label;
   return (
     <span
       title={counter.label}
       className={cn(
-        // Encolhe antes do rótulo (o rótulo guarda ≥40% da linha): "3 ativos · 1 desaut…".
-        'ml-auto inline-flex min-w-0 items-center gap-1 font-mono text-xs tabular-nums',
-        counter.alert ? 'font-semibold text-danger' : 'text-text-low',
+        // Forma compacta, sem truncar. O alerta usa o tom de aviso: o mesmo do selo
+        // "Desautorizado" da página Canais.
+        'ml-auto inline-flex shrink-0 items-center gap-1 whitespace-nowrap font-mono text-xs tabular-nums',
+        counter.alert ? 'font-semibold text-warn' : 'text-text-low',
       )}
     >
-      {counter.alert && <span aria-hidden className="size-1.5 shrink-0 rounded-pill bg-danger" />}
-      <span className="truncate">{counter.label}</span>
+      {counter.alert && <span aria-hidden className="size-1.5 shrink-0 rounded-pill bg-current" />}
+      {/* O leitor de tela ouve o resumo inteiro; a vista, a forma compacta. */}
+      <span aria-hidden={compact || undefined}>{visible}</span>
+      {compact && <span className="sr-only">{counter.label}</span>}
     </span>
   );
 }

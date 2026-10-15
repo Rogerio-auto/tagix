@@ -53,6 +53,7 @@ export function SetVariableInspector({ nodeId }: { nodeId: string }) {
         label="Nome da variável"
         value={name}
         placeholder="ex.: cidade"
+        mono
         hint="Sem espaços. Usada a jusante como {{vars.nome}}."
         onChange={(v) => set({ name: v })}
       />

@@ -78,7 +78,7 @@ export default function SessionsSection(): React.JSX.Element {
       width: '10rem',
       cell: (s) => <span className="font-mono text-sm tabular-nums text-text-mid">{s.ipAddress ?? '—'}</span>,
     },
-    { id: 'createdAt', header: 'Início', numeric: true, width: '10rem', cell: (s) => formatDateTime(s.createdAt) },
+    { id: 'createdAt', header: 'Início', numeric: true, width: '10rem', cell: (s) => <span className="whitespace-nowrap">{formatDateTime(s.createdAt)}</span> },
     {
       id: 'actions',
       header: <span className="sr-only">Ações</span>,

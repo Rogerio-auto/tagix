@@ -125,8 +125,9 @@ export function LeadSourcesPanel(): React.JSX.Element {
                 {ativas.map((s) => (
                   <li key={s.id} className="flex flex-col gap-2.5 py-3 first:pt-0 last:pb-0">
                     <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="flex min-w-0 flex-col gap-1.5">
-                        <p className="truncate font-body text-sm font-bold text-text">
+                      {/* `items-start`: o selo fica no tamanho do texto, não esticado na coluna. */}
+                      <div className="flex min-w-0 flex-col items-start gap-1.5">
+                        <p className="max-w-full truncate font-body text-sm font-bold text-text">
                           {s.pageName ?? `Página ${s.pageId}`}
                         </p>
                         {s.delivery === 'webhook' ? (

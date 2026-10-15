@@ -213,7 +213,21 @@ export function MessageTemplatesCatalog({ channel }: { channel: Channel }) {
     { id: 'language', header: 'Idioma', width: '11rem', cell: (t) => <span className="text-text-mid">{languageLabel(t.language)}</span> },
     { id: 'category', header: 'Categoria', width: '9rem', cell: (t) => <span className="text-text-mid">{categoryLabel(t.category)}</span> },
     { id: 'status', header: 'Status', width: '10rem', cell: (t) => <TemplateStatusBadge template={t} /> },
-    { id: 'synced', header: 'Sincronizado', numeric: true, width: '9.5rem', cell: (t) => formatDateTime(t.lastSyncedAt) },
+    {
+      id: 'synced',
+      header: 'Sincronizado',
+      numeric: true,
+      // Data + hora (a hora do sync importa), sempre numa linha só.
+      width: '11rem',
+      cell: (t) => {
+        const label = formatDateTime(t.lastSyncedAt);
+        return (
+          <span className="block truncate whitespace-nowrap" title={label}>
+            {label}
+          </span>
+        );
+      },
+    },
   ];
 
   const emptyState = (

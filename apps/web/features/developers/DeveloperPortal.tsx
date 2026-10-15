@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * Portal do Desenvolvedor in-product (F38-S13; DS 3.0 na F72-S07) — documentacao (nao Swagger
- * cru) da Leadium API. Secoes: Primeiros passos, Autenticacao, Referencia (do
- * OpenAPI live), Webhooks e Exemplos. Nav lateral por ancoras (scroll), colapsa
+ * Portal do Desenvolvedor in-product (F38-S13; DS 3.0 na F72-S07) — documentação (não Swagger
+ * cru) da Leadium API. Seções: Primeiros passos, Autenticação, Referência (do
+ * OpenAPI live), Webhooks e Exemplos. Nav lateral por âncoras (ids ASCII) (scroll), colapsa
  * no mobile. Responsivo, ARIA.
  */
 import { ArrowLeft, BookText } from 'lucide-react';
@@ -18,8 +18,8 @@ import {
 
 const SECTIONS = [
   { id: 'inicio', label: 'Primeiros passos', Component: GettingStarted },
-  { id: 'auth', label: 'Autenticacao', Component: Authentication },
-  { id: 'referencia', label: 'Referencia', Component: ReferenceSection },
+  { id: 'auth', label: 'Autenticação', Component: Authentication },
+  { id: 'referencia', label: 'Referência', Component: ReferenceSection },
   { id: 'webhooks', label: 'Webhooks', Component: Webhooks },
   { id: 'exemplos', label: 'Exemplos', Component: Examples },
 ] as const;
@@ -31,7 +31,7 @@ export function DeveloperPortal() {
         href="/help"
         className="inline-flex w-fit items-center gap-1.5 rounded-xs font-body text-sm font-bold text-text-mid outline-none transition-colors duration-(--dur-fast) ease-ds hover:text-text focus-visible:focus-ring"
       >
-        <ArrowLeft className="size-4" aria-hidden /> Voltar a Central de Ajuda
+        <ArrowLeft className="size-4" aria-hidden /> Voltar à Central de Ajuda
       </Link>
 
       <header className="flex items-start gap-4">
@@ -51,7 +51,7 @@ export function DeveloperPortal() {
 
       <div className="flex flex-col gap-8 lg:flex-row">
         <nav
-          aria-label="Secoes da documentacao"
+          aria-label="Seções da documentação"
           className="flex gap-1 overflow-x-auto border-b border-border pb-2 lg:sticky lg:top-6 lg:h-fit lg:w-48 lg:shrink-0 lg:flex-col lg:border-l lg:border-b-0 lg:pb-0 lg:pl-2"
         >
           {SECTIONS.map((s) => (

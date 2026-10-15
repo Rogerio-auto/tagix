@@ -114,7 +114,7 @@ export function MediaUploadField({
         )}
       >
         {busy ? (
-          <Loader2 className="size-5 animate-spin text-text-low motion-reduce:animate-none" aria-hidden />
+          <Loader2 className="size-5 text-text-low motion-safe:animate-spin" aria-hidden />
         ) : (
           <Upload className="size-5 text-text-low" aria-hidden />
         )}

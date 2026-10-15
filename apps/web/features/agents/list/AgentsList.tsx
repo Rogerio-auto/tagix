@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Bot, Plus, Power } from 'lucide-react';
 import { can } from '@hm/shared';
 import {
-  AnchoredHelpHint,
   Button,
   DataTable,
   EmptyState,
@@ -35,7 +34,7 @@ import { AgentsHelp } from './help';
  * abre o detalhe). Mobile: cards com a ação no rodapé (MOBILE_UX §1/§4). O wizard de
  * criação abre num painel (UX §2.3).
  *
- * UX: §2.1 clique na linha; §2.5 `?` (HelpPanel + dica ancorada); §2.6 vazio com CTA
+ * UX: §2.1 clique na linha; §2.5 um único `?` (HelpPanel, com link para a Central de Ajuda); §2.6 vazio com CTA
  * único; §2.7 skeleton no formato da tabela e botão em loading no toggle; §2.10 teclado
  * na tabela; §2.11 erro em 3 partes. Só leitura: "Criar agente" e ativar/desativar ficam
  * `aria-disabled` com a explicação (F71-S17).
@@ -203,12 +202,11 @@ export function AgentsList() {
         description={description}
         actions={createButton}
         helpSlot={
-          <span className="flex items-center gap-1">
-            <HelpPanel title="Agentes">
-              <AgentsHelp />
-            </HelpPanel>
-            <AnchoredHelpHint anchorKey="agents.list" />
-          </span>
+          // Um `?` só (UX §2.5). O artigo do CMS de Ajuda fica a um clique, pelo link
+          // "Mais na Central de Ajuda" no fim do painel.
+          <HelpPanel title="Agentes">
+            <AgentsHelp />
+          </HelpPanel>
         }
       />
 

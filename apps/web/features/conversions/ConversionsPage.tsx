@@ -30,6 +30,7 @@ import {
   formatTotals,
   sumByCurrency,
 } from '@/shared/lib/locale';
+import { dotColorStyle } from './color';
 import { useCancelConversion, useConversionTypes, useConversions } from './queries';
 import type { ConversionEvent } from './types';
 
@@ -155,14 +156,14 @@ export function ConversionsPage(): React.JSX.Element {
     );
 
   const typeCell = (ev: ConversionEvent): React.JSX.Element => {
-    const color = typeById.get(ev.conversionTypeId)?.color;
     return (
       <span className="flex min-w-0 items-center gap-2.5">
-        {/* A cor é dado do tipo (cadastrada pelo cliente): só no ponto, nunca no texto. */}
+        {/* A cor é dado do tipo (cadastrada pelo cliente): só no ponto, nunca no texto, e só
+            se for `#RRGGBB` válido (senão fica o token `bg-text-low`). */}
         <i
           aria-hidden
           className="size-2 shrink-0 rounded-pill bg-text-low"
-          style={color ? { backgroundColor: color } : undefined}
+          style={dotColorStyle(typeById.get(ev.conversionTypeId)?.color)}
         />
         <span className={cn('truncate font-bold', ev.cancelledAt ? 'text-text-low line-through' : 'text-text')}>
           {labelOf(ev)}
@@ -177,7 +178,7 @@ export function ConversionsPage(): React.JSX.Element {
       id: 'when',
       header: 'Quando',
       width: '11rem',
-      cell: (ev) => <span className="font-mono text-sm tabular-nums">{formatDateTime(ev.occurredAt)}</span>,
+      cell: (ev) => <span className="whitespace-nowrap font-mono text-sm tabular-nums">{formatDateTime(ev.occurredAt)}</span>,
     },
     {
       id: 'source',

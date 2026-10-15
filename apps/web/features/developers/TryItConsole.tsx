@@ -86,7 +86,7 @@ function runSandbox(endpoint: Endpoint): RunResult {
 async function runReal(endpoint: Endpoint, url: string, apiKey: string): Promise<RunResult> {
   if (endpoint.method !== 'get') {
     // defesa em profundidade: o componente ja bloqueia, mas garantimos aqui.
-    throw new Error('Modo real permite apenas requisicoes GET.');
+    throw new Error('Modo real permite apenas requisições GET.');
   }
   const started = performance.now();
   const res = await fetch(url, {
@@ -159,7 +159,7 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
       const url = '/api/v1' + fillPath(endpoint.path.replace('/api/v1', ''), pathValues) + buildQuery(endpoint.params, queryValues);
       setResult(await runReal(endpoint, url, apiKey.trim()));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao executar a requisicao.');
+      setError(e instanceof Error ? e.message : 'Falha ao executar a requisição.');
     } finally {
       setRunning(false);
     }
@@ -189,7 +189,7 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
         </div>
 
         {!isMutating && (
-          <div className="flex gap-1" role="tablist" aria-label="Modo de execucao">
+          <div className="flex gap-1" role="tablist" aria-label="Modo de execução">
             <button
               type="button"
               role="tab"
@@ -220,15 +220,15 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
 
       {isMutating && (
         <p className="rounded-sm border border-warn/25 bg-warn/10 px-3 py-2 font-body text-sm text-text-mid">
-          Esta operacao tem efeito (escrita). Para nao disparar nada de verdade, ela so roda no
-          Sandbox — o modo real e desabilitado aqui.
+          Esta operação tem efeito (escrita). Para não disparar nada de verdade, ela só roda no
+          Sandbox — o modo real é desabilitado aqui.
         </p>
       )}
 
       {pathParamDefs.length > 0 && (
         <div className="flex flex-col gap-2">
           <h6 className="font-mono text-xs font-medium uppercase tracking-wider text-text-low">
-            Parametros de path
+            Parâmetros de path
           </h6>
           {pathParamDefs.map((p) => (
             <label key={p.name} className="flex flex-col gap-1">
@@ -297,7 +297,7 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
             className="h-9 rounded-sm border border-border bg-surface px-2.5 font-mono text-sm text-text outline-none transition-[border-color] duration-(--dur-fast) hover:border-border-2 focus:border-brand-text focus-visible:focus-ring"
           />
           <span className="font-body text-xs text-text-low">
-            A chave fica so na memoria desta aba e some ao sair. Nunca e salva nem registrada.
+            A chave fica só na memória desta aba e some ao sair. Nunca é salva nem registrada.
           </span>
         </label>
       )}

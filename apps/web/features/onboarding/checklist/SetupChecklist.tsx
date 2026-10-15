@@ -106,9 +106,10 @@ export function SetupChecklist() {
           aria-valuenow={doneCount}
           aria-label={`${doneCount} de ${total} passos concluídos`}
         >
+          {/* Anima `transform` (compositor), não `width` (layout). A trilha recorta as pontas. */}
           <div
-            className="h-full rounded-pill bg-brand-text motion-safe:transition-[width] motion-safe:duration-500 motion-safe:ease-ds"
-            style={{ width: `${pct}%` }}
+            className="h-full w-full origin-left bg-brand-text motion-safe:transition-transform motion-safe:duration-500 motion-safe:ease-ds"
+            style={{ transform: `scaleX(${pct / 100})` }}
           />
         </div>
 

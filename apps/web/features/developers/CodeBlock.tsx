@@ -30,7 +30,7 @@ export function CodeBlock({ code, label }: { code: string; label?: string }) {
       <button
         type="button"
         onClick={() => void copy()}
-        aria-label="Copiar codigo"
+        aria-label="Copiar código"
         className="absolute right-2 top-1.5 inline-flex items-center gap-1 rounded-xs border border-border bg-surface px-2 py-1 font-body text-xs font-bold text-text-mid outline-none transition-colors duration-(--dur-fast) ease-ds hover:border-border-2 hover:text-text focus-visible:focus-ring"
       >
         {copied ? <Check className="size-3.5 text-success" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}

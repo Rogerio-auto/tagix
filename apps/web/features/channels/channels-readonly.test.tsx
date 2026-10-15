@@ -32,6 +32,12 @@ vi.mock('@/shared/stores/auth.store', () => ({
 vi.mock('@/shared/hooks/useBreakpoint', () => ({
   useBreakpoint: () => ({ isMobile: false, isTablet: false, isDesktop: true, isBelowDesktop: false }),
 }));
+// O detalhe do modelo navega para a campanha nova pelo router (sem App Router no teste).
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: () => undefined, replace: () => undefined, prefetch: () => undefined }),
+  usePathname: () => '/settings/channels',
+  useSearchParams: () => new URLSearchParams(),
+}));
 // O assistente de conexão (SDK da Meta, popup) não entra no render estático.
 vi.mock('./components/ConnectWizard', () => ({ ConnectWizard: () => null }));
 

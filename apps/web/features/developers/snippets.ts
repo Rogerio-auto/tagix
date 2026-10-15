@@ -180,7 +180,7 @@ export const CURL_AUTH = [
 ].join('\n');
 
 export const WEBHOOK_VERIFY = [
-  '// Verificacao da assinatura HMAC (Node.js)',
+  '// Verificação da assinatura HMAC (Node.js)',
   'import crypto from "node:crypto";',
   '',
   'function verify(rawBody, signatureHeader, secret) {',

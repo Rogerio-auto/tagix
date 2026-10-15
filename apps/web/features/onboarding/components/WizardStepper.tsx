@@ -49,8 +49,9 @@ export function WizardStepper({ steps, current }: WizardStepperProps): ReactNode
                 <span aria-hidden className="relative h-px min-w-4 flex-1 overflow-hidden bg-border-2">
                   <span
                     className={cn(
-                      'absolute inset-y-0 left-0 bg-brand-text motion-safe:transition-[width] motion-safe:duration-(--dur-slow) motion-safe:ease-ds',
-                      done ? 'w-full' : 'w-0',
+                      // `scaleX` (compositor) em vez de animar `width` (layout).
+                      'absolute inset-0 origin-left bg-brand-text motion-safe:transition-transform motion-safe:duration-(--dur-slow) motion-safe:ease-ds',
+                      done ? 'scale-x-100' : 'scale-x-0',
                     )}
                   />
                 </span>

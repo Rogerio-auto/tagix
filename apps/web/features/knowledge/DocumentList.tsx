@@ -20,6 +20,9 @@ function Visibility({ doc }: { doc: KbDocument }): React.JSX.Element {
   );
 }
 
+/** Data compacta de lista (uma linha, mesmo padrão de campanhas/flows/agentes). */
+const LIST_DATE: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' };
+
 const tableColumns: DataTableColumn<KbDocument>[] = [
   {
     id: 'title',
@@ -43,8 +46,12 @@ const tableColumns: DataTableColumn<KbDocument>[] = [
     id: 'updated',
     header: 'Atualizado',
     numeric: true,
-    width: '10rem',
-    cell: (doc) => <span className="text-text-mid">{formatDate(doc.updatedAt ?? doc.createdAt)}</span>,
+    width: '8rem',
+    cell: (doc) => (
+      <span className="whitespace-nowrap text-text-mid">
+        {formatDate(doc.updatedAt ?? doc.createdAt, LIST_DATE)}
+      </span>
+    ),
   },
   { id: 'status', header: 'Indexação', width: '9.5rem', cell: (doc) => <DocumentStatusBadge status={doc.status} /> },
 ];

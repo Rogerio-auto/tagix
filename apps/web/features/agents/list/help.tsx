@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 /** Conteúdo do HelpPanel da feature de agentes (UX §2.5 — explicação no painel `?`). */
 export function AgentsHelp() {
   return (
@@ -18,6 +20,14 @@ export function AgentsHelp() {
       <p>
         Desativar um agente pausa o atendimento automático sem apagar a configuração. Você pode
         reativá-lo a qualquer momento.
+      </p>
+      <p>
+        <Link
+          href="/help"
+          className="rounded-xs font-bold text-text underline decoration-border-2 underline-offset-4 outline-none transition-colors duration-(--dur-fast) hover:decoration-text focus-visible:focus-ring"
+        >
+          Mais na Central de Ajuda
+        </Link>
       </p>
     </div>
   );

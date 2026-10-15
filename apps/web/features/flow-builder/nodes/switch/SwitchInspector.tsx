@@ -62,8 +62,10 @@ export function SwitchInspector({ nodeId }: { nodeId: string }) {
             type="text"
             value={variable}
             placeholder="contact.plan"
+            spellCheck={false}
+            autoCapitalize="off"
             onChange={(e) => set({ variable: e.target.value })}
-            className="rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
+            className="rounded-sm border border-border bg-surface-2 px-3 py-2 font-mono text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring sm:text-sm"
           />
           <VariablesPicker onPick={handleVarPick} />
         </div>

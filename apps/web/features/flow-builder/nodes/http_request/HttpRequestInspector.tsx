@@ -116,7 +116,7 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
       {/* Requisição */}
       <section className="flex flex-col gap-3">
         <SelectField
-          label="Metodo"
+          label="Método"
           value={((d['method'] as string) ?? '') || 'GET'}
           options={METHOD_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
           onChange={(v) => set({ method: v })}
@@ -125,6 +125,7 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
           label="URL"
           value={(d['url'] as string) ?? ''}
           placeholder="https://api.exemplo.com/hook"
+          mono
           hint="Aceita variáveis {{...}}. Edges: success / error."
           onChange={(v) => set({ url: v })}
         />
@@ -220,7 +221,7 @@ export function HttpRequestInspector({ nodeId }: { nodeId: string }) {
       <section className="flex flex-col gap-3">
         <SectionHeader title="Retentativas" />
         <NumberField
-          label="Tentativas (max)"
+          label="Tentativas (máx.)"
           value={readNum(d, 'retryPolicy', 'maxAttempts')}
           hint="Entre 1 e 10. Padrão 3. 5xx retenta; 4xx vai direto p/ error."
           onChange={(v) => setRetry(d, set, { maxAttempts: clamp(v, 1, 10) })}

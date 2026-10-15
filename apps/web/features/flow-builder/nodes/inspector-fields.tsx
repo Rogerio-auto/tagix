@@ -2,7 +2,10 @@
 
 import type { ReactNode } from 'react';
 
-/** Primitivos de campo do inspector de nodes (F4-S11). DS v2, sem hex. */
+/**
+ * Primitivos de campo do inspector de nodes (F4-S11). Mesmo desenho do `Input` do DS
+ * (14px no desktop; 16px abaixo de `sm`, que evita o zoom do iOS ao focar). Sem hex.
+ */
 
 export function Field({
   label,
@@ -27,12 +30,15 @@ export function TextField({
   value,
   placeholder,
   hint,
+  mono = false,
   onChange,
 }: {
   label: string;
   value: string;
   placeholder?: string;
   hint?: string;
+  /** Valor técnico (caminho de variável, URL): em mono, como no canvas. */
+  mono?: boolean;
   onChange: (v: string) => void;
 }) {
   return (
@@ -41,8 +47,10 @@ export function TextField({
         type="text"
         value={value}
         placeholder={placeholder}
+        spellCheck={mono ? false : undefined}
+        autoCapitalize={mono ? 'off' : undefined}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
+        className={`${mono ? 'font-mono' : 'font-body'} rounded-sm border border-border bg-surface-2 px-3 py-2 text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring sm:text-sm`}
       />
     </Field>
   );
@@ -67,7 +75,7 @@ export function TextAreaField({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="min-h-[90px] rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
+        className="min-h-[90px] rounded-sm border border-border bg-surface-2 px-3 py-2 font-body text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring sm:text-sm"
       />
     </Field>
   );
@@ -98,7 +106,7 @@ export function NumberField({
         min={min}
         max={max}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
+        className="rounded-sm border border-border bg-surface-2 px-3 py-2 font-body text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring sm:text-sm"
       />
     </Field>
   );
@@ -122,7 +130,7 @@ export function SelectField({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
+        className="rounded-sm border border-border bg-surface-2 px-3 py-2 font-body text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring sm:text-sm"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>

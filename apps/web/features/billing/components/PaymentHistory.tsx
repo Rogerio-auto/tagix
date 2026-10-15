@@ -27,6 +27,9 @@ function EventStatus({ status }: { status: string }): React.JSX.Element {
   );
 }
 
+/** Data compacta de lista (uma linha, mesmo padrão das outras tabelas). */
+const LIST_DATE: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' };
+
 const tableColumns: DataTableColumn<PaymentEvent>[] = [
   {
     id: 'type',
@@ -34,7 +37,13 @@ const tableColumns: DataTableColumn<PaymentEvent>[] = [
     cell: (e) => <span className="font-bold text-text">{eventTypeLabel(e.eventType)}</span>,
   },
   { id: 'status', header: 'Status', width: '9rem', cell: (e) => <EventStatus status={e.status} /> },
-  { id: 'date', header: 'Data', numeric: true, width: '11rem', cell: (e) => formatDate(e.receivedAt) },
+  {
+    id: 'date',
+    header: 'Data',
+    numeric: true,
+    width: '8rem',
+    cell: (e) => <span className="whitespace-nowrap">{formatDate(e.receivedAt, LIST_DATE)}</span>,
+  },
   { id: 'amount', header: 'Valor', numeric: true, width: '10rem', cell: (e) => formatBRL(e.amountCents) },
 ];
 
@@ -43,7 +52,7 @@ const cardColumns: readonly ResponsiveColumn<PaymentEvent>[] = [
   {
     id: 'date',
     card: 'secondary',
-    cell: (e) => <span className="font-mono tabular-nums">{formatDate(e.receivedAt)}</span>,
+    cell: (e) => <span className="font-mono tabular-nums">{formatDate(e.receivedAt, LIST_DATE)}</span>,
   },
   {
     id: 'amount',

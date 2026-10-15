@@ -43,10 +43,21 @@ type RowProps = Pick<PendingInvitesProps, 'busy' | 'onResend' | 'onCopyLink' | '
  * novo por POST), então com a empresa em só leitura ficam `aria-disabled` com a
  * explicação (F71-S17) — continuam focáveis e o clique não chama a API.
  */
-function InviteActions({ invite, busy, onResend, onCopyLink, onRevoke }: RowProps): React.JSX.Element {
+function InviteActions({
+  invite,
+  busy,
+  onResend,
+  onCopyLink,
+  onRevoke,
+  compact = false,
+}: RowProps & { compact?: boolean }): React.JSX.Element {
   const rowBusy = busy?.id === invite.id ? busy.action : null;
   const anyBusy = busy !== null;
   const noResends = invite.resendsLeft <= 0;
+  // Tabela (desktop): "Reenviar" e "Revogar" viram ícone quadrado com dica, para o e-mail
+  // e as datas caberem sem quebra na coluna de conteúdo das Configurações. "Copiar link",
+  // a saída quando o e-mail não chega, segue com rótulo. O nome acessível é sempre o completo.
+  const iconOnly = compact ? 'w-8 px-0' : '';
   return (
     // Mobile: `-ml-3` alinha o ícone do 1º botão fantasma à borda do conteúdo, e "Revogar"
     // vira só o ícone (o nome acessível segue completo) para as três ações caberem numa
@@ -56,15 +67,15 @@ function InviteActions({ invite, busy, onResend, onCopyLink, onRevoke }: RowProp
         <Button
           size="sm"
           variant="ghost"
-          className={ROW_ACTION}
+          className={`${ROW_ACTION} ${iconOnly}`}
           leftIcon={<RefreshCw className="size-3.5" aria-hidden />}
           loading={rowBusy === 'resend'}
           disabled={anyBusy || noResends}
-          title={noResends ? 'Limite de reenvios atingido: copie o link' : undefined}
+          title={noResends ? 'Limite de reenvios atingido: copie o link' : compact ? 'Reenviar' : undefined}
           aria-label={`Reenviar convite para ${invite.email}`}
           onClick={() => onResend(invite)}
         >
-          Reenviar
+          <span className={compact ? 'sr-only' : undefined}>Reenviar</span>
         </Button>
       </ReadOnlyGuard>
       <ReadOnlyGuard>
@@ -85,14 +96,15 @@ function InviteActions({ invite, busy, onResend, onCopyLink, onRevoke }: RowProp
         <Button
           size="sm"
           variant="ghost"
-          className={`${ROW_ACTION} hover:text-danger max-sm:w-11 max-sm:px-0`}
+          className={`${ROW_ACTION} ${iconOnly} hover:text-danger max-sm:w-11 max-sm:px-0`}
           leftIcon={<Trash2 className="size-3.5 text-danger" aria-hidden />}
           loading={rowBusy === 'revoke'}
           disabled={anyBusy}
+          title={compact ? 'Revogar' : undefined}
           aria-label={`Revogar convite de ${invite.email}`}
           onClick={() => onRevoke(invite)}
         >
-          <span className="max-sm:sr-only">Revogar</span>
+          <span className={compact ? 'sr-only' : 'max-sm:sr-only'}>Revogar</span>
         </Button>
       </ReadOnlyGuard>
     </div>
@@ -227,17 +239,26 @@ export function PendingInvites(props: PendingInvitesProps): React.JSX.Element {
           >
             <Mail className="size-4" />
           </span>
-          <span className="truncate font-semibold text-text">{i.email}</span>
+          {/* `w-0 flex-1`: sem largura mínima própria — a coluna do e-mail fica com o espaço que
+              sobra das colunas fixas e trunca (com o e-mail inteiro na dica) em vez de empurrar a tabela. */}
+          <span className="w-0 min-w-0 flex-1 truncate font-semibold text-text" title={i.email}>
+            {i.email}
+          </span>
         </span>
       ),
     },
-    { id: 'role', header: 'Papel', width: '8.5rem', cell: (i) => <span className="text-text-mid">{roleLabel(i.role)}</span> },
+    {
+      id: 'role',
+      header: 'Papel',
+      width: '9rem',
+      cell: (i) => <span className="whitespace-nowrap text-text-mid">{roleLabel(i.role)}</span>,
+    },
     {
       id: 'sent',
       header: 'Enviado',
       width: '7.5rem',
       cell: (i) => (
-        <span className="font-mono text-sm tabular-nums text-text-mid">
+        <span className="whitespace-nowrap font-mono text-sm tabular-nums text-text-mid">
           {formatRelative(i.lastSentAt ?? i.createdAt, now)}
         </span>
       ),
@@ -248,9 +269,16 @@ export function PendingInvites(props: PendingInvitesProps): React.JSX.Element {
       header: <span className="sr-only">Ações</span>,
       headerLabel: 'Ações',
       align: 'right',
-      width: '20rem',
+      width: '12rem',
       cell: (i) => (
-        <InviteActions invite={i} busy={busy} onResend={onResend} onCopyLink={onCopyLink} onRevoke={onRevoke} />
+        <InviteActions
+          compact
+          invite={i}
+          busy={busy}
+          onResend={onResend}
+          onCopyLink={onCopyLink}
+          onRevoke={onRevoke}
+        />
       ),
     },
   ];

@@ -167,7 +167,7 @@ export default function ApiKeysManager(): React.JSX.Element {
       width: '7rem',
       cell: (k) => `${formatNumber(k.rateLimitPerMinute)}/min`,
     },
-    { id: 'lastUsed', header: 'Último uso', numeric: true, width: '10rem', cell: (k) => lastUsed(k.lastUsedAt) },
+    { id: 'lastUsed', header: 'Último uso', numeric: true, width: '10rem', cell: (k) => <span className="whitespace-nowrap">{lastUsed(k.lastUsedAt)}</span> },
     {
       id: 'actions',
       header: <span className="sr-only">Ações</span>,

@@ -62,7 +62,7 @@ function FieldRows({ fields, depth }: { fields: SchemaField[]; depth: number }) 
             <div className="min-w-0" style={{ paddingLeft: depth * 12 }}>
               <code className="font-mono text-sm text-text">{f.name}</code>
               {f.required && (
-                <span className="ml-2 font-head text-xs uppercase text-danger">obrigatorio</span>
+                <span className="ml-2 font-head text-xs uppercase text-danger">obrigatório</span>
               )}
               {f.description && <p className="mt-0.5 font-body text-xs text-text-low">{f.description}</p>}
             </div>
@@ -99,7 +99,7 @@ function ParamsTable({ params }: { params: ParamField[] }) {
   if (params.length === 0) return null;
   return (
     <div className="flex flex-col gap-2">
-      <h5 className="font-mono text-xs font-medium uppercase tracking-wider text-text-low">Parametros</h5>
+      <h5 className="font-mono text-xs font-medium uppercase tracking-wider text-text-low">Parâmetros</h5>
       <div className="overflow-hidden rounded-md border border-border bg-surface">
         {params.map((p) => (
           <div
@@ -112,7 +112,7 @@ function ParamsTable({ params }: { params: ParamField[] }) {
                 {p.location}
               </span>
               {p.required && (
-                <span className="ml-2 font-head text-xs uppercase text-danger">obrigatorio</span>
+                <span className="ml-2 font-head text-xs uppercase text-danger">obrigatório</span>
               )}
               {p.description && <p className="mt-0.5 font-body text-xs text-text-low">{p.description}</p>}
             </div>
@@ -195,7 +195,7 @@ function EndpointRow({ endpoint }: { endpoint: Endpoint }) {
           {endpoint.requestBody && (
             <div className="flex flex-col gap-2">
               <h5 className="font-mono text-xs font-medium uppercase tracking-wider text-text-low">
-                Corpo da requisicao
+                Corpo da requisição
               </h5>
               <SchemaTable schema={endpoint.requestBody} emptyLabel="Sem corpo." />
             </div>

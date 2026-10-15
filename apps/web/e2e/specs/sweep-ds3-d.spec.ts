@@ -615,6 +615,12 @@ const SCREENS: Screen[] = [
       await expect(page.getByRole('heading', { name: 'Primeiros passos' })).toBeVisible();
       await expect(page.getByRole('link', { name: /Importar contatos/ })).toBeVisible();
     },
+    // O checklist fica abaixo da dobra do dashboard: a captura tem de mostrar ELE, não o topo.
+    open: async (page) => {
+      const checklist = page.locator('section[aria-labelledby="setup-checklist-title"]');
+      await checklist.scrollIntoViewIfNeeded();
+      await expect(checklist).toBeInViewport({ ratio: 0.9 });
+    },
     scope: 'section[aria-labelledby="setup-checklist-title"]',
   },
 ];

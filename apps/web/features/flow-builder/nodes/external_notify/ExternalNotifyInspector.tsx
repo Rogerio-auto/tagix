@@ -78,7 +78,7 @@ export function ExternalNotifyInspector({ nodeId }: { nodeId: string }) {
           value={text}
           placeholder="Novo lead aguardando: {{contact.name}}"
           onChange={(e) => set({ text: e.target.value })}
-          className="min-h-[90px] rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
+          className="min-h-[90px] rounded-sm border border-border bg-surface-2 px-3 py-2 font-body text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring sm:text-sm"
         />
       </div>
 

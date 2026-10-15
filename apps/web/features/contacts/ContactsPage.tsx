@@ -33,6 +33,29 @@ import type { Contact, ContactFilters } from './types';
 const PAGE_SIZE = 25;
 const SEARCH_DEBOUNCE_MS = 300;
 
+/** Data compacta de lista (uma linha, mesmo padrão de campanhas/flows/agentes). */
+const LIST_DATE: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' };
+
+/**
+ * Rótulo legível da origem. A origem é texto livre (o form permite digitar), então só
+ * os valores conhecidos do sistema são traduzidos; o resto aparece como foi escrito.
+ */
+const SOURCE_LABEL: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  instagram: 'Instagram',
+  site: 'Site',
+  manual: 'Manual',
+  api: 'API',
+  import: 'Importação',
+  csv: 'Importação',
+  lead_ads: 'Lead Ads',
+};
+
+function sourceLabel(source: string | null): string {
+  if (!source) return '—';
+  return SOURCE_LABEL[source.toLowerCase()] ?? source;
+}
+
 function OptInPill({ contact }: { contact: Contact }): React.JSX.Element {
   return contact.marketingOptIn ? (
     <StatusPill tone="success" size="sm">
@@ -173,14 +196,16 @@ export function ContactsPage(): React.JSX.Element {
             <span className="truncate">{c.email ?? '—'}</span>
           ),
       },
-      { id: 'source', header: 'Origem', cell: (c) => c.source ?? '—' },
+      { id: 'source', header: 'Origem', cell: (c) => sourceLabel(c.source) },
       { id: 'optIn', header: 'Marketing', width: '9rem', cell: (c) => <OptInPill contact={c} /> },
       {
         id: 'createdAt',
         header: 'Criado em',
         numeric: true,
-        width: '10rem',
-        cell: (c) => <span className="text-text-mid">{formatDate(c.createdAt)}</span>,
+        width: '8rem',
+        cell: (c) => (
+          <span className="whitespace-nowrap text-text-mid">{formatDate(c.createdAt, LIST_DATE)}</span>
+        ),
       },
     ],
     [],
@@ -205,7 +230,7 @@ export function ContactsPage(): React.JSX.Element {
         cell: (c) =>
           c.phone ? <span className="font-mono tabular-nums">{c.phone}</span> : (c.email ?? '—'),
       },
-      { id: 'source', card: 'meta', cell: (c) => c.source ?? '—' },
+      { id: 'source', card: 'meta', cell: (c) => sourceLabel(c.source) },
       { id: 'optIn', card: 'badge', cell: (c) => <OptInPill contact={c} /> },
     ],
     [],

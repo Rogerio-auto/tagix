@@ -14,8 +14,8 @@ test.describe('F38 — Portal do Desenvolvedor', () => {
 
     // Secoes presentes.
     await expect(page.getByRole('heading', { name: 'Primeiros passos' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Autenticacao' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Referencia' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Autenticação' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Referência' })).toBeVisible();
 
     // Referencia agrupada por recurso (do OpenAPI mockado: contacts, deals). Texto
     // exato: o exemplo de curl da pagina tambem cita /api/v1/contacts.

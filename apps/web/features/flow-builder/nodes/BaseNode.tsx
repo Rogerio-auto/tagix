@@ -70,10 +70,13 @@ export function OutputPorts({ ports }: { ports: readonly NodePort[] }) {
   if (ports.length <= 1) {
     return <Handle type="source" position={Position.Bottom} className={HANDLE_CLASS} />;
   }
+  // O handle se posiciona pelo casco (`relative`), na borda de baixo do nó, centrado sob
+  // o rótulo da sua coluna: o rótulo fica acima, com o respiro do padding inferior, e o
+  // handle nunca cobre o texto ("fr●e"). A conta desconta o `px-3` do casco.
   return (
     <div className="mt-3 flex justify-between gap-1 border-t border-border pt-2">
       {ports.map((port, i) => (
-        <div key={port.id} className="relative min-w-0 flex-1 text-center">
+        <div key={port.id} className="min-w-0 flex-1 text-center">
           <span
             className={cn(
               'block truncate font-mono text-[11px] leading-4',
@@ -87,7 +90,7 @@ export function OutputPorts({ ports }: { ports: readonly NodePort[] }) {
             id={port.id}
             position={Position.Bottom}
             // Posição horizontal calculada: o único estilo inline (geometria, não cor).
-            style={{ left: `${((i + 0.5) / ports.length) * 100}%` }}
+            style={{ left: `calc(0.75rem + (100% - 1.5rem) * ${(i + 0.5) / ports.length})` }}
             className={HANDLE_CLASS}
           />
         </div>

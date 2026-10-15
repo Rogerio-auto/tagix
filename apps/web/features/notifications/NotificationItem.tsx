@@ -83,35 +83,41 @@ export function NotificationItem({ n }: { n: AppNotification }): React.JSX.Eleme
           </div>
           <p className="mt-1 truncate font-body text-sm font-bold text-text">{n.title}</p>
 
-          {/* Ações secundárias — reabilitam o ponteiro acima do overlay. */}
-          <div className="pointer-events-auto mt-2 flex flex-wrap items-center gap-1.5">
+          {/* Uma linha só: a dica (decorativa; o overlay já se anuncia) encolhe e as duas
+              ações secundárias ficam juntas à direita, reabilitando o ponteiro acima do overlay. */}
+          <div className="mt-2 flex flex-nowrap items-center gap-1.5">
             {hasConversation && (
-              <span className="inline-flex items-center gap-1 font-body text-xs text-text-low">
-                <ChevronRight className="size-3.5" aria-hidden />
-                Toque para abrir a conversa
+              <span
+                aria-hidden
+                className="inline-flex min-w-0 items-center gap-1 font-body text-xs text-text-low"
+              >
+                <ChevronRight className="size-3.5 shrink-0" aria-hidden />
+                <span className="truncate">Abrir conversa</span>
               </span>
             )}
-            <ReadOnlyGuard className="ml-auto">
+            <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-1.5">
+              <ReadOnlyGuard>
+                <button
+                  type="button"
+                  onClick={() => void onComplete()}
+                  disabled={complete.isPending}
+                  aria-busy={complete.isPending || undefined}
+                  className="touch-target inline-flex items-center gap-1.5 rounded-sm px-2 font-body text-xs font-bold text-text-mid outline-none transition-colors duration-(--dur-fast) ease-ds hover:bg-surface-3 hover:text-text focus-visible:focus-ring disabled:opacity-60"
+                >
+                  <Check className="size-3.5" aria-hidden />
+                  {complete.isPending ? 'Concluindo…' : 'Concluir'}
+                </button>
+              </ReadOnlyGuard>
               <button
                 type="button"
-                onClick={() => void onComplete()}
-                disabled={complete.isPending}
-                aria-busy={complete.isPending || undefined}
-                className="touch-target inline-flex items-center gap-1.5 rounded-sm px-2 font-body text-xs font-bold text-text-mid outline-none transition-colors duration-(--dur-fast) ease-ds hover:bg-surface-3 hover:text-text focus-visible:focus-ring disabled:opacity-60"
+                onClick={() => remove(n.eventId)}
+                aria-label={`Descartar notificação — ${n.title}`}
+                className="touch-target inline-flex items-center gap-1.5 rounded-sm px-2 font-body text-xs font-bold text-text-low outline-none transition-colors duration-(--dur-fast) ease-ds hover:bg-surface-3 hover:text-text focus-visible:focus-ring"
               >
-                <Check className="size-3.5" aria-hidden />
-                {complete.isPending ? 'Concluindo…' : 'Concluir'}
+                <X className="size-3.5" aria-hidden />
+                Descartar
               </button>
-            </ReadOnlyGuard>
-            <button
-              type="button"
-              onClick={() => remove(n.eventId)}
-              aria-label={`Descartar notificação — ${n.title}`}
-              className="touch-target inline-flex items-center gap-1.5 rounded-sm px-2 font-body text-xs font-bold text-text-low outline-none transition-colors duration-(--dur-fast) ease-ds hover:bg-surface-3 hover:text-text focus-visible:focus-ring"
-            >
-              <X className="size-3.5" aria-hidden />
-              Descartar
-            </button>
+            </div>
           </div>
         </div>
       </div>

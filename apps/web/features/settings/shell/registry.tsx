@@ -22,6 +22,11 @@ export type SettingsGroup = 'pessoal' | 'workspace';
 export interface CounterState {
   /** Texto curto exibido ao lado do item (ex.: "3 ativos"). */
   readonly label: string;
+  /**
+   * Forma compacta visível quando o `label` completo não cabe ao lado do item
+   * (ex.: "1 desaut."). O `label` segue no `title` e no nome acessível.
+   */
+  readonly short?: string;
   /** `true` pinta o contador como alerta (ex.: token expirando). */
   readonly alert?: boolean;
 }
