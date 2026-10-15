@@ -53,7 +53,7 @@ export function DepartmentsField({
     return (
       <div className="flex flex-col gap-2" aria-busy>
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-12 animate-pulse rounded-sm bg-surface-inset" />
+          <div key={i} className="h-12 rounded-sm bg-surface-2 motion-safe:animate-pulse" />
         ))}
       </div>
     );
@@ -88,7 +88,7 @@ export function DepartmentsField({
             className={cn(
               'rounded-sm border transition-colors',
               isSelected
-                ? 'border-border-2 bg-surface-inset'
+                ? 'border-brand-text/30 bg-brand-text/5'
                 : 'border-border bg-surface-2 hover:border-border-2',
             )}
           >
@@ -101,8 +101,8 @@ export function DepartmentsField({
                 disabled={disabled}
                 onChange={() => toggleDepartment(dept.id)}
                 className={cn(
-                  'size-4 shrink-0 cursor-pointer rounded-xs border-border accent-brand outline-none',
-                  'focus-visible:shadow-glow-sm disabled:cursor-not-allowed disabled:opacity-40',
+                  'size-4 shrink-0 cursor-pointer rounded-xs border-border accent-brand-text outline-none',
+                  'focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-40',
                 )}
               />
               <label
@@ -114,7 +114,7 @@ export function DepartmentsField({
               >
                 <Building2 className="size-4 shrink-0 text-text-low" aria-hidden />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-head text-sm font-medium text-text">
+                  <span className="block truncate font-body text-sm font-bold text-text">
                     {dept.name}
                   </span>
                   {dept.description && (
@@ -133,10 +133,10 @@ export function DepartmentsField({
                   onClick={() => setDefault(dept.id, !isDefault)}
                   className={cn(
                     'inline-flex shrink-0 items-center gap-1.5 rounded-pill border px-2.5 py-1',
-                    'font-head text-xs font-medium outline-none transition-colors',
-                    'focus-visible:shadow-glow-md disabled:cursor-not-allowed disabled:opacity-40',
+                    'font-body text-xs font-bold outline-none transition-colors duration-(--dur-fast)',
+                    'focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-40',
                     isDefault
-                      ? 'border-transparent bg-brand text-text-on-brand'
+                      ? 'border-brand-text/30 bg-brand-text/10 text-brand-text'
                       : 'border-border text-text-low hover:border-border-2 hover:text-text-mid',
                   )}
                   title={

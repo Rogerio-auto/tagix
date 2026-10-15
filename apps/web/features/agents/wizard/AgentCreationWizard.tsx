@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { Button, Input, Modal, useToast } from '@hm/ui';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
 import { Sheet } from '@/shared/components/Sheet';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { cn } from '@/shared/lib/cn';
@@ -251,7 +252,7 @@ export function AgentCreationWizard({ open, onClose }: AgentCreationWizardProps)
     <div
       className={cn(
         'flex items-center justify-between gap-3',
-        navInline && 'mt-1 border-t border-border-2 pt-4',
+        navInline && 'mt-1 border-t border-border pt-4',
       )}
     >
       {step > 0 ? (
@@ -278,14 +279,16 @@ export function AgentCreationWizard({ open, onClose }: AgentCreationWizardProps)
           Continuar
         </Button>
       ) : (
-        <Button
-          variant="primary"
-          loading={create.isPending}
-          leftIcon={<Check className="size-4" aria-hidden />}
-          onClick={() => void submit()}
-        >
-          Criar agente
-        </Button>
+        <ReadOnlyGuard>
+          <Button
+            variant="primary"
+            loading={create.isPending}
+            leftIcon={<Check className="size-4" aria-hidden />}
+            onClick={() => void submit()}
+          >
+            Criar agente
+          </Button>
+        </ReadOnlyGuard>
       )}
     </div>
   );

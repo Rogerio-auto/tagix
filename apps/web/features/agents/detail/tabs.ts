@@ -1,7 +1,9 @@
 /** Definição das tabs da página de detalhe do agente (UX §2 — nav clara). */
 export const AGENT_TABS = [
-  { id: 'config', label: 'Config' },
-  { id: 'tools', label: 'Tools' },
+  { id: 'config', label: 'Configuração' },
+  // Prompt como código (F56-S31): histórico, publicação, diff e rollback.
+  { id: 'versions', label: 'Versões' },
+  { id: 'tools', label: 'Ferramentas' },
   { id: 'knowledge', label: 'Conhecimento' },
   { id: 'metrics', label: 'Métricas' },
   { id: 'playground', label: 'Playground' },

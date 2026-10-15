@@ -1,25 +1,20 @@
 'use client';
 
-import { cn } from '@hm/ui';
+import { StatusPill, type BadgeTone } from '@hm/ui';
 import type { HealthStatus } from '../list/types';
 
-const STYLES: Record<HealthStatus, { label: string; cls: string }> = {
-  healthy: { label: 'Saudavel', cls: 'bg-success/15 text-success border-success/30' },
-  warning: { label: 'Atencao', cls: 'bg-warn/15 text-warn border-warn/30' },
-  critical: { label: 'Critico', cls: 'bg-danger/15 text-danger border-danger/30' },
+const META: Record<HealthStatus, { label: string; tone: BadgeTone }> = {
+  healthy: { label: 'Saudável', tone: 'success' },
+  warning: { label: 'Atenção', tone: 'warning' },
+  critical: { label: 'Crítico', tone: 'danger' },
 };
 
-/** Badge de saude da campanha (CAMPAIGNS.md 11). */
+/** Saúde da campanha (CAMPAIGNS.md 11). O texto carrega o sentido; a cor só reforça. */
 export function HealthBadge({ status }: { status: HealthStatus }): React.JSX.Element {
-  const s = STYLES[status];
+  const meta = META[status];
   return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ',
-        s.cls,
-      )}
-    >
-      {s.label}
-    </span>
+    <StatusPill tone={meta.tone} size="sm">
+      {meta.label}
+    </StatusPill>
   );
 }

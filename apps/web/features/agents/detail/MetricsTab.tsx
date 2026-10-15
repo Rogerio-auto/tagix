@@ -2,21 +2,32 @@
 
 import { useMemo, useState } from 'react';
 import { BarChart3 } from 'lucide-react';
-import { Button, Card } from '@hm/ui';
+import {
+  Button,
+  DataTable,
+  EmptyState,
+  ErrorState,
+  Skeleton,
+  type DataTableColumn,
+} from '@hm/ui';
 import { cn } from '@/shared/lib/cn';
-import { EmptyState, ErrorState, Skeleton } from '@/shared/components/feedback';
 import { ResponsiveTable, type ResponsiveColumn } from '@/shared/components/ResponsiveTable';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
+import { EMPTY, formatDate, formatNumber } from '@/shared/lib/locale';
 import { useAgentMetrics } from './queries';
 import type { AgentMetric, MetricPeriod } from './types';
 import { METRIC_PERIODS } from './types';
 
 /**
- * Aba de Métricas (UX §2.7 skeleton / §2.11 erro 3-partes).
+ * Aba de Métricas no DS 3.0 (F72-S07). UX §2.7 skeleton / §2.11 erro 3-partes.
  *
  * Consome `GET /api/agents/:id/metrics` — **gap-fill do orchestrator**. Contrato:
  *   { metrics: Array<{ period, periodStart, totalTokens, totalCostUsd,
  *     totalConversations, totalMessages, errorCount, handoffCount, avgLatencyMs }> }
  * O hook degrada para `[]` em 404 → aqui isso vira o empty state "sem métricas".
+ *
+ * Custo de LLM só aparece para quem pode agir sobre ele (`agent.view_costs`; regra 7 da
+ * DS3_ADOCAO). Números em mono tabular; o custo vem em dólar (moeda do dado da API).
  */
 
 const PERIOD_LABEL: Record<MetricPeriod, string> = {
@@ -25,19 +36,15 @@ const PERIOD_LABEL: Record<MetricPeriod, string> = {
   month: 'Mensal',
 };
 
-const usd = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 4,
-});
-const int = new Intl.NumberFormat('pt-BR');
+/**
+ * Custo de LLM em dólar (moeda do dado da API, não do componente). Fração de centavo
+ * importa aqui, então formata direto pelo `formatNumber` (idioma da interface) em vez
+ * do `formatMoneyUnits`, que arredonda para centavos.
+ */
+const COST_FORMAT = { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 } as const;
+const usd = (value: number): string => formatNumber(value, COST_FORMAT);
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('pt-BR');
-}
-
-/** Soma os agregados de um conjunto de linhas para os cards de resumo. */
+/** Soma os agregados de um conjunto de linhas para os blocos de resumo. */
 function summarize(rows: AgentMetric[]) {
   return rows.reduce(
     (acc, r) => ({
@@ -59,87 +66,87 @@ function summarize(rows: AgentMetric[]) {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+/** Bloco de número do DS 3.0: rótulo em mono caixa-alta, valor em mono tabular. */
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <Card elevation={1} className="flex flex-col gap-1 p-4">
-      <span className="font-body text-xs text-text-low">{label}</span>
-      <span className="font-price text-2xl font-semibold text-text">{value}</span>
-    </Card>
+    <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface px-5 py-4">
+      <dt className="font-mono text-xs font-medium uppercase tracking-widest text-text-low">{label}</dt>
+      <dd className="truncate font-mono text-h4 font-medium tabular-nums tracking-tight text-text md:text-h3">
+        {value}
+      </dd>
+    </div>
   );
 }
+
+const latency = (r: AgentMetric): string =>
+  r.avgLatencyMs === null ? EMPTY : `${formatNumber(Math.round(r.avgLatencyMs))} ms`;
 
 /** Chave estável de uma linha de métrica agregada. */
 const metricRowId = (r: AgentMetric) => `${r.period}-${r.periodStart}`;
 
-/**
- * Colunas da grade de métricas. `ResponsiveTable` renderiza tabela densa em
- * `md+` e cards escaneáveis em `< md` (a partir desta mesma config). O período é
- * a coluna `primary` do card; custo entra como `badge`; o resto vira `meta`.
- */
-const METRIC_COLUMNS: readonly ResponsiveColumn<AgentMetric>[] = [
-  {
-    id: 'period',
-    header: 'Período',
-    card: 'primary',
-    cell: (r) => <span className="text-text-mid md:text-text">{formatDate(r.periodStart)}</span>,
-  },
-  {
-    id: 'cost',
-    header: 'Custo',
-    align: 'right',
-    card: 'badge',
-    cell: (r) => <span className="font-price">{usd.format(r.totalCostUsd)}</span>,
-  },
-  {
-    id: 'tokens',
-    header: 'Tokens',
-    align: 'right',
-    cell: (r) => <span className="font-price">{int.format(r.totalTokens)} tokens</span>,
-  },
-  {
-    id: 'conversations',
-    header: 'Conversas',
-    align: 'right',
-    cell: (r) => <span className="font-price">{int.format(r.totalConversations)} conv.</span>,
-  },
-  {
-    id: 'messages',
-    header: 'Mensagens',
-    align: 'right',
-    cell: (r) => <span className="font-price">{int.format(r.totalMessages)} msg</span>,
-  },
-  {
-    id: 'errors',
-    header: 'Erros',
-    align: 'right',
-    cell: (r) => (
-      <span className={cn('font-price', r.errorCount > 0 ? 'text-danger' : 'text-text-low')}>
-        {int.format(r.errorCount)} erros
-      </span>
-    ),
-  },
-  {
-    id: 'handoffs',
-    header: 'Handoffs',
-    align: 'right',
-    cell: (r) => (
-      <span className="font-price text-text-mid">{int.format(r.handoffCount)} handoffs</span>
-    ),
-  },
-  {
-    id: 'latency',
-    header: 'Latência',
-    align: 'right',
-    cell: (r) => (
-      <span className="font-price text-text-mid">
-        {r.avgLatencyMs === null ? '—' : `${int.format(Math.round(r.avgLatencyMs))} ms`}
-      </span>
-    ),
-  },
-];
+function tableColumns(showCost: boolean): DataTableColumn<AgentMetric>[] {
+  return [
+    {
+      id: 'period',
+      header: 'Período',
+      cell: (r) => <span className="font-mono tabular-nums text-text">{formatDate(r.periodStart)}</span>,
+    },
+    ...(showCost
+      ? [{ id: 'cost', header: 'Custo', numeric: true, cell: (r: AgentMetric) => usd(r.totalCostUsd) }]
+      : []),
+    { id: 'tokens', header: 'Tokens', numeric: true, cell: (r) => formatNumber(r.totalTokens) },
+    { id: 'conversations', header: 'Conversas', numeric: true, cell: (r) => formatNumber(r.totalConversations) },
+    { id: 'messages', header: 'Mensagens', numeric: true, cell: (r) => formatNumber(r.totalMessages) },
+    {
+      id: 'errors',
+      header: 'Erros',
+      numeric: true,
+      cell: (r) => (
+        <span className={r.errorCount > 0 ? 'text-danger' : 'text-text-low'}>{formatNumber(r.errorCount)}</span>
+      ),
+    },
+    {
+      id: 'handoffs',
+      header: 'Handoffs',
+      numeric: true,
+      cell: (r) => <span className="text-text-mid">{formatNumber(r.handoffCount)}</span>,
+    },
+    {
+      id: 'latency',
+      header: 'Latência',
+      numeric: true,
+      cell: (r) => <span className="text-text-mid">{latency(r)}</span>,
+    },
+  ];
+}
 
-export function MetricsTab({ agentId }: { agentId: string }) {
+/** Cards (< md): período é o título; custo (se visível) no canto; o resto vira metadado. */
+function cardColumns(showCost: boolean): ResponsiveColumn<AgentMetric>[] {
+  const mono = 'font-mono tabular-nums';
+  return [
+    { id: 'period', card: 'primary', cell: (r) => <span className={mono}>{formatDate(r.periodStart)}</span> },
+    ...(showCost
+      ? [{ id: 'cost', card: 'badge' as const, cell: (r: AgentMetric) => <span className={mono}>{usd(r.totalCostUsd)}</span> }]
+      : []),
+    { id: 'tokens', card: 'meta', cell: (r) => <span className={mono}>{formatNumber(r.totalTokens)} tokens</span> },
+    { id: 'conversations', card: 'meta', cell: (r) => <span className={mono}>{formatNumber(r.totalConversations)} conv.</span> },
+    { id: 'messages', card: 'meta', cell: (r) => <span className={mono}>{formatNumber(r.totalMessages)} msg</span> },
+    {
+      id: 'errors',
+      card: 'meta',
+      cell: (r) => (
+        <span className={cn(mono, r.errorCount > 0 ? 'text-danger' : 'text-text-low')}>
+          {formatNumber(r.errorCount)} erros
+        </span>
+      ),
+    },
+    { id: 'latency', card: 'meta', cell: (r) => <span className={mono}>{latency(r)}</span> },
+  ];
+}
+
+export function MetricsTab({ agentId, canViewCosts = false }: { agentId: string; canViewCosts?: boolean }) {
   const metrics = useAgentMetrics(agentId);
+  const { isMobile } = useBreakpoint();
   const [period, setPeriod] = useState<MetricPeriod>('day');
 
   const rows = useMemo(
@@ -150,13 +157,14 @@ export function MetricsTab({ agentId }: { agentId: string }) {
 
   if (metrics.isLoading) {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="flex flex-col gap-4" aria-busy aria-label="Carregando métricas">
+        <Skeleton className="h-10 w-64" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-20" />
+            <Skeleton key={i} className="h-24 rounded-lg" />
           ))}
         </div>
-        <Skeleton className="h-48" />
+        <Skeleton className="h-48 rounded-lg" />
       </div>
     );
   }
@@ -168,7 +176,7 @@ export function MetricsTab({ agentId }: { agentId: string }) {
         reason="A conexão com a API falhou ou expirou."
         whatToDo="Verifique sua conexão e tente novamente."
         action={
-          <Button variant="secondary" onClick={() => void metrics.refetch()}>
+          <Button variant="secondary" loading={metrics.isFetching} onClick={() => void metrics.refetch()}>
             Tentar de novo
           </Button>
         }
@@ -182,31 +190,34 @@ export function MetricsTab({ agentId }: { agentId: string }) {
       <EmptyState
         icon={BarChart3}
         title="Sem métricas ainda"
-        description="As métricas de custo, execuções e latência aparecem aqui assim que o agente começar a processar conversas."
+        description="Execuções, conversas e latência aparecem aqui assim que o agente começar a processar conversas."
       />
     );
   }
 
+  const periodEmpty = {
+    title: `Sem dados ${PERIOD_LABEL[period].toLowerCase()}s`,
+    description: 'Não há métricas agregadas para este período. Tente outro intervalo.',
+  };
+
   return (
     <div className="flex flex-col gap-5">
-      {/* Seletor de período — full-width segmentado no mobile (alvos ≥44px),
-          compacto inline no desktop. */}
+      {/* Seletor de período: segmentado, largura total no celular (alvos ≥44px). */}
       <div
-        role="tablist"
+        role="group"
         aria-label="Período"
-        className="flex w-full gap-1 rounded-md bg-surface-2 p-1 sm:inline-flex sm:w-auto"
+        className="flex w-full gap-1 rounded-md border border-border bg-surface-2 p-1 sm:inline-flex sm:w-auto sm:self-start"
       >
         {METRIC_PERIODS.map((p) => (
           <button
             key={p}
             type="button"
-            role="tab"
-            aria-selected={p === period}
+            aria-pressed={p === period}
             onClick={() => setPeriod(p)}
             className={cn(
-              'min-h-11 flex-1 rounded-sm px-3 py-1.5 font-head text-sm font-medium outline-none transition-colors duration-200 sm:min-h-0 sm:flex-none',
-              'focus-visible:shadow-glow-md',
-              p === period ? 'bg-surface-3 text-text' : 'text-text-low hover:text-text-mid',
+              'min-h-11 flex-1 rounded-sm px-3 py-1.5 font-body text-sm font-bold outline-none sm:min-h-0 sm:flex-none',
+              'transition-colors duration-(--dur-fast) ease-ds focus-visible:focus-ring motion-reduce:transition-none',
+              p === period ? 'bg-surface text-text shadow-ds-1' : 'text-text-low hover:text-text',
             )}
           >
             {PERIOD_LABEL[p]}
@@ -215,32 +226,35 @@ export function MetricsTab({ agentId }: { agentId: string }) {
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState
-          icon={BarChart3}
-          title={`Sem dados ${PERIOD_LABEL[period].toLowerCase()}s`}
-          description="Não há métricas agregadas para este período. Tente outro intervalo."
-        />
+        <EmptyState icon={BarChart3} {...periodEmpty} />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Custo total" value={usd.format(summary.totalCostUsd)} />
-            <StatCard label="Tokens" value={int.format(summary.totalTokens)} />
-            <StatCard label="Conversas" value={int.format(summary.totalConversations)} />
-            <StatCard label="Mensagens" value={int.format(summary.totalMessages)} />
-          </div>
+          <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {canViewCosts ? <Stat label="Custo total" value={usd(summary.totalCostUsd)} /> : null}
+            <Stat label="Tokens" value={formatNumber(summary.totalTokens)} />
+            <Stat label="Conversas" value={formatNumber(summary.totalConversations)} />
+            <Stat label="Mensagens" value={formatNumber(summary.totalMessages)} />
+            {canViewCosts ? null : <Stat label="Handoffs" value={formatNumber(summary.handoffCount)} />}
+          </dl>
 
-          {/* Tabela densa (md+) → cards escaneáveis (< md). */}
-          <ResponsiveTable
-            rows={rows}
-            columns={METRIC_COLUMNS}
-            getRowId={metricRowId}
-            ariaLabel="Métricas por período"
-            empty={{
-              icon: BarChart3,
-              title: `Sem dados ${PERIOD_LABEL[period].toLowerCase()}s`,
-              description: 'Não há métricas agregadas para este período. Tente outro intervalo.',
-            }}
-          />
+          {isMobile ? (
+            <ResponsiveTable
+              rows={rows}
+              columns={cardColumns(canViewCosts)}
+              getRowId={metricRowId}
+              ariaLabel="Métricas por período"
+              empty={{ icon: BarChart3, ...periodEmpty }}
+            />
+          ) : (
+            <DataTable<AgentMetric>
+              caption="Métricas por período"
+              columns={tableColumns(canViewCosts)}
+              rows={rows}
+              getRowId={metricRowId}
+              density="compact"
+              empty={<EmptyState icon={BarChart3} {...periodEmpty} />}
+            />
+          )}
         </>
       )}
     </div>

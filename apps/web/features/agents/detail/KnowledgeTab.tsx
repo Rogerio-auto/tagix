@@ -13,15 +13,18 @@ import { Button, Card } from '@hm/ui';
 export function KnowledgeTab() {
   const router = useRouter();
   return (
-    <Card elevation={1} className="flex flex-col items-start gap-4 p-6">
+    <Card elevation={1} className="flex flex-col items-start gap-5 p-6">
       <div className="flex items-center gap-3">
-        <span className="flex size-10 items-center justify-center rounded-md bg-surface-3 text-brand">
-          <BookOpen className="size-5" aria-hidden />
+        <span
+          aria-hidden
+          className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border bg-surface-2 text-brand-text"
+        >
+          <BookOpen className="size-5" />
         </span>
         <div>
-          <h3 className="font-head text-base font-semibold text-text">
+          <h2 className="font-head text-lg font-medium text-text">
             Base de conhecimento do workspace
-          </h3>
+          </h2>
           <p className="font-body text-sm text-text-mid">
             Este agente consulta automaticamente (RAG) os documentos marcados como visíveis aos
             agentes. A base é compartilhada por todo o workspace.

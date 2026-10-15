@@ -19,7 +19,7 @@ import {
 } from './locale';
 
 /** Espaços do Intl (NBSP / NNBSP) viram espaço comum para comparar. */
-const norm = (s: string): string => s.replace(/[  ]/g, ' ');
+const norm = (s: string): string => s.replace(/[\u00a0\u202f]/g, ' ');
 
 function withLang(lang: string): void {
   Reflect.set(globalThis, 'document', { documentElement: { lang } });

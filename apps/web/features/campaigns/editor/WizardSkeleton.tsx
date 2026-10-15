@@ -10,9 +10,10 @@ import { Skeleton } from '@/shared/components/feedback';
  */
 export function WizardSkeleton({ steps = 6 }: { steps?: number }): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-6 p-6" aria-busy aria-label="Carregando campanha">
+    <div className="flex w-full max-w-4xl flex-col gap-6" aria-busy aria-label="Carregando campanha">
+      <Skeleton className="h-5 w-28" />
       <header className="flex flex-col gap-2">
-        <Skeleton className="h-6 w-52" />
+        <Skeleton className="h-8 w-56" />
         <Skeleton className="h-4 w-40" />
       </header>
 

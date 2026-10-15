@@ -28,11 +28,11 @@ export function TabNav({ basePath, active }: { basePath: string; active: AgentTa
             aria-selected={isActive}
             scroll={false}
             className={cn(
-              'relative -mb-px flex shrink-0 items-center whitespace-nowrap rounded-t-sm px-4 py-2.5 font-head text-sm font-medium outline-none',
-              'min-h-11 transition-colors duration-200 focus-visible:shadow-glow-md',
+              'relative -mb-px flex shrink-0 items-center whitespace-nowrap rounded-t-sm px-4 py-2.5 font-body text-sm font-bold outline-none',
+              'min-h-11 transition-colors duration-(--dur-fast) ease-ds focus-visible:focus-ring motion-reduce:transition-none',
               isActive
-                ? 'border-b-2 border-brand text-text'
-                : 'border-b-2 border-transparent text-text-low hover:text-text-mid',
+                ? 'border-b-2 border-brand-text text-text'
+                : 'border-b-2 border-transparent text-text-low hover:text-text',
             )}
           >
             {tab.label}

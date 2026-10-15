@@ -1,37 +1,21 @@
-import { cn } from '@/shared/lib/cn';
+import { StatusPill, type BadgeTone } from '@hm/ui';
 import type { AgentStatus } from '../types';
 
-type Tone = 'ok' | 'off' | 'muted';
-
-const STATUS_META: Record<AgentStatus, { label: string; tone: Tone }> = {
-  active: { label: 'Ativo', tone: 'ok' },
-  inactive: { label: 'Inativo', tone: 'off' },
-  archived: { label: 'Arquivado', tone: 'muted' },
+const STATUS_META: Record<AgentStatus, { label: string; tone: BadgeTone }> = {
+  active: { label: 'Ativo', tone: 'success' },
+  inactive: { label: 'Inativo', tone: 'neutral' },
+  archived: { label: 'Arquivado', tone: 'neutral' },
 };
 
-const toneClass: Record<Tone, string> = {
-  ok: 'bg-success/15 text-success',
-  off: 'bg-surface-3 text-text-low',
-  muted: 'bg-surface-3 text-text-low',
-};
-
-const dotClass: Record<Tone, string> = {
-  ok: 'bg-success',
-  off: 'bg-text-low',
-  muted: 'bg-text-low',
-};
-
+/**
+ * Status do agente no `StatusPill` do DS 3.0. Estático de propósito: numa lista com vários
+ * agentes ativos, o pulso viraria ruído. O texto carrega o sentido; a cor só reforça.
+ */
 export function AgentStatusBadge({ status }: { status: AgentStatus }) {
   const { label, tone } = STATUS_META[status];
   return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 font-head text-xs font-medium',
-        toneClass[tone],
-      )}
-    >
-      <span className={cn('size-1.5 rounded-pill', dotClass[tone])} aria-hidden />
+    <StatusPill tone={tone} size="sm">
       {label}
-    </span>
+    </StatusPill>
   );
 }
