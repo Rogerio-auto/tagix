@@ -111,16 +111,17 @@ export function CreatePipelineModal({ open, onClose, onCreated }: CreatePipeline
           <Button
             type="submit"
             form="create-pipeline-form"
-            disabled={!name.trim() || isSubmitting}
+            loading={isSubmitting}
+            disabled={!name.trim()}
           >
-            {isSubmitting ? 'Criando...' : 'Criar pipeline'}
+            Criar pipeline
           </Button>
         </>
       }
     >
       <form id="create-pipeline-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         {limitError && (
-          <div className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          <div role="alert" className="rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
             Limite de {limitError.max} pipelines atingido. Exclua uma pipeline para criar outra.
           </div>
         )}
@@ -147,15 +148,19 @@ export function CreatePipelineModal({ open, onClose, onCreated }: CreatePipeline
                 key={t.key}
                 type="button"
                 onClick={() => setTemplate(t.key)}
+                aria-pressed={template === t.key}
                 className={[
-                  'flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors duration-150',
+                  'flex flex-col items-start gap-1 rounded-lg border p-3 text-left outline-none transition-colors duration-(--dur-fast) focus-visible:focus-ring',
                   template === t.key
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border bg-surface-raised text-text hover:border-border-2',
+                    ? 'border-border-brand bg-brand-text/10 text-text'
+                    : 'border-border bg-surface-2 text-text hover:border-border-2',
                 ].join(' ')}
               >
-                <Layers className="size-4 shrink-0" />
-                <span className="text-sm font-medium">{t.name}</span>
+                <Layers
+                  className={`size-4 shrink-0 ${template === t.key ? 'text-brand-text' : 'text-text-low'}`}
+                  aria-hidden
+                />
+                <span className="font-body text-sm font-bold">{t.name}</span>
                 <span className="text-xs text-text-low leading-tight">{t.description}</span>
               </button>
             ))}

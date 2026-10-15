@@ -101,7 +101,7 @@ export function DynamicFieldsForm({
                   checked={value === true}
                   disabled={disabled}
                   onChange={(e) => set(def.key, e.target.checked)}
-                  className="size-4 accent-[var(--color-accent)]"
+                  className="size-4 accent-brand-text"
                 />
                 Sim
               </label>
@@ -140,8 +140,8 @@ export function DynamicFieldsForm({
                       }
                       className={
                         active
-                          ? 'rounded-full bg-brand px-3 py-1 text-xs text-text-on-brand'
-                          : 'rounded-full border border-border px-3 py-1 text-xs text-text-mid hover:border-border-strong'
+                          ? 'rounded-pill bg-brand px-3 py-1 text-xs font-bold text-text-on-brand outline-none focus-visible:focus-ring'
+                          : 'rounded-pill border border-border px-3 py-1 text-xs text-text-mid outline-none hover:border-border-brand focus-visible:focus-ring'
                       }
                     >
                       {opt}

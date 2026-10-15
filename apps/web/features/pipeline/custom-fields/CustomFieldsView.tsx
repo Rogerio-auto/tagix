@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import type { CustomFieldDef, CustomFieldValues } from './types';
+import { uiLocale } from '../board/format';
 
 export interface CustomFieldsViewProps {
   defs: readonly CustomFieldDef[];
@@ -13,7 +14,7 @@ function formatValue(def: CustomFieldDef, value: unknown): string {
   switch (def.type) {
     case 'currency':
       return typeof value === 'number'
-        ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value / 100)
+        ? new Intl.NumberFormat(uiLocale(), { style: 'currency', currency: 'BRL' }).format(value / 100)
         : '—';
     case 'boolean':
       return value === true ? 'Sim' : 'Não';

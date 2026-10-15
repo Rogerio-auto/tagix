@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { Avatar, Button, useToast } from '@hm/ui';
 import { cn } from '@hm/ui/cn';
-import { EmptyState, ErrorState } from '@/shared/components/feedback';
+import { EmptyState, ErrorState, Skeleton } from '@/shared/components/feedback';
 import { AppointmentDetail } from '@/features/cockpit-agenda/AppointmentDetail';
 import {
   normalizePriority,
@@ -44,6 +44,8 @@ import {
 } from '@/features/cockpit-agenda/AgendaSection';
 import { useCancelEvent, useEvents, useUpdateEvent } from './queries';
 import { buildAgendaList, isTerminalStatus, type DayRelative } from './agendaList';
+import { eventTone } from './eventTone';
+import { uiLocale } from './locale';
 import { isOccurrence, masterEventId, type EventRow } from './types';
 
 const DAY_MS = 86_400_000;
@@ -58,8 +60,8 @@ const DAY_PREFIX: Partial<Record<DayRelative, string>> = {
 /** "qui 28 jun" (weekday curto + dia + mês curto), sem pontos abreviativos. */
 function formatDate(dayMs: number): string {
   const d = new Date(dayMs);
-  const wd = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace(/\.$/, '');
-  const mo = d.toLocaleDateString('pt-BR', { month: 'short' }).replace(/\.$/, '');
+  const wd = d.toLocaleDateString(uiLocale(), { weekday: 'short' }).replace(/\.$/, '');
+  const mo = d.toLocaleDateString(uiLocale(), { month: 'short' }).replace(/\.$/, '');
   return `${wd} ${d.getDate()} ${mo}`;
 }
 
@@ -67,7 +69,7 @@ function formatDate(dayMs: number): string {
 function formatTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit' });
 }
 
 export interface AgendaListViewProps {
@@ -259,7 +261,7 @@ function DayHeading({
         {prefix ? (
           <span
             className={cn(
-              'font-head text-sm font-semibold uppercase tracking-wide',
+              'font-mono text-xs font-semibold uppercase tracking-wider',
               relative === 'today' ? 'text-text' : isPast ? 'text-danger' : 'text-text-mid',
             )}
           >
@@ -268,7 +270,7 @@ function DayHeading({
         ) : null}
         <span
           className={cn(
-            'font-body text-sm capitalize',
+            'font-mono text-xs capitalize tracking-wide',
             relative === 'today' ? 'text-text-mid' : 'text-text-low',
           )}
         >
@@ -313,6 +315,7 @@ function AgendaItemCard(props: AgendaItemCardProps): React.JSX.Element {
   const priority = normalizePriority(event.priority);
   const terminal = isTerminalStatus(status);
   const TypeIcon = typeIcon(event.type);
+  const tone = eventTone(event.type);
   const name = event.contact?.name?.trim() || event.title;
   const phone = event.contact?.phone?.trim() || null;
 
@@ -331,8 +334,14 @@ function AgendaItemCard(props: AgendaItemCardProps): React.JSX.Element {
         type="button"
         onClick={props.onOpen}
         aria-label={`${formatTime(event.startAt)} — ${name}. Abrir detalhe.`}
-        className="flex w-full items-start gap-3 rounded-t-lg px-3 py-3 text-left outline-none transition-colors duration-150 hover:bg-surface-2/60 focus-visible:shadow-glow-md"
+        className="flex w-full items-start gap-3 rounded-t-lg px-3 py-3 text-left outline-none transition-colors duration-150 hover:bg-surface-2/60 focus-visible:focus-ring"
       >
+        {/* Barra no tom do TIPO (a mesma da grade, da agenda mobile e do cockpit). */}
+        <span
+          aria-hidden
+          data-event-tone={tone.name}
+          className={cn('w-1 shrink-0 self-stretch rounded-pill', tone.bar)}
+        />
         {/* Horário com ponto colorido pelo calendário (DATA → style inline). */}
         <span className="flex w-12 shrink-0 flex-col items-center gap-1 pt-0.5">
           <span
@@ -340,7 +349,7 @@ function AgendaItemCard(props: AgendaItemCardProps): React.JSX.Element {
             className="size-2 rounded-pill"
             style={{ backgroundColor: color }}
           />
-          <span className="font-body text-xs font-medium tabular-nums text-text-mid">
+          <span className="font-mono text-xs font-semibold tabular-nums text-text-mid">
             {formatTime(event.startAt)}
           </span>
         </span>
@@ -351,7 +360,7 @@ function AgendaItemCard(props: AgendaItemCardProps): React.JSX.Element {
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="truncate font-head text-sm font-semibold text-text">{name}</span>
             {overdue ? (
-              <span className="inline-flex items-center gap-1 rounded-pill border border-danger/30 bg-danger/10 px-2 py-0.5 font-body text-[0.6875rem] font-semibold uppercase leading-none text-danger">
+              <span className="inline-flex items-center gap-1 rounded-pill border border-danger/30 bg-danger/10 px-2 py-0.5 font-body text-xs font-semibold uppercase leading-none text-danger">
                 <AlertTriangle className="size-3" aria-hidden />
                 Vencido
               </span>
@@ -360,7 +369,7 @@ function AgendaItemCard(props: AgendaItemCardProps): React.JSX.Element {
           </span>
 
           <span className="flex items-center gap-1.5 font-body text-xs text-text-low">
-            <TypeIcon className="size-3.5 shrink-0" aria-hidden />
+            <TypeIcon className={cn('size-3.5 shrink-0', tone.text)} aria-hidden />
             <span>{typeLabel(event.type)}</span>
             <span aria-hidden>·</span>
             <Badge className={priorityBadgeClass(priority)}>{priorityLabel(priority)}</Badge>
@@ -490,14 +499,14 @@ function RowMenu({
         aria-expanded={open}
         aria-label="Mais ações"
         onClick={() => setOpen((v) => !v)}
-        className="flex size-9 items-center justify-center rounded-md text-text-low outline-none transition-colors duration-150 hover:bg-surface-3 hover:text-text focus-visible:shadow-glow-md disabled:opacity-50"
+        className="flex size-9 pointer-coarse:size-11 items-center justify-center rounded-md text-text-low outline-none transition-colors duration-150 hover:bg-surface-3 hover:text-text focus-visible:focus-ring disabled:opacity-50"
       >
         <MoreHorizontal className="size-4" aria-hidden />
       </button>
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1 min-w-44 overflow-hidden rounded-md border border-border-2 bg-surface-raised shadow-elev-2 motion-safe:animate-[hm-fade-in_150ms_ease-out]"
+          className="absolute right-0 z-20 mt-1 min-w-44 overflow-hidden rounded-md border border-border bg-surface-3 shadow-ds-3 motion-safe:animate-[hm-fade-in_150ms_var(--ease)]"
         >
           {items.map((item) => {
             const Icon = item.icon;
@@ -540,7 +549,7 @@ function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-pill border px-2 py-0.5 font-body text-[0.6875rem] font-medium leading-none',
+        'inline-flex items-center rounded-pill border px-2 py-0.5 font-body text-xs font-medium leading-none',
         className,
       )}
     >
@@ -562,12 +571,12 @@ function ListSkeleton(): React.JSX.Element {
     <ul className="w-full max-w-2xl space-y-3" aria-hidden>
       {[0, 1, 2, 3, 4].map((i) => (
         <li key={i} className="flex items-start gap-3 rounded-lg border border-border-2 bg-surface p-3">
-          <span className="h-10 w-12 shrink-0 animate-pulse rounded-md bg-surface-3" />
-          <span className="size-10 shrink-0 animate-pulse rounded-pill bg-surface-3" />
+          <Skeleton className="h-10 w-12 shrink-0 rounded-md" />
+          <Skeleton className="size-10 shrink-0 rounded-pill" />
           <span className="flex flex-1 flex-col gap-2 pt-1">
-            <span className="h-3 w-1/3 animate-pulse rounded-sm bg-surface-3" />
-            <span className="h-3 w-1/4 animate-pulse rounded-sm bg-surface-3" />
-            <span className="h-3 w-2/3 animate-pulse rounded-sm bg-surface-3" />
+            <Skeleton className="h-3 w-1/3" />
+            <Skeleton className="h-3 w-1/4" />
+            <Skeleton className="h-3 w-2/3" />
           </span>
         </li>
       ))}

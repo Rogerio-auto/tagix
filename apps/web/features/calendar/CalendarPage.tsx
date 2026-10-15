@@ -16,13 +16,15 @@ import type {
 } from '@fullcalendar/core';
 import type { EventResizeDoneArg } from '@fullcalendar/interaction';
 import { CalendarPlus, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Avatar, Button, useToast } from '@hm/ui';
+import { Avatar, Button, IconButton, useToast } from '@hm/ui';
 import { cn } from '@hm/ui/cn';
 import { can, type Role } from '@hm/shared';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { HelpPanel } from '@/shared/components/help';
-import { EmptyState, ErrorState } from '@/shared/components/feedback';
+import { EmptyState, ErrorState, Skeleton } from '@/shared/components/feedback';
+import { PageHeader } from '@/shared/components/layout/PageHeader';
+import { READ_ONLY_TOOLTIP, useIsReadOnly } from '@/shared/components/account-banner/useIsReadOnly';
 import {
   useCalendars,
   useCalendarMembers,
@@ -35,7 +37,9 @@ import { EventDetailModal } from './EventDetailModal';
 import { MobileAgenda } from './MobileAgenda';
 import { AgendaListView } from './AgendaListView';
 import { CalendarRail, CalendarLegend } from './CalendarRail';
+import { eventTone } from './eventTone';
 import { masterEventId, type EventContactSummary, type EventRow } from './types';
+import './calendar-theme.css';
 
 /** Visões da grade (FullCalendar). */
 type GridView = 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay';
@@ -44,26 +48,15 @@ type ViewName = GridView | 'list';
 
 const ADMIN_ROLES: ReadonlySet<Role> = new Set(['OWNER', 'ADMIN']);
 
-/**
- * Tema do FullCalendar via CSS custom properties (`--fc-*`) mapeadas para tokens DS v2.
- * Mantém a grade dark-first e coerente sem editar CSS global. Os valores são `var(--token)`
- * (zero hex literal). A cor de CADA evento vem de `calendars.color` (DATA da API).
- */
-const FC_THEME: React.CSSProperties = {
-  ['--fc-border-color' as string]: 'var(--border-2)',
-  ['--fc-page-bg-color' as string]: 'transparent',
-  ['--fc-neutral-bg-color' as string]: 'var(--surface-2)',
-  ['--fc-today-bg-color' as string]: 'var(--surface-2)',
-  ['--fc-now-indicator-color' as string]: 'var(--danger)',
-  ['--fc-event-text-color' as string]: 'var(--text)',
-};
-
 export function CalendarPage(): React.JSX.Element {
   const { toast } = useToast();
   const auth = useAuthStore((st) => st.auth);
   const role = auth?.role as Role | undefined;
   const myMemberId = auth?.memberId;
-  const canEdit = role ? can(role, 'event.edit') : false;
+  const readOnly = useIsReadOnly();
+  // Trial vencido/cancelado: a agenda segue legível, mas nada de escrita (a guarda real é o 402).
+  const roleCanEdit = role ? can(role, 'event.edit') : false;
+  const canEdit = roleCanEdit && !readOnly;
   const canSeeOthers = role ? ADMIN_ROLES.has(role) : false;
   const { isMobile } = useBreakpoint();
 
@@ -103,12 +96,19 @@ export function CalendarPage(): React.JSX.Element {
             title: e.title,
             start: e.startAt,
             end: e.endAt,
-            backgroundColor: color,
-            borderColor: color,
+            // O chip por tipo é desenhado em `renderEventContent`; o calendário de origem
+            // vira o pontinho de cor (DATA da API).
+            classNames: ['hm-fc-event'],
             // Só permite arrastar/redimensionar quem pode editar este evento (criador/admin).
             editable: canEdit && (e.createdBy === myMemberId || canSeeOthers),
             // F54-S03: o contato viaja no chip do evento (quem atender) — render em eventContent.
-            extendedProps: { calendarId: e.calendarId, contact: e.contact ?? null },
+            extendedProps: {
+              calendarId: e.calendarId,
+              contact: e.contact ?? null,
+              type: e.type,
+              status: e.status,
+              calendarColor: color,
+            },
           } satisfies EventInput;
         }),
     [events, colorByCalendar, canEdit, myMemberId, canSeeOthers],
@@ -239,22 +239,32 @@ export function CalendarPage(): React.JSX.Element {
     setTitle(arg.view.title);
   }
 
+  const helpSlot = (
+    <HelpPanel title="Sobre a agenda">
+      <CalendarHelp />
+    </HelpPanel>
+  );
+
   // ─── Mobile: delega para a agenda (S04 reconcilia trilha como sheet) ─────────
   if (isMobile) {
     return (
-      <div className="flex h-full flex-col gap-3 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-lg font-semibold text-text">Agenda</h1>
-        </div>
+      <div className="flex h-full min-h-0 flex-col gap-3">
+        <PageHeader title="Agenda" helpSlot={helpSlot} />
         <MobileAgenda
           calendarId={selection.selectedIds[0] ?? ''}
           canEdit={canEdit}
           onOpenEvent={(id) => setDetailId(id)}
           onCreateForDay={(start, end) => openCreate(start, end)}
         />
-        {canEdit && (
+        {roleCanEdit && (
           <div className="pb-safe sticky bottom-0">
-            <Button variant="primary" className="w-full touch-target" onClick={() => openCreate()}>
+            <Button
+              variant="primary"
+              className="w-full touch-target"
+              disabled={readOnly}
+              title={readOnly ? READ_ONLY_TOOLTIP : undefined}
+              onClick={() => openCreate()}
+            >
               <CalendarPlus className="size-4" />
               Novo evento
             </Button>
@@ -284,46 +294,61 @@ export function CalendarPage(): React.JSX.Element {
     calendarsQuery.isSuccess && calendars.length === 0 && !calendarsQuery.isFetching;
 
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-text">Agenda</h1>
+    <div className="flex h-full min-h-0 flex-col">
+      <PageHeader
+        title="Agenda"
+        description={isList ? 'Follow-ups por dia' : undefined}
+        helpSlot={helpSlot}
+        actions={
+          roleCanEdit ? (
+            <Button
+              variant="primary"
+              disabled={readOnly}
+              title={readOnly ? READ_ONLY_TOOLTIP : 'Novo evento (N)'}
+              leftIcon={<CalendarPlus className="size-4" aria-hidden />}
+              onClick={() => openCreate()}
+            >
+              Novo evento
+            </Button>
+          ) : undefined
+        }
+      />
+
+      {/* Barra de período: navegação à esquerda, visões à direita. */}
+      <div className="-mt-2 mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           {/* Navegação de período só faz sentido na grade (a Lista tem janela própria). */}
           {!isList ? (
             <>
               <div className="flex items-center gap-1">
-                <IconNavButton aria-label="Anterior" onClick={() => api()?.prev()}>
-                  <ChevronLeft className="size-4" />
-                </IconNavButton>
-                <IconNavButton aria-label="Próximo" onClick={() => api()?.next()}>
-                  <ChevronRight className="size-4" />
-                </IconNavButton>
-                <Button variant="ghost" size="sm" onClick={() => api()?.today()}>
+                <IconButton
+                  variant="solid"
+                  aria-label="Período anterior"
+                  icon={<ChevronLeft />}
+                  onClick={() => api()?.prev()}
+                />
+                <IconButton
+                  variant="solid"
+                  aria-label="Próximo período"
+                  icon={<ChevronRight />}
+                  onClick={() => api()?.next()}
+                />
+                <Button variant="secondary" onClick={() => api()?.today()} title="Ir para hoje (T)">
                   Hoje
                 </Button>
               </div>
               {title ? (
-                <span className="text-sm font-medium capitalize text-text-mid">{title}</span>
+                <h2
+                  aria-live="polite"
+                  className="truncate pl-2 font-head text-lg font-semibold capitalize tracking-tight text-text"
+                >
+                  {title}
+                </h2>
               ) : null}
             </>
-          ) : (
-            <span className="text-sm font-medium text-text-mid">Follow-ups por dia</span>
-          )}
+          ) : null}
         </div>
-
-        <div className="flex items-center gap-2">
-          <ViewSwitcher value={view} onChange={setFcView} />
-          <HelpPanel title="Sobre a agenda">
-            <CalendarHelp />
-          </HelpPanel>
-          {canEdit && (
-            <Button variant="primary" size="sm" onClick={() => openCreate()}>
-              <CalendarPlus className="size-4" />
-              Novo evento
-            </Button>
-          )}
-        </div>
+        <ViewSwitcher value={view} onChange={setFcView} />
       </div>
 
       {/* Erro de carregamento dos calendários */}
@@ -331,7 +356,12 @@ export function CalendarPage(): React.JSX.Element {
         <ErrorState
           title="Não foi possível carregar seus calendários"
           reason="Houve uma falha de conexão com o servidor."
-          whatToDo="Tente recarregar a página em instantes."
+          whatToDo="Tente de novo; se persistir, recarregue a página."
+          action={
+            <Button variant="secondary" size="sm" onClick={() => void calendarsQuery.refetch()}>
+              Tentar de novo
+            </Button>
+          }
         />
       ) : showEmpty ? (
         <EmptyState
@@ -342,7 +372,7 @@ export function CalendarPage(): React.JSX.Element {
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr] gap-4 xl:grid-cols-[248px_1fr]">
           {/* Trilha de calendários */}
-          <aside className="flex min-h-0 flex-col rounded-lg border border-border bg-surface p-3">
+          <aside className="flex min-h-0 flex-col rounded-lg border border-border bg-surface-inset p-3">
             <CalendarRail
               calendars={calendars}
               members={members}
@@ -356,8 +386,14 @@ export function CalendarPage(): React.JSX.Element {
           {/* Grade */}
           <div className="relative flex min-h-0 flex-col">
             {eventsQuery.isError ? (
-              <div className="mb-2 rounded-md border border-danger/40 bg-danger-bg px-3 py-2 text-sm text-danger">
-                Falha ao carregar eventos. Tente recarregar.
+              <div
+                role="alert"
+                className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 font-body text-sm text-danger"
+              >
+                Não foi possível carregar os eventos desta janela. Sua conexão pode ter oscilado.
+                <Button variant="secondary" size="sm" onClick={() => void eventsQuery.refetch()}>
+                  Tentar de novo
+                </Button>
               </div>
             ) : null}
 
@@ -379,9 +415,10 @@ export function CalendarPage(): React.JSX.Element {
               </div>
             ) : (
               <div
-                className="hm-calendar min-h-0 flex-1 rounded-lg border border-border bg-surface p-3"
-                style={FC_THEME}
+                className="hm-calendar relative min-h-0 flex-1 rounded-lg border border-border bg-surface p-3"
+                aria-busy={eventsQuery.isLoading}
               >
+                {eventsQuery.isLoading ? <GridLoading /> : null}
                 <FullCalendar
                   ref={calendarRef}
                   plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -391,6 +428,7 @@ export function CalendarPage(): React.JSX.Element {
                   firstDay={0}
                   height="100%"
                   nowIndicator
+                  eventDisplay="block"
                   editable={canEdit}
                   selectable={canEdit}
                   selectMirror
@@ -431,41 +469,71 @@ export function CalendarPage(): React.JSX.Element {
 }
 
 /**
- * Render do chip de evento na grade (F54-S03): mostra o CLIENTE (foto + nome) além
- * do horário, transformando a grade em leitura de "quem atender". Cai no título do
- * evento quando não há contato vinculado. Zero hex — herda a cor do calendário.
+ * Render do chip de evento na grade (maquete "Unified calendar"): tinta + barra à esquerda no
+ * tom do TIPO (token), horário em mono, e o CLIENTE (foto + nome) quando há contato — quem
+ * atender (F54-S03). O calendário de origem fica no pontinho à direita. Zero hex.
  */
 function renderEventContent(arg: EventContentArg): React.JSX.Element {
-  const contact = arg.event.extendedProps['contact'] as EventContactSummary | null | undefined;
+  const props = arg.event.extendedProps;
+  const contact = props['contact'] as EventContactSummary | null | undefined;
+  const type = typeof props['type'] === 'string' ? props['type'] : 'other';
+  const completed = props['status'] === 'completed';
+  const calendarColor = typeof props['calendarColor'] === 'string' ? props['calendarColor'] : null;
+  const tone = eventTone(type);
   const label = contact?.name?.trim() || arg.event.title;
+  // Concluído recua por COR, não por opacidade (opacidade derrubava o contraste a 2,5:1 no
+  // claro): fundo neutro `surface-3`, barra `text-low`, título riscado em `text-mid`
+  // (10,0:1 escuro / 7,5:1 claro) e horário em `text-low` (4,57:1 / 5,03:1).
   return (
-    <div className="flex w-full items-center gap-1 overflow-hidden px-0.5">
+    <div
+      data-event-tone={tone.name}
+      data-completed={completed || undefined}
+      className={cn(
+        'hm-fc-chip flex h-full w-full min-w-0 items-start gap-1 overflow-hidden rounded-sm border-l-[3px] px-1.5 py-0.5',
+        completed ? 'border-l-text-low bg-surface-3' : tone.chip,
+      )}
+    >
       {contact ? <Avatar src={contact.avatarUrl} name={label} size="sm" className="size-4" /> : null}
-      <span className="min-w-0 truncate text-[0.6875rem] font-medium leading-tight">
-        {arg.timeText ? <span className="mr-1 opacity-80">{arg.timeText}</span> : null}
-        {label}
+      <span
+        className={cn(
+          'min-w-0 flex-1 truncate font-body text-xs font-bold leading-snug',
+          completed ? 'text-text-mid' : 'text-text',
+        )}
+      >
+        {arg.timeText ? (
+          <span
+            className={cn(
+              'mr-1 font-mono font-semibold tabular-nums',
+              completed ? 'text-text-low' : 'text-text-mid',
+            )}
+          >
+            {arg.timeText}
+          </span>
+        ) : null}
+        <span className={cn(completed && 'line-through')}>{label}</span>
       </span>
+      {calendarColor ? (
+        <span
+          aria-hidden
+          className="mt-1 size-1.5 shrink-0 rounded-pill"
+          style={{ backgroundColor: calendarColor }}
+        />
+      ) : null}
     </div>
   );
 }
 
-function IconNavButton({
-  children,
-  onClick,
-  ...rest
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-} & Pick<React.AriaAttributes, 'aria-label'>): React.JSX.Element {
+/** Véu de carregamento da grade: mantém a forma, sem layout shift. */
+function GridLoading(): React.JSX.Element {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      {...rest}
-      className="flex size-8 items-center justify-center rounded-md text-text-low outline-none transition-colors duration-200 hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md"
+    <div
+      aria-hidden
+      className="absolute inset-3 z-10 flex flex-col gap-3 rounded-md bg-surface/80 p-3 backdrop-blur-[2px]"
     >
-      {children}
-    </button>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <Skeleton key={i} className="h-10 rounded-md" />
+      ))}
+    </div>
   );
 }
 
@@ -478,8 +546,9 @@ function CalendarHelp(): React.JSX.Element {
         times e — se você for proprietário ou administrador — o pessoal de cada membro.
       </p>
       <p>
-        Marque a caixa de cor para mostrar ou ocultar cada calendário. Os eventos aparecem
-        coloridos pelo calendário de origem; a legenda no rodapé ajuda a leitura. Sua seleção fica
+        Marque a caixa de cor para mostrar ou ocultar cada calendário. A cor do evento diz o
+        tipo do compromisso (atendimento, demonstração, follow-up, proposta); o pontinho diz de
+        qual calendário ele vem. A legenda no rodapé da trilha mostra as duas. Sua seleção fica
         salva neste navegador.
       </p>
       <p>
@@ -488,7 +557,8 @@ function CalendarHelp(): React.JSX.Element {
       </p>
       <p>
         Atalhos: <strong>N</strong> novo evento, <strong>T</strong> ir para hoje,{' '}
-        <strong>1</strong>/<strong>2</strong>/<strong>3</strong> alternar mês, semana e dia.
+        <strong>1</strong>/<strong>2</strong>/<strong>3</strong>/<strong>4</strong> alternar mês,
+        semana, dia e lista. Na semana e no dia, a linha verde marca o agora.
       </p>
     </div>
   );
@@ -508,7 +578,11 @@ function ViewSwitcher({
     { value: 'list', label: 'Lista', hint: '4' },
   ];
   return (
-    <div className="flex items-center rounded-md border border-border bg-surface-2 p-0.5">
+    <div
+      role="group"
+      aria-label="Visão da agenda"
+      className="flex items-center rounded-md border border-border bg-surface-inset p-0.5"
+    >
       {options.map((o) => (
         <button
           key={o.value}
@@ -517,8 +591,10 @@ function ViewSwitcher({
           aria-pressed={value === o.value}
           title={`${o.label} (${o.hint})`}
           className={cn(
-            'rounded px-2.5 py-1 text-sm outline-none transition-colors duration-200 focus-visible:shadow-glow-md',
-            value === o.value ? 'bg-surface text-text shadow-elev-1' : 'text-text-low hover:text-text',
+            'h-8 rounded-sm px-3 font-body text-sm font-bold outline-none transition-[color,background-color,box-shadow] duration-(--dur-fast) ease-ds focus-visible:focus-ring motion-reduce:transition-none',
+            value === o.value
+              ? 'bg-surface-3 text-text shadow-ds-1'
+              : 'text-text-low hover:text-text',
           )}
         >
           {o.label}

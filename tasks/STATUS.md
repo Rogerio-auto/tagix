@@ -58,7 +58,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F7   | 7     | 0   | 0   | 0   | 0   | 0   | 7   |
 | F70   | 37     | 1   | 2   | 0   | 0   | 2   | 32   |
 | F71   | 19     | 9   | 0   | 0   | 0   | 0   | 10   |
-| F72   | 9     | 0   | 3   | 0   | 1   | 0   | 5   |
+| F72   | 9     | 0   | 3   | 0   | 0   | 1   | 5   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -832,17 +832,17 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 72
 
-| ID      | Titulo                                                                                                     | Status        | Prioridade | Depende de                                  |
-| ------- | ---------------------------------------------------------------------------------------------------------- | ------------- | ---------- | ------------------------------------------- |
-| F72-S01 | Tokens, fontes e escala tipográfica do DS 3.0, com tema claro corrigido                                    | ✅ done        | critical   | —                                           |
-| F72-S02 | Componentes do @hm/ui no DS 3.0 — botões, campos, status, tabela operacional e camadas                     | ✅ done        | critical   | F72-S01                                     |
-| F72-S03 | Shell do produto no DS 3.0 e navegação mobile com 4 abas mais Mais                                         | ✅ done        | critical   | F72-S01                                     |
-| F72-S04 | Home no DS 3.0 — o que mudou, precisa da sua atenção e resultado no topo                                   | ✅ done        | critical   | F72-S02, F72-S03                            |
-| F72-S05 | Inbox no DS 3.0, com a lista acessível e o avatar sem número                                               | ✅ done        | high       | F72-S02, F72-S03                            |
-| F72-S06 | Pipeline e calendário unificado no DS 3.0                                                                  | 🔵 in-progress | high       | F72-S02, F72-S03                            |
-| F72-S07 | Varredura do app no DS 3.0 — contatos, campanhas, agentes, flows, conhecimento, conversões e configurações | ⏸️ blocked    | high       | F72-S02, F72-S03                            |
-| F72-S08 | Varredura de auth, painel de plataforma, ajuda e páginas públicas no DS 3.0                                | ⏸️ blocked    | medium     | F72-S02, F72-S03                            |
-| F72-S09 | Auditoria final do DS 3.0 — acessibilidade nos dois temas, peso, capturas e revisão de gosto               | ⏸️ blocked    | high       | F72-S04, F72-S05, F72-S06, F72-S07, F72-S08 |
+| ID      | Titulo                                                                                                     | Status     | Prioridade | Depende de                                  |
+| ------- | ---------------------------------------------------------------------------------------------------------- | ---------- | ---------- | ------------------------------------------- |
+| F72-S01 | Tokens, fontes e escala tipográfica do DS 3.0, com tema claro corrigido                                    | ✅ done     | critical   | —                                           |
+| F72-S02 | Componentes do @hm/ui no DS 3.0 — botões, campos, status, tabela operacional e camadas                     | ✅ done     | critical   | F72-S01                                     |
+| F72-S03 | Shell do produto no DS 3.0 e navegação mobile com 4 abas mais Mais                                         | ✅ done     | critical   | F72-S01                                     |
+| F72-S04 | Home no DS 3.0 — o que mudou, precisa da sua atenção e resultado no topo                                   | ✅ done     | critical   | F72-S02, F72-S03                            |
+| F72-S05 | Inbox no DS 3.0, com a lista acessível e o avatar sem número                                               | ✅ done     | high       | F72-S02, F72-S03                            |
+| F72-S06 | Pipeline e calendário unificado no DS 3.0                                                                  | 🟣 review   | high       | F72-S02, F72-S03                            |
+| F72-S07 | Varredura do app no DS 3.0 — contatos, campanhas, agentes, flows, conhecimento, conversões e configurações | ⏸️ blocked | high       | F72-S02, F72-S03                            |
+| F72-S08 | Varredura de auth, painel de plataforma, ajuda e páginas públicas no DS 3.0                                | ⏸️ blocked | medium     | F72-S02, F72-S03                            |
+| F72-S09 | Auditoria final do DS 3.0 — acessibilidade nos dois temas, peso, capturas e revisão de gosto               | ⏸️ blocked | high       | F72-S04, F72-S05, F72-S06, F72-S07, F72-S08 |
 
 ## Fase 8 — Permissions & Settings
 

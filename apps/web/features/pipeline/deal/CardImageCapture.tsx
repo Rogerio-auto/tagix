@@ -111,7 +111,7 @@ export function CardImageCapture({
   return (
     <div className="flex flex-col gap-2">
       {active ? (
-        <div className="overflow-hidden rounded-lg border border-border bg-black">
+        <div className="overflow-hidden rounded-lg border border-border bg-bg">
           <video ref={videoRef} className="w-full" playsInline muted />
         </div>
       ) : null}

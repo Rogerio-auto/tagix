@@ -2,7 +2,7 @@
 id: F72-S06
 title: Pipeline e calendário unificado no DS 3.0
 phase: F72
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 ui: true
@@ -13,6 +13,7 @@ source_docs:
   - docs/design/ds-3.0-agency-os.html
 agent_id: backend-engineer
 claimed_at: 2026-10-15T03:17:37Z
+completed_at: 2026-10-15T03:54:56Z
 
 ---
 # F72-S06 — Pipeline e calendário no DS 3.0

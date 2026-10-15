@@ -1,5 +1,7 @@
 /** Tipos da feature de agenda. Calendar 2.0 (F37): multi-calendário + recorrência. */
 
+import { uiLocale } from './locale';
+
 export type CalendarType = 'personal' | 'team' | 'workspace';
 
 export type EventType = 'meeting' | 'demo' | 'follow_up' | 'task' | 'reminder' | 'other';
@@ -228,7 +230,7 @@ export function describeRecurrence(rule: string | null, until: string | null): s
   if (untilIso) {
     const d = new Date(untilIso);
     if (!Number.isNaN(d.getTime())) {
-      base += `, até ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+      base += `, até ${d.toLocaleDateString(uiLocale(), { day: '2-digit', month: 'short', year: 'numeric' })}`;
     }
   }
   return base;

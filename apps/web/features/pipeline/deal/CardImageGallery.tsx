@@ -2,6 +2,7 @@
 
 import { Trash2 } from 'lucide-react';
 import type { DealAttachment } from './types';
+import { uiLocale } from '../board/format';
 
 export interface CardImageGalleryProps {
   attachments: DealAttachment[];
@@ -35,14 +36,14 @@ export function CardImageGallery({
         return (
           <figure
             key={att.id}
-            className="relative overflow-hidden rounded-lg border border-border bg-surface-raised"
+            className="relative overflow-hidden rounded-lg border border-border bg-surface-2"
           >
             <div className="flex aspect-square items-center justify-center text-xs text-text-low">
               {att.indexNumber != null ? `#${att.indexNumber}` : 'foto'}
             </div>
             <figcaption className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 bg-surface/80 px-2 py-1 text-[10px] text-text-mid backdrop-blur-sm">
               {att.capturedAt ? (
-                <span>{new Date(att.capturedAt).toLocaleString('pt-BR')}</span>
+                <span>{new Date(att.capturedAt).toLocaleString(uiLocale())}</span>
               ) : null}
               {gps ? <span>{gps}</span> : null}
               {city ? <span>{city}</span> : null}

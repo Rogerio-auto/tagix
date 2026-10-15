@@ -44,10 +44,11 @@ export function DeletePipelineDialog({
           <Button
             type="submit"
             form="delete-pipeline-form"
-            disabled={!isMatch || isDeleting}
-            className="bg-danger text-white hover:bg-danger/90 focus-visible:ring-danger"
+            variant="danger"
+            loading={isDeleting}
+            disabled={!isMatch}
           >
-            {isDeleting ? 'Excluindo...' : 'Excluir pipeline'}
+            Excluir pipeline
           </Button>
         </>
       }
@@ -61,9 +62,9 @@ export function DeletePipelineDialog({
         className="flex flex-col gap-4"
       >
         <div className="flex items-start gap-3 rounded-md border border-danger/30 bg-danger/10 p-3">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" />
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
           <p className="text-sm text-danger">
-            Todos os deals e estagios serao excluidos permanentemente. Esta acao nao pode ser
+            Todos os negócios e estágios serão excluídos permanentemente. Esta ação não pode ser
             desfeita.
           </p>
         </div>

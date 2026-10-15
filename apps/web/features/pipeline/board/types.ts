@@ -44,6 +44,9 @@ export interface Deal {
   customFields: Record<string, unknown>;
   closedAt: string | null;
   closedWon: boolean | null;
+  /** A API devolve a linha do deal; `updatedAt` muda a cada move-stage (base do "tempo na etapa"). */
+  createdAt?: string;
+  updatedAt?: string | null;
 }
 
 export interface CreateDealInput {

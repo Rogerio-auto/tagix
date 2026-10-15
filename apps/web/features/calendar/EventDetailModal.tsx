@@ -14,12 +14,13 @@ import {
   X as XIcon,
   HelpCircle,
 } from 'lucide-react';
-import { Avatar, Button, Modal, useToast } from '@hm/ui';
+import { Avatar, Button, Drawer, Skeleton, useToast } from '@hm/ui';
 import { cn } from '@hm/ui/cn';
 import { Sheet } from '@/shared/components/Sheet';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useCalendarMembers, useCancelEvent, useEventDetail, useRsvpEvent } from './queries';
 import { describeRecurrence, type EventParticipantRow, type EventRow } from './types';
+import { uiLocale } from './locale';
 
 const STATUS_LABEL: Record<string, string> = {
   scheduled: 'Agendado',
@@ -36,7 +37,7 @@ const RSVP_LABEL: Record<string, string> = {
 };
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleString('pt-BR', {
+  return new Date(iso).toLocaleString(uiLocale(), {
     weekday: 'short',
     day: '2-digit',
     month: 'short',
@@ -138,7 +139,11 @@ export function EventDetailModal(props: EventDetailModalProps): React.JSX.Elemen
   const body = (
     <>
       {detail.isLoading ? (
-        <p className="text-sm text-text-low">Carregando…</p>
+        <div className="flex flex-col gap-3" aria-hidden>
+          <Skeleton className="h-14 rounded-md" />
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
       ) : !event ? (
         <p className="text-sm text-text-low">Evento não encontrado.</p>
       ) : (
@@ -169,11 +174,11 @@ export function EventDetailModal(props: EventDetailModalProps): React.JSX.Elemen
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-md border border-border-subtle bg-surface-raised px-2 py-0.5 text-xs text-text-mid">
+            <span className="rounded-md border border-border bg-surface-3 px-2 py-0.5 text-xs text-text-mid">
               {STATUS_LABEL[event.status] ?? event.status}
             </span>
             {recurrenceText && (
-              <span className="inline-flex items-center gap-1 rounded-md border border-border-subtle bg-surface-raised px-2 py-0.5 text-xs text-text-mid">
+              <span className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-3 px-2 py-0.5 text-xs text-text-mid">
                 <Repeat className="size-3" /> {recurrenceText}
               </span>
             )}
@@ -189,9 +194,9 @@ export function EventDetailModal(props: EventDetailModalProps): React.JSX.Elemen
               href={event.meetingUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-2 text-brand hover:underline"
+              className="flex items-center gap-2 text-brand-text hover:underline"
             >
-              <Link2 className="size-4" /> Entrar na reunião
+              <Link2 className="size-4" aria-hidden /> Entrar na reunião
             </a>
           )}
           {event.description && <p className="text-text-mid">{event.description}</p>}
@@ -274,9 +279,10 @@ export function EventDetailModal(props: EventDetailModalProps): React.JSX.Elemen
   }
 
   return (
-    <Modal open={open} onClose={props.onClose} title={title} footer={footer}>
+    // Detalhe de item = Drawer lateral (UX §2.3), não modal: a agenda continua visível ao lado.
+    <Drawer open={open} onClose={props.onClose} title={title} footer={footer} ariaLabel="Detalhe do evento">
       {body}
-    </Modal>
+    </Drawer>
   );
 }
 
@@ -337,7 +343,7 @@ function RsvpButton({
       disabled={disabled}
       aria-pressed={active}
       className={cn(
-        'flex flex-1 items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-sm outline-none transition-colors duration-200 focus-visible:shadow-glow-md disabled:opacity-50',
+        'flex flex-1 items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-sm outline-none transition-colors duration-200 focus-visible:focus-ring disabled:opacity-50',
         active
           ? `bg-surface-2 ${toneRing}`
           : 'border-border bg-surface-2 text-text-mid hover:text-text',
