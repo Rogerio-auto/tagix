@@ -106,6 +106,9 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: apps/agent-runtime/uv.lock
+          # Sem pin o uv resolve o CPython mais novo (3.15) e o psycopg-binary
+          # nao tem wheel. 3.13 = alvo do projeto (Dockerfile python:3.13-slim).
+          python-version: "3.13"
 
       - name: Install (uv sync)
         run: uv sync --frozen
