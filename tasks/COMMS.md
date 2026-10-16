@@ -1050,3 +1050,11 @@ A liberação é só `atendimento-humano`. Etiqueta de conversão não entra nun
 - Nada de codigo de producao nesta etapa. Nada da Maian foi decomposto (decisao do Rogerio): so apresentacao e documentacao no vault do Obsidian.
 - Achado critico para hotfix: SSRF no `http_request` do flow-engine (F75-S16). Detalhes e demais achados em `tasks/HANDOFF.md` §5.
 - Sem push, sem deploy.
+
+
+### F73 — construção (Orchestrator, etapa 1: hotfix F75-S16 + F73 S01..S15) (2026-10-16)
+
+- Escopo: F75-S16 (SSRF no `http_request`) sozinho e primeiro, com security-auditor; depois F73 S01..S15 pelo grafo de dependências. F73-S16 ("mover sozinho") fica bloqueado de propósito (v1.1). Não avança para F74 nesta etapa.
+- Regras desta etapa: máx. 3 workers simultâneos (máx. 2 de frontend), sempre em primeiro plano; typecheck/vitest por pacote, sequencial; infra dev no ar (Postgres :5442) — testes de banco e RLS rodam de verdade; sem push/deploy; sem chamadas pagas (OpenRouter/Meta mockados). Pendências do Rogério vão em `tasks/PENDENCIAS-F73-F76.md`.
+- Plano de lotes: (0) F75-S16 → (1) S01 ‖ S02 ‖ S04 → (2) S03 → (3) S05 ‖ S06 ‖ S10 (S15 depende de S10) → (4) S07 ‖ S11 ‖ S12 (+S15) → (5) S08 ‖ S09 → (6) S13 → (7) S14.
+- **Ponto de parada:** commit inicial (PENDENCIAS + este cabeçalho) → claim F75-S16.
