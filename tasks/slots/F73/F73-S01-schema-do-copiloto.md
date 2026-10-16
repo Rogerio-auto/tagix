@@ -2,7 +2,7 @@
 id: F73-S01
 title: Schema do Copiloto (sessões, turnos, propostas, memória, briefing, piloto) com RLS e repos
 phase: F73
-status: available
+status: in-progress
 priority: critical
 estimated_size: L
 model: opus
@@ -15,6 +15,8 @@ source_docs:
   - docs/decisions/ADR-004-motor-de-acoes-com-confirmacao-humana.md
   - docs/DATA_MODEL.md
 agent_id: db-engineer
+claimed_at: 2026-10-16T23:27:39Z
+
 ---
 # F73-S01 — Schema do Copiloto
 
