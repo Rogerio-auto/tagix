@@ -2,7 +2,7 @@
 id: F72-S07
 title: Varredura do app no DS 3.0 — contatos, campanhas, agentes, flows, conhecimento, conversões e configurações
 phase: F72
-status: in-progress
+status: review
 priority: high
 estimated_size: L
 ui: true
@@ -13,6 +13,7 @@ source_docs:
   - docs/design/ds-3.0-agency-os.html
 agent_id: backend-engineer
 claimed_at: 2026-10-15T12:26:49Z
+completed_at: 2026-10-16T13:44:11Z
 
 ---
 # F72-S07 — Varredura das telas do app
