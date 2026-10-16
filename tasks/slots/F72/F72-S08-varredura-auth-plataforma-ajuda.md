@@ -2,7 +2,7 @@
 id: F72-S08
 title: Varredura de auth, painel de plataforma, ajuda e páginas públicas no DS 3.0
 phase: F72
-status: review
+status: done
 priority: medium
 estimated_size: M
 ui: true
