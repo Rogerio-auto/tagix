@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark" data-tenant="leadium" data-mode="vivas" data-dir="B" data-rm="off">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
+  <title>Leadium — Botão do Copiloto · gradiente animado e mascote</title>
+  <meta name="description" content="Demo interativa: varredura de cor nas letras do Copiloto, mascote com ciclo de vida, orçamento de atenção e temas por marca." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Figtree:wght@400;500;600;700&family=Archivo:wdth,wght@112,600;112,700&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+/* =====================================================================
+   LEADIUM · Botão do Copiloto — varredura nas letras + mascote
+   Tokens: espelho de packages/design-tokens/src/tokens.css (DS 3.0) e da
+   maquete copilot-integracoes.html. Curvas e durações: cânone §4.
+   Tokens NOVOS desta proposta: --cp-ink, --cp-ink-a, --cp-ink-b (tinta da
+   varredura), --m-ink, --m-fill, --m-accent, --m-visor, --m-eye, --m-cut.
+   Fora dos blocos de tema nenhum componente usa hex.
+   ===================================================================== */
+@property --sw { syntax: '<percentage>'; inherits: false; initial-value: -30%; }
+
+:root {
+  --brand: #1fff13; --brand-strong: #16e00a; --brand-bright: #72ff69; --brand-soft: #b1ffaa;
+  --font-head: 'Space Grotesk', 'Manrope', system-ui, sans-serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --r-xs: 7px; --r-sm: 10px; --r-md: 14px; --r-lg: 18px; --r-xl: 24px; --r-pill: 999px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms; --dur-base: 200ms; --dur-slow: 320ms;
+  /* Cânone §4 */
+  --ease-saida: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-cena: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-mover: cubic-bezier(0.77, 0, 0.175, 1);
+  /* Durações desta proposta (todas ≤ 900 ms fora de loop) */
+  --d-press: 120ms; --d-sweep: 900ms; --d-blink: 140ms; --d-wave: 860ms;
+  --d-hop: 700ms; --d-celebrate: 900ms; --d-confused: 900ms; --d-peek-in: 320ms; --d-peek-out: 240ms;
+  --side-w: 236px; --top-h: 56px;
+}
+
+/* ---------- Leadium · escuro (padrão) ---------- */
+:root, [data-theme='dark'] {
+  color-scheme: dark;
+  --danger: #ff625f; --danger-bg: #2a0e0e; --warn: #f6c85f; --warn-bg: #2b1d00;
+  --info: #67b7ff; --info-bg: #0a1a2a; --success: #25f018; --success-bg: #08200a;
+  --bg: #070907; --bg-alt: #0a0d0b; --bg-elevated: #0a0d0b;
+  --surface: #0e120f; --surface-2: #131814; --surface-3: #192019;
+  --surface-glass: rgba(17, 22, 18, 0.78);
+  --text: #f4f7f3; --text-mid: #c3cbc1; --text-low: #7e897e; --text-on-brand: #071108;
+  --brand-text: #72ff69; --violet: #a58bff;
+  --border: #202920; --border-2: #2a352a; --border-brand: rgba(31, 255, 19, 0.32);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-2: 0 12px 32px rgba(0, 0, 0, 0.2);
+  --shadow-3: 0 24px 70px rgba(0, 0, 0, 0.35);
+  --hi: rgba(255, 255, 255, 0.05);
+  --focus: #9dff96;
+  /* proposta */
+  --cp-ink: #f4f7f3; --cp-ink-a: #b1ffaa; --cp-ink-b: #72ff69;
+  --m-ink: #f4f7f3; --m-accent: #72ff69; --m-visor: #070907; --m-eye: #f4f7f3;
+}
+/* ---------- Leadium · claro ---------- */
+[data-theme='light'] {
+  color-scheme: light;
+  --danger: #b42318; --danger-bg: #fdecea; --warn: #8a5300; --warn-bg: #fff3d1;
+  --info: #0b5fb0; --info-bg: #e5f1fd; --success: #12700d; --success-bg: #e3f6e1;
+  --bg: #f3f6f1; --bg-alt: #eef2ec; --bg-elevated: #eef2ec;
+  --surface: #ffffff; --surface-2: #f8faf7; --surface-3: #eef3ec;
+  --surface-glass: rgba(255, 255, 255, 0.82);
+  --text: #111811; --text-mid: #465045; --text-low: #5f6a5e; --text-on-brand: #071108;
+  --brand-text: #0b6e08; --violet: #6b4fd8;
+  --border: #dde5da; --border-2: #cfd9cc; --border-brand: rgba(22, 224, 10, 0.3);
+  --shadow-1: 0 1px 3px rgba(31, 42, 31, 0.08);
+  --shadow-2: 0 12px 32px rgba(31, 42, 31, 0.08);
+  --shadow-3: 0 24px 70px rgba(31, 42, 31, 0.14);
+  --hi: rgba(255, 255, 255, 0.9);
+  --focus: #0b6e08;
+  --cp-ink: #111811; --cp-ink-a: #0b6e08; --cp-ink-b: #08603f;
+  --m-ink: #111811; --m-accent: #0b6e08; --m-visor: #111811; --m-eye: #ffffff;
+}
+[data-tenant='leadium'] {
+  --font-head: 'Space Grotesk', 'Manrope', system-ui, sans-serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --brand: #1fff13;
+}
+/* ---------- Odonto (Arrimo por Arcada) · escuro — sem mascote ---------- */
+[data-tenant='odonto'] {
+  color-scheme: dark;
+  --font-head: 'Archivo', 'Figtree', system-ui, sans-serif;
+  --font-body: 'Figtree', system-ui, sans-serif;
+  --font-mono: 'Martian Mono', ui-monospace, Consolas, monospace;
+  --brand: #6f8cff; --brand-text: #8fa5ff; --violet: #b29cff;
+  --danger: #ff7d70; --danger-bg: #2c1110; --warn: #e9b85c; --warn-bg: #2a1f08;
+  --info: #5ec3cf; --info-bg: #0b2226; --success: #5cc795; --success-bg: #0e2219;
+  --bg: #0b0b0c; --bg-alt: #0f0f11; --bg-elevated: #0f0f11;
+  --surface: #141416; --surface-2: #19191c; --surface-3: #1f1f23;
+  --surface-glass: rgba(20, 20, 22, 0.8);
+  --text: #eeeae3; --text-mid: #c2bdb4; --text-low: #959088; --text-on-brand: #0b0b0c;
+  --border: #26262a; --border-2: #323238; --border-brand: rgba(111, 140, 255, 0.34);
+  --hi: rgba(238, 234, 227, 0.06);
+  --focus: #8fa5ff;
+  --cp-ink: #eeeae3; --cp-ink-a: #c9bcff; --cp-ink-b: #b29cff;
+  --m-ink: #eeeae3; --m-accent: #b29cff; --m-visor: #0b0b0c; --m-eye: #eeeae3;
+}
+[data-tenant='odonto'][data-theme='light'] {
+  color-scheme: light;
+  --brand: #4a63e8; --brand-text: #3a51cf; --violet: #6a4bb8;
+  --danger: #b02a1f; --danger-bg: #fbe9e6; --warn: #8a5300; --warn-bg: #fbefd8;
+  --info: #0e6673; --info-bg: #e2f1f2; --success: #1e6e48; --success-bg: #e5f2ea;
+  --bg: #f4f2ee; --bg-alt: #edeae4; --bg-elevated: #edeae4;
+  --surface: #ffffff; --surface-2: #f9f8f5; --surface-3: #f0ede8;
+  --surface-glass: rgba(255, 255, 255, 0.84);
+  --text: #141416; --text-mid: #4b4842; --text-low: #68635b; --text-on-brand: #ffffff;
+  --border: #e3dfd8; --border-2: #d2ccc2; --border-brand: rgba(74, 99, 232, 0.3);
+  --shadow-1: 0 1px 3px rgba(38, 30, 18, 0.08);
+  --shadow-2: 0 12px 32px rgba(38, 30, 18, 0.08);
+  --shadow-3: 0 24px 70px rgba(38, 30, 18, 0.12);
+  --hi: rgba(255, 255, 255, 0.9);
+  --focus: #3a51cf;
+  --cp-ink: #141416; --cp-ink-a: #6a4bb8; --cp-ink-b: #4e3596;
+  --m-ink: #141416; --m-accent: #6a4bb8; --m-visor: #141416; --m-eye: #ffffff;
+}
+/* ---------- Maian (B2B química) · escuro ---------- */
+[data-tenant='maian'] {
+  color-scheme: dark;
+  --brand: #ee7623; --brand-text: #ffa66b; --violet: #b9a4ff;
+  --bg: #0d0c0b; --bg-alt: #11100e; --bg-elevated: #11100e;
+  --surface: #161412; --surface-2: #1c1a17; --surface-3: #23201c;
+  --surface-glass: rgba(22, 20, 18, 0.8);
+  --text: #f5f1ec; --text-mid: #cfc6bb; --text-low: #978d81; --text-on-brand: #1b0e04;
+  --border: #2a2622; --border-2: #36302a; --border-brand: rgba(238, 118, 35, 0.36);
+  --hi: rgba(255, 255, 255, 0.05);
+  --focus: #ffa66b;
+  --cp-ink: #f5f1ec; --cp-ink-a: #ffc59c; --cp-ink-b: #ff9a52;
+  --m-ink: #f5f1ec; --m-accent: #ee7623; --m-visor: #0d0c0b; --m-eye: #f5f1ec;
+}
+[data-tenant='maian'][data-theme='light'] {
+  color-scheme: light;
+  --brand: #ee7623; --brand-text: #b4530f; --violet: #6b4fd8;
+  --danger: #b42318; --danger-bg: #fdecea; --warn: #8a5300; --warn-bg: #fff3d1;
+  --info: #0b5fb0; --info-bg: #e5f1fd; --success: #12700d; --success-bg: #e3f6e1;
+  --bg: #f6f4f1; --bg-alt: #efece7; --bg-elevated: #efece7;
+  --surface: #ffffff; --surface-2: #faf8f5; --surface-3: #f1ede7;
+  --surface-glass: rgba(255, 255, 255, 0.84);
+  --text: #1b1814; --text-mid: #4d463e; --text-low: #6b6259; --text-on-brand: #1b0e04;
+  --border: #e6e0d8; --border-2: #d6cec3; --border-brand: rgba(238, 118, 35, 0.34);
+  --shadow-1: 0 1px 3px rgba(40, 28, 14, 0.08);
+  --shadow-2: 0 12px 32px rgba(40, 28, 14, 0.08);
+  --shadow-3: 0 24px 70px rgba(40, 28, 14, 0.12);
+  --hi: rgba(255, 255, 255, 0.9);
+  --focus: #b4530f;
+  /* #EE7623 dá 2,9:1 no branco: reprova como letra (4,5) e como gráfico (3,0). */
+  --cp-ink: #1b1814; --cp-ink-a: #b4530f; --cp-ink-b: #8a3c06;
+  --m-ink: #1b1814; --m-accent: #d4610f; --m-visor: #1b1814; --m-eye: #ffffff;
+}
+[data-tenant] { color: var(--text); font-family: var(--font-body); }
+:root, [data-tenant] { --m-fill: color-mix(in srgb, var(--m-ink) 7%, transparent); }
+
+/* ---------- base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 500 14px/1.55 var(--font-body); -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+a { color: inherit; text-decoration: none; }
+svg { display: block; flex: 0 0 auto; }
+h1, h2, h3, h4, p { margin: 0; }
+h1, h2, h3, h4 { font-family: var(--font-head); font-weight: 600; text-wrap: balance; line-height: 1.15; }
+p { text-wrap: pretty; }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.ico { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.ico.sm { width: 15px; height: 15px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 8px; }
+.kbd { font: 500 10px/1 var(--font-mono); color: var(--text-low); border: 1px solid var(--border); background: var(--surface-2); padding: 3px 5px; border-radius: 5px; white-space: nowrap; }
+
+/* ---------- doc chrome ---------- */
+.doc { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; }
+.doc-nav { position: sticky; top: 0; height: 100vh; overflow: auto; padding: 22px 14px 18px; border-right: 1px solid var(--border); background: var(--bg-elevated); display: flex; flex-direction: column; gap: 2px; }
+.lockup { display: flex; align-items: center; gap: 11px; padding: 2px 8px 20px; }
+.mark { width: 32px; height: 32px; border-radius: 9px; background: var(--brand); color: var(--text-on-brand); display: grid; place-items: center; flex: 0 0 auto; }
+.mark svg { width: 18px; height: 18px; }
+.lockup b { display: block; font: 700 16px/1 var(--font-head); letter-spacing: -0.02em; }
+.lockup small { display: block; margin-top: 5px; font: 500 10px/1 var(--font-mono); color: var(--text-low); letter-spacing: .06em; text-transform: uppercase; }
+.doc-nav a { display: grid; grid-template-columns: 24px 1fr; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 8px; color: var(--text-mid); font-size: 13px; font-weight: 600; transition: background var(--dur-base) var(--ease-saida), color var(--dur-base) var(--ease-saida); }
+.doc-nav a span { font: 500 10px/1 var(--font-mono); color: var(--text-low); }
+.doc-nav a:hover { background: var(--surface-2); color: var(--text); }
+.doc-nav-foot { margin-top: auto; padding: 16px 10px 0; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-low); line-height: 1.5; }
+
+.doc-top { position: sticky; top: 0; z-index: 60; min-height: 60px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; padding: 10px clamp(20px, 3vw, 40px); border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(16px) saturate(1.3); }
+.ctl { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-low); }
+.ctl > .t { font: 600 10px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.seg button { height: 28px; padding: 0 10px; border-radius: 7px; font: 600 12px/1 var(--font-body); color: var(--text-low); white-space: nowrap; transition: background var(--dur-fast) var(--ease-saida), color var(--dur-fast) var(--ease-saida); }
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed='true'] { background: var(--surface-3); color: var(--text); box-shadow: var(--shadow-1); }
+.seg.mono button { font-family: var(--font-mono); font-weight: 500; }
+.swtch { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text-mid); }
+.switch { width: 34px; height: 20px; border-radius: var(--r-pill); background: var(--surface-3); border: 1px solid var(--border-2); padding: 2px; transition: background var(--dur-base) var(--ease-saida); }
+.switch::after { content: ""; display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--text-low); transition: transform var(--dur-base) var(--ease-saida), background var(--dur-base); }
+.switch[aria-checked='true'] { background: var(--text-mid); border-color: transparent; }
+.switch[aria-checked='true']::after { transform: translateX(14px); background: var(--bg); }
+
+.doc-main { min-width: 0; }
+.sec { padding: 84px clamp(20px, 3.4vw, 52px) 8px; scroll-margin-top: 64px; }
+.sec-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 340px); gap: 20px 48px; align-items: end; margin-bottom: 26px; }
+.eyebrow { font: 600 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-low); margin-bottom: 14px; display: flex; gap: 10px; align-items: center; }
+.eyebrow b { color: var(--brand-text); font-weight: 600; }
+.sec-head h2 { font-size: 38px; line-height: 1.06; letter-spacing: -0.035em; max-width: 20ch; }
+.lead { margin-top: 14px; color: var(--text-mid); font-size: 16px; line-height: 1.65; max-width: 66ch; }
+.sec-aside { font-size: 13px; color: var(--text-low); line-height: 1.6; border-left: 1px solid var(--border-2); padding-left: 16px; }
+.sec-aside b { color: var(--text-mid); font-weight: 600; }
+.hero { padding: 88px clamp(20px, 3.4vw, 52px) 0; }
+.hero h1 { font-size: clamp(42px, 5.6vw, 80px); line-height: .98; letter-spacing: -0.05em; max-width: 15ch; }
+.hero h1 em { font-style: normal; color: var(--text-low); }
+.hero .lead { font-size: 18px; max-width: 62ch; }
+.notes { margin-top: 22px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 32px; }
+.note { display: grid; grid-template-columns: 26px 1fr; gap: 10px; font-size: 13px; line-height: 1.55; color: var(--text-mid); }
+.note i { font: 500 11px/22px var(--font-mono); font-style: normal; color: var(--text-low); }
+.note b { color: var(--text); font-weight: 600; }
+.lbl { font: 600 10.5px/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--text-low); }
+.card { border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-md); }
+.btn { height: 34px; padding: 0 12px; border-radius: 9px; display: inline-flex; align-items: center; gap: 7px; font: 700 12.5px/1 var(--font-body); white-space: nowrap; border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text); transition: transform var(--d-press) var(--ease-saida), border-color var(--dur-base) var(--ease-saida); }
+.btn:hover { border-color: color-mix(in srgb, var(--text) 24%, var(--border-2)); }
+.btn:active { transform: scale(.97); }
+.btn.ghost { background: transparent; border-color: var(--border); color: var(--text-mid); }
+.btn .tag { font: 500 10px/1 var(--font-mono); color: var(--text-low); }
+.trig { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.trig .sep { width: 1px; height: 22px; background: var(--border-2); margin: 0 4px; }
+.trig .lbl { margin-right: 4px; }
+
+/* =====================================================================
+   VARREDURA NAS LETRAS (gradient text sweep / "aurora text")
+   background-clip:text + @property --sw. Nunca contínua: roda 900 ms por
+   gatilho. O texto em repouso é cor sólida (--cp-ink).
+   ===================================================================== */
+.cp-word {
+  display: inline-block; color: var(--cp-ink); -webkit-text-fill-color: currentColor;
+  font: 600 15px/1.1 var(--font-head); letter-spacing: -0.012em; white-space: nowrap;
+  padding-block: .06em;
+}
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  .cp-word.sw {
+    background-image: linear-gradient(105deg in oklab,
+      var(--cp-ink) 0 calc(var(--sw) - 28%), var(--cp-ink-a) calc(var(--sw) - 12%),
+      var(--cp-ink-b) var(--sw), var(--cp-ink-a) calc(var(--sw) + 12%), var(--cp-ink) calc(var(--sw) + 28%) 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    animation: cpSweep var(--d-sweep) linear both;
+  }
+}
+/* linear de propósito (cânone §4: luz que passa, como marquee): velocidade
+   constante exatamente no trecho visível. Faixa de 56% da palavra. */
+@keyframes cpSweep { from { --sw: -30%; } to { --sw: 130%; } }
+/* Movimento reduzido: sem deslocamento. A tinta troca por cor (200 ms) e volta. */
+html[data-rm='on'] .cp-word.sw { background-image: none; -webkit-text-fill-color: currentColor; animation: cpTint 1100ms linear both; }
+@keyframes cpTint { 0% { color: var(--cp-ink); } 18%, 82% { color: var(--cp-ink-a); } 100% { color: var(--cp-ink); } }
+html[data-mode='desligadas'] .cp-btn .cp-word.sw { animation: none; background-image: none; -webkit-text-fill-color: currentColor; }
+
+/* =====================================================================
+   MASCOTE — um componente, três direções (data-d = A | B | C)
+   Estados por data-state; todo estado é keyframe com fill both (congelável).
+   ===================================================================== */
+.cpm { --m-size: 24px; position: relative; display: inline-grid; place-items: center; width: var(--m-size); height: var(--m-size); flex: 0 0 auto; color: var(--m-ink); }
+.cpm svg.m { width: 100%; height: 100%; overflow: visible; }
+.m * { transform-box: view-box; }
+.m-shell, .m-body { fill: var(--m-fill); stroke: var(--m-ink); stroke-width: 1.6; }
+.m-open rect { fill: var(--m-ink); }
+.m-ln { fill: none; stroke: var(--m-ink); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.m-sat { fill: var(--m-ink); stroke: var(--m-cut, var(--surface)); stroke-width: 1.6; paint-order: stroke; transition: fill var(--dur-base) var(--ease-saida); }
+.m-limb { fill: none; stroke: var(--m-ink); stroke-width: 1.7; stroke-linecap: round; }
+.m-happy, .m-closed, .m-squint, .m-look, .a-alt { opacity: 0; }
+.cpm:is([data-state='wave'], [data-state='play'], [data-state='celebrate'], [data-state='peek'], [data-state='thinking']) .m-sat,
+.cpm:is([data-state='wave'], [data-state='play'], [data-state='celebrate'], [data-state='peek'], [data-state='thinking']) .a-tip { fill: var(--m-accent); }
+.cpm[data-state='confused'] .m-sat, .cpm[data-state='confused'] .a-tip { fill: var(--warn); }
+.cpm .m-eyes { transition: transform var(--dur-base) var(--ease-saida); }
+.cpm[data-look='right'] .m-eyes { transform: translateX(1.1px); }
+.cpm[data-look='left'] .m-eyes { transform: translateX(-1.1px); }
+.cpm[data-look='up'] .m-eyes { transform: translateY(-0.8px); }
+
+/* --- B · Órbita (evolução do glifo) --- */
+[data-d='B'] .m-fig { transform-origin: 12px 20.6px; }
+[data-d='B'] .m-head, [data-d='B'] .m-hand { transform-origin: 12px 13px; }
+[data-d='B'] .m-open { transform-origin: 12px 12.8px; }
+/* --- C · Personagem --- */
+[data-d='C'] .m-fig { transform-origin: 12px 21.6px; }
+[data-d='C'] .m-head { transform-origin: 12px 15px; }
+[data-d='C'] .m-hand { transform-origin: 15.4px 18px; }
+[data-d='C'] .m-armL { transform-origin: 8.6px 18px; }
+[data-d='C'] .m-ant { transform-origin: 12px 4.4px; }
+[data-d='C'] .m-open { transform-origin: 12px 9.7px; }
+[data-d='C'] .m-visor { fill: var(--m-visor); }
+[data-d='C'] .m-open rect { fill: var(--m-eye); }
+[data-d='C'] .m-ln { stroke: var(--m-eye); stroke-width: 1.3; }
+/* --- A · Pixel --- */
+[data-d='A'] svg.m { shape-rendering: crispEdges; }
+.a-o { fill: var(--m-ink); }
+.a-s { fill: var(--m-visor); }
+.a-e, [data-d='A'] .a-e rect { fill: var(--m-eye); }
+[data-d='A'][data-look='right'] .m-open { opacity: 0; }
+[data-d='A'][data-look='right'] .m-look { opacity: 1; }
+.a-tip { fill: var(--m-ink); transition: fill var(--dur-base) steps(1, end); }
+
+/* piscar (blink) */
+.cpm:is([data-d='B'], [data-d='C'])[data-state='blink'] .m-open { animation: mBlink var(--d-blink) var(--ease-mover) both; }
+@keyframes mBlink { 0%, 100% { transform: scaleY(1); } 45%, 55% { transform: scaleY(.12); } }
+[data-d='A'][data-state='blink'] .m-open { animation: aOff 167ms steps(1, end) both; }
+[data-d='A'][data-state='blink'] .m-closed { animation: aOn 167ms steps(1, end) both; }
+@keyframes aOff { 0% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes aOn { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+/* acena (wave) — antecipação, 2 ciclos, assentamento */
+[data-d='B'][data-state='wave'] .m-hand { animation: bWaveHand var(--d-wave) var(--ease-mover) both; }
+[data-d='B'][data-state='wave'] .m-head { animation: bWaveHead var(--d-wave) var(--ease-mover) both; }
+@keyframes bWaveHand { 0% { transform: rotate(0); } 12% { transform: rotate(18deg); } 28% { transform: rotate(-44deg); } 44% { transform: rotate(-2deg); } 60% { transform: rotate(-42deg); } 76% { transform: rotate(-4deg); } 100% { transform: rotate(0); } }
+@keyframes bWaveHead { 0%, 100% { transform: none; } 12% { transform: rotate(-5deg) translateY(.6px); } 36% { transform: rotate(7deg); } 70% { transform: rotate(5deg); } }
+@keyframes bReach { 0%, 100% { transform: none; } 22%, 80% { transform: translate(1.5px, -1.5px) scale(1.12); } }
+[data-d='B'] .m-sat { transform-origin: 18.1px 6.9px; }
+[data-d='B'][data-state='wave'] .m-sat { animation: bReach var(--d-wave) var(--ease-mover) both; }
+[data-d='C'][data-state='wave'] .m-hand { animation: cWaveArm var(--d-wave) var(--ease-mover) both; }
+[data-d='C'][data-state='wave'] .m-head { animation: cWaveHead var(--d-wave) var(--ease-mover) both; }
+[data-d='C'][data-state='wave'] .m-ant { animation: cAntLag var(--d-wave) var(--ease-mover) both; }
+@keyframes cWaveArm { 0% { transform: rotate(0); } 12% { transform: rotate(14deg); } 30% { transform: rotate(-128deg); } 46% { transform: rotate(-98deg); } 62% { transform: rotate(-132deg); } 78% { transform: rotate(-102deg); } 100% { transform: rotate(0); } }
+@keyframes cWaveHead { 0%, 100% { transform: none; } 12% { transform: translateY(.6px); } 34% { transform: rotate(5deg) translateY(-.4px); } 70% { transform: rotate(3deg); } }
+@keyframes cAntLag { 0%, 100% { transform: none; } 20% { transform: rotate(-10deg); } 42% { transform: rotate(12deg); } 64% { transform: rotate(-7deg); } 84% { transform: rotate(4deg); } }
+[data-d='A'][data-state='wave'] .a-armR-down { animation: aWD 833ms steps(1, end) both; }
+[data-d='A'][data-state='wave'] .a-armR-up1 { animation: aW1 833ms steps(1, end) both; }
+[data-d='A'][data-state='wave'] .a-armR-up2 { animation: aW2 833ms steps(1, end) both; }
+[data-d='A'][data-state='wave'] .m-open { animation: aWD 833ms steps(1, end) both; }
+[data-d='A'][data-state='wave'] .m-happy { animation: aWin 833ms steps(1, end) both; }
+@keyframes aWD { 0% { opacity: 1; } 10% { opacity: 0; } 90%, 100% { opacity: 1; } }
+@keyframes aWin { 0% { opacity: 0; } 10% { opacity: 1; } 90%, 100% { opacity: 0; } }
+@keyframes aW1 { 0% { opacity: 0; } 10% { opacity: 1; } 20% { opacity: 0; } 30% { opacity: 1; } 40% { opacity: 0; } 50% { opacity: 1; } 60% { opacity: 0; } 70% { opacity: 1; } 80%, 100% { opacity: 0; } }
+@keyframes aW2 { 0%, 10% { opacity: 0; } 20% { opacity: 1; } 30% { opacity: 0; } 40% { opacity: 1; } 50% { opacity: 0; } 60% { opacity: 1; } 70% { opacity: 0; } 80% { opacity: 1; } 90%, 100% { opacity: 0; } }
+
+/* brinca (hop) — comprime e estica */
+[data-d='B'][data-state='play'] .m-fig { animation: mHop var(--d-hop) var(--ease-mover) both; }
+[data-d='B'][data-state='play'] .m-hand { animation: bLoop var(--d-hop) var(--ease-mover) both; }
+@keyframes mHop { 0% { transform: none; } 16% { transform: scale(1.09, .88); } 46% { transform: translateY(-3.6px) scale(.95, 1.06); } 72% { transform: scale(1.07, .92); } 86% { transform: translateY(-.5px); } 100% { transform: none; } }
+@keyframes bLoop { 0%, 12% { transform: rotate(0); } 74%, 100% { transform: rotate(360deg); } }
+[data-d='C'][data-state='play'] .m-fig { animation: mHop var(--d-hop) var(--ease-mover) both; }
+[data-d='C'][data-state='play'] .m-hand { animation: cArmsUpR var(--d-hop) var(--ease-mover) both; }
+[data-d='C'][data-state='play'] .m-armL { animation: cArmsUpL var(--d-hop) var(--ease-mover) both; }
+@keyframes cArmsUpR { 0%, 12%, 88%, 100% { transform: rotate(0); } 40%, 60% { transform: rotate(-118deg); } }
+@keyframes cArmsUpL { 0%, 12%, 88%, 100% { transform: rotate(0); } 40%, 60% { transform: rotate(118deg); } }
+[data-d='A'][data-state='play'] .m-fig { animation: aHop 667ms steps(1, end) both; }
+[data-d='A'][data-state='play'] .a-armR-down, [data-d='A'][data-state='play'] .a-armL-down { animation: aHopDown 667ms steps(1, end) both; }
+[data-d='A'][data-state='play'] .a-armR-up1, [data-d='A'][data-state='play'] .a-armL-up { animation: aHopUp 667ms steps(1, end) both; }
+@keyframes aHop { 0%, 12.5% { transform: none; } 25% { transform: translateY(-1px); } 37.5%, 50% { transform: translateY(-2px); } 62.5% { transform: translateY(-1px); } 75%, 100% { transform: none; } }
+@keyframes aHopDown { 0% { opacity: 1; } 12.5% { opacity: 0; } 75%, 100% { opacity: 1; } }
+@keyframes aHopUp { 0% { opacity: 0; } 12.5% { opacity: 1; } 75%, 100% { opacity: 0; } }
+
+/* pensando (thinking) — único loop; só enquanto há trabalho */
+[data-d='B'][data-state='thinking'] .m-hand { animation: orbit 1.6s linear infinite; }
+[data-d='B'][data-state='thinking'] .m-eyes,
+[data-d='C'][data-state='thinking'] .m-eyes { transform: translate(.8px, -.8px); }
+[data-d='C'][data-state='thinking'] .a-tip, [data-d='C'][data-state='thinking'] .m-sat { animation: tipPulse 1.6s var(--ease-mover) infinite alternate; }
+[data-d='A'][data-state='thinking'] .m-open { opacity: 0; }
+[data-d='A'][data-state='thinking'] .m-look { opacity: 1; }
+[data-d='A'][data-state='thinking'] .a-tip { animation: tipPulse 1333ms steps(1, end) infinite; }
+@keyframes tipPulse { 0% { opacity: 1; } 50% { opacity: .35; } 100% { opacity: 1; } }
+@keyframes orbit { to { transform: rotate(360deg); } }
+
+/* comemorou (celebrate) */
+.cpm:is([data-d='B'], [data-d='C'])[data-state='celebrate'] .m-open { animation: fadeOutHold var(--d-celebrate) var(--ease-saida) both; }
+.cpm:is([data-d='B'], [data-d='C'])[data-state='celebrate'] .m-happy { animation: fadeInHold var(--d-celebrate) var(--ease-saida) both; }
+@keyframes fadeOutHold { 0% { opacity: 1; } 10%, 88% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes fadeInHold { 0% { opacity: 0; } 10%, 88% { opacity: 1; } 100% { opacity: 0; } }
+[data-d='B'][data-state='celebrate'] .m-hand { animation: bCeleb var(--d-celebrate) var(--ease-mover) both; }
+[data-d='B'][data-state='celebrate'] .m-fig { animation: smallHop var(--d-celebrate) var(--ease-mover) both; }
+@keyframes bCeleb { 0% { transform: rotate(0) scale(1); } 60% { transform: rotate(360deg) scale(1.12); } 100% { transform: rotate(360deg) scale(1); } }
+@keyframes smallHop { 0%, 100% { transform: none; } 12% { transform: scale(1.05, .93); } 34% { transform: translateY(-2px); } 56% { transform: none; } }
+[data-d='C'][data-state='celebrate'] .m-hand { animation: cArmsUpR var(--d-celebrate) var(--ease-mover) both; }
+[data-d='C'][data-state='celebrate'] .m-armL { animation: cArmsUpL var(--d-celebrate) var(--ease-mover) both; }
+[data-d='C'][data-state='celebrate'] .m-fig { animation: smallHop var(--d-celebrate) var(--ease-mover) both; }
+[data-d='A'][data-state='celebrate'] .m-open { animation: aWD 833ms steps(1, end) both; }
+[data-d='A'][data-state='celebrate'] .m-happy { animation: aWin 833ms steps(1, end) both; }
+[data-d='A'][data-state='celebrate'] .a-armR-down, [data-d='A'][data-state='celebrate'] .a-armL-down { animation: aWD 833ms steps(1, end) both; }
+[data-d='A'][data-state='celebrate'] .a-armR-up1, [data-d='A'][data-state='celebrate'] .a-armL-up { animation: aWin 833ms steps(1, end) both; }
+[data-d='A'][data-state='celebrate'] .m-fig { animation: aHop 667ms steps(1, end) both; }
+
+/* dormindo (sleep) — pose persistente, sem respirar (zero loop) */
+[data-state='sleep'] .m-open { animation: toOff var(--dur-slow) var(--ease-saida) both; }
+[data-state='sleep'] .m-closed { animation: toOn var(--dur-slow) var(--ease-saida) both; }
+[data-d='B'][data-state='sleep'] .m-hand { animation: bRest var(--dur-slow) var(--ease-saida) both; }
+[data-d='B'][data-state='sleep'] .m-head { animation: dim var(--dur-slow) var(--ease-saida) both; }
+[data-d='C'][data-state='sleep'] .m-head { animation: cDroop var(--dur-slow) var(--ease-saida) both; }
+[data-d='A'][data-state='sleep'] .a-tip { animation: dim var(--dur-slow) steps(1, end) both; }
+@keyframes toOff { to { opacity: 0; } }
+@keyframes toOn { to { opacity: 1; } }
+@keyframes dim { to { opacity: .6; } }
+@keyframes bRest { to { transform: rotate(100deg); } }
+@keyframes cDroop { to { transform: rotate(7deg) translateY(.6px); } }
+
+/* confuso (erro) — inclina, aperta um olho, e fica na pose até o erro sumir */
+[data-state='confused'] .m-open { animation: toOff 160ms linear both; }
+[data-state='confused'] .m-squint { animation: toOn 160ms linear both; }
+[data-d='B'][data-state='confused'] .m-head { animation: tiltQ var(--d-confused) var(--ease-mover) both; }
+[data-d='B'][data-state='confused'] .m-hand { animation: bQ var(--d-confused) var(--ease-mover) both; }
+[data-d='C'][data-state='confused'] .m-head { animation: tiltQ var(--d-confused) var(--ease-mover) both; }
+[data-d='C'][data-state='confused'] .m-hand { animation: cScratch var(--d-confused) var(--ease-mover) both; }
+[data-d='A'][data-state='confused'] .a-ant { animation: toOff 83ms steps(1, end) both; }
+[data-d='A'][data-state='confused'] .a-antB { animation: toOn 83ms steps(1, end) both; }
+@keyframes tiltQ { 0% { transform: none; } 30% { transform: rotate(-13deg); } 55% { transform: rotate(-6deg); } 78%, 100% { transform: rotate(-9deg); } }
+@keyframes bQ { 0% { transform: rotate(0); } 50% { transform: rotate(-100deg); } 70% { transform: rotate(-84deg); } 100% { transform: rotate(-90deg); } }
+@keyframes cScratch { 0% { transform: rotate(0); } 40% { transform: rotate(-150deg); } 55% { transform: rotate(-138deg); } 70% { transform: rotate(-152deg); } 100% { transform: rotate(-144deg); } }
+
+/* glifo (modo discreto e marcas sem mascote) */
+.cpg { display: none; width: 20px; height: 20px; place-items: center; color: var(--m-ink); flex: 0 0 auto; }
+.cpg svg { width: 18px; height: 18px; overflow: visible; }
+.cpg .orb { transform-origin: 10px 10px; transform-box: view-box; }
+.cpg[data-state='orbit'] .orb { animation: orbitOnce 760ms var(--ease-mover) both; }
+.cpg[data-state='thinking'] .orb { animation: orbit 1.6s linear infinite; }
+.cpg[data-state='confused'] .orb circle { fill: var(--warn); }
+.cpg[data-state='sleep'] { opacity: .6; }
+@keyframes orbitOnce { to { transform: rotate(360deg); } }
+html[data-mode='discretas'] .cp-btn .cpm, html[data-mode='desligadas'] .cp-btn .cpm, [data-mascot='off'] .cp-btn .cpm, [data-mascot='off'] .cp-peek { display: none; }
+html[data-mode='discretas'] .cp-btn .cpg, html[data-mode='desligadas'] .cp-btn .cpg, [data-mascot='off'] .cp-btn .cpg { display: inline-grid; }
+html[data-mode='desligadas'] .cp-btn .cpg .orb { animation: none; }
+html[data-mode='discretas'] .cp-peek, html[data-mode='desligadas'] .cp-peek { display: none; }
+
+/* pausas: aba oculta e fora da tela */
+html.tab-hidden *, .offscreen * { animation-play-state: paused !important; }
+/* movimento reduzido: o JS congela cada estado no seu quadro-pose e faz só um esmaecimento */
+.rm-swap { animation: rmSwap 160ms linear both; }
+@keyframes rmSwap { from { opacity: .35; } to { opacity: 1; } }
+
+/* Pendência sem movimento: o próprio satélite (ou a ponta da antena) fica aceso.
+   Não existe um ponto separado; o glifo da marca é o sinal. */
+.cp-btn[data-pending] .m-sat, .cp-btn[data-pending] .a-tip, .cp-btn[data-pending] .cpg .orb circle { fill: var(--m-accent); }
+.cp-btn[data-pending='warn'] .m-sat, .cp-btn[data-pending='warn'] .a-tip, .cp-btn[data-pending='warn'] .cpg .orb circle { fill: var(--warn); }
+/* o glifo NÃO leva recorte: a 18 px o recorte faz o anel ler como ícone de “recarregar” */
+.cpg .orb circle { transition: fill var(--dur-base) var(--ease-saida); }
+
+/* =====================================================================
+   BOTÕES
+   ===================================================================== */
+.cp-btn { position: relative; -webkit-tap-highlight-color: transparent; }
+.cp-av { position: relative; display: inline-grid; place-items: center; width: 24px; height: 24px; flex: 0 0 auto; }
+
+/* Sidebar — o principal */
+.cp-side { --m-cut: var(--surface); width: 100%; height: 52px; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 0 10px 0 11px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-1), inset 0 1px 0 var(--hi); text-align: left; transition: background var(--dur-base) var(--ease-saida), border-color var(--dur-base) var(--ease-saida), transform var(--d-press) var(--ease-saida), box-shadow var(--dur-base) var(--ease-saida); }
+.cp-side .tx { display: grid; gap: 3px; min-width: 0; justify-items: start; }
+.cp-side .tx .sub { max-width: 100%; }
+.cp-side .sub { font: 500 11.5px/1.2 var(--font-body); color: var(--text-low); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-side .sub.warn { color: var(--warn); }
+.cp-side .kbd { align-self: center; }
+@media (hover: hover) and (pointer: fine) { .cp-side:hover { --m-cut: var(--surface-2); background: var(--surface-2); border-color: var(--border-2); } }
+.cp-side.is-hover { --m-cut: var(--surface-2); background: var(--surface-2); border-color: var(--border-2); }
+.cp-side:focus-visible, .cp-side.is-focus { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 12px; }
+.cp-side:active, .cp-side.is-press { transform: scale(.97); background: var(--surface-2); --m-cut: var(--surface-2); }
+.cp-side[aria-expanded='true'] { --m-cut: var(--surface-2); background: var(--surface-2); border-color: var(--border-2); box-shadow: inset 2px 0 0 var(--m-accent), inset 0 1px 0 var(--hi); }
+.cp-side[aria-expanded='true'] .sub { color: var(--text-mid); }
+
+/* TopBar */
+.cp-top { --m-cut: var(--surface); --cp-ink: var(--text-mid); height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 9px 0 7px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); white-space: nowrap; transition: background var(--dur-base) var(--ease-saida), border-color var(--dur-base) var(--ease-saida), transform var(--d-press) var(--ease-saida); }
+.cp-top .cp-word { font: 600 13px/1.1 var(--font-body); letter-spacing: 0; }
+@media (hover: hover) and (pointer: fine) { .cp-top:hover { --cp-ink: var(--text); border-color: var(--border-2); } }
+.cp-top.is-hover { --cp-ink: var(--text); border-color: var(--border-2); }
+.cp-top:focus-visible, .cp-top.is-focus { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 10px; }
+.cp-top:active, .cp-top.is-press { transform: scale(.97); background: var(--surface-2); --m-cut: var(--surface-2); }
+.cp-top[aria-expanded='true'] { --m-cut: var(--surface-3); --cp-ink: var(--text); background: var(--surface-3); border-color: var(--border-2); }
+
+/* Celular (TopBar 44 px) */
+.cp-mob { --m-cut: var(--bg); width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; transition: transform var(--d-press) var(--ease-saida), background var(--dur-base) var(--ease-saida); }
+.cp-mob:active, .cp-mob.is-press { transform: scale(.94); background: var(--surface-2); }
+.cp-mob[aria-expanded='true'] { background: var(--surface-2); --m-cut: var(--surface-2); }
+/* pílula que se abre do botão (sem empurrar o layout: é absoluta, recorte por clip-path) */
+.cp-mwrap { position: relative; display: grid; }
+.cp-mpill { position: absolute; right: calc(100% + 2px); top: 50%; height: 34px; margin-top: -17px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: var(--r-pill); border: 1px solid var(--border-2); background: var(--surface-glass); backdrop-filter: blur(14px); box-shadow: var(--shadow-2); white-space: nowrap; clip-path: inset(0 0 0 100% round 999px); opacity: 0; pointer-events: none; transition: clip-path var(--dur-slow) var(--ease-cena), opacity var(--dur-base) var(--ease-saida); font-size: 13px; }
+.cp-mpill.on { clip-path: inset(0 0 0 0 round 999px); opacity: 1; pointer-events: auto; }
+.cp-mpill .cp-word { font: 600 13px/1.1 var(--font-body); }
+.cp-mpill small { font-size: 12px; color: var(--text-low); }
+
+/* =====================================================================
+   APP FICTÍCIO (palco)
+   ===================================================================== */
+.frame { position: relative; border: 1px solid var(--border-2); border-radius: var(--r-xl); overflow: hidden; background: var(--bg); box-shadow: var(--shadow-3); isolation: isolate; }
+.app { display: grid; grid-template-columns: var(--side-w) minmax(0, 1fr); height: 600px; }
+.side { border-right: 1px solid var(--border); background: var(--bg-elevated); display: flex; flex-direction: column; padding: 14px 12px; gap: 2px; min-width: 0; }
+.side .ws { display: flex; align-items: center; gap: 10px; padding: 4px 6px 14px; }
+.side .ws .mark { width: 28px; height: 28px; border-radius: 8px; }
+.side .ws .mark svg { width: 15px; height: 15px; }
+.side .ws b { font: 600 14px/1.1 var(--font-head); letter-spacing: -0.01em; display: block; white-space: nowrap; }
+.side .ws small { font-size: 11px; color: var(--text-low); white-space: nowrap; }
+.side .cp-slot { padding: 0 0 12px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+.nav-i { display: flex; align-items: center; gap: 11px; height: 36px; padding: 0 10px; border-radius: 9px; color: var(--text-mid); font-size: 13.5px; font-weight: 600; white-space: nowrap; }
+.nav-i.on { background: var(--surface-2); color: var(--text); box-shadow: inset 2px 0 0 var(--brand); }
+.nav-i .cnt { margin-left: auto; font: 500 11px/1 var(--font-mono); color: var(--text-low); }
+.side .foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 8px 6px 2px; }
+.avatar { width: 30px; height: 30px; border-radius: 9px; background: var(--surface-3); border: 1px solid var(--border-2); display: grid; place-items: center; font: 600 11px/1 var(--font-head); color: var(--text-mid); flex: 0 0 auto; }
+.side .foot b { display: block; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.side .foot small { font-size: 11px; color: var(--text-low); white-space: nowrap; }
+.main { position: relative; display: grid; grid-template-rows: var(--top-h) minmax(0, 1fr); min-width: 0; min-height: 0; }
+.top { display: flex; align-items: center; gap: 10px; padding: 0 18px 0 22px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 90%, transparent); min-width: 0; position: relative; }
+.top .search { flex: 0 1 320px; height: 36px; display: flex; align-items: center; gap: 9px; padding: 0 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text-low); font-size: 13px; min-width: 0; }
+.top .search input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-size: 13px; color: var(--text); }
+.top .search input::placeholder { color: var(--text-low); }
+.top .search:focus-within { border-color: var(--border-2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent); }
+.top .spacer { flex: 1; }
+.iconbtn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text-mid); display: inline-grid; place-items: center; }
+.page { overflow: hidden; padding: 24px 26px; min-height: 0; }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.page-head h1 { font-size: 26px; letter-spacing: -0.035em; }
+.page-head p { color: var(--text-low); font-size: 13px; margin-top: 6px; }
+.board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.col { border-radius: var(--r-md); background: color-mix(in srgb, var(--surface) 55%, transparent); border: 1px solid var(--border); padding: 10px; min-height: 360px; }
+.col-h { display: flex; justify-content: space-between; padding: 2px 4px 10px; font-size: 13px; font-weight: 700; }
+.col-h span { font: 500 11px/1 var(--font-mono); color: var(--text-low); }
+.deal { border: 1px solid var(--border); background: var(--surface); border-radius: 11px; padding: 11px 12px; margin-bottom: 8px; }
+.deal b { display: block; font-size: 13px; }
+.deal small { display: block; font-size: 12px; color: var(--text-low); margin-top: 2px; }
+.deal .val { display: block; margin-top: 9px; font: 500 12px/1 var(--font-mono); color: var(--text-mid); }
+
+/* alça de borda + mascote espiando */
+.cp-edge { position: absolute; z-index: 45; right: 0; top: 50%; height: 120px; width: 30px; margin-top: -60px; display: flex; align-items: center; justify-content: flex-end; }
+.cp-pill { position: relative; width: 5px; height: 58px; margin-right: 4px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--text) 26%, var(--border-2)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--bg) 60%, transparent); transition: opacity var(--dur-base) var(--ease-saida); }
+.cp-pill::after { content: ""; position: absolute; left: 1px; right: 1px; top: 30%; height: 22%; border-radius: inherit; background: var(--m-accent); opacity: .9; }
+.cp-tab { position: absolute; right: 0; top: 50%; height: 40px; margin-top: -20px; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 9px; border: 1px solid var(--border-2); border-right: 0; border-radius: 12px 0 0 12px; background: var(--surface-glass); backdrop-filter: blur(14px); box-shadow: var(--shadow-2); font-size: 12.5px; font-weight: 700; white-space: nowrap; transform: translateX(105%); transition: transform var(--dur-base) var(--ease-saida); pointer-events: none; --m-cut: var(--surface); }
+.cp-edge:hover .cp-tab, .cp-edge:focus-visible .cp-tab, .cp-edge.show-tab .cp-tab { transform: translateX(0); }
+.cp-edge:hover .cp-pill, .cp-edge.show-tab .cp-pill, .cp-edge.peeking .cp-pill { opacity: 0; }
+.cp-peek { --m-cut: var(--bg); position: absolute; right: 0; top: 50%; width: 46px; height: 46px; margin-top: -23px; display: grid; place-items: center; pointer-events: none; transform: translateX(105%) rotate(0deg); transition: transform var(--d-peek-out) var(--ease-saida); }
+.cp-peek .cpm { --m-size: 36px; }
+.cp-edge.peeking .cp-peek { transform: translateX(16%) rotate(-14deg); transition: transform var(--d-peek-in) var(--ease-saida); }
+.cp-peek-cap { position: absolute; right: 40px; top: 50%; margin-top: -15px; height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: var(--r-pill); background: var(--surface-glass); border: 1px solid var(--border-2); box-shadow: var(--shadow-2); font-size: 12px; font-weight: 600; white-space: nowrap; opacity: 0; transform: translateX(6px); transition: opacity var(--dur-base) var(--ease-saida), transform var(--dur-base) var(--ease-saida); pointer-events: none; }
+.cp-edge.peeking .cp-peek-cap { opacity: 1; transform: none; transition-delay: 220ms; }
+.cp-peek-cap .num { color: var(--text-low); font-size: 11px; }
+
+.stage-bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; margin: 14px 0 0; }
+.gate { display: inline-flex; align-items: center; gap: 8px; font: 500 11.5px/1.3 var(--font-mono); color: var(--text-low); }
+.gate i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-low); flex: 0 0 auto; }
+.gate.ok i { background: var(--success); }
+.gate.no i { background: var(--warn); }
+
+/* =====================================================================
+   SEÇÕES
+   ===================================================================== */
+/* estados dos botões */
+.states { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.st { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-elevated); padding: 16px 14px 14px; display: grid; gap: 14px; align-content: start; }
+.st .lbl { display: flex; justify-content: space-between; }
+.st p { font-size: 12px; color: var(--text-low); line-height: 1.5; }
+.st p b { color: var(--text-mid); font-weight: 600; }
+.st .tb { display: flex; justify-content: flex-start; padding: 10px; border-radius: 10px; background: color-mix(in srgb, var(--bg) 90%, transparent); border: 1px solid var(--border); }
+.rowlbl { font: 600 12px/1 var(--font-mono); color: var(--text-low); margin: 26px 0 12px; display: flex; gap: 10px; align-items: baseline; }
+.rowlbl b { color: var(--text); font-family: var(--font-head); font-size: 15px; letter-spacing: -0.01em; }
+.rail-demo { display: flex; gap: 12px; align-items: center; margin-top: 14px; }
+.cp-rail { --m-cut: var(--surface); width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); }
+
+/* letras */
+.ltr { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; }
+.specimen { padding: 34px 32px 28px; display: grid; gap: 22px; }
+.specimen .big { font-size: clamp(48px, 7vw, 92px); letter-spacing: -0.045em; line-height: 1; }
+.strip-w { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.strip-w > div { border: 1px solid var(--border); border-radius: 10px; padding: 12px 10px 9px; display: grid; gap: 8px; background: var(--surface); --m-cut: var(--surface); }
+.strip-w .cp-word { font-size: 17px; }
+.strip-w small, .film small { font: 500 10.5px/1 var(--font-mono); color: var(--text-low); }
+.ctr { padding: 22px; display: grid; gap: 14px; align-content: start; }
+.ctr table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ctr th { text-align: left; font: 600 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-low); padding: 8px 6px; border-bottom: 1px solid var(--border); }
+.ctr td { padding: 9px 6px; border-bottom: 1px solid var(--border); color: var(--text-mid); vertical-align: middle; }
+.ctr td.num { text-align: right; }
+.sw-chip { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 8px; border: 1px solid var(--border-2); }
+.pass { color: var(--success); font-weight: 700; }
+.fail { color: var(--danger); font-weight: 700; }
+.floor { display: flex; align-items: baseline; gap: 10px; }
+.floor b { font: 500 30px/1 var(--font-mono); letter-spacing: -0.02em; }
+.code { font: 500 11.5px/1.6 var(--font-mono); color: var(--text-mid); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; white-space: pre; overflow-x: auto; }
+
+/* ciclo */
+.cycle { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.cy { --m-cut: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); padding: 0 0 14px; display: grid; gap: 10px; align-content: start; text-align: left; transition: border-color var(--dur-base) var(--ease-saida); }
+.cy:hover { border-color: var(--border-2); }
+.cy .pad { height: 148px; display: grid; place-items: center; border-bottom: 1px solid var(--border); background: radial-gradient(120% 90% at 50% 100%, color-mix(in srgb, var(--m-ink) 4%, transparent), transparent 60%); }
+.cy .cpm { --m-size: 96px; }
+.cy .meta { padding: 0 14px; display: grid; gap: 6px; }
+.cy h3 { font-size: 16px; letter-spacing: -0.02em; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.cy h3 small { font: 500 10.5px/1 var(--font-mono); color: var(--text-low); letter-spacing: 0; }
+.cy .en { font: 500 11px/1.3 var(--font-mono); color: var(--text-low); }
+.cy p { font-size: 12.5px; color: var(--text-mid); line-height: 1.5; }
+.cy p em { font-style: normal; color: var(--text-low); }
+
+/* quadros */
+.film { display: grid; grid-template-columns: 132px repeat(6, minmax(0, 1fr)); gap: 8px; align-items: stretch; margin-bottom: 8px; }
+.film .nm { display: grid; align-content: center; gap: 4px; font: 600 14px/1.2 var(--font-head); }
+.film .nm small { font-weight: 500; }
+.film .fr { --m-cut: var(--surface); border: 1px solid var(--border); background: var(--surface); border-radius: 10px; height: 104px; display: grid; place-items: center; position: relative; }
+.film .fr .cpm { --m-size: 64px; }
+.film .fr small { position: absolute; left: 8px; bottom: 7px; }
+
+/* direções */
+.dirs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.dir { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); display: grid; align-content: start; overflow: hidden; --m-cut: var(--surface); }
+.dir.rec { border-color: color-mix(in srgb, var(--m-accent) 45%, var(--border-2)); }
+.dir .hero-m { height: 200px; display: grid; place-items: center; border-bottom: 1px solid var(--border); position: relative; background: radial-gradient(100% 80% at 50% 100%, color-mix(in srgb, var(--m-ink) 5%, transparent), transparent 62%); }
+.dir .hero-m .cpm { --m-size: 120px; }
+.dir .hero-m .tagr { position: absolute; top: 12px; left: 12px; }
+.pill-tag { font: 600 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; padding: 5px 7px; border-radius: 6px; border: 1px solid var(--border-2); color: var(--text-mid); background: var(--surface-2); }
+.pill-tag.rec { color: var(--text); border-color: color-mix(in srgb, var(--m-accent) 50%, var(--border-2)); }
+.dir .body { padding: 18px; display: grid; gap: 12px; }
+.dir h3 { font-size: 20px; letter-spacing: -0.025em; }
+.dir p { font-size: 13px; color: var(--text-mid); line-height: 1.55; }
+.dir .inbtn { display: grid; gap: 8px; padding: 12px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px; }
+.dir .inbtn .cp-side { --m-cut: var(--surface); }
+.score { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.score td { padding: 6px 0; border-bottom: 1px solid var(--border); color: var(--text-mid); }
+.score td.num { text-align: right; color: var(--text); }
+.score tr.tot td { border-bottom: 0; font-weight: 700; color: var(--text); padding-top: 9px; }
+.bar5 { display: inline-flex; gap: 3px; vertical-align: middle; margin-left: 8px; }
+.bar5 i { width: 10px; height: 4px; border-radius: 2px; background: var(--border-2); }
+.bar5 i.f { background: var(--text-mid); }
+
+/* orçamento */
+.bud { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 14px; align-items: start; }
+.panel { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); padding: 18px; display: grid; gap: 16px; }
+.panel h3 { font-size: 15px; letter-spacing: -0.015em; }
+.radio-row { display: grid; gap: 6px; }
+.radio-row .seg { width: 100%; }
+.radio-row .seg button { flex: 1; }
+.radio-row p { font-size: 12px; color: var(--text-low); line-height: 1.5; }
+.kv { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.kv div { background: var(--surface); padding: 12px 12px 11px; display: grid; gap: 6px; }
+.kv b { font: 500 20px/1 var(--font-mono); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.kv small { font-size: 11.5px; color: var(--text-low); }
+.tl { position: relative; height: 64px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-elevated); overflow: hidden; }
+.tl .hr { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); }
+.tl .hr span { position: absolute; bottom: 4px; left: 4px; font: 500 9.5px/1 var(--font-mono); color: var(--text-low); }
+.tl .act { position: absolute; top: 8px; height: 8px; }
+.tl .mk { position: absolute; top: 22px; width: 2px; height: 22px; border-radius: 1px; transform: translateX(-1px); }
+.tl .mk.wave { background: var(--m-accent); width: 4px; transform: translateX(-2px); }
+.tl .mk.sweep { background: var(--text-mid); height: 12px; top: 27px; }
+.tl .mk.dot { background: var(--info); height: 8px; top: 29px; }
+.tl .mk.celebrate { background: var(--success); }
+.tl .mk.confused { background: var(--warn); width: 4px; transform: translateX(-2px); }
+.tl .now { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--text); opacity: .6; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11.5px; color: var(--text-low); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.log { height: 260px; overflow: auto; font: 500 11.5px/1.65 var(--font-mono); color: var(--text-mid); border: 1px solid var(--border); border-radius: 12px; background: var(--bg-elevated); padding: 10px 12px; }
+.log div { display: grid; grid-template-columns: 70px 1fr; gap: 8px; }
+.log time { color: var(--text-low); }
+.log .f { color: var(--text); }
+.log .b { color: var(--text-low); }
+.log .w { color: var(--warn); }
+.why-blk { display: flex; flex-wrap: wrap; gap: 6px; }
+.why-blk span { font: 500 11px/1 var(--font-mono); padding: 5px 7px; border-radius: 6px; border: 1px solid var(--border); color: var(--text-mid); background: var(--surface-2); }
+.rules { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.rules .panel p, .rules .panel li { font-size: 12.5px; color: var(--text-mid); line-height: 1.55; }
+.rules ul { margin: 0; padding-left: 16px; display: grid; gap: 4px; }
+.rules b { color: var(--text); font-weight: 600; }
+.sim-actor { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-elevated); }
+.sim-actor .clock { margin-left: auto; font: 500 22px/1 var(--font-mono); letter-spacing: -0.02em; }
+.sim-actor .clock small { display: block; font-size: 10.5px; color: var(--text-low); letter-spacing: 0; margin-top: 4px; text-align: right; }
+.toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { height: 30px; padding: 0 11px; border-radius: var(--r-pill); border: 1px solid var(--border); background: var(--surface); color: var(--text-mid); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.chip[aria-pressed='true'] { color: var(--text); border-color: var(--text-low); background: var(--surface-3); }
+
+/* celular */
+.phones { display: grid; grid-template-columns: 375px minmax(0, 1fr); gap: 32px; align-items: start; }
+.phone { width: 375px; height: 760px; border-radius: 40px; border: 1px solid var(--border-2); background: var(--bg); overflow: hidden; position: relative; box-shadow: var(--shadow-3); }
+.ph-status { height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 26px; font: 600 13px/1 var(--font-body); }
+.ph-top { height: 56px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 18px; border-bottom: 1px solid var(--border); position: relative; }
+.ph-top .tt { font: 600 19px/1 var(--font-head); letter-spacing: -0.03em; margin-right: auto; }
+.ph-page { padding: 14px 16px; display: grid; gap: 10px; }
+.ph-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ph-kpis div { border: 1px solid var(--border); background: var(--surface); border-radius: 12px; padding: 12px; }
+.ph-kpis small { font-size: 11.5px; color: var(--text-low); }
+.ph-kpis b { display: block; font: 500 20px/1 var(--font-mono); margin-top: 8px; }
+.bnav { position: absolute; left: 0; right: 0; bottom: 0; height: 84px; padding-bottom: 20px; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--border); background: color-mix(in srgb, var(--bg-elevated) 94%, transparent); }
+.bnav a { display: grid; place-items: center; align-content: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--text-low); min-height: 44px; }
+.bnav a.on { color: var(--text); }
+.phone .cp-edge { height: 96px; margin-top: -48px; width: 24px; }
+.ph-notes { display: grid; gap: 14px; }
+
+/* alça: estados estáticos */
+.edges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.edge-cell { position: relative; height: 240px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); overflow: hidden; }
+.edge-cell .ghost-ln { position: absolute; left: 18px; right: 70px; height: 10px; border-radius: 5px; background: var(--surface-2); }
+.edge-cell .cap { position: absolute; left: 16px; top: 14px; }
+.edge-cell .cap b { display: block; font: 600 14px/1.2 var(--font-head); }
+.edge-cell .cap small { font-size: 12px; color: var(--text-low); }
+
+/* marcas */
+.brands { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.brand { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--bg); padding: 18px; display: grid; gap: 14px; align-content: start; }
+.brand header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.brand header b { font: 600 17px/1.2 var(--font-head); letter-spacing: -0.02em; }
+.brand header small { font: 500 10.5px/1.3 var(--font-mono); color: var(--text-low); text-align: right; }
+.brand .side-mini { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+.brand .top-mini { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
+.brand p { font-size: 12.5px; color: var(--text-mid); line-height: 1.5; }
+.brand .floor-s { font: 500 11.5px/1.5 var(--font-mono); color: var(--text-low); }
+.brand .floor-s b { color: var(--text); font-weight: 500; }
+
+.warnbar { display: none; margin-bottom: 14px; padding: 10px 14px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--warn) 30%, var(--border)); background: var(--warn-bg); color: var(--warn); font-size: 13px; font-weight: 600; }
+html[data-tenant='odonto'] .warnbar.odonto { display: block; }
+html[data-mode='desligadas'] .warnbar.off, html[data-mode='discretas'] .warnbar.off { display: block; }
+
+/* ---------- solo (capturas) ---------- */
+html.solo .doc { display: block; }
+html.solo .doc-nav, html.solo .doc-top, html.solo .hero-wrap, html.solo .sec:not(.solo-on) { display: none; }
+html.solo .sec.solo-on { padding: 40px 44px 44px; }
+
+/* ---------- responsivo ---------- */
+@media (max-width: 1200px) {
+  .doc { grid-template-columns: minmax(0, 1fr); }
+  .doc-nav { display: none; }
+  .states { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cycle { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bud, .ltr, .phones { grid-template-columns: minmax(0, 1fr); }
+  .dirs, .brands, .rules, .edges { grid-template-columns: minmax(0, 1fr); }
+  .sec-head { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .sec { padding: 56px 16px 8px; }
+  html.solo .sec.solo-on { padding: 20px 12px 24px; }
+  .hero { padding: 56px 16px 0; }
+  .sec-head h2 { font-size: 28px; }
+  .notes, .states, .cycle { grid-template-columns: minmax(0, 1fr); }
+  .film { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .film .nm { grid-column: 1 / -1; }
+  .strip-w { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .app .side { display: none; }
+  .phone { width: 100%; max-width: 375px; }
+  .phones { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+}
+  </style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+    <symbol id="i-pipe" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v7M12 7v4M16 7v9"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></symbol>
+    <symbol id="i-set" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  </defs>
+</svg>
+
+<div class="doc">
+  <nav class="doc-nav" aria-label="Seções">
+    <div class="lockup"><div class="mark"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3.5v13h8.5" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="square"/><circle cx="14.6" cy="5.4" r="2.1" fill="currentColor"/></svg></div><div><b>Leadium</b><small>Movimento · Copiloto</small></div></div>
+    <a href="#palco"><span>00</span>Palco ao vivo</a>
+    <a href="#botoes"><span>01</span>Estados dos botões</a>
+    <a href="#letras"><span>02</span>Varredura nas letras</a>
+    <a href="#ciclo"><span>03</span>Ciclo do mascote</a>
+    <a href="#quadros"><span>04</span>Quadro a quadro</a>
+    <a href="#direcoes"><span>05</span>Três direções</a>
+    <a href="#orcamento"><span>06</span>Orçamento de atenção</a>
+    <a href="#celular"><span>07</span>Celular 375</a>
+    <a href="#alca"><span>08</span>Alça de borda</a>
+    <a href="#marcas"><span>09</span>Temas por marca</a>
+    <div class="doc-nav-foot">Proposta para decisão. Sem código de produto. Plano: <span class="mono">copilot-botao-animacao.md</span></div>
+  </nav>
+
+  <div class="doc-main">
+    <header class="doc-top" role="toolbar" aria-label="Controles da demo">
+      <div class="ctl"><span class="t">Tema</span><div class="seg" data-ctl="theme"><button data-v="dark" aria-pressed="true">Escuro</button><button data-v="light" aria-pressed="false">Claro</button></div></div>
+      <div class="ctl"><span class="t">Marca</span><div class="seg" data-ctl="tenant"><button data-v="leadium" aria-pressed="true">Leadium</button><button data-v="odonto" aria-pressed="false">Odonto</button><button data-v="maian" aria-pressed="false">Maian</button></div></div>
+      <div class="ctl"><span class="t">Animações</span><div class="seg" data-ctl="mode"><button data-v="vivas" aria-pressed="true">Vivas</button><button data-v="discretas" aria-pressed="false">Discretas</button><button data-v="desligadas" aria-pressed="false">Desligadas</button></div></div>
+      <div class="ctl"><span class="t">Mascote</span><div class="seg mono" data-ctl="dir"><button data-v="A" aria-pressed="false">A · Pixel</button><button data-v="B" aria-pressed="true">B · Órbita</button><button data-v="C" aria-pressed="false">C · Personagem</button></div></div>
+      <label class="swtch"><button class="switch" role="switch" aria-checked="false" id="rm-switch" aria-label="Simular movimento reduzido"></button>Movimento reduzido</label>
+    </header>
+
+    <div class="hero-wrap">
+      <section class="hero">
+        <div class="eyebrow"><b>Copiloto</b><span>·</span><span>Botão, varredura e mascote</span></div>
+        <h1>Chamar a atenção <em>só quando vale a pena.</em></h1>
+        <p class="lead">Dois botões e um único ator. As letras de “Copiloto” recebem uma varredura de cor de vez em quando, sem nunca virar efeito contínuo. O mascote pisca, acena e brinca apenas quando a pessoa está parada. Ele nunca interrompe quem está digitando, e quando ninguém responde ele aprende a ficar quieto. Tudo sai dos tokens da marca: Odonto não tem mascote, Maian usa laranja.</p>
+      </section>
+    </div>
+
+    <!-- 00 · PALCO -->
+    <section class="sec" id="palco" style="padding-top:48px">
+      <div class="warnbar odonto">Marca Odonto: sem mascote por regra de marca. O botão usa só o glifo de órbita e uma varredura calma, em violeta.</div>
+      <div class="frame" id="stage" data-scope="stage">
+        <div class="app">
+          <aside class="side" aria-label="Navegação principal">
+            <div class="ws"><div class="mark"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3.5v13h8.5" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="square"/><circle cx="14.6" cy="5.4" r="2.1" fill="currentColor"/></svg></div><div><b data-ws>Norte Imóveis</b><small>São Paulo · 2 equipes</small></div></div>
+            <div class="cp-slot"><button class="cp-btn cp-side" data-actor data-open-toggle aria-expanded="false" aria-keyshortcuts="Meta+J Control+J" aria-describedby="sub-stage">__SIDE__</button></div>
+            <a class="nav-i" href="#"><svg class="ico"><use href="#i-home"/></svg>Início</a>
+            <a class="nav-i" href="#"><svg class="ico"><use href="#i-inbox"/></svg>Inbox<em class="cnt">12</em></a>
+            <a class="nav-i on" href="#" aria-current="page"><svg class="ico"><use href="#i-pipe"/></svg>Pipeline</a>
+            <a class="nav-i" href="#"><svg class="ico"><use href="#i-cal"/></svg>Agenda</a>
+            <a class="nav-i" href="#"><svg class="ico"><use href="#i-users"/></svg>Contatos</a>
+            <a class="nav-i" href="#"><svg class="ico"><use href="#i-plug"/></svg>Integrações</a>
+            <a class="nav-i" href="#"><svg class="ico"><use href="#i-chart"/></svg>Relatórios</a>
+            <div class="foot"><span class="avatar">BT</span><div><b>Bruna Teixeira</b><small>Gestora comercial</small></div></div>
+          </aside>
+          <div class="main">
+            <header class="top">
+              <label class="search"><svg class="ico sm"><use href="#i-search"/></svg><input id="stage-input" placeholder="Buscar ou perguntar…" aria-label="Buscar ou perguntar"><span class="kbd">⌘K</span></label>
+              <span class="spacer"></span>
+              <button class="cp-btn cp-top" data-open-toggle aria-expanded="false" aria-label="Abrir Copiloto">__TOP__</button>
+              <button class="iconbtn" aria-label="Notificações"><svg class="ico"><use href="#i-bell"/></svg></button>
+              <span class="avatar">BT</span>
+            </header>
+            <div class="page">
+              <div class="page-head"><div><h1>Pipeline</h1><p>Vendas · 38 negócios · R$ 1,24 mi em aberto</p></div></div>
+              <div class="board">
+                <div class="col"><div class="col-h">Qualificação<span>11</span></div><div class="deal"><b>Residencial Ipê</b><small>Marina Couto</small><span class="val">R$ 48.000</span></div><div class="deal"><b>Sala 1204, Faria Lima</b><small>Otávio Prado</small><span class="val">R$ 92.500</span></div><div class="deal"><b>Casa Granja Viana</b><small>Lia Mendes</small><span class="val">R$ 31.000</span></div></div>
+                <div class="col"><div class="col-h">Visita<span>9</span></div><div class="deal"><b>Loft Pinheiros</b><small>Caio Nunes</small><span class="val">R$ 64.200</span></div><div class="deal"><b>Cobertura Moema</b><small>Sofia Ramos</small><span class="val">R$ 120.000</span></div></div>
+                <div class="col"><div class="col-h">Proposta<span>12</span></div><div class="deal"><b>Galpão Barueri</b><small>Grupo Ativa</small><span class="val">R$ 210.000</span></div><div class="deal"><b>Studio Vila Madalena</b><small>Rafa Lima</small><span class="val">R$ 22.900</span></div></div>
+                <div class="col"><div class="col-h">Fechamento<span>6</span></div><div class="deal"><b>Apto Perdizes</b><small>Helena Dias</small><span class="val">R$ 58.300</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="cp-edge" data-edge>
+          <span class="cp-pill" aria-hidden="true"></span>
+          <span class="cp-peek" aria-hidden="true">__PEEK__</span>
+          <span class="cp-peek-cap" aria-hidden="true">2 sugestões no pipeline</span>
+          <button class="cp-tab" tabindex="-1" aria-hidden="true">__TAB__</button>
+        </div>
+      </div>
+      <p class="sr-only" aria-live="polite" id="cp-live"></p>
+      <div class="stage-bar">
+        <div class="trig" data-target="stage">
+          <span class="lbl">Estado</span>
+          <button class="btn ghost" data-play="sweep">Varredura</button>
+          <button class="btn ghost" data-play="blink">Piscar</button>
+          <button class="btn ghost" data-play="wave">Acenar</button>
+          <button class="btn ghost" data-play="play">Brincar</button>
+          <button class="btn ghost" data-play="thinking">Pensando</button>
+          <button class="btn ghost" data-play="celebrate">Comemorou</button>
+          <button class="btn ghost" data-play="sleep">Dormindo</button>
+          <button class="btn ghost" data-play="confused">Confuso</button>
+          <button class="btn ghost" data-play="peek">Espiar da borda</button>
+        </div>
+      </div>
+      <div class="stage-bar">
+        <div class="trig" data-target="stage">
+          <span class="lbl">Gatilho</span>
+          <button class="btn" data-ev="briefing">Briefing novo do dia <span class="tag">acena</span></button>
+          <button class="btn" data-ev="sugestao">Sugestão pendente <span class="tag">espia</span></button>
+          <button class="btn" data-ev="erro">Erro de integração <span class="tag">confuso</span></button>
+          <button class="btn" data-ev="acao">Ação concluída <span class="tag">comemora</span></button>
+          <button class="btn ghost" data-ev="reset">Limpar</button>
+        </div>
+        <div class="gate" id="stage-gate"><i></i><span>Demo acelerada: varredura a cada 12 s, chamada a cada 30 s (no produto: 6 min e 12 min).</span></div>
+      </div>
+      <div class="notes">
+        <div class="note"><i>01</i><div><b>Um ator por vez.</b> Quem chama é o botão da sidebar. O do TopBar só ganha vida quando a sidebar está recolhida ou no celular. Dois mascotes acenando juntos viram ruído.</div></div>
+        <div class="note"><i>02</i><div><b>O movimento nunca é o único sinal.</b> A linha de status dentro do botão diz o motivo (“3 itens no briefing”) e o satélite do mascote fica aceso até a pessoa abrir. Com as animações desligadas, a informação continua lá.</div></div>
+        <div class="note"><i>03</i><div><b>Clique no campo de busca e espere.</b> Com foco em campo, digitação, modal ou arrasto, nada se mexe. A chamada espera numa fila e, se a pessoa não parar, vira só o satélite aceso.</div></div>
+      </div>
+    </section>
+
+    <!-- 01 · ESTADOS -->
+    <section class="sec" id="botoes">
+      <div class="sec-head">
+        <div><div class="eyebrow"><b>01</b><span>Botões</span></div><h2>Repouso, hover, foco, pressionado e aberto.</h2><p class="lead">A sidebar é o lugar principal: 52 px de altura, com o mascote, o nome e uma linha de status que muda com o contexto. O TopBar é o atalho compacto de 36 px. Quando o Copiloto está aberto, o mascote olha para o painel e o atalho vira Esc.</p></div>
+        <aside class="sec-aside"><b>Valores.</b> Hover 200 ms <span class="mono">--ease-saida</span>, com uma varredura por entrada do cursor (no máximo uma a cada 2 s). Pressionado <span class="mono">scale(.97)</span> em 120 ms. Foco: anel de 2 px com offset de 2 px na cor <span class="mono">--focus</span>, que dá 3:1 ou mais.</aside>
+      </div>
+      <div class="rowlbl"><b>Sidebar</b><span>principal · 212 × 52</span></div>
+      <div class="states" id="states-side"></div>
+      <div class="rowlbl"><b>TopBar</b><span>atalho · 36 px</span></div>
+      <div class="states" id="states-top"></div>
+      <div class="rail-demo"><button class="cp-btn cp-rail" aria-label="Abrir Copiloto">__RAIL__</button><span class="mono" style="font-size:12px;color:var(--text-low)">Barra recolhida (64 px): só o mascote, 44 × 44. Com a sidebar recolhida, o ator passa a ser o botão do TopBar.</span></div>
+    </section>
+
+    <!-- 02 · LETRAS -->
+    <section class="sec" id="letras">
+      <div class="sec-head">
+        <div><div class="eyebrow"><b>02</b><span>Letras</span></div><h2>Uma varredura de cor que passa e vai embora.</h2><p class="lead">A técnica se chama <b>texto com gradiente animado</b> (gradient text, “shimmer text” ou “aurora text”). O gradiente é recortado pela forma das letras com <span class="mono">background-clip: text</span>, e a posição da faixa é uma variável registrada com <span class="mono">@property</span>, por isso o navegador interpola. A faixa atravessa a palavra em 900 ms, em velocidade constante (<span class="mono">linear</span>, como luz passando), e some. Em repouso, o texto é uma cor sólida.</p></div>
+        <aside class="sec-aside"><b>Piso de contraste.</b> Cada parada do gradiente precisa de 4,5:1 sobre o fundo do botão, no hover também. A interpolação em oklab tem luminância monotônica entre paradas, então o piso das paradas é o piso do texto. Isso é medido abaixo, ao vivo, para a marca e o tema atuais.</aside>
+      </div>
+      <div class="ltr">
+        <div class="card specimen" style="--m-cut:var(--surface)">
+          <div><span class="cp-word big" id="spec-word">Copiloto</span></div>
+          <div class="trig"><button class="btn" id="spec-play">Rodar a varredura</button><span class="mono" style="font-size:11.5px;color:var(--text-low)">900 ms · linear · 105° · faixa de 56% · oklab</span></div>
+          <div class="strip-w" id="sweep-strip"></div>
+        </div>
+        <div class="card ctr">
+          <div class="lbl">Contraste medido · <span id="ctr-ctx"></span></div>
+          <div class="floor"><b id="ctr-floor">—</b><span id="ctr-verdict" class="mono" style="font-size:12px"></span></div>
+          <table><thead><tr><th>Parada</th><th style="text-align:right">Botão</th><th style="text-align:right">Hover</th></tr></thead><tbody id="ctr-body"></tbody></table>
+          <div class="code" aria-label="Receita CSS">@property --sw { syntax: '&lt;percentage&gt;';
+  inherits: false; initial-value: -30%; }
+.cp-word.sw {
+  background-image: linear-gradient(105deg in oklab,
+    var(--cp-ink) 0 calc(var(--sw) - 28%),
+    var(--cp-ink-a) calc(var(--sw) - 12%),
+    var(--cp-ink-b) var(--sw), …);
+  background-clip: text; color: transparent;
+  animation: cpSweep 900ms linear both;
+}
+@keyframes cpSweep { to { --sw: 130%; } }</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 · CICLO -->
+    <section class="sec" id="ciclo">
+      <div class="sec-head">
+        <div><div class="eyebrow"><b>03</b><span>Mascote</span></div><h2>Oito estados, um só ciclo de vida.</h2><p class="lead">O estado de repouso é parado: sem flutuar e sem respirar. O piscar acontece a cada 4 a 9 s, só quando o botão está na tela. Todo o resto responde a um evento e volta ao repouso. O único loop é “pensando”, e ele só dura enquanto há trabalho de verdade.</p></div>
+        <aside class="sec-aside"><b>Clique num card</b> para repetir o estado. A galeria repete sozinha enquanto está na tela. <button class="btn ghost" id="gal-pause" style="margin-top:10px">Pausar a galeria</button></aside>
+      </div>
+      <div class="warnbar odonto">A galeria aparece aqui só como especificação. Na marca Odonto o mascote não entra no produto.</div>
+      <div class="cycle" id="cycle"></div>
+    </section>
+
+    <!-- 04 · QUADROS -->
+    <section class="sec" id="quadros">
+      <div class="sec-head">
+        <div><div class="eyebrow"><b>04</b><span>Quadro a quadro</span></div><h2>Cada estado em seis quadros.</h2><p class="lead">São quadros congelados da própria animação CSS, pausada em seis instantes. Assim dá para revisar a antecipação, o pico e o assentamento sem depender de vídeo. Troque a direção no topo para ver A e C.</p></div>
+        <aside class="sec-aside"><b>Direção atual:</b> <span id="film-dir" class="mono"></span>. Os tempos são do cânone §4: nenhum estado passa de 900 ms. Na direção A, os quadros andam em passo fixo de 12 qps.</aside>
+      </div>
+      <div id="film"></div>
+    </section>
+
+    <!-- 05 · DIREÇÕES -->
+    <section class="sec" id="direcoes">
+      <div class="sec-head">
+        <div><div class="eyebrow"><b>05</b><span>Direções</span></div><h2>Três personalidades possíveis, uma recomendação.</h2><p class="lead">As três usam a mesma máquina de estados, os mesmos tokens e os mesmos gatilhos. Muda o traço, e com ele o quanto se lê a 24 px, quanto pesa e quanto custa manter.</p></div>
+        <aside class="sec-aside"><b>Nota de 1 a 5</b> em seis critérios. A recomendação é a <b>B · Órbita</b>: ela nasce do glifo que já está na maquete aprovada, então o mascote é a marca que ganha vida, e não um personagem colado ao lado.</aside>
+      </div>
+      <div class="dirs" id="dirs"></div>
+    </section>
+
+    <!-- 06 · ORÇAMENTO -->
+    <section class="sec" id="orcamento">
+      <div class="sec-head">
+        <div><div class="eyebrow"><b>06</b><span>Orçamento de atenção</span></div><h2>Retenção sem virar o clipe do Office.</h2><p class="lead">Cada chamada gasta atenção. Antes de acenar, o diretor de atenção confere quatro coisas: se a pessoa está parada, se o cooldown já passou, se ainda há cota no dia e se ela tem respondido. Quem ignora vê menos chamadas. Quem já usa o Copiloto todo dia para de ser chamado: o mascote “se forma”. Simule um dia.</p></div>
+        <aside class="sec-aside"><b>Simulação:</b> 1 passo = 1 minuto, do expediente das 8h às 18h. A atividade da usuária é sorteada com semente fixa (digitando, campo em foco, modal, arrasto, aba oculta ou parada). As regras são as mesmas do plano.</aside>
+      </div>
+      <div class="bud">
+        <div class="panel">
+          <div class="radio-row">
+            <h3>Configurações do Copiloto</h3>
+            <div class="lbl" style="margin-top:6px">Animações do Copiloto</div>
+            <div class="seg" data-ctl="mode"><button data-v="vivas" aria-pressed="true">Vivas</button><button data-v="discretas" aria-pressed="false">Discretas</button><button data-v="desligadas" aria-pressed="false">Desligadas</button></div>
+            <p id="mode-desc"></p>
+          </div>
+          <div class="radio-row">
+            <div class="lbl">Perfil da usuária</div>
+            <div class="seg" data-sim="profile"><button data-v="nova" aria-pressed="true">Nova</button><button data-v="ocasional" aria-pressed="false">Ocasional</button><button data-v="frequente" aria-pressed="false">Frequente</button></div>
+            <div class="lbl" style="margin-top:6px">Quando ele chama, ela…</div>
+            <div class="seg" data-sim="resp"><button data-v="0" aria-pressed="false">Ignora</button><button data-v="0.3" aria-pressed="true">Às vezes abre</button><button data-v="0.9" aria-pressed="false">Abre</button></div>
+          </div>
+          <div class="radio-row">
+            <div class="lbl">Forçar agora</div>
+            <div class="toggles" id="force">
+              <button class="chip" data-force="digitando" aria-pressed="false">Digitando</button>
+              <button class="chip" data-force="campo" aria-pressed="false">Campo em foco</button>
+              <button class="chip" data-force="modal" aria-pressed="false">Modal aberto</button>
+              <button class="chip" data-force="arrasto" aria-pressed="false">Arrastando</button>
+            </div>
+            <div class="lbl" style="margin-top:6px">Evento agora</div>
+            <div class="toggles">
+              <button class="chip" data-simev="briefing">Briefing</button>
+              <button class="chip" data-simev="sugestao">Sugestão</button>
+              <button class="chip" data-simev="erro">Erro de integração</button>
+              <button class="chip" data-simev="acao">Ação concluída</button>
+            </div>
+          </div>
+          <div class="trig">
+            <button class="btn" id="sim-play">Rodar</button>
+            <button class="btn" id="sim-day">Simular o dia inteiro</button>
+            <button class="btn ghost" id="sim-next">Próximo dia</button>
+            <button class="btn ghost" id="sim-reset">Zerar</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="sim-actor" data-scope="sim"><button class="cp-btn cp-top" aria-label="Copiloto (simulação)">__TOP__</button><span id="sim-status" style="font-size:12.5px;color:var(--text-mid)">Parado</span><div class="clock num" id="sim-clock">08:00<small id="sim-daylbl">dia 1</small></div></div>
+          <div class="kv">
+            <div><small>Chamadas hoje</small><b id="k-nudges">0/4</b></div>
+            <div><small>Varreduras hoje</small><b id="k-sweeps">0/10</b></div>
+            <div><small>Próxima chamada livre</small><b id="k-cool">—</b></div>
+            <div><small>Ignoradas seguidas · fator</small><b id="k-ign">0 · ×1</b></div>
+          </div>
+          <div>
+            <div class="tl" id="tl"></div>
+            <div class="legend" style="margin-top:8px"><span><i style="background:var(--m-accent)"></i>acena / espia</span><span><i style="background:var(--text-mid)"></i>varredura</span><span><i style="background:var(--warn)"></i>confuso (erro)</span><span><i style="background:var(--success)"></i>comemora (resposta)</span><span><i style="background:var(--info)"></i>virou sinal parado (satélite aceso)</span></div>
+          </div>
+          <div><div class="lbl" style="margin-bottom:8px">Bloqueios do dia</div><div class="why-blk" id="blk"></div></div>
+          <div class="log" id="log" aria-live="off"></div>
+        </div>
+      </div>
+      <div class="rules">
+        <div class="panel"><h3>Portões (todos precisam abrir)</h3><ul>
+          <li>Aba visível e botão na tela (<span class="mono">visibilitychange</span>, <span class="mono">IntersectionObserver</span>).</li>
+          <li>Pessoa parada há <b>≥ 20 s</b>, sem tecla há <b>≥ 4 s</b>.</li>
+          <li>Sem foco em campo, sem modal, sem arrasto e sem ponteiro pressionado.</li>
+          <li>Copiloto fechado, e fora dos primeiros <b>3 min</b> da sessão.</li></ul></div>
+        <div class="panel"><h3>Cotas e cooldown</h3><ul>
+          <li>Chamada ambiente: <b>2/dia</b>, cooldown de <b>12 min</b>.</li>
+          <li>Chamada por evento: cooldown de <b>3 min</b>. Briefing 1/dia, sugestão 1 a cada 2 h, erro 1 por integração por dia.</li>
+          <li>Teto somado: <b>4 chamadas/dia</b>. Varredura: <b>10/dia</b>, 6 min entre elas.</li>
+          <li>Evento bloqueado espera na fila por até <b>10 min</b>. Depois vira só o satélite aceso.</li></ul></div>
+        <div class="panel"><h3>Aprender com a pessoa</h3><ul>
+          <li>Ignorada = <b>60 s</b> sem abrir depois de um aceno ou espiada. Aviso de erro não conta. Com 2 seguidas, o cooldown dobra (até <b>×4</b>).</li>
+          <li><b>4 ignoradas em 7 dias</b>: silenciada por 7 dias. Sem chamada ambiente, e evento vira varredura com satélite aceso. Só o erro de integração ainda mostra a pose de confuso.</li>
+          <li>Abriu o Copiloto em <b>≥ 3 dos últimos 7 dias</b>: formada. Sem chamada ambiente, e o evento vira varredura com satélite aceso.</li>
+          <li>“Ação concluída” é resposta a quem agiu. Não gasta cota.</li></ul></div>
+      </div>
+    </section>
+
+    <!-- 07 · CELULAR -->
+    <section class="sec" id="celular">
+      <div class="sec-head">
+        <div><div class="eyebrow"><b>07</b><span>Celular</span></div><h2>No TopBar de 375 px, o mascote é o botão.</h2><p class="lead">Não sobra espaço para a palavra. O alvo tem 44 × 44 e o mascote 24 px. Quando um evento chega, uma pílula abre a partir do botão por recorte (<span class="mono">clip-path</span>, 320 ms <span class="mono">--ease-cena</span>), por cima do título e sem empurrar nada: zero layout shift. A varredura acontece dentro da pílula.</p></div>
+        <aside class="sec-aside"><b>Para as vendedoras da Maian</b>, no celular entre uma visita e outra: o briefing do dia é o único aceno ambiente. A pílula fica 3,2 s e fecha. O satélite aceso fica até a pessoa abrir.</aside>
+      </div>
+      <div class="phones">
+        <div class="phone" id="phone" data-scope="phone">
+          <div class="ph-status"><span>9:41</span><span class="mono" style="font-size:11px">5G · 82%</span></div>
+          <div class="ph-top">
+            <span class="tt">Pipeline</span>
+            <span class="cp-mwrap"><span class="cp-mpill" id="mpill" aria-hidden="true"><span class="cp-word">Briefing pronto</span><small>3 itens</small></span>
+            <button class="cp-btn cp-mob" data-actor-m data-open-toggle aria-expanded="false" aria-label="Abrir Copiloto">__MOB__</button></span>
+            <span class="avatar" style="width:32px;height:32px">BT</span>
+          </div>
+          <div class="ph-page">
+            <div class="ph-kpis"><div><small>Em aberto</small><b>R$ 1,24 mi</b></div><div><small>Parados &gt; 7 dias</small><b>7</b></div></div>
+            <div class="deal"><b>Galpão Barueri</b><small>Grupo Ativa · Proposta</small><span class="val">R$ 210.000</span></div>
+            <div class="deal"><b>Cobertura Moema</b><small>Sofia Ramos · Visita</small><span class="val">R$ 120.000</span></div>
+            <div class="deal"><b>Loft Pinheiros</b><small>Caio Nunes · Visita</small><span class="val">R$ 64.200</span></div>
+            <div class="deal"><b>Apto Perdizes</b><small>Helena Dias · Fechamento</small><span class="val">R$ 58.300</span></div>
+          </div>
+          <div class="cp-edge" data-edge-m>
+            <span class="cp-pill" aria-hidden="true"></span>
+            <span class="cp-peek" aria-hidden="true">__PEEK__</span>
+          </div>
+          <nav class="bnav" aria-label="Navegação inferior"><a href="#" class="on"><svg class="ico"><use href="#i-home"/></svg>Início</a><a href="#"><svg class="ico"><use href="#i-inbox"/></svg>Inbox</a><a href="#"><svg class="ico"><use href="#i-cal"/></svg>Agenda</a><a href="#"><svg class="ico"><use href="#i-grid"/></svg>Mais</a></nav>
+        </div>
+        <div class="ph-notes">
+          <div class="trig" data-target="phone">
+            <span class="lbl">Gatilho</span>
+            <button class="btn" data-ev="briefing">Briefing novo</button>
+            <button class="btn" data-ev="sugestao">Sugestão</button>
+            <button class="btn" data-ev="erro">Erro</button>
+            <button class="btn" data-ev="acao">Ação concluída</button>
+            <button class="btn ghost" data-ev="reset">Limpar</button>
+          </div>
+          <div class="note"><i>01</i><div><b>Alvo de 44 px e zero texto que cresce.</b> O botão não muda de largura. A pílula é uma camada por cima, então o título “Pipeline” nunca salta.</div></div>
+          <div class="note"><i>02</i><div><b>Espiar da borda vale também no celular</b>, mas só para “sugestão pendente”, porque aponta para o gesto de deslizar da borda que abre o Copiloto. Fica 1,6 s e recolhe.</div></div>
+          <div class="note"><i>03</i><div><b>Tocar e segurar o mascote</b> abre direto o ditado por voz (fase 2). O mascote não precisa de nenhum gesto novo para ser descoberto.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 08 · ALÇA -->
+    <section class="sec" id="alca">
+      <div class="sec-head">
+        <div><div class="eyebrow"><b>08</b><span>Alça de borda</span></div><h2>O mascote espia por trás da borda.</h2><p class="lead">A alça continua sendo a pílula de 5 × 58 px. Quando há sugestão pendente, o mascote entra da borda girado −14° em 320 ms (<span class="mono">--ease-saida</span>), olha para a esquerda, acena uma vez e recolhe em 240 ms. Junto aparece uma etiqueta curta com o motivo. Isso ensina o gesto de arrastar sem um tutorial.</p></div>
+        <aside class="sec-aside"><b>Mesma cota:</b> espiar conta como chamada. Nunca acontece com o Copiloto aberto nem no Odonto. No modo Discretas, a alça só acende o trecho de destaque da pílula.</aside>
+      </div>
+      <div class="edges" id="edges"></div>
+    </section>
+
+    <!-- 09 · MARCAS -->
+    <section class="sec" id="marcas">
+      <div class="sec-head">
+        <div><div class="eyebrow"><b>09</b><span>Temas por marca</span></div><h2>As mesmas peças, três marcas.</h2><p class="lead">A tinta da varredura (<span class="mono">--cp-ink-a</span> e <span class="mono">--cp-ink-b</span>), o destaque do mascote (<span class="mono">--m-accent</span>) e a permissão de mascote (<span class="mono">copilot.mascot</span>) vêm do tema da marca. O componente não tem nenhuma cor própria.</p></div>
+        <aside class="sec-aside"><b>Maian:</b> o laranja #EE7623 dá 2,9:1 no branco. Reprova como letra e também como gráfico pequeno. A letra usa #B4530F (5,0:1) e o mascote usa #D4610F (≥ 3,4:1 no fundo e no cartão). O laranja puro fica para fundos e áreas grandes.</aside>
+      </div>
+      <div class="brands" id="brands"></div>
+    </section>
+    <div style="height:80px"></div>
+  </div>
+</div>
+
+<script>
+/* ===================================================================
+   Construção
+   =================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const html = document.documentElement;
+const params = new URLSearchParams(location.search);
+
+/* ---------- mascote: três direções, mesmas classes de estado ---------- */
+const A_PX = {
+  o: [[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],[7,2],[8,2],[9,2],[1,3],[9,3],[1,4],[9,4],[1,5],[9,5],[1,6],[2,6],[3,6],[4,6],[5,6],[6,6],[7,6],[8,6],[9,6],
+      [3,7],[4,7],[5,7],[6,7],[7,7],[3,8],[4,8],[5,8],[6,8],[7,8],[3,9],[4,9],[5,9],[6,9],[7,9],[3,10],[7,10]],
+  s: [[2,3],[3,3],[4,3],[5,3],[6,3],[7,3],[8,3],[2,4],[3,4],[4,4],[5,4],[6,4],[7,4],[8,4],[2,5],[3,5],[4,5],[5,5],[6,5],[7,5],[8,5]],
+  open: [[3,3],[3,4],[7,3],[7,4]],
+  closed: [[2,4],[3,4],[4,4],[6,4],[7,4],[8,4]],
+  happy: [[2,4],[3,3],[4,4],[6,4],[7,3],[8,4]],
+  squint: [[3,4],[7,3],[7,4],[8,3],[8,4]],
+  look: [[4,3],[4,4],[8,3],[8,4]],
+  ant: [[5,1]], antB: [[6,1]],
+  armLd: [[2,8],[1,9]], armLu: [[2,8],[1,7],[0,6]],
+  armRd: [[8,8],[9,9]], armR1: [[8,8],[9,7],[10,6],[10,5]], armR2: [[8,8],[9,7],[10,7],[11,6]]
+};
+const px = (list, cls) => `<g class="${cls}">${list.map(([x, y]) => `<rect x="${x}" y="${y}" width="1" height="1"/>`).join('')}</g>`;
+const MASCOT = {
+  A: () => `<svg class="m" viewBox="0 0 12 12" aria-hidden="true"><g class="m-fig">
+    ${px(A_PX.s, 'a-s')}${px(A_PX.o, 'a-o')}
+    <g class="a-ant">${px(A_PX.ant, 'a-o')}<rect class="a-tip" x="5" y="0" width="1" height="1"/></g>
+    <g class="a-antB a-alt">${px(A_PX.antB, 'a-o')}<rect class="a-tip" x="7" y="0" width="1" height="1"/></g>
+    ${px(A_PX.open, 'm-open a-e')}${px(A_PX.closed, 'm-closed a-e')}${px(A_PX.happy, 'm-happy a-e')}${px(A_PX.squint, 'm-squint a-e')}${px(A_PX.look, 'm-look a-e')}
+    ${px(A_PX.armLd, 'a-armL-down a-o')}${px(A_PX.armLu, 'a-armL-up a-o a-alt')}
+    ${px(A_PX.armRd, 'a-armR-down a-o')}${px(A_PX.armR1, 'a-armR-up1 a-o a-alt')}${px(A_PX.armR2, 'a-armR-up2 a-o a-alt')}
+  </g></svg>`,
+  B: () => `<svg class="m" viewBox="0 0 24 24" aria-hidden="true"><g class="m-fig">
+    <g class="m-head"><circle class="m-shell" cx="12" cy="13" r="7.4"/>
+      <g class="m-eyes">
+        <g class="m-open"><rect x="8.75" y="11" width="2.1" height="3.6" rx="1.05"/><rect x="13.15" y="11" width="2.1" height="3.6" rx="1.05"/></g>
+        <path class="m-happy m-ln" d="M8.55 13.7q1.25-2 2.5 0M12.95 13.7q1.25-2 2.5 0"/>
+        <path class="m-closed m-ln" d="M8.55 13.1h2.5M12.95 13.1h2.5"/>
+        <g class="m-squint"><path class="m-ln" d="M8.5 12.3l2.4 1"/><rect x="13.2" y="11.1" width="2" height="3.3" rx="1" style="fill:var(--m-ink)"/></g>
+      </g></g>
+    <g class="m-hand"><circle class="m-sat" cx="18.1" cy="6.9" r="2.3"/></g>
+  </g></svg>`,
+  C: () => `<svg class="m" viewBox="0 0 24 24" aria-hidden="true"><g class="m-fig">
+    <g class="m-armL"><path class="m-limb" d="M8.6 18 6.4 20.3"/></g>
+    <g class="m-hand"><path class="m-limb" d="M15.4 18 17.6 20.3"/></g>
+    <rect class="m-body" x="8.6" y="16.4" width="6.8" height="5.4" rx="2.7"/>
+    <g class="m-head">
+      <g class="m-ant"><path class="m-limb" d="M12 4.4V2.6"/><circle class="m-sat" cx="12" cy="2" r="1.35"/></g>
+      <rect class="m-shell" x="4.6" y="4.4" width="14.8" height="10.8" rx="5"/>
+      <rect class="m-visor" x="6.9" y="6.7" width="10.2" height="6" rx="3"/>
+      <g class="m-eyes">
+        <g class="m-open"><rect x="9.05" y="8.35" width="1.8" height="2.7" rx=".9"/><rect x="13.15" y="8.35" width="1.8" height="2.7" rx=".9"/></g>
+        <path class="m-happy m-ln" d="M8.9 10.4q1.05-1.6 2.1 0M13 10.4q1.05-1.6 2.1 0"/>
+        <path class="m-closed m-ln" d="M8.9 9.9h2.1M13 9.9h2.1"/>
+        <g class="m-squint"><path class="m-ln" d="M8.9 9.3l2 .9"/><rect x="13.2" y="8.5" width="1.7" height="2.5" rx=".85" style="fill:var(--m-eye)"/></g>
+      </g></g>
+  </g></svg>`
+};
+const GLYPH = `<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6.2" fill="none" stroke="currentColor" stroke-width="1.6"/><g class="orb"><circle cx="15.1" cy="4.9" r="2.2" fill="currentColor"/></g></svg>`;
+const mascot = (d = html.dataset.dir, forced = false) => `<span class="cpm" data-state="idle" ${forced ? 'data-force="1"' : ''} data-d="${d}">${MASCOT[d]()}</span>`;
+const glyph = () => `<span class="cpg" data-state="idle">${GLYPH}</span>`;
+const av = () => `<span class="cp-av" aria-hidden="true">${mascot()}${glyph()}</span>`;
+const SIDE = (sub = 'Pergunte ou peça', id = '') => `${av()}<span class="tx"><span class="cp-word">Copiloto</span><span class="sub" ${id ? `id="${id}"` : ''}>${sub}</span></span><span class="kbd">⌘J</span>`;
+const TOP = () => `${av()}<span class="cp-word">Copiloto</span><span class="kbd">⌘J</span>`;
+const MOB = () => av();
+
+function fill(root = document) {
+  root.querySelectorAll('.cp-side').forEach(b => { if (b.innerHTML.includes('__SIDE__')) b.innerHTML = SIDE('Pergunte ou peça', b.closest('#stage') ? 'sub-stage' : ''); });
+  root.querySelectorAll('.cp-top').forEach(b => { if (b.innerHTML.includes('__TOP__')) b.innerHTML = TOP(); });
+  root.querySelectorAll('.cp-mob, .cp-rail').forEach(b => { if (/__(MOB|RAIL)__/.test(b.innerHTML)) b.innerHTML = MOB(); });
+  root.querySelectorAll('.cp-peek').forEach(b => { if (b.innerHTML.includes('__PEEK__')) b.innerHTML = mascot(); });
+  root.querySelectorAll('.cp-tab').forEach(b => { if (b.innerHTML.includes('__TAB__')) b.innerHTML = `<span class="cp-av">${mascot()}${glyph()}</span><span>Copiloto</span><span class="kbd">⌘J</span>`; });
+}
+
+/* ---------- seção 01: estados ---------- */
+const ST = [
+  ['Repouso', '', '<b>Superfície</b> --surface, borda --border, sombra 1 e alta-luz de 1 px. O texto é sólido.'],
+  ['Hover', 'is-hover', '<b>200 ms --ease-saida.</b> Sobe para --surface-2 e --border-2, e a varredura roda uma vez.'],
+  ['Foco', 'is-focus', '<b>Anel de 2 px, offset de 2 px</b>, cor --focus (≥ 3:1). O teclado não dispara varredura.'],
+  ['Pressionado', 'is-press', '<b>scale(.97) em 120 ms.</b> O mascote não reage, porque o clique já é a resposta.'],
+  ['Aberto', 'open', '<b>Barra de 2 px em --m-accent.</b> O mascote olha para o painel e o atalho vira Esc.']
+];
+function buildStates() {
+  $('#states-side').innerHTML = ST.map(([n, c, p]) => `<div class="st"><div class="lbl"><span>${n}</span></div><div style="background:var(--bg-elevated)"><button class="cp-btn cp-side ${c !== 'open' ? c : ''}" ${c === 'open' ? 'aria-expanded="true"' : ''} tabindex="-1" aria-label="Copiloto · ${n}">${SIDE(c === 'open' ? 'Conversa de hoje' : 'Pergunte ou peça')}</button></div><p>${p}</p></div>`).join('');
+  $('#states-top').innerHTML = ST.map(([n, c]) => `<div class="st"><div class="lbl"><span>${n}</span></div><div class="tb"><button class="cp-btn cp-top ${c !== 'open' ? c : ''}" ${c === 'open' ? 'aria-expanded="true"' : ''} tabindex="-1" aria-label="Copiloto · ${n}">${TOP()}</button></div></div>`).join('');
+  $$('#states-side .cp-side, #states-top .cp-top').forEach(b => {
+    if (b.getAttribute('aria-expanded') === 'true') { $('.cpm', b).dataset.look = 'right'; $('.kbd', b).textContent = 'Esc'; }
+    if (b.classList.contains('is-hover')) freezeWord($('.cp-word', b), 0.52);
+  });
+}
+
+/* ---------- seção 03: ciclo ---------- */
+const STATES = [
+  ['idle', 'Repouso', 'idle pose', '—', 'Parado. Pisca a cada 4–9 s quando visível.', 'nunca respira nem flutua'],
+  ['blink', 'Pisca', 'blink · idle animation', '140 ms', 'Sinal de vida barato. --ease-mover, olhos a 12%.', 'fora da tela, aba oculta, Desligadas'],
+  ['wave', 'Acena', 'wave · attention seeker', '860 ms', 'Antecipação de +16°, dois ciclos, assentamento. Briefing do dia ou chamada ambiente.', 'digitando, modal, foco, cota esgotada'],
+  ['play', 'Brinca', 'hop · squash & stretch', '700 ms', 'Comprime, salta 3,6 px, estica e aterrissa. O satélite dá uma volta. Primeiro uso e marcos.', 'mais de 1×/semana'],
+  ['thinking', 'Pensando', 'orbit · loop', '1,6 s ∞', 'O satélite orbita e os olhos olham para cima. Dura só enquanto o Copiloto trabalha.', 'sem trabalho real'],
+  ['celebrate', 'Comemorou', 'success · celebrate', '900 ms', 'Olhos felizes e uma volta do satélite. Responde a “Ação concluída”, junto com o Desfazer.', 'ação que falhou'],
+  ['sleep', 'Dormindo', 'rest pose', '320 ms', 'Olhos fechados e satélite em repouso. Fora do horário, Discretas automático ou aba parada 30 min.', '—'],
+  ['confused', 'Confuso', 'error · tilt', '900 ms', 'Inclina −9°, aperta um olho e o satélite fica âmbar. A pose fica até o erro de integração sumir.', 'erro que a pessoa não pode resolver']
+];
+function buildCycle() {
+  $('#cycle').innerHTML = STATES.map(([k, n, en, d, p, no]) => `<div class="cy" data-cy="${k}" role="button" tabindex="0" aria-label="Repetir estado ${n}"><div class="pad">${mascot(html.dataset.dir, true)}</div><div class="meta"><h3>${n}<small>${d}</small></h3><div class="en">${en}</div><p>${p}</p><p><em>Nunca: ${no}</em></p></div></div>`).join('');
+  $$('#cycle .cpm').forEach(m => setDir(m, html.dataset.dir, true));
+}
+
+/* ---------- seção 04: quadros (congelados via Web Animations) ---------- */
+const FILM = { blink: 140, wave: 860, play: 700, thinking: 1600, celebrate: 900, confused: 900, sleep: 320 };
+const FILM_A = { blink: 167, wave: 833, play: 667, thinking: 1333, celebrate: 833, confused: 167, sleep: 320 };
+const NAMES = Object.fromEntries(STATES.map(s => [s[0], s[1]]));
+function buildFilm() {
+  const d = html.dataset.dir;
+  $('#film-dir').textContent = { A: 'A · Pixel', B: 'B · Órbita', C: 'C · Personagem' }[d];
+  const T = d === 'A' ? FILM_A : FILM;
+  $('#film').innerHTML = Object.keys(T).map(k => {
+    const dur = T[k];
+    const frames = [0, 1, 2, 3, 4, 5].map(i => Math.round(i * (dur - 1) / 5));
+    return `<div class="film"><div class="nm">${NAMES[k]}<small class="mono">${dur} ms</small></div>${frames.map(t => `<div class="fr" data-k="${k}" data-t="${t}">${mascot(d, true)}<small>${t} ms</small></div>`).join('')}</div>`;
+  }).join('');
+  $$('#film .fr').forEach(fr => { const m = $('.cpm', fr); setDir(m, d, true); freeze(m, fr.dataset.k, +fr.dataset.t); });
+}
+function freeze(m, state, t) {
+  m.dataset.state = 'idle'; void m.getBoundingClientRect();
+  m.dataset.state = state; void m.getBoundingClientRect();
+  m.getAnimations({ subtree: true }).forEach(a => { a.pause(); a.currentTime = t; });
+}
+function freezeWord(w, frac) {
+  w.classList.remove('sw'); void w.offsetWidth; w.classList.add('sw'); void w.offsetWidth;
+  w.getAnimations().forEach(a => { a.pause(); a.currentTime = frac * 900; });
+}
+
+/* ---------- seção 05: direções ---------- */
+const DIRS = [
+  ['A', 'A · Pixel', 'Robô em pixel art numa grade de 12 × 12, a 12 quadros por segundo em passo fixo. Reaproveita o motor do pixel-anima e conversa com os robôs do escritório virtual do Rogério OS. Tem muito charme a 96 px. A 24 px só fica nítido em múltiplo inteiro da grade (24 ou 36), e o estilo puxa para jogo, longe do DS 3.0.', [3, 2, 4, 5, 4, 3], '≈ 2,5 KB gz em SVG; ≈ 14 KB gz com o motor do pixel-anima'],
+  ['B', 'B · Órbita', 'É o glifo de órbita da maquete ganhando rosto. O anel vira a cabeça, os olhos são duas pílulas e o satélite vira a mão que acena. Lê bem a 18–24 px, herda a identidade aprovada e cabe em SVG com CSS, sem runtime. A personalidade vem do tempo do movimento, não do desenho.', [5, 5, 4, 5, 5, 4], '≈ 3 KB gz medidos (SVG 0,4 + CSS 2,7)'],
+  ['C', 'C · Personagem', 'Cabeça com visor, corpo e dois braços, com movimento secundário (a antena atrasa o aceno). É a mais expressiva e a que mais lembra mascote de verdade. A 24 px os braços viram ruído. Pede ferramenta de personagem (Rive) para crescer, e com isso vem um runtime pesado.', [2, 3, 5, 3, 2, 2], '≈ 3,5 KB gz em SVG/CSS; com Rive, + runtime WASM (medir)']
+];
+const CRIT = ['Legível a 24 px', 'Alinhado ao DS 3.0', 'Expressividade', 'Peso', 'Custo de manter', 'Risco de irritar (5 = baixo)'];
+function buildDirs() {
+  $('#dirs').innerHTML = DIRS.map(([k, n, p, sc, w]) => `<article class="dir ${k === 'B' ? 'rec' : ''}" data-dircard="${k}">
+    <div class="hero-m"><span class="tagr pill-tag ${k === 'B' ? 'rec' : ''}">${k === 'B' ? 'Recomendada' : 'Direção ' + k}</span>${mascot(k, true)}</div>
+    <div class="body"><h3>${n}</h3><p>${p}</p>
+      <div class="inbtn"><button class="cp-btn cp-side" tabindex="-1" aria-label="Exemplo direção ${k}">${SIDE('3 itens no briefing')}</button>
+        <div style="display:flex;gap:8px;align-items:center"><button class="cp-btn cp-top" tabindex="-1" aria-label="Exemplo TopBar ${k}">${TOP()}</button><span class="mono" style="font-size:11px;color:var(--text-low)">${w}</span></div></div>
+      <table class="score">${CRIT.map((c, i) => `<tr><td>${c}</td><td class="num">${sc[i]}<span class="bar5">${[1, 2, 3, 4, 5].map(j => `<i class="${j <= sc[i] ? 'f' : ''}"></i>`).join('')}</span></td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="num">${sc.reduce((a, b) => a + b, 0)} / 30</td></tr></table>
+      <button class="btn" data-usedir="${k}">Usar esta direção</button></div></article>`).join('');
+  $$('#dirs .dir').forEach(card => { const k = card.dataset.dircard; $$('.cpm', card).forEach(m => setDir(m, k, true)); });
+}
+
+/* ---------- seção 08: alça ---------- */
+function buildEdges() {
+  const cells = [['Repouso', 'Pílula de 5 × 58 px com o trecho de destaque.', ''], ['Espiando (sugestão)', 'Entra em 320 ms, acena uma vez, sai em 240 ms.', 'peeking'], ['Hover ou foco', 'A aba “Copiloto ⌘J” com o mascote.', 'show-tab']];
+  $('#edges').innerHTML = cells.map(([n, s, c]) => `<div class="edge-cell"><div class="cap"><b>${n}</b><small>${s}</small></div>
+    ${[70, 96, 122, 148, 174].map((y, i) => `<span class="ghost-ln" style="top:${y}px;right:${70 + (i % 3) * 40}px"></span>`).join('')}
+    <div class="cp-edge ${c}" style="margin-top:-40px"><span class="cp-pill"></span><span class="cp-peek">${mascot()}</span><span class="cp-peek-cap">2 sugestões</span><span class="cp-tab"><span class="cp-av">${mascot()}${glyph()}</span><span>Copiloto</span><span class="kbd">⌘J</span></span></div></div>`).join('');
+  const pk = $('#edges .peeking .cp-peek .cpm'); if (pk) { pk.dataset.look = 'left'; freeze(pk, 'wave', 300); }
+}
+
+/* ---------- seção 09: marcas ---------- */
+const TEN = {
+  leadium: { name: 'Leadium', ws: 'Norte Imóveis', mascot: true, note: 'Verde do DS 3.0 só na tinta da varredura e no destaque do mascote. Fora disso, o botão é neutro.' },
+  odonto: { name: 'Odonto · Arrimo por Arcada', ws: 'Arcada Odontologia', mascot: false, note: 'Sem mascote, rosto ou faísca. O glifo fica parado e a varredura é violeta (a cor do assistente na marca) e só por evento. O tom é calmo.' },
+  maian: { name: 'Maian', ws: 'Maian Química', mascot: true, note: 'Tema claro com laranja. O mascote é opcional por marca (ligado). As vendedoras usam no celular: só o briefing acena.' }
+};
+function buildBrands() {
+  const th = html.dataset.theme;
+  $('#brands').innerHTML = Object.entries(TEN).map(([k, t]) => `<div class="brand" data-tenant="${k}" data-theme="${th}" data-mascot="${t.mascot ? 'on' : 'off'}">
+    <header><b>${t.name}</b><small>copilot.mascot = ${t.mascot ? 'on' : 'off'}</small></header>
+    <div class="side-mini"><button class="cp-btn cp-side" tabindex="-1" aria-label="Copiloto ${t.name}">${SIDE('3 itens no briefing')}</button></div>
+    <div class="top-mini"><button class="cp-btn cp-top" tabindex="-1" aria-label="Copiloto TopBar ${t.name}">${TOP()}</button><button class="cp-btn cp-mob" tabindex="-1" aria-label="Copiloto celular ${t.name}" style="--m-cut:var(--bg)">${MOB()}</button></div>
+    <p>${t.note}</p><div class="floor-s" data-floor></div></div>`).join('');
+  $$('#brands .brand').forEach(b => {
+    freezeWord($('.side-mini .cp-word', b), 0.5);
+    $$('.cpm', b).forEach(m => setDir(m, html.dataset.dir, false));
+    const m = $('.side-mini .cpm', b); if (m) freeze(m, 'wave', 280);
+    $('.side-mini .cp-btn', b).dataset.pending = 'on';
+    $('[data-floor]', b).innerHTML = floorText(b);
+  });
+}
+
+/* ===================================================================
+   Estado global e motor de estados
+   =================================================================== */
+function setDir(m, d, force) {
+  if (!force && m.dataset.force) return;
+  if (m.dataset.d === d && m.firstElementChild) return;
+  m.dataset.d = d; m.innerHTML = MASCOT[d]();
+}
+function applyDir() { $$('.cpm').forEach(m => { if (!m.dataset.force) setDir(m, html.dataset.dir); }); buildFilm(); buildCycle(); }
+
+const DUR = { blink: 140, wave: 860, play: 700, celebrate: 900, confused: 900, sleep: 320, thinking: Infinity, idle: 0 };
+const POSE = { wave: 0.32, play: 0.46, celebrate: 0.5, confused: 1, sleep: 1, blink: 0, thinking: 0 }; // quadro parado (movimento reduzido)
+const HOLD = new Set(['thinking', 'sleep', 'confused']);
+const rm = () => html.dataset.rm === 'on';
+const mode = () => html.dataset.mode;
+const mascotAllowed = (el) => mode() === 'vivas' && (el.closest('[data-mascot]')?.dataset.mascot ?? html.dataset.mascot) !== 'off';
+
+function playM(m, state, { hold } = {}) {
+  if (!m) return;
+  clearTimeout(m._t);
+  m.dataset.state = 'idle'; void m.getBoundingClientRect();
+  m.dataset.state = state;
+  if (rm() && state !== 'idle') {
+    if (state === 'blink') { m.dataset.state = 'idle'; return; }
+    void m.getBoundingClientRect();
+    const dur = (m.dataset.d === 'A' ? FILM_A : FILM)[state] || 0;
+    m.getAnimations({ subtree: true }).forEach(a => { a.pause(); a.currentTime = Math.max(0, POSE[state] * dur - 1); });
+    m.classList.remove('rm-swap'); void m.offsetWidth; m.classList.add('rm-swap');
+  }
+  const d = DUR[state];
+  if (!(hold || HOLD.has(state)) && isFinite(d)) m._t = setTimeout(() => { m.dataset.state = 'idle'; }, rm() ? 1800 : d + 60);
+}
+function playG(g, state) {
+  if (!g) return;
+  const map = { wave: 'orbit', play: 'orbit', celebrate: 'orbit', peek: 'orbit', thinking: 'thinking', sleep: 'sleep', confused: 'confused', blink: 'idle', idle: 'idle' };
+  let s = map[state] || 'idle';
+  if ((mode() === 'desligadas' || rm()) && s === 'orbit') s = 'idle';
+  g.dataset.state = 'idle'; void g.getBoundingClientRect(); g.dataset.state = s;
+  clearTimeout(g._t); if (s === 'orbit') g._t = setTimeout(() => g.dataset.state = 'idle', 800);
+}
+let lastSweep = new WeakMap();
+function sweep(w, { force } = {}) {
+  if (!w || mode() === 'desligadas') return;
+  const now = performance.now();
+  if (!force && now - (lastSweep.get(w) || 0) < 2000) return;
+  lastSweep.set(w, now);
+  w.classList.remove('sw'); void w.offsetWidth; w.classList.add('sw');
+}
+/* ação num botão: escolhe mascote ou glifo conforme marca/modo */
+function act(btn, state) {
+  if (!btn) return;
+  const m = $('.cp-av > .cpm', btn), g = $('.cp-av > .cpg', btn), w = $('.cp-word', btn);
+  if (state === 'sweep') { sweep(w, { force: true }); return; }
+  const showM = mascotAllowed(btn);
+  if (showM) playM(m, state); else playG(g, state);
+  if (['wave', 'play', 'peek'].includes(state) && mode() !== 'desligadas') sweep(w, { force: true });
+}
+
+/* ---------- palco: alvos ---------- */
+const stage = $('#stage'), phone = $('#phone');
+const actor = () => $('[data-actor]', stage);
+const tops = () => $$('.cp-top', stage);
+function peek(edge, ms = 1600) {
+  if (!edge || mode() !== 'vivas' || !mascotAllowed(edge)) return false;
+  const m = $('.cp-peek .cpm', edge);
+  edge.classList.add('peeking'); m.dataset.look = 'left';
+  setTimeout(() => playM(m, 'wave'), 260);
+  clearTimeout(edge._t); edge._t = setTimeout(() => { edge.classList.remove('peeking'); m.dataset.look = ''; }, ms + 320);
+  return true;
+}
+const live = (t) => { $('#cp-live').textContent = t; };
+function setSub(text, warn) { const s = $('#sub-stage'); s.textContent = text; s.classList.toggle('warn', !!warn); }
+function dots(scope, on, warn) { $$('.cp-btn', scope).forEach(b => { if (on) b.dataset.pending = warn ? 'warn' : 'on'; else delete b.dataset.pending; }); }
+function mpill(text, sub) { const p = $('#mpill'); $('.cp-word', p).textContent = text; $('small', p).textContent = sub; p.classList.add('on'); if (params.has('freeze')) sweep($('.cp-word', p), { force: true }); else setTimeout(() => sweep($('.cp-word', p), { force: true }), 200); clearTimeout(p._t); p._t = setTimeout(() => p.classList.remove('on'), 3200); }
+
+const EVENTS = {
+  briefing: { sub: '3 itens no briefing', live: 'Copiloto: briefing do dia pronto, 3 itens.', state: 'wave', dot: true, pill: ['Briefing pronto', '3 itens'] },
+  sugestao: { sub: '2 sugestões no pipeline', live: 'Copiloto: 2 sugestões pendentes no pipeline.', state: 'peek', dot: true, pill: ['2 sugestões', 'pipeline'] },
+  erro: { sub: 'Omie com falha', live: 'Copiloto: integração Omie com falha.', state: 'confused', dot: true, warn: true, pill: ['Omie com falha', 'ver causa'] },
+  acao: { sub: 'Movi 7 negócios', live: 'Copiloto: 7 negócios movidos. Desfazer disponível.', state: 'celebrate', dot: false, pill: ['Feito · Desfazer', '7 negócios'] }
+};
+function fire(target, ev) {
+  const scope = target === 'phone' ? phone : stage;
+  if (ev === 'reset') {
+    $$('.cpm', scope).forEach(m => { clearTimeout(m._t); m.dataset.state = 'idle'; m.dataset.look = ''; });
+    $$('.cpg', scope).forEach(g => g.dataset.state = 'idle');
+    dots(scope, false); if (target !== 'phone') setSub('Pergunte ou peça'); $('#mpill').classList.remove('on'); return;
+  }
+  const e = EVENTS[ev];
+  live(e.live);
+  if (target === 'phone') {
+    const b = $('[data-actor-m]', phone);
+    dots(phone, e.dot, e.warn);
+    if (ev === 'sugestao' && mode() === 'vivas' && mascotAllowed(phone)) peek($('[data-edge-m]', phone));
+    else act(b, e.state === 'peek' ? 'wave' : e.state);
+    if (mode() !== 'desligadas') mpill(...e.pill);
+    return;
+  }
+  setSub(e.sub, e.warn);
+  dots(stage, e.dot, e.warn);
+  if (e.state === 'peek') { if (!peek($('[data-edge]', stage))) act(actor(), 'wave'); sweep($('.cp-word', actor()), { force: true }); }
+  else act(actor(), e.state);
+}
+
+/* ---------- gatilhos ---------- */
+function replayCy(c) { const m = $('.cpm', c); playM(m, c.dataset.cy === 'idle' ? 'blink' : c.dataset.cy); }
+document.addEventListener('keydown', (ev) => { const c = ev.target.closest?.('[data-cy]'); if (c && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); replayCy(c); } });
+document.addEventListener('click', (ev) => {
+  const cy = ev.target.closest('[data-cy]'); if (cy) { replayCy(cy); return; }
+  const t = ev.target.closest('button'); if (!t) return;
+  const box = t.closest('[data-target]');
+  if (t.dataset.play && box) {
+    const s = t.dataset.play;
+    if (s === 'peek') { peek($('[data-edge]', stage)) || act(actor(), 'wave'); return; }
+    act(actor(), s); if (s === 'thinking' || s === 'sleep' || s === 'confused') {/* mantém */}
+    return;
+  }
+  if (t.dataset.ev && box) { fire(box.dataset.target, t.dataset.ev); return; }
+  if (t.hasAttribute('data-open-toggle')) {
+    const scope = t.closest('[data-scope]') || document;
+    const open = t.getAttribute('aria-expanded') !== 'true';
+    $$('[data-open-toggle]', scope).forEach(b => {
+      b.setAttribute('aria-expanded', String(open));
+      const m = $('.cp-av > .cpm', b); if (m) m.dataset.look = open ? 'right' : '';
+      const k = $('.kbd', b); if (k) k.textContent = open ? 'Esc' : '⌘J';
+    });
+    if (open) { dots(scope, false); if (scope === stage) setSub('Conversa de hoje'); sim.engage?.(); }
+    else if (scope === stage) setSub('Pergunte ou peça');
+    return;
+  }
+  if (t.dataset.usedir) { setCtl('dir', t.dataset.usedir); return; }
+});
+/* hover = uma varredura (com trava de 2 s) */
+document.addEventListener('pointerover', (ev) => {
+  if (ev.pointerType !== 'mouse') return;
+  const b = ev.target.closest('.cp-side, .cp-top'); if (!b || b.contains(ev.relatedTarget)) return;
+  if (b.closest('#states-side, #states-top, #brands')) return;
+  sweep($('.cp-word', b));
+  const m = $('.cp-av > .cpm', b); if (m && mascotAllowed(b) && m.dataset.state === 'idle' && !m.dataset.look) { m.dataset.look = 'up'; b.addEventListener('pointerleave', () => { if (m.dataset.look === 'up') m.dataset.look = ''; }, { once: true }); }
+});
+$('#spec-play').addEventListener('click', () => { const w = $('#spec-word'); w.getAnimations().forEach(a => a.cancel()); sweep(w, { force: true }); });
+
+/* ---------- controles globais ---------- */
+function setCtl(k, v) {
+  if (k === 'theme') html.dataset.theme = v;
+  if (k === 'tenant') { html.dataset.tenant = v; html.dataset.mascot = TEN[v].mascot ? 'on' : 'off'; $$('[data-ws]').forEach(e => e.textContent = TEN[v].ws); }
+  if (k === 'mode') html.dataset.mode = v;
+  if (k === 'dir') { html.dataset.dir = v; applyDir(); buildBrands(); }
+  $$(`[data-ctl="${k}"] button`).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  if (k === 'theme' || k === 'tenant') { buildBrands(); contrast(); }
+  if (k === 'mode') $('#mode-desc').textContent = MODE_DESC[v];
+}
+const MODE_DESC = {
+  vivas: 'Mascote com piscar, acenos e brincadeiras dentro do orçamento de atenção. Varredura por evento e de tempos em tempos.',
+  discretas: 'Sem mascote: só o glifo de órbita. Varredura e uma volta do glifo apenas por evento. Nenhuma chamada ambiente. É o padrão quando o sistema pede movimento reduzido.',
+  desligadas: 'Nada se move. Eventos aparecem como satélite aceso e como texto na linha de status.'
+};
+$$('[data-ctl]').forEach(seg => seg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setCtl(seg.dataset.ctl, b.dataset.v); }));
+$('#rm-switch').addEventListener('click', e => { const on = e.currentTarget.getAttribute('aria-checked') !== 'true'; e.currentTarget.setAttribute('aria-checked', String(on)); html.dataset.rm = on ? 'on' : 'off'; });
+
+/* ---------- contraste (WCAG 2.x) ---------- */
+function hexRgb(h) { h = h.trim().replace('#', ''); if (h.length === 3) h = [...h].map(c => c + c).join(''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); }
+function lum([r, g, b]) { const f = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); }
+function cr(a, b) { const [x, y] = [lum(hexRgb(a)), lum(hexRgb(b))].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); }
+const tok = (el, n) => getComputedStyle(el).getPropertyValue(n).trim();
+function floorText(el) {
+  const stops = ['--cp-ink', '--cp-ink-a', '--cp-ink-b'].map(n => tok(el, n));
+  const bgs = ['--surface', '--surface-2'].map(n => tok(el, n));
+  let min = 99; stops.forEach(s => bgs.forEach(b => { min = Math.min(min, cr(s, b)); }));
+  const acc = Math.min(cr(tok(el, '--m-accent'), tok(el, '--surface')), cr(tok(el, '--m-accent'), tok(el, '--bg')));
+  return `Piso da varredura <b>${min.toFixed(2)}:1</b> ${min >= 4.5 ? '✓ AA' : '✗'} · destaque do mascote <b>${acc.toFixed(2)}:1</b> ${acc >= 3 ? '✓ ≥3:1' : '✗'}`;
+}
+function contrast() {
+  const el = html;
+  const rows = [['Repouso', '--cp-ink'], ['Borda da faixa', '--cp-ink-a'], ['Centro da faixa', '--cp-ink-b']];
+  const s1 = tok(el, '--surface'), s2 = tok(el, '--surface-2');
+  let min = 99;
+  $('#ctr-body').innerHTML = rows.map(([n, v]) => { const c = tok(el, v); const a = cr(c, s1), b = cr(c, s2); min = Math.min(min, a, b);
+    return `<tr><td><span class="sw-chip" style="background:${c}"></span>${n} <span class="mono" style="color:var(--text-low);font-size:11px">${c}</span></td><td class="num ${a >= 4.5 ? 'pass' : 'fail'}">${a.toFixed(2)}</td><td class="num ${b >= 4.5 ? 'pass' : 'fail'}">${b.toFixed(2)}</td></tr>`; }).join('');
+  $('#ctr-floor').textContent = min.toFixed(2) + ':1';
+  $('#ctr-verdict').innerHTML = min >= 7 ? '<span class="pass">AAA (≥ 7:1)</span>' : min >= 4.5 ? '<span class="pass">AA (≥ 4,5:1)</span>' : '<span class="fail">reprova</span>';
+  $('#ctr-ctx').textContent = `${TEN[html.dataset.tenant].name} · ${html.dataset.theme === 'dark' ? 'escuro' : 'claro'}`;
+  $('#sweep-strip').innerHTML = [0, .2, .4, .6, .8, 1].map(f => `<div><span class="cp-word">Copiloto</span><small>${Math.round(f * 899)} ms</small></div>`).join('');
+  $$('#sweep-strip .cp-word').forEach((w, i) => freezeWord(w, [0, .2, .4, .6, .8, 1][i] * 0.999));
+}
+
+/* ===================================================================
+   Agendadores (só o que está na tela, pausa com aba oculta)
+   =================================================================== */
+const io = new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle('offscreen', !e.isIntersecting)), { rootMargin: '80px' });
+$$('.sec, .frame, .phone').forEach(el => io.observe(el));
+document.addEventListener('visibilitychange', () => html.classList.toggle('tab-hidden', document.hidden));
+const visible = el => el && !el.closest('.offscreen') && !document.hidden;
+
+/* piscar: 4–9 s por mascote visível em repouso */
+function blinkLoop() {
+  if (mode() === 'vivas' && !rm()) {
+    [actor(), $('[data-actor-m]', phone)].forEach(b => {
+      const m = b && $('.cp-av > .cpm', b);
+      if (m && visible(b) && m.dataset.state === 'idle' && mascotAllowed(b) && Math.random() < 0.35) playM(m, 'blink');
+    });
+  }
+  setTimeout(blinkLoop, 2000 + Math.random() * 1500);
+}
+/* demo acelerada do palco com portões reais: foco em campo, digitação, Copiloto aberto */
+let lastKey = -1e9; document.addEventListener('keydown', () => { lastKey = performance.now(); });
+let demoT = 0;
+function gateReason() {
+  const a = document.activeElement;
+  if (document.hidden) return 'aba oculta';
+  if (!visible(stage)) return 'palco fora da tela';
+  if (a && (a.matches('input, textarea, select, [contenteditable]'))) return 'campo em foco';
+  if (performance.now() - lastKey < 4000) return 'digitando';
+  if (actor().getAttribute('aria-expanded') === 'true') return 'Copiloto aberto';
+  if (mode() !== 'vivas') return mode() === 'discretas' ? 'modo Discretas: só eventos' : 'animações desligadas';
+  if (html.dataset.mascot === 'off') return 'marca sem mascote: só por evento';
+  return '';
+}
+function demoLoop() {
+  demoT++;
+  const why = gateReason(), g = $('#stage-gate');
+  g.className = 'gate ' + (why ? 'no' : 'ok');
+  $('span', g).textContent = why ? `Chamada em espera: ${why}.` : `Demo acelerada: varredura a cada 12 s, chamada a cada 30 s. Próxima chamada em ${30 - (demoT % 30)} s.`;
+  if (!why && !params.has('freeze')) {
+    if (demoT % 30 === 0) act(actor(), Math.random() < 0.7 ? 'wave' : 'play');
+    else if (demoT % 12 === 0) sweep($('.cp-word', actor()), { force: true });
+  }
+  setTimeout(demoLoop, 1000);
+}
+/* galeria do ciclo */
+let galOn = true, galI = 0;
+$('#gal-pause').addEventListener('click', e => { galOn = !galOn; e.currentTarget.textContent = galOn ? 'Pausar a galeria' : 'Retomar a galeria'; });
+function galLoop() {
+  if (galOn && !params.has('freeze') && visible($('#cycle'))) {
+    const cards = $$('#cycle .cy'); const c = cards[galI % cards.length]; galI++;
+    const k = c.dataset.cy; const m = $('.cpm', c);
+    if (!HOLD.has(k)) playM(m, k === 'idle' ? 'blink' : k);
+    else if (m.dataset.state !== k) playM(m, k);
+  }
+  setTimeout(galLoop, 1100);
+}
+function dirLoop() {
+  if (!params.has('freeze') && visible($('#dirs'))) $$('#dirs .hero-m .cpm').forEach((m, i) => setTimeout(() => playM(m, ['wave', 'play', 'celebrate'][Math.floor(Math.random() * 3)]), i * 180));
+  setTimeout(dirLoop, 3600);
+}
+
+/* ===================================================================
+   Simulador do orçamento de atenção (mesmas regras do plano)
+   =================================================================== */
+const CFG = { idleNeeded: true, sessionWarm: 3, ambCool: 12, ambDay: 2, evCool: 3, dayCap: 4, swCool: 6, swDay: 10, ignoreWin: 1, backoffMax: 4, ign7: 4, offDays: 7, gradDays: 3, queueMax: 10, briefingDay: 1, sugEvery: 120 };
+const sim = { profile: 'nova', resp: 0.3, force: new Set(), running: false };
+function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+function simReset(keepHistory) {
+  const hist = keepHistory ? { day: sim.day + 1, ign: sim.ign, usage: sim.usage, ambOffUntil: sim.ambOffUntil, backoff: sim.backoff, streak: sim.streak } : { day: 1, ign: [], usage: sim.profile === 'frequente' ? [0, -1, -3] : sim.profile === 'ocasional' ? [-2] : [], ambOffUntil: 0, backoff: 1, streak: 0 };
+  Object.assign(sim, hist, { t: 8 * 60, nudges: 0, amb: 0, sweeps: 0, lastNudge: -999, lastEv: -999, lastSweep: -999, lastSug: -999, briefed: false, errDone: false, pending: null, queue: [], log: [], marks: [], blocks: {}, act: 'ocioso', acts: [], r: rng(42 + (hist.day || 1) * 7) });
+  // eventos do dia: briefing na chegada, 2 sugestões, 1 erro, 2 ações
+  sim.plan = [[8 * 60 + 2, 'briefing'], [10 * 60 + 40, 'sugestao'], [11 * 60 + 15, 'acao'], [14 * 60 + 10, 'erro'], [15 * 60 + 30, 'sugestao'], [16 * 60 + 45, 'acao']];
+  simRender();
+}
+const hhmm = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const graduated = () => sim.usage.filter(d => d > sim.day - 7 && d <= sim.day).length >= CFG.gradDays;
+function L(cls, txt) { sim.log.push([sim.t, cls, txt]); }
+function nextAct() {
+  if (sim.force.size) return [...sim.force][0];
+  const r = sim.r();
+  if (sim.r() < 0.62) return sim.act; // persistência
+  return r < 0.44 ? 'ocioso' : r < 0.74 ? 'digitando' : r < 0.84 ? 'campo' : r < 0.92 ? 'modal' : r < 0.96 ? 'arrasto' : 'oculta';
+}
+const ACT_LBL = { digitando: 'digitando', campo: 'campo em foco', modal: 'modal aberto', arrasto: 'arrastando', oculta: 'aba oculta' };
+function block(why) { sim.blocks[why] = (sim.blocks[why] || 0) + 1; }
+function nudge(kind, level, label) {
+  // level: 'wave' (acena/espia/confuso) gasta cota; 'sweep' não gasta chamada
+  if (level === 'sweep') { sim.sweeps++; sim.lastSweep = sim.t; sim.marks.push([sim.t, 'sweep']); L('f', `varredura nas letras${label ? ' · ' + label : ''}`); if (sim.live) act($('#orcamento .cp-top'), 'sweep'); return; }
+  sim.nudges++; sim.lastNudge = sim.t; if (kind === 'ambiente') sim.amb++; else sim.lastEv = sim.t;
+  const st = kind === 'erro' ? 'confused' : kind === 'sugestao' ? 'peek' : 'wave';
+  sim.marks.push([sim.t, st === 'confused' ? 'confused' : 'wave']);
+  L('f', `${{ wave: 'acena', peek: 'espia da borda', confused: 'fica confuso' }[st]} · ${label} (${sim.nudges}/${CFG.dayCap})`);
+  if (kind !== 'erro') sim.pending = { at: sim.t, kind }; // erro é informação, não convite: não conta como ignorada
+  if (sim.live) act($('#orcamento .cp-top'), st === 'peek' ? 'wave' : st);
+}
+function tick() {
+  if (sim.t >= 18 * 60) return false;
+  sim.t++;
+  sim.act = nextAct(); sim.acts.push(sim.act);
+  // planejados
+  sim.plan.filter(p => p[0] === sim.t).forEach(p => enqueue(p[1]));
+  // resposta à chamada pendente
+  if (sim.pending && sim.t - sim.pending.at >= CFG.ignoreWin) {
+    if (sim.r() < sim.resp) engage(true);
+    else { sim.streak++; sim.ign.push(sim.day); if (sim.streak >= 2) sim.backoff = Math.min(CFG.backoffMax, sim.backoff * 2);
+      const n7 = sim.ign.filter(d => d > sim.day - 7).length;
+      L('w', `ignorada (${sim.streak} seguidas)${sim.streak >= 2 ? ` · cooldown ×${sim.backoff}` : ''}`);
+      if (n7 >= CFG.ign7 && sim.ambOffUntil <= sim.day) { sim.ambOffUntil = sim.day + CFG.offDays; L('w', `${n7} ignoradas em 7 dias · chamada ambiente desligada até o dia ${sim.ambOffUntil}`); }
+      sim.pending = null; }
+  }
+  if (sim.act === 'oculta') { block('aba oculta'); return true; }
+  const gateWhy = sim.act !== 'ocioso' ? ACT_LBL[sim.act] : (sim.t - 8 * 60 < CFG.sessionWarm ? 'início de sessão' : '');
+  const modeNow = mode();
+  // fila de eventos (prioridade: erro > briefing > sugestao)
+  if (sim.queue.length) {
+    sim.queue.sort((a, b) => b.p - a.p);
+    const q = sim.queue[0];
+    if (sim.t - q.at > CFG.queueMax) { sim.queue.shift(); sim.marks.push([sim.t, 'dot']); L('b', `${q.kind}: esperou 10 min · só satélite aceso`); }
+    else if (gateWhy) { block(gateWhy); }
+    else if (modeNow === 'desligadas') { sim.queue.shift(); sim.marks.push([sim.t, 'dot']); L('b', `${q.kind}: modo Desligadas · satélite aceso e linha de status`); }
+    else if (graduated() || modeNow === 'discretas' || html.dataset.mascot === 'off' || (sim.ambOffUntil > sim.day && q.kind !== 'erro')) { sim.queue.shift(); nudge(q.kind, 'sweep', `${q.kind} (${graduated() ? 'formada' : modeNow === 'discretas' ? 'Discretas' : html.dataset.mascot === 'off' ? 'sem mascote' : 'silenciada'}) + satélite aceso`); }
+    else if (sim.t - sim.lastEv < CFG.evCool) { block('cooldown de evento'); }
+    else if (sim.nudges >= CFG.dayCap) { sim.queue.shift(); sim.marks.push([sim.t, 'dot']); L('b', `${q.kind}: teto diário · satélite aceso`); }
+    else { sim.queue.shift(); nudge(q.kind, 'wave', q.kind); }
+    return true;
+  }
+  if (gateWhy) { block(gateWhy); return true; }
+  if (modeNow !== 'vivas') return true;
+  // chamada ambiente
+  const cool = CFG.ambCool * sim.backoff;
+  const ambOk = !graduated() && sim.day >= sim.ambOffUntil && html.dataset.mascot !== 'off' && sim.amb < CFG.ambDay && sim.nudges < CFG.dayCap && sim.t - sim.lastNudge >= cool && !sim.pending;
+  if (ambOk && sim.t - 8 * 60 > 30 && sim.r() < 0.08) { nudge('ambiente', 'wave', 'ambiente'); return true; }
+  // varredura ambiente
+  if (sim.sweeps < CFG.swDay && sim.t - sim.lastSweep >= CFG.swCool && sim.t - sim.lastNudge >= 2 && sim.r() < 0.05) nudge('ambiente', 'sweep');
+  return true;
+}
+function enqueue(kind) {
+  if (kind === 'acao') { sim.marks.push([sim.t, 'celebrate']); L('f', 'comemora · resposta à ação (não gasta cota)'); if (sim.live) act($('#orcamento .cp-top'), 'celebrate'); return; }
+  if (kind === 'briefing' && sim.briefed) { L('b', 'briefing: já chamou hoje'); return; }
+  if (kind === 'sugestao' && sim.t - sim.lastSug < CFG.sugEvery) { sim.marks.push([sim.t, 'dot']); L('b', 'sugestão: menos de 2 h da última · satélite aceso'); return; }
+  if (kind === 'erro' && sim.errDone) { L('b', 'erro: já avisou hoje desta integração'); return; }
+  if (kind === 'briefing') sim.briefed = true; if (kind === 'sugestao') sim.lastSug = sim.t; if (kind === 'erro') sim.errDone = true;
+  sim.queue.push({ kind, at: sim.t, p: { erro: 3, briefing: 2, sugestao: 1 }[kind] });
+  L('b', `evento: ${kind} entrou na fila`);
+}
+function engage(fromSim) {
+  if (!sim.usage.includes(sim.day)) sim.usage.push(sim.day);
+  sim.streak = 0; sim.backoff = 1; sim.pending = null;
+  L('f', `${fromSim ? 'ela abriu o Copiloto' : 'Copiloto aberto'} · ignoradas zeradas, cooldown ×1`);
+}
+sim.engage = () => { if (sim.day) { engage(false); simRender(); } };
+function simRender() {
+  if (!sim.log) return;
+  $('#sim-clock').firstChild.textContent = hhmm(sim.t);
+  $('#sim-daylbl').textContent = `dia ${sim.day}${graduated() ? ' · formada' : ''}${sim.ambOffUntil > sim.day ? ' · ambiente off' : ''}`;
+  $('#k-nudges').textContent = `${sim.nudges}/${CFG.dayCap}`;
+  $('#k-sweeps').textContent = `${sim.sweeps}/${CFG.swDay}`;
+  const free = Math.max(sim.lastNudge + CFG.ambCool * sim.backoff, 8 * 60 + 30);
+  $('#k-cool').textContent = graduated() || sim.ambOffUntil > sim.day ? 'só eventos' : sim.amb >= CFG.ambDay ? 'cota usada' : hhmm(Math.max(free, sim.t));
+  $('#k-ign').textContent = `${sim.streak} · ×${sim.backoff}`;
+  $('#sim-status').textContent = sim.act === 'ocioso' ? 'Parada (portão aberto)' : `Bloqueado: ${ACT_LBL[sim.act]}`;
+  const tl = $('#tl'), span = 600, pos = m => ((m - 480) / span * 100).toFixed(2) + '%';
+  let h = '';
+  for (let k = 8; k <= 18; k += 2) h += `<span class="hr" style="left:${pos(k * 60)}"><span>${k}h</span></span>`;
+  // faixa de atividade
+  const colors = { ocioso: 'transparent', digitando: 'var(--text-low)', campo: 'var(--text-low)', modal: 'var(--warn)', arrasto: 'var(--warn)', oculta: 'var(--border-2)' };
+  sim.acts.forEach((a, i) => { if (a !== 'ocioso') h += `<span class="act" style="left:${pos(481 + i)};width:${(100 / span).toFixed(3)}%;background:${colors[a]};opacity:.55"></span>`; });
+  sim.marks.forEach(([m, k]) => h += `<span class="mk ${k}" style="left:${pos(m)}"></span>`);
+  h += `<span class="now" style="left:${pos(sim.t)}"></span>`;
+  tl.innerHTML = h;
+  $('#blk').innerHTML = Object.entries(sim.blocks).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span>${k} · ${v} min</span>`).join('') || '<span>nenhum</span>';
+  const lg = $('#log'); lg.innerHTML = sim.log.slice(-80).map(([m, c, t]) => `<div><time>d${sim.day} ${hhmm(m)}</time><span class="${c}">${t}</span></div>`).join(''); lg.scrollTop = lg.scrollHeight;
+}
+function simLoop() { if (sim.running) { sim.live = visible($('#orcamento')); if (!tick()) { sim.running = false; $('#sim-play').textContent = 'Rodar'; } simRender(); } setTimeout(simLoop, 110); }
+$('#sim-play').addEventListener('click', e => { sim.running = !sim.running; e.currentTarget.textContent = sim.running ? 'Pausar' : 'Rodar'; });
+$('#sim-day').addEventListener('click', () => { sim.live = false; while (tick()); simRender(); });
+$('#sim-next').addEventListener('click', () => { simReset(true); });
+$('#sim-reset').addEventListener('click', () => simReset(false));
+$$('[data-sim]').forEach(seg => seg.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; $$('button', seg).forEach(x => x.setAttribute('aria-pressed', String(x === b))); if (seg.dataset.sim === 'profile') { sim.profile = b.dataset.v; simReset(false); } else sim.resp = +b.dataset.v; }));
+$$('[data-force]').forEach(c => c.addEventListener('click', () => { const on = c.getAttribute('aria-pressed') !== 'true'; c.setAttribute('aria-pressed', String(on)); on ? sim.force.add(c.dataset.force) : sim.force.delete(c.dataset.force); }));
+$$('[data-simev]').forEach(c => c.addEventListener('click', () => { sim.live = true; enqueue(c.dataset.simev); tick(); simRender(); }));
+
+/* ===================================================================
+   Início
+   =================================================================== */
+fill();
+buildStates(); buildCycle(); buildFilm(); buildDirs(); buildEdges();
+['theme', 'tenant', 'mode', 'dir'].forEach(k => { if (params.has(k)) setCtl(k, params.get(k)); });
+html.dataset.mascot = TEN[html.dataset.tenant].mascot ? 'on' : 'off';
+if (params.get('rm') === 'on' || matchMedia('(prefers-reduced-motion: reduce)').matches) { html.dataset.rm = 'on'; $('#rm-switch').setAttribute('aria-checked', 'true'); }
+$('#mode-desc').textContent = MODE_DESC[html.dataset.mode];
+buildBrands(); contrast(); simReset(false);
+if (params.has('solo')) { html.classList.add('solo'); const s = document.getElementById(params.get('solo')); if (s) s.classList.add('solo-on'); }
+blinkLoop(); demoLoop(); galLoop(); dirLoop(); simLoop();
+if (!params.has('freeze')) setTimeout(() => sweep($('.cp-word', actor()), { force: true }), 1200);
+
+/* Ganchos para as capturas (Playwright) */
+window.__demo = {
+  freezeAll(state, t, scope) { $$(scope || '[data-actor] .cp-av > .cpm').forEach(m => freeze(m, state, t)); },
+  freezeWord, freeze, fire, peek, act, setCtl,
+  simDay(profile, resp, days = 1) { sim.profile = profile; sim.resp = resp;
+    $$('[data-sim="profile"] button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === profile)));
+    $$('[data-sim="resp"] button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === resp))); simReset(false); for (let d = 0; d < days; d++) { if (d) simReset(true); while (tick()); } simRender(); },
+  galleryAt(frac) { $$('#cycle .cy').forEach(c => { const k = c.dataset.cy; const m = $('.cpm', c); const T = m.dataset.d === 'A' ? FILM_A : FILM; if (k === 'idle') { m.dataset.state = 'idle'; return; } freeze(m, k, Math.round((T[k] || 0) * (k === 'confused' || k === 'sleep' ? 0.99 : frac))); }); },
+  dirsAt(t) { $$('#dirs .cpm').forEach(m => freeze(m, 'wave', t)); }
+};
+</script>
+</body>
+</html>
