@@ -10,6 +10,7 @@ import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Button, Input } from '@hm/ui';
 import { api } from '@/shared/lib/api-client';
 import { newPasswordSchema, type NewPasswordInput } from '../schema';
+import { AuthHeading, AuthNotice, primaryLinkClass } from './AuthKit';
 
 /**
  * Define a nova senha a partir do token do link de recuperação.
@@ -45,84 +46,84 @@ export function NewPasswordForm() {
 
   if (!token) {
     return (
-      <div className="flex flex-col gap-4">
-        <div
-          role="alert"
-          className="flex gap-3 rounded-md border border-danger/40 bg-danger/10 p-3"
-        >
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-danger" aria-hidden />
-          <p className="font-body text-sm text-text-mid">
-            Link de redefinição inválido. Solicite um novo na tela de recuperação.
-          </p>
-        </div>
-        <Link
-          href="/reset-password"
-          className="touch-target flex items-center justify-center font-body text-sm text-text-low hover:text-text"
-        >
+      <>
+        <AuthHeading
+          eyebrow="Recuperação de acesso"
+          title="Link de redefinição inválido"
+          lead="Solicite um novo na tela de recuperação."
+        />
+        <Link href="/reset-password" className={primaryLinkClass}>
           Solicitar novo link
         </Link>
-      </div>
+      </>
     );
   }
 
   if (done) {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="flex gap-3 rounded-md border border-border bg-surface-2 p-3">
-          <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden />
-          <p className="font-body text-text-mid">Senha redefinida. Faça login com a nova senha.</p>
+      <>
+        <AuthHeading
+          eyebrow="Recuperação de acesso"
+          title="Senha redefinida"
+          lead="Faça login com a nova senha."
+          focusOnMount
+        />
+        <div role="status" className="flex flex-col gap-5">
+          <AuthNotice tone="success" icon={<CheckCircle2 aria-hidden />} title="Tudo certo">
+            A senha antiga deixou de valer.
+          </AuthNotice>
+          <Link href="/login" className={primaryLinkClass}>
+            Ir para o login
+          </Link>
         </div>
-        <Link
-          href="/login"
-          className="touch-target flex items-center justify-center font-body text-sm text-text-low hover:text-text"
-        >
-          Ir para o login
-        </Link>
-      </div>
+      </>
     );
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
-      {failed && (
-        <div
-          role="alert"
-          className="flex gap-3 rounded-md border border-danger/40 bg-danger/10 p-3"
-        >
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-danger" aria-hidden />
-          <div className="flex flex-col gap-0.5">
-            <p className="font-head text-sm font-semibold text-text">Não foi possível redefinir</p>
-            <p className="font-body text-sm text-text-mid">
-              O link pode ter expirado. Solicite um novo na tela de recuperação.
-            </p>
-          </div>
-        </div>
-      )}
-      <Input
-        label="Nova senha"
-        type="password"
-        size="lg"
-        autoComplete="new-password"
-        autoCapitalize="none"
-        spellCheck={false}
-        placeholder="ao menos 10 caracteres"
-        error={errors.password?.message}
-        {...register('password')}
+    <>
+      <AuthHeading
+        eyebrow="Recuperação de acesso"
+        title="Definir nova senha"
+        lead="Escolha uma nova senha para a sua conta."
       />
-      <Input
-        label="Confirme a nova senha"
-        type="password"
-        size="lg"
-        autoComplete="new-password"
-        autoCapitalize="none"
-        spellCheck={false}
-        placeholder="repita a senha"
-        error={errors.confirm?.message}
-        {...register('confirm')}
-      />
-      <Button type="submit" size="lg" loading={isSubmitting} className="mt-1 w-full">
-        Redefinir senha
-      </Button>
-    </form>
+      <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
+        {failed && (
+          <AuthNotice
+            role="alert"
+            tone="danger"
+            icon={<AlertTriangle aria-hidden />}
+            title="Não foi possível redefinir"
+          >
+            O link pode ter expirado. Solicite um novo na tela de recuperação.
+          </AuthNotice>
+        )}
+        <Input
+          label="Nova senha"
+          type="password"
+          size="lg"
+          autoComplete="new-password"
+          autoCapitalize="none"
+          spellCheck={false}
+          placeholder="ao menos 10 caracteres"
+          error={errors.password?.message}
+          {...register('password')}
+        />
+        <Input
+          label="Confirme a nova senha"
+          type="password"
+          size="lg"
+          autoComplete="new-password"
+          autoCapitalize="none"
+          spellCheck={false}
+          placeholder="repita a senha"
+          error={errors.confirm?.message}
+          {...register('confirm')}
+        />
+        <Button type="submit" size="lg" loading={isSubmitting} className="w-full">
+          Redefinir senha
+        </Button>
+      </form>
+    </>
   );
 }

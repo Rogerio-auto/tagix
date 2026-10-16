@@ -1,3 +1,4 @@
+import { AuthHeading } from '@/features/auth/components/AuthKit';
 import { LoginForm } from '@/features/auth/components/LoginForm';
 import { loginNoticeFor, sanitizeEmailParam } from '@/features/auth/resend';
 import { SESSION_EXPIRED_REASON } from '@/shared/auth/route-guard';
@@ -16,18 +17,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const initialEmail = sanitizeEmailParam(email);
   const notice = loginNoticeFor(from, initialEmail !== '');
   return (
-    // Mobile: card full-width com paddings generosos. md+: largura travada,
-    // sem chrome de card (visual original preservado).
-    <div className="mx-auto w-full max-w-sm py-8 md:py-0">
-      <div className="mb-8 flex items-center gap-2">
-        <span className="font-display text-2xl text-brand" aria-hidden>
-          ◢
-        </span>
-        <span className="font-head text-2xl font-semibold text-text">Leadium</span>
-      </div>
-      <h1 className="mb-1 font-head text-3xl font-semibold text-text">Entrar</h1>
-      <p className="mb-6 font-body text-text-mid">Acesse o seu workspace.</p>
+    <>
+      <AuthHeading eyebrow="Acesso" title="Entrar" lead="Acesse o seu workspace." />
       <LoginForm sessionExpired={sessionExpired} initialEmail={initialEmail} notice={notice} />
-    </div>
+    </>
   );
 }

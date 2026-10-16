@@ -23,9 +23,9 @@ export function HelpPanel({ title, children }: HelpPanelProps) {
         type="button"
         onClick={() => setOpen(true)}
         aria-label={`Ajuda: ${title}`}
-        className="rounded-pill p-1 text-text-low outline-none transition-colors duration-200 hover:text-text focus-visible:shadow-glow-md"
+        className="grid size-8 place-items-center rounded-sm text-text-low outline-none transition-colors duration-(--dur-fast) ease-ds hover:bg-surface-2 hover:text-text focus-visible:focus-ring"
       >
-        <HelpCircle className="size-5" />
+        <HelpCircle className="size-[1.125rem]" aria-hidden />
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title={title}>
         {children}

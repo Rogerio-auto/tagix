@@ -9,6 +9,7 @@
  */
 import type * as React from 'react';
 import { useEffect, useState } from 'react';
+import { formatDateTime } from '@/shared/lib/locale';
 
 type StatusPedido = 'received' | 'completed' | 'no_data' | 'failed';
 
@@ -35,10 +36,20 @@ const TEXTO: Record<'received' | 'completed' | 'no_data' | 'failed', string> = {
     'Houve um problema ao concluir seu pedido. Ele continua registrado e será refeito; se preferir, escreva para suporte@leadium.com.br informando o código acima.',
 };
 
-function dataLegivel(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
-}
+/** Rótulo curto do estado, ao lado do texto completo (cor nunca sozinha, WCAG 1.4.1). */
+const ROTULO: Record<StatusPedido, { texto: string; tom: string }> = {
+  received: { texto: 'Em andamento', tom: 'border-info/30 bg-info/10' },
+  completed: { texto: 'Concluído', tom: 'border-success/30 bg-success/10' },
+  no_data: { texto: 'Concluído', tom: 'border-success/30 bg-success/10' },
+  failed: { texto: 'Com problema', tom: 'border-danger/30 bg-danger/10' },
+};
+
+const PONTO: Record<StatusPedido, string> = {
+  received: 'bg-info',
+  completed: 'bg-success',
+  no_data: 'bg-success',
+  failed: 'bg-danger',
+};
 
 export function DeletionStatus({ codigo }: { codigo: string }): React.JSX.Element {
   const [estado, setEstado] = useState<Estado>({ tipo: 'carregando' });
@@ -70,30 +81,73 @@ export function DeletionStatus({ codigo }: { codigo: string }): React.JSX.Elemen
   }, [codigo]);
 
   if (estado.tipo === 'carregando') {
-    return <p className="mt-6 text-body text-text-2">Consultando o pedido…</p>;
+    return (
+      <div role="status" aria-busy="true" className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-6">
+        <span className="sr-only">Consultando o pedido…</span>
+        <div aria-hidden className="h-6 w-28 rounded-pill bg-surface-3 motion-safe:animate-pulse" />
+        <div aria-hidden className="h-4 w-full rounded-xs bg-surface-3 motion-safe:animate-pulse" />
+        <div aria-hidden className="h-4 w-2/3 rounded-xs bg-surface-3 motion-safe:animate-pulse" />
+      </div>
+    );
   }
   if (estado.tipo === 'nao_encontrado') {
     return (
-      <p className="mt-6 text-body text-text-2">
+      <Aviso titulo="Pedido não encontrado">
         Não encontramos um pedido com este código. Confira se o endereço está completo.
-      </p>
+      </Aviso>
     );
   }
   if (estado.tipo === 'erro') {
     return (
-      <p className="mt-6 text-body text-text-2">
+      <Aviso titulo="Consulta indisponível" alerta>
         Não foi possível consultar agora. Tente de novo em alguns minutos.
-      </p>
+      </Aviso>
     );
   }
 
+  const rotulo = ROTULO[estado.status];
   return (
-    <div className="mt-6 rounded-md border border-border bg-surface p-5">
-      <p className="text-body text-text">{TEXTO[estado.status]}</p>
-      <p className="mt-3 text-small text-text-3">Pedido recebido em {dataLegivel(estado.requestedAt)}</p>
-      {estado.completedAt !== null && (
-        <p className="text-small text-text-3">Concluído em {dataLegivel(estado.completedAt)}</p>
-      )}
+    <section aria-label="Estado do pedido" className="flex flex-col gap-6 rounded-lg border border-border bg-surface p-6 shadow-ds-1">
+      <p
+        className={`inline-flex w-fit items-center gap-2 rounded-pill border px-3 py-1 font-mono text-xs font-medium uppercase tracking-[0.12em] text-text ${rotulo.tom}`}
+      >
+        <span aria-hidden className={`size-1.5 rounded-full ${PONTO[estado.status]}`} />
+        {rotulo.texto}
+      </p>
+      <p className="font-body text-[1.0625rem] leading-[1.75] text-text">{TEXTO[estado.status]}</p>
+      <ol className="flex flex-col border-l border-border">
+        <Marco rotulo="Pedido recebido" quando={estado.requestedAt} />
+        {estado.completedAt !== null && <Marco rotulo="Concluído" quando={estado.completedAt} />}
+      </ol>
+    </section>
+  );
+}
+
+function Marco({ rotulo, quando }: { rotulo: string; quando: string }): React.JSX.Element {
+  return (
+    <li className="relative flex flex-col gap-0.5 pb-3 pl-5 last:pb-0">
+      <span aria-hidden className="absolute -left-[4.5px] top-2 size-2 rounded-full bg-text-low" />
+      <span className="font-body text-sm text-text-mid">{rotulo}</span>
+      <time dateTime={quando} className="font-mono text-sm tabular-nums text-text">
+        {formatDateTime(quando)}
+      </time>
+    </li>
+  );
+}
+
+function Aviso({
+  titulo,
+  alerta = false,
+  children,
+}: {
+  titulo: string;
+  alerta?: boolean;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <div role={alerta ? 'alert' : 'status'} className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-6">
+      <p className="font-body font-bold text-text">{titulo}</p>
+      <p className="font-body text-body text-text-mid">{children}</p>
     </div>
   );
 }

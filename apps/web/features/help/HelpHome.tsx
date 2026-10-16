@@ -1,73 +1,93 @@
 'use client';
 
 /**
- * Home da Central de Ajuda do membro (F38-S05). Busca + grade de categorias +
- * launcher de suporte. Conteudo publicado servido pela API S03. DS v2, sem hex,
- * responsivo (grade colapsa em mobile), estados loading/error/empty.
+ * Home da Central de Ajuda do membro (F38-S05; DS 3.0 na F72-S08). Busca + grade de
+ * categorias + launcher de suporte. Conteúdo publicado servido pela API S03. Sem hex,
+ * responsiva (a grade colapsa no celular), estados carregando/erro/vazio.
  */
 import Link from 'next/link';
-import { BookOpen, ChevronRight, LifeBuoy } from 'lucide-react';
+import { ArrowRight, BookOpen, LifeBuoy } from 'lucide-react';
 import type { HelpCategoryWithCountDTO } from '@hm/shared';
-import { EmptyState } from '@/shared/components/feedback';
+import { Button } from '@hm/ui';
+import { EmptyState, ErrorState, Skeleton } from '@/shared/components/feedback';
+import { formatNumber } from '@/shared/lib/locale';
 import { HelpSearch } from './HelpSearch';
 import { SupportLauncher } from './SupportLauncher';
 import { useHelpCategories } from './queries';
+import { HelpEyebrow } from './HelpEyebrow';
 
 export function HelpHome() {
-  const { data, isLoading, isError, refetch } = useHelpCategories();
+  const { data, isLoading, isError, error, refetch } = useHelpCategories();
   const categories = data?.categories ?? [];
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
-      <header className="flex flex-col items-center gap-3 pt-4 text-center">
-        <span className="inline-flex size-12 items-center justify-center rounded-xl bg-surface-2 text-brand">
-          <LifeBuoy className="size-6" aria-hidden />
-        </span>
-        <h1 className="font-head text-3xl font-semibold text-text">Central de Ajuda</h1>
-        <p className="max-w-lg font-body text-text-mid">
-          Aprenda a tirar o maximo do Leadium. Busque um topico ou navegue pelas categorias.
-        </p>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-10">
+      <header className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between md:gap-10">
+        <div className="flex min-w-0 items-start gap-4">
+          <span className="grid size-12 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-text-mid">
+            <LifeBuoy className="size-6" aria-hidden strokeWidth={1.75} />
+          </span>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <HelpEyebrow>Ajuda · Leadium</HelpEyebrow>
+            <h1 className="font-head text-h3 text-text md:text-h2">Central de Ajuda</h1>
+            <p className="max-w-xl font-body text-body text-text-mid">
+              Aprenda a tirar o máximo do Leadium. Busque um tópico ou navegue pelas categorias.
+            </p>
+          </div>
+        </div>
       </header>
 
       <HelpSearch />
 
-      {isLoading && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="h-28 animate-pulse rounded-lg bg-surface-2" />
-          <div className="h-28 animate-pulse rounded-lg bg-surface-2" />
-          <div className="h-28 animate-pulse rounded-lg bg-surface-2" />
-          <div className="h-28 animate-pulse rounded-lg bg-surface-2" />
-        </div>
-      )}
+      <section aria-labelledby="help-categorias" className="flex flex-col gap-4">
+        <h2
+          id="help-categorias"
+          className="font-mono text-xs font-medium uppercase tracking-[0.14em] text-text-low"
+        >
+          Categorias
+        </h2>
 
-      {isError && (
-        <div className="rounded-lg border border-border bg-surface-2 px-5 py-6 text-center">
-          <p className="font-body text-sm text-danger">Falha ao carregar as categorias.</p>
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            className="mt-2 rounded-md px-3 py-1.5 font-head text-sm font-semibold text-brand outline-none hover:text-brand-strong focus-visible:shadow-glow-md"
-          >
-            Tentar novamente
-          </button>
-        </div>
-      )}
+        {isLoading && (
+          <div role="status" aria-busy="true" className="grid gap-3 sm:grid-cols-2">
+            <span className="sr-only">Carregando categorias</span>
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-32 rounded-lg" />
+            ))}
+          </div>
+        )}
 
-      {!isLoading && !isError && categories.length === 0 && (
-        <EmptyState
-          icon={BookOpen}
-          title="Ainda sem conteudo"
-          description="A Central de Ajuda do Leadium esta sendo preparada. Volte em breve."
-        />
-      )}
+        {isError && (
+          <ErrorState
+            error={error}
+            title="Não foi possível carregar as categorias"
+            reason="A Central de Ajuda não respondeu agora."
+            whatToDo="Tente de novo em instantes."
+            action={
+              <Button variant="secondary" onClick={() => void refetch()}>
+                Tentar novamente
+              </Button>
+            }
+          />
+        )}
 
-      {categories.length > 0 && (
-        <section aria-label="Categorias de ajuda" className="grid gap-4 sm:grid-cols-2">
-          {categories.map((c) => (
-            <CategoryCard key={c.id} category={c} />
-          ))}
-        </section>
-      )}
+        {!isLoading && !isError && categories.length === 0 && (
+          <EmptyState
+            icon={BookOpen}
+            title="Ainda sem conteúdo"
+            description="A Central de Ajuda do Leadium está sendo preparada. Volte em breve."
+          />
+        )}
+
+        {categories.length > 0 && (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {categories.map((c) => (
+              <li key={c.id} className="flex">
+                <CategoryCard category={c} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <SupportLauncher />
     </div>
@@ -75,27 +95,27 @@ export function HelpHome() {
 }
 
 function CategoryCard({ category }: { category: HelpCategoryWithCountDTO }) {
+  const count = category.publishedCount;
   return (
     <Link
       href={`/help?category=${category.id}`}
-      className="group flex items-start justify-between gap-4 rounded-lg border border-border bg-surface-2 px-5 py-4 outline-none transition-colors hover:border-border-2 hover:bg-surface-3 focus-visible:shadow-glow-md"
+      className="group flex w-full flex-col justify-between gap-6 rounded-lg border border-border bg-surface p-5 shadow-ds-1 outline-none transition-[border-color,background-color,transform,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 hover:bg-surface-2 hover:shadow-ds-2 focus-visible:focus-ring motion-safe:hover:-translate-y-0.5"
     >
-      <span className="flex flex-col gap-1">
-        <span className="flex items-center gap-2">
-          <BookOpen className="size-4 text-text-mid" aria-hidden />
-          <span className="font-head text-base font-semibold text-text">{category.title}</span>
-        </span>
+      <span className="flex flex-col gap-1.5">
+        <span className="font-head text-h4 text-text">{category.title}</span>
         {category.description && (
           <span className="font-body text-sm text-text-mid">{category.description}</span>
         )}
-        <span className="mt-1 font-body text-xs text-text-low">
-          {category.publishedCount} {category.publishedCount === 1 ? 'artigo' : 'artigos'}
-        </span>
       </span>
-      <ChevronRight
-        className="mt-1 size-5 shrink-0 text-text-low transition-transform group-hover:translate-x-0.5 group-hover:text-text"
-        aria-hidden
-      />
+      <span className="flex items-center justify-between gap-4">
+        <span className="font-mono text-xs tabular-nums text-text-low">
+          {formatNumber(count)} {count === 1 ? 'artigo' : 'artigos'}
+        </span>
+        <ArrowRight
+          className="size-4 shrink-0 text-text-low transition-[transform,color] duration-(--dur-base) ease-ds group-hover:text-text motion-safe:group-hover:translate-x-0.5"
+          aria-hidden
+        />
+      </span>
     </Link>
   );
 }
