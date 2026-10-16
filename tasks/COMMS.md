@@ -1041,3 +1041,12 @@ A liberação é só `atendimento-humano`. Etiqueta de conversão não entra nun
 - **S08 design 2a passada: APROVADO COM RESSALVAS** (B1/B2 resolvidos). Ressalvas fechadas: 360 sem cards esticados (Auditoria para a coluna esquerda; abaixo de lg a ordem passa a Membros -> Agentes/Canais -> Auditoria -> Assinatura -> Saude), "Politicas" acentuado. platform-ds3 64/64.
 - **F72-S08 integrada** (merge 35fa6867). **Lote C encerrado. PARADO antes da S09** (decisao do Rogerio).
 - **Follow-ups S08:** `Logo`/`AuthKit` de features/auth -> `shared/components/brand`; Markdown do @hm/ui com base `text-sm` e link `text-brand`; `API_INTERNAL_URL` fixo no `playwright.config.ts`; Referrer-Policy global no `next.config`; acoes sem confirmacao na plataforma (encerrar ver-como, status/prioridade/desatribuir no suporte, despublicar artigo); `invites/time.ts` com locale literal; marca Leadium vs tagix (decisao).
+
+
+### Copiloto, Loja de Integracoes e Mascote — decomposicao F73-F76 (2026-10-16)
+
+- Decisao do Rogerio: construir o Copiloto, a Loja de Integracoes e o mascote (direcao C, Personagem; a B Orbita foi descartada). Maquete: `docs/design/copilot-integracoes.html`; demo dos botoes: `docs/design/copilot-botao-animacao.html`.
+- Dois agentes Opus decompuseram em paralelo, sem tocar STATUS/COMMS/INDEX/ROADMAP: F73+F74 (Copiloto; ADR-003/004; 29 slots) e F75+F76 (Integracoes e Mascote; ADR-005/006; 25 slots). Integracao feita pelo agente principal: dependencias cruzadas (F75-S04/S06/S07/S08 e F76-S04 dependem de F73-S02), `slot.py sync` (597 slots), INDEX, ROADMAP e HANDOFF atualizados.
+- Nada de codigo de producao nesta etapa. Nada da Maian foi decomposto (decisao do Rogerio): so apresentacao e documentacao no vault do Obsidian.
+- Achado critico para hotfix: SSRF no `http_request` do flow-engine (F75-S16). Detalhes e demais achados em `tasks/HANDOFF.md` §5.
+- Sem push, sem deploy.

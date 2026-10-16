@@ -1,5 +1,12 @@
 # Botão do Copiloto: varredura nas letras e mascote
 
+> **DECISÃO 16/10/2026: direção C (Personagem).** O Rogério escolheu C em vez da B recomendada ("fica mais viva,
+> dá um ar de mais diversidade") e quer o personagem como parte do sistema (carregamento longo, "pensando",
+> vazios, recibos, onboarding), de forma estratégica. Os defeitos da C nesta proposta (braços a 24 px, Rive)
+> viram requisitos: rig com nível de detalhe e tecnologia por spike medido. Este documento fica como histórico
+> da proposta; a regra vigente está em [`ADR-006`](../decisions/ADR-006-mascote-personagem-tecnologia-e-politicas.md)
+> e [`MASCOTE_ANIMACOES.md`](../features/MASCOTE_ANIMACOES.md) (fase F76).
+>
 > Demo: [`copilot-botao-animacao.html`](copilot-botao-animacao.html). Abra no navegador. O topo troca tema, marca, modo e direção, e `?solo=<seção>&theme=light&tenant=maian&dir=A` isola uma seção.
 > Capturas: [`copilot-botao-animacao/`](copilot-botao-animacao/) em 1440 e 375, escuro e claro, com um quadro por direção e uma tira de quadros por estado.
 > Base: maquete aprovada [`copilot-integracoes.html`](copilot-integracoes.html) (glifo de órbita, alça de borda) e tokens do DS 3.0. Status: proposta para decisão, sem código de produto.

@@ -327,7 +327,21 @@
 
 ---
 
+## F73–F76 — Copiloto, Loja de Integrações e Mascote (decididas em 2026-10-16)
+
+Depois da F72 (DS 3.0). Maquete aprovada em `design/copilot-integracoes.html`; mascote = direção C (Personagem). Nada construído ainda; specs, ADRs e slots escritos.
+
+| Fase | O quê | Spec |
+|---|---|---|
+| F73 | Fundação do Copiloto: identidade do membro, motor de propostas com confirmação, consultas e ações, sessão/SSE, memória, briefing do dia, piloto automático (backend) | `features/COPILOTO.md` |
+| F74 | Copiloto — experiência: alça de borda, balão/painel/tela cheia, cartões de ação, ⌘K, mobile, piloto do pipeline | `features/COPILOTO.md` |
+| F75 | Loja de Integrações: conectores, cofre, sync, mapeamento por IA, webhook de entrada, saúde | `features/INTEGRACOES.md` |
+| F76 | Mascote e animações do sistema (botões, carregamento, vazios, recibos) | `features/MASCOTE_ANIMACOES.md` |
+
+A UI de aprovação de ações de IA, antes listada como pós-MVP, passa a ser resolvida na F73/F74 por propostas persistidas (ADR-004), não por `interrupt` do LangGraph. "Mover sozinho" no piloto automático fica para a v1.1 (F73-S16, bloqueado até haver dado de aceitação).
+
 ## Fases 2+ (pós-MVP)
+
 
 Fora do MVP estrito, vide PRD §3.2:
 

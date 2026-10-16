@@ -59,6 +59,10 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70   | 37     | 1   | 2   | 0   | 0   | 2   | 32   |
 | F71   | 19     | 9   | 0   | 0   | 0   | 0   | 10   |
 | F72   | 9     | 0   | 1   | 0   | 0   | 0   | 8   |
+| F73   | 16     | 3   | 13   | 0   | 0   | 0   | 0   |
+| F74   | 13     | 0   | 13   | 0   | 0   | 0   | 0   |
+| F75   | 16     | 3   | 13   | 0   | 0   | 0   | 0   |
+| F76   | 9     | 1   | 8   | 0   | 0   | 0   | 0   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -843,6 +847,80 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F72-S07 | Varredura do app no DS 3.0 — contatos, campanhas, agentes, flows, conhecimento, conversões e configurações | ✅ done     | high       | F72-S02, F72-S03                            |
 | F72-S08 | Varredura de auth, painel de plataforma, ajuda e páginas públicas no DS 3.0                                | ✅ done     | medium     | F72-S02, F72-S03                            |
 | F72-S09 | Auditoria final do DS 3.0 — acessibilidade nos dois temas, peso, capturas e revisão de gosto               | ⏸️ blocked | high       | F72-S04, F72-S05, F72-S06, F72-S07, F72-S08 |
+
+## Fase 73
+
+| ID      | Titulo                                                                                                                                   | Status      | Prioridade | Depende de                                                                      |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ---------- | ------------------------------------------------------------------------------- |
+| F73-S01 | Schema do Copiloto (sessões, turnos, propostas, memória, briefing, piloto) com RLS e repos                                               | 🟢 available | critical   | —                                                                               |
+| F73-S02 | Contratos do Copiloto em @hm/shared (permissões copilot.*, catálogo de capacidades, classificador de risco, Zod de API e SSE)            | 🟢 available | critical   | —                                                                               |
+| F73-S03 | Identidade do membro, grant assinado, callback interno do Copiloto e API de me/configurações                                             | ⏸️ blocked  | critical   | F73-S01, F73-S02                                                                |
+| F73-S04 | Runtime do Copiloto (grafo LangGraph próprio, /copilot/run em SSE, ferramentas por callback com grant, resposta estruturada, /kb/search) | 🟢 available | critical   | —                                                                               |
+| F73-S05 | Motor de propostas (classificar, prever, confirmar, executar item a item, parar, desfazer, aprovação) e API de propostas e atividade     | ⏸️ blocked  | critical   | F73-S01, F73-S02, F73-S03                                                       |
+| F73-S06 | Ferramentas de consulta do Copiloto, CRM (contatos, negócios, funil, agregações, previsão de receita) sob o escopo do membro             | ⏸️ blocked  | high       | F73-S02, F73-S03                                                                |
+| F73-S07 | Ferramentas de consulta do Copiloto, operação (conversas com contaminação, agenda, campanhas, conhecimento)                              | ⏸️ blocked  | high       | F73-S02, F73-S03, F73-S04                                                       |
+| F73-S08 | Ações de CRM do Copiloto (tags, contato, responsável, mover negócios, nota, compromisso interno) com prévia e desfazer                   | ⏸️ blocked  | high       | F73-S05, F73-S06                                                                |
+| F73-S09 | Ações externas do Copiloto (nível 4), mensagens a clientes, pausar/retomar/cancelar campanha e disparar flow, com checagem de política   | ⏸️ blocked  | high       | F73-S05, F73-S07                                                                |
+| F73-S10 | API de sessão do Copiloto com streaming SSE de produção, contexto de página, histórico, limites e orçamento mensal próprio               | ⏸️ blocked  | critical   | F73-S01, F73-S02, F73-S03, F73-S04                                              |
+| F73-S11 | Memória do negócio (perfil da empresa, fatos com fonte, ensinar, corrigir e esquecer na hora) e a ferramenta remember_fact               | ⏸️ blocked  | high       | F73-S01, F73-S03, F73-S05                                                       |
+| F73-S12 | Briefing do dia (geração determinística com score explicável por receita em risco, dado com hora, revalidação e push da manhã)           | ⏸️ blocked  | high       | F73-S01, F73-S02, F73-S03, F73-S05                                              |
+| F73-S13 | Piloto automático do pipeline, backend (regras por estágio, gerador determinístico de sugestões, aprovar ou recusar em lote via motor)   | ⏸️ blocked  | high       | F73-S01, F73-S02, F73-S03, F73-S05, F73-S08                                     |
+| F73-S14 | Portão de segurança do Copiloto (red team de prompt injection, escalonamento e exfiltração) e eval de uso de ferramentas                 | ⏸️ blocked  | critical   | F73-S04, F73-S05, F73-S06, F73-S07, F73-S08, F73-S09, F73-S10, F73-S11, F73-S13 |
+| F73-S15 | Observabilidade, uso e custo do Copiloto, telemetria de produto e retenção do histórico                                                  | ⏸️ blocked  | medium     | F73-S01, F73-S03, F73-S10                                                       |
+| F73-S16 | (v1.1, NÃO PEGAR) Piloto automático move sozinho, com limite diário, desfazer por 7 dias e registro na Atividade                         | ⏸️ blocked  | low        | F73-S13, F73-S14, F73-S15, F74-S13                                              |
+
+## Fase 74
+
+| ID      | Titulo                                                                                                                                               | Status     | Prioridade | Depende de                                                                                                                                                                |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F74-S01 | Núcleo do cliente do Copiloto (CopilotClient http e mock, SSE, store Zustand, contexto de página, provider e API useCopilot)                         | ⏸️ blocked | critical   | F73-S02                                                                                                                                                                   |
+| F74-S02 | Superfícies do Copiloto (balão, painel acoplado, troca FLIP, atalho ⌘J) e alça de borda com gesto (A1)                                               | ⏸️ blocked | critical   | F74-S01                                                                                                                                                                   |
+| F74-S03 | Conversa e parecer (compositor, streaming do veredito, por quê, cartões de dados, fonte e hora, próximo passo, sugestões por tela, chip de contexto) | ⏸️ blocked | critical   | F74-S02, F74-S04                                                                                                                                                          |
+| F74-S04 | Cartões de ação dos 4 níveis (recibo com Desfazer, lote com antes e depois, externo com política e Revisei, bloqueios por papel e assinatura)        | ⏸️ blocked | critical   | F74-S01                                                                                                                                                                   |
+| F74-S05 | Briefing do dia no Copiloto e abertura automática (uma vez por dia, toda vez ou nunca) sem roubar o foco                                             | ⏸️ blocked | high       | F74-S03                                                                                                                                                                   |
+| F74-S06 | Paleta ⌘K com "Perguntar ao Copiloto" quando a busca não acha destino (A6)                                                                           | ⏸️ blocked | medium     | F74-S01                                                                                                                                                                   |
+| F74-S07 | Tela cheia /copiloto (histórico de conversas, painel de confiança) e Atividade com Desfazer (A7, A8)                                                 | ⏸️ blocked | high       | F74-S03, F74-S04                                                                                                                                                          |
+| F74-S08 | Memória do negócio na interface (perfil editável, fatos com fonte, Corrigir, Esquecer, Ensinar, fontes conectadas) (A10)                             | ⏸️ blocked | medium     | F74-S01                                                                                                                                                                   |
+| F74-S09 | Configurações do Copiloto (abrir ao entrar, capacidades × papel, quem pode usar, orçamento mensal, histórico) (A11)                                  | ⏸️ blocked | medium     | F74-S01, F74-S04                                                                                                                                                          |
+| F74-S10 | Copiloto no celular (gesto da borda, folha a 78%, tela cheia para ação com botões no polegar, áreas seguras) (A12)                                   | ⏸️ blocked | high       | F74-S02, F74-S03, F74-S04, F74-S05                                                                                                                                        |
+| F74-S11 | Piloto automático na interface (aba Sugestões do Copiloto no pipeline, aprovar e recusar em lote, autonomia por estágio) (A9)                        | ⏸️ blocked | high       | F74-S01, F74-S04                                                                                                                                                          |
+| F74-S12 | Integração real do Copiloto (API e SSE de produção, contexto declarado nas telas, quadro do pipeline anima a execução)                               | ⏸️ blocked | critical   | F74-S03, F74-S04, F74-S05, F74-S06, F74-S07, F74-S08, F74-S09, F74-S10, F74-S11, F73-S05, F73-S06, F73-S07, F73-S08, F73-S09, F73-S10, F73-S11, F73-S12, F73-S13, F73-S15 |
+| F74-S13 | Portão final do Copiloto (e2e da jornada, axe nos dois temas, capturas 1440 e 375, peso, hm-designer e hm-qa)                                        | ⏸️ blocked | high       | F74-S12, F73-S14, F73-S15                                                                                                                                                 |
+
+## Fase 75
+
+| ID      | Titulo                                                                                                          | Status      | Prioridade | Depende de                                                             |
+| ------- | --------------------------------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------------------------------------------------------- |
+| F75-S01 | Schema de integrações com conexões, cofre, sync, refs externas e webhook de entrada, com RLS                    | ⏸️ blocked  | critical   | F73-S01                                                                |
+| F75-S02 | Pacote @hm/integrations com contrato de conector, E/S guardada, paginação e kit de conformidade                 | 🟢 available | critical   | —                                                                      |
+| F75-S03 | Cofre de credenciais com keyring por versão e AAD, OAuth genérico com PKCE e recifra de chaves                  | ⏸️ blocked  | critical   | F75-S01, F75-S02, F75-S07                                              |
+| F75-S04 | Motor de sincronização incremental, idempotente por ref externa, com retries, reconciliação e teste com amostra | ⏸️ blocked  | critical   | F75-S01, F75-S02, F75-S03, F75-S05, F73-S02                            |
+| F75-S05 | Motor de mapeamento de campos e proposta assistida com confiança por campo                                      | ⏸️ blocked  | high       | F75-S01, F75-S02, F75-S07, F75-S14                                     |
+| F75-S06 | Webhook de entrada por empresa e conector "Conectar qualquer sistema" com teste ao vivo                         | ⏸️ blocked  | high       | F75-S04, F75-S05, F73-S02                                              |
+| F75-S07 | API da Loja — catálogo, conexões, rascunho do assistente, ativação, pedidos, permissões e plano                 | ⏸️ blocked  | critical   | F75-S01, F75-S02, F73-S02                                              |
+| F75-S08 | Saúde por integração — KPIs, erros com causa, registro legível, ações e alertas como notificação                | ⏸️ blocked  | high       | F75-S04, F75-S07, F73-S02                                              |
+| F75-S09 | Loja de Integrações — catálogo, busca por intenção, detalhe, vazio inteligente e pedido                         | ⏸️ blocked  | high       | F75-S07                                                                |
+| F75-S10 | Assistente de conexão em 5 passos — autorizar, escolher, mapear com o Copiloto, testar e sincronizar            | ⏸️ blocked  | high       | F75-S09, F75-S03, F75-S04, F75-S05, F75-S12, F76-S03                   |
+| F75-S11 | Painel de saúde da integração e tela "Conectar qualquer sistema" com teste ao vivo                              | ⏸️ blocked  | high       | F75-S09, F75-S08, F75-S06                                              |
+| F75-S12 | Conectores de referência — API REST genérica por polling e importação de CSV/planilha com relatório             | ⏸️ blocked  | high       | F75-S04, F75-S05, F75-S06                                              |
+| F75-S13 | Portão de segurança da F75 — SSRF, cofre, isolamento entre empresas, webhook público e injeção via dado externo | ⏸️ blocked  | critical   | F75-S03, F75-S04, F75-S06, F75-S07, F75-S08, F75-S12, F75-S14, F75-S16 |
+| F75-S14 | Proposta de mapeamento de campos no agent-runtime com dado externo tratado como não confiável                   | 🟢 available | high       | —                                                                      |
+| F75-S15 | QA da F75 — jornada ponta a ponta, lacunas de teste, acessibilidade e portão de design                          | ⏸️ blocked  | high       | F75-S10, F75-S11, F75-S13                                              |
+| F75-S16 | SSRF guard no port HTTP do flow-engine (nó http_request)                                                        | 🟢 available | critical   | —                                                                      |
+
+## Fase 76
+
+| ID      | Titulo                                                                                                         | Status      | Prioridade | Depende de                         |
+| ------- | -------------------------------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------------------- |
+| F76-S01 | Spike medido — SVG+CSS com máquina de estados em TS contra Rive para o personagem                              | 🟢 available | critical   | —                                  |
+| F76-S02 | Arte final do personagem com rig em camadas, LODs de 16 a 160 px, folha de estados e variantes por marca       | ⏸️ blocked  | critical   | F76-S01                            |
+| F76-S03 | Componentes do personagem no @hm/ui — Mascot, MascotStage, GradientText, Thinking, LongWait e tokens por marca | ⏸️ blocked  | critical   | F76-S02                            |
+| F76-S04 | Diretor do orçamento de atenção com persistência por membro e a configuração Animações do Copiloto             | ⏸️ blocked  | high       | F76-S03, F73-S02                   |
+| F76-S05 | Botões do Copiloto na sidebar, TopBar, barra recolhida e celular, com varredura, personagem e alça espiando    | ⏸️ blocked  | high       | F76-S03, F76-S04, F74-S01          |
+| F76-S06 | Política de carregamento — loading.tsx por rota com skeleton imediato e LongWait só em espera longa            | ⏸️ blocked  | high       | F76-S03                            |
+| F76-S07 | Personagem nos estados vazios, no recibo de ação com Desfazer e na apresentação do Copiloto                    | ⏸️ blocked  | medium     | F76-S03                            |
+| F76-S08 | Marca por empresa com flag do personagem (Odonto só glifo, Maian) e telemetria só de evento                    | ⏸️ blocked  | high       | F76-S04, F76-S05                   |
+| F76-S09 | QA da F76 — axe nos dois temas, movimento reduzido, INP, peso e quadros longos, capturas e portão de design    | ⏸️ blocked  | high       | F76-S05, F76-S06, F76-S07, F76-S08 |
 
 ## Fase 8 — Permissions & Settings
 
