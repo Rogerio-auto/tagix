@@ -98,7 +98,7 @@ function CategoryCard({ category }: { category: HelpCategoryWithCountDTO }) {
   const count = category.publishedCount;
   return (
     <Link
-      href={`/help?category=${category.id}`}
+      href={`/help?category=${encodeURIComponent(category.id)}`}
       className="group flex w-full flex-col justify-between gap-6 rounded-lg border border-border bg-surface p-5 shadow-ds-1 outline-none transition-[border-color,background-color,transform,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 hover:bg-surface-2 hover:shadow-ds-2 focus-visible:focus-ring motion-safe:hover:-translate-y-0.5"
     >
       <span className="flex flex-col gap-1.5">

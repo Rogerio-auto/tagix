@@ -115,15 +115,17 @@ function InviteHeader({ preview }: { preview: InvitePreview }): React.JSX.Elemen
         )}
         <span className="font-bold text-text">{roleLabel(preview.role)}</span>.
       </p>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-6 rounded-md border border-border bg-surface px-4 font-body text-sm">
-        <dt className="border-b border-border py-3 font-mono text-xs uppercase tracking-[0.12em] text-text-low">
-          Para
-        </dt>
-        <dd className="min-w-0 truncate border-b border-border py-3 text-right font-mono text-text">
-          {preview.emailMasked}
-        </dd>
-        <dt className="py-3 font-mono text-xs uppercase tracking-[0.12em] text-text-low">Expira</dt>
-        <dd className="py-3 text-right font-mono tabular-nums text-text">{formatRelative(preview.expiresAt)}</dd>
+      {/* Cada par é uma linha inteira (`div` em `dl` é HTML válido): a hairline atravessa
+          a caixa sem o vão do `gap-x` entre termo e valor. */}
+      <dl className="divide-y divide-border rounded-md border border-border bg-surface px-4 font-body text-sm">
+        <div className="flex items-baseline justify-between gap-6 py-3">
+          <dt className="shrink-0 font-mono text-xs uppercase tracking-[0.12em] text-text-low">Para</dt>
+          <dd className="min-w-0 truncate text-right font-mono text-text">{preview.emailMasked}</dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-6 py-3">
+          <dt className="shrink-0 font-mono text-xs uppercase tracking-[0.12em] text-text-low">Expira</dt>
+          <dd className="text-right font-mono tabular-nums text-text">{formatRelative(preview.expiresAt)}</dd>
+        </div>
       </dl>
     </header>
   );

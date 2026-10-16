@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Logo } from '@/features/auth/components/Logo';
 
@@ -14,6 +15,16 @@ import { Logo } from '@/features/auth/components/Logo';
  * editorial que diz o que o produto faz, em texto. Nenhum dado inventado, nenhuma
  * imagem genérica: tipografia, hairlines e um grid que some para baixo.
  */
+/**
+ * `no-referrer` em todo o grupo: verificação e redefinição de senha carregam `?token=` na
+ * URL, e o web não define `Referrer-Policy` global. Sem isto, qualquer navegação ou
+ * subrecurso a partir destas telas levaria o token no `Referer`. As páginas definem o
+ * próprio título; o `referrer` herdado daqui não é sobrescrito por nenhuma delas.
+ */
+export const metadata: Metadata = {
+  referrer: 'no-referrer',
+};
+
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh w-full bg-bg">
@@ -36,13 +47,13 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
         <footer className="flex flex-wrap items-center gap-x-1 gap-y-2 pb-safe-4 md:pb-8">
           <nav aria-label="Documentos legais" className="flex items-center gap-1">
-            <Link href="/termos" className={footerLinkClass}>
+            <Link href="/termos" prefetch={false} className={footerLinkClass}>
               Termos
             </Link>
             <span aria-hidden className="text-text-low">
               ·
             </span>
-            <Link href="/privacidade" className={footerLinkClass}>
+            <Link href="/privacidade" prefetch={false} className={footerLinkClass}>
               Privacidade
             </Link>
           </nav>

@@ -363,6 +363,27 @@ test.describe('Acesso — o H1 é o estado da tela', () => {
     );
   });
 
+  test('token na URL não vaza no Referer: no-referrer no grupo de acesso', async ({ page }) => {
+    await installRoutes(page);
+    await page.goto('/reset-password?token=tok_reset');
+    await expect(h1(page, 'Definir nova senha')).toBeVisible();
+    await expect(page.locator('meta[name="referrer"]')).toHaveAttribute('content', 'no-referrer');
+    // A navegação real ao rodapé sai sem Referer.
+    const termos = page.waitForRequest((req) => new URL(req.url()).pathname === '/termos');
+    await page.getByRole('link', { name: 'Termos', exact: true }).click();
+    const req = await termos;
+    expect(await req.headerValue('referer')).toBeNull();
+  });
+
+  test('exclusão de dados: estado desconhecido da API vira o aviso de erro', async ({ page }) => {
+    await page.route('**/api/meta/data-deletion/**', (route) =>
+      json(route, { status: 'arquivado', requestedAt: new Date().toISOString(), completedAt: null }),
+    );
+    await page.goto('/exclusao-de-dados/DEL-7F3A9C');
+    await expect(page.getByRole('alert').getByText('Consulta indisponível')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Estado do pedido' })).toHaveCount(0);
+  });
+
   test('marca: logotipo SVG, sem a família Orbitron', async ({ page }) => {
     await page.goto('/login');
     await expect(page.locator('svg[viewBox="0 0 32 32"]').first()).toBeVisible();

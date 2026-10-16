@@ -9,16 +9,22 @@
  */
 import type * as React from 'react';
 import { useEffect, useState } from 'react';
+import { z } from 'zod';
 import { formatDateTime } from '@/shared/lib/locale';
 
-type StatusPedido = 'received' | 'completed' | 'no_data' | 'failed';
+/**
+ * Corpo de `GET /api/meta/data-deletion/:code`, validado na fronteira: um estado que
+ * esta tela não conhece (ou uma data que não é data) vira o aviso de erro, nunca uma
+ * render quebrada. Os quatro estados espelham `MetaDataRequestStatus` (@hm/db).
+ */
+const respostaPedidoSchema = z.object({
+  status: z.enum(['received', 'completed', 'no_data', 'failed']),
+  requestedAt: z.string().datetime({ offset: true }),
+  completedAt: z.string().datetime({ offset: true }).nullable(),
+});
 
-/** Corpo de `GET /api/meta/data-deletion/:code`. */
-interface RespostaPedido {
-  status: StatusPedido;
-  requestedAt: string;
-  completedAt: string | null;
-}
+type RespostaPedido = z.infer<typeof respostaPedidoSchema>;
+type StatusPedido = RespostaPedido['status'];
 
 type Estado =
   | { tipo: 'carregando' }
@@ -27,7 +33,7 @@ type Estado =
   | ({ tipo: 'ok' } & RespostaPedido);
 
 /** O que cada estado significa para quem pediu, sem jargão. */
-const TEXTO: Record<'received' | 'completed' | 'no_data' | 'failed', string> = {
+const TEXTO: Record<StatusPedido, string> = {
   received: 'Recebemos seu pedido e ele está sendo processado.',
   completed: 'Seu pedido foi concluído. Os dados ligados à sua conta foram excluídos.',
   no_data:
@@ -67,10 +73,9 @@ export function DeletionStatus({ codigo }: { codigo: string }): React.JSX.Elemen
           setEstado({ tipo: 'erro' });
           return;
         }
-        const corpo = (await res.json()) as Extract<Estado, { tipo: 'ok' }> extends infer T
-          ? Omit<T & object, 'tipo'>
-          : never;
-        setEstado({ tipo: 'ok', ...corpo });
+        const corpo = respostaPedidoSchema.safeParse(await res.json());
+        if (!vivo) return;
+        setEstado(corpo.success ? { tipo: 'ok', ...corpo.data } : { tipo: 'erro' });
       })
       .catch(() => {
         if (vivo) setEstado({ tipo: 'erro' });

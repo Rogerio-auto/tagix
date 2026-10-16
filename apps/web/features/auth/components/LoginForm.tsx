@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangle, Clock, MailWarning, UserCheck } from 'lucide-react';
-import { Button, Input, cn, useToast } from '@hm/ui';
+import { Button, Input, cn } from '@hm/ui';
 import { ApiError } from '@/shared/lib/api-client';
 import { postLoginPath } from '@/shared/auth/route-guard';
 import { loginSchema, type LoginInput } from '../schema';
@@ -61,7 +61,6 @@ export function LoginForm({
   notice = null,
 }: LoginFormProps) {
   const router = useRouter();
-  const { toast } = useToast();
   const login = useLogin();
   const [submitError, setSubmitError] = useState<SubmitError | null>(null);
   const [unverified, setUnverified] = useState(false);
@@ -107,8 +106,9 @@ export function LoginForm({
         setUnverified(true);
         return;
       }
-      // UX §2.11: erro com o quê / por quê / o que fazer. Mostrado inline (no
-      // mobile o toast pode ficar atrás do teclado) e também via toast.
+      // UX §2.11: erro com o quê / por quê / o que fazer. Só inline (role=alert): no
+      // mobile o toast fica atrás do teclado, e os dois juntos anunciavam o erro duas
+      // vezes no leitor de tela.
       const isBadCreds = err instanceof ApiError && err.status === 401;
       const nextError: SubmitError = isBadCreds
         ? {
@@ -120,11 +120,6 @@ export function LoginForm({
             description: 'Algo deu errado ao autenticar. Tente novamente em instantes.',
           };
       setSubmitError(nextError);
-      toast({
-        variant: 'error',
-        title: nextError.title,
-        description: nextError.description,
-      });
     }
   });
 

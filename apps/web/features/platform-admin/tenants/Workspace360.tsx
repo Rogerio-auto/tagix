@@ -197,19 +197,19 @@ function Loaded({ data }: { data: Workspace360Data }) {
 
           <nav aria-label="Ações do tenant" className="flex flex-wrap gap-2">
             <Link
-              href={`/platform/subscriptions?workspace=${summary.id}`}
+              href={`/platform/subscriptions?workspace=${encodeURIComponent(summary.id)}`}
               className={cn(shortcutClass, 'border-border bg-surface-2 text-text hover:border-border-2 hover:bg-surface-3')}
             >
               <CreditCard className="size-4" aria-hidden /> Assinatura
             </Link>
             <Link
-              href={`/platform/playground?workspace=${summary.id}`}
+              href={`/platform/playground?workspace=${encodeURIComponent(summary.id)}`}
               className={cn(shortcutClass, 'border-border bg-surface-2 text-text hover:border-border-2 hover:bg-surface-3')}
             >
               <Bot className="size-4" aria-hidden /> Playground
             </Link>
             <Link
-              href={`/platform/impersonation?workspace=${summary.id}`}
+              href={`/platform/impersonation?workspace=${encodeURIComponent(summary.id)}`}
               className={cn(shortcutClass, 'border-warn/30 bg-warn/10 text-warn hover:border-warn/50 hover:bg-warn/15')}
             >
               <Eye className="size-4" aria-hidden /> Ver como
@@ -239,8 +239,10 @@ function Loaded({ data }: { data: Workspace360Data }) {
 
       {/* KPIs */}
       <section aria-label="Números do mês" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {/* Rótulos curtos (o "do mês" vai para a dica): a 375, em duas colunas, rótulo de
+            duas linhas desalinhava os valores da mesma fileira. */}
         <Kpi
-          label="Custo de IA (mês)"
+          label="Custo de IA"
           icon={Gauge}
           value={usd(usage.monthCostUsd)}
           tone={cap === 'over' ? 'danger' : cap === 'warn' ? 'warn' : 'default'}
@@ -249,29 +251,32 @@ function Loaded({ data }: { data: Workspace360Data }) {
             usage.capUsd != null ? (
               <>
                 <span className="font-mono tabular-nums text-text-mid">{formatPercent(usage.pctOfCap)}</span> de{' '}
-                <span className="font-mono tabular-nums text-text-mid">{usd(usage.capUsd)}</span>
+                <span className="font-mono tabular-nums text-text-mid">{usd(usage.capUsd)}</span> no mês
               </>
             ) : (
-              'Sem teto na política'
+              'No mês, sem teto na política'
             )
           }
         />
         <Kpi
-          label="Tokens (mês)"
+          label="Tokens"
           icon={Activity}
           value={formatNumber(usage.monthTokens)}
-          hint="Sem execuções de teste"
+          hint="No mês, sem testes"
         />
         <Kpi
-          label="Conversas abertas"
+          label="Conversas"
           icon={MessagesSquare}
           value={formatNumber(health.openConversations)}
-          hint="Agora"
+          hint="Abertas agora"
         />
-        <Kpi label="Deals abertos" icon={Target} value={formatNumber(health.openDeals)} hint="No funil" />
+        <Kpi label="Deals" icon={Target} value={formatNumber(health.openDeals)} hint="Abertos no funil" />
       </section>
 
-      <div className="grid items-start gap-4 lg:grid-cols-3">
+      {/* As duas colunas terminam na mesma linha em lg+: o último bloco de cada lado
+          estica (o volume de membros/agentes varia por tenant, então não dá para acertar
+          a altura na mão). */}
+      <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
           <Panel
             title="Membros"
@@ -297,9 +302,15 @@ function Loaded({ data }: { data: Workspace360Data }) {
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-3">
-                    <span className="hidden whitespace-nowrap font-mono text-xs tabular-nums text-text-low sm:inline">
-                      {m.lastSeenAt ? formatDate(m.lastSeenAt, DATE) : 'Nunca entrou'}
-                    </span>
+                    {m.lastSeenAt ? (
+                      <span className="hidden whitespace-nowrap font-mono text-xs tabular-nums text-text-low sm:inline">
+                        {formatDate(m.lastSeenAt, DATE)}
+                      </span>
+                    ) : (
+                      <span className="hidden whitespace-nowrap font-body text-xs text-text-low sm:inline">
+                        Nunca entrou
+                      </span>
+                    )}
                     <Badge size="sm">{memberRole(m.role)}</Badge>
                   </span>
                 </li>
@@ -307,7 +318,7 @@ function Loaded({ data }: { data: Workspace360Data }) {
             </ul>
           </Panel>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 lg:flex-1">
             <Panel
               title="Agentes"
               titleId="w360-agents"
@@ -325,7 +336,7 @@ function Loaded({ data }: { data: Workspace360Data }) {
                         <span className="truncate font-body text-sm font-semibold text-text">{a.name}</span>
                         <span className="truncate font-mono text-xs text-text-low">{a.model}</span>
                       </span>
-                      <Badge tone={s.tone} size="sm">
+                      <Badge tone={s.tone} size="sm" dot>
                         {s.label}
                       </Badge>
                     </li>
@@ -381,6 +392,7 @@ function Loaded({ data }: { data: Workspace360Data }) {
             title="Saúde"
             titleId="w360-health"
             icon={HeartPulse}
+            className="lg:flex-1"
             tone={health.failedWebhookDeliveries > 0 || health.capExceeded ? 'warn' : 'default'}
           >
             <Facts

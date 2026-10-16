@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { PLATFORM_ICONS } from '@/features/platform-admin/shell/icons';
 import { groupedPlatformNav } from '@/features/platform-admin/shell/nav-items';
 
@@ -43,8 +43,9 @@ export default function PlatformHome() {
                       <span className="grid size-9 place-items-center rounded-sm border border-border bg-surface-2 text-text-mid transition-colors duration-(--dur-base) group-hover:text-text">
                         <Icon className="size-4.5" aria-hidden />
                       </span>
-                      <ArrowUpRight
-                        className="size-4 text-text-low transition-[color,transform] duration-(--dur-base) ease-ds group-hover:text-text motion-safe:group-hover:translate-x-0.5 motion-safe:group-hover:-translate-y-0.5"
+                      {/* Seta reta: destino interno (a diagonal ↗ promete sair do produto). */}
+                      <ArrowRight
+                        className="size-4 text-text-low transition-[color,transform] duration-(--dur-base) ease-ds group-hover:text-text motion-safe:group-hover:translate-x-0.5"
                         aria-hidden
                       />
                     </span>

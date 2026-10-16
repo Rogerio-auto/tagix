@@ -41,25 +41,46 @@ const GUARD_PORT = Number(GUARD_API.port || 80);
 
 const ADMIN = { id: 'mem_platform_admin', email: 'rogerio@leadium.test', name: 'Rogério Viana', isPlatformAdmin: true };
 
-let guardApi: Server | null = null;
+/**
+ * Só loopback: a API falsa reconhece um token fixo como platform admin e não pode ficar
+ * exposta na rede local enquanto o spec roda. `localhost` pode resolver para 127.0.0.1 ou
+ * ::1 conforme o SO, então sobe nos dois; host explícito em `API_INTERNAL_URL` sobe só nele.
+ */
+const GUARD_HOSTS: readonly string[] =
+  GUARD_API.hostname === 'localhost' ? ['127.0.0.1', '::1'] : [GUARD_API.hostname.replace(/^\[|\]$/g, '')];
+
+let guardApis: Server[] = [];
+
+function listen(server: Server, host: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(GUARD_PORT, host, () => resolve());
+  });
+}
 
 test.beforeAll(async () => {
-  guardApi = createServer((req, res) => {
+  const handler: Parameters<typeof createServer>[1] = (req, res) => {
     const valid = req.url === '/api/me' && (req.headers.cookie ?? '').includes('hm_session=e2e-token');
     res.writeHead(valid ? 200 : 401, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(valid ? { member: ADMIN } : { message: 'Não autenticado.' }));
-  });
-  await new Promise<void>((resolve, reject) => {
-    guardApi?.once('error', (err) =>
-      reject(new Error(`Porta ${GUARD_PORT} ocupada para a API do guard de plataforma: ${String(err)}`)),
-    );
-    // Sem host: escuta IPv4 e IPv6 (o guard pede `localhost`, que pode resolver para ::1).
-    guardApi?.listen(GUARD_PORT, () => resolve());
-  });
+  };
+  for (const [i, host] of GUARD_HOSTS.entries()) {
+    const server = createServer(handler);
+    try {
+      await listen(server, host);
+      guardApis.push(server);
+    } catch (err) {
+      // ::1 é melhor-esforço (máquina sem IPv6); o primeiro host é obrigatório.
+      const code = (err as NodeJS.ErrnoException).code;
+      if (i > 0 && (code === 'EADDRNOTAVAIL' || code === 'EAFNOSUPPORT')) continue;
+      throw new Error(`Porta ${GUARD_PORT} (${host}) indisponível para a API do guard de plataforma: ${String(err)}`);
+    }
+  }
 });
 
 test.afterAll(async () => {
-  await new Promise<void>((resolve) => (guardApi ? guardApi.close(() => resolve()) : resolve()));
+  await Promise.all(guardApis.map((s) => new Promise<void>((resolve) => s.close(() => resolve()))));
+  guardApis = [];
 });
 
 // ── Dados ────────────────────────────────────────────────────────────────────
@@ -394,7 +415,7 @@ const SCREENS: Screen[] = [
     path: `/platform/tenants/${WS}`,
     ready: async (page) => {
       await expect(h1(page, 'Clínica Aurora')).toBeVisible();
-      await expect(page.getByText('Custo de IA (mês)')).toBeVisible();
+      await expect(page.getByText('Custo de IA', { exact: true })).toBeVisible();
       await expect(page.getByText('Sinais de risco')).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Auditoria recente' })).toBeVisible();
     },

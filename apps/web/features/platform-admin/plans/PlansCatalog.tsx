@@ -248,10 +248,12 @@ function PlanCard({
         </p>
 
         {limits.length > 0 && (
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+          // Uma coluna: em duas, "Mensagens/mês" truncava no card (cada célula ficava com
+          // ~160px a 1440). Lista de fatos, valor alinhado à direita.
+          <dl className="flex flex-col divide-y divide-border border-y border-border">
             {limits.map(([k, v]) => (
-              <div key={k} className="flex items-baseline justify-between gap-2 border-b border-border pb-1.5">
-                <dt className="truncate font-body text-sm text-text-low">{LIMIT_LABEL[k] ?? k}</dt>
+              <div key={k} className="flex items-baseline justify-between gap-4 py-2">
+                <dt className="min-w-0 truncate font-body text-sm text-text-low">{LIMIT_LABEL[k] ?? k}</dt>
                 <dd className="font-mono text-sm tabular-nums text-text">{formatNumber(v)}</dd>
               </div>
             ))}

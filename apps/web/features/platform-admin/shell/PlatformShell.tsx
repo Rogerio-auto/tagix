@@ -78,7 +78,7 @@ export function PlatformShell({ admin, children }: { admin: PlatformAdminMe; chi
         <main
           id="main-content"
           tabIndex={-1}
-          className="pb-safe pl-safe pr-safe flex-1 px-4 py-6 outline-none md:py-8 lg:px-8"
+          className="flex-1 pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-6 outline-none md:pb-[max(2rem,env(safe-area-inset-bottom))] md:pt-8 lg:pl-[max(2rem,env(safe-area-inset-left))] lg:pr-[max(2rem,env(safe-area-inset-right))]"
         >
           <div className="mx-auto w-full max-w-content">{children}</div>
         </main>
