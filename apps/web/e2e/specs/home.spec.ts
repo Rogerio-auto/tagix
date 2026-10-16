@@ -298,12 +298,13 @@ for (const theme of ['dark', 'light'] as const) {
         '84 respondidas · 5 sem resposta',
       );
 
-      // Número em mono (IBM Plex Mono / fallback monoespaçado do token).
+      // Número na IBM Plex Mono do token, primeira da pilha. `/mono/` não bastava: o
+      // default do Tailwind (`ui-monospace, …`) também casa, e foi ele que vazou.
       const family = await revenue
         .locator('span.font-mono')
         .last()
         .evaluate((el) => getComputedStyle(el).fontFamily.toLowerCase());
-      expect(family).toMatch(/mono/);
+      expect(family).toMatch(/^"?ibm plex mono/);
 
       // Painel do dono: série de receita e jornada vieram do servidor. A série soma
       // exatamente o KPI (o total do gráfico é o mesmo número da faixa).

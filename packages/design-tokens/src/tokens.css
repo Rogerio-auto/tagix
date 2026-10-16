@@ -143,10 +143,20 @@
  * Utilitários dos tokens NOVOS do DS 3.0 (`bg-bg-elevated`, `bg-surface-glass`,
  * `text-violet`, `text-brand-text`, `shadow-ds-1..3`, `shadow-glow`,
  * `rounded-xl`). Os valores vivem nos blocos de tema abaixo; aqui só o espelho
- * Tailwind (mesmo padrão de `@hm/ui/styles/theme.css`). `font-mono` já usa o
- * `--font-mono` do :root (IBM Plex Mono).
+ * Tailwind (mesmo padrão de `@hm/ui/styles/theme.css`).
+ *
+ * `--font-mono` é nome do tema PADRÃO do Tailwind: sem declará-lo aqui, o Tailwind
+ * emite o default dele (`ui-monospace, …, Consolas, "Liberation Mono", …`) num
+ * `:root, :host` DEPOIS do :root acima, que perde a cascata. Todo `font-mono` do app
+ * caía na mono do sistema (Consolas no Windows, Liberation Mono no Linux do CI) em vez
+ * da IBM Plex Mono. Mesmo valor do :root (o teste garante); não é auto-referente,
+ * porque aponta para `--font-mono-next`, não para si.
  * ───────────────────────────────────────────────────────────────────────── */
 @theme {
+  --font-mono:
+    var(--font-mono-next, 'IBM Plex Mono'), ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+
   --color-bg-elevated: var(--bg-elevated);
   --color-surface-glass: var(--surface-glass);
   --color-violet: var(--violet);

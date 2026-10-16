@@ -13,6 +13,12 @@
  * que herda as linhas da grade-mãe. Células da mesma faixa visual dividem as mesmas
  * trilhas, então um rodapé de duas linhas (a amostra do speed-to-lead) aumenta a
  * trilha de rodapé de todas, em vez de empurrar só o próprio número para cima.
+ *
+ * Na trilha do número, o alinhamento é `last baseline` (os itens de subgrids irmãos
+ * dividem o grupo de linha de base da grade-mãe), não `end`: a manchete tem corpo
+ * maior que as outras, e alinhar o FUNDO das caixas deixa as linhas de base a
+ * (entrelinha − altura da fonte)/2 + descendente de distância, que muda com o corpo e
+ * com a métrica da fonte (1px na Plex Mono, 2px na Liberation Mono do Linux).
  */
 import type * as React from 'react';
 import { useLayoutEffect, useRef, useState } from 'react';
@@ -160,8 +166,9 @@ function Kpi({ kpi, span }: { kpi: HomeKpi; span: KpiSpan }): React.JSX.Element 
       <span
         data-kpi-value
         className={cn(
-          // `self-end`: na trilha comum, os números assentam na mesma linha de base.
-          'block self-end truncate font-mono font-medium tabular-nums tracking-tight text-text',
+          // `last baseline`: os números da faixa assentam na mesma linha de base (o
+          // fallback do grupo é `end`, então continuam no pé da trilha).
+          'block self-baseline-last truncate font-mono font-medium tabular-nums tracking-tight text-text',
           lead ? 'text-h3 @5xl:text-h2' : 'text-h4 @3xl:text-h3',
         )}
       >

@@ -201,6 +201,15 @@ describe('contrato de nomes', () => {
       expect(css.includes(old)).toBe(false);
     }
   });
+
+  it('`--font-mono` também vive no @theme, com o valor do :root (o default do Tailwind não vence)', () => {
+    // Todo `--font-*` que é nome do tema padrão do Tailwind e não está num @theme é
+    // emitido com o valor default DEPOIS do :root e o sobrescreve.
+    const typeScale = blockBody('@theme {');
+    const ds3 = parseDecls(blockBody('@theme {', typeScale.end).body);
+    expect(ds3['--font-mono']).toBe(primitives['--font-mono']);
+    expect(ds3['--font-mono']).not.toMatch(/var\(--font-mono\)/);
+  });
 });
 
 describe('typography.ts espelha o @theme do tokens.css', () => {
