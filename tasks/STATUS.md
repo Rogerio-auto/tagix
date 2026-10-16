@@ -61,7 +61,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F72   | 9     | 0   | 1   | 0   | 0   | 0   | 8   |
 | F73   | 16     | 3   | 13   | 0   | 0   | 0   | 0   |
 | F74   | 13     | 0   | 13   | 0   | 0   | 0   | 0   |
-| F75   | 16     | 3   | 13   | 0   | 0   | 0   | 0   |
+| F75   | 16     | 2   | 13   | 0   | 1   | 0   | 0   |
 | F76   | 9     | 1   | 8   | 0   | 0   | 0   | 0   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
@@ -889,24 +889,24 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 75
 
-| ID      | Titulo                                                                                                          | Status      | Prioridade | Depende de                                                             |
-| ------- | --------------------------------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------------------------------------------------------- |
-| F75-S01 | Schema de integrações com conexões, cofre, sync, refs externas e webhook de entrada, com RLS                    | ⏸️ blocked  | critical   | F73-S01                                                                |
-| F75-S02 | Pacote @hm/integrations com contrato de conector, E/S guardada, paginação e kit de conformidade                 | 🟢 available | critical   | —                                                                      |
-| F75-S03 | Cofre de credenciais com keyring por versão e AAD, OAuth genérico com PKCE e recifra de chaves                  | ⏸️ blocked  | critical   | F75-S01, F75-S02, F75-S07                                              |
-| F75-S04 | Motor de sincronização incremental, idempotente por ref externa, com retries, reconciliação e teste com amostra | ⏸️ blocked  | critical   | F75-S01, F75-S02, F75-S03, F75-S05, F73-S02                            |
-| F75-S05 | Motor de mapeamento de campos e proposta assistida com confiança por campo                                      | ⏸️ blocked  | high       | F75-S01, F75-S02, F75-S07, F75-S14                                     |
-| F75-S06 | Webhook de entrada por empresa e conector "Conectar qualquer sistema" com teste ao vivo                         | ⏸️ blocked  | high       | F75-S04, F75-S05, F73-S02                                              |
-| F75-S07 | API da Loja — catálogo, conexões, rascunho do assistente, ativação, pedidos, permissões e plano                 | ⏸️ blocked  | critical   | F75-S01, F75-S02, F73-S02                                              |
-| F75-S08 | Saúde por integração — KPIs, erros com causa, registro legível, ações e alertas como notificação                | ⏸️ blocked  | high       | F75-S04, F75-S07, F73-S02                                              |
-| F75-S09 | Loja de Integrações — catálogo, busca por intenção, detalhe, vazio inteligente e pedido                         | ⏸️ blocked  | high       | F75-S07                                                                |
-| F75-S10 | Assistente de conexão em 5 passos — autorizar, escolher, mapear com o Copiloto, testar e sincronizar            | ⏸️ blocked  | high       | F75-S09, F75-S03, F75-S04, F75-S05, F75-S12, F76-S03                   |
-| F75-S11 | Painel de saúde da integração e tela "Conectar qualquer sistema" com teste ao vivo                              | ⏸️ blocked  | high       | F75-S09, F75-S08, F75-S06                                              |
-| F75-S12 | Conectores de referência — API REST genérica por polling e importação de CSV/planilha com relatório             | ⏸️ blocked  | high       | F75-S04, F75-S05, F75-S06                                              |
-| F75-S13 | Portão de segurança da F75 — SSRF, cofre, isolamento entre empresas, webhook público e injeção via dado externo | ⏸️ blocked  | critical   | F75-S03, F75-S04, F75-S06, F75-S07, F75-S08, F75-S12, F75-S14, F75-S16 |
-| F75-S14 | Proposta de mapeamento de campos no agent-runtime com dado externo tratado como não confiável                   | 🟢 available | high       | —                                                                      |
-| F75-S15 | QA da F75 — jornada ponta a ponta, lacunas de teste, acessibilidade e portão de design                          | ⏸️ blocked  | high       | F75-S10, F75-S11, F75-S13                                              |
-| F75-S16 | SSRF guard no port HTTP do flow-engine (nó http_request)                                                        | 🟢 available | critical   | —                                                                      |
+| ID      | Titulo                                                                                                          | Status        | Prioridade | Depende de                                                             |
+| ------- | --------------------------------------------------------------------------------------------------------------- | ------------- | ---------- | ---------------------------------------------------------------------- |
+| F75-S01 | Schema de integrações com conexões, cofre, sync, refs externas e webhook de entrada, com RLS                    | ⏸️ blocked    | critical   | F73-S01                                                                |
+| F75-S02 | Pacote @hm/integrations com contrato de conector, E/S guardada, paginação e kit de conformidade                 | 🟢 available   | critical   | —                                                                      |
+| F75-S03 | Cofre de credenciais com keyring por versão e AAD, OAuth genérico com PKCE e recifra de chaves                  | ⏸️ blocked    | critical   | F75-S01, F75-S02, F75-S07                                              |
+| F75-S04 | Motor de sincronização incremental, idempotente por ref externa, com retries, reconciliação e teste com amostra | ⏸️ blocked    | critical   | F75-S01, F75-S02, F75-S03, F75-S05, F73-S02                            |
+| F75-S05 | Motor de mapeamento de campos e proposta assistida com confiança por campo                                      | ⏸️ blocked    | high       | F75-S01, F75-S02, F75-S07, F75-S14                                     |
+| F75-S06 | Webhook de entrada por empresa e conector "Conectar qualquer sistema" com teste ao vivo                         | ⏸️ blocked    | high       | F75-S04, F75-S05, F73-S02                                              |
+| F75-S07 | API da Loja — catálogo, conexões, rascunho do assistente, ativação, pedidos, permissões e plano                 | ⏸️ blocked    | critical   | F75-S01, F75-S02, F73-S02                                              |
+| F75-S08 | Saúde por integração — KPIs, erros com causa, registro legível, ações e alertas como notificação                | ⏸️ blocked    | high       | F75-S04, F75-S07, F73-S02                                              |
+| F75-S09 | Loja de Integrações — catálogo, busca por intenção, detalhe, vazio inteligente e pedido                         | ⏸️ blocked    | high       | F75-S07                                                                |
+| F75-S10 | Assistente de conexão em 5 passos — autorizar, escolher, mapear com o Copiloto, testar e sincronizar            | ⏸️ blocked    | high       | F75-S09, F75-S03, F75-S04, F75-S05, F75-S12, F76-S03                   |
+| F75-S11 | Painel de saúde da integração e tela "Conectar qualquer sistema" com teste ao vivo                              | ⏸️ blocked    | high       | F75-S09, F75-S08, F75-S06                                              |
+| F75-S12 | Conectores de referência — API REST genérica por polling e importação de CSV/planilha com relatório             | ⏸️ blocked    | high       | F75-S04, F75-S05, F75-S06                                              |
+| F75-S13 | Portão de segurança da F75 — SSRF, cofre, isolamento entre empresas, webhook público e injeção via dado externo | ⏸️ blocked    | critical   | F75-S03, F75-S04, F75-S06, F75-S07, F75-S08, F75-S12, F75-S14, F75-S16 |
+| F75-S14 | Proposta de mapeamento de campos no agent-runtime com dado externo tratado como não confiável                   | 🟢 available   | high       | —                                                                      |
+| F75-S15 | QA da F75 — jornada ponta a ponta, lacunas de teste, acessibilidade e portão de design                          | ⏸️ blocked    | high       | F75-S10, F75-S11, F75-S13                                              |
+| F75-S16 | SSRF guard no port HTTP do flow-engine (nó http_request)                                                        | 🔵 in-progress | critical   | —                                                                      |
 
 ## Fase 76
 
