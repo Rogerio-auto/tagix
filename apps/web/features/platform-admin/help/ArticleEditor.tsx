@@ -5,13 +5,17 @@
  * preview AO VIVO usando o MESMO render sanitizado do leitor (@hm/ui Markdown),
  * garantindo preview === publicado e ZERO divergencia de XSS (alvo do S15).
  * Workflow draft -> published com publish/unpublish.
+ *
+ * DS 3.0 (F72-S08): campos no desenho do `Input`, status em `Badge`, abas com estado
+ * `aria-pressed`, corpo em mono. Mesmas chamadas e o MESMO `confirm` antes de excluir.
  */
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Eye, FileText, Save, Send, Trash2, Undo2 } from 'lucide-react';
 import type { HelpArticleDTO, HelpCategoryDTO } from '@hm/shared';
-import { Button, Markdown } from '@hm/ui';
-import { ErrorState } from '@/shared/components/feedback';
+import { Badge, Button, ErrorState, Markdown } from '@hm/ui';
+import { cn } from '@/shared/lib/cn';
+import { controlClass, textareaClass } from '../ui/kit';
 import {
   useCreateArticle,
   useDeleteArticle,
@@ -58,9 +62,8 @@ interface Props {
   onDeleted: () => void;
 }
 
-const labelCls = 'mb-1 block font-head text-xs font-semibold uppercase tracking-wide text-text-low';
-const fieldCls =
-  'w-full rounded-md border border-border bg-surface-2 px-3 py-2 font-body text-sm text-text outline-none transition-colors placeholder:text-text-low focus-visible:border-border-2 focus-visible:shadow-glow-md';
+const labelCls = 'mb-1.5 block font-body text-sm font-bold text-text-mid';
+const fieldCls = cn(controlClass, 'placeholder:text-text-low');
 
 export function ArticleEditor({
   article,
@@ -117,38 +120,31 @@ export function ArticleEditor({
   const saving = create.isPending || update.isPending;
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col gap-4">
+    <section
+      aria-labelledby="help-editor-title"
+      className="flex min-w-0 flex-1 flex-col gap-5 rounded-lg border border-border bg-surface p-4 md:p-5"
+    >
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <FileText className="size-5 text-text-mid" aria-hidden />
-          <h2 className="font-head text-lg font-semibold text-text">
+        <div className="flex min-w-0 items-center gap-2">
+          <FileText className="size-4.5 shrink-0 text-text-low" aria-hidden />
+          <h2 id="help-editor-title" className="truncate font-head text-lg font-semibold text-text">
             {isNew ? 'Novo artigo' : 'Editar artigo'}
           </h2>
           {!isNew && article && (
-            <span
-              className={
-                isPublished
-                  ? 'rounded-pill bg-brand/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand'
-                  : 'rounded-pill bg-surface-3 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-text-low'
-              }
-            >
+            <Badge tone={isPublished ? 'brand' : 'neutral'} size="sm" dot>
               {isPublished ? 'Publicado' : 'Rascunho'}
-            </span>
+            </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {!isNew && article && (
             <Button
               variant={isPublished ? 'outline' : 'secondary'}
               size="sm"
               loading={publish.isPending}
+              leftIcon={isPublished ? <Undo2 className="size-4" aria-hidden /> : <Send className="size-4" aria-hidden />}
               onClick={() => void publish.mutateAsync({ id: article.id, publish: !isPublished })}
             >
-              {isPublished ? (
-                <Undo2 className="size-4" aria-hidden />
-              ) : (
-                <Send className="size-4" aria-hidden />
-              )}
               {isPublished ? 'Despublicar' : 'Publicar'}
             </Button>
           )}
@@ -157,22 +153,24 @@ export function ArticleEditor({
             size="sm"
             loading={saving}
             disabled={!valid}
+            leftIcon={<Save className="size-4" aria-hidden />}
             onClick={() => void save()}
           >
-            <Save className="size-4" aria-hidden /> Salvar
+            Salvar
           </Button>
           {!isNew && article && (
             <Button
-              variant="ghost"
+              variant="danger"
               size="sm"
               loading={remove.isPending}
+              leftIcon={<Trash2 className="size-4" aria-hidden />}
               onClick={() => {
                 if (window.confirm('Excluir este artigo? A acao nao pode ser desfeita.')) {
                   void remove.mutateAsync(article.id).then(onDeleted);
                 }
               }}
             >
-              <Trash2 className="size-4" aria-hidden /> Excluir
+              Excluir
             </Button>
           )}
         </div>
@@ -180,15 +178,16 @@ export function ArticleEditor({
 
       {(create.isError || update.isError) && (
         <ErrorState
-          title="Nao foi possivel salvar"
-          reason="Verifique o slug (kebab-case, unico) e os campos obrigatorios."
+          title="Não foi possível salvar"
+          reason="Verifique o slug (kebab-case, único) e os campos obrigatórios."
+          whatToDo="Corrija e salve de novo."
         />
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className={labelCls} htmlFor="art-title">
-            Titulo
+            Título
           </label>
           <input
             id="art-title"
@@ -213,7 +212,7 @@ export function ArticleEditor({
               set('slug', e.target.value);
             }}
             placeholder="como-criar-um-agente"
-            className={fieldCls}
+            className={cn(fieldCls, 'font-mono')}
           />
         </div>
         <div>
@@ -226,7 +225,7 @@ export function ArticleEditor({
             onChange={(e) => set('categoryId', e.target.value)}
             className={fieldCls}
           >
-            <option value="">Selecione...</option>
+            <option value="">Selecione…</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.title}
@@ -236,14 +235,14 @@ export function ArticleEditor({
         </div>
         <div>
           <label className={labelCls} htmlFor="art-anchor">
-            Chave de ancora (help contextual, opcional)
+            Chave de âncora (ajuda contextual, opcional)
           </label>
           <input
             id="art-anchor"
             value={draft.anchorKey}
             onChange={(e) => set('anchorKey', e.target.value)}
             placeholder="agents.create"
-            className={fieldCls}
+            className={cn(fieldCls, 'font-mono')}
           />
         </div>
         <div className="sm:col-span-2">
@@ -261,7 +260,7 @@ export function ArticleEditor({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="mb-2 flex items-center gap-1 border-b border-border-2">
+        <div className="mb-3 flex items-center gap-1 border-b border-border">
           <TabButton
             active={tab === 'write'}
             onClick={() => setTab('write')}
@@ -283,13 +282,13 @@ export function ArticleEditor({
             value={draft.bodyMd}
             onChange={(e) => set('bodyMd', e.target.value)}
             aria-label="Corpo do artigo em Markdown"
-            placeholder="Escreva o conteudo em Markdown. Titulos, listas, links, codigo e blocos de codigo sao suportados."
-            className={fieldCls + ' min-h-[320px] flex-1 resize-y font-price leading-relaxed'}
+            placeholder="Escreva o conteúdo em Markdown. Títulos, listas, links e blocos de código são suportados."
+            className={cn(textareaClass, 'min-h-80 flex-1 resize-y font-mono leading-relaxed')}
           />
         ) : (
-          <div className="min-h-[320px] flex-1 overflow-y-auto rounded-md border border-border-2 bg-surface p-5">
+          <div className="min-h-80 flex-1 overflow-y-auto rounded-sm border border-border bg-surface-inset p-5">
             {draft.bodyMd.trim() === '' ? (
-              <p className="text-sm text-text-low">Nada para pre-visualizar ainda.</p>
+              <p className="font-body text-sm text-text-low">Nada para pré-visualizar ainda.</p>
             ) : (
               <Markdown>{draft.bodyMd}</Markdown>
             )}
@@ -316,11 +315,11 @@ function TabButton({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={
-        active
-          ? 'inline-flex items-center gap-1.5 border-b-2 border-brand px-3 py-2 font-head text-sm font-medium text-text outline-none transition-colors focus-visible:shadow-glow-md'
-          : 'inline-flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 font-head text-sm font-medium text-text-mid outline-none transition-colors hover:text-text focus-visible:shadow-glow-md'
-      }
+      className={cn(
+        '-mb-px inline-flex min-h-10 items-center gap-1.5 border-b-2 px-3 font-head text-sm font-medium outline-none',
+        'transition-colors duration-(--dur-fast) focus-visible:focus-ring',
+        active ? 'border-brand-text text-text' : 'border-transparent text-text-mid hover:text-text',
+      )}
     >
       {icon}
       {children}

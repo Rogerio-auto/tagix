@@ -1,12 +1,16 @@
 'use client';
 
 /**
- * CMS da Central de Ajuda (F38-S04) — painel super-admin. Layout master-detail:
- * categorias | lista de artigos | editor com preview Markdown sanitizado.
- * Conteudo e PLATFORM-LEVEL (Leadium escreve, todos os workspaces leem).
+ * CMS da Central de Ajuda (F38-S04) no DS 3.0 (F72-S08) — painel super-admin. Layout
+ * master-detail: categorias | artigos | editor com preview Markdown sanitizado.
+ * Conteúdo é PLATFORM-LEVEL (a equipe escreve, todos os workspaces leem).
+ *
+ * UX: §2.5 `?` no título; §2.6 "nenhum artigo aberto" explica o próximo passo.
  */
 import { useState } from 'react';
-import { LifeBuoy } from 'lucide-react';
+import { FileText } from 'lucide-react';
+import { EmptyState } from '@hm/ui';
+import { PlatformPageHeader } from '../ui/PlatformPageHeader';
 import { ArticleEditor } from './ArticleEditor';
 import { ArticleList } from './ArticleList';
 import { CategorySidebar } from './CategorySidebar';
@@ -26,20 +30,20 @@ export function HelpCms() {
   const editorVisible = creating || selectedId !== null;
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex items-center gap-3">
-        <span className="inline-flex size-10 items-center justify-center rounded-md bg-surface-2 text-text-mid">
-          <LifeBuoy className="size-5" aria-hidden />
-        </span>
-        <div>
-          <h1 className="font-head text-2xl font-semibold text-text">Central de Ajuda</h1>
-          <p className="font-body text-sm text-text-mid">
-            Conteudo de ajuda do Leadium — escrito aqui, lido por todos os workspaces.
+    <div className="flex flex-col">
+      <PlatformPageHeader
+        href="/platform/help"
+        title="Central de Ajuda"
+        description="Escrito aqui, lido por todos os workspaces. Publicar não exige deploy."
+        help={
+          <p>
+            O preview usa o mesmo render sanitizado do leitor: o que aparece no preview é o que o
+            cliente vê. A chave de âncora liga o artigo à ajuda contextual de uma tela do app.
           </p>
-        </div>
-      </header>
+        }
+      />
 
-      <div className="flex flex-col gap-6 lg:flex-row">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <CategorySidebar
           selected={categoryId}
           onSelect={(id) => {
@@ -77,10 +81,15 @@ export function HelpCms() {
             }}
           />
         ) : (
-          <section className="flex min-w-0 flex-1 items-center justify-center rounded-md border border-dashed border-border-2 px-6 py-16 text-center">
-            <p className="max-w-sm font-body text-sm text-text-low">
-              Selecione um artigo a esquerda para editar, ou crie um novo para comecar.
-            </p>
+          <section
+            aria-label="Editor"
+            className="flex min-w-0 flex-1 items-center justify-center rounded-lg border border-dashed border-border-2 px-6 py-16"
+          >
+            <EmptyState
+              icon={FileText}
+              title="Nenhum artigo aberto"
+              description="Escolha um artigo na lista para editar, ou crie um novo."
+            />
           </section>
         )}
       </div>

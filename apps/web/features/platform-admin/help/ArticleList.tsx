@@ -1,13 +1,14 @@
 'use client';
 
 /**
- * Lista de artigos do CMS de Ajuda (F38-S04) com reordenacao por setas (sobe/
- * desce) — acessivel por teclado, sem drag-and-drop obrigatorio. Mostra status
- * (rascunho/publicado) e seleciona o artigo no editor.
+ * Lista de artigos do CMS de Ajuda (F38-S04; DS 3.0 na F72-S08) com reordenação por
+ * setas (sobe/desce) — acessível por teclado, sem drag-and-drop obrigatório. Mostra o
+ * status (rascunho/publicado) e seleciona o artigo no editor. Mesmas chamadas de antes.
  */
 import { ChevronDown, ChevronUp, FilePlus2, FileText } from 'lucide-react';
-import { Button } from '@hm/ui';
-import { EmptyState, Skeleton } from '@/shared/components/feedback';
+import { Badge, Button, EmptyState, ErrorState, IconButton, Skeleton } from '@hm/ui';
+import { cn } from '@/shared/lib/cn';
+import { eyebrowClass } from '../ui/kit';
 import { useHelpArticles, useReorderArticles } from './queries';
 
 interface Props {
@@ -18,7 +19,7 @@ interface Props {
 }
 
 export function ArticleList({ categoryId, selectedId, onSelect, onNew }: Props) {
-  const { data, isLoading, isError, refetch } = useHelpArticles(categoryId ?? undefined);
+  const { data, isLoading, isError, isFetching, refetch } = useHelpArticles(categoryId ?? undefined);
   const reorder = useReorderArticles();
   const articles = data?.articles ?? [];
 
@@ -35,106 +36,88 @@ export function ArticleList({ categoryId, selectedId, onSelect, onNew }: Props) 
   }
 
   return (
-    <div className="flex w-full flex-col gap-2 lg:w-80 lg:shrink-0">
-      <div className="flex items-center justify-between">
-        <h2 className="font-head text-sm font-semibold uppercase tracking-wide text-text-low">
+    <section aria-labelledby="help-articles" className="flex w-full flex-col gap-2 lg:w-80 lg:shrink-0">
+      <div className="flex min-h-8 items-center justify-between gap-2 px-1">
+        <h2 id="help-articles" className={eyebrowClass}>
           Artigos
         </h2>
-        <Button variant="secondary" size="sm" onClick={onNew}>
-          <FilePlus2 className="size-4" aria-hidden /> Novo
+        <Button variant="secondary" size="sm" leftIcon={<FilePlus2 className="size-4" aria-hidden />} onClick={onNew}>
+          Novo artigo
         </Button>
       </div>
 
-      {isLoading && (
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-14 w-full" />
-          <Skeleton className="h-14 w-full" />
-          <Skeleton className="h-14 w-full" />
-        </div>
-      )}
-
-      {isError && (
-        <button
-          type="button"
-          onClick={() => void refetch()}
-          className="rounded-md border border-border px-3 py-2 text-left text-sm text-danger outline-none hover:bg-surface-2 focus-visible:shadow-glow-md"
-        >
-          Falha ao carregar artigos. Tentar de novo.
-        </button>
-      )}
-
-      {!isLoading && !isError && articles.length === 0 && (
-        <EmptyState
-          icon={FileText}
-          title="Nenhum artigo"
-          description="Crie o primeiro artigo desta visao para comecar a Central de Ajuda."
-          action={
-            <Button variant="primary" size="sm" onClick={onNew}>
-              <FilePlus2 className="size-4" aria-hidden /> Criar artigo
-            </Button>
-          }
-        />
-      )}
-
-      <ul className="flex flex-col gap-1">
-        {articles.map((a, i) => (
-          <li key={a.id} className="flex items-stretch gap-1">
-            <button
-              type="button"
-              onClick={() => onSelect(a.id)}
-              aria-current={selectedId === a.id ? 'true' : undefined}
-              className={
-                selectedId === a.id
-                  ? 'flex flex-1 flex-col gap-0.5 rounded-md border border-border-2 bg-surface-3 px-3 py-2 text-left outline-none focus-visible:shadow-glow-md'
-                  : 'flex flex-1 flex-col gap-0.5 rounded-md border border-transparent px-3 py-2 text-left outline-none transition-colors hover:bg-surface-2 focus-visible:shadow-glow-md'
-              }
-            >
-              <span className="flex items-center gap-2">
-                <span className="truncate font-head text-sm font-medium text-text">{a.title}</span>
-                <StatusDot status={a.status} />
-              </span>
-              {a.excerpt && (
-                <span className="truncate font-body text-xs text-text-low">{a.excerpt}</span>
-              )}
-            </button>
-            <div className="flex flex-col">
-              <button
-                type="button"
-                onClick={() => move(i, -1)}
-                disabled={i === 0 || reorder.isPending}
-                aria-label={'Mover ' + a.title + ' para cima'}
-                className="rounded-sm p-0.5 text-text-low outline-none transition hover:text-text focus-visible:shadow-glow-md disabled:opacity-30"
-              >
-                <ChevronUp className="size-4" aria-hidden />
-              </button>
-              <button
-                type="button"
-                onClick={() => move(i, 1)}
-                disabled={i === articles.length - 1 || reorder.isPending}
-                aria-label={'Mover ' + a.title + ' para baixo'}
-                className="rounded-sm p-0.5 text-text-low outline-none transition hover:text-text focus-visible:shadow-glow-md disabled:opacity-30"
-              >
-                <ChevronDown className="size-4" aria-hidden />
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function StatusDot({ status }: { status: 'draft' | 'published' }) {
-  const published = status === 'published';
-  return (
-    <span
-      className={
-        published
-          ? 'ml-auto inline-flex shrink-0 items-center gap-1 rounded-pill bg-brand/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand'
-          : 'ml-auto inline-flex shrink-0 items-center gap-1 rounded-pill bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-low'
-      }
-    >
-      {published ? 'Publicado' : 'Rascunho'}
-    </span>
+      <div className="overflow-hidden rounded-lg border border-border bg-surface">
+        {isLoading ? (
+          <div role="status" aria-busy="true" aria-label="Carregando artigos" className="flex flex-col gap-2 p-3">
+            <Skeleton className="h-14 w-full rounded-md" />
+            <Skeleton className="h-14 w-full rounded-md" />
+            <Skeleton className="h-14 w-full rounded-md" />
+          </div>
+        ) : isError ? (
+          <ErrorState
+            title="Não foi possível carregar os artigos"
+            reason="A lista de artigos não respondeu."
+            whatToDo="Tente de novo em instantes."
+            action={
+              <Button variant="secondary" size="sm" loading={isFetching} onClick={() => void refetch()}>
+                Tentar de novo
+              </Button>
+            }
+          />
+        ) : articles.length === 0 ? (
+          <EmptyState
+            className="py-10"
+            icon={FileText}
+            title="Nenhum artigo"
+            description="Crie o primeiro artigo desta visão para começar."
+          />
+        ) : (
+          <ul className="divide-y divide-border">
+            {articles.map((a, i) => {
+              const active = selectedId === a.id;
+              return (
+                <li key={a.id} className="flex items-stretch">
+                  <button
+                    type="button"
+                    onClick={() => onSelect(a.id)}
+                    aria-current={active ? 'true' : undefined}
+                    className={cn(
+                      'flex min-w-0 flex-1 flex-col gap-1 px-4 py-3 text-left outline-none transition-colors duration-(--dur-fast) focus-visible:focus-ring',
+                      active ? 'bg-surface-2 shadow-[inset_2px_0_0_var(--brand-text)]' : 'hover:bg-surface-2',
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate font-body text-sm font-semibold text-text">{a.title}</span>
+                      <Badge tone={a.status === 'published' ? 'brand' : 'neutral'} size="sm">
+                        {a.status === 'published' ? 'Publicado' : 'Rascunho'}
+                      </Badge>
+                    </span>
+                    {a.excerpt && <span className="truncate font-body text-sm text-text-low">{a.excerpt}</span>}
+                  </button>
+                  <div className="flex flex-col justify-center border-l border-border px-1">
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      icon={<ChevronUp aria-hidden />}
+                      onClick={() => move(i, -1)}
+                      disabled={i === 0 || reorder.isPending}
+                      aria-label={`Mover ${a.title} para cima`}
+                    />
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      icon={<ChevronDown aria-hidden />}
+                      onClick={() => move(i, 1)}
+                      disabled={i === articles.length - 1 || reorder.isPending}
+                      aria-label={`Mover ${a.title} para baixo`}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }

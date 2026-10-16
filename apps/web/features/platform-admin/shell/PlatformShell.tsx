@@ -1,71 +1,86 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Command } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import type { PlatformAdminMe } from '../lib';
-import { PlatformNav } from './PlatformNav';
+import { PlatformMark } from './PlatformMark';
 import { PlatformMobileNav } from './PlatformMobileNav';
+import { PlatformNav } from './PlatformNav';
+import { PlatformThemeToggle } from './PlatformThemeToggle';
 
 /**
- * Chrome do painel de super-admin (F25-S06). Visualmente DISTINTO do workspace
- * (faixa de plataforma + cor de acento `warn`) para deixar claro que é um modo
- * "admin de plataforma", não "settings de workspace". DS v2 dark-first, tokens
- * semânticos (zero hex). As páginas (S07/S08) renderizam dentro de `children`.
+ * Chrome do painel de super-admin (F25-S06) no DS 3.0 (F72-S08).
+ *
+ * Mesma arquitetura do shell do app (sidebar de 248px em `lg+`, barra de vidro no topo),
+ * mas com um sinal de modo que não sai da tela: o fio âmbar (`warn`) no topo da barra, o
+ * selo "Super-admin" e a barra ativa da navegação em `warn`. Quem está aqui sabe que não
+ * está num workspace. Tokens semânticos, zero hex; as páginas renderizam em `children`.
+ *
+ * O guard (privilégio real) é do layout `(platform)` e da API; o shell só pinta.
  */
-export function PlatformShell({
-  admin,
-  children,
-}: {
-  admin: PlatformAdminMe;
-  children: ReactNode;
-}) {
+export function PlatformShell({ admin, children }: { admin: PlatformAdminMe; children: ReactNode }) {
+  const who = admin.name ?? admin.email;
   return (
     <div className="flex min-h-dvh bg-bg">
       <aside
         aria-label="Plataforma"
-        className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border bg-surface lg:flex"
+        className="fixed inset-y-0 left-0 z-40 hidden w-62 flex-col border-r border-border bg-surface lg:flex"
       >
-        <div className="flex h-14 items-center gap-2 border-b border-border px-5">
-          <Command className="size-5 text-warn" aria-hidden />
-          <div className="flex flex-col leading-tight">
-            <span className="font-head text-sm font-semibold text-text">Plataforma</span>
-            <span className="text-[11px] uppercase tracking-wide text-text-low">Super-admin</span>
-          </div>
+        <div className="flex h-17 shrink-0 items-center px-5">
+          <Link href="/platform" className="rounded-sm outline-none focus-visible:focus-ring" aria-label="Início da plataforma">
+            <PlatformMark />
+          </Link>
         </div>
-        <PlatformNav />
-        <div className="border-t border-border px-3 py-3">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 pt-1">
+          <PlatformNav />
+        </div>
+        <div className="border-t border-border px-3 py-2">
           <Link
             href="/"
-            className="flex items-center gap-2 rounded-sm px-3 py-2 font-head text-sm text-text-mid outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md"
+            className="flex items-center gap-3 rounded-sm px-3 py-2 font-head text-sm font-medium text-text-mid outline-none transition-colors duration-200 hover:bg-surface-2 hover:text-text focus-visible:focus-ring motion-reduce:transition-none"
           >
-            <ArrowLeft className="size-4 shrink-0" aria-hidden />
+            <ArrowLeft className="size-4.5 shrink-0 text-text-low" aria-hidden />
             Voltar ao workspace
           </Link>
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col lg:pl-64">
-        {/* Faixa de plataforma: reforça visualmente o modo admin. */}
-        <header className="pt-safe pl-safe pr-safe sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-warn/30 bg-surface/80 px-4 backdrop-blur lg:px-8">
-          <div className="flex min-w-0 items-center gap-2">
-            <PlatformMobileNav />
-            <span className="rounded-pill bg-warn/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-warn">
-              Plataforma
-            </span>
-            <span className="hidden text-sm text-text-low sm:inline">
-              Acesso restrito a administradores de plataforma
-            </span>
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-62">
+        <header
+          className="pt-safe pl-safe pr-safe sticky top-0 z-30 border-b border-border bg-surface-glass shadow-[inset_0_2px_0_var(--warn)] backdrop-blur-xl"
+        >
+          <div className="flex h-14 items-center justify-between gap-3 px-4 lg:h-17 lg:px-8">
+            <div className="flex min-w-0 items-center gap-2">
+              <PlatformMobileNav />
+              <span className="lg:hidden">
+                <PlatformMark />
+              </span>
+              <p className="hidden items-center gap-2 font-body text-sm text-text-low lg:flex">
+                <span className="font-mono text-xs font-semibold uppercase tracking-[0.12em] text-warn">
+                  Modo plataforma
+                </span>
+                <span aria-hidden>·</span>
+                Acesso restrito. Toda ação sensível é auditada.
+              </p>
+            </div>
+            <div className="flex min-w-0 shrink-0 items-center gap-1">
+              <PlatformThemeToggle />
+              <span
+                className="ml-2 hidden min-w-0 max-w-56 flex-col text-right leading-tight sm:flex"
+                title={admin.email}
+              >
+                <span className="truncate font-body text-sm font-semibold text-text">{who}</span>
+                {admin.name && <span className="truncate font-mono text-xs text-text-low">{admin.email}</span>}
+              </span>
+            </div>
           </div>
-          <span className="truncate text-sm text-text-mid" title={admin.email}>
-            {admin.name ?? admin.email}
-          </span>
         </header>
 
         <main
           id="main-content"
           tabIndex={-1}
-          className="pb-safe pl-safe pr-safe flex-1 px-4 py-6 outline-none lg:px-8"
+          className="pb-safe pl-safe pr-safe flex-1 px-4 py-6 outline-none md:py-8 lg:px-8"
         >
-          {children}
+          <div className="mx-auto w-full max-w-content">{children}</div>
         </main>
       </div>
     </div>
