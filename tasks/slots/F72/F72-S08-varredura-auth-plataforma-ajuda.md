@@ -2,7 +2,7 @@
 id: F72-S08
 title: Varredura de auth, painel de plataforma, ajuda e páginas públicas no DS 3.0
 phase: F72
-status: blocked
+status: review
 priority: medium
 estimated_size: M
 ui: true
@@ -11,6 +11,10 @@ blocks: [F72-S09]
 source_docs:
   - docs/features/DS3_ADOCAO.md
   - docs/design/ds-3.0-agency-os.html
+agent_id: backend-engineer
+claimed_at: 2026-10-16T14:12:08Z
+completed_at: 2026-10-16T16:53:20Z
+
 ---
 # F72-S08 — Auth, plataforma, ajuda e páginas públicas
 
@@ -50,3 +54,12 @@ pnpm --filter @hm/web exec vitest run features/auth features/platform-admin feat
 ## Notas
 
 - Agente: `frontend-engineer`.
+
+## Notas de execução
+
+- 2 sub-lotes sequenciais: (a) auth (login, signup, verify, reset, convite) + aceite de convite (`features/invites/components/{InviteView,CreatePasswordForm}.tsx`, desvio autorizado) + `(public)` + Central de Ajuda; (b) painel de plataforma (14 telas). + rodada de correção do portão de design/segurança + ressalvas finais. Detalhe em `tasks/COMMS.md` (F72 lote C).
+- Telas no DS 3.0, 375/1440, dark/light, axe sem violação séria, contraste ≥4,5, captura em `apps/web/e2e/.artifacts/f72-s08/`: specs `e2e/specs/{auth-ds3,help-ds3,platform-ds3}.spec.ts`.
+- e2e de auth, convite e plataforma verdes (`auth`, `invite`, `signup-terms`, `help-support`, `members-invites`, `closed-panels-a11y`, `session-expired`, + os 3 novos: 191/191 na rodada de correção; platform-ds3 64/64 final). Suíte inteira 619/621 (2 intermitentes fora do escopo, verdes isoladas).
+- Lint: platform-admin 11 → 0; `eslint apps/web` 44 → 33 avisos, 0 erros.
+- `/hm-designer` (login e Workspace 360 obrigatórios): REPROVADO (2 bloqueantes) → corrigido → APROVADO COM RESSALVAS → ressalvas fechadas.
+- Segurança (fluxo de senha/auth): APROVADO COM RESSALVAS; LOW-1 (Referer com token), LOW-2 (Zod na exclusão de dados), LOW-3 (servidor de teste em loopback) corrigidos.

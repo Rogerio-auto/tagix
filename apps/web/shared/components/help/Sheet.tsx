@@ -73,7 +73,7 @@ export function Sheet({ open, onClose, title, children, widthClass = 'w-[420px]'
         onClick={onClose}
         aria-hidden
         className={cn(
-          'absolute inset-0 bg-black/50 transition-opacity duration-200',
+          'absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-(--dur-base) ease-ds motion-reduce:transition-none',
           open ? 'opacity-100' : 'opacity-0',
         )}
       />
@@ -83,23 +83,28 @@ export function Sheet({ open, onClose, title, children, widthClass = 'w-[420px]'
         aria-label={title}
         onKeyDown={trapTab}
         className={cn(
-          'absolute inset-y-0 right-0 flex max-w-full flex-col border-l border-border bg-surface shadow-elev-4 transition-transform duration-200',
+          'absolute inset-y-0 right-0 flex max-w-full flex-col border-l border-border bg-surface shadow-ds-3 transition-transform duration-(--dur-base) ease-ds-spring motion-reduce:transition-none',
           widthClass,
           open ? 'translate-x-0' : 'translate-x-full',
         )}
       >
-        <div className="flex items-center justify-between border-b border-border-2 px-5 py-4">
-          <h2 className="font-head text-lg font-semibold text-text">{title}</h2>
+        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 pt-[max(1rem,env(safe-area-inset-top))]">
+          <div className="flex min-w-0 flex-col gap-1">
+            <p aria-hidden className="font-mono text-xs font-medium uppercase tracking-[0.14em] text-text-low">
+              Ajuda
+            </p>
+            <h2 className="font-head text-h4 text-text">{title}</h2>
+          </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Fechar"
-            className="rounded-sm p-1 text-text-low outline-none hover:text-text focus-visible:shadow-glow-md"
+            className="-mr-1 grid size-9 shrink-0 place-items-center rounded-sm text-text-low outline-none transition-colors duration-(--dur-fast) ease-ds hover:bg-surface-2 hover:text-text focus-visible:focus-ring"
           >
-            <X className="size-5" />
+            <X className="size-5" aria-hidden />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto px-5 py-5 pb-safe-4 font-body text-body text-text-mid">{children}</div>
       </aside>
     </div>,
     document.body,

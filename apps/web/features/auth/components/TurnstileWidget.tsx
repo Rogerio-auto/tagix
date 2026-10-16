@@ -93,11 +93,12 @@ export function TurnstileWidget({ onToken }: { onToken: (token: string) => void 
 
   if (!siteKey) {
     return (
-      <p className="font-body text-xs text-text-low">
+      <p className="rounded-sm border border-dashed border-border-2 px-3 py-2 font-mono text-xs text-text-low">
         Verificação anti-robô desativada em desenvolvimento.
       </p>
     );
   }
 
-  return <div ref={ref} className="min-h-[65px]" aria-label="Verificação anti-robô" />;
+  // `role="group"`: `aria-label` em `div` sem papel é proibido (axe `aria-prohibited-attr`).
+  return <div ref={ref} role="group" className="min-h-[65px]" aria-label="Verificação anti-robô" />;
 }

@@ -1,65 +1,50 @@
 'use client';
 
 /**
- * Detalhe de um thread no inbox de suporte da plataforma (F38-S11). Mensagens
- * (member/platform), reply da equipe, e controles status/priority/assign.
- * Real-time via usePlatformSupportSocket (junta-se ao room do thread aberto).
+ * Detalhe de um thread no inbox de suporte da plataforma (F38-S11) no DS 3.0 (F72-S08).
+ * Mensagens (cliente/equipe), resposta da equipe e controles de status, prioridade e
+ * atribuição. Real-time via `usePlatformSupportSocket` (entra no room do thread aberto).
+ *
+ * Mesmas chamadas de antes (`usePlatformReply`, `usePatchThread`). Visual: bolha da equipe
+ * em tinta da marca de texto (não o verde cheio), horários em mono, botão de enviar com
+ * nome acessível. `compact`: dentro do Drawer (o título já está no cabeçalho dele).
+ *
+ * UX: §2.7 botões em carregando; §2.10 Enter envia, Shift+Enter quebra linha;
+ * §2.11 erro em 3 partes.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
-import type {
-  SupportMessageDTO,
-  SupportThreadPriorityT,
-  SupportThreadStatusT,
-} from '@hm/shared';
-import {
-  SUPPORT_THREAD_PRIORITIES,
-  SUPPORT_THREAD_STATUSES,
-} from '@hm/shared';
-import { Button } from '@hm/ui';
-import { PriorityBadge, StatusBadge } from './badges';
+import type { SupportMessageDTO, SupportThreadPriorityT, SupportThreadStatusT } from '@hm/shared';
+import { SUPPORT_THREAD_PRIORITIES, SUPPORT_THREAD_STATUSES } from '@hm/shared';
+import { Button, ErrorState, Skeleton } from '@hm/ui';
+import { cn } from '@/shared/lib/cn';
+import { formatDateTime } from '@/shared/lib/locale';
+import { useAuthStore } from '@/shared/stores/auth.store';
+import { controlClass, textareaClass } from '../ui/kit';
+import { PRIORITY_LABEL, PriorityBadge, STATUS_LABEL, StatusBadge } from './badges';
 import { usePatchThread, usePlatformReply, usePlatformThread } from './queries';
 import { usePlatformSupportSocket } from './usePlatformSupportSocket';
-import { useAuthStore } from '@/shared/stores/auth.store';
 
-const STATUS_LABEL: Record<SupportThreadStatusT, string> = {
-  open: 'Aberto',
-  pending: 'Aguardando',
-  resolved: 'Resolvido',
-};
-const PRIORITY_LABEL: Record<SupportThreadPriorityT, string> = {
-  low: 'Baixa',
-  normal: 'Normal',
-  high: 'Alta',
-};
+const WHEN: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
 
-const ctrlCls =
-  'rounded-md border border-border bg-surface-2 px-2 py-1.5 font-body text-xs text-text outline-none focus-visible:border-border-2 focus-visible:shadow-glow-md';
-
-function timeOf(iso: string | null): string {
-  if (!iso) return '';
-  return new Date(iso).toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-export function InboxThread({ threadId }: { threadId: string }) {
+export function InboxThread({ threadId, compact = false }: { threadId: string; compact?: boolean }) {
   usePlatformSupportSocket(threadId);
-  const { data, isLoading, isError, refetch } = usePlatformThread(threadId);
+  const { data, isLoading, isError, isFetching, refetch } = usePlatformThread(threadId);
   const reply = usePlatformReply(threadId);
   const patch = usePatchThread(threadId);
   const memberId = useAuthStore((st) => st.auth?.memberId);
   const [draft, setDraft] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
+  const statusId = useId();
+  const priorityId = useId();
 
   const thread = data?.thread;
   const messages: SupportMessageDTO[] = data?.messages ?? [];
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // `motion-safe` vale para o scroll também: sob movimento reduzido, salta.
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    endRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'nearest' });
   }, [messages.length]);
 
   function submit(): void {
@@ -69,40 +54,54 @@ export function InboxThread({ threadId }: { threadId: string }) {
   }
 
   if (isLoading) {
-    return <div className="flex-1 p-6 text-sm text-text-low">Carregando conversa...</div>;
+    return (
+      <div role="status" aria-busy="true" aria-label="Carregando a conversa" className="flex flex-1 flex-col gap-3 p-5">
+        <Skeleton className="h-6 w-2/3" />
+        <Skeleton className="h-16 w-3/4 rounded-lg" />
+        <Skeleton className="ml-auto h-16 w-2/3 rounded-lg" />
+      </div>
+    );
   }
   if (isError || !thread) {
     return (
-      <div className="flex-1 p-6 text-center">
-        <p className="text-sm text-danger">Falha ao carregar a conversa.</p>
-        <Button variant="secondary" size="sm" onClick={() => void refetch()} className="mt-3">
-          Tentar novamente
-        </Button>
+      <div className="flex flex-1 items-center justify-center p-5">
+        <ErrorState
+          title="Não foi possível abrir a conversa"
+          reason="O histórico deste thread não respondeu."
+          whatToDo="Tente de novo em instantes."
+          action={
+            <Button variant="secondary" size="sm" loading={isFetching} onClick={() => void refetch()}>
+              Tentar de novo
+            </Button>
+          }
+        />
       </div>
     );
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-col gap-3 border-b border-border-2 px-5 py-4">
-        <div className="flex items-center gap-2">
-          <h2 className="flex-1 truncate font-head text-base font-semibold text-text">
-            {thread.subject}
-          </h2>
-          <StatusBadge status={thread.status} />
-          <PriorityBadge priority={thread.priority} />
-        </div>
-        <p className="font-body text-xs text-text-low">
-          Workspace: <span className="font-price text-text-mid">{thread.workspaceId}</span>
+      <div className="flex flex-col gap-3 border-b border-border px-5 py-4">
+        {!compact && (
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="min-w-0 flex-1 truncate font-head text-base font-semibold text-text">{thread.subject}</h2>
+            <StatusBadge status={thread.status} />
+            <PriorityBadge priority={thread.priority} />
+          </div>
+        )}
+        <p className="font-body text-sm text-text-low">
+          Workspace <span className="font-mono text-text-mid">{thread.workspaceId}</span>
         </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5 text-xs text-text-low">
-            Status
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label htmlFor={statusId} className="font-body text-xs font-bold text-text-mid">
+              Status
+            </label>
             <select
+              id={statusId}
               value={thread.status}
               onChange={(e) => patch.mutate({ status: e.target.value as SupportThreadStatusT })}
-              className={ctrlCls}
-              aria-label="Alterar status"
+              className={cn(controlClass, 'h-9 w-auto')}
             >
               {SUPPORT_THREAD_STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -110,14 +109,16 @@ export function InboxThread({ threadId }: { threadId: string }) {
                 </option>
               ))}
             </select>
-          </label>
-          <label className="flex items-center gap-1.5 text-xs text-text-low">
-            Prioridade
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor={priorityId} className="font-body text-xs font-bold text-text-mid">
+              Prioridade
+            </label>
             <select
+              id={priorityId}
               value={thread.priority}
               onChange={(e) => patch.mutate({ priority: e.target.value as SupportThreadPriorityT })}
-              className={ctrlCls}
-              aria-label="Alterar prioridade"
+              className={cn(controlClass, 'h-9 w-auto')}
             >
               {SUPPORT_THREAD_PRIORITIES.map((p) => (
                 <option key={p} value={p}>
@@ -125,14 +126,14 @@ export function InboxThread({ threadId }: { threadId: string }) {
                 </option>
               ))}
             </select>
-          </label>
+          </div>
           <span className="ml-auto flex items-center gap-2">
             {thread.assignedTo ? (
               <>
-                <span className="font-body text-xs text-text-low">
-                  Atribuido:{' '}
-                  <span className="font-price text-text-mid">
-                    {thread.assignedTo === memberId ? 'Voce' : thread.assignedTo}
+                <span className="font-body text-sm text-text-low">
+                  Atribuída a{' '}
+                  <span className="font-mono text-text-mid">
+                    {thread.assignedTo === memberId ? 'você' : thread.assignedTo}
                   </span>
                 </span>
                 <Button
@@ -147,7 +148,7 @@ export function InboxThread({ threadId }: { threadId: string }) {
               </>
             ) : (
               <>
-                <span className="font-body text-xs text-text-low">Nao atribuido</span>
+                <span className="font-body text-sm text-text-low">Sem responsável</span>
                 {memberId ? (
                   <Button
                     variant="secondary"
@@ -165,28 +166,36 @@ export function InboxThread({ threadId }: { threadId: string }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-4" aria-live="polite" aria-label="Mensagens">
+      <div
+        role="log"
+        aria-label="Mensagens"
+        // Região rolável focável: o teclado também rola o histórico (axe scrollable-region-focusable).
+        tabIndex={0}
+        className="min-h-0 flex-1 overflow-y-auto px-5 py-4 outline-none focus-visible:focus-ring"
+      >
         <ul className="flex flex-col gap-3">
           {messages.map((m) => {
             const fromPlatform = m.senderType === 'platform';
             return (
-              <li
-                key={m.id}
-                className={fromPlatform ? 'flex flex-col items-end' : 'flex flex-col items-start'}
-              >
+              <li key={m.id} className={cn('flex flex-col', fromPlatform ? 'items-end' : 'items-start')}>
                 <div
-                  className={
+                  className={cn(
+                    'max-w-[80%] rounded-lg border px-3.5 py-2.5',
                     fromPlatform
-                      ? 'max-w-[80%] rounded-2xl rounded-br-sm bg-brand px-3.5 py-2 text-text-on-brand'
-                      : 'max-w-[80%] rounded-2xl rounded-bl-sm bg-surface-2 px-3.5 py-2 text-text'
-                  }
+                      ? 'rounded-br-xs border-brand-text/20 bg-brand-text/10'
+                      : 'rounded-bl-xs border-border bg-surface-2',
+                  )}
                 >
-                  <span className="mb-0.5 block font-head text-[11px] font-semibold uppercase tracking-wide opacity-70">
-                    {fromPlatform ? 'Equipe Leadium' : 'Cliente'}
+                  <span className="mb-1 block font-mono text-[0.6875rem] font-semibold uppercase tracking-widest text-text-mid">
+                    {fromPlatform ? 'Equipe' : 'Cliente'}
                   </span>
-                  <span className="whitespace-pre-wrap break-words font-body text-sm">{m.body}</span>
+                  <span className="whitespace-pre-wrap break-words font-body text-sm text-text">{m.body}</span>
                 </div>
-                <span className="mt-0.5 font-body text-[11px] text-text-low">{timeOf(m.createdAt)}</span>
+                {m.createdAt && (
+                  <time dateTime={m.createdAt} className="mt-1 font-mono text-xs tabular-nums text-text-low">
+                    {formatDateTime(m.createdAt, WHEN)}
+                  </time>
+                )}
               </li>
             );
           })}
@@ -194,7 +203,7 @@ export function InboxThread({ threadId }: { threadId: string }) {
         <div ref={endRef} />
       </div>
 
-      <div className="border-t border-border-2 p-3">
+      <div className="border-t border-border p-3">
         <form
           className="flex items-end gap-2"
           onSubmit={(e) => {
@@ -212,12 +221,19 @@ export function InboxThread({ threadId }: { threadId: string }) {
               }
             }}
             rows={1}
-            placeholder="Responder ao cliente..."
+            placeholder="Responder ao cliente…"
             aria-label="Resposta da equipe"
-            className="max-h-32 min-h-[40px] flex-1 resize-none rounded-md border border-border bg-surface-2 px-3 py-2 font-body text-sm text-text outline-none transition-colors placeholder:text-text-low focus-visible:border-border-2 focus-visible:shadow-glow-md"
+            className={cn(textareaClass, 'max-h-32 min-h-10 flex-1 resize-none')}
           />
-          <Button type="submit" variant="primary" size="sm" loading={reply.isPending} disabled={draft.trim() === ''}>
-            <Send className="size-4" aria-hidden />
+          <Button
+            type="submit"
+            variant="primary"
+            loading={reply.isPending}
+            disabled={draft.trim() === ''}
+            aria-label="Enviar resposta"
+            leftIcon={<Send className="size-4" aria-hidden />}
+          >
+            <span className="max-sm:sr-only">Enviar</span>
           </Button>
         </form>
       </div>

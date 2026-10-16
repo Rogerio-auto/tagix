@@ -1,205 +1,315 @@
 'use client';
 
 /**
- * Hub de Tenants (F26-S07) — lista buscavel/paginavel com plano, status, #membros e
- * custo-mes; clicar leva ao Workspace 360 (UX §3.1: selecionar antes de agir). Consome
- * F26-S02. DS v2 dark-first (tokens semanticos, zero hex); skeleton no loading (§3.6).
- * Mobile (F36-S13): tabela→cards + filtros em sheet via `ResponsiveTable`.
+ * Hub de Tenants (F26-S07) no DS 3.0 (F72-S08) — lista buscável e paginada com plano,
+ * status, membros e custo de IA do mês; clicar na linha abre o Workspace 360 (UX §2.1).
+ *
+ * Desktop: `DataTable` operacional (slug, números e datas em mono). Mobile: cards via
+ * `ResponsiveTable` (filtro no bottom-sheet). Custo de IA é legítimo aqui: quem vê pode
+ * agir sobre ele (DS3_ADOCAO §2.7).
+ *
+ * UX: §2.1 linha clicável; §2.5 `?` no título; §2.6 vazio distingue "sem tenants" de
+ * "filtro sem resultado"; §2.7 skeleton no formato da tabela; §2.10 Tab/Enter/setas na
+ * tabela; §2.11 erro em 3 partes com "Tentar de novo".
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Search } from 'lucide-react';
+import { Building2, ChevronLeft, ChevronRight, Search, SearchX } from 'lucide-react';
+import { Button, DataTable, EmptyState, ErrorState, type DataTableColumn } from '@hm/ui';
 import { ResponsiveTable, type ResponsiveColumn } from '@/shared/components/ResponsiveTable';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
+import { cn } from '@/shared/lib/cn';
+import { formatDate, formatNumber } from '@/shared/lib/locale';
+import { SUBSCRIPTION_STATUSES, subscriptionStatus, usd } from '../lib/labels';
+import { PlatformPageHeader } from '../ui/PlatformPageHeader';
+import { SubscriptionBadge } from '../ui/kit';
 import { useTenants, type TenantListItem } from './queries';
 
 const PAGE_SIZE = 25;
+const TABLE_DATE: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' };
 
-const STATUS_OPTIONS = [
-  { value: '', label: 'Todos os status' },
-  { value: 'trial', label: 'Trial' },
-  { value: 'active', label: 'Ativo' },
-  { value: 'past_due', label: 'Inadimplente' },
-  { value: 'canceled', label: 'Cancelado' },
-  { value: 'expired', label: 'Expirado' },
-] as const;
-
-const STATUS_TONE: Record<string, string> = {
-  trial: 'bg-info/15 text-info',
-  active: 'bg-ok/15 text-ok',
-  past_due: 'bg-warn/15 text-warn',
-  canceled: 'bg-surface-3 text-text-mid',
-  expired: 'bg-danger/15 text-danger',
-};
-
-function StatusPill({ status }: { status: string }) {
-  return (
-    <span
-      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_TONE[status] ?? 'bg-surface-3 text-text-mid'}`}
-    >
-      {status}
-    </span>
-  );
-}
+const FILTERS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: '', label: 'Todos' },
+  ...SUBSCRIPTION_STATUSES.map((s) => ({ value: s, label: subscriptionStatus(s).label })),
+];
 
 export function TenantsList() {
   const router = useRouter();
+  const { isMobile } = useBreakpoint();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(0);
 
-  const { data, isLoading, isError } = useTenants({
+  const query = useTenants({
     search: search.trim() || undefined,
     status: status || undefined,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
   });
 
-  const total = data?.total ?? 0;
+  const tenants = query.data?.tenants ?? [];
+  const total = query.data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const isFiltering = status !== '' || search.trim() !== '';
+  const open = (t: TenantListItem) => router.push(`/platform/tenants/${t.id}`);
 
-  const statusLabel = STATUS_OPTIONS.find((o) => o.value === status)?.label;
+  const clearFilters = () => {
+    setStatus('');
+    setSearch('');
+    setPage(0);
+  };
 
-  const columns: ResponsiveColumn<TenantListItem>[] = [
+  // ── Desktop ────────────────────────────────────────────────────────────────
+  const columns: DataTableColumn<TenantListItem>[] = [
     {
       id: 'tenant',
       header: 'Tenant',
-      card: 'primary',
       cell: (t) => (
-        <span className="flex flex-col">
-          <span className="font-medium text-text-high">{t.name}</span>
-          <span className="text-xs text-text-low">{t.slug}</span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate font-bold text-text">{t.name}</span>
+          <span className="truncate font-mono text-xs text-text-low">{t.slug}</span>
         </span>
       ),
     },
     {
       id: 'plan',
       header: 'Plano',
-      className: 'text-text-mid',
-      cell: (t) => t.planName ?? '—',
+      width: '11rem',
+      cell: (t) => <span className="truncate text-text-mid">{t.planName ?? 'Sem plano'}</span>,
     },
-    {
-      id: 'status',
-      header: 'Status',
-      card: 'badge',
-      cell: (t) => <StatusPill status={t.subscriptionStatus} />,
-    },
+    { id: 'status', header: 'Status', width: '9.5rem', cell: (t) => <SubscriptionBadge status={t.subscriptionStatus} size="sm" /> },
     {
       id: 'members',
       header: 'Membros',
-      align: 'right',
-      className: 'text-right font-mono text-text-mid',
-      cell: (t) => `${t.memberCount} membro(s)`,
+      numeric: true,
+      width: '7rem',
+      cell: (t) => <span className="text-text-mid">{formatNumber(t.memberCount)}</span>,
     },
     {
       id: 'cost',
-      header: 'Custo (mês)',
-      align: 'right',
-      className: 'text-right font-mono text-text-mid',
-      cell: (t) => `$${t.monthCostUsd.toFixed(2)}`,
+      header: 'Custo IA (mês)',
+      numeric: true,
+      width: '9rem',
+      cell: (t) => <span className="text-text">{usd(t.monthCostUsd)}</span>,
+    },
+    {
+      id: 'createdAt',
+      header: 'Criado em',
+      numeric: true,
+      width: '8rem',
+      cell: (t) => <span className="whitespace-nowrap text-text-mid">{formatDate(t.createdAt, TABLE_DATE)}</span>,
     },
   ];
 
-  const filters = (
-    <select
-      value={status}
-      onChange={(e) => {
-        setStatus(e.target.value);
-        setPage(0);
-      }}
-      aria-label="Filtrar por status"
-      className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text-high focus:border-accent focus:outline-none"
-    >
-      {STATUS_OPTIONS.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
-  );
+  // ── Mobile ─────────────────────────────────────────────────────────────────
+  const cardColumns: ResponsiveColumn<TenantListItem>[] = [
+    { id: 'name', card: 'primary', cell: (t) => t.name },
+    {
+      id: 'plan',
+      card: 'secondary',
+      cell: (t) => (
+        <span>
+          {t.planName ?? 'Sem plano'} · <span className="font-mono">{t.slug}</span>
+        </span>
+      ),
+    },
+    { id: 'status', card: 'badge', cell: (t) => <SubscriptionBadge status={t.subscriptionStatus} size="sm" /> },
+    {
+      id: 'numbers',
+      card: 'meta',
+      cell: (t) => (
+        <span className="whitespace-nowrap font-mono tabular-nums">
+          {formatNumber(t.memberCount)} {t.memberCount === 1 ? 'membro' : 'membros'} · {usd(t.monthCostUsd)}
+        </span>
+      ),
+    },
+  ];
 
-  const searchSlot = (
-    <div className="relative">
-      <Search
-        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-low"
-        aria-hidden
-      />
+  const searchField = (
+    <div className="relative w-full md:max-w-sm">
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-low" aria-hidden />
       <input
+        type="search"
         value={search}
         onChange={(e) => {
           setSearch(e.target.value);
           setPage(0);
         }}
-        placeholder="Buscar por nome ou slug…"
+        placeholder="Buscar por nome ou slug"
         aria-label="Buscar tenant"
-        className="w-full rounded-lg border border-border bg-surface-2 py-2 pl-9 pr-3 text-sm text-text-high placeholder:text-text-low focus:border-accent focus:outline-none"
+        className="h-10 w-full rounded-sm border border-border bg-surface-2 pl-9 pr-3 font-body text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds placeholder:text-text-low hover:border-border-2 focus:border-brand-text focus-visible:focus-ring sm:text-sm"
       />
     </div>
   );
 
-  return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-text-high">Tenants</h1>
-        <p className="text-sm text-text-mid">
-          Todos os workspaces da plataforma. Clique para abrir o 360 do tenant.
-        </p>
-      </header>
+  const filterControls = (
+    <div role="group" aria-label="Filtrar por status" className="flex flex-wrap gap-1.5">
+      {FILTERS.map((f) => {
+        const active = status === f.value;
+        return (
+          <button
+            key={f.value || 'all'}
+            type="button"
+            aria-pressed={active}
+            onClick={() => {
+              setStatus(f.value);
+              setPage(0);
+            }}
+            className={cn(
+              'h-11 rounded-pill border px-3 font-body text-sm font-medium outline-none md:h-8',
+              'transition-colors duration-(--dur-fast) ease-ds focus-visible:focus-ring motion-reduce:transition-none',
+              active
+                ? 'border-brand-text/30 bg-brand-text/10 text-brand-text'
+                : 'border-border bg-surface text-text-mid hover:border-border-2 hover:text-text',
+            )}
+          >
+            {f.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 
-      <ResponsiveTable
-        ariaLabel="Tenants"
-        rows={data?.tenants ?? []}
-        columns={columns}
-        getRowId={(t) => t.id}
-        onRowClick={(t) => router.push(`/platform/tenants/${t.id}`)}
-        rowLabel={(t) => `Abrir 360 de ${t.name}`}
-        searchSlot={searchSlot}
-        filters={filters}
-        filtersTitle="Filtrar tenants"
-        activeFilters={
-          status
-            ? [{ id: 'status', label: `Status: ${statusLabel}`, onClear: () => setStatus('') }]
-            : []
-        }
-        onClearFilters={() => setStatus('')}
-        isLoading={isLoading}
-        isError={isError}
-        empty={{
-          icon: Building2,
-          title: 'Nenhum tenant encontrado',
-          description: 'Ajuste a busca ou o filtro de status.',
-        }}
-        error={{
-          title: 'Não foi possível carregar os tenants',
-          whatToDo: 'Tente novamente em instantes.',
-        }}
-        footer={
-          total > 0 ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-text-mid">
-              <span>
-                {total} tenant(s) · página {page + 1} de {pageCount}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={page === 0}
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  className="touch-target rounded-lg border border-border px-3 py-1.5 text-text-high disabled:opacity-40"
-                >
-                  Anterior
-                </button>
-                <button
-                  type="button"
-                  disabled={page + 1 >= pageCount}
-                  onClick={() => setPage((p) => p + 1)}
-                  className="touch-target rounded-lg border border-border px-3 py-1.5 text-text-high disabled:opacity-40"
-                >
-                  Próxima
-                </button>
-              </div>
-            </div>
-          ) : undefined
-        }
-      />
+  const retry = (
+    <Button variant="secondary" size="sm" loading={query.isFetching} onClick={() => void query.refetch()}>
+      Tentar de novo
+    </Button>
+  );
+  const errorCopy = {
+    title: 'Não foi possível carregar os tenants',
+    reason: 'A lista de workspaces da plataforma não respondeu.',
+    whatToDo: 'Verifique a conexão e tente novamente.',
+  };
+  const noResults = {
+    title: 'Nenhum tenant com estes filtros',
+    description: 'Ajuste a busca ou o status, ou veja todos os workspaces.',
+  };
+  const firstUse = {
+    title: 'Nenhum tenant ainda',
+    description: 'Os workspaces aparecem aqui assim que alguém cria uma conta.',
+  };
+
+  const from = total === 0 ? 0 : page * PAGE_SIZE + 1;
+  const to = Math.min(total, (page + 1) * PAGE_SIZE);
+  const pager =
+    total > PAGE_SIZE ? (
+      <nav aria-label="Paginação de tenants" className="flex flex-wrap items-center justify-between gap-3">
+        <p className="font-body text-sm text-text-low">
+          <span className="font-mono tabular-nums text-text-mid">
+            {formatNumber(from)}–{formatNumber(to)}
+          </span>{' '}
+          de <span className="font-mono tabular-nums text-text-mid">{formatNumber(total)}</span>
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="max-md:h-11"
+            disabled={page === 0}
+            leftIcon={<ChevronLeft className="size-4" aria-hidden />}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+          >
+            Anterior
+          </Button>
+          <span className="font-mono text-sm tabular-nums text-text-low" aria-live="polite">
+            {formatNumber(page + 1)}/{formatNumber(pageCount)}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="max-md:h-11"
+            disabled={page + 1 >= pageCount}
+            rightIcon={<ChevronRight className="size-4" aria-hidden />}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Próxima
+          </Button>
+        </div>
+      </nav>
+    ) : null;
+
+  const description = query.data ? (
+    <span>
+      <span className="font-mono tabular-nums text-text-mid">{formatNumber(total)}</span>{' '}
+      {total === 1 ? 'workspace' : 'workspaces'}
+      {isFiltering ? ' com estes filtros' : ' na plataforma'}
+    </span>
+  ) : (
+    'Todos os workspaces da plataforma.'
+  );
+
+  return (
+    <div className="flex flex-col">
+      <PlatformPageHeader href="/platform/tenants" title="Tenants" description={description} />
+
+      {isMobile ? (
+        <div className="flex flex-col gap-3">
+          <ResponsiveTable<TenantListItem>
+            ariaLabel="Tenants"
+            rows={tenants}
+            columns={cardColumns}
+            getRowId={(t) => t.id}
+            onRowClick={open}
+            rowLabel={(t) => `Abrir 360 de ${t.name}`}
+            searchSlot={searchField}
+            filters={filterControls}
+            filtersTitle="Filtrar tenants"
+            activeFilters={
+              status
+                ? [{ id: 'status', label: `Status: ${subscriptionStatus(status).label}`, onClear: () => setStatus('') }]
+                : []
+            }
+            onClearFilters={isFiltering ? clearFilters : undefined}
+            isLoading={query.isLoading}
+            isError={query.isError}
+            error={{ ...errorCopy, action: retry }}
+            empty={{ icon: isFiltering ? SearchX : Building2, ...(isFiltering ? noResults : firstUse) }}
+          />
+          {pager}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {searchField}
+            {filterControls}
+          </div>
+          <DataTable<TenantListItem>
+            caption="Tenants"
+            columns={columns}
+            rows={tenants}
+            getRowId={(t) => t.id}
+            loading={query.isLoading}
+            loadingRows={8}
+            onRowClick={open}
+            getRowLabel={(t) => `Abrir 360 de ${t.name}`}
+            getRowState={(t) =>
+              t.subscriptionStatus === 'past_due'
+                ? 'attention'
+                : t.subscriptionStatus === 'canceled' || t.subscriptionStatus === 'expired'
+                  ? 'muted'
+                  : undefined
+            }
+            error={query.isError ? <ErrorState {...errorCopy} action={retry} /> : undefined}
+            empty={
+              isFiltering ? (
+                <EmptyState
+                  variant="no-results"
+                  icon={SearchX}
+                  {...noResults}
+                  secondaryAction={
+                    <Button variant="ghost" size="sm" onClick={clearFilters}>
+                      Limpar filtros
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState icon={Building2} {...firstUse} />
+              )
+            }
+          />
+          {pager}
+        </div>
+      )}
     </div>
   );
 }

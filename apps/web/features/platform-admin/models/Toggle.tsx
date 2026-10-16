@@ -1,40 +1,25 @@
 'use client';
 
-import { cn } from '@/shared/lib/cn';
+import { Switch } from '@hm/ui';
 
-/** Switch acessível (checkbox nativo estilizado, DS v2). Reusado em modelos/políticas. */
+/**
+ * Interruptor on/off do painel (modelos, políticas): o `Switch` do DS 3.0 com a API
+ * antiga (`checked`/`onChange`/`label`), para os consumidores não mudarem (F72-S08).
+ */
 export function Toggle({
   checked,
   onChange,
   disabled,
+  loading,
   label,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
   disabled?: boolean;
+  loading?: boolean;
   label: string;
 }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        'relative inline-flex h-5 w-9 shrink-0 items-center rounded-pill outline-none transition-colors',
-        'focus-visible:shadow-glow-md disabled:opacity-50',
-        checked ? 'bg-brand' : 'bg-surface-3',
-      )}
-    >
-      <span
-        className={cn(
-          'inline-block size-4 rounded-pill bg-white transition-transform',
-          checked ? 'translate-x-4' : 'translate-x-0.5',
-        )}
-        aria-hidden
-      />
-    </button>
+    <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} loading={loading} aria-label={label} />
   );
 }

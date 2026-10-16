@@ -6,12 +6,15 @@
  * checkout real (POST /billing/checkout, F41-S07) e copia/abre o link.
  *
  * Inline expand-in-place (não full-screen modal, UX §2.3) coerente com o resto
- * do platform-admin. DS v2 dark-first, zero hex hardcoded. Quem transiciona o
- * status do tenant é sempre o webhook HMAC — aqui só geramos o link.
+ * do platform-admin. DS 3.0 (F72-S08): controles no desenho do `Input`, valor em mono,
+ * moeda pelo `shared/lib/locale` (sem locale literal). Quem transiciona o status do
+ * tenant é sempre o webhook HMAC — aqui só geramos o link (fluxo inalterado).
  */
 import { useMemo, useState } from 'react';
 import { Check, Copy, ExternalLink, Link2, ReceiptText, X } from 'lucide-react';
-import { Button, useToast } from '@hm/ui';
+import { Button, IconButton, useToast } from '@hm/ui';
+import { formatMoney } from '@/shared/lib/locale';
+import { controlClass, FieldLabel } from '../ui/kit';
 import {
   type BillingCycle,
   type BillingMethod,
@@ -60,15 +63,12 @@ const ERROR_COPY: Record<CheckoutErrorCode, { title: string; description: string
   },
 };
 
-const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+/** O catálogo de planos é cobrado em real (AbacatePay, PAYMENTS_ABACATEPAY.md). */
+const PLAN_CURRENCY = 'BRL';
 
 function fmtCents(cents: number): string {
-  return BRL.format(cents / 100);
+  return formatMoney(cents, PLAN_CURRENCY);
 }
-
-/** Estilo compartilhado dos <select> (espelha o padrão do platform-admin). */
-const selectClass =
-  'rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text-high focus:border-accent focus:outline-none focus-visible:shadow-glow-md';
 
 function GeneratedLink({ result, onReset }: { result: CheckoutResult; onReset: () => void }) {
   const { toast } = useToast();
@@ -86,16 +86,16 @@ function GeneratedLink({ result, onReset }: { result: CheckoutResult; onReset: (
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-ok/40 bg-ok/5 p-4">
-      <div className="flex items-center gap-2 text-sm font-semibold text-text-high">
-        <Check className="size-4 text-ok" aria-hidden />
+    <div role="status" className="flex flex-col gap-3 rounded-md border border-success/30 bg-success/10 p-4">
+      <div className="flex items-center gap-2 font-body text-sm font-bold text-text">
+        <Check className="size-4 text-success" aria-hidden />
         Link de cobrança gerado
       </div>
-      <p className="text-xs text-text-mid">
-        {fmtCents(result.amountCents)} · {result.cycle === 'yearly' ? 'anual' : 'mensal'} ·{' '}
-        {result.method === 'pix' ? 'PIX' : 'cartão'}
+      <p className="font-body text-sm text-text-mid">
+        <span className="font-mono tabular-nums text-text">{fmtCents(result.amountCents)}</span> ·{' '}
+        {result.cycle === 'yearly' ? 'anual' : 'mensal'} · {result.method === 'pix' ? 'PIX' : 'cartão'}
       </p>
-      <div className="flex items-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2 rounded-sm border border-border bg-surface-2 px-3 py-2">
         <Link2 className="size-4 shrink-0 text-text-low" aria-hidden />
         <span className="truncate font-mono text-xs text-text-mid" title={result.redirectUrl}>
           {result.redirectUrl}
@@ -106,25 +106,21 @@ function GeneratedLink({ result, onReset }: { result: CheckoutResult; onReset: (
           size="sm"
           variant="secondary"
           onClick={copy}
-          leftIcon={copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+          leftIcon={copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
         >
           {copied ? 'Copiado' : 'Copiar link'}
         </Button>
         <Button
           size="sm"
           variant="outline"
-          leftIcon={<ExternalLink className="size-4" />}
+          leftIcon={<ExternalLink className="size-4" aria-hidden />}
           onClick={() => window.open(result.redirectUrl, '_blank', 'noopener,noreferrer')}
         >
           Abrir checkout
         </Button>
-        <button
-          type="button"
-          onClick={onReset}
-          className="ml-auto rounded-md px-2 py-1 text-xs text-text-low outline-none hover:text-text-high focus-visible:shadow-glow-md"
-        >
+        <Button size="sm" variant="ghost" className="ml-auto" onClick={onReset}>
           Gerar outro
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -185,11 +181,11 @@ export function BillingCheckoutPanel({
 
   if (!open) {
     return (
-      <div className="mt-1 border-t border-border pt-3">
+      <div className="mt-4 border-t border-border pt-4">
         <Button
           size="sm"
           variant="outline"
-          leftIcon={<ReceiptText className="size-4" />}
+          leftIcon={<ReceiptText className="size-4" aria-hidden />}
           onClick={() => setOpen(true)}
         >
           Gerar cobrança
@@ -199,104 +195,99 @@ export function BillingCheckoutPanel({
   }
 
   return (
-    <div className="mt-4 flex flex-col gap-4 rounded-lg border border-border bg-surface-2 p-4">
-      <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-text-high">
-          <ReceiptText className="size-4 text-text-mid" aria-hidden />
+    <div className="mt-4 flex flex-col gap-4 rounded-md border border-border bg-surface-inset p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="flex items-center gap-2 font-head text-sm font-semibold text-text">
+          <ReceiptText className="size-4 text-text-low" aria-hidden />
           Gerar cobrança
         </h3>
-        <button
-          type="button"
+        <IconButton
+          variant="ghost"
+          size="sm"
+          aria-label="Fechar a cobrança"
+          icon={<X aria-hidden />}
           onClick={() => {
             setOpen(false);
             generate.reset();
           }}
-          aria-label="Fechar"
-          className="rounded-md p-1 text-text-low outline-none hover:text-text-high focus-visible:shadow-glow-md"
-        >
-          <X className="size-4" aria-hidden />
-        </button>
+        />
       </div>
 
       {generate.isSuccess && generate.data ? (
         <GeneratedLink result={generate.data} onReset={() => generate.reset()} />
+      ) : plansError ? (
+        <p role="alert" className="font-body text-sm text-danger">
+          Não foi possível carregar os planos. Recarregue a página.
+        </p>
       ) : (
         <>
-          {plansError ? (
-            <p className="text-sm text-danger">Não foi possível carregar os planos. Recarregue a página.</p>
-          ) : (
-            <>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <label className="flex flex-col gap-1 text-sm sm:col-span-3">
-                  <span className="text-text-mid">Plano</span>
-                  <select
-                    value={effectivePlanId}
-                    onChange={(e) => setPlanId(e.target.value)}
-                    disabled={plansLoading || plans.length === 0}
-                    className={selectClass}
-                  >
-                    {plans.length === 0 && <option value="">{plansLoading ? 'Carregando…' : 'Nenhum plano ativo'}</option>}
-                    {plans.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  <span className="text-text-mid">Ciclo</span>
-                  <select
-                    value={cycle}
-                    onChange={(e) => setCycle(e.target.value as BillingCycle)}
-                    className={selectClass}
-                  >
-                    {CYCLES.map((c) => (
-                      <option key={c.value} value={c.value}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  <span className="text-text-mid">Método</span>
-                  <select
-                    value={method}
-                    onChange={(e) => setMethod(e.target.value as BillingMethod)}
-                    className={selectClass}
-                  >
-                    {METHODS.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="flex flex-col justify-end gap-1 text-sm">
-                  <span className="text-text-mid">Valor</span>
-                  <span className="rounded-lg border border-border bg-surface-1 px-3 py-2 text-text-high">
-                    {previewCents != null ? fmtCents(previewCents) : '—'}
-                  </span>
-                </div>
-              </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FieldLabel label="Plano" className="col-span-2">
+              <select
+                value={effectivePlanId}
+                onChange={(e) => setPlanId(e.target.value)}
+                disabled={plansLoading || plans.length === 0}
+                className={controlClass}
+              >
+                {plans.length === 0 && <option value="">{plansLoading ? 'Carregando…' : 'Nenhum plano ativo'}</option>}
+                {plans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </FieldLabel>
+            <FieldLabel label="Ciclo">
+              <select
+                value={cycle}
+                onChange={(e) => setCycle(e.target.value as BillingCycle)}
+                className={controlClass}
+              >
+                {CYCLES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </FieldLabel>
+            <FieldLabel label="Método">
+              <select
+                value={method}
+                onChange={(e) => setMethod(e.target.value as BillingMethod)}
+                className={controlClass}
+              >
+                {METHODS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </FieldLabel>
+          </div>
 
-              <p className="text-xs text-text-low">
-                Gera um link de checkout real. O acesso do tenant só muda quando o pagamento for confirmado.
-              </p>
+          <div className="flex items-baseline justify-between gap-3 border-t border-border pt-3">
+            <span className="font-body text-sm text-text-low">Valor</span>
+            <span className="font-mono text-xl tabular-nums text-text" aria-live="polite">
+              {previewCents != null ? fmtCents(previewCents) : '—'}
+            </span>
+          </div>
 
-              <div className="flex justify-end">
-                <Button
-                  size="sm"
-                  variant="primary"
-                  loading={generate.isPending}
-                  disabled={!effectivePlanId}
-                  onClick={onGenerate}
-                  leftIcon={<Link2 className="size-4" />}
-                >
-                  {generate.isPending ? 'Gerando…' : 'Gerar link'}
-                </Button>
-              </div>
-            </>
-          )}
+          <p className="font-body text-sm text-text-low">
+            Gera um link de checkout real. O acesso do tenant só muda quando o pagamento for confirmado.
+          </p>
+
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="primary"
+              loading={generate.isPending}
+              disabled={!effectivePlanId}
+              onClick={onGenerate}
+              leftIcon={<Link2 className="size-4" aria-hidden />}
+            >
+              {generate.isPending ? 'Gerando…' : 'Gerar link'}
+            </Button>
+          </div>
         </>
       )}
     </div>

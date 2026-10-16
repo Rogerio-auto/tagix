@@ -14,6 +14,7 @@ import {
   resendSuccessMessage,
   type ResendFailure,
 } from '../resend';
+import { AuthNotice } from './AuthKit';
 import { TurnstileWidget } from './TurnstileWidget';
 
 export interface ResendVerificationProps {
@@ -112,21 +113,16 @@ export function ResendVerification({
       {/* Região viva sempre montada: leitores de tela anunciam a mudança de conteúdo. */}
       <div aria-live="polite" role="status" className="empty:hidden">
         {sentTo && !resend.isPending && (
-          <div className="flex gap-3 rounded-md border border-border bg-surface-2 p-3">
-            <MailCheck className="mt-0.5 size-5 shrink-0 text-success" aria-hidden />
-            <p className="font-body text-sm text-text-mid">{resendSuccessMessage(sentTo)}</p>
-          </div>
+          <AuthNotice tone="neutral" icon={<MailCheck aria-hidden />}>
+            {resendSuccessMessage(sentTo)}
+          </AuthNotice>
         )}
       </div>
       <div role="alert" className="empty:hidden">
         {copy && (
-          <div className="flex gap-3 rounded-md border border-danger/40 bg-danger/10 p-3">
-            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-danger" aria-hidden />
-            <div className="flex flex-col gap-0.5">
-              <p className="font-head text-sm font-semibold text-text">{copy.title}</p>
-              <p className="font-body text-sm text-text-mid">{copy.description}</p>
-            </div>
-          </div>
+          <AuthNotice tone="danger" icon={<AlertTriangle aria-hidden />} title={copy.title}>
+            {copy.description}
+          </AuthNotice>
         )}
       </div>
     </div>

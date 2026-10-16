@@ -29,7 +29,7 @@ export function PasswordMeter({ password }: { password: string }): React.JSX.Ele
           <span
             key={i}
             className={cn(
-              'h-1 flex-1 rounded-pill transition-colors duration-200 motion-reduce:transition-none',
+              'h-1 flex-1 rounded-pill transition-colors duration-(--dur-base) ease-ds motion-reduce:transition-none',
               i <= s.segments ? BAR_TONE[s.level] : 'bg-surface-3',
             )}
           />
@@ -61,7 +61,7 @@ export function CreatePasswordForm({ busy, onSubmit }: CreatePasswordFormProps):
   const password = watch('password') ?? '';
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
       <Input
         label="Seu nome"
         size="lg"

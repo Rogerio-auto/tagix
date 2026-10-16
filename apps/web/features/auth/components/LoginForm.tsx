@@ -6,12 +6,13 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangle, Clock, MailWarning, UserCheck } from 'lucide-react';
-import { Button, Input, useToast } from '@hm/ui';
+import { Button, Input, cn } from '@hm/ui';
 import { ApiError } from '@/shared/lib/api-client';
 import { postLoginPath } from '@/shared/auth/route-guard';
 import { loginSchema, type LoginInput } from '../schema';
 import { useLogin } from '../queries';
 import { LOGIN_NOTICE_COPY, type LoginNotice } from '../resend';
+import { AuthNotice, inlineLinkClass, quietLinkClass } from './AuthKit';
 import { ResendVerification } from './ResendVerification';
 
 /** Erro de submit em 3 partes (UX §2.11): o quê / por quê / o que fazer. */
@@ -39,13 +40,11 @@ export interface LoginFormProps {
  */
 export function UnverifiedPanel({ email }: { email: string }) {
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-warn/40 bg-warn/10 p-3">
+    <div className="flex flex-col gap-3 rounded-md border border-warn/30 bg-warn/10 p-4">
       <div role="alert" className="flex gap-3">
         <MailWarning className="mt-0.5 size-5 shrink-0 text-warn" aria-hidden />
-        <div className="flex flex-col gap-0.5">
-          <p className="font-head text-sm font-semibold text-text">
-            Confirme seu email para entrar.
-          </p>
+        <div className="flex flex-col gap-1">
+          <p className="font-body text-sm font-bold text-text">Confirme seu email para entrar.</p>
           <p className="font-body text-sm text-text-mid">
             Enviamos um link quando você criou a conta. Abra-o e volte aqui, ou peça um novo.
           </p>
@@ -62,7 +61,6 @@ export function LoginForm({
   notice = null,
 }: LoginFormProps) {
   const router = useRouter();
-  const { toast } = useToast();
   const login = useLogin();
   const [submitError, setSubmitError] = useState<SubmitError | null>(null);
   const [unverified, setUnverified] = useState(false);
@@ -108,8 +106,9 @@ export function LoginForm({
         setUnverified(true);
         return;
       }
-      // UX §2.11: erro com o quê / por quê / o que fazer. Mostrado inline (no
-      // mobile o toast pode ficar atrás do teclado) e também via toast.
+      // UX §2.11: erro com o quê / por quê / o que fazer. Só inline (role=alert): no
+      // mobile o toast fica atrás do teclado, e os dois juntos anunciavam o erro duas
+      // vezes no leitor de tela.
       const isBadCreds = err instanceof ApiError && err.status === 401;
       const nextError: SubmitError = isBadCreds
         ? {
@@ -121,50 +120,29 @@ export function LoginForm({
             description: 'Algo deu errado ao autenticar. Tente novamente em instantes.',
           };
       setSubmitError(nextError);
-      toast({
-        variant: 'error',
-        title: nextError.title,
-        description: nextError.description,
-      });
     }
   });
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+    <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
       {notice && !sessionExpired && !submitError && !unverified && (
-        <div
-          role="status"
-          className="flex items-center gap-3 rounded-md border border-success/40 bg-success/10 p-3"
-        >
-          <UserCheck className="size-5 shrink-0 text-success" aria-hidden />
-          <p className="font-head text-sm font-semibold text-text">{LOGIN_NOTICE_COPY[notice]}</p>
-        </div>
+        <AuthNotice role="status" tone="success" icon={<UserCheck aria-hidden />} title={LOGIN_NOTICE_COPY[notice]} />
       )}
       {unverified && <UnverifiedPanel email={typedEmail} />}
       {sessionExpired && !submitError && !unverified && (
-        <div role="status" className="flex gap-3 rounded-md border border-info/40 bg-info/10 p-3">
-          <Clock className="mt-0.5 size-5 shrink-0 text-info" aria-hidden />
-          <div className="flex flex-col gap-0.5">
-            <p className="font-head text-sm font-semibold text-text">
-              Sua sessão terminou. Entre de novo.
-            </p>
-            <p className="font-body text-sm text-text-mid">
-              Por segurança, o acesso expira depois de um tempo. Você volta para onde estava.
-            </p>
-          </div>
-        </div>
+        <AuthNotice
+          role="status"
+          tone="info"
+          icon={<Clock aria-hidden />}
+          title="Sua sessão terminou. Entre de novo."
+        >
+          Por segurança, o acesso expira depois de um tempo. Você volta para onde estava.
+        </AuthNotice>
       )}
       {submitError && (
-        <div
-          role="alert"
-          className="flex gap-3 rounded-md border border-danger/40 bg-danger/10 p-3"
-        >
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-danger" aria-hidden />
-          <div className="flex flex-col gap-0.5">
-            <p className="font-head text-sm font-semibold text-text">{submitError.title}</p>
-            <p className="font-body text-sm text-text-mid">{submitError.description}</p>
-          </div>
-        </div>
+        <AuthNotice role="alert" tone="danger" icon={<AlertTriangle aria-hidden />} title={submitError.title}>
+          {submitError.description}
+        </AuthNotice>
       )}
       <Input
         label="Email"
@@ -179,33 +157,29 @@ export function LoginForm({
         error={errors.email?.message}
         {...register('email')}
       />
-      <Input
-        label="Senha"
-        type="password"
-        size="lg"
-        autoComplete="current-password"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
-        placeholder="••••••••"
-        error={errors.password?.message}
-        {...register('password')}
-      />
-      <Button type="submit" size="lg" loading={isSubmitting} className="mt-1 w-full">
+      <div className="flex flex-col gap-1">
+        <Input
+          label="Senha"
+          type="password"
+          size="lg"
+          autoComplete="current-password"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="••••••••"
+          error={errors.password?.message}
+          {...register('password')}
+        />
+        <Link href="/reset-password" className={cn(quietLinkClass, '-mr-2 self-end')}>
+          Esqueci minha senha
+        </Link>
+      </div>
+      <Button type="submit" size="lg" loading={isSubmitting} className="w-full">
         Entrar
       </Button>
-      <Link
-        href="/reset-password"
-        className="touch-target flex items-center justify-center font-body text-sm text-text-low outline-none hover:text-text focus-visible:underline"
-      >
-        Esqueci minha senha
-      </Link>
-      <p className="text-center font-body text-sm text-text-low">
+      <p className="border-t border-border pt-5 text-center font-body text-sm text-text-mid">
         Não tem conta?{' '}
-        <Link
-          href="/signup"
-          className="font-medium text-text outline-none hover:text-brand focus-visible:underline"
-        >
+        <Link href="/signup" className={inlineLinkClass}>
           Criar conta
         </Link>
       </p>

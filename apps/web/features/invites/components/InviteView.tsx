@@ -6,6 +6,12 @@ import { AlertTriangle, CircleCheck, Clock, LinkIcon, MailCheck, MailQuestion, U
 import { Button, Skeleton } from '@hm/ui';
 import { formatRelative } from '../time';
 import { roleLabel, type InvitePreview } from '../types';
+import {
+  AuthNotice,
+  primaryLinkClass,
+  quietLinkClass,
+  secondaryLinkClass,
+} from '@/features/auth/components/AuthKit';
 import { CreatePasswordForm, type CreatePasswordValues } from './CreatePasswordForm';
 
 /** Erro de ação em 3 partes (UX §2.11). */
@@ -48,27 +54,12 @@ export interface InviteViewProps {
   onRetry: () => void;
 }
 
-function Wordmark(): React.JSX.Element {
-  return (
-    <div className="mb-8 flex items-center gap-2">
-      <span className="font-display text-2xl text-brand" aria-hidden>
-        ◢
-      </span>
-      <span className="font-head text-2xl font-semibold text-text">Leadium</span>
-    </div>
-  );
-}
-
 /** Aviso em 3 partes, `role="alert"`. */
 function Alert({ error }: { error: ViewError }): React.JSX.Element {
   return (
-    <div role="alert" className="flex gap-3 rounded-md border border-danger/40 bg-danger/10 p-3">
-      <AlertTriangle className="mt-0.5 size-5 shrink-0 text-danger" aria-hidden />
-      <div className="flex flex-col gap-0.5">
-        <p className="font-head text-sm font-semibold text-text">{error.title}</p>
-        <p className="font-body text-sm text-text-mid">{error.description}</p>
-      </div>
-    </div>
+    <AuthNotice role="alert" tone="danger" icon={<AlertTriangle aria-hidden />} title={error.title}>
+      {error.description}
+    </AuthNotice>
   );
 }
 
@@ -82,56 +73,59 @@ function Notice({
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <div className="flex gap-3 rounded-md border border-border bg-surface-2 p-3">
-      <span className="mt-0.5 shrink-0 text-text-mid">{icon}</span>
-      <div className="flex flex-col gap-1">
-        <p className="font-head text-sm font-semibold text-text">{title}</p>
-        <div className="font-body text-sm text-text-mid">{children}</div>
-      </div>
-    </div>
+    <AuthNotice tone="neutral" icon={icon} title={title}>
+      {children}
+    </AuthNotice>
   );
 }
 
-const textLinkClass =
-  'touch-target flex items-center justify-center rounded-sm font-body text-sm text-text-low outline-none transition-colors hover:text-text focus-visible:shadow-glow-md';
+const eyebrowClass =
+  'flex items-center gap-2.5 font-mono text-xs font-medium uppercase tracking-[0.14em] text-text-low';
 
 /** O "passe": quem convidou, para onde, com que papel e até quando. */
 function InviteHeader({ preview }: { preview: InvitePreview }): React.JSX.Element {
   const initial = preview.workspaceName.trim().charAt(0).toUpperCase() || '·';
   return (
-    <header className="flex flex-col gap-5">
-      <div className="flex items-center gap-4">
-        <span
-          aria-hidden
-          className="flex size-14 shrink-0 items-center justify-center rounded-lg border border-border-2 bg-surface-3 font-head text-2xl font-semibold text-text"
-        >
-          {initial}
-        </span>
-        <div className="min-w-0">
-          <p className="font-head text-xs font-medium uppercase tracking-widest text-text-low">
-            Convite
-          </p>
-          <h1 className="break-words font-head text-3xl font-semibold leading-tight text-text">
+    <header className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
+        <p className={eyebrowClass}>
+          <span aria-hidden className="h-px w-5 bg-border-2" />
+          Convite
+        </p>
+        <div className="flex items-center gap-4">
+          <span
+            aria-hidden
+            className="grid size-14 shrink-0 place-items-center rounded-lg border border-border bg-surface-2 font-head text-2xl font-semibold text-text shadow-ds-1"
+          >
+            {initial}
+          </span>
+          <h1 className="min-w-0 break-words font-head text-h3 text-balance text-text lg:text-h2">
             {preview.workspaceName}
           </h1>
         </div>
       </div>
-      <p className="font-body text-base text-text-mid">
+      <p className="font-body text-body text-text-mid">
         {preview.inviterName ? (
           <>
-            <span className="font-semibold text-text">{preview.inviterName}</span> convidou você para
+            <span className="font-bold text-text">{preview.inviterName}</span> convidou você para
             entrar como{' '}
           </>
         ) : (
           <>Você foi convidado para entrar como </>
         )}
-        <span className="font-semibold text-text">{roleLabel(preview.role)}</span>.
+        <span className="font-bold text-text">{roleLabel(preview.role)}</span>.
       </p>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 border-y border-border py-3 font-body text-sm">
-        <dt className="text-text-low">Para</dt>
-        <dd className="min-w-0 truncate text-right font-price text-text">{preview.emailMasked}</dd>
-        <dt className="text-text-low">Expira</dt>
-        <dd className="text-right text-text">{formatRelative(preview.expiresAt)}</dd>
+      {/* Cada par é uma linha inteira (`div` em `dl` é HTML válido): a hairline atravessa
+          a caixa sem o vão do `gap-x` entre termo e valor. */}
+      <dl className="divide-y divide-border rounded-md border border-border bg-surface px-4 font-body text-sm">
+        <div className="flex items-baseline justify-between gap-6 py-3">
+          <dt className="shrink-0 font-mono text-xs uppercase tracking-[0.12em] text-text-low">Para</dt>
+          <dd className="min-w-0 truncate text-right font-mono text-text">{preview.emailMasked}</dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-6 py-3">
+          <dt className="shrink-0 font-mono text-xs uppercase tracking-[0.12em] text-text-low">Expira</dt>
+          <dd className="text-right font-mono tabular-nums text-text">{formatRelative(preview.expiresAt)}</dd>
+        </div>
       </dl>
     </header>
   );
@@ -157,7 +151,7 @@ function StageBody({
           {stage.sessionEmail && (
             <p className="font-body text-sm text-text-low">
               Você está conectado como{' '}
-              <span className="font-price text-text-mid">{stage.sessionEmail}</span>.
+              <span className="font-mono text-text-mid">{stage.sessionEmail}</span>.
             </p>
           )}
           <Button size="lg" loading={busy} onClick={onAccept} className="w-full">
@@ -175,7 +169,7 @@ function StageBody({
           </p>
           <Link
             href={loginHref}
-            className="inline-flex h-12 w-full items-center justify-center rounded-md bg-brand px-6 font-head text-base font-semibold text-text-on-brand outline-none transition-[background-color,box-shadow] duration-200 hover:bg-brand-strong focus-visible:shadow-glow-md"
+            className={primaryLinkClass}
           >
             Entre para aceitar
           </Link>
@@ -185,18 +179,18 @@ function StageBody({
     case 'wrong-account':
       return (
         <div className="flex flex-col gap-4">
-          <Notice icon={<UserRoundX className="size-5" aria-hidden />} title="Este convite é para outra conta">
+          <Notice icon={<UserRoundX aria-hidden />} title="Este convite é para outra conta">
             <p>
               {stage.sessionEmail ? (
                 <>
                   Você está conectado como{' '}
-                  <span className="font-price text-text">{stage.sessionEmail}</span>, mas o convite foi
-                  enviado para <span className="font-price text-text">{preview.emailMasked}</span>.
+                  <span className="font-mono text-text">{stage.sessionEmail}</span>, mas o convite foi
+                  enviado para <span className="font-mono text-text">{preview.emailMasked}</span>.
                 </>
               ) : (
                 <>
                   A conta conectada não é a do convite, enviado para{' '}
-                  <span className="font-price text-text">{preview.emailMasked}</span>.
+                  <span className="font-mono text-text">{preview.emailMasked}</span>.
                 </>
               )}{' '}
               Saia e entre com o email certo.
@@ -223,10 +217,10 @@ function StageBody({
       return (
         <div className="flex flex-col gap-4">
           {error && <Alert error={error} />}
-          <Notice icon={<MailQuestion className="size-5" aria-hidden />} title="Confirme que o email é seu">
+          <Notice icon={<MailQuestion aria-hidden />} title="Confirme que o email é seu">
             <p>
               Para criar a sua conta, vamos enviar um link de confirmação para{' '}
-              <span className="font-price text-text">{preview.emailMasked}</span>. Abra o email e
+              <span className="font-mono text-text">{preview.emailMasked}</span>. Abra o email e
               toque no botão dele — ele traz você de volta aqui.
             </p>
           </Notice>
@@ -246,9 +240,9 @@ function StageBody({
       return (
         <div className="flex flex-col gap-4">
           {error && <Alert error={error} />}
-          <Notice icon={<MailCheck className="size-5" aria-hidden />} title="Email enviado">
+          <Notice icon={<MailCheck aria-hidden />} title="Email enviado">
             <p>
-              Mandamos o link para <span className="font-price text-text">{stage.emailMasked}</span>.
+              Mandamos o link para <span className="font-mono text-text">{stage.emailMasked}</span>.
               Abra o email e toque em <span className="font-semibold text-text">Aceitar convite</span>.
               Pode fechar esta aba — o link do email abre a tela certa.
             </p>
@@ -269,7 +263,7 @@ function StageBody({
     case 'created':
       return (
         <div className="flex flex-col gap-4">
-          <Notice icon={<CircleCheck className="size-5 text-success" aria-hidden />} title="Conta criada">
+          <Notice icon={<CircleCheck className="text-success" aria-hidden />} title="Conta criada">
             <p>
               Entre com a sua senha para abrir a{' '}
               <span className="font-semibold text-text">{preview.workspaceName}</span>.
@@ -277,7 +271,7 @@ function StageBody({
           </Notice>
           <Link
             href={stage.next}
-            className="inline-flex h-12 w-full items-center justify-center rounded-md bg-brand px-6 font-head text-base font-semibold text-text-on-brand outline-none transition-[background-color,box-shadow] duration-200 hover:bg-brand-strong focus-visible:shadow-glow-md"
+            className={primaryLinkClass}
           >
             Entrar
           </Link>
@@ -294,55 +288,50 @@ export function InviteView(props: InviteViewProps): React.JSX.Element {
   const { state } = props;
 
   return (
-    <div className="mx-auto w-full max-w-sm py-8 md:py-0">
-      <Wordmark />
-
+    <div className="w-full">
       {state.kind === 'loading' && (
-        <div role="status" aria-busy="true" aria-label="Carregando convite" className="flex flex-col gap-5">
+        <div role="status" aria-busy="true" aria-label="Carregando convite" className="flex flex-col gap-6">
+          <Skeleton className="h-3 w-20" />
           <div className="flex items-center gap-4">
             <Skeleton className="size-14 rounded-lg" />
-            <div className="flex flex-1 flex-col gap-2">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-8 w-48" />
-            </div>
+            <Skeleton className="h-9 w-48" />
           </div>
           <Skeleton className="h-5 w-full" />
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-24 w-full rounded-md" />
+          <Skeleton className="h-12 w-full rounded-sm" />
         </div>
       )}
 
       {state.kind === 'invalid' && (
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3">
-            <span className="flex size-12 items-center justify-center rounded-pill border border-border-2 bg-surface-2 text-text-mid">
-              <LinkIcon className="size-6" aria-hidden strokeWidth={1.75} />
+        <div className="flex flex-col gap-8">
+          <div className="flex flex-col gap-4">
+            <span className="grid size-12 place-items-center rounded-md border border-border bg-surface-2 text-text-mid">
+              <LinkIcon className="size-5" aria-hidden strokeWidth={1.75} />
             </span>
-            <h1 className="font-head text-2xl font-semibold text-text">
+            <h1 className="font-head text-h3 text-balance text-text lg:text-h2">
               Este convite não está mais disponível
             </h1>
-            <p className="font-body text-base text-text-mid">
+            <p className="font-body text-body text-text-mid">
               O link pode ter expirado ou já ter sido usado. Peça um novo convite a quem convidou
               você.
             </p>
           </div>
-          <Link
-            href="/login"
-            className="inline-flex h-12 w-full items-center justify-center rounded-md border border-border bg-transparent px-6 font-head text-base font-semibold text-text outline-none transition-[border-color,background-color,box-shadow] duration-200 hover:border-border-2 hover:bg-surface-2 focus-visible:shadow-glow-md"
-          >
+          <Link href="/login" className={secondaryLinkClass}>
             Ir para o login
           </Link>
         </div>
       )}
 
       {state.kind === 'unavailable' && (
-        <div role="alert" className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3">
-            <span className="flex size-12 items-center justify-center rounded-pill border border-danger/25 bg-danger/10 text-danger">
-              <Clock className="size-6" aria-hidden strokeWidth={1.75} />
+        <div role="alert" className="flex flex-col gap-8">
+          <div className="flex flex-col gap-4">
+            <span className="grid size-12 place-items-center rounded-md border border-danger/30 bg-danger/10 text-danger">
+              <Clock className="size-5" aria-hidden strokeWidth={1.75} />
             </span>
-            <h1 className="font-head text-2xl font-semibold text-text">Não conseguimos abrir o convite</h1>
-            <p className="font-body text-base text-text-mid">
+            <h1 className="font-head text-h3 text-balance text-text lg:text-h2">
+              Não conseguimos abrir o convite
+            </h1>
+            <p className="font-body text-body text-text-mid">
               O serviço está instável agora. Seu convite continua válido — tente de novo em instantes.
             </p>
           </div>
@@ -353,13 +342,15 @@ export function InviteView(props: InviteViewProps): React.JSX.Element {
       )}
 
       {state.kind === 'ready' && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-8">
           <InviteHeader preview={state.preview} />
           <StageBody {...props} preview={state.preview} stage={state.stage} />
           {(state.stage.kind === 'create-password' || state.stage.kind === 'send-proof') && (
-            <Link href={props.loginHref} className={textLinkClass}>
-              Já tenho conta — entrar
-            </Link>
+            <div className="-mt-3 flex justify-center border-t border-border pt-3">
+              <Link href={props.loginHref} className={quietLinkClass}>
+                Já tenho conta — entrar
+              </Link>
+            </div>
           )}
         </div>
       )}

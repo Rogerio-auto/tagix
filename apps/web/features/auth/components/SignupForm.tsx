@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { useCallback, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, AlertTriangle, MailCheck } from 'lucide-react';
+import { AlertCircle, AlertTriangle, MailCheck, Sparkles } from 'lucide-react';
 import { Button, Input } from '@hm/ui';
 import { signupSchema, type SignupInput } from '../schema';
 import { useSignup } from '../queries';
 import { rememberSignupEmail } from '../pending-email';
 import { TERMS_VERSION } from '../terms';
 import { RESEND_COOLDOWN_SECONDS } from '../resend';
+import { AuthHeading, AuthNotice, inlineLinkClass, quietLinkClass } from './AuthKit';
 import { ResendVerification } from './ResendVerification';
 import { TurnstileWidget } from './TurnstileWidget';
 
@@ -84,162 +85,145 @@ export function SignupForm() {
 
   if (sentTo !== null) {
     return (
-      <div className="flex flex-col gap-5">
-        <div role="status" className="flex gap-3 rounded-md border border-border bg-surface-2 p-3">
-          <MailCheck className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden />
-          <div className="flex flex-col gap-1">
-            <p className="font-head text-sm font-semibold text-text">Verifique seu email</p>
-            <p className="font-body text-sm text-text-mid">
-              Se os dados estiverem corretos, enviamos um link de confirmação para{' '}
-              <span className="font-medium text-text wrap-anywhere">{sentTo}</span>. Abra-o para ativar
-              sua conta: você só acessa o Leadium depois de confirmar.
-            </p>
+      <>
+        {/* O título acompanha o estado (ressalva da F71-S09): a tela agora é outra. */}
+        <AuthHeading
+          eyebrow="Confirmação"
+          title="Verifique seu email"
+          lead="Falta um passo para ativar a sua conta."
+          focusOnMount
+        />
+        <div className="flex flex-col gap-5">
+          <AuthNotice role="status" tone="neutral" icon={<MailCheck aria-hidden />}>
+            Se os dados estiverem corretos, enviamos um link de confirmação para{' '}
+            <span className="font-mono text-text wrap-anywhere">{sentTo}</span>. Abra-o para ativar
+            sua conta: você só acessa o Leadium depois de confirmar.
+          </AuthNotice>
+          <div className="flex flex-col gap-3">
+            <p className="font-body text-sm text-text-mid">Não chegou? Confira o spam ou reenvie.</p>
+            <ResendVerification email={sentTo} initialCooldownSeconds={RESEND_COOLDOWN_SECONDS} />
+          </div>
+          <div className="flex flex-col items-center border-t border-border pt-3">
+            <button type="button" onClick={() => setSentTo(null)} className={quietLinkClass}>
+              Errei o email — voltar ao cadastro
+            </button>
+            <Link href={`/login?email=${encodeURIComponent(sentTo)}`} className={quietLinkClass}>
+              Voltar ao login
+            </Link>
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <p className="font-body text-sm text-text-mid">Não chegou? Confira o spam ou reenvie.</p>
-          <ResendVerification email={sentTo} initialCooldownSeconds={RESEND_COOLDOWN_SECONDS} />
-        </div>
-        <div className="flex flex-col">
-          <button
-            type="button"
-            onClick={() => setSentTo(null)}
-            className="touch-target flex items-center justify-center font-body text-sm text-text-low outline-none hover:text-text focus-visible:underline"
-          >
-            Errei o email — voltar ao cadastro
-          </button>
-          <Link
-            href={`/login?email=${encodeURIComponent(sentTo)}`}
-            className="touch-target flex items-center justify-center font-body text-sm text-text-low outline-none hover:text-text focus-visible:underline"
-          >
-            Voltar ao login
-          </Link>
-        </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
-      {planLabel && plan !== 'free' && (
-        <div className="flex items-center gap-2 rounded-md border border-brand/40 bg-brand/5 p-3">
-          <p className="font-body text-sm text-text-mid">
-            Plano escolhido: <span className="font-head font-semibold text-text">{planLabel}</span>.
+    <>
+      <AuthHeading
+        eyebrow="Nova conta"
+        title="Criar conta"
+        lead="Comece em minutos. Sem cartão — plano gratuito para testar."
+      />
+      <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
+        {planLabel && plan !== 'free' && (
+          <AuthNotice tone="neutral" icon={<Sparkles aria-hidden />} title={`Plano escolhido: ${planLabel}`}>
             Crie sua conta — você vai para o pagamento depois de confirmar o email.
-          </p>
-        </div>
-      )}
-      {submitError && (
-        <div
-          role="alert"
-          className="flex gap-3 rounded-md border border-danger/40 bg-danger/10 p-3"
-        >
-          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-danger" aria-hidden />
-          <div className="flex flex-col gap-0.5">
-            <p className="font-head text-sm font-semibold text-text">{submitError.title}</p>
-            <p className="font-body text-sm text-text-mid">{submitError.description}</p>
-          </div>
-        </div>
-      )}
-      <Input
-        label="Seu nome"
-        size="lg"
-        autoComplete="name"
-        placeholder="Maria Silva"
-        error={errors.name?.message}
-        {...register('name')}
-      />
-      <Input
-        label="Email"
-        type="email"
-        size="lg"
-        inputMode="email"
-        autoComplete="email"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
-        placeholder="voce@empresa.com"
-        error={errors.email?.message}
-        {...register('email')}
-      />
-      <Input
-        label="Nome do workspace"
-        size="lg"
-        autoComplete="organization"
-        placeholder="Minha Empresa"
-        error={errors.workspaceName?.message}
-        {...register('workspaceName')}
-      />
-      <Input
-        label="Senha"
-        type="password"
-        size="lg"
-        autoComplete="new-password"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
-        placeholder="ao menos 10 caracteres"
-        hint={
-          password.length > 0 ? passwordHint(password) : 'Use letras e números, mín. 10 caracteres.'
-        }
-        error={errors.password?.message}
-        {...register('password')}
-      />
-      <div className="flex flex-col gap-1.5">
-        <label className="flex cursor-pointer items-start gap-3 py-1">
-          <input
-            type="checkbox"
-            aria-invalid={errors.acceptTerms ? true : undefined}
-            aria-describedby={errors.acceptTerms ? 'accept-terms-error' : undefined}
-            className="mt-0.5 size-5 shrink-0 cursor-pointer rounded-xs accent-text outline-none focus-visible:shadow-glow-md"
-            {...register('acceptTerms')}
-          />
-          <span className="font-body text-sm text-text-mid">
-            Li e aceito os{' '}
-            <Link
-              href="/termos"
-              target="_blank"
-              rel="noopener"
-              className="font-medium text-text underline underline-offset-4 outline-none hover:text-brand focus-visible:shadow-glow-md"
-            >
-              Termos de uso
-            </Link>{' '}
-            e a{' '}
-            <Link
-              href="/privacidade"
-              target="_blank"
-              rel="noopener"
-              className="font-medium text-text underline underline-offset-4 outline-none hover:text-brand focus-visible:shadow-glow-md"
-            >
-              Política de privacidade
-            </Link>
-            .
-          </span>
-        </label>
-        {errors.acceptTerms && (
-          // Ícone em `danger`, texto em `text`: `text-danger` a 14 px dá 3:1 no tema claro.
-          <span
-            id="accept-terms-error"
-            role="alert"
-            aria-live="assertive"
-            className="flex items-start gap-2 font-body text-sm text-text"
-          >
-            <AlertCircle className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
-            {errors.acceptTerms.message}
-          </span>
+          </AuthNotice>
         )}
-      </div>
-      <TurnstileWidget onToken={onToken} />
-      <Button type="submit" size="lg" loading={isSubmitting} className="mt-1 w-full">
-        Criar conta
-      </Button>
-      <Link
-        href="/login"
-        className="touch-target flex items-center justify-center font-body text-sm text-text-low outline-none hover:text-text focus-visible:underline"
-      >
-        Já tenho conta — entrar
-      </Link>
-    </form>
+        {submitError && (
+          <AuthNotice role="alert" tone="danger" icon={<AlertTriangle aria-hidden />} title={submitError.title}>
+            {submitError.description}
+          </AuthNotice>
+        )}
+        <Input
+          label="Seu nome"
+          size="lg"
+          autoComplete="name"
+          placeholder="Maria Silva"
+          error={errors.name?.message}
+          {...register('name')}
+        />
+        <Input
+          label="Email"
+          type="email"
+          size="lg"
+          inputMode="email"
+          autoComplete="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="voce@empresa.com"
+          error={errors.email?.message}
+          {...register('email')}
+        />
+        <Input
+          label="Nome do workspace"
+          size="lg"
+          autoComplete="organization"
+          placeholder="Minha Empresa"
+          error={errors.workspaceName?.message}
+          {...register('workspaceName')}
+        />
+        <Input
+          label="Senha"
+          type="password"
+          size="lg"
+          autoComplete="new-password"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="ao menos 10 caracteres"
+          hint={
+            password.length > 0 ? passwordHint(password) : 'Use letras e números, mín. 10 caracteres.'
+          }
+          error={errors.password?.message}
+          {...register('password')}
+        />
+        <div className="flex flex-col gap-1.5">
+          <label className="flex cursor-pointer items-start gap-3 rounded-sm py-1">
+            <input
+              type="checkbox"
+              aria-invalid={errors.acceptTerms ? true : undefined}
+              aria-describedby={errors.acceptTerms ? 'accept-terms-error' : undefined}
+              className="mt-0.5 size-5 shrink-0 cursor-pointer rounded-xs accent-text outline-none focus-visible:focus-ring"
+              {...register('acceptTerms')}
+            />
+            <span className="font-body text-sm text-text-mid">
+              Li e aceito os{' '}
+              <Link href="/termos" target="_blank" rel="noopener" className={inlineLinkClass}>
+                Termos de uso
+              </Link>{' '}
+              e a{' '}
+              <Link href="/privacidade" target="_blank" rel="noopener" className={inlineLinkClass}>
+                Política de privacidade
+              </Link>
+              .
+            </span>
+          </label>
+          {errors.acceptTerms && (
+            // Ícone em `danger`, texto em `text`: o vermelho fica no sinal, a leitura no neutro.
+            <span
+              id="accept-terms-error"
+              role="alert"
+              aria-live="assertive"
+              className="flex items-start gap-2 font-body text-sm text-text"
+            >
+              <AlertCircle className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
+              {errors.acceptTerms.message}
+            </span>
+          )}
+        </div>
+        <TurnstileWidget onToken={onToken} />
+        <Button type="submit" size="lg" loading={isSubmitting} className="w-full">
+          Criar conta
+        </Button>
+        <p className="border-t border-border pt-5 text-center font-body text-sm text-text-mid">
+          Já tem conta?{' '}
+          <Link href="/login" className={inlineLinkClass}>
+            Entrar
+          </Link>
+        </p>
+      </form>
+    </>
   );
 }
 

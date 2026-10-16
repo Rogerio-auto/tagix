@@ -1,20 +1,25 @@
 'use client';
 
 /**
- * Assinatura por tenant (F26-S08) -- trocar plano/status/trial/cycle + override
- * "custom plan" (limites/features que sobrepoem o plano), mostrando os entitlements
- * EFETIVOS resolvidos (override > plano). Consome F26-S04. DS v2 dark-first. Sem Stripe.
- * Acoes de impacto (downgrade/cancelar) confirmam (UX 2.9).
+ * Assinatura por tenant (F26-S08) no DS 3.0 (F72-S08) -- trocar plano/status/trial/ciclo
+ * + override "custom plan" (limites/features que sobrepõem o plano), mostrando os
+ * entitlements EFETIVOS resolvidos (override > plano). Consome F26-S04. Sem Stripe.
+ *
+ * Fluxo inalterado: os mesmos payloads (`useUpdateSubscription`/`useUpdateOverrides`) e o
+ * MESMO `window.confirm` para status de impacto (cancelada, expirada, inadimplente; UX
+ * §2.9). Novo só o feedback: toast de sucesso/erro (UX §2.7) e erro de carga em 3 partes.
  */
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Skeleton } from '@/shared/components/feedback';
-import {
-  FEATURE_KEYS,
-  LIMIT_KEYS,
-  type FeatureKey,
-  type LimitKey,
-} from '../plans/queries';
+import { Building2, Sparkles } from 'lucide-react';
+import { Badge, Button, EmptyState, ErrorState, Input, Skeleton, useToast } from '@hm/ui';
+import { cn } from '@/shared/lib/cn';
+import { formatNumber } from '@/shared/lib/locale';
+import { SUBSCRIPTION_STATUSES, subscriptionStatus } from '../lib/labels';
+import { FEATURE_LABEL, LIMIT_LABEL } from '../plans/labels';
+import { FEATURE_KEYS, LIMIT_KEYS, type FeatureKey, type LimitKey } from '../plans/queries';
+import { PlatformPageHeader } from '../ui/PlatformPageHeader';
+import { checkboxClass, controlClass, eyebrowClass, FieldLabel, Panel } from '../ui/kit';
 import {
   type OverrideUpdate,
   type SubscriptionUpdate,
@@ -25,31 +30,15 @@ import {
   useUpdateSubscription,
 } from './queries';
 
-const STATUSES = ['trial', 'active', 'past_due', 'canceled', 'expired'] as const;
 const DESTRUCTIVE = new Set(['canceled', 'expired', 'past_due']);
 
-const LIMIT_LABEL: Record<LimitKey, string> = {
-  max_agents: 'Agentes',
-  max_channels: 'Canais',
-  max_members: 'Membros',
-  max_monthly_messages: 'Mensagens/mes',
-  max_flows: 'Flows',
-  max_knowledge_documents: 'Documentos KB',
-};
-const FEATURE_LABEL: Record<FeatureKey, string> = {
-  instagram: 'Instagram',
-  flows: 'Flow Builder',
-  api_access: 'API publica',
-  campaigns: 'Campanhas',
-  calendar: 'Calendario',
-  knowledge_base: 'Base de conhecimento',
-};
-
 function SubscriptionPanel({ workspaceId }: { workspaceId: string }) {
-  const { data: sub, isLoading } = useSubscription(workspaceId);
+  const query = useSubscription(workspaceId);
+  const sub = query.data;
   const { data: plansData } = usePlansForSelect();
   const updateSub = useUpdateSubscription(workspaceId);
   const updateOv = useUpdateOverrides(workspaceId);
+  const { toast } = useToast();
 
   const [form, setForm] = useState<SubscriptionUpdate>({});
   const [ov, setOv] = useState<OverrideUpdate>({ limits: {}, features: {} });
@@ -69,178 +58,233 @@ function SubscriptionPanel({ workspaceId }: { workspaceId: string }) {
     }
   }, [sub]);
 
-  if (isLoading || !sub) return <Skeleton className="h-64 w-full rounded-xl" />;
+  if (query.isError) {
+    return (
+      <ErrorState
+        title="Não foi possível carregar a assinatura"
+        reason="A assinatura deste tenant não respondeu."
+        whatToDo="Verifique a conexão e tente novamente."
+        action={
+          <Button variant="secondary" size="sm" loading={query.isFetching} onClick={() => void query.refetch()}>
+            Tentar de novo
+          </Button>
+        }
+      />
+    );
+  }
+
+  if (query.isLoading || !sub) {
+    return (
+      <div role="status" aria-busy="true" aria-label="Carregando a assinatura" className="grid gap-4 lg:grid-cols-3">
+        <div className="flex flex-col gap-4 lg:col-span-2">
+          <Skeleton className="h-64 rounded-lg" />
+          <Skeleton className="h-72 rounded-lg" />
+        </div>
+        <Skeleton className="h-96 rounded-lg" />
+      </div>
+    );
+  }
 
   async function saveSubscription() {
     if (form.status && DESTRUCTIVE.has(form.status) && form.status !== sub!.status) {
-      if (!window.confirm(`Mudar o status para "${form.status}"? Isso afeta o acesso do tenant.`)) return;
+      const label = subscriptionStatus(form.status).label;
+      if (!window.confirm(`Mudar o status para "${label}"? Isso afeta o acesso do tenant.`)) return;
     }
-    await updateSub.mutateAsync(form);
+    try {
+      await updateSub.mutateAsync(form);
+      toast({ variant: 'success', title: 'Assinatura salva' });
+    } catch {
+      toast({ variant: 'error', title: 'Não foi possível salvar a assinatura', description: 'Tente novamente.' });
+    }
   }
 
   async function saveOverrides() {
-    await updateOv.mutateAsync(ov);
+    try {
+      await updateOv.mutateAsync(ov);
+      toast({ variant: 'success', title: 'Override salvo' });
+    } catch {
+      toast({ variant: 'error', title: 'Não foi possível salvar o override', description: 'Tente novamente.' });
+    }
   }
 
   const ent = sub.entitlements;
+  const effectiveLimits = Object.entries(ent.limits) as [LimitKey, number][];
+  const effectiveFeatures = (Object.entries(ent.features) as [FeatureKey, boolean][]).filter(([, v]) => v);
 
   return (
-    <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-3 rounded-xl border border-border bg-surface-1 p-5">
-        <h2 className="text-sm font-semibold text-text-high">Assinatura</h2>
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-text-mid">Plano</span>
-            <select
-              value={form.planId ?? ''}
-              onChange={(e) => setForm({ ...form, planId: e.target.value || null })}
-              className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-text-high focus:border-accent focus:outline-none"
-            >
-              <option value="">Sem plano</option>
-              {plansData?.plans
-                .filter((p) => p.isActive || p.id === sub.planId)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
+    <div className="grid items-start gap-4 lg:grid-cols-3">
+      <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
+        <Panel
+          title="Assinatura"
+          titleId="sub-main"
+          footer={
+            <Button variant="primary" loading={updateSub.isPending} onClick={() => void saveSubscription()}>
+              {updateSub.isPending ? 'Salvando…' : 'Salvar assinatura'}
+            </Button>
+          }
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FieldLabel label="Plano">
+              <select
+                value={form.planId ?? ''}
+                onChange={(e) => setForm({ ...form, planId: e.target.value || null })}
+                className={controlClass}
+              >
+                <option value="">Sem plano</option>
+                {plansData?.plans
+                  .filter((p) => p.isActive || p.id === sub.planId)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
+            </FieldLabel>
+            <FieldLabel label="Status">
+              <select
+                value={form.status ?? ''}
+                onChange={(e) => setForm({ ...form, status: e.target.value })}
+                className={controlClass}
+              >
+                {SUBSCRIPTION_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {subscriptionStatus(s).label}
                   </option>
                 ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-text-mid">Status</span>
-            <select
-              value={form.status ?? ''}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-              className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-text-high focus:border-accent focus:outline-none"
-            >
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-text-mid">Ciclo</span>
-            <select
-              value={form.billingCycle ?? 'monthly'}
-              onChange={(e) => setForm({ ...form, billingCycle: e.target.value })}
-              className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-text-high focus:border-accent focus:outline-none"
-            >
-              <option value="monthly">Mensal</option>
-              <option value="yearly">Anual</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-text-mid">Trial ate</span>
-            <input
-              type="date"
-              value={form.trialEndsAt ? form.trialEndsAt.slice(0, 10) : ''}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  trialEndsAt: e.target.value ? new Date(e.target.value).toISOString() : null,
-                })
-              }
-              className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-text-high focus:border-accent focus:outline-none"
-            />
-          </label>
-        </div>
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={saveSubscription}
-            disabled={updateSub.isPending}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-surface-0 disabled:opacity-50"
-          >
-            {updateSub.isPending ? 'Salvando...' : 'Salvar assinatura'}
-          </button>
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-3 rounded-xl border border-border bg-surface-1 p-5">
-        <h2 className="text-sm font-semibold text-text-high">Override (custom plan)</h2>
-        <p className="text-xs text-text-low">
-          Sobrepoe limites/features do plano para este tenant. Deixe vazio para herdar do plano.
-        </p>
-        <div className="grid gap-3 md:grid-cols-3">
-          {LIMIT_KEYS.map((k) => (
-            <label key={k} className="flex flex-col gap-1 text-sm">
-              <span className="text-text-mid">{LIMIT_LABEL[k]}</span>
+              </select>
+            </FieldLabel>
+            <FieldLabel label="Ciclo">
+              <select
+                value={form.billingCycle ?? 'monthly'}
+                onChange={(e) => setForm({ ...form, billingCycle: e.target.value })}
+                className={controlClass}
+              >
+                <option value="monthly">Mensal</option>
+                <option value="yearly">Anual</option>
+              </select>
+            </FieldLabel>
+            <FieldLabel label="Teste até">
               <input
-                type="number"
-                value={ov.limits[k] ?? ''}
-                placeholder={ent.planLimits[k] != null ? `plano: ${ent.planLimits[k]}` : 'sem limite'}
+                type="date"
+                value={form.trialEndsAt ? form.trialEndsAt.slice(0, 10) : ''}
                 onChange={(e) =>
-                  setOv({
-                    ...ov,
-                    limits: { ...ov.limits, [k]: e.target.value === '' ? undefined : Number(e.target.value) },
+                  setForm({
+                    ...form,
+                    trialEndsAt: e.target.value ? new Date(e.target.value).toISOString() : null,
                   })
                 }
-                className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-text-high placeholder:text-text-low focus:border-accent focus:outline-none"
+                className={cn(controlClass, 'font-mono tabular-nums')}
               />
-            </label>
-          ))}
-        </div>
-        <div className="grid gap-2 md:grid-cols-3">
-          {FEATURE_KEYS.map((k) => (
-            <label key={k} className="flex items-center gap-2 text-sm text-text-mid">
-              <input
-                type="checkbox"
-                checked={Boolean(ov.features[k])}
-                onChange={(e) => setOv({ ...ov, features: { ...ov.features, [k]: e.target.checked } })}
-                className="size-4 rounded border-border bg-surface-2 accent-accent"
-              />
-              {FEATURE_LABEL[k]}
-            </label>
-          ))}
-        </div>
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={saveOverrides}
-            disabled={updateOv.isPending}
-            className="rounded-lg border border-border px-4 py-2 text-sm text-text-high disabled:opacity-50"
-          >
-            {updateOv.isPending ? 'Salvando...' : 'Salvar override'}
-          </button>
-        </div>
-      </section>
+            </FieldLabel>
+          </div>
+        </Panel>
 
-      <section className="flex flex-col gap-3 rounded-xl border border-accent/40 bg-accent/5 p-5">
-        <h2 className="text-sm font-semibold text-text-high">Entitlements efetivos (override &gt; plano)</h2>
-        <div className="flex flex-wrap gap-1 text-xs">
-          {Object.entries(ent.limits).map(([k, v]) => {
-            const overridden = ent.overrideLimits[k as LimitKey] != null;
-            return (
-              <span
-                key={k}
-                className={`rounded-full px-2 py-0.5 ${overridden ? 'bg-accent/20 text-accent' : 'bg-surface-3 text-text-mid'}`}
-              >
-                {LIMIT_LABEL[k as LimitKey] ?? k}: {v}
-                {overridden ? ' *' : ''}
-              </span>
-            );
-          })}
-        </div>
-        <div className="flex flex-wrap gap-1 text-xs">
-          {Object.entries(ent.features)
-            .filter(([, v]) => v)
-            .map(([k]) => {
-              const overridden = ent.overrideFeatures[k as FeatureKey] != null;
-              return (
-                <span
+        <Panel
+          title="Override (custom plan)"
+          titleId="sub-override"
+          description="Sobrepõe limites e features do plano só para este tenant. Vazio herda do plano."
+          footer={
+            <Button variant="secondary" loading={updateOv.isPending} onClick={() => void saveOverrides()}>
+              {updateOv.isPending ? 'Salvando…' : 'Salvar override'}
+            </Button>
+          }
+        >
+          <div className="flex flex-col gap-6">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {LIMIT_KEYS.map((k) => (
+                <Input
                   key={k}
-                  className={`rounded-full px-2 py-0.5 ${overridden ? 'bg-accent/20 text-accent' : 'bg-surface-3 text-text-mid'}`}
-                >
-                  {FEATURE_LABEL[k as FeatureKey] ?? k}
-                  {overridden ? ' *' : ''}
-                </span>
-              );
-            })}
+                  label={LIMIT_LABEL[k]}
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  className="font-mono tabular-nums"
+                  value={ov.limits[k] ?? ''}
+                  placeholder={ent.planLimits[k] != null ? `plano: ${formatNumber(ent.planLimits[k])}` : 'sem limite'}
+                  onChange={(e) =>
+                    setOv({
+                      ...ov,
+                      limits: { ...ov.limits, [k]: e.target.value === '' ? undefined : Number(e.target.value) },
+                    })
+                  }
+                />
+              ))}
+            </div>
+            <fieldset>
+              <legend className={cn(eyebrowClass, 'mb-2')}>Features</legend>
+              <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
+                {FEATURE_KEYS.map((k) => (
+                  <label
+                    key={k}
+                    className="flex min-h-11 cursor-pointer items-center gap-3 rounded-sm px-2 font-body text-sm text-text transition-colors duration-(--dur-fast) hover:bg-surface-2"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={Boolean(ov.features[k])}
+                      onChange={(e) => setOv({ ...ov, features: { ...ov.features, [k]: e.target.checked } })}
+                      className={checkboxClass}
+                    />
+                    {FEATURE_LABEL[k]}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+        </Panel>
+      </div>
+
+      <Panel
+        title="Entitlements efetivos"
+        titleId="sub-effective"
+        icon={Sparkles}
+        description="O que o tenant tem agora: override vence o plano."
+        className="lg:sticky lg:top-24"
+      >
+        <div className="flex flex-col gap-5">
+          {effectiveLimits.length > 0 ? (
+            <dl className="divide-y divide-border">
+              {effectiveLimits.map(([k, v]) => {
+                const overridden = ent.overrideLimits[k] != null;
+                return (
+                  <div key={k} className="flex items-center justify-between gap-3 py-2 first:pt-0">
+                    <dt className="flex min-w-0 items-center gap-2 font-body text-sm text-text-low">
+                      <span className="truncate">{LIMIT_LABEL[k] ?? k}</span>
+                      {overridden && (
+                        <Badge tone="brand" size="sm">
+                          override
+                        </Badge>
+                      )}
+                    </dt>
+                    <dd className="font-mono text-sm tabular-nums text-text">{formatNumber(v)}</dd>
+                  </div>
+                );
+              })}
+            </dl>
+          ) : (
+            <p className="font-body text-sm text-text-low">Sem limites: tudo liberado.</p>
+          )}
+          <div>
+            <p className={cn(eyebrowClass, 'mb-2')}>Features</p>
+            {effectiveFeatures.length > 0 ? (
+              <ul className="flex flex-wrap gap-1.5">
+                {effectiveFeatures.map(([k]) => {
+                  const overridden = ent.overrideFeatures[k] != null;
+                  return (
+                    <li key={k}>
+                      <Badge tone={overridden ? 'brand' : 'neutral'} size="sm">
+                        {FEATURE_LABEL[k] ?? k}
+                        {overridden ? ' · override' : ''}
+                      </Badge>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="font-body text-sm text-text-low">Nenhuma feature extra.</p>
+            )}
+          </div>
         </div>
-        <p className="text-xs text-text-low">* sobreposto por override deste tenant.</p>
-      </section>
+      </Panel>
     </div>
   );
 }
@@ -249,38 +293,53 @@ export function SubscriptionEditor() {
   const params = useSearchParams();
   const initial = params.get('workspace') ?? '';
   const [workspaceId, setWorkspaceId] = useState(initial);
-  const { data: tenants } = useTenantSelector();
+  const { data: tenants, isLoading } = useTenantSelector();
+  const current = tenants?.tenants.find((t) => t.id === workspaceId);
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-text-high">Assinaturas</h1>
-        <p className="text-sm text-text-mid">
-          Configure plano, status, trial e override por tenant. Gestao interna (sem cobranca).
-        </p>
-      </header>
+    <div className="flex flex-col">
+      <PlatformPageHeader
+        href="/platform/subscriptions"
+        title="Assinaturas"
+        description={
+          current ? (
+            <span>
+              {current.name} · <span className="font-mono text-text-mid">{current.slug}</span>
+            </span>
+          ) : (
+            'Plano, status, teste e override por tenant. Gestão interna (sem cobrança).'
+          )
+        }
+      />
 
-      <label className="flex max-w-md flex-col gap-1 text-sm">
-        <span className="text-text-mid">Tenant</span>
-        <select
-          value={workspaceId}
-          onChange={(e) => setWorkspaceId(e.target.value)}
-          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-text-high focus:border-accent focus:outline-none"
-        >
-          <option value="">Selecione um tenant…</option>
-          {tenants?.tenants.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name} ({t.slug})
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="flex flex-col gap-6">
+        <div className="max-w-md">
+          {isLoading ? (
+            <Skeleton className="h-16 rounded-sm" />
+          ) : (
+            <FieldLabel label="Tenant">
+              <select value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)} className={controlClass}>
+                <option value="">Selecione um tenant…</option>
+                {tenants?.tenants.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.slug})
+                  </option>
+                ))}
+              </select>
+            </FieldLabel>
+          )}
+        </div>
 
-      {workspaceId ? (
-        <SubscriptionPanel workspaceId={workspaceId} />
-      ) : (
-        <p className="text-sm text-text-low">Selecione um tenant para editar a assinatura.</p>
-      )}
+        {workspaceId ? (
+          <SubscriptionPanel key={workspaceId} workspaceId={workspaceId} />
+        ) : (
+          <EmptyState
+            icon={Building2}
+            title="Escolha um tenant"
+            description="Selecione acima o workspace cuja assinatura você quer ver ou ajustar."
+          />
+        )}
+      </div>
     </div>
   );
 }

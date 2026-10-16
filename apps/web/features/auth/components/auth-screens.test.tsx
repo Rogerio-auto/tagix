@@ -95,3 +95,22 @@ describe('Signup', () => {
     expect(html).toContain('href="/privacidade"');
   });
 });
+
+describe('Título acompanha o estado (F72-S08, ressalva da F71-S09)', () => {
+  const h1 = (html: string): string | undefined => /<h1[^>]*>([^<]*)<\/h1>/.exec(html)?.[1];
+
+  it('cadastro abre com "Criar conta"', () => {
+    expect(h1(render(<SignupForm />))).toBe('Criar conta');
+  });
+
+  it('link expirado e link incompleto viram o H1 da verificação', () => {
+    expect(h1(render(<ExpiredLinkRecovery />))).toBe('Link inválido ou expirado');
+    expect(h1(render(<ExpiredLinkRecovery missing />))).toBe('Link incompleto');
+  });
+
+  it('sucesso: H1 "Email confirmado" com foco programático (tabindex -1)', () => {
+    const html = render(<VerifiedSuccess email="ana@empresa.com" />);
+    expect(h1(html)).toBe('Email confirmado');
+    expect(html).toMatch(/<h1[^>]*tabindex="-1"/);
+  });
+});
