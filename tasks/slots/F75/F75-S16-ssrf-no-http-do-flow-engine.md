@@ -2,7 +2,7 @@
 id: F75-S16
 title: SSRF guard no port HTTP do flow-engine (nó http_request)
 phase: F75
-status: review
+status: done
 priority: critical
 estimated_size: S
 model: opus

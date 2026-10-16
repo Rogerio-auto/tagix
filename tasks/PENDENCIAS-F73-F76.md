@@ -6,11 +6,17 @@
 
 ## Decisões de produto (do Rogério)
 
+- [ ] F75-S16 — confirmar se algum flow em produção chama host interno/porta baixa/resposta > 1 MiB (passam a falhar após o deploy) — **Precisa de:** Rogério (consulta no banco de produção antes do deploy) — **Impacto:** flow legítimo pode parar — **Como fechar:** `SELECT` nos nós `http_request` dos flows publicados; se houver host interno legítimo, pôr em `HM_FLOW_HTTP_ALLOWLIST`.
+
 ## Credenciais, contas e serviços externos
 
 ## Provas que não puderam ser executadas (infra, dispositivo, custo)
 
 ## Dívida técnica e achados fora de fronteira (slots futuros)
+
+- [ ] F75-S16 (para F75-S13) — guard SSRF compartilhado (`packages/shared/src/net/ssrf-guard.ts`) não bloqueia fec0::/10, 2002::/16 (6to4 com v4 interno), 64:ff9b:1::/48, 2001::/32 (Teredo), 100::/64 — **Precisa de:** slot de `@hm/shared` (F75-S13) — **Impacto:** fail-closed incompleto em IPv6 raro (pouco roteável na VPS) — **Como fechar:** acrescentar as faixas em `isBlockedIpAddress` com teste.
+- [ ] F75-S16 — `FlowHttpRequest` (`packages/flow-engine/src/types.ts`) e `docs/features/FLOW_BUILDER.md` não citam o teto de 1 MiB, 5 redirects, portas permitidas e `HM_FLOW_HTTP_ALLOWLIST` — **Precisa de:** F75-S13 — **Impacto:** documentação desatualizada — **Como fechar:** atualizar comentário e doc.
+- [ ] Infra dev — Postgres nativo do Windows ocupa `localhost:5432`; o container dev só é alcançável via override fora do repo em 5442 — **Precisa de:** slot de infra (parametrizar `${POSTGRES_HOST_PORT:-5432}` no compose dev) — **Impacto:** quem sobe o compose cru não roda testes de banco — **Como fechar:** uma linha no compose + runbook.
 
 ## Itens bloqueados de propósito (v1.1)
 

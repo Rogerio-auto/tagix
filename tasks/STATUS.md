@@ -61,7 +61,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F72   | 9     | 0   | 1   | 0   | 0   | 0   | 8   |
 | F73   | 16     | 3   | 13   | 0   | 0   | 0   | 0   |
 | F74   | 13     | 0   | 13   | 0   | 0   | 0   | 0   |
-| F75   | 16     | 2   | 13   | 0   | 0   | 1   | 0   |
+| F75   | 16     | 2   | 13   | 0   | 0   | 0   | 1   |
 | F76   | 9     | 1   | 8   | 0   | 0   | 0   | 0   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
@@ -906,7 +906,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F75-S13 | Portão de segurança da F75 — SSRF, cofre, isolamento entre empresas, webhook público e injeção via dado externo | ⏸️ blocked  | critical   | F75-S03, F75-S04, F75-S06, F75-S07, F75-S08, F75-S12, F75-S14, F75-S16 |
 | F75-S14 | Proposta de mapeamento de campos no agent-runtime com dado externo tratado como não confiável                   | 🟢 available | high       | —                                                                      |
 | F75-S15 | QA da F75 — jornada ponta a ponta, lacunas de teste, acessibilidade e portão de design                          | ⏸️ blocked  | high       | F75-S10, F75-S11, F75-S13                                              |
-| F75-S16 | SSRF guard no port HTTP do flow-engine (nó http_request)                                                        | 🟣 review    | critical   | —                                                                      |
+| F75-S16 | SSRF guard no port HTTP do flow-engine (nó http_request)                                                        | ✅ done      | critical   | —                                                                      |
 
 ## Fase 76
 
