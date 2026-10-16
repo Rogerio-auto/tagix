@@ -209,7 +209,9 @@ export default function WebhooksManager(): React.JSX.Element {
   );
 
   const nameCell = (w: OutboundWebhook) => (
-    <span className="flex min-w-0 flex-col gap-0.5">
+    // `w-0 min-w-full`: sem largura intrínseca — nome/URL longos truncam na coluna em vez de
+    // alargar a tabela (que rolaria na horizontal dentro do painel).
+    <span className="flex w-0 min-w-full flex-col gap-0.5">
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate font-semibold text-text">{w.name}</span>
         {!w.isActive && (
@@ -331,7 +333,9 @@ export default function WebhooksManager(): React.JSX.Element {
           getRowState={(w) => (w.isActive ? undefined : 'muted')}
           error={webhooksQuery.isError ? error : undefined}
           empty={empty}
-          className="rounded-none border-0"
+          // Painel `flush`: a tabela recorta as linhas no raio interno do painel (raio − 1 px de
+          // borda), senão o fundo da última linha cobre o canto arredondado do card.
+          className="rounded-t-none rounded-b-[calc(var(--radius-lg)-1px)] border-0"
         />
       )}
 

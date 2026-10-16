@@ -35,6 +35,11 @@ export interface SettingsSection {
   readonly id: string;
   readonly group: SettingsGroup;
   readonly label: string;
+  /**
+   * Rótulo curto só para a sidebar, quando o `label` completo não cabe na coluna de
+   * navegação (ex.: "Meta"). Busca e título seguem com o `label`.
+   */
+  readonly navLabel?: string;
   readonly description: string;
   readonly keywords: readonly string[];
   /** Permissão exigida; ausente = qualquer member autenticado (seções pessoais). */
@@ -158,6 +163,7 @@ const WORKSPACE: SettingsSection[] = [
     id: 'meta',
     group: 'workspace',
     label: 'Meta (Facebook e Instagram)',
+    navLabel: 'Meta',
     description: 'Conectar a Meta por caso de uso: leads dos anúncios, anúncios e Instagram.',
     keywords: ['meta', 'facebook', 'instagram', 'anúncios', 'leads', 'permissões', 'token'],
     permission: 'channel.connect',

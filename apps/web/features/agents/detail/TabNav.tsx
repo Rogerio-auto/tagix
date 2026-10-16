@@ -53,6 +53,17 @@ function useEdgeFade(): { ref: React.RefObject<HTMLDivElement | null>; fade: Fad
 
 export function TabNav({ basePath, active }: { basePath: string; active: AgentTabId }) {
   const { ref, fade, onScroll } = useEdgeFade();
+
+  // Trilho rolável (375 px): ao montar e ao trocar de aba, a ativa entra na vista — um
+  // deep-link para "Conhecimento" não abre com a aba selecionada escondida à direita.
+  // `nearest` não mexe quando ela já está visível (e no `md+`, sem rolagem, é no-op);
+  // sem animação com `prefers-reduced-motion`.
+  useEffect(() => {
+    const tab = ref.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!tab || typeof tab.scrollIntoView !== 'function') return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    tab.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+  }, [active, ref]);
   return (
     // Mobile: trilho de abas roláveis horizontalmente (scroll-x), sem quebra de
     // linha — MOBILE_UX §2 "detalhe c/ abas" — com fade nas pontas que escondem abas.

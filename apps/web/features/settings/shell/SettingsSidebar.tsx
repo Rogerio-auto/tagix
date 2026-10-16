@@ -151,7 +151,9 @@ export function SettingsSidebar({ sections, activeId, counters, onSelect }: Sett
                 const active = section.id === activeId && !section.externalHref;
                 const content = (
                   <>
-                    <span className={cn('truncate', counter && 'min-w-[40%] shrink-0')}>{section.label}</span>
+                    <span className={cn('truncate', counter && 'min-w-[40%] shrink-0')}>
+                      {section.navLabel ?? section.label}
+                    </span>
                     {counter && <Counter counter={counter} />}
                     <span className={cn('flex items-center', !counter && 'ml-auto')}>
                       {trailing(Boolean(section.externalHref))}

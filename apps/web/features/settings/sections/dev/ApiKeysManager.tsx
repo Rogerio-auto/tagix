@@ -139,7 +139,9 @@ export default function ApiKeysManager(): React.JSX.Element {
     ) : null;
 
   const nameCell = (k: ApiKey) => (
-    <span className="flex min-w-0 flex-col gap-0.5">
+    // `w-0 min-w-full`: sem largura intrínseca — nome/URL longos truncam na coluna em vez de
+    // alargar a tabela (que rolaria na horizontal dentro do painel).
+    <span className="flex w-0 min-w-full flex-col gap-0.5">
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate font-semibold text-text">{k.name}</span>
         {!k.isActive && (
@@ -241,7 +243,9 @@ export default function ApiKeysManager(): React.JSX.Element {
           getRowState={(k) => (k.isActive ? undefined : 'muted')}
           error={keysQuery.isError ? error : undefined}
           empty={empty}
-          className="rounded-none border-0"
+          // Painel `flush`: a tabela recorta as linhas no raio interno do painel (raio − 1 px de
+          // borda), senão o fundo da última linha cobre o canto arredondado do card.
+          className="rounded-t-none rounded-b-[calc(var(--radius-lg)-1px)] border-0"
         />
       )}
 

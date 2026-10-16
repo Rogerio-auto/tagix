@@ -49,15 +49,11 @@ function InviteActions({
   onResend,
   onCopyLink,
   onRevoke,
-  compact = false,
-}: RowProps & { compact?: boolean }): React.JSX.Element {
+}: RowProps): React.JSX.Element {
   const rowBusy = busy?.id === invite.id ? busy.action : null;
   const anyBusy = busy !== null;
   const noResends = invite.resendsLeft <= 0;
-  // Tabela (desktop): "Reenviar" e "Revogar" viram ícone quadrado com dica, para o e-mail
-  // e as datas caberem sem quebra na coluna de conteúdo das Configurações. "Copiar link",
-  // a saída quando o e-mail não chega, segue com rótulo. O nome acessível é sempre o completo.
-  const iconOnly = compact ? 'w-8 px-0' : '';
+  // As três ações com rótulo (como "Remover" em Membros); o nome acessível é o completo.
   return (
     // Mobile: `-ml-3` alinha o ícone do 1º botão fantasma à borda do conteúdo, e "Revogar"
     // vira só o ícone (o nome acessível segue completo) para as três ações caberem numa
@@ -67,15 +63,15 @@ function InviteActions({
         <Button
           size="sm"
           variant="ghost"
-          className={`${ROW_ACTION} ${iconOnly}`}
+          className={ROW_ACTION}
           leftIcon={<RefreshCw className="size-3.5" aria-hidden />}
           loading={rowBusy === 'resend'}
           disabled={anyBusy || noResends}
-          title={noResends ? 'Limite de reenvios atingido: copie o link' : compact ? 'Reenviar' : undefined}
+          title={noResends ? 'Limite de reenvios atingido: copie o link' : undefined}
           aria-label={`Reenviar convite para ${invite.email}`}
           onClick={() => onResend(invite)}
         >
-          <span className={compact ? 'sr-only' : undefined}>Reenviar</span>
+          Reenviar
         </Button>
       </ReadOnlyGuard>
       <ReadOnlyGuard>
@@ -96,15 +92,14 @@ function InviteActions({
         <Button
           size="sm"
           variant="ghost"
-          className={`${ROW_ACTION} ${iconOnly} hover:text-danger max-sm:w-11 max-sm:px-0`}
+          className={`${ROW_ACTION} hover:text-danger max-sm:w-11 max-sm:px-0`}
           leftIcon={<Trash2 className="size-3.5 text-danger" aria-hidden />}
           loading={rowBusy === 'revoke'}
           disabled={anyBusy}
-          title={compact ? 'Revogar' : undefined}
           aria-label={`Revogar convite de ${invite.email}`}
           onClick={() => onRevoke(invite)}
         >
-          <span className={compact ? 'sr-only' : 'max-sm:sr-only'}>Revogar</span>
+          <span className="max-sm:sr-only">Revogar</span>
         </Button>
       </ReadOnlyGuard>
     </div>
@@ -146,13 +141,20 @@ function MobileRow({ invite, now, ...actions }: RowProps & { now: number | undef
             <span className="truncate font-body text-sm font-semibold text-text">{invite.email}</span>
             {invite.expired && <Expiry invite={invite} now={now} />}
           </p>
+          {/* Cada fragmento é indivisível: a linha quebra entre "· enviado …" e "· expira …",
+              nunca no meio de "expira em 5 dias". */}
           <p className="font-body text-xs text-text-low">
-            {roleLabel(invite.role)} · enviado{' '}
-            <span className="font-mono tabular-nums">{formatRelative(invite.lastSentAt ?? invite.createdAt, now)}</span>
+            <span className="whitespace-nowrap">{roleLabel(invite.role)}</span>
+            {' · '}
+            <span className="whitespace-nowrap">
+              enviado <span className="font-mono tabular-nums">{formatRelative(invite.lastSentAt ?? invite.createdAt, now)}</span>
+            </span>
             {!invite.expired && (
               <>
-                {' · expira '}
-                <span className="font-mono tabular-nums">{formatRelative(invite.expiresAt, now)}</span>
+                {' · '}
+                <span className="whitespace-nowrap">
+                  expira <span className="font-mono tabular-nums">{formatRelative(invite.expiresAt, now)}</span>
+                </span>
               </>
             )}
           </p>
@@ -240,9 +242,16 @@ export function PendingInvites(props: PendingInvitesProps): React.JSX.Element {
             <Mail className="size-4" />
           </span>
           {/* `w-0 flex-1`: sem largura mínima própria — a coluna do e-mail fica com o espaço que
-              sobra das colunas fixas e trunca (com o e-mail inteiro na dica) em vez de empurrar a tabela. */}
-          <span className="w-0 min-w-0 flex-1 truncate font-semibold text-text" title={i.email}>
-            {i.email}
+              sobra das colunas fixas e trunca (com o e-mail inteiro na dica) em vez de empurrar a tabela.
+              O envio desce como subtítulo (como no celular), liberando a largura das ações rotuladas. */}
+          <span className="flex w-0 min-w-0 flex-1 flex-col gap-0.5">
+            <span className="truncate font-semibold text-text" title={i.email}>
+              {i.email}
+            </span>
+            <span className="truncate font-body text-xs text-text-low">
+              enviado{' '}
+              <span className="font-mono tabular-nums">{formatRelative(i.lastSentAt ?? i.createdAt, now)}</span>
+            </span>
           </span>
         </span>
       ),
@@ -253,26 +262,15 @@ export function PendingInvites(props: PendingInvitesProps): React.JSX.Element {
       width: '9rem',
       cell: (i) => <span className="whitespace-nowrap text-text-mid">{roleLabel(i.role)}</span>,
     },
-    {
-      id: 'sent',
-      header: 'Enviado',
-      width: '7.5rem',
-      cell: (i) => (
-        <span className="whitespace-nowrap font-mono text-sm tabular-nums text-text-mid">
-          {formatRelative(i.lastSentAt ?? i.createdAt, now)}
-        </span>
-      ),
-    },
     { id: 'expires', header: 'Expira', width: '7.5rem', cell: (i) => <Expiry invite={i} now={now} /> },
     {
       id: 'actions',
       header: <span className="sr-only">Ações</span>,
       headerLabel: 'Ações',
       align: 'right',
-      width: '12rem',
+      width: '19.5rem',
       cell: (i) => (
         <InviteActions
-          compact
           invite={i}
           busy={busy}
           onResend={onResend}
