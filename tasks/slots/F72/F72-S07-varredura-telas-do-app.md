@@ -2,7 +2,7 @@
 id: F72-S07
 title: Varredura do app no DS 3.0 — contatos, campanhas, agentes, flows, conhecimento, conversões e configurações
 phase: F72
-status: review
+status: done
 priority: high
 estimated_size: L
 ui: true
