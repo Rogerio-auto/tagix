@@ -2,7 +2,7 @@
 id: F75-S16
 title: SSRF guard no port HTTP do flow-engine (nó http_request)
 phase: F75
-status: available
+status: review
 priority: critical
 estimated_size: S
 model: opus
@@ -12,6 +12,9 @@ source_docs:
   - docs/features/INTEGRACOES.md
   - docs/features/FLOW_BUILDER.md
 agent_id: backend-engineer
+claimed_at: 2026-10-16T22:47:25Z
+completed_at: 2026-10-16T23:26:41Z
+
 ---
 # F75-S16 — SSRF no port HTTP do flow-engine
 

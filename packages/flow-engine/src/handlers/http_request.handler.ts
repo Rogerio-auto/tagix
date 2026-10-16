@@ -4,10 +4,27 @@
  * configuravel por `node.data.retryPolicy`. Guarda a resposta em `variables.webhook_response`,
  * aplica o mapeamento JSONPath -> variavel custom e roteia por `success`/`error` (2xx = success).
  *
- * Seguranca: a allowlist/timeout anti-SSRF vivem no port (`ctx.httpRequest`) — este handler
- * apenas o consome. Headers/body sao interpolados mas NUNCA logados (podem conter segredos).
+ * Seguranca: a guarda anti-SSRF e o timeout vivem no port (`ctx.httpRequest`, ver
+ * `ports/http.port.ts`). Destino em rede interna chega aqui como erro `code: 'ssrf_blocked'`:
+ * e terminal (sem retry — o destino nao muda entre tentativas) e vira FALHA do no
+ * (`status: 'ERROR'`) com mensagem fixa em PT-BR, nunca com o host/IP resolvido. Nao cai na
+ * aresta `error` de proposito: e configuracao proibida, nao instabilidade do servico, e precisa
+ * aparecer como falha no log da execucao. Headers/body sao interpolados mas NUNCA logados.
+ *
+ * `webhook_error` (visivel a quem edita o flow e a jusante como `{{webhook_error}}`) so recebe
+ * mensagens FIXAS em PT-BR: `HTTP <status>` ou a mensagem do codigo do port
+ * (`FLOW_HTTP_ERROR_MESSAGES`). Erro cru de rede (ENOTFOUND, ECONNREFUSED...) vira "Falha de
+ * rede ao chamar o endereço" — o detalhe vai so para o log interno, junto com o HOST (nunca a
+ * URL completa: query e credenciais ficam de fora).
  */
 import { z } from 'zod';
+import {
+  FLOW_HTTP_ERROR_MESSAGES,
+  flowHttpBlockedMessage,
+  flowHttpErrorCode,
+  isFlowHttpBlockedError,
+  SSRF_BLOCKED_CODE,
+} from '../ports/http.port';
 import { interpolate } from '../utils/interpolate';
 import type { FlowHandler } from '../types';
 
@@ -71,11 +88,7 @@ function buildBody(data: HttpRequestData, vars: Record<string, unknown>): unknow
     data.bodyMode ?? (data.body == null ? 'none' : 'raw');
   if (mode === 'none') return undefined;
   const raw =
-    typeof data.body === 'string'
-      ? data.body
-      : data.body == null
-        ? ''
-        : JSON.stringify(data.body);
+    typeof data.body === 'string' ? data.body : data.body == null ? '' : JSON.stringify(data.body);
   const interpolated = interpolate(raw, vars);
   if (mode === 'json') {
     try {
@@ -88,8 +101,7 @@ function buildBody(data: HttpRequestData, vars: Record<string, unknown>): unknow
   return interpolated;
 }
 
-const PATH_SEGMENT =
-  /\.([\w$-]+)|\[\s*'([^']*)'\s*\]|\[\s*"([^"]*)"\s*\]|\[\s*(\d+)\s*\]/g;
+const PATH_SEGMENT = /\.([\w$-]+)|\[\s*'([^']*)'\s*\]|\[\s*"([^"]*)"\s*\]|\[\s*(\d+)\s*\]/g;
 
 /** Avalia um JSONPath simples (`$.a.b[0]['c']`) contra `root`. Retorna `undefined` se nao resolver. */
 function evalJsonPath(root: unknown, path: string): unknown {
@@ -138,6 +150,34 @@ function applyResponseMapping(
   return out;
 }
 
+/** So o host do destino (sem esquema, porta, caminho, query nem credenciais), para log. */
+function hostForLog(url: string): string {
+  try {
+    return new URL(url).hostname || '(sem host)';
+  } catch {
+    return '(url inválida)';
+  }
+}
+
+/** Mensagem publica de uma falha do port: fixa por codigo; desconhecida = falha de rede. */
+function publicErrorMessage(err: unknown): string {
+  const code = flowHttpErrorCode(err);
+  return code !== null ? FLOW_HTTP_ERROR_MESSAGES[code] : FLOW_HTTP_ERROR_MESSAGES.network_error;
+}
+
+/** Detalhe cru (so log interno): codigo + mensagem do erro e da causa. */
+function internalErrorDetail(err: unknown): Record<string, unknown> {
+  const describe = (e: unknown): { code?: unknown; message: string } =>
+    e instanceof Error
+      ? { code: Reflect.get(e, 'code'), message: e.message }
+      : { message: String(e) };
+  const cause = err instanceof Error ? err.cause : undefined;
+  return {
+    error: describe(err),
+    ...(cause !== undefined ? { cause: describe(cause) } : {}),
+  };
+}
+
 export const httpRequestHandler: FlowHandler<HttpRequestData> = {
   schema: httpRequestSchema,
   async execute(node, ctx) {
@@ -150,6 +190,7 @@ export const httpRequestHandler: FlowHandler<HttpRequestData> = {
     const body = buildBody(data, ctx.variables);
 
     let lastError = '';
+    let lastDetail: Record<string, unknown> | undefined;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const res = await ctx.httpRequest({
@@ -174,6 +215,7 @@ export const httpRequestHandler: FlowHandler<HttpRequestData> = {
           };
         }
         lastError = `HTTP ${res.status}`;
+        lastDetail = undefined;
         // 4xx nao retenta (erro do cliente); 5xx retenta.
         if (res.status < 500) {
           return {
@@ -183,7 +225,17 @@ export const httpRequestHandler: FlowHandler<HttpRequestData> = {
           };
         }
       } catch (err) {
-        lastError = err instanceof Error ? err.message : String(err);
+        if (isFlowHttpBlockedError(err)) {
+          const message = flowHttpBlockedMessage(err);
+          // Sem url/host no log: pode carregar o IP interno que o flow tentou alcancar.
+          ctx.log('warn', 'http_request bloqueado pela guarda anti-SSRF', {
+            code: SSRF_BLOCKED_CODE,
+            message,
+          });
+          return { status: 'ERROR', error: `${message} [${SSRF_BLOCKED_CODE}]` };
+        }
+        lastError = publicErrorMessage(err);
+        lastDetail = internalErrorDetail(err);
       }
 
       if (attempt < maxAttempts) {
@@ -192,8 +244,12 @@ export const httpRequestHandler: FlowHandler<HttpRequestData> = {
       }
     }
 
-    // Nao loga headers/body (podem conter segredos): apenas url e mensagem de erro.
-    ctx.log('warn', `http_request falhou apos ${maxAttempts} tentativas`, { url, lastError });
+    // Nao loga headers/body nem a URL (query/credenciais podem conter segredos): so o host.
+    ctx.log('warn', `http_request falhou apos ${maxAttempts} tentativas`, {
+      host: hostForLog(url),
+      lastError,
+      ...(lastDetail !== undefined ? { detail: lastDetail } : {}),
+    });
     return {
       status: 'SUCCESS',
       edgeHandle: 'error',
