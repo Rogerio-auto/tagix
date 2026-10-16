@@ -44,6 +44,8 @@ function useCampaignAction(action: 'pause' | 'resume') {
     mutationFn: (id) => api.post<{ campaign: Campaign }>(`/api/campaigns/${id}/${action}`),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['campaigns'] });
+      // O detalhe mostra o status: sem isto, pausar/cancelar ali deixaria o cabeçalho velho.
+      void qc.invalidateQueries({ queryKey: ['campaign'] });
     },
   });
 }
@@ -57,6 +59,8 @@ export function useCancelCampaign() {
     mutationFn: (id) => api.delete<void>(`/api/campaigns/${id}`),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['campaigns'] });
+      // O detalhe mostra o status: sem isto, pausar/cancelar ali deixaria o cabeçalho velho.
+      void qc.invalidateQueries({ queryKey: ['campaign'] });
     },
   });
 }

@@ -10,8 +10,8 @@ import { Info } from 'lucide-react';
  */
 export function MobileDegradationBanner(): React.JSX.Element {
   return (
-    <div className="flex items-start gap-2.5 border-b border-border-2 bg-surface-1 px-4 py-2.5">
-      <Info className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
+    <div className="flex items-start gap-2.5 border-b border-border bg-surface px-4 py-2.5">
+      <Info className="mt-0.5 size-4 shrink-0 text-brand-text" aria-hidden />
       <p className="text-xs leading-snug text-text-low">
         No celular você inspeciona e opera o flow. A{' '}
         <span className="text-text">edição estrutural do grafo é melhor no desktop ou tablet</span>.

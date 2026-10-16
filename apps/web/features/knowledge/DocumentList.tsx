@@ -1,46 +1,138 @@
 'use client';
 
-import { Card } from '@hm/ui';
-import { cn } from '@/shared/lib/cn';
+import type { ReactNode } from 'react';
+import { DataTable, StatusPill, type DataTableColumn } from '@hm/ui';
+import { ResponsiveTable, type ResponsiveColumn, type ResponsiveTableEmpty } from '@/shared/components/ResponsiveTable';
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
+import { formatDate, formatNumber } from '@/shared/lib/locale';
 import { DocumentStatusBadge } from './DocumentStatusBadge';
 import type { KbDocument } from './types';
 
-/** Lista de documentos da KB (Card com linhas clicáveis). */
+function Visibility({ doc }: { doc: KbDocument }): React.JSX.Element {
+  return doc.visibleToAgents ? (
+    <StatusPill tone="info" size="sm">
+      Visível
+    </StatusPill>
+  ) : (
+    <StatusPill tone="neutral" size="sm">
+      Oculto
+    </StatusPill>
+  );
+}
+
+/** Data compacta de lista (uma linha, mesmo padrão de campanhas/flows/agentes). */
+const LIST_DATE: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' };
+
+const tableColumns: DataTableColumn<KbDocument>[] = [
+  {
+    id: 'title',
+    header: 'Documento',
+    cell: (doc) => (
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate font-bold text-text">{doc.title}</span>
+        <span className="truncate text-xs text-text-low">{doc.category ?? 'Sem categoria'}</span>
+      </span>
+    ),
+  },
+  { id: 'agents', header: 'Agentes', width: '8rem', cell: (doc) => <Visibility doc={doc} /> },
+  {
+    id: 'priority',
+    header: 'Prioridade',
+    numeric: true,
+    width: '8rem',
+    cell: (doc) => formatNumber(doc.priority),
+  },
+  {
+    id: 'updated',
+    header: 'Atualizado',
+    numeric: true,
+    width: '8rem',
+    cell: (doc) => (
+      <span className="whitespace-nowrap text-text-mid">
+        {formatDate(doc.updatedAt ?? doc.createdAt, LIST_DATE)}
+      </span>
+    ),
+  },
+  { id: 'status', header: 'Indexação', width: '9.5rem', cell: (doc) => <DocumentStatusBadge status={doc.status} /> },
+];
+
+const cardColumns: ResponsiveColumn<KbDocument>[] = [
+  { id: 'title', card: 'primary', cell: (doc) => doc.title },
+  {
+    id: 'meta',
+    card: 'secondary',
+    cell: (doc) => (
+      <>
+        {doc.category ?? 'Sem categoria'} ·{' '}
+        <span className="font-mono tabular-nums">prioridade {formatNumber(doc.priority)}</span>
+      </>
+    ),
+  },
+  {
+    id: 'agents',
+    card: 'meta',
+    cell: (doc) => (doc.visibleToAgents ? 'Visível aos agentes' : 'Oculto dos agentes'),
+  },
+  { id: 'status', card: 'badge', cell: (doc) => <DocumentStatusBadge status={doc.status} /> },
+];
+
+/**
+ * Lista de documentos da KB (F3-S06; DS 3.0 na F72-S07). Desktop: `DataTable`
+ * (prioridade e data em mono à direita, linha abre o Drawer — UX §2.1). Mobile: cards.
+ * Vazio, carregando e erro ficam dentro da própria tabela/lista.
+ */
 export function DocumentList({
   documents,
+  selectedId,
   onSelect,
+  loading,
+  error,
+  errorCopy,
+  empty,
+  emptyCopy,
 }: {
   documents: KbDocument[];
+  selectedId: string | null;
   onSelect: (id: string) => void;
+  loading: boolean;
+  /** Nó de erro do desktop (`<ErrorState>`); `undefined` sem erro. */
+  error: ReactNode;
+  errorCopy: { title: string; reason: string; whatToDo: string; action: ReactNode } | null;
+  empty: ReactNode;
+  emptyCopy: ResponsiveTableEmpty;
 }) {
+  const { isMobile } = useBreakpoint();
+
+  if (isMobile) {
+    return (
+      <ResponsiveTable<KbDocument>
+        ariaLabel="Documentos da base de conhecimento"
+        rows={documents}
+        columns={cardColumns}
+        getRowId={(d) => d.id}
+        onRowClick={(d) => onSelect(d.id)}
+        rowLabel={(d) => `Abrir documento ${d.title}`}
+        isLoading={loading}
+        isError={errorCopy !== null}
+        error={errorCopy ?? undefined}
+        empty={emptyCopy}
+        skeletonRows={5}
+      />
+    );
+  }
+
   return (
-    <Card elevation={1}>
-      <ul className="divide-y divide-border-2">
-        {documents.map((doc) => (
-          <li key={doc.id}>
-            <button
-              type="button"
-              onClick={() => onSelect(doc.id)}
-              className={cn(
-                'touch-target flex w-full items-center justify-between gap-4 px-4 py-3 text-left outline-none transition-colors',
-                'hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:shadow-glow-sm',
-              )}
-            >
-              <div className="min-w-0">
-                <div className="truncate font-head text-sm font-medium text-text">{doc.title}</div>
-                <div className="mt-0.5 flex items-center gap-2 font-body text-xs text-text-low">
-                  {doc.category && <span>{doc.category}</span>}
-                  {doc.category && <span aria-hidden>·</span>}
-                  <span>{doc.visibleToAgents ? 'Visível aos agentes' : 'Oculto dos agentes'}</span>
-                  <span aria-hidden>·</span>
-                  <span>prioridade {doc.priority}</span>
-                </div>
-              </div>
-              <DocumentStatusBadge status={doc.status} />
-            </button>
-          </li>
-        ))}
-      </ul>
-    </Card>
+    <DataTable<KbDocument>
+      caption="Documentos da base de conhecimento"
+      columns={tableColumns}
+      rows={documents}
+      getRowId={(d) => d.id}
+      loading={loading}
+      onRowClick={(d) => onSelect(d.id)}
+      getRowLabel={(d) => `Abrir documento ${d.title}`}
+      getRowState={(d) => (d.id === selectedId ? 'selected' : d.status === 'archived' ? 'muted' : undefined)}
+      error={error}
+      empty={empty}
+    />
   );
 }

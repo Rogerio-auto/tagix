@@ -3,8 +3,8 @@
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { FileText, Upload } from 'lucide-react';
-import { Button, Input, useToast } from '@hm/ui';
-import { Sheet as Drawer } from '@/shared/components/help/Sheet';
+import { Button, Drawer, Input, useToast } from '@hm/ui';
+import { ReadOnlyGuard, useIsReadOnly } from '@/shared/components/account-banner';
 import { Sheet as MobileSheet } from '@/shared/components/Sheet';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { ApiError } from '@/shared/lib/api-client';
@@ -14,12 +14,14 @@ import { useCreateKbDocument } from './queries';
  * Drawer lateral de upload de documento (UX §2.3: drawer, não modal full-screen).
  * Aceita texto/markdown colado OU um arquivo .md/.txt. Cria o documento (nasce
  * `draft`/processando) e fecha; a lista faz polling até virar `active`.
+ * Em empresa só leitura, "Enviar" fica `aria-disabled` com a explicação (F72-S07).
  */
 export function UploadDocumentDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
   const { isMobile } = useBreakpoint();
   const create = useCreateKbDocument();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const readOnly = useIsReadOnly();
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
@@ -45,6 +47,7 @@ export function UploadDocumentDrawer({ open, onClose }: { open: boolean; onClose
   };
 
   const submit = async () => {
+    if (readOnly) return;
     if (title.trim().length === 0 || content.trim().length === 0) {
       toast({ variant: 'error', title: 'Preencha título e conteúdo' });
       return;
@@ -89,13 +92,16 @@ export function UploadDocumentDrawer({ open, onClose }: { open: boolean; onClose
       />
 
       <div className="flex flex-col gap-1.5">
-        <span className="font-head text-sm font-medium text-text-mid">Conteúdo (markdown)</span>
+        <label htmlFor="kb-upload-content" className="font-body text-sm font-bold text-text-mid">
+          Conteúdo (markdown)
+        </label>
         <textarea
+          id="kb-upload-content"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           rows={isMobile ? 8 : 12}
           placeholder="Cole o texto/markdown do documento aqui…"
-          className="w-full resize-y rounded-sm border border-border bg-surface-2 px-3 py-2 font-body text-sm text-text outline-none placeholder:text-text-low focus-visible:border-border-brand focus-visible:shadow-glow-sm"
+          className="w-full resize-y rounded-sm border border-border bg-surface-2 px-3 py-2 font-mono text-sm leading-relaxed text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds placeholder:font-body placeholder:text-text-low hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
         />
       </div>
 
@@ -105,6 +111,8 @@ export function UploadDocumentDrawer({ open, onClose }: { open: boolean; onClose
           type="file"
           accept=".md,.markdown,.txt,text/markdown,text/plain"
           className="hidden"
+          tabIndex={-1}
+          aria-hidden
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void onFile(file);
@@ -131,15 +139,17 @@ export function UploadDocumentDrawer({ open, onClose }: { open: boolean; onClose
         variant="bottom"
         title="Novo documento"
         footer={
-          <Button
-            variant="primary"
-            className="w-full"
-            leftIcon={<Upload className="size-4" aria-hidden />}
-            loading={create.isPending}
-            onClick={() => void submit()}
-          >
-            Enviar
-          </Button>
+          <ReadOnlyGuard className="w-full" align="center">
+            <Button
+              variant="primary"
+              className="w-full"
+              leftIcon={<Upload className="size-4" aria-hidden />}
+              loading={create.isPending}
+              onClick={() => void submit()}
+            >
+              Enviar
+            </Button>
+          </ReadOnlyGuard>
         }
       >
         {fields}
@@ -148,21 +158,31 @@ export function UploadDocumentDrawer({ open, onClose }: { open: boolean; onClose
   }
 
   return (
-    <Drawer open={open} onClose={close} title="Novo documento" widthClass="w-[520px]">
+    <Drawer
+      open={open}
+      onClose={close}
+      title="Novo documento"
+      description="Os agentes passam a consultá-lo assim que a indexação terminar."
+      className="max-w-xl"
+      footer={
+        <>
+          <Button variant="ghost" onClick={close}>
+            Cancelar
+          </Button>
+          <ReadOnlyGuard>
+            <Button
+              variant="primary"
+              leftIcon={<Upload className="size-4" aria-hidden />}
+              loading={create.isPending}
+              onClick={() => void submit()}
+            >
+              Enviar
+            </Button>
+          </ReadOnlyGuard>
+        </>
+      }
+    >
       {fields}
-      <div className="mt-4 flex items-center justify-end gap-2">
-        <Button variant="secondary" onClick={close}>
-          Cancelar
-        </Button>
-        <Button
-          variant="primary"
-          leftIcon={<Upload className="size-4" aria-hidden />}
-          loading={create.isPending}
-          onClick={() => void submit()}
-        >
-          Enviar
-        </Button>
-      </div>
     </Drawer>
   );
 }

@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { BookOpen, Plus } from 'lucide-react';
+import { BookOpen, Lock, Plus } from 'lucide-react';
 import { can } from '@hm/shared';
-import { Button } from '@hm/ui';
-import { EmptyState, ErrorState, SkeletonList } from '@/shared/components/feedback';
+import { AnchoredHelpHint, Button, EmptyState, ErrorState } from '@hm/ui';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
 import { PageHeader } from '@/shared/components/layout/PageHeader';
+import { formatNumber } from '@/shared/lib/locale';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { useKbDocuments } from './queries';
 import { DocumentList } from './DocumentList';
@@ -13,10 +14,10 @@ import { UploadDocumentDrawer } from './UploadDocumentDrawer';
 import { DocumentDetailDrawer } from './DocumentDetailDrawer';
 
 /**
- * Tela de gestão da Knowledge Base (F3-S06). Lista documentos com status de
- * indexação quase-real (polling enquanto houver `draft`), upload via drawer,
- * detalhe/edição/preview via drawer. Página gated por `kb.edit` (defesa em
- * profundidade do guard de F3-S04).
+ * Base de conhecimento (F3-S06; DS 3.0 na F72-S07). Lista com status de indexação
+ * quase-real (polling enquanto houver `draft`), upload e detalhe em Drawer (UX §2.3).
+ * Página gated por `kb.edit` (defesa em profundidade do guard da API). Só leitura:
+ * "Novo documento" fica `aria-disabled` com a explicação.
  */
 export function KnowledgeBasePage() {
   const role = useAuthStore((s) => s.auth?.role);
@@ -33,7 +34,7 @@ export function KnowledgeBasePage() {
       <div>
         <PageHeader title="Conhecimento" />
         <EmptyState
-          icon={BookOpen}
+          icon={Lock}
           title="Sem acesso à base de conhecimento"
           description="A gestão da base de conhecimento é restrita a administradores e supervisores."
         />
@@ -42,42 +43,72 @@ export function KnowledgeBasePage() {
   }
 
   const uploadButton = (
-    <Button
-      variant="primary"
-      leftIcon={<Plus className="size-4" aria-hidden />}
-      onClick={() => setUploadOpen(true)}
-    >
-      Novo documento
+    <ReadOnlyGuard>
+      <Button
+        variant="primary"
+        leftIcon={<Plus className="size-4" aria-hidden />}
+        onClick={() => setUploadOpen(true)}
+      >
+        Novo documento
+      </Button>
+    </ReadOnlyGuard>
+  );
+
+  const list = documents.data?.documents ?? [];
+  const indexing = list.filter((d) => d.status === 'draft').length;
+  const retry = (
+    <Button variant="secondary" size="sm" onClick={() => void documents.refetch()}>
+      Tentar de novo
     </Button>
   );
+  const errorCopy = {
+    title: 'Não foi possível carregar a base de conhecimento',
+    reason: 'A conexão com a API falhou ou expirou.',
+    whatToDo: 'Verifique sua conexão e tente novamente.',
+    action: retry,
+  };
+  const emptyCopy = {
+    icon: BookOpen,
+    title: 'Nenhum documento ainda',
+    description:
+      'Envie documentos (markdown ou texto) para que seus agentes possam consultá-los nas conversas.',
+  };
 
   return (
     <div>
-      <PageHeader title="Conhecimento" actions={uploadButton} />
+      <PageHeader
+        title="Conhecimento"
+        description={
+          documents.data ? (
+            <span>
+              <span className="font-mono tabular-nums text-text-mid">{formatNumber(list.length)}</span>{' '}
+              {list.length === 1 ? 'documento' : 'documentos'}
+              {indexing > 0 && (
+                <>
+                  {' · '}
+                  <span className="font-mono tabular-nums text-text-mid">{formatNumber(indexing)}</span>{' '}
+                  em indexação
+                </>
+              )}
+            </span>
+          ) : (
+            'O que os agentes consultam para responder nas conversas.'
+          )
+        }
+        helpSlot={<AnchoredHelpHint anchorKey="knowledge.list" />}
+        actions={uploadButton}
+      />
 
-      {documents.isLoading ? (
-        <SkeletonList rows={5} />
-      ) : documents.isError ? (
-        <ErrorState
-          title="Não foi possível carregar a base de conhecimento"
-          reason="A conexão com a API falhou ou expirou."
-          whatToDo="Verifique sua conexão e tente novamente."
-          action={
-            <Button variant="secondary" onClick={() => void documents.refetch()}>
-              Tentar de novo
-            </Button>
-          }
-        />
-      ) : !documents.data || documents.data.documents.length === 0 ? (
-        <EmptyState
-          icon={BookOpen}
-          title="Nenhum documento ainda"
-          description="Envie documentos (markdown ou texto) para que seus agentes possam consultá-los nas conversas via RAG."
-          action={uploadButton}
-        />
-      ) : (
-        <DocumentList documents={documents.data.documents} onSelect={setSelectedId} />
-      )}
+      <DocumentList
+        documents={list}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        loading={documents.isLoading}
+        error={documents.isError ? <ErrorState {...errorCopy} /> : undefined}
+        errorCopy={documents.isError ? errorCopy : null}
+        empty={<EmptyState {...emptyCopy} action={uploadButton} />}
+        emptyCopy={{ ...emptyCopy, action: uploadButton }}
+      />
 
       <UploadDocumentDrawer open={uploadOpen} onClose={() => setUploadOpen(false)} />
       <DocumentDetailDrawer

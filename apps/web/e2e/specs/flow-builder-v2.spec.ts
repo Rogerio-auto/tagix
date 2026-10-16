@@ -134,7 +134,7 @@ test.describe('Flow Builder v2', () => {
     await page.mouse.down();
     await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 60, { steps: 8 });
     await page.mouse.up();
-    await expect(page.getByText('Alteracoes nao salvas')).toBeVisible();
+    await expect(page.getByText('Alterações não salvas')).toBeVisible();
 
     await save.click();
     await expect.poll(() => called).toBe(true);

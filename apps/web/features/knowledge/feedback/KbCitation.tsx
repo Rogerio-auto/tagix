@@ -45,7 +45,7 @@ export function KbCitation({
   };
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-sm border border-border-2 bg-surface-inset px-2.5 py-1.5">
+    <div className="flex items-center justify-between gap-3 rounded-sm border border-border bg-surface-inset px-2.5 py-1.5">
       <span className="flex min-w-0 items-center gap-1.5 font-body text-xs text-text-mid">
         <FileText className="size-3.5 shrink-0 text-text-low" aria-hidden />
         <span className="truncate">{citation.title}</span>
@@ -92,12 +92,14 @@ function VoteButton({
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        'flex size-6 items-center justify-center rounded-sm outline-none transition-colors duration-200',
-        'focus-visible:shadow-glow-sm',
+        // Alvo visual compacto (24px) com área de toque de 40px pelo pseudo-elemento (WCAG 2.5.8).
+        'relative flex size-6 items-center justify-center rounded-xs outline-none transition-colors duration-(--dur-fast) ease-ds',
+        "before:absolute before:left-1/2 before:top-1/2 before:size-10 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']",
+        'focus-visible:focus-ring',
         active
           ? tone === 'up'
-            ? 'bg-success/15 text-success'
-            : 'bg-danger/15 text-danger'
+            ? 'bg-success/10 text-success'
+            : 'bg-danger/10 text-danger'
           : 'text-text-low hover:bg-surface-3 hover:text-text-mid',
       )}
     >

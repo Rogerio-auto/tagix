@@ -28,10 +28,8 @@ function BannerShell({ tone, icon, title, children, action }: BannerShellProps) 
     <div
       role="status"
       className={cn(
-        'flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between',
-        tone === 'warn'
-          ? 'border-warn/40 bg-warn/10'
-          : 'border-info/40 bg-info/10',
+        'flex flex-col gap-3 rounded-lg border px-5 py-4 sm:flex-row sm:items-center sm:justify-between',
+        tone === 'warn' ? 'border-warn/25 bg-warn/10' : 'border-info/25 bg-info/10',
       )}
     >
       <div className="flex items-start gap-3">
@@ -39,7 +37,7 @@ function BannerShell({ tone, icon, title, children, action }: BannerShellProps) 
           {icon}
         </span>
         <div className="flex flex-col gap-0.5">
-          <p className="font-head text-sm font-semibold text-text">{title}</p>
+          <p className="font-head text-base font-semibold text-text">{title}</p>
           <p className="font-body text-sm text-text-mid">{children}</p>
         </div>
       </div>
@@ -61,7 +59,7 @@ export function BillingBanner({ subscription, onUpgrade }: BillingBannerProps) {
     return (
       <BannerShell
         tone="warn"
-        icon={<AlertTriangle className="size-5" />}
+        icon={<AlertTriangle className="size-5" aria-hidden />}
         title="Pagamento pendente"
         action={
           <Button variant="secondary" size="sm" onClick={onUpgrade}>
@@ -79,7 +77,7 @@ export function BillingBanner({ subscription, onUpgrade }: BillingBannerProps) {
     return (
       <BannerShell
         tone="info"
-        icon={<Clock className="size-5" />}
+        icon={<Clock className="size-5" aria-hidden />}
         title="Período de teste"
         action={
           <Button variant="secondary" size="sm" onClick={onUpgrade}>
@@ -98,7 +96,7 @@ export function BillingBanner({ subscription, onUpgrade }: BillingBannerProps) {
     return (
       <BannerShell
         tone="warn"
-        icon={<Info className="size-5" />}
+        icon={<Info className="size-5" aria-hidden />}
         title="Cancelamento agendado"
       >
         {currentPeriodEnd

@@ -7,9 +7,8 @@
  * DS v2: Card/Button de @hm/ui, tokens semânticos, zero hex.
  */
 import { useState } from 'react';
-import { Card, CardBody, CardHeader, Button, Modal, useToast } from '@hm/ui';
+import { Card, CardBody, CardHeader, Button, Modal, StatusPill, useToast } from '@hm/ui';
 import { CreditCard, QrCode } from 'lucide-react';
-import { cn } from '@/shared/lib/cn';
 import type { CurrentSubscription } from '../queries';
 import { useCancelSubscription } from '../queries';
 import { CYCLE_LABEL, formatBRL, formatDate, METHOD_LABEL, statusPresentation } from '../format';
@@ -26,9 +25,9 @@ function priceForCycle(sub: CurrentSubscription): number | null {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
+    <div className="flex items-center justify-between gap-4 py-3">
       <dt className="font-body text-sm text-text-low">{label}</dt>
-      <dd className="text-right font-head text-sm font-medium text-text">{children}</dd>
+      <dd className="text-right font-body text-sm font-bold text-text">{children}</dd>
     </div>
   );
 }
@@ -76,20 +75,16 @@ export function CurrentPlanCard({ subscription }: CurrentPlanCardProps) {
       <CardHeader
         title={subscription.plan?.name ?? 'Plano atual'}
         action={
-          <span
-            className={cn('rounded-pill px-2.5 py-1 font-head text-xs font-semibold', status.badgeClass)}
-          >
-            {status.label}
-          </span>
+          <StatusPill tone={status.tone}>{status.label}</StatusPill>
         }
       />
       <CardBody className="flex flex-col gap-1">
-        <dl className="divide-y divide-border-2">
+        <dl className="divide-y divide-border">
           <Row label="Valor">
             {price != null ? (
-              <span className="font-price">
-                {formatBRL(price)}
-                <span className="text-text-low">
+              <span>
+                <span className="font-mono tabular-nums">{formatBRL(price)}</span>
+                <span className="font-body font-medium text-text-low">
                   {subscription.billingCycle === 'yearly' ? ' / ano' : ' / mês'}
                 </span>
               </span>
@@ -115,12 +110,12 @@ export function CurrentPlanCard({ subscription }: CurrentPlanCardProps) {
             )}
           </Row>
           <Row label={subscription.cancelAtPeriodEnd ? 'Ativo até' : 'Próximo vencimento'}>
-            {formatDate(subscription.currentPeriodEnd)}
+            <span className="font-mono tabular-nums">{formatDate(subscription.currentPeriodEnd)}</span>
           </Row>
         </dl>
 
         {canCancel && (
-          <div className="mt-3 flex justify-end border-t border-border-2 pt-4">
+          <div className="mt-2 flex justify-end border-t border-border pt-4">
             <Button variant="ghost" size="sm" onClick={() => setConfirmOpen(true)}>
               Cancelar assinatura
             </Button>

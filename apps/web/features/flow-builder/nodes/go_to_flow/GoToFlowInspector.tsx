@@ -73,7 +73,7 @@ export function GoToFlowInspector({ nodeId }: { nodeId: string }) {
         </ul>
       </Field>
 
-      <div className="flex items-start gap-2 rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-[11px] text-text-low">
+      <div className="flex items-start gap-2 rounded-sm border border-border bg-surface-2 px-3 py-2 text-[11px] text-text-low">
         <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
         <span>
           O flow alvo deve estar publicado (status ativo). Flows rascunho ou inativados são

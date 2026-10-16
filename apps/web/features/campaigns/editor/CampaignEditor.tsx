@@ -3,10 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Button, Card, CardBody, Input, useToast } from '@hm/ui';
-import { ErrorState } from '@/shared/components/feedback';
+import { ArrowLeft, Plus } from 'lucide-react';
+import { Button, Card, CardBody, ErrorState, Input, Switch, useToast } from '@hm/ui';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
 import { cn } from '@/shared/lib/cn';
+import { formatNumber } from '@/shared/lib/locale';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
+import { browserTimeZone, MARKET_DEFAULT_TIMEZONE } from './delivery/timezone';
 import { useChannels } from '@/features/channels/queries';
 import { parseRecipientsCsv } from './csv';
 import { describeLoadError, describeSaveError } from './errors';
@@ -61,11 +64,26 @@ const TRIGGER_LABEL: Record<FollowupTrigger, string> = {
   on_delivered: 'Após entregar',
 };
 
-const COMMERCIAL_WINDOWS: SendWindowsConfig = {
-  enabled: true,
-  timezone: 'America/Sao_Paulo',
-  windows: [1, 2, 3, 4, 5].map((day) => ({ day, start: '09:00', end: '18:00' })),
-};
+/**
+ * Horário comercial (seg-sex, 9h-18h) no fuso de quem configura: o do navegador, com
+ * o padrão do market pack como reserva. Calculado no clique (nunca no SSR, onde o
+ * fuso seria o do servidor).
+ */
+function commercialWindows(): SendWindowsConfig {
+  return {
+    enabled: true,
+    timezone: browserTimeZone(MARKET_DEFAULT_TIMEZONE),
+    windows: [1, 2, 3, 4, 5].map((day) => ({ day, start: '09:00', end: '18:00' })),
+  };
+}
+
+/** Campo nativo (select/textarea) no mesmo desenho do `Input` do DS 3.0. */
+const controlClass =
+  'w-full rounded-sm border border-border bg-surface-2 px-3 font-body text-base text-text outline-none ' +
+  'transition-[border-color,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 ' +
+  'focus:border-brand-text focus-visible:focus-ring disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm';
+
+const labelClass = 'flex flex-col gap-1.5 font-body text-sm font-bold text-text-mid';
 
 /**
  * Wizard de campanha em 6 passos (CAMPAIGNS.md 4, 12.2).
@@ -233,7 +251,7 @@ export function CampaignEditor({
   if (isEditing && detail.isError) {
     const copy = describeLoadError(detail.error);
     return (
-      <div className="p-6">
+      <div>
         <ErrorState
           title={copy.title}
           reason={copy.reason}
@@ -263,22 +281,36 @@ export function CampaignEditor({
   if (isEditing && !hydrated) return <WizardSkeleton steps={TOTAL_STEPS} />;
 
   const stepLabel = STEP_LABELS[step] ?? '';
+  const invalidCount = state.rows.filter((r) => !r.valid).length;
 
+  // Formulário em largura de leitura (~900px), alinhado à esquerda como o resto do app.
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-head text-lg font-semibold text-text">
-          {isEditing ? 'Editar campanha' : 'Nova campanha'}
-        </h1>
-        <p className="text-sm text-text-low">
-          Passo {step + 1} de {TOTAL_STEPS} · {stepLabel}
-        </p>
-      </header>
+    <div className="flex w-full max-w-4xl flex-col gap-6">
+      <div className="flex flex-col gap-3">
+        <Link
+          href={campaignId && isEditing ? `/campaigns/${campaignId}` : '/campaigns'}
+          className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-sm font-body text-sm text-text-low outline-none transition-colors duration-(--dur-fast) hover:text-text focus-visible:focus-ring"
+        >
+          <ArrowLeft className="size-4" aria-hidden />
+          {isEditing ? 'Campanha' : 'Campanhas'}
+        </Link>
+        <header className="flex flex-col gap-1.5">
+          <h1 className="font-head text-h4 text-text md:text-h3">
+            {isEditing ? 'Editar campanha' : 'Nova campanha'}
+          </h1>
+          <p className="font-body text-small text-text-low">
+            <span className="font-mono tabular-nums text-text-mid">
+              Passo {step + 1} de {TOTAL_STEPS}
+            </span>{' '}
+            · {stepLabel}
+          </p>
+        </header>
+      </div>
 
       {readOnly && status ? (
         <div
           role="status"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-warn/30 bg-warn-bg px-4 py-3 text-sm text-warn"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warn/30 bg-warn/10 px-4 py-3 text-sm text-text"
         >
           <span>
             Campanha {STATUS_LABEL[status]}: só rascunhos podem ser editados. Os campos abaixo
@@ -287,7 +319,7 @@ export function CampaignEditor({
           {campaignId ? (
             <Link
               href={`/campaigns/${campaignId}`}
-              className="touch-target inline-flex items-center rounded-md border border-warn/40 px-3 py-1.5 text-sm text-warn outline-none hover:bg-warn/10 focus-visible:shadow-glow-md"
+              className="touch-target inline-flex items-center rounded-sm border border-border-2 px-3 py-1.5 text-sm font-medium text-text outline-none transition-colors hover:bg-surface-2 focus-visible:focus-ring"
             >
               Ver campanha
             </Link>
@@ -296,70 +328,76 @@ export function CampaignEditor({
       ) : null}
 
       {/* Trilha de passos: em edição a campanha já existe → navegação direta (UX §2.10). */}
-      <nav aria-label="Passos do wizard" className="flex gap-1">
-        {STEP_LABELS.map((label, i) => {
-          const tone =
-            i === step ? 'bg-brand' : i < step ? 'bg-brand-soft' : 'bg-surface-3';
-          return campaignId ? (
-            <button
-              key={label}
-              type="button"
-              title={label}
-              aria-label={`Passo ${i + 1}: ${label}`}
-              aria-current={i === step ? 'step' : undefined}
-              onClick={() => void goToStep(i)}
-              disabled={savingNext}
-              className="group flex-1 rounded-pill py-2 outline-none focus-visible:shadow-glow-md disabled:cursor-not-allowed"
-            >
-              <span
-                className={cn(
-                  'block h-1 rounded-pill transition-colors',
-                  tone,
-                  i > step && 'group-hover:bg-border-2',
+      <nav aria-label="Passos da campanha">
+        <ol className="flex gap-1.5">
+          {STEP_LABELS.map((label, i) => {
+            const bar = cn(
+              'block h-1 rounded-pill transition-colors duration-(--dur-base) motion-reduce:transition-none',
+              i === step ? 'bg-brand-text' : i < step ? 'bg-brand-text/40' : 'bg-surface-3',
+            );
+            const caption = cn(
+              'mt-2 hidden truncate font-mono text-xs uppercase tracking-wider md:block',
+              i === step ? 'text-text' : 'text-text-low',
+            );
+            return (
+              <li key={label} className="min-w-0 flex-1">
+                {campaignId ? (
+                  <button
+                    type="button"
+                    aria-label={`Passo ${i + 1}: ${label}`}
+                    aria-current={i === step ? 'step' : undefined}
+                    onClick={() => void goToStep(i)}
+                    disabled={savingNext}
+                    className="group block w-full rounded-sm py-2 text-left outline-none focus-visible:focus-ring disabled:cursor-not-allowed"
+                  >
+                    <span className={cn(bar, i > step && 'group-hover:bg-border-2')} />
+                    <span className={caption} aria-hidden>
+                      {label}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="py-2" aria-current={i === step ? 'step' : undefined}>
+                    <span className={bar} />
+                    <span className={caption}>{label}</span>
+                  </div>
                 )}
-              />
-            </button>
-          ) : (
-            <div key={label} className="flex-1 py-2" title={label}>
-              <span className={cn('block h-1 rounded-pill', tone)} />
-            </div>
-          );
-        })}
+              </li>
+            );
+          })}
+        </ol>
       </nav>
 
       <Card>
         <CardBody>
           {step === 0 ? (
-            <div className="flex flex-col gap-4">
-              <label className="flex flex-col gap-1 text-sm text-text-mid">
-                Nome
-                <Input
-                  value={state.name}
-                  disabled={readOnly}
-                  onChange={(e) => patch({ name: e.target.value })}
-                  placeholder="Black Friday 2026"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-text-mid">
+            <div className="flex flex-col gap-5">
+              <Input
+                label="Nome"
+                value={state.name}
+                disabled={readOnly}
+                onChange={(e) => patch({ name: e.target.value })}
+                placeholder="Black Friday 2026"
+              />
+              <label className={labelClass}>
                 Tipo
                 <select
                   value={state.type}
                   disabled={readOnly}
                   onChange={(e) => patch({ type: e.target.value as CampaignType })}
-                  className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus-visible:shadow-glow-md disabled:opacity-60"
+                  className={cn(controlClass, 'h-10')}
                 >
-                  <option value="broadcast">Broadcast</option>
-                  <option value="drip">Drip</option>
-                  <option value="triggered">Triggered</option>
+                  <option value="broadcast">Disparo único</option>
+                  <option value="drip">Sequência</option>
+                  <option value="triggered">Por gatilho</option>
                 </select>
               </label>
-              <label className="flex flex-col gap-1 text-sm text-text-mid">
+              <label className={labelClass}>
                 Canal
                 <select
                   value={state.channelId}
                   disabled={readOnly || isEditing}
                   onChange={(e) => patch({ channelId: e.target.value })}
-                  className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text outline-none focus-visible:shadow-glow-md disabled:opacity-60"
+                  className={cn(controlClass, 'h-10')}
                 >
                   <option value="">Selecione um canal</option>
                   {channels.map((c) => (
@@ -379,45 +417,52 @@ export function CampaignEditor({
           ) : null}
 
           {step === 1 ? (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-4">
               {isEditing ? (
-                <p className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text-mid">
+                <p className="rounded-sm border border-border bg-surface-2 px-3 py-2 text-sm text-text-mid">
                   Os destinatários já importados continuam nesta campanha. Colar um novo CSV{' '}
-                  <strong className="font-medium text-text">adiciona</strong> contatos — nada é
+                  <strong className="font-bold text-text">adiciona</strong> contatos: nada é
                   removido aqui.
                 </p>
               ) : null}
-              <p className="text-sm text-text-mid">
-                Cole o CSV (cabeçalho phone,name). Telefones em E.164.
-              </p>
-              <textarea
-                rows={6}
-                disabled={readOnly}
-                onChange={(e) => patch({ rows: parseRecipientsCsv(e.target.value) })}
-                className="rounded-md border border-border bg-surface px-3 py-2 font-mono text-sm text-text outline-none focus-visible:shadow-glow-md disabled:opacity-60"
-              />
-              <label className="flex items-center gap-2 text-sm text-text-mid">
-                <input
-                  type="checkbox"
-                  checked={state.optInOnImport}
+              <label className={labelClass}>
+                Destinatários (CSV)
+                <span className="font-normal text-text-low">
+                  Cabeçalho <span className="font-mono">phone,name</span>; telefones em E.164.
+                </span>
+                <textarea
+                  rows={6}
                   disabled={readOnly}
-                  onChange={(e) => patch({ optInOnImport: e.target.checked })}
+                  spellCheck={false}
+                  onChange={(e) => patch({ rows: parseRecipientsCsv(e.target.value) })}
+                  className={cn(controlClass, 'py-2 font-mono')}
                 />
-                Registrar opt-in nesta importação
               </label>
+              <Switch
+                checked={state.optInOnImport}
+                disabled={readOnly}
+                onCheckedChange={(next) => patch({ optInOnImport: next })}
+                label="Registrar opt-in nesta importação"
+              />
               {state.rows.length > 0 ? (
-                <div className="text-sm text-text-mid">
-                  {validRows.length} válidos · {state.rows.filter((r) => !r.valid).length} inválidos
-                  <ul className="mt-2 max-h-40 overflow-auto rounded-md border border-border">
+                <div className="flex flex-col gap-2 text-sm text-text-mid">
+                  <p className="font-mono tabular-nums">
+                    <span className="text-text">{formatNumber(validRows.length)}</span> válidos ·{' '}
+                    <span className={invalidCount > 0 ? 'text-danger' : undefined}>
+                      {formatNumber(invalidCount)}
+                    </span>{' '}
+                    inválidos
+                  </p>
+                  <ul className="max-h-40 divide-y divide-border overflow-auto rounded-sm border border-border">
                     {state.rows.slice(0, 10).map((r, i) => (
                       <li
                         key={r.phone + i}
                         className={cn(
-                          'flex justify-between px-3 py-1 text-xs',
+                          'flex justify-between gap-3 px-3 py-1.5 text-xs',
                           r.valid && !r.duplicate ? 'text-text' : 'text-danger',
                         )}
                       >
-                        <span>{r.phone}</span>
+                        <span className="font-mono tabular-nums">{r.phone}</span>
                         <span>{r.duplicate ? 'duplicado' : r.valid ? 'ok' : 'inválido'}</span>
                       </li>
                     ))}
@@ -430,22 +475,24 @@ export function CampaignEditor({
           {step === 2 ? (
             <div className="flex flex-col gap-3">
               {state.steps.map((s, i) => (
-                <div key={i} className="flex flex-col gap-2 rounded-md border border-border p-3">
+                <div key={i} className="flex flex-col gap-3 rounded-lg border border-border bg-surface-2 p-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-text">Step {i + 1}</span>
+                    <span className="font-mono text-xs font-medium uppercase tracking-widest text-text-low">
+                      Mensagem {i + 1}
+                    </span>
                     {state.steps.length > 1 && !readOnly ? (
-                      <button
-                        type="button"
-                        className="touch-target rounded-sm px-2 text-xs text-danger outline-none hover:underline focus-visible:shadow-glow-md"
-                        onClick={() =>
-                          patch({ steps: state.steps.filter((_, idx) => idx !== i) })
-                        }
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Remover mensagem ${i + 1}`}
+                        onClick={() => patch({ steps: state.steps.filter((_, idx) => idx !== i) })}
                       >
                         Remover
-                      </button>
+                      </Button>
                     ) : null}
                   </div>
                   <Input
+                    label="Template"
                     value={s.templateName}
                     disabled={readOnly}
                     onChange={(e) => {
@@ -453,25 +500,30 @@ export function CampaignEditor({
                       next[i] = { ...s, templateName: e.target.value };
                       patch({ steps: next });
                     }}
-                    placeholder="Template Meta (APPROVED)"
+                    placeholder="Template Meta aprovado"
                   />
                   <Input
+                    label="Espera antes de enviar (segundos)"
                     type="number"
                     min={0}
                     value={String(s.delaySeconds)}
                     disabled={readOnly}
+                    className="font-mono tabular-nums"
                     onChange={(e) => {
                       const next = [...state.steps];
                       next[i] = { ...s, delaySeconds: Number(e.target.value) || 0 };
                       patch({ steps: next });
                     }}
-                    placeholder="Delay (segundos)"
                   />
                   <p className="text-xs text-text-low">
-                    Idioma {s.languageCode}
-                    {s.templateComponents.length > 0
-                      ? ` · ${s.templateComponents.length} componente(s) preservado(s)`
-                      : ''}
+                    Idioma <span className="font-mono">{s.languageCode}</span>
+                    {s.templateComponents.length > 0 ? (
+                      <>
+                        {' · '}
+                        <span className="font-mono tabular-nums">{formatNumber(s.templateComponents.length)}</span>{' '}
+                        componente(s) preservado(s)
+                      </>
+                    ) : null}
                   </p>
                 </div>
               ))}
@@ -479,29 +531,33 @@ export function CampaignEditor({
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="self-start"
+                  leftIcon={<Plus className="size-4" aria-hidden />}
                   onClick={() => patch({ steps: [...state.steps, blankStep()] })}
                 >
-                  + Adicionar step
+                  Adicionar mensagem
                 </Button>
               ) : null}
             </div>
           ) : null}
 
           {step === 3 ? (
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-5">
+              <div role="group" aria-label="Janela de envio" className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={readOnly}
-                  onClick={() => patch({ sendWindows: COMMERCIAL_WINDOWS })}
+                  aria-pressed={state.sendWindows.enabled}
+                  onClick={() => patch({ sendWindows: commercialWindows() })}
                 >
-                  Horário comercial (Seg-Sex 9-18)
+                  Horário comercial (seg-sex, 9h-18h)
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={readOnly}
+                  aria-pressed={!state.sendWindows.enabled}
                   onClick={() => patch({ sendWindows: { enabled: false } })}
                 >
                   24/7
@@ -509,46 +565,53 @@ export function CampaignEditor({
               </div>
               <p className="text-sm text-text-mid">
                 Janelas: {state.sendWindows.enabled ? 'horário comercial' : '24/7'}
-                {state.sendWindows.enabled && state.sendWindows.windows?.length
-                  ? ` · ${state.sendWindows.windows.length} faixa(s)`
-                  : ''}
+                {state.sendWindows.enabled && state.sendWindows.windows?.length ? (
+                  <>
+                    {' · '}
+                    <span className="font-mono tabular-nums">{formatNumber(state.sendWindows.windows.length)}</span>{' '}
+                    faixa(s)
+                  </>
+                ) : null}
+                {state.sendWindows.enabled && state.sendWindows.timezone ? (
+                  <>
+                    {' · '}
+                    <span className="font-mono">{state.sendWindows.timezone}</span>
+                  </>
+                ) : null}
               </p>
-              <label className="flex flex-col gap-1 text-sm text-text-mid">
-                Rate limit (mensagens/minuto)
-                <Input
-                  type="number"
-                  min={1}
-                  value={String(state.rateLimitPerMinute)}
-                  disabled={readOnly}
-                  onChange={(e) => patch({ rateLimitPerMinute: Number(e.target.value) || 30 })}
-                />
-              </label>
+              <Input
+                label="Ritmo (mensagens por minuto)"
+                type="number"
+                min={1}
+                value={String(state.rateLimitPerMinute)}
+                disabled={readOnly}
+                className="font-mono tabular-nums"
+                onChange={(e) => patch({ rateLimitPerMinute: Number(e.target.value) || 30 })}
+              />
             </div>
           ) : null}
 
           {step === 4 ? (
             <div className="flex flex-col gap-3">
-              <label className="flex items-center gap-2 text-sm text-text-mid">
-                <input
-                  type="checkbox"
-                  checked={state.autoHandoffOnReply}
-                  disabled={readOnly}
-                  onChange={(e) => patch({ autoHandoffOnReply: e.target.checked })}
-                />
-                Acionar IA quando o contato responder
-              </label>
-              <p className="text-xs text-text-low">Ao avançar, rodamos a validação pré-flight.</p>
+              <Switch
+                checked={state.autoHandoffOnReply}
+                disabled={readOnly}
+                onCheckedChange={(next) => patch({ autoHandoffOnReply: next })}
+                label="Acionar a IA quando o contato responder"
+                description="Ao avançar, rodamos a validação antes do envio."
+              />
             </div>
           ) : null}
 
           {step === 5 ? (
-            <div className="flex flex-col gap-4">
-              <h2 className="font-head text-base font-semibold text-text">Revisão + checklist</h2>
+            <div className="flex flex-col gap-5">
+              <h2 className="font-head text-lg font-medium text-text">Revisão</h2>
               {validation ? (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-4">
                   <div
+                    role="status"
                     className={cn(
-                      'rounded-md border px-3 py-2 text-sm',
+                      'rounded-sm border px-3 py-2 text-sm font-medium',
                       validation.safe
                         ? 'border-success/30 bg-success/10 text-success'
                         : 'border-danger/30 bg-danger/10 text-danger',
@@ -556,31 +619,34 @@ export function CampaignEditor({
                   >
                     {validation.safe ? 'Pronta para ativar.' : 'Há bloqueios críticos.'}
                   </div>
-                  <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {[
-                      ['Destinatários', String(validation.stats.recipients)],
-                      ['Sem opt-in', String(validation.stats.recipientsWithoutOptIn)],
-                      ['Steps', String(validation.stats.steps)],
-                      ['Limite do tier', String(validation.stats.tierLimit)],
-                    ].map(([label, value]) => (
-                      <div
-                        key={label}
-                        className="flex flex-col gap-1 rounded-md border border-border bg-surface-2 px-3 py-2"
-                      >
-                        <dt className="text-xs text-text-low">{label}</dt>
-                        <dd className="font-price text-sm text-text">{value}</dd>
+                  <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-4">
+                    {(
+                      [
+                        ['Destinatários', validation.stats.recipients],
+                        ['Sem opt-in', validation.stats.recipientsWithoutOptIn],
+                        ['Mensagens', validation.stats.steps],
+                        ['Limite do tier', validation.stats.tierLimit],
+                      ] as const
+                    ).map(([label, value]) => (
+                      <div key={label} className="flex flex-col gap-1.5 bg-surface px-4 py-3">
+                        <dt className="font-mono text-xs font-medium uppercase tracking-widest text-text-low">
+                          {label}
+                        </dt>
+                        <dd className="font-mono text-lg font-medium tabular-nums text-text">
+                          {formatNumber(value)}
+                        </dd>
                       </div>
                     ))}
                   </dl>
                   {validation.criticalIssues.length > 0 ? (
-                    <ul className="flex flex-col gap-1 text-sm text-danger">
+                    <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-danger">
                       {validation.criticalIssues.map((m, i) => (
                         <li key={i}>{m}</li>
                       ))}
                     </ul>
                   ) : null}
                   {validation.warnings.length > 0 ? (
-                    <ul className="flex flex-col gap-1 text-sm text-warn">
+                    <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-warn">
                       {validation.warnings.map((m, i) => (
                         <li key={i}>{m}</li>
                       ))}
@@ -590,7 +656,7 @@ export function CampaignEditor({
               ) : (
                 <div className="flex flex-col items-start gap-2">
                   <p className="text-sm text-text-low">
-                    Validação pré-flight ainda não executada nesta sessão.
+                    A validação antes do envio ainda não rodou nesta sessão.
                   </p>
                   <Button
                     variant="secondary"
@@ -606,10 +672,13 @@ export function CampaignEditor({
 
               {followups.length > 0 ? (
                 <section className="flex flex-col gap-2">
-                  <h3 className="text-sm font-medium text-text">
-                    Follow-ups configurados ({followups.length})
+                  <h3 className="text-sm font-bold text-text">
+                    Follow-ups configurados{' '}
+                    <span className="font-mono tabular-nums text-text-low">
+                      ({formatNumber(followups.length)})
+                    </span>
                   </h3>
-                  <ul className="flex flex-col gap-1 rounded-md border border-border">
+                  <ul className="flex flex-col divide-y divide-border rounded-sm border border-border">
                     {followups.map((f) => (
                       <li
                         key={f.id}
@@ -618,13 +687,14 @@ export function CampaignEditor({
                         <span className="text-text">{TRIGGER_LABEL[f.triggerEvent]}</span>
                         <span className="font-mono">{f.templateName}</span>
                         <span>
-                          {f.delayMinutes} min · {f.isActive ? 'ativo' : 'inativo'}
+                          <span className="font-mono tabular-nums">{formatNumber(f.delayMinutes)} min</span> ·{' '}
+                          {f.isActive ? 'ativo' : 'inativo'}
                         </span>
                       </li>
                     ))}
                   </ul>
                   <p className="text-xs text-text-low">
-                    Preservados: a edição pelo wizard não altera follow-ups.
+                    Preservados: a edição pelo assistente não altera follow-ups.
                   </p>
                 </section>
               ) : null}
@@ -638,13 +708,13 @@ export function CampaignEditor({
       <div
         className={
           isMobile
-            ? 'sticky bottom-0 z-10 -mx-6 flex items-center justify-between gap-3 border-t border-border bg-surface px-6 pt-3 pb-safe-4'
+            ? 'sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t border-border bg-surface px-4 pt-3 pb-safe-4'
             : 'flex items-center justify-between gap-3'
         }
       >
         <Button
           variant="ghost"
-          size="sm"
+          size={isMobile ? 'md' : 'sm'}
           disabled={step === 0}
           onClick={() => setStep((s) => Math.max(s - 1, 0))}
         >
@@ -655,27 +725,31 @@ export function CampaignEditor({
             Fechar
           </Button>
         ) : step < TOTAL_STEPS - 1 ? (
-          <Button
-            variant="primary"
-            size={isMobile ? 'md' : 'sm'}
-            className={isMobile ? 'flex-1' : undefined}
-            disabled={savingNext}
-            loading={savingNext}
-            onClick={() => void persistAndNext()}
-          >
-            Salvar e continuar
-          </Button>
+          <ReadOnlyGuard className={isMobile ? 'flex-1' : undefined}>
+            <Button
+              variant="primary"
+              size={isMobile ? 'md' : 'sm'}
+              className={isMobile ? 'w-full' : undefined}
+              disabled={savingNext}
+              loading={savingNext}
+              onClick={() => void persistAndNext()}
+            >
+              Salvar e continuar
+            </Button>
+          </ReadOnlyGuard>
         ) : (
-          <Button
-            variant="primary"
-            size={isMobile ? 'md' : 'sm'}
-            className={isMobile ? 'flex-1' : undefined}
-            disabled={!validation?.safe || activateCampaign.isPending}
-            loading={activateCampaign.isPending}
-            onClick={() => void activate()}
-          >
-            Ativar campanha
-          </Button>
+          <ReadOnlyGuard className={isMobile ? 'flex-1' : undefined}>
+            <Button
+              variant="primary"
+              size={isMobile ? 'md' : 'sm'}
+              className={isMobile ? 'w-full' : undefined}
+              disabled={!validation?.safe || activateCampaign.isPending}
+              loading={activateCampaign.isPending}
+              onClick={() => void activate()}
+            >
+              Ativar campanha
+            </Button>
+          </ReadOnlyGuard>
         )}
       </div>
     </div>

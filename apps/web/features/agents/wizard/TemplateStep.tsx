@@ -1,6 +1,6 @@
 import { Bot, Headset, HelpCircle, MessageCircle, ShoppingBag, UserPlus } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Skeleton } from '@/shared/components/feedback';
+import { Skeleton } from '@hm/ui';
 import { cn } from '@/shared/lib/cn';
 import type { AgentTemplate } from '../types';
 
@@ -37,7 +37,7 @@ export function TemplateStep({ templates, loading, selectedId, onSelect }: Templ
 
   if (templates.length === 0) {
     return (
-      <p className="rounded-md border border-border-2 bg-surface-inset px-4 py-6 text-center font-body text-sm text-text-low">
+      <p className="rounded-lg border border-dashed border-border bg-surface-2 px-4 py-6 text-center font-body text-sm text-text-low">
         Nenhum template disponível. Os templates da plataforma ainda não foram provisionados neste
         ambiente.
       </p>
@@ -60,17 +60,17 @@ export function TemplateStep({ templates, loading, selectedId, onSelect }: Templ
             aria-pressed={selected}
             className={cn(
               'flex items-center gap-3 rounded-md border px-4 py-3 text-left outline-none',
-              'transition-colors duration-200 focus-visible:shadow-glow-md',
+              'transition-colors duration-(--dur-fast) ease-ds focus-visible:focus-ring motion-reduce:transition-none',
               selected
-                ? 'border-brand bg-brand/10'
-                : 'border-border bg-surface-inset hover:border-border-2 hover:bg-surface-2',
+                ? 'border-brand-text/40 bg-brand-text/10'
+                : 'border-border bg-surface-2 hover:border-border-2 hover:bg-surface-3',
             )}
           >
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-surface text-text-mid">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-sm border border-border bg-surface text-text-mid">
               <Icon className="size-5" aria-hidden />
             </span>
             <span className="min-w-0">
-              <span className="block font-head text-sm font-semibold text-text">
+              <span className="block font-body text-sm font-bold text-text">
                 {template.name}
               </span>
               {template.description && (

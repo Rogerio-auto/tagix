@@ -2,11 +2,9 @@
 
 import { useState } from 'react';
 import { Wrench } from 'lucide-react';
-import { Button, Card } from '@hm/ui';
-import { Toggle } from '@/features/agents/wizard/fields';
-import { EmptyState, ErrorState, SkeletonList } from '@/shared/components/feedback';
+import { Badge, Button, EmptyState, ErrorState, Skeleton, Switch, useToast } from '@hm/ui';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
 import { ApiError } from '@/shared/lib/api-client';
-import { useToast } from '@hm/ui';
 import { useAgentTools, useToggleAgentTool } from './queries';
 import type { AgentToolState } from './types';
 
@@ -14,7 +12,8 @@ import type { AgentToolState } from './types';
  * Aba de Tools (UX §2.7 skeleton / §2.11 erro 3-partes). Lista o catálogo de
  * tools visível ao workspace com o estado por agente; cada item é um toggle
  * (`PUT /api/agents/:id/tools/:toolId`). Sem permissão `agent.toggle_tools` os
- * toggles ficam read-only.
+ * toggles ficam read-only; em empresa só leitura, `aria-disabled` com a explicação
+ * (F71-S17). DS 3.0 (F72-S07): `Switch` do `@hm/ui`, rótulo com o nome da tool.
  */
 export function ToolsTab({ agentId, canToggle }: { agentId: string; canToggle: boolean }) {
   const { toast } = useToast();
@@ -44,7 +43,15 @@ export function ToolsTab({ agentId, canToggle }: { agentId: string; canToggle: b
     }
   };
 
-  if (tools.isLoading) return <SkeletonList rows={4} />;
+  if (tools.isLoading) {
+    return (
+      <div className="flex flex-col gap-2" aria-busy aria-label="Carregando ferramentas">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-16 rounded-lg" />
+        ))}
+      </div>
+    );
+  }
 
   if (tools.isError) {
     return (
@@ -53,7 +60,7 @@ export function ToolsTab({ agentId, canToggle }: { agentId: string; canToggle: b
         reason="A conexão com a API falhou ou expirou."
         whatToDo="Verifique sua conexão e tente novamente."
         action={
-          <Button variant="secondary" onClick={() => void tools.refetch()}>
+          <Button variant="secondary" loading={tools.isFetching} onClick={() => void tools.refetch()}>
             Tentar de novo
           </Button>
         }
@@ -73,44 +80,51 @@ export function ToolsTab({ agentId, canToggle }: { agentId: string; canToggle: b
   }
 
   return (
-    <Card elevation={1}>
-      <ul className="divide-y divide-border-2">
-        {list.map((tool) => (
-          <li key={tool.id} className="flex items-center gap-4 px-5 py-4">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-surface-inset text-text-mid">
-              <Wrench className="size-4" aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-2 truncate font-head text-sm font-medium text-text">
-                {tool.name}
-                {tool.isGlobal && (
-                  <span className="rounded-pill bg-surface-3 px-2 py-0.5 font-body text-[11px] text-text-low">
-                    global
-                  </span>
-                )}
-                {tool.category && (
-                  <span className="rounded-pill bg-surface-3 px-2 py-0.5 font-body text-[11px] text-text-low">
-                    {tool.category}
-                  </span>
-                )}
-              </p>
-              {tool.description && (
-                <p className="truncate font-body text-xs text-text-low">{tool.description}</p>
+    <ul className="flex flex-col divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
+      {list.map((tool) => (
+        <li key={tool.id} className="flex items-center gap-4 px-5 py-4">
+          <span
+            aria-hidden
+            className="flex size-9 shrink-0 items-center justify-center rounded-sm border border-border bg-surface-2 text-text-mid"
+          >
+            <Wrench className="size-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="flex min-w-0 flex-wrap items-center gap-2 font-body text-sm font-bold text-text">
+              <span className="truncate">{tool.name}</span>
+              {tool.isGlobal && (
+                <Badge tone="neutral" size="sm">
+                  global
+                </Badge>
               )}
-            </div>
-            <div aria-busy={pendingId === tool.id || undefined}>
-              <Toggle
-                checked={tool.isEnabled}
-                onChange={(next) => {
-                  if (!canToggle || pendingId === tool.id) return;
-                  void onToggle(tool, next);
-                }}
-                label={tool.isEnabled ? 'Ativa' : 'Inativa'}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </Card>
+              {tool.category && (
+                <Badge tone="neutral" size="sm">
+                  {tool.category}
+                </Badge>
+              )}
+            </p>
+            {tool.description && (
+              <p className="truncate font-body text-xs text-text-low">{tool.description}</p>
+            )}
+          </div>
+          {/* Estado visível; o leitor de tela lê o nome da tool + `aria-checked`. */}
+          <span aria-hidden className="hidden w-14 text-right font-body text-xs text-text-low sm:inline">
+            {tool.isEnabled ? 'Ativa' : 'Inativa'}
+          </span>
+          <ReadOnlyGuard>
+            <Switch
+              checked={tool.isEnabled}
+              disabled={!canToggle}
+              loading={pendingId === tool.id}
+              aria-label={tool.name}
+              onCheckedChange={(next) => {
+                if (!canToggle || pendingId === tool.id) return;
+                void onToggle(tool, next);
+              }}
+            />
+          </ReadOnlyGuard>
+        </li>
+      ))}
+    </ul>
   );
 }

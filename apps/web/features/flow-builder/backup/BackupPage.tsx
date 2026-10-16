@@ -1,12 +1,15 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { DatabaseBackup, Download, Upload } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronLeft, Download, Lock, ShieldAlert, Upload } from 'lucide-react';
 import { can } from '@hm/shared';
-import { Button, Card, useToast } from '@hm/ui';
+import { Button, useToast } from '@hm/ui';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
 import { HelpPanel } from '@/shared/components/help';
 import { PageHeader } from '@/shared/components/layout/PageHeader';
 import { ApiError } from '@/shared/lib/api-client';
+import { formatNumber } from '@/shared/lib/locale';
 import { useAuthStore } from '@/shared/stores/auth.store';
 import { ImportPreviewModal } from './ImportPreviewModal';
 import { useExportFlows, useImportFlows, usePreviewImport } from './queries';
@@ -29,6 +32,18 @@ function downloadEnvelope(envelope: BackupEnvelope): void {
   }, 1000);
 }
 
+/** "1 flow" / "12 flows", com o número no idioma da interface. */
+function flowCount(n: number): string {
+  return `${formatNumber(n)} ${n === 1 ? 'flow' : 'flows'}`;
+}
+
+/**
+ * Backup de flows (F50-S05) no DS 3.0 (F72-S07): exportar (leitura, sempre disponível) e
+ * importar (escrita, guardada em só leitura — F71-S17). A importação passa por um resumo
+ * com verificação de integridade antes de confirmar (UX §2.9).
+ *
+ * UX: §2.5 `?` (HelpPanel); §2.7 botões em loading; §2.11 erros por toast com o motivo.
+ */
 export function BackupPage() {
   const role = useAuthStore((s) => s.auth?.role);
   const canBackup = role ? can(role, 'flow.backup') : false;
@@ -58,7 +73,7 @@ export function BackupPage() {
         toast({
           variant: 'success',
           title: 'Backup exportado',
-          description: `${envelope.flows.length} flow(s) no arquivo.`,
+          description: `${flowCount(envelope.flows.length)} no arquivo.`,
         });
       },
       onError: (err) => toastError(err, 'Não foi possível exportar'),
@@ -105,7 +120,7 @@ export function BackupPage() {
           toast({
             variant: 'success',
             title: 'Importação concluída',
-            description: `${res.created.length} flow(s) importado(s) como rascunho.`,
+            description: `${flowCount(res.created.length)} como rascunho.`,
           });
           setModalOpen(false);
           setPendingEnvelope(null);
@@ -117,9 +132,17 @@ export function BackupPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div>
+      <Link
+        href="/flows"
+        className="-ml-2 mb-3 inline-flex h-8 items-center gap-1 rounded-sm px-2 text-sm font-medium text-text-low outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:focus-ring"
+      >
+        <ChevronLeft className="size-4" aria-hidden />
+        Flows
+      </Link>
       <PageHeader
         title="Backup de Flows"
+        description="Exporte todos os flows num arquivo e importe em outro ambiente, como rascunho."
         helpSlot={
           <HelpPanel title="Backup de Flows">
             <div className="space-y-2 text-sm text-text-mid">
@@ -138,81 +161,94 @@ export function BackupPage() {
       />
 
       {!canBackup ? (
-        <Card elevation={1}>
-          <p className="p-6 text-sm text-text-low">
+        <div className="flex items-start gap-3 rounded-lg border border-border bg-surface p-6">
+          <Lock className="mt-0.5 size-4 shrink-0 text-text-low" aria-hidden />
+          <p className="text-sm text-text-mid">
             Você não tem permissão para exportar ou importar flows. Fale com um administrador do
             workspace.
           </p>
-        </Card>
+        </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {/* Exportar */}
-          <Card elevation={1}>
-            <div className="flex flex-col gap-4 p-6">
-              <div className="flex items-center gap-3">
-                <span className="flex size-10 items-center justify-center rounded-lg bg-surface-2 text-accent">
-                  <Download className="size-5" aria-hidden />
-                </span>
-                <div>
-                  <h2 className="text-sm font-semibold text-text">Exportar flows</h2>
-                  <p className="text-xs text-text-low">Baixa todos os flows num arquivo JSON.</p>
-                </div>
-              </div>
-              <p className="text-sm text-text-mid">
-                Inclui nós, conexões, posições e configurações de cada flow, além dos nomes das
-                referências para reconstrução em outro ambiente.
-              </p>
-              <Button
-                variant="primary"
-                leftIcon={<Download className="size-4" aria-hidden />}
-                loading={exportFlows.isPending}
-                onClick={onExport}
+        <div className="flex flex-col gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <section
+              aria-labelledby="backup-export-title"
+              className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-6"
+            >
+              <span
+                aria-hidden
+                className="flex size-10 items-center justify-center rounded-sm border border-border bg-surface-2 text-text-mid"
               >
-                Exportar e baixar
-              </Button>
-            </div>
-          </Card>
-
-          {/* Importar */}
-          <Card elevation={1}>
-            <div className="flex flex-col gap-4 p-6">
-              <div className="flex items-center gap-3">
-                <span className="flex size-10 items-center justify-center rounded-lg bg-surface-2 text-accent">
-                  <Upload className="size-5" aria-hidden />
-                </span>
-                <div>
-                  <h2 className="text-sm font-semibold text-text">Importar flows</h2>
-                  <p className="text-xs text-text-low">Restaura de um arquivo de backup.</p>
-                </div>
+                <Download className="size-5" />
+              </span>
+              <div className="space-y-1.5">
+                <h2 id="backup-export-title" className="font-head text-base font-semibold text-text">
+                  Exportar flows
+                </h2>
+                <p className="text-sm leading-relaxed text-text-mid">
+                  Baixa um arquivo JSON com nós, conexões, posições e configurações de cada flow, além dos
+                  nomes das referências para reconstrução em outro ambiente.
+                </p>
               </div>
-              <p className="text-sm text-text-mid">
-                Você verá um resumo do conteúdo antes de confirmar. Os flows entram como rascunho — nada
-                é sobrescrito.
-              </p>
+              <div className="mt-auto">
+                <Button
+                  variant="primary"
+                  leftIcon={<Download className="size-4" aria-hidden />}
+                  loading={exportFlows.isPending}
+                  onClick={onExport}
+                >
+                  Exportar e baixar
+                </Button>
+              </div>
+            </section>
+
+            <section
+              aria-labelledby="backup-import-title"
+              className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-6"
+            >
+              <span
+                aria-hidden
+                className="flex size-10 items-center justify-center rounded-sm border border-border bg-surface-2 text-text-mid"
+              >
+                <Upload className="size-5" />
+              </span>
+              <div className="space-y-1.5">
+                <h2 id="backup-import-title" className="font-head text-base font-semibold text-text">
+                  Importar flows
+                </h2>
+                <p className="text-sm leading-relaxed text-text-mid">
+                  Restaura de um arquivo de backup. Você revisa um resumo antes de confirmar; os flows
+                  entram como rascunho e nada é sobrescrito.
+                </p>
+              </div>
               <input
                 ref={fileRef}
                 type="file"
                 accept="application/json,.json"
                 className="hidden"
+                tabIndex={-1}
+                aria-hidden
                 onChange={onFileSelected}
               />
-              <Button
-                variant="secondary"
-                leftIcon={<Upload className="size-4" aria-hidden />}
-                loading={previewImport.isPending}
-                onClick={() => fileRef.current?.click()}
-              >
-                Selecionar arquivo…
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
+              <div className="mt-auto">
+                <ReadOnlyGuard align="start">
+                  <Button
+                    variant="secondary"
+                    leftIcon={<Upload className="size-4" aria-hidden />}
+                    loading={previewImport.isPending}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    Selecionar arquivo…
+                  </Button>
+                </ReadOnlyGuard>
+              </div>
+            </section>
+          </div>
 
-      {!canBackup ? null : (
-        <div className="flex items-center gap-2 text-xs text-text-low">
-          <DatabaseBackup className="size-3.5" aria-hidden />
-          <span>O arquivo de backup pode conter dados sensíveis (URLs e cabeçalhos de webhooks). Guarde com cuidado.</span>
+          <p className="flex items-start gap-2 text-xs leading-snug text-text-low">
+            <ShieldAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+            O arquivo de backup pode conter dados sensíveis (URLs e cabeçalhos de webhooks). Guarde com cuidado.
+          </p>
         </div>
       )}
 

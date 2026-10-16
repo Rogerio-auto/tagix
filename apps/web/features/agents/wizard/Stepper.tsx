@@ -18,11 +18,11 @@ export function Stepper({ steps, current }: StepperProps) {
           <li key={label} className="flex items-center gap-2">
             <span
               className={cn(
-                'flex size-6 items-center justify-center rounded-pill font-head text-xs font-semibold',
-                'transition-colors duration-200',
-                done && 'bg-brand text-text-on-brand',
-                active && 'bg-brand/20 text-brand ring-1 ring-brand',
-                !done && !active && 'bg-surface-3 text-text-low',
+                'flex size-6 items-center justify-center rounded-pill border font-mono text-xs font-medium tabular-nums',
+                'transition-colors duration-(--dur-base) motion-reduce:transition-none',
+                done && 'border-brand-text/30 bg-brand-text/10 text-brand-text',
+                active && 'border-brand-text bg-brand-text/15 text-text',
+                !done && !active && 'border-border bg-surface-2 text-text-low',
               )}
               aria-current={active ? 'step' : undefined}
             >
@@ -30,7 +30,7 @@ export function Stepper({ steps, current }: StepperProps) {
             </span>
             <span
               className={cn(
-                'hidden font-head text-xs font-medium sm:inline',
+                'hidden font-body text-xs font-bold sm:inline',
                 active ? 'text-text' : 'text-text-low',
               )}
             >
@@ -39,7 +39,7 @@ export function Stepper({ steps, current }: StepperProps) {
             {i < steps.length - 1 && (
               <span
                 aria-hidden
-                className={cn('h-px w-4 sm:w-6', done ? 'bg-brand' : 'bg-border-2')}
+                className={cn('h-px w-4 sm:w-6', done ? 'bg-brand-text/40' : 'bg-border')}
               />
             )}
           </li>

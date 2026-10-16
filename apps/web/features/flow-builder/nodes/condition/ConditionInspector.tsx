@@ -39,6 +39,7 @@ export function ConditionInspector({ nodeId }: { nodeId: string }) {
             label="Variável"
             value={(d['variable'] as string) ?? ''}
             placeholder="trigger.message"
+            mono
             hint="Caminho da variável a comparar (sem chaves)."
             onChange={(v) => set({ variable: v })}
           />
@@ -56,6 +57,7 @@ export function ConditionInspector({ nodeId }: { nodeId: string }) {
           label="Variável"
           value={(d['variable'] as string) ?? ''}
           placeholder="webhook_response.body"
+          mono
           hint="Verdadeiro quando a variável tem valor."
           onChange={(v) => set({ variable: v })}
         />

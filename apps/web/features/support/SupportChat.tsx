@@ -4,11 +4,15 @@
  * Chat de Suporte do membro (F38-S09) com a equipe Leadium. Overlay responsivo
  * (full-screen no mobile, painel lateral no desktop) lancado da Central de
  * Ajuda. Lista de threads + view de chat em tempo real (S08) + abrir thread +
- * resolver. Canal INTERNO (nao passa por Meta/WhatsApp). DS v2, ARIA, estados.
+ * resolver. Canal INTERNO (nao passa por Meta/WhatsApp). DS 3.0 (F72-S07), ARIA, estados.
+ * Fechado, o painel segue montado só para a transição: `inert` + `aria-hidden` o tiram
+ * do Tab e da árvore de acessibilidade. Suporte segue liberado em empresa só leitura
+ * (a API isenta `/api/support/**`: quem está bloqueado precisa falar com a gente).
  */
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, Headset, Plus, X } from 'lucide-react';
+import { Button, IconButton } from '@hm/ui';
 import { ThreadList } from './ThreadList';
 import { ThreadView } from './ThreadView';
 import { NewThreadForm } from './NewThreadForm';
@@ -45,6 +49,8 @@ export function SupportChat({ open, onClose }: { open: boolean; onClose: () => v
 
   return createPortal(
     <div
+      inert={!open}
+      aria-hidden={open ? undefined : true}
       className={
         open
           ? 'fixed inset-0 z-50 pointer-events-auto'
@@ -56,8 +62,8 @@ export function SupportChat({ open, onClose }: { open: boolean; onClose: () => v
         aria-hidden
         className={
           open
-            ? 'absolute inset-0 bg-black/50 opacity-100 transition-opacity duration-200'
-            : 'absolute inset-0 bg-black/50 opacity-0 transition-opacity duration-200'
+            ? 'absolute inset-0 bg-black/60 opacity-100 backdrop-blur-sm transition-opacity duration-(--dur-base) ease-ds motion-reduce:transition-none'
+            : 'absolute inset-0 bg-black/60 opacity-0 transition-opacity duration-(--dur-base) ease-ds motion-reduce:transition-none'
         }
       />
       <div
@@ -68,44 +74,45 @@ export function SupportChat({ open, onClose }: { open: boolean; onClose: () => v
         tabIndex={-1}
         className={
           (open ? 'translate-x-0 ' : 'translate-x-full ') +
-          'absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-border bg-surface shadow-elev-4 outline-none transition-transform duration-200 ease-out'
+          'absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-border bg-surface shadow-ds-3 outline-none transition-transform duration-(--dur-base) ease-ds-spring motion-reduce:transition-none'
         }
       >
-        <header className="flex items-center gap-2 border-b border-border-2 px-4 py-3">
+        <header className="flex items-center gap-2 border-b border-border px-4 py-3">
           {view.kind !== 'list' && (
-            <button
-              type="button"
-              onClick={() => setView({ kind: 'list' })}
+            <IconButton
+              size="sm"
               aria-label="Voltar para a lista de conversas"
-              className="rounded-sm p-1 text-text-low outline-none transition-colors hover:text-text focus-visible:shadow-glow-md"
-            >
-              <ArrowLeft className="size-5" aria-hidden />
-            </button>
+              icon={<ArrowLeft aria-hidden />}
+              onClick={() => setView({ kind: 'list' })}
+            />
           )}
-          <span className="inline-flex items-center gap-2">
-            <Headset className="size-5 text-brand" aria-hidden />
-            <span className="font-head text-base font-semibold text-text">Suporte Leadium</span>
+          <span className="inline-flex min-w-0 items-center gap-2.5">
+            <span
+              aria-hidden
+              className="grid size-8 shrink-0 place-items-center rounded-sm border border-border-brand bg-brand-text/10 text-brand-text"
+            >
+              <Headset className="size-4" />
+            </span>
+            <span className="truncate font-head text-lg font-semibold text-text">Suporte Leadium</span>
           </span>
           {view.kind === 'list' && (
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
+              className="ml-auto"
+              leftIcon={<Plus className="size-4" aria-hidden />}
               onClick={() => setView({ kind: 'new' })}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 font-head text-sm font-semibold text-text-on-brand outline-none transition-colors hover:bg-brand-strong focus-visible:shadow-glow-md"
             >
-              <Plus className="size-4" aria-hidden /> Nova
-            </button>
+              Nova
+            </Button>
           )}
-          <button
-            type="button"
-            onClick={onClose}
+          <IconButton
+            size="sm"
             aria-label="Fechar suporte"
-            className={
-              (view.kind === 'list' ? 'ml-2 ' : 'ml-auto ') +
-              'rounded-sm p-1 text-text-low outline-none transition-colors hover:text-text focus-visible:shadow-glow-md'
-            }
-          >
-            <X className="size-5" aria-hidden />
-          </button>
+            icon={<X aria-hidden />}
+            onClick={onClose}
+            className={view.kind === 'list' ? 'ml-1' : 'ml-auto'}
+          />
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col">

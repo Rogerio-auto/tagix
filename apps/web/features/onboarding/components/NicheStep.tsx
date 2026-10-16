@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { Badge } from '@hm/ui';
 import { OptionCard } from './OptionCard';
 import { NICHE_ICON, NICHE_OPTIONS } from '../niches';
 import type { NicheKey } from '../types';
@@ -22,13 +23,13 @@ export function NicheStep({ selected, suggested, onSelect }: NicheStepProps): Re
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h2 className="font-head text-xl font-semibold text-text">Escolha o seu nicho</h2>
-        <p className="text-sm text-text-mid">
+        <h2 className="font-head text-xl font-semibold tracking-tight text-text">Escolha o seu nicho</h2>
+        <p className="font-body text-sm text-text-mid">
           Vamos criar um funil pronto, um agente de IA, etiquetas e fluxos sob medida. Você ajusta tudo depois.
         </p>
       </div>
 
-      <div role="radiogroup" aria-label="Nichos disponíveis" className="grid gap-3 sm:grid-cols-2">
+      <div role="group" aria-label="Nichos disponíveis" className="grid gap-3 sm:grid-cols-2">
         {NICHE_OPTIONS.map((option) => {
           const Icon = NICHE_ICON[option.key];
           const isSuggested = suggested === option.key;
@@ -42,9 +43,9 @@ export function NicheStep({ selected, suggested, onSelect }: NicheStepProps): Re
               description={
                 <>
                   {isSuggested && (
-                    <span className="mb-1 inline-block rounded-pill bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+                    <Badge tone="brand" size="sm" className="mb-1.5">
                       Sugerido para você
-                    </span>
+                    </Badge>
                   )}
                   <span className="block">{option.description}</span>
                 </>
@@ -52,7 +53,7 @@ export function NicheStep({ selected, suggested, onSelect }: NicheStepProps): Re
             >
               <ul className="flex flex-wrap gap-1.5">
                 {option.stages.map((stage) => (
-                  <li key={stage} className="rounded-pill bg-surface-raised px-2 py-0.5 text-xs text-text-low">
+                  <li key={stage} className="rounded-xs border border-border bg-surface-2 px-2 py-0.5 font-body text-xs text-text-mid">
                     {stage}
                   </li>
                 ))}

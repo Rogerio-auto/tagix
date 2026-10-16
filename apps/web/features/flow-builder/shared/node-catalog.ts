@@ -1,5 +1,5 @@
 /**
- * Catalogo dos 22 tipos de node do Flow Builder (FLOW_BUILDER.md secao 4.1). Fonte unica de
+ * Catalogo dos 22 tipos de node do Flow Builder (FLOW_BUILDER.md seção 4.1). Fonte única de
  * label/categoria/icon/edges para palette, registry e inspector. O `nodeTypes` registry
  * (canvas) e dono de S10; as pastas `nodes/<tipo>/` trazem a UI rica de cada node.
  *
@@ -62,7 +62,7 @@ export interface NodeMeta {
   label: string;
   category: NodeCategory;
   icon: LucideIcon;
-  /** handles de saida (sourceHandle das edges). `default` = unica saida. */
+  /** handles de saída (sourceHandle das edges). `default` = única saída. */
   edges: readonly string[];
   /** stub-ate-F5 (Pipeline): node aparece com aviso, handler e no-op. */
   deferred?: boolean;
@@ -79,7 +79,7 @@ export const NODE_CATALOG: Record<FlowNodeKind, NodeMeta> = {
   },
   interactive: {
     kind: 'interactive',
-    label: 'Botoes / Lista',
+    label: 'Botões / Lista',
     category: 'output',
     icon: ListChecks,
     edges: ['default'],
@@ -101,7 +101,7 @@ export const NODE_CATALOG: Record<FlowNodeKind, NodeMeta> = {
   },
   condition: {
     kind: 'condition',
-    label: 'Condicao',
+    label: 'Condição',
     category: 'logic',
     icon: GitBranch,
     edges: ['true', 'false'],
@@ -115,7 +115,7 @@ export const NODE_CATALOG: Record<FlowNodeKind, NodeMeta> = {
   },
   ai_action: {
     kind: 'ai_action',
-    label: 'Acao de IA',
+    label: 'Ação de IA',
     category: 'system',
     icon: Bot,
     edges: ['default'],
@@ -129,7 +129,7 @@ export const NODE_CATALOG: Record<FlowNodeKind, NodeMeta> = {
   },
   http_request: {
     kind: 'http_request',
-    label: 'Requisicao HTTP',
+    label: 'Requisição HTTP',
     category: 'external',
     icon: Globe,
     edges: ['success', 'error'],
@@ -164,14 +164,14 @@ export const NODE_CATALOG: Record<FlowNodeKind, NodeMeta> = {
   },
   register_conversion: {
     kind: 'register_conversion',
-    label: 'Registrar conversao',
+    label: 'Registrar conversão',
     category: 'system',
     icon: Target,
     edges: ['default'],
   },
   set_variable: {
     kind: 'set_variable',
-    label: 'Definir variavel',
+    label: 'Definir variável',
     category: 'system',
     icon: Variable,
     edges: ['default'],
@@ -216,10 +216,10 @@ export const NODE_CATALOG: Record<FlowNodeKind, NodeMeta> = {
 export const NODE_KINDS = Object.keys(NODE_CATALOG) as FlowNodeKind[];
 
 export const CATEGORY_LABEL: Record<NodeCategory, string> = {
-  start: 'Inicio',
-  output: 'Saida',
+  start: 'Início',
+  output: 'Saída',
   timing: 'Tempo',
-  logic: 'Logica',
+  logic: 'Lógica',
   system: 'Sistema',
   external: 'Externo',
 };

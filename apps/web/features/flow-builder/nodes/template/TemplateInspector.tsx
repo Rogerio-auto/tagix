@@ -88,7 +88,7 @@ export function TemplateInspector({ nodeId }: { nodeId: string }) {
           <button
             type="button"
             onClick={addParam}
-            className="inline-flex items-center gap-1 rounded-pill border border-border-2 bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-text-low transition-colors hover:border-accent hover:text-text focus:border-accent focus:shadow-glow-sm focus:outline-none"
+            className="inline-flex items-center gap-1 rounded-pill border border-border bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-text-low transition-colors hover:border-brand-text hover:text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
           >
             <Plus className="size-3.5" aria-hidden />
             Adicionar
@@ -103,7 +103,7 @@ export function TemplateInspector({ nodeId }: { nodeId: string }) {
           params.map((param, index) => (
             <div
               key={index}
-              className="flex flex-col gap-2 rounded-md border border-border-2 bg-surface-1 p-2.5"
+              className="flex flex-col gap-2 rounded-md border border-border bg-surface p-2.5"
             >
               <div className="flex items-center justify-between gap-2">
                 <SelectField
@@ -116,7 +116,7 @@ export function TemplateInspector({ nodeId }: { nodeId: string }) {
                   type="button"
                   onClick={() => removeParam(index)}
                   aria-label="Remover parâmetro"
-                  className="mt-5 inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border-2 bg-surface-2 text-text-low transition-colors hover:border-danger hover:text-danger focus:border-danger focus:outline-none"
+                  className="mt-5 inline-flex size-8 shrink-0 items-center justify-center rounded-sm border border-border bg-surface-2 text-text-low transition-colors hover:border-danger hover:text-danger outline-none focus:border-danger focus-visible:focus-ring"
                 >
                   <Trash2 className="size-3.5" aria-hidden />
                 </button>
@@ -134,7 +134,7 @@ export function TemplateInspector({ nodeId }: { nodeId: string }) {
                   value={param.text}
                   placeholder="{{contact.name}}"
                   onChange={(e) => updateParam(index, { text: e.target.value })}
-                  className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text focus:border-accent focus:shadow-glow-sm focus:outline-none"
+                  className="rounded-sm border border-border bg-surface-2 px-3 py-2 font-body text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring sm:text-sm"
                 />
               </div>
             </div>
@@ -142,7 +142,7 @@ export function TemplateInspector({ nodeId }: { nodeId: string }) {
         )}
       </div>
 
-      <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] text-warning">
+      <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[11px] text-warn">
         <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
         <span>
           Templates reabrem a janela de 24h. O envio real depende do bridge de saída ganhar suporte

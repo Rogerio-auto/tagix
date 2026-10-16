@@ -7,6 +7,8 @@ import { Sheet } from '@/shared/components/Sheet';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { ApiError } from '@/shared/lib/api-client';
 import { parseToCents } from '@/features/products/money';
+import { ReadOnlyGuard, useIsReadOnly } from '@/shared/components/account-banner';
+import { centsToInput } from '@/shared/lib/locale';
 import { useConversionTypes, useRegisterConversion } from './queries';
 
 export interface MarkConversionModalProps {
@@ -43,6 +45,7 @@ export function MarkConversionModal({
   const { isMobile } = useBreakpoint();
   const typesQuery = useConversionTypes();
   const register = useRegisterConversion();
+  const readOnly = useIsReadOnly();
 
   const types = useMemo(
     () => (typesQuery.data?.conversionTypes ?? []).filter((t) => t.isActive),
@@ -62,14 +65,14 @@ export function MarkConversionModal({
   // reais. Não trava a edição — o usuário pode sobrescrever livremente.
   useEffect(() => {
     if (open && valueCents != null && valueCents > 0) {
-      setValueReais((valueCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+      setValueReais(centsToInput(valueCents));
     }
   }, [open, valueCents]);
 
   const selected = types.find((t) => t.id === typeId);
 
   async function submit(): Promise<void> {
-    if (!selected) return;
+    if (!selected || readOnly) return;
     const valueCents = valueReais ? parseToCents(valueReais) : null;
     if (selected.valueRequired && valueCents == null) {
       toast({ variant: 'warn', title: 'Informe o valor desta conversão.' });
@@ -103,14 +106,14 @@ export function MarkConversionModal({
   const fields: ReactNode = (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-text" htmlFor="conv-type">
+        <label className="font-body text-sm font-bold text-text-mid" htmlFor="conv-type">
           Tipo de conversão
         </label>
         <select
           id="conv-type"
           value={typeId}
           onChange={(e) => setTypeId(e.target.value)}
-          className="touch-target rounded-md border border-border bg-surface px-3 text-sm text-text outline-none focus-visible:shadow-glow-md"
+          className="h-11 rounded-sm border border-border bg-surface-2 px-3 font-body text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 focus:border-brand-text focus-visible:focus-ring sm:text-sm"
         >
           {types.map((t) => (
             <option key={t.id} value={t.id}>
@@ -122,23 +125,32 @@ export function MarkConversionModal({
 
       {selected?.valueRequired || valueReais ? (
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-text" htmlFor="conv-value">
-            {selected?.valueLabel ?? 'Valor (R$)'}
-            {selected?.valueRequired ? <span className="ml-1 text-danger">*</span> : null}
+          <label className="font-body text-sm font-bold text-text-mid" htmlFor="conv-value">
+            {selected?.valueLabel ?? 'Valor'}
+            {selected?.currency ? (
+              <span className="ml-1.5 font-mono text-xs font-medium text-text-low">{selected.currency}</span>
+            ) : null}
+            {selected?.valueRequired ? (
+              <span className="ml-1 text-danger" aria-hidden>
+                *
+              </span>
+            ) : null}
           </label>
           <Input
             id="conv-value"
             type="text"
             inputMode="decimal"
             placeholder="0,00"
+            required={selected?.valueRequired}
             value={valueReais}
             onChange={(e) => setValueReais(e.target.value)}
+            className="font-mono tabular-nums"
           />
         </div>
       ) : null}
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-text" htmlFor="conv-note">
+        <label className="font-body text-sm font-bold text-text-mid" htmlFor="conv-note">
           Observação (opcional)
         </label>
         <Input id="conv-note" value={note} onChange={(e) => setNote(e.target.value)} />
@@ -154,15 +166,17 @@ export function MarkConversionModal({
         variant="bottom"
         title="Marcar conversão"
         footer={
-          <Button
-            variant="primary"
-            className="w-full"
-            disabled={!selected || register.isPending}
-            loading={register.isPending}
-            onClick={() => void submit()}
-          >
-            Registrar
-          </Button>
+          <ReadOnlyGuard className="w-full" align="center">
+            <Button
+              variant="primary"
+              className="w-full"
+              disabled={!selected}
+              loading={register.isPending}
+              onClick={() => void submit()}
+            >
+              Registrar
+            </Button>
+          </ReadOnlyGuard>
         }
       >
         {fields}
@@ -171,22 +185,29 @@ export function MarkConversionModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Marcar conversão">
-      <div className="flex flex-col gap-4">
-        {fields}
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Marcar conversão"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={register.isPending}>
             Cancelar
           </Button>
-          <Button
-            variant="primary"
-            disabled={!selected || register.isPending}
-            onClick={() => void submit()}
-          >
-            {register.isPending ? 'Registrando…' : 'Registrar'}
-          </Button>
-        </div>
-      </div>
+          <ReadOnlyGuard>
+            <Button
+              variant="primary"
+              disabled={!selected}
+              loading={register.isPending}
+              onClick={() => void submit()}
+            >
+              Registrar
+            </Button>
+          </ReadOnlyGuard>
+        </>
+      }
+    >
+      {fields}
     </Modal>
   );
 }

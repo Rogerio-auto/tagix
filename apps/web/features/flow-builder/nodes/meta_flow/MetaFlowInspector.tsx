@@ -74,7 +74,7 @@ export function MetaFlowInspector({ nodeId }: { nodeId: string }) {
 
       {/* Section: Identificação */}
       <div className="flex flex-col gap-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-text-low">
+        <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-text-low">
           Identificação
         </p>
         <TextField
@@ -95,7 +95,7 @@ export function MetaFlowInspector({ nodeId }: { nodeId: string }) {
 
       {/* Section: Mensagem */}
       <div className="flex flex-col gap-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-text-low">Mensagem</p>
+        <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-text-low">Mensagem</p>
         <TextField
           label="Texto do CTA"
           value={ctaText}
@@ -113,7 +113,7 @@ export function MetaFlowInspector({ nodeId }: { nodeId: string }) {
 
       {/* Section: Configuração */}
       <div className="flex flex-col gap-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-text-low">
+        <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-text-low">
           Configuração
         </p>
         <TextField
@@ -134,7 +134,7 @@ export function MetaFlowInspector({ nodeId }: { nodeId: string }) {
             placeholder="{}"
             onChange={(e) => setJsonRaw(e.target.value)}
             onBlur={(e) => handlePayloadBlur(e.target.value)}
-            className="min-h-[80px] rounded-md border border-border-2 bg-surface-2 px-3 py-2 font-mono text-xs text-text focus:border-accent focus:outline-none"
+            className="min-h-[80px] rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 font-mono text-xs text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
             spellCheck={false}
           />
           {jsonError && (

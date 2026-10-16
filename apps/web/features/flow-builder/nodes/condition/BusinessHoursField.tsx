@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import { cn } from '@/shared/lib/cn';
-import { Field, SelectField } from '../inspector-fields';
+import { Field } from '../inspector-fields';
+import { effectiveTimeZone, timeZoneOptions } from './timezone';
 
-/** Janela de horario comercial (espelha o schema do condition.handler). */
+/** Janela de horário comercial (espelha o schema do condition.handler). */
 export interface BusinessHoursValue {
   start?: string;
   end?: string;
@@ -34,21 +35,8 @@ const WEEKDAY_FULL: Readonly<Record<number, string>> = {
   6: 'Sáb',
 };
 
-/** Timezones IANA mais usadas no Brasil + UTC (o handler respeita DST via Intl). */
-const TIMEZONES: { value: string; label: string }[] = [
-  { value: 'America/Sao_Paulo', label: 'Brasília (America/Sao_Paulo)' },
-  { value: 'America/Manaus', label: 'Manaus (America/Manaus)' },
-  { value: 'America/Cuiaba', label: 'Cuiabá (America/Cuiaba)' },
-  { value: 'America/Belem', label: 'Belém (America/Belem)' },
-  { value: 'America/Fortaleza', label: 'Fortaleza (America/Fortaleza)' },
-  { value: 'America/Recife', label: 'Recife (America/Recife)' },
-  { value: 'America/Bahia', label: 'Salvador (America/Bahia)' },
-  { value: 'America/Rio_Branco', label: 'Rio Branco (America/Rio_Branco)' },
-  { value: 'America/Noronha', label: 'Fernando de Noronha (America/Noronha)' },
-  { value: 'UTC', label: 'UTC' },
-];
-
-const DEFAULT_TZ = 'America/Sao_Paulo';
+const FIELD_CLASS =
+  'h-10 rounded-sm border border-border bg-surface-2 px-3 text-sm text-text outline-none transition-colors hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring';
 
 function isHHMM(v: string | undefined): v is string {
   return typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
@@ -86,12 +74,20 @@ function TimeInput({
         type="time"
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text focus:border-accent focus:shadow-glow-sm focus:outline-none"
+        className={cn(FIELD_CLASS, 'font-mono tabular-nums')}
       />
     </Field>
   );
 }
 
+/**
+ * Janela de horário comercial do nó `condition` (DS 3.0, F72-S07).
+ *
+ * Fuso sem literal (regra F59-S08): o efetivo é o salvo no nó ou, sem ele, o do navegador
+ * com o padrão do market pack como reserva (`./timezone`). Toda edição grava o fuso
+ * efetivo junto: o motor avalia em UTC quando o nó não tem fuso, então "mostrar um fuso e
+ * salvar outro" não pode acontecer.
+ */
 export function BusinessHoursField({
   value,
   onChange,
@@ -100,18 +96,23 @@ export function BusinessHoursField({
   onChange: (patch: BusinessHoursValue) => void;
 }) {
   const days = value.days ?? [];
-  const tz = value.timezone ?? DEFAULT_TZ;
+  const tz = effectiveTimeZone(value.timezone);
+  const tzId = useId();
+  const options = useMemo(() => timeZoneOptions(tz), [tz]);
+
+  /** Aplica a mudança gravando o fuso efetivo (o que a tela mostra é o que o motor usa). */
+  const emit = (patch: BusinessHoursValue): void => onChange({ ...value, timezone: tz, ...patch });
 
   const toggleDay = (day: number) => {
     const next = days.includes(day) ? days.filter((d) => d !== day) : [...days, day].sort((a, b) => a - b);
-    onChange({ ...value, days: next });
+    emit({ days: next });
   };
 
   // Validacao reativa (estados de erro DS v2).
   const errors = useMemo(() => {
     const list: string[] = [];
-    if (!isHHMM(value.start)) list.push('Defina o horario de inicio.');
-    if (!isHHMM(value.end)) list.push('Defina o horario de fim.');
+    if (!isHHMM(value.start)) list.push('Defina o horário de início.');
+    if (!isHHMM(value.end)) list.push('Defina o horário de fim.');
     if (days.length === 0) list.push('Selecione ao menos um dia.');
     return list;
   }, [value.start, value.end, days.length]);
@@ -126,10 +127,10 @@ export function BusinessHoursField({
   }, [errors.length, days, value.start, value.end, overnight]);
 
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border-2 bg-surface-1 p-3">
+    <div className="flex flex-col gap-3 rounded-md border border-border bg-surface p-3">
       <div className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-text-low">Dias da semana</span>
-        <div className="flex flex-wrap gap-1.5">
+        <div role="group" aria-label="Dias da semana" className="flex flex-wrap gap-1.5">
           {WEEKDAYS.map((d) => {
             const active = days.includes(d.value);
             return (
@@ -139,10 +140,10 @@ export function BusinessHoursField({
                 aria-pressed={active}
                 onClick={() => toggleDay(d.value)}
                 className={cn(
-                  'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus:shadow-glow-sm focus:outline-none',
+                  'h-8 rounded-sm border px-2.5 text-xs font-medium outline-none transition-colors focus-visible:focus-ring',
                   active
-                    ? 'border-accent bg-accent/15 text-text'
-                    : 'border-border-2 bg-surface-2 text-text-low hover:text-text',
+                    ? 'border-brand-text/30 bg-brand-text/10 text-brand-text'
+                    : 'border-border bg-surface-2 text-text-mid hover:border-border-2 hover:text-text',
                 )}
               >
                 {d.label}
@@ -153,26 +154,43 @@ export function BusinessHoursField({
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <TimeInput label="Inicio" value={value.start} onChange={(v) => onChange({ ...value, start: v })} />
-        <TimeInput label="Fim" value={value.end} onChange={(v) => onChange({ ...value, end: v })} />
+        <TimeInput label="Início" value={value.start} onChange={(v) => emit({ start: v })} />
+        <TimeInput label="Fim" value={value.end} onChange={(v) => emit({ end: v })} />
       </div>
 
-      <SelectField
-        label="Fuso horario"
-        value={tz}
-        options={TIMEZONES}
-        onChange={(v) => onChange({ ...value, timezone: v })}
-        hint="Janela noturna (fim ≤ inicio) cruza a meia-noite automaticamente."
-      />
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={tzId} className="text-xs font-medium text-text-low">
+          Fuso horário
+        </label>
+        <select id={tzId} value={tz} onChange={(e) => emit({ timezone: e.target.value })} className={FIELD_CLASS}>
+          <optgroup label="Sugeridos">
+            {options.suggested.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Todos os fusos">
+            {options.all.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+        <span className="text-[11px] text-text-low">
+          Janela noturna (fim ≤ início) cruza a meia-noite automaticamente.
+        </span>
+      </div>
 
       {preview && (
-        <p className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-xs text-text-mid">
+        <p className="rounded-sm border border-border bg-surface-2 px-3 py-2 font-mono text-xs tabular-nums text-text-mid">
           {preview}
         </p>
       )}
 
       {errors.length > 0 && (
-        <ul className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+        <ul className="rounded-sm border border-danger/25 bg-danger/10 px-3 py-2 text-xs text-danger">
           {errors.map((e) => (
             <li key={e}>{e}</li>
           ))}

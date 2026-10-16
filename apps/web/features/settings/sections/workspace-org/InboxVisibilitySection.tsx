@@ -18,14 +18,16 @@
  */
 
 import { useState } from 'react';
-import { Users, ShieldCheck } from 'lucide-react';
-import { Button, useToast } from '@hm/ui';
+import { Plus, ShieldCheck, Users, X } from 'lucide-react';
+import { Button, Modal, useToast } from '@hm/ui';
 import type { PeerVisibility, VisibilityPolicy } from '@hm/shared';
 import { HelpPanel } from '@/shared/components/help';
 import { EmptyState } from '@/shared/components/feedback/EmptyState';
 import { ErrorState } from '@/shared/components/feedback/ErrorState';
 import { Skeleton } from '@/shared/components/feedback/Skeleton';
-import { selectClass, Row, Toggle } from '../personal/components';
+import { ReadOnlyGuard, useIsReadOnly } from '@/shared/components/account-banner';
+import { cn } from '@/shared/lib/cn';
+import { Panel, Row, SaveFooter, Toggle, eyebrowClass, selectClass } from '../personal/components';
 import {
   useInboxVisibility,
   useUpdateInboxVisibility,
@@ -52,7 +54,7 @@ function InboxVisibilityHelp(): React.JSX.Element {
           atribuídas a ele. Líderes de time (role &quot;lead&quot;) sempre enxergam tudo do seu
           time, independente desse modo.
         </p>
-        <p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+        <p className="rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-sm text-text">
           <strong>Atenção:</strong> mudar para &quot;Private&quot; é a configuração mais sensível.
           Agentes deixarão de ver conversas de colegas. Certifique-se de que supervisores
           (role &quot;lead&quot;) estão alocados nos times para manter visibilidade de gestão.
@@ -69,9 +71,9 @@ function InboxVisibilityHelp(): React.JSX.Element {
 
       <section className="flex flex-col gap-2">
         <h3 className="font-head text-base font-semibold text-text">Hierarquia de resolução</h3>
-        <ol className="list-decimal pl-4 flex flex-col gap-1">
-          <li>Time com <code className="rounded bg-surface-3 px-1">peer_visibility</code> definido → usa esse.</li>
-          <li>Time com <code className="rounded bg-surface-3 px-1">inherit</code> → usa o default do workspace (esta tela).</li>
+        <ol className="flex list-decimal flex-col gap-1 pl-4">
+          <li>Time com <code className="rounded-xs bg-surface-3 px-1 font-mono text-xs">peer_visibility</code> definido → usa esse.</li>
+          <li>Time com <code className="rounded-xs bg-surface-3 px-1 font-mono text-xs">inherit</code> → usa o default do workspace (esta tela).</li>
           <li>Conversa sem time → usa o default do workspace diretamente.</li>
         </ol>
       </section>
@@ -85,6 +87,7 @@ function VisibilityPolicyForm(): React.JSX.Element {
   const { toast } = useToast();
   const query = useInboxVisibility();
   const update = useUpdateInboxVisibility();
+  const readOnly = useIsReadOnly();
 
   const remote = query.data?.policy;
   const [local, setLocal] = useState<VisibilityPolicy | null>(null);
@@ -119,7 +122,7 @@ function VisibilityPolicyForm(): React.JSX.Element {
 
   if (query.isLoading) {
     return (
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3" role="status" aria-busy="true" aria-label="Carregando política">
         <Skeleton className="h-12 rounded-lg" />
         <Skeleton className="h-12 rounded-lg" />
       </div>
@@ -137,9 +140,20 @@ function VisibilityPolicyForm(): React.JSX.Element {
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <Panel
+      body="rows"
+      footer={
+        <SaveFooter dirty={isDirty}>
+          <ReadOnlyGuard>
+            <Button variant="primary" disabled={!readOnly && !isDirty} loading={update.isPending} onClick={() => void handleSave()}>
+              Salvar política
+            </Button>
+          </ReadOnlyGuard>
+        </SaveFooter>
+      }
+    >
       <Row
-        title="Default peer-privacy"
+        title="Privacidade padrão entre colegas"
         description="Define se agentes do mesmo departamento/time enxergam conversas uns dos outros."
       >
         <select
@@ -148,32 +162,18 @@ function VisibilityPolicyForm(): React.JSX.Element {
           className={selectClass}
           aria-label="Modo de peer-privacy padrão"
         >
-          <option value="shared">Shared — visível para o time</option>
-          <option value="private">Private — cada um só as suas</option>
+          <option value="shared">Compartilhada: visível para o time</option>
+          <option value="private">Privada: cada um só as suas</option>
         </select>
       </Row>
 
       <Row
-        title="READONLY enxerga tudo"
-        description="Membros com role READONLY têm acesso de leitura a toda a inbox do workspace."
+        title="Somente leitura enxerga tudo"
+        description="Membros com papel Somente leitura têm acesso de leitura a toda a inbox do workspace."
       >
-        <Toggle
-          checked={policy.readonlySeesAll}
-          onChange={setReadonlySeesAll}
-          label="READONLY enxerga toda a inbox"
-        />
+        <Toggle checked={policy.readonlySeesAll} onChange={setReadonlySeesAll} label="READONLY enxerga toda a inbox" />
       </Row>
-
-      <div className="mt-4 flex justify-end">
-        <Button
-          variant="primary"
-          disabled={!isDirty || update.isPending}
-          onClick={() => void handleSave()}
-        >
-          {update.isPending ? 'Salvando…' : 'Salvar'}
-        </Button>
-      </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -192,6 +192,7 @@ function MemberOverrideRow({
   const overridesQuery = useMemberVisibilityOverrides(memberId);
   const deptQuery = useDepartments();
   const updateOverrides = useUpdateMemberVisibilityOverrides();
+  const readOnly = useIsReadOnly();
 
   const [selectedDeptId, setSelectedDeptId] = useState('');
 
@@ -215,14 +216,15 @@ function MemberOverrideRow({
     }
   };
 
-  const removeOverride = async (deptId: string, deptName: string) => {
-    const confirmed = window.confirm(
-      `Remover acesso de "${memberName ?? memberEmail}" ao departamento "${deptName}"?`,
-    );
-    if (!confirmed) return;
-    const nextIds = [...currentDeptIds].filter((id) => id !== deptId);
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
+  const label = memberName ?? memberEmail;
+
+  const removeOverride = async () => {
+    if (!removeTarget) return;
+    const nextIds = [...currentDeptIds].filter((id) => id !== removeTarget.id);
     try {
       await updateOverrides.mutateAsync({ memberId, departmentIds: nextIds });
+      setRemoveTarget(null);
       toast({ variant: 'success', title: 'Acesso removido.' });
     } catch (err) {
       toast({
@@ -233,66 +235,93 @@ function MemberOverrideRow({
   };
 
   return (
-    <div className="rounded-lg border border-border bg-surface-2 p-4">
-      <p className="mb-3 text-sm font-medium text-text">
-        {memberName ?? memberEmail}
-        <span className="ml-2 font-normal text-text-low">{memberEmail}</span>
+    <li className="flex flex-col gap-3 px-5 py-4">
+      <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 font-body text-sm">
+        <span className="font-semibold text-text">{label}</span>
+        {memberName && <span className="truncate text-text-low">{memberEmail}</span>}
       </p>
 
-      {/* Current overrides */}
+      {/* Acessos extras atuais */}
       {overridesQuery.isLoading ? (
         <Skeleton className="h-7 w-1/2" />
       ) : (
-        <div className="mb-3 flex flex-wrap gap-2">
+        <ul className="flex flex-wrap gap-2" aria-label={`Acessos extras de ${label}`}>
           {currentOverrides.length === 0 && (
-            <span className="text-xs text-text-low">Sem acesso extra a departamentos.</span>
+            <li className="font-body text-sm text-text-low">Sem acesso extra a departamentos.</li>
           )}
           {currentOverrides.map((ov) => (
-            <span
+            <li
               key={ov.departmentId}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-xs text-text"
+              className="inline-flex items-center gap-1 rounded-pill border border-border bg-surface-2 py-1 pl-3 pr-1 font-body text-sm text-text"
             >
               {ov.departmentName}
-              <button
-                type="button"
-                aria-label={`Remover acesso ao departamento ${ov.departmentName}`}
-                onClick={() => void removeOverride(ov.departmentId, ov.departmentName)}
-                className="text-text-low transition-colors hover:text-danger focus-visible:shadow-glow-md focus-visible:outline-none"
-              >
-                ×
-              </button>
-            </span>
+              <ReadOnlyGuard>
+                <button
+                  type="button"
+                  aria-label={`Remover acesso ao departamento ${ov.departmentName}`}
+                  onClick={() => setRemoveTarget({ id: ov.departmentId, name: ov.departmentName })}
+                  className="grid size-6 place-items-center rounded-pill text-text-low outline-none transition-colors duration-(--dur-fast) hover:bg-surface-3 hover:text-danger focus-visible:focus-ring"
+                >
+                  <X className="size-3.5" aria-hidden />
+                </button>
+              </ReadOnlyGuard>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
-      {/* Add override */}
+      {/* Conceder acesso */}
       {availableDepts.length > 0 && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <select
             value={selectedDeptId}
             onChange={(e) => setSelectedDeptId(e.target.value)}
-            className={selectClass}
-            aria-label={`Conceder acesso a departamento para ${memberName ?? memberEmail}`}
+            className={cn(selectClass, 'min-w-0 flex-1 sm:max-w-72')}
+            aria-label={`Conceder acesso a departamento para ${label}`}
           >
-            <option value="">Adicionar acesso a departamento…</option>
+            <option value="">Escolha um departamento…</option>
             {availableDepts.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            disabled={!selectedDeptId || updateOverrides.isPending}
-            onClick={() => void addOverride()}
-            className="rounded-md border border-border px-2 py-1.5 text-xs text-text-mid transition-colors hover:text-text disabled:opacity-50 focus-visible:shadow-glow-md focus-visible:outline-none"
-          >
-            Conceder
-          </button>
+          <ReadOnlyGuard>
+            <Button
+              variant="secondary"
+              leftIcon={<Plus className="size-4" aria-hidden />}
+              disabled={!readOnly && !selectedDeptId}
+              loading={updateOverrides.isPending && removeTarget === null}
+              aria-label={`Conceder acesso a ${label}`}
+              onClick={() => void addOverride()}
+            >
+              Conceder
+            </Button>
+          </ReadOnlyGuard>
         </div>
       )}
-    </div>
+
+      <Modal
+        open={removeTarget !== null}
+        onClose={() => setRemoveTarget(null)}
+        title="Remover acesso extra"
+        description={
+          removeTarget
+            ? `${label} deixa de ver as conversas do departamento ${removeTarget.name} que não forem dos times dele.`
+            : undefined
+        }
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setRemoveTarget(null)}>
+              Cancelar
+            </Button>
+            <Button variant="danger" loading={updateOverrides.isPending} onClick={() => void removeOverride()}>
+              Remover acesso
+            </Button>
+          </div>
+        }
+      />
+    </li>
   );
 }
 
@@ -305,7 +334,7 @@ function MemberOverridesSection(): React.JSX.Element {
 
   if (membersQuery.isLoading) {
     return (
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3" role="status" aria-busy="true" aria-label="Carregando membros">
         <Skeleton className="h-24 rounded-lg" />
         <Skeleton className="h-24 rounded-lg" />
       </div>
@@ -324,25 +353,22 @@ function MemberOverridesSection(): React.JSX.Element {
 
   if (activeMembers.length === 0) {
     return (
-      <EmptyState
-        icon={Users}
-        title="Nenhum membro"
-        description="Convide membros ao workspace para gerenciar overrides de visibilidade."
-      />
+      <div className="rounded-lg border border-dashed border-border-2">
+        <EmptyState
+          icon={Users}
+          title="Nenhum membro"
+          description="Convide membros ao workspace para gerenciar overrides de visibilidade."
+        />
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
       {activeMembers.map((m) => (
-        <MemberOverrideRow
-          key={m.id}
-          memberId={m.id}
-          memberName={m.name}
-          memberEmail={m.email}
-        />
+        <MemberOverrideRow key={m.id} memberId={m.id} memberName={m.name} memberEmail={m.email} />
       ))}
-    </div>
+    </ul>
   );
 }
 
@@ -351,43 +377,37 @@ function MemberOverridesSection(): React.JSX.Element {
 export default function InboxVisibilitySection(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-8">
-      {/* Header + help */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="size-5 text-text-low" aria-hidden />
-          <div>
-            <p className="text-sm text-text-low">
-              Controle quem enxerga o quê dentro da inbox. Configuração de OWNER/ADMIN.
-            </p>
-          </div>
+      {/* Contexto + ajuda (UX §2.5) */}
+      <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-surface px-5 py-4">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-brand-text" aria-hidden />
+          <p className="font-body text-sm text-text-mid">
+            Controle quem enxerga o quê dentro da inbox. Configuração de proprietários e administradores.
+          </p>
         </div>
         <HelpPanel title="Visibilidade da inbox">
           <InboxVisibilityHelp />
         </HelpPanel>
       </div>
 
-      {/* Política default do workspace */}
-      <section aria-labelledby="policy-heading">
-        <h3
-          id="policy-heading"
-          className="mb-4 text-sm font-semibold uppercase tracking-wide text-text-low"
-        >
+      {/* Política padrão do workspace */}
+      <section aria-labelledby="policy-heading" className="flex flex-col gap-3">
+        <h3 id="policy-heading" className={eyebrowClass}>
           Política do workspace
         </h3>
         <VisibilityPolicyForm />
       </section>
 
-      {/* Overrides por membro */}
-      <section aria-labelledby="overrides-heading">
-        <h3
-          id="overrides-heading"
-          className="mb-1 text-sm font-semibold uppercase tracking-wide text-text-low"
-        >
-          Acesso extra por membro
-        </h3>
-        <p className="mb-4 text-xs text-text-low">
-          Conceda a um membro visibilidade sobre departamentos além dos seus times.
-        </p>
+      {/* Acessos extras por membro */}
+      <section aria-labelledby="overrides-heading" className="flex flex-col gap-3">
+        <div>
+          <h3 id="overrides-heading" className={eyebrowClass}>
+            Acesso extra por membro
+          </h3>
+          <p className="mt-1.5 font-body text-sm text-text-low">
+            Conceda a um membro visibilidade sobre departamentos além dos seus times.
+          </p>
+        </div>
         <MemberOverridesSection />
       </section>
     </div>

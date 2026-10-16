@@ -8,6 +8,7 @@ import { useAppointmentDue } from '@/shared/realtime/useAppointmentDue';
 import { groupByContact, useNotificationsStore } from './store';
 import { useNotificationSound } from './useNotificationSound';
 import { NotificationItem } from './NotificationItem';
+import { formatNumber } from '@/shared/lib/locale';
 import type { AppNotification } from './types';
 
 /**
@@ -41,12 +42,16 @@ export function NotificationCenter(): React.JSX.Element {
 
   const body =
     notifications.length === 0 ? (
-      <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-        <BellOff className="size-8 text-text-low" aria-hidden />
-        <p className="font-head text-sm font-semibold text-text">Tudo em dia</p>
-        <p className="max-w-[16rem] text-xs text-text-mid">
-          Lembretes de compromissos aparecem aqui no horário certo. Nada pendente agora.
-        </p>
+      <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+        <span className="grid size-12 place-items-center rounded-md border border-border-2 bg-surface-2 text-text-low">
+          <BellOff className="size-5" aria-hidden strokeWidth={1.75} />
+        </span>
+        <div className="flex flex-col gap-1">
+          <p className="font-head text-base font-semibold text-text">Tudo em dia</p>
+          <p className="max-w-[16rem] font-body text-sm text-text-mid">
+            Lembretes de compromissos aparecem aqui no horário certo. Nada pendente agora.
+          </p>
+        </div>
       </div>
     ) : (
       <div className="flex flex-col gap-3">
@@ -58,14 +63,21 @@ export function NotificationCenter(): React.JSX.Element {
 
   const header = (
     <div className="flex items-center justify-between gap-2">
-      <span className="font-head text-sm font-semibold text-text">Notificações</span>
+      <span className="flex items-center gap-2">
+        <span className="font-head text-base font-semibold text-text">Notificações</span>
+        {notifications.length > 0 && (
+          <span className="rounded-pill border border-border bg-surface-2 px-1.5 font-mono text-xs tabular-nums text-text-mid">
+            {formatNumber(notifications.length)}
+          </span>
+        )}
+      </span>
       {notifications.length > 0 && (
         <button
           type="button"
           onClick={clear}
-          className="touch-target inline-flex items-center gap-1.5 rounded-sm px-2 text-xs font-medium text-text-low outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md"
+          className="touch-target inline-flex items-center gap-1.5 rounded-sm px-2 font-body text-xs font-bold text-text-low outline-none transition-colors duration-(--dur-fast) ease-ds hover:bg-surface-2 hover:text-text focus-visible:focus-ring"
         >
-          <Trash2 className="size-3.5" />
+          <Trash2 className="size-3.5" aria-hidden />
           Limpar todas
         </button>
       )}
@@ -81,9 +93,9 @@ export function NotificationCenter(): React.JSX.Element {
               <button
                 type="button"
                 onClick={clear}
-                className="touch-target inline-flex items-center gap-1.5 rounded-sm px-2 text-xs font-medium text-text-low outline-none transition-colors hover:bg-surface-2 hover:text-text focus-visible:shadow-glow-md"
+                className="touch-target inline-flex items-center gap-1.5 rounded-sm px-2 font-body text-xs font-bold text-text-low outline-none transition-colors duration-(--dur-fast) ease-ds hover:bg-surface-2 hover:text-text focus-visible:focus-ring"
               >
-                <Trash2 className="size-3.5" />
+                <Trash2 className="size-3.5" aria-hidden />
                 Limpar todas
               </button>
             </div>
@@ -102,8 +114,8 @@ function NotificationGroupBlock({ items }: { items: readonly AppNotification[] }
   return (
     <div className="flex flex-col gap-1.5">
       {items.length > 1 && (
-        <p className="px-0.5 text-xs font-medium text-text-low">
-          {items.length} lembretes deste contato
+        <p className="px-0.5 font-mono text-xs uppercase tracking-wider text-text-low">
+          <span className="tabular-nums">{formatNumber(items.length)}</span> lembretes deste contato
         </p>
       )}
       <ul className="flex flex-col gap-1.5">
@@ -151,7 +163,7 @@ function DesktopPopover({
         role="dialog"
         aria-modal="false"
         aria-label="Notificações"
-        className="absolute right-4 top-16 flex max-h-[70dvh] w-[22rem] flex-col rounded-lg border border-border bg-bg shadow-elev-4 motion-safe:animate-[hm-fade-in_150ms_ease-out]"
+        className="absolute right-4 top-16 flex max-h-[70dvh] w-[23rem] flex-col overflow-hidden rounded-lg border border-border-2 bg-bg-elevated shadow-ds-3 motion-safe:animate-[hm-rise_200ms_var(--ease)_both]"
       >
         <div className="border-b border-border px-4 py-3">{header}</div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">{body}</div>

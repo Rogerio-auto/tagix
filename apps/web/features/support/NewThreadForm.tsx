@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { Send } from 'lucide-react';
 import type { SupportThreadPriorityT } from '@hm/shared';
 import { Button } from '@hm/ui';
-import { ErrorState } from '@/shared/components/feedback';
+import { ErrorState } from '@hm/ui';
 import { useOpenThread } from './queries';
 
 const PRIORITIES: { value: SupportThreadPriorityT; label: string }[] = [
@@ -18,7 +18,11 @@ const PRIORITIES: { value: SupportThreadPriorityT; label: string }[] = [
 ];
 
 const fieldCls =
-  'w-full rounded-md border border-border bg-surface-2 px-3 py-2 font-body text-sm text-text outline-none transition-colors placeholder:text-text-low focus-visible:border-border-2 focus-visible:shadow-glow-md';
+  'w-full rounded-sm border border-border bg-surface-2 px-3 py-2 font-body text-base text-text outline-none ' +
+  'transition-[border-color,box-shadow] duration-(--dur-base) ease-ds placeholder:text-text-low ' +
+  'hover:border-border-2 focus:border-brand-text focus-visible:focus-ring sm:text-sm';
+
+const labelCls = 'mb-1.5 block font-body text-sm font-bold text-text-mid';
 
 export function NewThreadForm({
   onCreated,
@@ -52,13 +56,15 @@ export function NewThreadForm({
     >
       {open.isError && (
         <ErrorState
-          title="Nao foi possivel abrir a conversa"
-          reason="Verifique os campos e tente novamente."
+          title="Não foi possível abrir a conversa"
+          reason="O suporte não recebeu a mensagem."
+          whatToDo="Verifique os campos e tente de novo."
+          className="py-6"
         />
       )}
 
       <div>
-        <label htmlFor="sup-subject" className="mb-1 block font-head text-xs font-semibold uppercase tracking-wide text-text-low">
+        <label htmlFor="sup-subject" className={labelCls}>
           Assunto
         </label>
         <input
@@ -71,14 +77,14 @@ export function NewThreadForm({
       </div>
 
       <div>
-        <label htmlFor="sup-priority" className="mb-1 block font-head text-xs font-semibold uppercase tracking-wide text-text-low">
+        <label htmlFor="sup-priority" className={labelCls}>
           Prioridade
         </label>
         <select
           id="sup-priority"
           value={priority}
           onChange={(e) => setPriority(e.target.value as SupportThreadPriorityT)}
-          className={fieldCls}
+          className={fieldCls + ' h-10 py-0'}
         >
           {PRIORITIES.map((p) => (
             <option key={p.value} value={p.value}>
@@ -89,7 +95,7 @@ export function NewThreadForm({
       </div>
 
       <div className="flex flex-1 flex-col">
-        <label htmlFor="sup-message" className="mb-1 block font-head text-xs font-semibold uppercase tracking-wide text-text-low">
+        <label htmlFor="sup-message" className={labelCls}>
           Mensagem
         </label>
         <textarea
@@ -97,7 +103,7 @@ export function NewThreadForm({
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Descreva o que esta acontecendo..."
-          className={fieldCls + ' min-h-[140px] flex-1 resize-none'}
+          className={fieldCls + ' min-h-36 flex-1 resize-none'}
         />
       </div>
 
@@ -105,8 +111,15 @@ export function NewThreadForm({
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button type="submit" variant="primary" size="sm" loading={open.isPending} disabled={!valid}>
-          <Send className="size-4" aria-hidden /> Enviar
+        <Button
+          type="submit"
+          variant="primary"
+          size="sm"
+          loading={open.isPending}
+          disabled={!valid}
+          leftIcon={<Send className="size-4" aria-hidden />}
+        >
+          Enviar
         </Button>
       </div>
     </form>

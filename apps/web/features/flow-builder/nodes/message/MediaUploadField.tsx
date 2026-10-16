@@ -9,7 +9,7 @@ export interface UploadedMedia {
   key: string;
   mime: string;
   filename: string;
-  /** Object URL local para preview imediato (nao persistido). */
+  /** Object URL local para preview imediato (não persistido). */
   objectUrl?: string;
 }
 
@@ -17,7 +17,7 @@ export interface MediaUploadFieldProps {
   label: string;
   /** `accept` do input nativo (ex.: `image/*`). */
   accept: string;
-  /** Prefixos MIME aceitos para validacao (ex.: `['image/']`). Vazio = qualquer. */
+  /** Prefixos MIME aceitos para validação (ex.: `['image/']`). Vazio = qualquer. */
   acceptPrefixes: readonly string[];
   storageKey: string;
   filename?: string;
@@ -33,10 +33,10 @@ export interface MediaUploadFieldProps {
 }
 
 /**
- * Campo de upload de midia do node `message` (F31-S02). Dropzone + file picker
+ * Campo de upload de mídia do node `message` (F31-S02). Dropzone + file picker
  * com pipeline de signed-url; degrada para entrada manual de storage key quando
- * o endpoint de upload de flow ainda nao existe (ver upload.ts SEAM). Estados de
- * erro DS v2 (MIME invalido / upload indisponivel / falha de rede).
+ * o endpoint de upload de flow ainda não existe (ver upload.ts SEAM). Estados de
+ * erro DS v2 (MIME inválido / upload indisponivel / falha de rede).
  */
 export function MediaUploadField({
   label,
@@ -62,7 +62,7 @@ export function MediaUploadField({
   const handleFile = async (file: File) => {
     setError(null);
     if (!validateMime(file.type)) {
-      setError(`Tipo de arquivo invalido. Esperado: ${accept}.`);
+      setError(`Tipo de arquivo inválido. Esperado: ${accept}.`);
       return;
     }
     setBusy(true);
@@ -80,7 +80,7 @@ export function MediaUploadField({
         objectUrl,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha no upload da midia.');
+      setError(err instanceof Error ? err.message : 'Falha no upload da mídia.');
     } finally {
       setBusy(false);
     }
@@ -107,14 +107,14 @@ export function MediaUploadField({
         disabled={busy}
         aria-describedby={hint ? `${inputId}-hint` : undefined}
         className={cn(
-          'flex flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-border-2 bg-surface-2 px-3 py-5 text-center transition-colors',
-          'hover:border-accent focus:border-accent focus:shadow-glow-sm focus:outline-none',
-          dragActive && 'border-accent bg-surface-3',
+          'flex flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-border bg-surface-2 px-3 py-5 text-center transition-colors',
+          'hover:border-brand-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring',
+          dragActive && 'border-brand-text bg-surface-3',
           busy && 'cursor-wait opacity-70',
         )}
       >
         {busy ? (
-          <Loader2 className="size-5 animate-spin text-text-low motion-reduce:animate-none" aria-hidden />
+          <Loader2 className="size-5 text-text-low motion-safe:animate-spin" aria-hidden />
         ) : (
           <Upload className="size-5 text-text-low" aria-hidden />
         )}
@@ -159,7 +159,7 @@ export function MediaUploadField({
           value={storageKey}
           placeholder="workspaces/…/objeto"
           onChange={(e) => onKeyChange(e.target.value)}
-          className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 font-mono text-[11px] text-text focus:border-accent focus:outline-none"
+          className="rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 font-mono text-[11px] text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
         />
       </label>
 

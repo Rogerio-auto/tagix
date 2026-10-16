@@ -14,6 +14,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Play, ShieldCheck, Zap } from 'lucide-react';
+import { Badge, Button } from '@hm/ui';
 import type { Endpoint, ParamField } from './openapi';
 import { buildSampleBody, buildSampleResponse } from './snippets';
 
@@ -85,7 +86,7 @@ function runSandbox(endpoint: Endpoint): RunResult {
 async function runReal(endpoint: Endpoint, url: string, apiKey: string): Promise<RunResult> {
   if (endpoint.method !== 'get') {
     // defesa em profundidade: o componente ja bloqueia, mas garantimos aqui.
-    throw new Error('Modo real permite apenas requisicoes GET.');
+    throw new Error('Modo real permite apenas requisições GET.');
   }
   const started = performance.now();
   const res = await fetch(url, {
@@ -158,7 +159,7 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
       const url = '/api/v1' + fillPath(endpoint.path.replace('/api/v1', ''), pathValues) + buildQuery(endpoint.params, queryValues);
       setResult(await runReal(endpoint, url, apiKey.trim()));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha ao executar a requisicao.');
+      setError(e instanceof Error ? e.message : 'Falha ao executar a requisição.');
     } finally {
       setRunning(false);
     }
@@ -170,33 +171,33 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
     <div
       className={
         'flex flex-col gap-3 rounded-md border p-4 ' +
-        (realBadge ? 'border-warn/40 bg-warn/5' : 'border-brand/30 bg-brand/5')
+        (realBadge ? 'border-warn/25 bg-warn/[0.06]' : 'border-border bg-surface-2')
       }
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="font-head text-sm font-semibold text-text">Testar</span>
+          <span className="font-head text-base font-semibold text-text">Testar</span>
           {effectiveMode === 'sandbox' ? (
-            <span className="inline-flex items-center gap-1 rounded-pill bg-brand/15 px-2 py-0.5 font-head text-[11px] font-semibold text-brand">
-              <ShieldCheck className="size-3" aria-hidden /> Simulacao — nenhum dado real tocado
-            </span>
+            <Badge tone="success" size="sm">
+              <ShieldCheck className="size-3" aria-hidden /> Simulação — nenhum dado real tocado
+            </Badge>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded-pill bg-warn/15 px-2 py-0.5 font-head text-[11px] font-semibold text-warn">
+            <Badge tone="warning" size="sm">
               <Zap className="size-3" aria-hidden /> Real — chama a API com sua chave
-            </span>
+            </Badge>
           )}
         </div>
 
         {!isMutating && (
-          <div className="flex gap-1" role="tablist" aria-label="Modo de execucao">
+          <div className="flex gap-1" role="tablist" aria-label="Modo de execução">
             <button
               type="button"
               role="tab"
               aria-selected={mode === 'sandbox'}
               onClick={() => setMode('sandbox')}
               className={
-                'rounded-sm px-2.5 py-1 font-head text-xs outline-none transition-colors focus-visible:shadow-glow-md ' +
-                (mode === 'sandbox' ? 'bg-surface-3 text-text' : 'text-text-low hover:text-text-mid')
+                'rounded-xs px-2.5 py-1 font-body text-xs font-bold outline-none transition-colors duration-(--dur-fast) ease-ds focus-visible:focus-ring ' +
+                (mode === 'sandbox' ? 'bg-surface-3 text-text' : 'text-text-low hover:text-text')
               }
             >
               Sandbox
@@ -207,8 +208,8 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
               aria-selected={mode === 'real'}
               onClick={() => setMode('real')}
               className={
-                'rounded-sm px-2.5 py-1 font-head text-xs outline-none transition-colors focus-visible:shadow-glow-md ' +
-                (mode === 'real' ? 'bg-surface-3 text-text' : 'text-text-low hover:text-text-mid')
+                'rounded-xs px-2.5 py-1 font-body text-xs font-bold outline-none transition-colors duration-(--dur-fast) ease-ds focus-visible:focus-ring ' +
+                (mode === 'real' ? 'bg-surface-3 text-text' : 'text-text-low hover:text-text')
               }
             >
               Real
@@ -218,26 +219,26 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
       </div>
 
       {isMutating && (
-        <p className="rounded-sm bg-warn/10 px-3 py-2 font-body text-xs text-warn">
-          Esta operacao tem efeito (escrita). Para nao disparar nada de verdade, ela so roda no
-          Sandbox — o modo real e desabilitado aqui.
+        <p className="rounded-sm border border-warn/25 bg-warn/10 px-3 py-2 font-body text-sm text-text-mid">
+          Esta operação tem efeito (escrita). Para não disparar nada de verdade, ela só roda no
+          Sandbox — o modo real é desabilitado aqui.
         </p>
       )}
 
       {pathParamDefs.length > 0 && (
         <div className="flex flex-col gap-2">
-          <h6 className="font-head text-[11px] font-semibold uppercase tracking-wide text-text-low">
-            Parametros de path
+          <h6 className="font-mono text-xs font-medium uppercase tracking-wider text-text-low">
+            Parâmetros de path
           </h6>
           {pathParamDefs.map((p) => (
             <label key={p.name} className="flex flex-col gap-1">
-              <span className="font-price text-xs text-text-mid">{p.name}</span>
+              <span className="font-mono text-xs text-text-mid">{p.name}</span>
               <input
                 type="text"
                 value={pathValues[p.name] ?? ''}
                 onChange={(e) => setPathValue(p.name, e.target.value)}
                 placeholder={p.format ?? p.type}
-                className="rounded-sm border border-border-2 bg-surface px-2.5 py-1.5 font-price text-sm text-text outline-none focus-visible:shadow-glow-md"
+                className="h-9 rounded-sm border border-border bg-surface px-2.5 font-mono text-sm text-text outline-none transition-[border-color] duration-(--dur-fast) hover:border-border-2 focus:border-brand-text focus-visible:focus-ring"
               />
             </label>
           ))}
@@ -246,12 +247,12 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
 
       {queryParamDefs.length > 0 && (
         <div className="flex flex-col gap-2">
-          <h6 className="font-head text-[11px] font-semibold uppercase tracking-wide text-text-low">
+          <h6 className="font-mono text-xs font-medium uppercase tracking-wider text-text-low">
             Query
           </h6>
           {queryParamDefs.map((p) => (
             <label key={p.name} className="flex flex-col gap-1">
-              <span className="font-price text-xs text-text-mid">
+              <span className="font-mono text-xs text-text-mid">
                 {p.name}
                 {p.required && <span className="ml-1 text-danger">*</span>}
               </span>
@@ -260,7 +261,7 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
                 value={queryValues[p.name] ?? ''}
                 onChange={(e) => setQueryValue(p.name, e.target.value)}
                 placeholder={p.enumValues ? p.enumValues.join(' | ') : (p.format ?? p.type)}
-                className="rounded-sm border border-border-2 bg-surface px-2.5 py-1.5 font-price text-sm text-text outline-none focus-visible:shadow-glow-md"
+                className="h-9 rounded-sm border border-border bg-surface px-2.5 font-mono text-sm text-text outline-none transition-[border-color] duration-(--dur-fast) hover:border-border-2 focus:border-brand-text focus-visible:focus-ring"
               />
             </label>
           ))}
@@ -269,7 +270,7 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
 
       {endpoint.requestBody && (
         <label className="flex flex-col gap-1">
-          <span className="font-head text-[11px] font-semibold uppercase tracking-wide text-text-low">
+          <span className="font-mono text-xs font-medium uppercase tracking-wider text-text-low">
             Corpo (JSON)
           </span>
           <textarea
@@ -277,14 +278,14 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
             onChange={(e) => setBodyText(e.target.value)}
             rows={6}
             spellCheck={false}
-            className="resize-y rounded-sm border border-border-2 bg-surface px-2.5 py-1.5 font-price text-[13px] text-text outline-none focus-visible:shadow-glow-md"
+            className="resize-y rounded-sm border border-border bg-surface px-2.5 py-1.5 font-mono text-sm text-text outline-none transition-[border-color] duration-(--dur-fast) hover:border-border-2 focus:border-brand-text focus-visible:focus-ring"
           />
         </label>
       )}
 
       {effectiveMode === 'real' && (
         <label className="flex flex-col gap-1">
-          <span className="font-head text-[11px] font-semibold uppercase tracking-wide text-text-low">
+          <span className="font-mono text-xs font-medium uppercase tracking-wider text-text-low">
             API key (Bearer)
           </span>
           <input
@@ -293,31 +294,32 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="hm_..."
             autoComplete="off"
-            className="rounded-sm border border-border-2 bg-surface px-2.5 py-1.5 font-price text-sm text-text outline-none focus-visible:shadow-glow-md"
+            className="h-9 rounded-sm border border-border bg-surface px-2.5 font-mono text-sm text-text outline-none transition-[border-color] duration-(--dur-fast) hover:border-border-2 focus:border-brand-text focus-visible:focus-ring"
           />
-          <span className="font-body text-[11px] text-text-low">
-            A chave fica so na memoria desta aba e some ao sair. Nunca e salva nem registrada.
+          <span className="font-body text-xs text-text-low">
+            A chave fica só na memória desta aba e some ao sair. Nunca é salva nem registrada.
           </span>
         </label>
       )}
 
       <div className="flex items-center gap-3">
-        <button
-          type="button"
+        {/* Secundário: o CTA neon da tela é outro; aqui é uma ação de ferramenta. */}
+        <Button
+          variant="secondary"
+          size="sm"
+          loading={running}
+          leftIcon={<Play className="size-3.5" aria-hidden />}
           onClick={() => void execute()}
-          disabled={running}
-          className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 font-head text-sm font-semibold text-on-brand outline-none transition-colors hover:bg-brand-strong focus-visible:shadow-glow-md disabled:opacity-60"
         >
-          <Play className="size-3.5" aria-hidden />
-          {running ? 'Executando…' : effectiveMode === 'sandbox' ? 'Simular' : 'Executar'}
-        </button>
+          {effectiveMode === 'sandbox' ? 'Simular' : 'Executar'}
+        </Button>
         {result && (
-          <span className="font-price text-xs text-text-low">{result.durationMs} ms</span>
+          <span className="font-mono text-xs tabular-nums text-text-low">{result.durationMs} ms</span>
         )}
       </div>
 
       {error && (
-        <p className="rounded-sm bg-danger/10 px-3 py-2 font-body text-xs text-danger" role="alert">
+        <p className="rounded-sm border border-danger/25 bg-danger/10 px-3 py-2 font-body text-sm text-danger" role="alert">
           {error}
         </p>
       )}
@@ -327,19 +329,22 @@ export function TryItConsole({ endpoint }: { endpoint: Endpoint }) {
           <div className="flex items-center gap-2">
             <span
               className={
-                'rounded-sm px-2 py-0.5 font-price text-[11px] font-semibold ' +
+                'rounded-xs border px-2 py-0.5 font-mono text-xs font-semibold tabular-nums ' +
                 (result.status >= 200 && result.status < 300
-                  ? 'bg-success/15 text-success'
-                  : 'bg-danger/15 text-danger')
+                  ? 'border-success/25 bg-success/10 text-success'
+                  : 'border-danger/25 bg-danger/10 text-danger')
               }
             >
               {result.status} {result.statusText}
             </span>
-            <span className="font-head text-[11px] uppercase text-text-low">
+            <span className="font-mono text-xs uppercase tracking-wider text-text-low">
               {result.mode === 'sandbox' ? 'resposta simulada' : 'resposta real'}
             </span>
           </div>
-          <pre className="max-h-80 overflow-auto rounded-sm border border-border-2 bg-surface-2 px-3 py-2 font-price text-[12px] leading-relaxed text-text-mid">
+          <pre
+            tabIndex={0}
+            className="max-h-80 overflow-auto rounded-sm border border-border bg-surface-inset px-3 py-2 font-mono text-xs leading-relaxed text-text outline-none focus-visible:focus-ring"
+          >
             <code>{result.body}</code>
           </pre>
         </div>

@@ -1,7 +1,7 @@
 'use client';
 
-// Inspector 'set_variable' (F31-S09). Define uma variavel da execucao no namespace `vars.*`,
-// com valor literal ou referencia a outras variaveis ({{...}}) e tipo de coercao.
+// Inspector 'set_variable' (F31-S09). Define uma variável da execução no namespace `vars.*`,
+// com valor literal ou referencia a outras variáveis ({{...}}) e tipo de coercao.
 import { useRef } from 'react';
 import { useFlowEditor } from '../../hooks/useFlowEditor';
 import { VariablesPicker } from '../../inspector/VariablesPicker';
@@ -53,6 +53,7 @@ export function SetVariableInspector({ nodeId }: { nodeId: string }) {
         label="Nome da variável"
         value={name}
         placeholder="ex.: cidade"
+        mono
         hint="Sem espaços. Usada a jusante como {{vars.nome}}."
         onChange={(v) => set({ name: v })}
       />
@@ -81,7 +82,7 @@ export function SetVariableInspector({ nodeId }: { nodeId: string }) {
                 : 'Valor ou {{contact.name}}'
           }
           onChange={(e) => set({ value: e.target.value })}
-          className="min-h-[80px] rounded-md border border-border-2 bg-surface-2 px-3 py-2 font-mono text-sm text-text focus:border-accent focus:outline-none"
+          className="min-h-[80px] rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 font-mono text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
         />
         <span className="text-[11px] text-text-low">
           Pode referenciar outras variáveis com {'{{...}}'}.
@@ -89,7 +90,7 @@ export function SetVariableInspector({ nodeId }: { nodeId: string }) {
       </div>
 
       <Field label="Disponível a jusante como">
-        <code className="rounded-sm border border-border-2 bg-surface-2 px-2 py-1.5 font-mono text-[12px] text-text-mid">
+        <code className="rounded-sm border border-border bg-surface-2 px-2 py-1.5 font-mono text-[12px] text-text-mid">
           {trimmedName ? `{{vars.${trimmedName}}}` : '{{vars.…}}'}
         </code>
       </Field>

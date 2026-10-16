@@ -47,7 +47,7 @@ export function MetaSignupUnavailable({ config, onSwitchProvider }: MetaSignupUn
           </Button>
           <Link
             href="/help"
-            className="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-1 font-head text-xs font-medium text-text-mid outline-none transition-colors duration-200 hover:text-text focus-visible:shadow-glow-md"
+            className="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-1 font-body text-sm font-semibold text-text-mid outline-none transition-colors duration-200 hover:text-text focus-visible:focus-ring"
           >
             <LifeBuoy className="size-3.5" aria-hidden />
             Falar com o suporte

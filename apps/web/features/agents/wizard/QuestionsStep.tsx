@@ -107,8 +107,8 @@ function QuestionInput({
                   onClick={() => toggle(opt)}
                   className={
                     on
-                      ? 'rounded-pill border border-brand bg-brand/15 px-3 py-1 font-head text-xs font-medium text-brand outline-none focus-visible:shadow-glow-md'
-                      : 'rounded-pill border border-border bg-surface-inset px-3 py-1 font-head text-xs font-medium text-text-mid outline-none transition-colors duration-200 hover:border-border-2 focus-visible:shadow-glow-md'
+                      ? 'rounded-pill border border-brand-text/30 bg-brand-text/10 px-3 py-1 font-body text-xs font-bold text-brand-text outline-none focus-visible:focus-ring'
+                      : 'rounded-pill border border-border bg-surface-2 px-3 py-1 font-body text-xs font-bold text-text-mid outline-none transition-colors duration-(--dur-fast) hover:border-border-2 hover:text-text focus-visible:focus-ring'
                   }
                 >
                   {opt}
@@ -138,7 +138,7 @@ function QuestionInput({
 export function QuestionsStep({ questions, values, errors, onChange }: QuestionsStepProps) {
   if (questions.length === 0) {
     return (
-      <p className="rounded-md border border-border-2 bg-surface-inset px-4 py-6 text-center font-body text-sm text-text-low">
+      <p className="rounded-lg border border-dashed border-border bg-surface-2 px-4 py-6 text-center font-body text-sm text-text-low">
         Este template não pede informações adicionais. Avance para escolher o modelo.
       </p>
     );

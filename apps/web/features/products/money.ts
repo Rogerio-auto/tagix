@@ -1,21 +1,18 @@
 /**
- * Formatação/parse de valores monetários do catálogo (F47-S05).
+ * Formatação/parse de valores monetários do catálogo (F47-S05; F72-S07 sem locale literal).
  *
- * O backend guarda em centavos (`priceCents` bigint). Aqui convertemos para/de
- * uma string editável no formato pt-BR. Default BRL (não-objetivo §9: sem multi-
- * moeda no MVP — herda a moeda do produto/deal).
+ * O backend guarda em centavos (`priceCents` bigint). A moeda vem do produto/deal; o
+ * idioma da formatação é o da interface (`@/shared/lib/locale`), nunca um literal aqui.
  */
+import { centsToInput, formatMoney } from '@/shared/lib/locale';
 
-/** Formata centavos como moeda (default BRL) via Intl. Ex.: 12990 → "R$ 129,90". */
-export function formatCents(cents: number, currency = 'BRL'): string {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency,
-  }).format(cents / 100);
+/** Formata centavos na moeda do dado. Ex. (pt-BR): 12990, 'BRL' → "R$ 129,90". */
+export function formatCents(cents: number, currency: string): string {
+  return formatMoney(cents, currency);
 }
 
 /**
- * Converte uma string digitada (pt-BR, ex.: "1.299,90" ou "1299.9") em centavos
+ * Converte uma string digitada (ex.: "1.299,90" ou "1299.9") em centavos
  * inteiros. Aceita vírgula ou ponto como separador decimal. Retorna `null` quando
  * não há número válido.
  */
@@ -42,10 +39,7 @@ export function parseToCents(input: string): number | null {
   return Math.round(value * 100);
 }
 
-/** Centavos → string editável "129,90" (pt-BR, sem símbolo). Para preencher o input. */
+/** Centavos → string editável sem símbolo ("129,90" em pt-BR). Para preencher o input. */
 export function centsToInputValue(cents: number): string {
-  return (cents / 100).toLocaleString('pt-BR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return centsToInput(cents);
 }

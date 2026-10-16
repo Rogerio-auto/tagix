@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { Button, Card, Input, useToast } from '@hm/ui';
 import { Field, Select, Textarea, Toggle } from '@/features/agents/wizard/fields';
 import { DepartmentsField } from '@/features/agents/DepartmentsField';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
 import { ApiError } from '@/shared/lib/api-client';
 import { useAgentModels } from '../queries';
 import type { Agent, AgentDepartmentLink } from '../types';
@@ -171,7 +172,7 @@ export function ConfigTab({ agent, canEdit }: { agent: Agent; canEdit: boolean }
   return (
     <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-6">
       <Card elevation={1} className="flex flex-col gap-5 p-5">
-        <h2 className="font-head text-base font-semibold text-text">Identidade</h2>
+        <h2 className="font-head text-lg font-medium text-text">Identidade</h2>
 
         <Input label="Nome" error={errors.name?.message} disabled={readOnly} {...register('name')} />
 
@@ -199,7 +200,7 @@ export function ConfigTab({ agent, canEdit }: { agent: Agent; canEdit: boolean }
       </Card>
 
       <Card elevation={1} className="flex flex-col gap-5 p-5">
-        <h2 className="font-head text-base font-semibold text-text">Modelo</h2>
+        <h2 className="font-head text-lg font-medium text-text">Modelo</h2>
 
         <Field
           id="model"
@@ -278,7 +279,7 @@ export function ConfigTab({ agent, canEdit }: { agent: Agent; canEdit: boolean }
       </Card>
 
       <Card elevation={1} className="flex flex-col gap-5 p-5">
-        <h2 className="font-head text-base font-semibold text-text">Comportamento</h2>
+        <h2 className="font-head text-lg font-medium text-text">Comportamento</h2>
 
         <Controller
           control={control}
@@ -286,7 +287,8 @@ export function ConfigTab({ agent, canEdit }: { agent: Agent; canEdit: boolean }
           render={({ field }) => (
             <Toggle
               checked={field.value}
-              onChange={(next) => !readOnly && field.onChange(next)}
+              onChange={(next) => field.onChange(next)}
+              disabled={readOnly}
               label="Agregar mensagens (debounce antes de responder)"
             />
           )}
@@ -331,7 +333,8 @@ export function ConfigTab({ agent, canEdit }: { agent: Agent; canEdit: boolean }
           render={({ field }) => (
             <Toggle
               checked={field.value}
-              onChange={(next) => !readOnly && field.onChange(next)}
+              onChange={(next) => field.onChange(next)}
+              disabled={readOnly}
               label="Permitir handoff para atendente humano"
             />
           )}
@@ -342,7 +345,8 @@ export function ConfigTab({ agent, canEdit }: { agent: Agent; canEdit: boolean }
           render={({ field }) => (
             <Toggle
               checked={field.value}
-              onChange={(next) => !readOnly && field.onChange(next)}
+              onChange={(next) => field.onChange(next)}
+              disabled={readOnly}
               label="Ignorar mensagens de grupo"
             />
           )}
@@ -351,7 +355,7 @@ export function ConfigTab({ agent, canEdit }: { agent: Agent; canEdit: boolean }
 
       <Card elevation={1} className="flex flex-col gap-5 p-5">
         <div>
-          <h2 className="font-head text-base font-semibold text-text">Departamentos</h2>
+          <h2 className="font-head text-lg font-medium text-text">Departamentos</h2>
           <p className="mt-1 font-body text-sm text-text-low">
             Quais departamentos este agente atende. Marque um como{' '}
             <span className="font-medium text-text-mid">agente de entrada</span> para que ele receba
@@ -362,7 +366,7 @@ export function ConfigTab({ agent, canEdit }: { agent: Agent; canEdit: boolean }
       </Card>
 
       {canEdit && (
-        <div className="flex items-center justify-end gap-3 border-t border-border-2 pt-4">
+        <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
           {isDirty && (
             <Button
               type="button"
@@ -376,15 +380,17 @@ export function ConfigTab({ agent, canEdit }: { agent: Agent; canEdit: boolean }
               Descartar
             </Button>
           )}
-          <Button
-            type="submit"
-            variant="primary"
-            loading={update.isPending}
-            disabled={!isDirty}
-            leftIcon={<Save className="size-4" aria-hidden />}
-          >
-            Salvar alterações
-          </Button>
+          <ReadOnlyGuard>
+            <Button
+              type="submit"
+              variant="primary"
+              loading={update.isPending}
+              disabled={!isDirty}
+              leftIcon={<Save className="size-4" aria-hidden />}
+            >
+              Salvar alterações
+            </Button>
+          </ReadOnlyGuard>
         </div>
       )}
     </form>

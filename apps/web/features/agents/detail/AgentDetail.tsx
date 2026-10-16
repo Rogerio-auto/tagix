@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Bot, Cpu, Power } from 'lucide-react';
+import { ArrowLeft, Bot, Power } from 'lucide-react';
 import { can } from '@hm/shared';
-import { Button, Card, useToast } from '@hm/ui';
-import { EmptyState, ErrorState, Skeleton } from '@/shared/components/feedback';
+import { Button, EmptyState, ErrorState, Skeleton, useToast } from '@hm/ui';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { ApiError } from '@/shared/lib/api-client';
 import { useAuthStore } from '@/shared/stores/auth.store';
@@ -18,7 +18,8 @@ import { MetricsTab } from './MetricsTab';
 import { PlaygroundPanel } from './PlaygroundTab';
 import { TabNav } from './TabNav';
 import { ToolsTab } from './ToolsTab';
-import { resolveTab } from './tabs';
+import { AGENT_TABS, resolveTab } from './tabs';
+import { VersionsPanel } from './versions';
 
 /**
  * Shell da página de detalhe do agente (F2-S18). Cabeçalho com identidade +
@@ -35,6 +36,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
   const role = useAuthStore((s) => s.auth?.role);
   const canEdit = role ? can(role, 'agent.edit') : false;
   const canToggle = role ? can(role, 'agent.toggle_tools') : false;
+  const canViewCosts = role ? can(role, 'agent.view_costs') : false;
 
   const agentQuery = useAgent(agentId);
   const basePath = `/agents/${agentId}`;
@@ -44,10 +46,16 @@ export function AgentDetail({ agentId }: { agentId: string }) {
   if (agentQuery.isLoading) {
     return (
       <div className="flex flex-col gap-6">
-        <Skeleton className="h-8 w-24" />
-        <Skeleton className="h-20" />
-        <Skeleton className="h-10" />
-        <Skeleton className="h-96" />
+        <Skeleton className="h-5 w-24" />
+        <div className="flex items-center gap-4">
+          <Skeleton className="size-12 rounded-md" />
+          <div className="flex flex-1 flex-col gap-2">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+        </div>
+        <Skeleton className="h-11" />
+        <Skeleton className="h-96 rounded-lg" />
       </div>
     );
   }
@@ -63,7 +71,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
           action={
             <Link
               href="/agents"
-              className="font-head text-sm font-medium text-brand underline-offset-4 hover:underline"
+              className="rounded-sm font-body text-sm font-bold text-brand-text underline-offset-4 outline-none hover:underline focus-visible:focus-ring"
             >
               Voltar para agentes
             </Link>
@@ -95,7 +103,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
         action={
           <Link
             href="/agents"
-            className="font-head text-sm font-medium text-brand underline-offset-4 hover:underline"
+            className="rounded-sm font-body text-sm font-bold text-brand-text underline-offset-4 outline-none hover:underline focus-visible:focus-ring"
           >
             Voltar para agentes
           </Link>
@@ -108,7 +116,7 @@ export function AgentDetail({ agentId }: { agentId: string }) {
     <div className="flex flex-col gap-6">
       <Link
         href="/agents"
-        className="inline-flex min-h-11 w-fit items-center gap-1.5 font-head text-sm text-text-low outline-none transition-colors hover:text-text focus-visible:text-text"
+        className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-sm font-body text-sm text-text-low outline-none transition-colors duration-(--dur-fast) hover:text-text focus-visible:focus-ring"
       >
         <ArrowLeft className="size-4" aria-hidden />
         Agentes
@@ -118,26 +126,33 @@ export function AgentDetail({ agentId }: { agentId: string }) {
 
       <TabNav basePath={basePath} active={activeTab} />
 
-      <div role="tabpanel" aria-label={activeTab} className={isMobile ? 'pb-2' : undefined}>
+      <div
+        role="tabpanel"
+        aria-label={AGENT_TABS.find((t) => t.id === activeTab)?.label ?? activeTab}
+        className={isMobile ? 'pb-2' : undefined}
+      >
         {activeTab === 'config' && <ConfigTab agent={agent} canEdit={canEdit} />}
+        {activeTab === 'versions' && <VersionsPanel agentId={agent.id} canEdit={canEdit} />}
         {activeTab === 'tools' && <ToolsTab agentId={agent.id} canToggle={canToggle} />}
         {activeTab === 'knowledge' && <KnowledgeTab />}
-        {activeTab === 'metrics' && <MetricsTab agentId={agent.id} />}
+        {activeTab === 'metrics' && <MetricsTab agentId={agent.id} canViewCosts={canViewCosts} />}
         {activeTab === 'playground' && <PlaygroundPanel agentId={agent.id} />}
       </div>
 
       {/* Ação primária na zona do polegar (mobile), fixa no rodapé da página. */}
       {canEdit && action && isMobile && (
-        <div className="pb-safe sticky inset-x-0 bottom-0 z-30 -mx-4 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur">
-          <Button
-            variant="secondary"
-            className="w-full"
-            loading={action.pending}
-            leftIcon={<Power className="size-4" aria-hidden />}
-            onClick={() => void action.run()}
-          >
-            {action.label}
-          </Button>
+        <div className="pb-safe sticky inset-x-0 bottom-0 z-30 -mx-4 border-t border-border bg-surface-glass px-4 py-3 backdrop-blur">
+          <ReadOnlyGuard className="w-full" align="start">
+            <Button
+              variant="secondary"
+              className="w-full"
+              loading={action.pending}
+              leftIcon={<Power className="size-4" aria-hidden />}
+              onClick={() => void action.run()}
+            >
+              {action.label}
+            </Button>
+          </ReadOnlyGuard>
         </div>
       )}
     </div>
@@ -213,33 +228,35 @@ function DetailHeader({
   const showInlineAction = canEdit && action && !isMobile;
 
   return (
-    <Card elevation={1} className="flex items-center gap-4 p-5">
-      <span className="flex size-12 shrink-0 items-center justify-center rounded-md bg-surface-inset text-text-mid">
-        <Bot className="size-6" aria-hidden />
+    <div className="flex items-center gap-4">
+      <span
+        aria-hidden
+        className="flex size-12 shrink-0 items-center justify-center rounded-md border border-border bg-surface-2 text-text-mid"
+      >
+        <Bot className="size-6" />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <h1 className="min-w-0 truncate font-head text-lg font-semibold text-text md:text-xl">
-            {agent.name}
-          </h1>
+          <h1 className="min-w-0 truncate font-head text-h4 text-text md:text-h3">{agent.name}</h1>
           <AgentStatusBadge status={agent.status} />
         </div>
-        <p className="mt-0.5 flex items-center gap-1.5 truncate font-body text-sm text-text-low">
-          <Cpu className="size-3.5 shrink-0" aria-hidden />
-          {agent.model ?? 'Modelo padrão'}
+        <p className="mt-1.5 truncate font-body text-small text-text-low">
+          <span className="font-mono text-text-mid">{agent.model ?? 'Modelo padrão'}</span>
           {agent.description ? ` · ${agent.description}` : ''}
         </p>
       </div>
       {showInlineAction && (
-        <Button
-          variant="ghost"
-          loading={action.pending}
-          leftIcon={<Power className="size-4" aria-hidden />}
-          onClick={() => void action.run()}
-        >
-          {action.label}
-        </Button>
+        <ReadOnlyGuard>
+          <Button
+            variant="secondary"
+            loading={action.pending}
+            leftIcon={<Power className="size-4" aria-hidden />}
+            onClick={() => void action.run()}
+          >
+            {action.label}
+          </Button>
+        </ReadOnlyGuard>
       )}
-    </Card>
+    </div>
   );
 }

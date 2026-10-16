@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, RotateCcw, Send, Sparkles, Wrench } from 'lucide-react';
 import { Button } from '@hm/ui';
 import { KbCitation } from '@/features/knowledge/feedback';
+import { formatNumber } from '@/shared/lib/locale';
 import { useAgentPlaygroundStream } from './useAgentPlaygroundStream';
 import type { PlaygroundError, SseUsage, ToolCallView, TranscriptTurn } from './types';
 
@@ -16,7 +17,8 @@ import type { PlaygroundError, SseUsage, ToolCallView, TranscriptTurn } from './
  * tools de negócio simulam e o usage é marcado `playground=true`. Respeita
  * policy + cost-guard (a API emite `budget_exceeded`/`model_blocked` quando aplicável).
  *
- * DS v2 (tokens semânticos, zero hex). Acessível: transcript `aria-live="polite"`,
+ * DS 3.0 (F72-S07): tokens semânticos, zero hex, números em mono no idioma da interface;
+ * a marca cheia fica só no CTA "Enviar". Acessível: transcript `aria-live="polite"`,
  * cursor de streaming, erro 3-partes com ref copiável.
  */
 export function AgentPlayground({ agentId }: { agentId: string }) {
@@ -42,12 +44,12 @@ export function AgentPlayground({ agentId }: { agentId: string }) {
     // Mobile: ocupa mais altura útil (dvh) para o chat caber na mão; desktop:
     // clamp original. A altura é só dimensionamento (aparência) — sem troca de
     // estrutura — então fica em classes responsivas. — MOBILE_UX §2 (canvas/chat).
-    <div className="flex h-[clamp(26rem,72dvh,40rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface-2 md:h-[clamp(28rem,60vh,44rem)]">
+    <div className="flex h-[clamp(26rem,72dvh,40rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface md:h-[clamp(28rem,60vh,44rem)]">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 border-b border-border-2 px-4 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
-          <Sparkles className="size-4 shrink-0 text-brand" aria-hidden />
-          <span className="font-head text-sm font-semibold text-text">Playground</span>
+          <Sparkles className="size-4 shrink-0 text-brand-text" aria-hidden />
+          <span className="font-head text-sm font-medium text-text">Playground</span>
           <span className="hidden truncate font-body text-xs text-text-low sm:inline">
             testes não afetam conversas reais
           </span>
@@ -82,7 +84,7 @@ export function AgentPlayground({ agentId }: { agentId: string }) {
       </div>
 
       {/* Composer */}
-      <div className="border-t border-border-2 p-3">
+      <div className="border-t border-border bg-surface-2 p-3">
         <div className="flex items-end gap-2">
           <textarea
             value={draft}
@@ -96,7 +98,7 @@ export function AgentPlayground({ agentId }: { agentId: string }) {
             rows={1}
             placeholder="Escreva uma mensagem para testar o agente…"
             aria-label="Mensagem para o agente"
-            className="max-h-32 min-h-10 flex-1 resize-none rounded-md border border-border bg-surface-inset px-3 py-2 font-body text-sm text-text outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-text-low hover:border-border-2 focus-visible:border-brand focus-visible:shadow-glow-md"
+            className="max-h-32 min-h-10 flex-1 resize-none rounded-sm border border-border bg-surface px-3 py-2 font-body text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds placeholder:text-text-low hover:border-border-2 focus:border-brand-text focus-visible:focus-ring sm:text-sm"
           />
           <Button
             type="button"
@@ -121,10 +123,10 @@ export function AgentPlayground({ agentId }: { agentId: string }) {
 function EmptyHint() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-      <span className="flex size-11 items-center justify-center rounded-full bg-surface-inset text-text-mid">
+      <span className="flex size-11 items-center justify-center rounded-pill border border-border bg-surface-2 text-text-mid">
         <Sparkles className="size-5" aria-hidden />
       </span>
-      <p className="font-head text-sm font-medium text-text-mid">Teste seu agente ao vivo</p>
+      <p className="font-head text-base font-medium text-text">Teste seu agente ao vivo</p>
       <p className="max-w-xs font-body text-xs text-text-low">
         Envie uma mensagem para ver o agente responder em tempo real, com as tools e o modelo
         configurados — sem criar uma conversa real.
@@ -137,7 +139,7 @@ function TurnBubble({ turn, agentId }: { turn: TranscriptTurn; agentId: string }
   if (turn.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-lg rounded-br-sm bg-brand px-3.5 py-2 font-body text-sm text-text-on-brand">
+        <div className="max-w-[80%] rounded-lg rounded-br-sm border border-brand-text/20 bg-brand-text/10 px-3.5 py-2 font-body text-sm text-text">
           {turn.text}
         </div>
       </div>
@@ -153,7 +155,7 @@ function TurnBubble({ turn, agentId }: { turn: TranscriptTurn; agentId: string }
           ))}
         </div>
       )}
-      <div className="max-w-[85%] rounded-lg rounded-bl-sm bg-surface-3 px-3.5 py-2 font-body text-sm text-text">
+      <div className="max-w-[85%] rounded-lg rounded-bl-sm border border-border bg-surface-2 px-3.5 py-2 font-body text-sm text-text">
         {turn.text.length > 0 ? (
           <span className="whitespace-pre-wrap">{turn.text}</span>
         ) : (
@@ -162,14 +164,14 @@ function TurnBubble({ turn, agentId }: { turn: TranscriptTurn; agentId: string }
         {turn.streaming && turn.text.length > 0 && (
           <span
             aria-hidden
-            className="ml-0.5 inline-block h-4 w-px translate-y-0.5 animate-pulse bg-text-mid align-middle"
+            className="ml-0.5 inline-block h-4 w-px translate-y-0.5 bg-text-mid align-middle motion-safe:animate-pulse"
           />
         )}
       </div>
       {turn.usage && <UsageLine usage={turn.usage} />}
       {turn.citations.length > 0 && (
         <div className="mt-1 flex max-w-[85%] flex-col gap-1">
-          <span className="font-head text-xs font-medium text-text-low">Fontes consultadas</span>
+          <span className="font-mono text-xs font-medium uppercase tracking-widest text-text-low">Fontes consultadas</span>
           {turn.citations.map((citation) => (
             <KbCitation
               key={`${citation.documentId}:${citation.chunkId ?? 'doc'}`}
@@ -187,31 +189,34 @@ function ToolChip({ call }: { call: ToolCallView }) {
   const done = call.status === 'done';
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface-inset px-2 py-0.5 font-head text-xs font-medium text-text-mid"
-      title={done && call.durationMs !== undefined ? `${call.durationMs} ms` : 'executando…'}
+      className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-surface-2 px-2 py-0.5 font-mono text-xs font-medium text-text-mid"
+      title={done && call.durationMs !== undefined ? `${formatNumber(call.durationMs)} ms` : 'executando…'}
     >
-      <Wrench className={done ? 'size-3 text-success' : 'size-3 animate-pulse text-brand'} aria-hidden />
+      <Wrench
+        className={
+          done ? 'size-3 text-success' : 'size-3 text-brand-text motion-safe:animate-pulse'
+        }
+        aria-hidden
+      />
       {call.toolKey}
       {done && call.durationMs !== undefined && (
-        <span className="font-price text-text-low">{call.durationMs}ms</span>
+        <span className="tabular-nums text-text-low">{formatNumber(call.durationMs)} ms</span>
       )}
     </span>
   );
 }
 
-const usd = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 4,
-  maximumFractionDigits: 6,
-});
-const int = new Intl.NumberFormat('pt-BR');
+/**
+ * Custo do turno em dólar (moeda do dado do SSE, não do componente). Um turno custa
+ * frações de centavo: formata direto (`formatMoneyUnits` arredondaria para centavos).
+ */
+const COST_FORMAT = { style: 'currency', currency: 'USD', minimumFractionDigits: 4, maximumFractionDigits: 6 } as const;
 
 function UsageLine({ usage }: { usage: SseUsage }) {
   const totalTokens = usage.total_tokens ?? usage.prompt_tokens + usage.completion_tokens;
   return (
-    <p className="pl-1 font-price text-xs text-text-low">
-      {int.format(totalTokens)} tokens · {usd.format(usage.total_cost_usd)}
+    <p className="pl-1 font-mono text-xs tabular-nums text-text-low">
+      {formatNumber(totalTokens)} tokens · {formatNumber(usage.total_cost_usd, COST_FORMAT)}
     </p>
   );
 }
@@ -228,7 +233,7 @@ function ErrorPanel({ error }: { error: PlaygroundError }) {
   return (
     <div
       role="alert"
-      className="rounded-md border border-danger bg-surface-inset px-3.5 py-3 font-body text-sm"
+      className="rounded-md border border-danger/30 bg-danger/10 px-3.5 py-3 font-body text-sm"
     >
       <p className="font-head font-semibold text-danger">{error.title}</p>
       {error.reason && <p className="mt-1 text-text-mid">{error.reason}</p>}
@@ -236,7 +241,7 @@ function ErrorPanel({ error }: { error: PlaygroundError }) {
         <button
           type="button"
           onClick={() => void copy()}
-          className="mt-2 inline-flex items-center gap-1.5 rounded-sm font-price text-xs text-text-low outline-none hover:text-text focus-visible:shadow-glow-md"
+          className="mt-2 inline-flex items-center gap-1.5 rounded-sm font-mono text-xs text-text-low outline-none hover:text-text focus-visible:focus-ring"
         >
           {copied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
           Ref: {error.reference}

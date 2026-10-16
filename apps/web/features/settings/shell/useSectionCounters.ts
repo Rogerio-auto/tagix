@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { summarizeChannels } from '@/features/channels/counters';
 import type { Channel } from '@/features/channels/types';
 import { api } from '@/shared/lib/api-client';
+import type { Member } from '../sections/workspace-org/queries';
 import type { CounterState } from './registry';
 
 /**
@@ -44,7 +45,7 @@ export function useSectionCounters(): Record<string, CounterState | null> {
 
   const members = useQuery({
     queryKey: ['settings-counter', 'members'],
-    queryFn: () => api.get<{ members: unknown[] }>('/api/members'),
+    queryFn: () => api.get<{ members: Pick<Member, 'status'>[] }>('/api/members'),
     retry: false,
     staleTime: 60_000,
   });
@@ -55,6 +56,10 @@ export function useSectionCounters(): Record<string, CounterState | null> {
       ? { label: `${conversionTypes.data.conversionTypes.length} tipos` }
       : null,
     tags: tags.data ? { label: `${tags.data.tags.length}` } : null,
-    membros: members.data ? { label: `${members.data.members.length}` } : null,
+    // Mesmo recorte da página de Membros: removidos (`inactive`) ficam fora da contagem
+    // (a página só os mostra com "Mostrar removidos"), senão o item diz 5 e a lista mostra 4.
+    membros: members.data
+      ? { label: `${members.data.members.filter((m) => m.status !== 'inactive').length}` }
+      : null,
   };
 }

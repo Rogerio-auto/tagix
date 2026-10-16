@@ -8,8 +8,8 @@ export type NoticeTone = 'info' | 'warn' | 'danger';
 
 const TONE_SHELL: Record<NoticeTone, string> = {
   info: 'border-border-2 bg-surface-inset',
-  warn: 'border-warn/40 bg-warn/10',
-  danger: 'border-danger/40 bg-danger/10',
+  warn: 'border-warn/30 bg-warn/10',
+  danger: 'border-danger/30 bg-danger/10',
 };
 
 const TONE_ICON: Record<NoticeTone, string> = {
@@ -58,9 +58,9 @@ export function InlineNotice({
     >
       <Glyph className={cn('mt-0.5 size-4 shrink-0', TONE_ICON[tone])} aria-hidden />
       <div className="min-w-0 flex-1">
-        {title && <p className="font-head text-sm font-semibold text-text">{title}</p>}
-        <div className={cn('font-body text-xs text-text-low', title && 'mt-1')}>{children}</div>
-        {detail && <p className="mt-1.5 break-words font-price text-xs text-text-low">{detail}</p>}
+        {title && <p className="font-body text-sm font-bold text-text">{title}</p>}
+        <div className={cn('font-body text-sm text-text-mid', title && 'mt-1')}>{children}</div>
+        {detail && <p className="mt-1.5 break-words font-mono text-xs text-text-low">{detail}</p>}
         {actions && <div className="mt-2.5 flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
     </div>

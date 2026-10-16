@@ -91,7 +91,7 @@ describe('labels', () => {
 
   it('cor da prioridade vem de tokens (sem hex)', () => {
     expect(priorityDotClass('high')).toBe('bg-danger');
-    expect(priorityDotClass('medium')).toBe('bg-warning');
+    expect(priorityDotClass('medium')).toBe('bg-warn');
     expect(priorityDotClass('low')).toBe('bg-info');
   });
 });

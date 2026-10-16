@@ -219,13 +219,13 @@ test.describe('Membros — convites (admin)', () => {
   test('revogar: pede confirmação, cancelar não chama a API, confirmar remove a linha', async ({ page }) => {
     const calls = await mockMembers(page);
     await page.goto(OPEN_MEMBERS);
-    await page.getByRole('button', { name: /Revogar convite de bia@acme.com|Revogar/ }).first().click();
+    await page.getByRole('button', { name: 'Revogar convite de bia@acme.com' }).click();
     const dialog = page.getByRole('dialog', { name: 'Revogar convite' });
     await dialog.getByRole('button', { name: 'Cancelar' }).click();
     expect(calls.revoked).toEqual([]);
     await expect(page.getByText('bia@acme.com', { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: /Revogar/ }).first().click();
+    await page.getByRole('button', { name: 'Revogar convite de bia@acme.com' }).click();
     await page.getByRole('dialog', { name: 'Revogar convite' }).getByRole('button', { name: 'Revogar convite' }).click();
     await expect(page.getByText('Convite revogado')).toBeVisible();
     expect(calls.revoked).toEqual(['inv_1']);
@@ -247,7 +247,10 @@ test.describe('Membros — convites (admin)', () => {
     await expect(dialog.getByRole('link', { name: 'Ver planos' })).toHaveAttribute('href', '/settings/billing');
   });
 
-  test('empresa em só leitura: faixa visível; 402 subscription_inactive explica sem deslogar', async ({
+  // F72-S07 (absorve F71-S17): com a empresa JÁ conhecida como só leitura, "Convidar membro"
+  // fica `aria-disabled` com a explicação e nem chega a chamar a API. O 402 do servidor
+  // continua sendo a guarda real — provado no teste seguinte, com o `/api/me` desatualizado.
+  test('empresa em só leitura: faixa visível; "Convidar membro" guardado e nada é enviado', async ({
     page,
   }) => {
     const me = {
@@ -255,6 +258,38 @@ test.describe('Membros — convites (admin)', () => {
       workspace: { id: 'ws_a', name: 'Acme', subscriptionStatus: 'expired', trialEndsAt: null },
       memberships: [
         { workspaceId: 'ws_a', name: 'Acme', slug: 'acme', role: 'OWNER', subscriptionStatus: 'expired' },
+      ],
+    };
+    const calls = await mockMembers(page, { me });
+    await page.goto(OPEN_MEMBERS);
+    const banner = page.getByRole('region', { name: 'Aviso da conta' });
+    await expect(banner).toContainText('modo só leitura');
+    await expect(banner.getByRole('link', { name: 'Escolher plano' })).toHaveAttribute(
+      'href',
+      '/settings/billing',
+    );
+
+    const invite = page.getByRole('button', { name: 'Convidar membro' }).first();
+    await expect(invite).toHaveAttribute('aria-disabled', 'true');
+    await expect(invite).not.toHaveAttribute('disabled');
+    await expect(invite).toHaveAccessibleDescription('Modo só leitura: escolha um plano para voltar a editar.');
+    // `force`: o Playwright recusa clicar em `aria-disabled`; a pessoa, não.
+    await invite.click({ force: true });
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(calls.created).toHaveLength(0);
+    await expect(page).toHaveURL(/\/settings/);
+  });
+
+  test('402 subscription_inactive com /api/me desatualizado: explica sem deslogar e mostra a faixa', async ({
+    page,
+  }) => {
+    // O `/api/me` ainda diz "ativa" (a assinatura venceu depois de carregar a tela): o botão
+    // está liberado, o servidor recusa com 402 e o handler central reflete o só leitura.
+    const me = {
+      member: { id: 'mem_owner_e2e', workspaceId: 'ws_a', name: 'Ana QA', role: 'OWNER', status: 'active' },
+      workspace: { id: 'ws_a', name: 'Acme', subscriptionStatus: 'active', trialEndsAt: null },
+      memberships: [
+        { workspaceId: 'ws_a', name: 'Acme', slug: 'acme', role: 'OWNER', subscriptionStatus: 'active' },
       ],
     };
     await mockMembers(page, {
@@ -265,12 +300,6 @@ test.describe('Membros — convites (admin)', () => {
       }),
     });
     await page.goto(OPEN_MEMBERS);
-    const banner = page.getByRole('region', { name: 'Aviso da conta' });
-    await expect(banner).toContainText('modo só leitura');
-    await expect(banner.getByRole('link', { name: 'Escolher plano' })).toHaveAttribute(
-      'href',
-      '/settings/billing',
-    );
 
     await page.getByRole('button', { name: 'Convidar membro' }).first().click();
     const dialog = page.getByRole('dialog');
@@ -279,6 +308,11 @@ test.describe('Membros — convites (admin)', () => {
     // O handler central explica UMA vez e a sessão continua de pé (sem ir para /login).
     await expect(page.getByText('Sua empresa está em modo só leitura').first()).toBeVisible();
     await expect(page).toHaveURL(/\/settings/);
-    await expect(banner).toBeVisible();
+    const banner = page.getByRole('region', { name: 'Aviso da conta' });
+    await expect(banner).toContainText('modo só leitura');
+    await expect(banner.getByRole('link', { name: 'Escolher plano' })).toHaveAttribute(
+      'href',
+      '/settings/billing',
+    );
   });
 });

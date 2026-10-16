@@ -2,10 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { Button, Input, useToast } from '@hm/ui';
-import { FieldLabel } from './components';
+import { Panel, SaveFooter, SectionLoading } from './components';
 import { useMe, useUpdateMe } from './queries';
 
-/** Perfil: nome, telefone, avatar. Salvar desabilitado até haver mudança (§5.1). */
+/**
+ * Perfil: nome, telefone, avatar. Salvar desabilitado até haver mudança (§5.1).
+ * Preferência PESSOAL: segue liberada com a empresa em só leitura (o servidor isenta
+ * `PATCH /api/members/me`), então não leva `ReadOnlyGuard`.
+ */
 export default function ProfileSection(): React.JSX.Element {
   const { toast } = useToast();
   const meQuery = useMe();
@@ -42,24 +46,38 @@ export default function ProfileSection(): React.JSX.Element {
     }
   };
 
-  if (meQuery.isLoading) return <p className="text-sm text-text-low">Carregando…</p>;
+  if (meQuery.isLoading) return <SectionLoading label="Carregando perfil" />;
 
   return (
-    <div className="flex max-w-md flex-col gap-4">
-      <FieldLabel label="Nome de exibição">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" />
-      </FieldLabel>
-      <FieldLabel label="Telefone">
-        <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+55 11 90000-0000" />
-      </FieldLabel>
-      <FieldLabel label="Avatar (URL)">
-        <Input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://…" />
-      </FieldLabel>
-      <div>
-        <Button variant="primary" disabled={!dirty || update.isPending} onClick={() => void save()}>
-          {update.isPending ? 'Salvando…' : 'Salvar'}
-        </Button>
-      </div>
-    </div>
+    <Panel
+      title="Como a equipe vê você"
+      description="Aparece nas conversas atribuídas, nas menções e no histórico."
+      footer={
+        <SaveFooter dirty={dirty}>
+          <Button variant="primary" disabled={!dirty} loading={update.isPending} onClick={() => void save()}>
+            Salvar perfil
+          </Button>
+        </SaveFooter>
+      }
+    >
+      <Input label="Nome de exibição" value={name} onChange={(e) => setName(e.target.value)} placeholder="Seu nome" autoComplete="name" />
+      <Input
+        label="Telefone"
+        type="tel"
+        inputMode="tel"
+        autoComplete="tel"
+        className="font-mono"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        placeholder="+55 11 90000-0000"
+      />
+      <Input
+        label="Avatar (URL)"
+        type="url"
+        value={avatarUrl}
+        onChange={(e) => setAvatarUrl(e.target.value)}
+        placeholder="https://…"
+      />
+    </Panel>
   );
 }

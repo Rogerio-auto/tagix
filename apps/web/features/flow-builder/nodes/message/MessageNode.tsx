@@ -1,9 +1,8 @@
 'use client';
 
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import type { NodeProps } from '@xyflow/react';
 import { AudioLines, FileText, ImageIcon, Mic, Type, Video } from 'lucide-react';
-import { cn } from '@/shared/lib/cn';
-import { NODE_CATALOG } from '../../shared/node-catalog';
+import { NodeShell } from '../BaseNode';
 import { type MessageType } from './types';
 
 const TYPE_META: Record<MessageType, { icon: typeof Type; label: string }> = {
@@ -29,11 +28,9 @@ function readType(data: Record<string, unknown>): MessageType {
 
 /**
  * Node `message` rico (F31-S02). Mostra o tipo de mensagem e um resumo do
- * conteúdo direto no canvas. Mantém os handles do shell base.
+ * conteúdo direto no canvas. DS 3.0 (F72-S07): casco comum `NodeShell`.
  */
 function MessageNodeComponent(props: NodeProps) {
-  const meta = NODE_CATALOG['message'];
-  const HeaderIcon = meta.icon;
   const data: Record<string, unknown> = props.data ?? {};
   const type = readType(data);
   const { icon: TypeIcon, label } = TYPE_META[type];
@@ -56,27 +53,12 @@ function MessageNodeComponent(props: NodeProps) {
   const RowIcon = type === 'audio' ? AudioGlyph : TypeIcon;
 
   return (
-    <div
-      className={cn(
-        'min-w-[180px] max-w-[220px] rounded-lg border bg-surface-2 px-3 py-2.5 shadow-sm transition-colors',
-        props.selected ? 'border-accent' : 'border-border-2',
-      )}
-    >
-      <Handle type="target" position={Position.Top} className="!bg-text-low" />
-      <div className="flex items-center gap-2">
-        <span className="flex size-7 items-center justify-center rounded-md bg-surface-3 text-text">
-          <HeaderIcon className="size-4" aria-hidden />
-        </span>
-        <p className="truncate font-head text-sm font-medium text-text">{meta.label}</p>
-      </div>
-
-      <div className="mt-2 flex items-center gap-1.5 rounded-md bg-surface-1/60 px-2 py-1.5">
+    <NodeShell kind="message" selected={props.selected}>
+      <div className="mt-2 flex items-center gap-1.5 rounded-xs border border-border bg-surface-2 px-2 py-1">
         <RowIcon className="size-3.5 shrink-0 text-text-low" aria-hidden />
-        <span className="truncate text-[11px] text-text-mid">{summary}</span>
+        <span className="truncate text-xs text-text-mid">{summary}</span>
       </div>
-
-      <Handle type="source" position={Position.Bottom} className="!bg-text-low" />
-    </div>
+    </NodeShell>
   );
 }
 

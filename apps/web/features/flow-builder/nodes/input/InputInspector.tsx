@@ -1,6 +1,6 @@
 'use client';
 
-// Inspector 'input' (F31-S09). Pergunta ao contato, valida a resposta pelo tipo, refaz a
+// Inspector 'input' (F31-S09). Pergunta ao contato, válida a resposta pelo tipo, refaz a
 // pergunta ate `maxRetries` e roteia por `response`/`timeout`. A resposta validada fica em
 // `{{input.<variable>}}`.
 import { useRef } from 'react';
@@ -57,7 +57,7 @@ function VarTextArea({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="min-h-[80px] rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+        className="min-h-[80px] rounded-sm border border-border bg-surface-2 px-3 py-2 font-body text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring sm:text-sm"
       />
       {hint && <span className="text-[11px] text-text-low">{hint}</span>}
     </div>
@@ -94,7 +94,7 @@ export function InputInspector({ nodeId }: { nodeId: string }) {
 
       {prompt.trim().length > 0 && (
         <Field label="Pré-visualização">
-          <div className="max-w-[85%] self-start rounded-lg rounded-bl-sm border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text">
+          <div className="max-w-[85%] self-start rounded-lg rounded-bl-sm border border-border bg-surface-2 px-3 py-2 text-sm text-text">
             {prompt}
           </div>
         </Field>
@@ -112,17 +112,18 @@ export function InputInspector({ nodeId }: { nodeId: string }) {
         label="Salvar resposta em"
         value={variable}
         placeholder="ex.: email_cliente"
+        mono
         hint="Sem espaços. Usada a jusante como {{input.nome}}."
         onChange={(v) => set({ variable: v })}
       />
 
       <Field label="Disponível a jusante como">
-        <code className="rounded-sm border border-border-2 bg-surface-2 px-2 py-1.5 font-mono text-[12px] text-text-mid">
+        <code className="rounded-sm border border-border bg-surface-2 px-2 py-1.5 font-mono text-[12px] text-text-mid">
           {trimmedVar ? `{{input.${trimmedVar}}}` : '{{input.…}}'}
         </code>
       </Field>
 
-      <div className="flex flex-col gap-4 border-t border-border-2 pt-4">
+      <div className="flex flex-col gap-4 border-t border-border pt-4">
         <VarTextArea
           label="Mensagem de retry (opcional)"
           value={retryMessage}

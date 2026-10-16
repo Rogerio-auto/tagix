@@ -12,22 +12,22 @@ import WebhooksManager from './WebhooksManager';
 
 export default function DevSection(): React.JSX.Element {
   return (
-    <div className="flex max-w-2xl flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <Link
         href="/help/developers"
-        className="group flex items-center gap-4 rounded-lg border border-border bg-surface-2 px-5 py-4 outline-none transition-colors hover:border-border-2 hover:bg-surface-3 focus-visible:shadow-glow-md"
+        className="group flex items-center gap-4 rounded-lg border border-border bg-surface px-5 py-4 outline-none transition-[border-color,transform,box-shadow] duration-(--dur-slow) ease-ds-spring hover:border-border-brand hover:shadow-ds-2 focus-visible:focus-ring motion-safe:hover:-translate-y-0.5"
       >
-        <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-md bg-brand/15 text-brand">
+        <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-brand-text/25 bg-brand-text/10 text-brand-text">
           <BookText className="size-5" aria-hidden />
         </span>
         <span className="flex flex-1 flex-col">
-          <span className="font-head text-sm font-semibold text-text">Portal do Desenvolvedor</span>
+          <span className="font-head text-base font-semibold text-text">Portal do Desenvolvedor</span>
           <span className="font-body text-sm text-text-mid">
-            Referencia da Leadium API, autenticacao, webhooks e exemplos copy-paste.
+            Referência da Leadium API, autenticação, webhooks e exemplos prontos para copiar.
           </span>
         </span>
         <ArrowUpRight
-          className="size-5 shrink-0 text-text-low transition-transform group-hover:translate-x-0.5 group-hover:text-text"
+          className="size-5 shrink-0 text-text-low transition-[transform,color] duration-(--dur-base) group-hover:text-text motion-safe:group-hover:-translate-y-0.5 motion-safe:group-hover:translate-x-0.5"
           aria-hidden
         />
       </Link>

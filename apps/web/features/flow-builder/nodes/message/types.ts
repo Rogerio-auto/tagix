@@ -29,7 +29,7 @@ export function mediaKindForType(type: MessageType): string | undefined {
 }
 
 /**
- * Patch atomico ao trocar o tipo no inspector. A referencia anterior nao pode
+ * Patch atomico ao trocar o tipo no inspector. A referencia anterior não pode
  * sobreviver a uma troca de familia (imagem -> audio, por exemplo), pois o
  * preview passaria a prometer uma nota de voz enquanto o storage ainda apontaria
  * para a imagem antiga.

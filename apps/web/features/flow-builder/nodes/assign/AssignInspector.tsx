@@ -53,7 +53,7 @@ export function AssignInspector({ nodeId }: { nodeId: string }) {
           {memberError && <span className="text-[11px] text-danger">{memberError}</span>}
         </div>
       ) : (
-        <div className="flex items-start gap-2 rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-[11px] text-text-low">
+        <div className="flex items-start gap-2 rounded-sm border border-border bg-surface-2 px-3 py-2 text-[11px] text-text-low">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           <span>
             A distribuição usa o time já vinculado à conversa. Sem time vinculado, a atribuição é

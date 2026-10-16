@@ -10,10 +10,12 @@
  *
  * UX aplicado: §2.3 (in-page, sem modal full-screen para escolher plano), §2.7
  * (feedback imediato/loading), §2.9 (cancelar confirma), §2.5/§2.4 (HelpPanel `?`
- * sempre visível). DS v2 dark-first, tokens semânticos, zero hex. Responsivo.
+ * sempre visível). DS 3.0 (F72-S07): número em mono, `StatusPill`, histórico em
+ * `DataTable`. Billing segue habilitado em empresa só leitura (a API libera
+ * `/api/billing/**` justamente para a pessoa poder pagar).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { HelpHint } from '@hm/ui';
+import { Button, HelpHint } from '@hm/ui';
 import { ErrorState, Skeleton } from '@/shared/components/feedback';
 import { PageHeader } from '@/shared/components/layout';
 import { useBillingPlans, useBillingSubscription } from './queries';
@@ -25,7 +27,7 @@ import { PlanSelector } from './components/PlanSelector';
 import { CheckoutReturnHandler } from './components/CheckoutReturnHandler';
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="font-head text-lg font-semibold text-text">{children}</h2>;
+  return <h2 className="font-head text-h4 text-text">{children}</h2>;
 }
 
 export function BillingPortal() {
@@ -63,11 +65,12 @@ export function BillingPortal() {
       : null;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-10">
       <CheckoutReturnHandler />
 
       <PageHeader
         title="Cobrança"
+        description="Plano, forma de pagamento e histórico de cobranças do workspace."
         helpSlot={<HelpHint {...billingHelp} />}
       />
 
@@ -82,13 +85,9 @@ export function BillingPortal() {
           reason="Houve uma falha ao buscar os dados da sua assinatura."
           whatToDo="Tente novamente em instantes."
           action={
-            <button
-              type="button"
-              onClick={() => void refetch()}
-              className="rounded-md bg-surface-2 px-4 py-2 font-head text-sm font-semibold text-text outline-none transition-colors hover:bg-surface-3 focus-visible:shadow-glow-md"
-            >
-              Tentar novamente
-            </button>
+            <Button variant="secondary" size="sm" onClick={() => void refetch()}>
+              Tentar de novo
+            </Button>
           }
         />
       ) : (

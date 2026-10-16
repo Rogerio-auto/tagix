@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { Check, ChevronRight, X } from 'lucide-react';
 import { useToast } from '@hm/ui';
+import { ReadOnlyGuard } from '@/shared/components/account-banner';
 import { cn } from '@/shared/lib/cn';
 import { useNotificationsStore } from './store';
 import { useCompleteEvent } from './queries';
@@ -19,7 +20,8 @@ import type { AppNotification } from './types';
  *
  * Sem hex; sem neon repetido (a cor da prioridade vem de tokens danger/warning/info).
  * Destaque de "não-lida" é estático (fundo elevado) — respeita prefers-reduced-motion
- * por construção. Alvos ≥ 44px (`touch-target`).
+ * por construção. Alvos ≥ 44px (`touch-target`). "Concluir" é escrita: em empresa só
+ * leitura fica `aria-disabled` com a explicação (F72-S07); "Descartar" é local.
  */
 export function NotificationItem({ n }: { n: AppNotification }): React.JSX.Element {
   const router = useRouter();
@@ -49,9 +51,9 @@ export function NotificationItem({ n }: { n: AppNotification }): React.JSX.Eleme
   return (
     <li
       className={cn(
-        'relative rounded-md border border-border p-3 transition-colors',
-        n.seen ? 'bg-surface' : 'bg-surface-2',
-        hasConversation && 'hover:border-border-2',
+        'relative rounded-md border p-3 transition-colors duration-(--dur-fast) ease-ds',
+        n.seen ? 'border-border bg-surface' : 'border-border-2 bg-surface-2',
+        hasConversation && 'hover:border-border-brand',
       )}
     >
       {/* Overlay: alvo da ação primária (abrir conversa). Fica ATRÁS do conteúdo. */}
@@ -60,7 +62,7 @@ export function NotificationItem({ n }: { n: AppNotification }): React.JSX.Eleme
           type="button"
           onClick={openConversation}
           aria-label={`Abrir conversa — ${n.title}`}
-          className="absolute inset-0 z-0 rounded-md outline-none focus-visible:shadow-glow-md"
+          className="absolute inset-0 z-0 rounded-md outline-none focus-visible:focus-ring"
         />
       )}
 
@@ -71,40 +73,51 @@ export function NotificationItem({ n }: { n: AppNotification }): React.JSX.Eleme
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-head text-xs font-semibold uppercase tracking-wide text-text-low">
+            <span className="font-mono text-xs font-medium uppercase tracking-wider text-text-low">
               {eventTypeLabel(n.type)}
             </span>
-            <span className="text-xs text-text-low">· {formatStartAt(n.startAt)}</span>
+            <span className="font-mono text-xs tabular-nums text-text-low">
+              · {formatStartAt(n.startAt)}
+            </span>
             <span className="sr-only">Prioridade {priorityLabel(n.priority)}</span>
           </div>
-          <p className="mt-0.5 truncate text-sm font-medium text-text">{n.title}</p>
+          <p className="mt-1 truncate font-body text-sm font-bold text-text">{n.title}</p>
 
-          {/* Ações secundárias — reabilitam o ponteiro acima do overlay. */}
-          <div className="pointer-events-auto mt-2 flex flex-wrap items-center gap-1.5">
+          {/* Uma linha só: a dica (decorativa; o overlay já se anuncia) encolhe e as duas
+              ações secundárias ficam juntas à direita, reabilitando o ponteiro acima do overlay. */}
+          <div className="mt-2 flex flex-nowrap items-center gap-1.5">
             {hasConversation && (
-              <span className="inline-flex items-center gap-1 text-xs text-text-low">
-                <ChevronRight className="size-3.5" />
-                Toque para abrir a conversa
+              <span
+                aria-hidden
+                className="inline-flex min-w-0 items-center gap-1 font-body text-xs text-text-low"
+              >
+                <ChevronRight className="size-3.5 shrink-0" aria-hidden />
+                <span className="truncate">Abrir conversa</span>
               </span>
             )}
-            <button
-              type="button"
-              onClick={() => void onComplete()}
-              disabled={complete.isPending}
-              className="touch-target ml-auto inline-flex items-center gap-1.5 rounded-sm px-2 text-xs font-medium text-text-mid outline-none transition-colors hover:bg-surface-3 hover:text-text focus-visible:shadow-glow-md disabled:opacity-60"
-            >
-              <Check className="size-3.5" />
-              {complete.isPending ? 'Concluindo…' : 'Concluir'}
-            </button>
-            <button
-              type="button"
-              onClick={() => remove(n.eventId)}
-              aria-label={`Descartar notificação — ${n.title}`}
-              className="touch-target inline-flex items-center gap-1.5 rounded-sm px-2 text-xs font-medium text-text-low outline-none transition-colors hover:bg-surface-3 hover:text-text focus-visible:shadow-glow-md"
-            >
-              <X className="size-3.5" />
-              Descartar
-            </button>
+            <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-1.5">
+              <ReadOnlyGuard>
+                <button
+                  type="button"
+                  onClick={() => void onComplete()}
+                  disabled={complete.isPending}
+                  aria-busy={complete.isPending || undefined}
+                  className="touch-target inline-flex items-center gap-1.5 rounded-sm px-2 font-body text-xs font-bold text-text-mid outline-none transition-colors duration-(--dur-fast) ease-ds hover:bg-surface-3 hover:text-text focus-visible:focus-ring disabled:opacity-60"
+                >
+                  <Check className="size-3.5" aria-hidden />
+                  {complete.isPending ? 'Concluindo…' : 'Concluir'}
+                </button>
+              </ReadOnlyGuard>
+              <button
+                type="button"
+                onClick={() => remove(n.eventId)}
+                aria-label={`Descartar notificação — ${n.title}`}
+                className="touch-target inline-flex items-center gap-1.5 rounded-sm px-2 font-body text-xs font-bold text-text-low outline-none transition-colors duration-(--dur-fast) ease-ds hover:bg-surface-3 hover:text-text focus-visible:focus-ring"
+              >
+                <X className="size-3.5" aria-hidden />
+                Descartar
+              </button>
+            </div>
           </div>
         </div>
       </div>

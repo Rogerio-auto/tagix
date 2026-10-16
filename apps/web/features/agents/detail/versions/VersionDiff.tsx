@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { cn } from '@/shared/lib/cn';
+import { formatNumber } from '@/shared/lib/locale';
 import { diffLines, diffStats } from './diff';
 import type { PromptVersion } from './types';
 
@@ -21,8 +22,12 @@ export function VersionDiff({ from, to }: { from: PromptVersion; to: PromptVersi
           Comparando <span className="font-price text-text-mid">v{from.version}</span> →{' '}
           <span className="font-price text-text-mid">v{to.version}</span>
         </span>
-        <span className="text-success">+{stats.added} adicionadas</span>
-        <span className="text-danger">-{stats.removed} removidas</span>
+        <span className="text-success">
+          <span className="font-mono tabular-nums">+{formatNumber(stats.added)}</span> adicionadas
+        </span>
+        <span className="text-danger">
+          <span className="font-mono tabular-nums">-{formatNumber(stats.removed)}</span> removidas
+        </span>
       </div>
 
       <div className="overflow-hidden rounded-md border border-border bg-surface-inset">
@@ -36,10 +41,10 @@ export function VersionDiff({ from, to }: { from: PromptVersion; to: PromptVersi
                 line.type === 'del' && 'bg-danger/10',
               )}
             >
-              <span className="w-8 shrink-0 select-none text-right text-text-low/60">
+              <span className="w-8 shrink-0 select-none text-right tabular-nums text-text-low">
                 {line.leftNo ?? ''}
               </span>
-              <span className="w-8 shrink-0 select-none text-right text-text-low/60">
+              <span className="w-8 shrink-0 select-none text-right tabular-nums text-text-low">
                 {line.rightNo ?? ''}
               </span>
               <span
@@ -54,7 +59,7 @@ export function VersionDiff({ from, to }: { from: PromptVersion; to: PromptVersi
               </span>
               <span
                 className={cn(
-                  'whitespace-pre-wrap break-words',
+                  'wrap-break-word whitespace-pre-wrap',
                   line.type === 'add' && 'text-text',
                   line.type === 'del' && 'text-text-mid line-through decoration-danger/40',
                   line.type === 'eq' && 'text-text-low',

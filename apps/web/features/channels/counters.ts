@@ -19,7 +19,13 @@ import type { Channel } from './types';
 export type ChannelCounterRow = Pick<Channel, 'provider' | 'isActive' | 'wahaSessionId'>;
 
 export interface ChannelsSummary {
+  /** Resumo completo (vai para `title`/`aria-label`): "3 ativos · 1 desautorizado". */
   readonly label: string;
+  /**
+   * Forma compacta visível na sidebar (cabe sem truncar): o alerta quando há um
+   * ("1 desaut.", "0 ativos"), senão só os ativos ("3 ativos").
+   */
+  readonly short: string;
   /** `true` pinta o contador como alerta (nada entra no inbox / sessão caiu). */
   readonly alert: boolean;
 }
@@ -49,8 +55,14 @@ export function summarizeChannels(rows: readonly ChannelCounterRow[]): ChannelsS
     parts.push(plural(inactive, 'inativo', 'inativos'));
   }
 
+  const short =
+    deauthorized > 0
+      ? `${deauthorized} desaut.`
+      : plural(active, 'ativo', 'ativos');
+
   return {
     label: parts.join(' · '),
+    short,
     // Alerta = o inbox está (ou pode estar) sem entrada: nenhum canal ativo, ou
     // sessão WAHA caída num canal que deveria estar recebendo.
     alert: active === 0 || deauthorized > 0,

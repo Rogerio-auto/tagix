@@ -177,15 +177,15 @@ export function Combobox({
           aria-label={ariaLabel}
           onClick={() => !disabled && setOpen((v) => !v)}
           className={cn(
-            'flex w-full items-center gap-2 rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-left text-sm transition-colors',
-            'focus:border-accent focus:shadow-glow-sm focus:outline-none',
+            'flex w-full items-center gap-2 rounded-sm border border-border bg-surface-2 hover:border-border-2 px-3 py-2 text-left text-sm transition-colors',
+            'outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring',
             'disabled:cursor-not-allowed disabled:opacity-40',
-            open && 'border-accent',
+            open && 'border-brand-text',
           )}
         >
           {selected?.color && (
             <span
-              className="size-2.5 shrink-0 rounded-full"
+              className="size-2.5 shrink-0 rounded-pill"
               style={{ backgroundColor: selected.color }}
               aria-hidden
             />
@@ -197,8 +197,8 @@ export function Combobox({
         </button>
 
         {open && (
-          <div className="absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-md border border-border-2 bg-surface-1 shadow-elev-3">
-            <div className="flex items-center gap-2 border-b border-border-2 px-2.5">
+          <div className="absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-md border border-border bg-surface shadow-elev-3">
+            <div className="flex items-center gap-2 border-b border-border px-2.5">
               <Search className="size-3.5 text-text-low" aria-hidden />
               <input
                 ref={inputRef}
@@ -236,7 +236,7 @@ export function Combobox({
                     >
                       {opt.color && (
                         <span
-                          className="size-2.5 shrink-0 rounded-full"
+                          className="size-2.5 shrink-0 rounded-pill"
                           style={{ backgroundColor: opt.color }}
                           aria-hidden
                         />
@@ -297,7 +297,7 @@ function ComboboxRow({
         )}
       >
         {children}
-        {selected && <Check className="size-3.5 shrink-0 text-accent" aria-hidden />}
+        {selected && <Check className="size-3.5 shrink-0 text-brand-text" aria-hidden />}
       </button>
     </li>
   );

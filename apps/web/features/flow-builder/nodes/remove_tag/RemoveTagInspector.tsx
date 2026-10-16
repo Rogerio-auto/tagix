@@ -26,13 +26,13 @@ export function RemoveTagInspector({ nodeId }: { nodeId: string }) {
     <div className="flex flex-col gap-3">
       <Field label="Tag a remover">
         {isLoading ? (
-          <div className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text-low">
+          <div className="rounded-sm border border-border bg-surface-2 px-3 py-2 text-sm text-text-low">
             Carregando…
           </div>
         ) : tags.length === 0 ? (
-          <div className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text-low">
+          <div className="rounded-sm border border-border bg-surface-2 px-3 py-2 text-sm text-text-low">
             Nenhuma tag encontrada.{' '}
-            <a href="/settings/workspace" className="text-accent underline">
+            <a href="/settings/workspace" className="text-brand-text underline">
               Crie tags em Configurações
             </a>
           </div>
@@ -40,7 +40,7 @@ export function RemoveTagInspector({ nodeId }: { nodeId: string }) {
           <select
             value={tagId}
             onChange={(e) => set({ tagId: e.target.value })}
-            className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+            className="rounded-sm border border-border bg-surface-2 px-3 py-2 font-body text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring sm:text-sm"
           >
             <option value="">Selecione uma tag</option>
             {tags.map((t) => (
@@ -56,7 +56,7 @@ export function RemoveTagInspector({ nodeId }: { nodeId: string }) {
       {selected && (
         <div className="flex items-center gap-2">
           <span
-            className="inline-block size-3 shrink-0 rounded-full"
+            className="inline-block size-3 shrink-0 rounded-pill"
             style={{ backgroundColor: selected.color }}
             aria-hidden
           />

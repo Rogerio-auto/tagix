@@ -1,6 +1,7 @@
 'use client';
 
 import { Plus, Trash2 } from 'lucide-react';
+import { Switch } from '@hm/ui';
 import { useFlowEditor } from '../../hooks/useFlowEditor';
 import { VariablesPicker } from '../../inspector/VariablesPicker';
 import { Field } from '../inspector-fields';
@@ -61,8 +62,10 @@ export function SwitchInspector({ nodeId }: { nodeId: string }) {
             type="text"
             value={variable}
             placeholder="contact.plan"
+            spellCheck={false}
+            autoCapitalize="off"
             onChange={(e) => set({ variable: e.target.value })}
-            className="rounded-md border border-border-2 bg-surface-2 px-3 py-2 text-sm text-text focus:border-accent focus:outline-none"
+            className="rounded-sm border border-border bg-surface-2 px-3 py-2 font-mono text-base text-text outline-none transition-[border-color,box-shadow] duration-(--dur-base) ease-ds hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring sm:text-sm"
           />
           <VariablesPicker onPick={handleVarPick} />
         </div>
@@ -75,7 +78,7 @@ export function SwitchInspector({ nodeId }: { nodeId: string }) {
           <button
             type="button"
             onClick={addCase}
-            className="inline-flex items-center gap-1 rounded-pill border border-border-2 bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-text-low transition-colors hover:border-accent hover:text-text focus:border-accent focus:shadow-glow-sm focus:outline-none"
+            className="inline-flex items-center gap-1 rounded-pill border border-border bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-text-low transition-colors hover:border-brand-text hover:text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
           >
             <Plus className="size-3.5" aria-hidden />
             Adicionar caso
@@ -83,27 +86,27 @@ export function SwitchInspector({ nodeId }: { nodeId: string }) {
         </div>
 
         {cases.length === 0 && (
-          <p className="text-[11px] text-warning">Adicione pelo menos um caso.</p>
+          <p className="text-[11px] text-warn">Adicione pelo menos um caso.</p>
         )}
 
         {cases.map((c, index) => (
           <div
             key={index}
-            className="flex items-center gap-2 rounded-md border border-border-2 bg-surface-1 px-3 py-2"
+            className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2"
           >
             <input
               type="text"
               value={c}
               placeholder={`caso ${index + 1}`}
               onChange={(e) => updateCase(index, e.target.value)}
-              className="flex-1 rounded-md border border-border-2 bg-surface-2 px-2 py-1.5 text-sm text-text focus:border-accent focus:outline-none"
+              className="flex-1 rounded-sm border border-border bg-surface-2 hover:border-border-2 px-2 py-1.5 text-sm text-text outline-none focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
             />
             <button
               type="button"
               onClick={() => removeCase(index)}
               disabled={cases.length <= 1}
               aria-label="Remover caso"
-              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border-2 bg-surface-2 text-text-low transition-colors hover:border-danger hover:text-danger focus:outline-none disabled:opacity-30"
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-sm border border-border bg-surface-2 text-text-low transition-colors hover:border-danger hover:text-danger outline-none focus-visible:focus-ring disabled:opacity-30"
             >
               <Trash2 className="size-3.5" aria-hidden />
             </button>
@@ -111,30 +114,17 @@ export function SwitchInspector({ nodeId }: { nodeId: string }) {
         ))}
       </div>
 
-      {/* Toggle case-sensitive */}
-      <label className="flex cursor-pointer items-center justify-between">
-        <span className="text-xs font-medium text-text-low">Diferencia maiúsculas</span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={caseSensitive}
-          onClick={() => set({ caseSensitive: !caseSensitive })}
-          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 border-transparent transition-colors focus:outline-none ${
-            caseSensitive ? 'bg-accent' : 'bg-surface-3'
-          }`}
-        >
-          <span
-            className={`inline-block size-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
-              caseSensitive ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
-      </label>
+      {/* Toggle case-sensitive (Switch do DS 3.0: role=switch, foco e toque acessíveis). */}
+      <Switch
+        checked={caseSensitive}
+        onCheckedChange={(next) => set({ caseSensitive: next })}
+        label="Diferencia maiúsculas"
+      />
 
       {/* Preview das edges */}
-      <div className="rounded-md border border-border-2 bg-surface-1 px-3 py-2">
-        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-low">
-          Edges geradas
+      <div className="rounded-sm border border-border bg-surface-2 px-3 py-2">
+        <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.08em] text-text-low">
+          Saídas geradas
         </p>
         <div className="flex flex-wrap gap-1.5">
           {edgePreview.map((e) => (
@@ -142,8 +132,8 @@ export function SwitchInspector({ nodeId }: { nodeId: string }) {
               key={e}
               className={`inline-flex items-center rounded-pill border px-2 py-0.5 font-mono text-[11px] ${
                 e === 'default'
-                  ? 'border-border-2 bg-surface-2 text-text-low'
-                  : 'border-accent/40 bg-accent/10 text-accent'
+                  ? 'border-border bg-surface-2 text-text-low'
+                  : 'border-brand-text/30 bg-brand-text/10 text-brand-text'
               }`}
             >
               → {e}

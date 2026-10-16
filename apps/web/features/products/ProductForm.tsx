@@ -9,9 +9,11 @@
  * - 409 `duplicate_sku` da API vira erro inline no campo SKU (UX §2.11 — o quê +
  *   o que fazer), não um toast genérico.
  * - Verde-neon (brand) só no CTA primário "Salvar".
+ * - Só leitura (F72-S07): o envio fica `aria-disabled` e o Enter não submete.
  */
 import { useEffect, useState } from 'react';
-import { Button, Input, useToast } from '@hm/ui';
+import { Button, Input, Switch, useToast } from '@hm/ui';
+import { ReadOnlyGuard, useIsReadOnly } from '@/shared/components/account-banner';
 import { ApiError } from '@/shared/lib/api-client';
 import { useCreateProduct, useUpdateProduct } from './queries';
 import { centsToInputValue, parseToCents } from './money';
@@ -29,6 +31,7 @@ export function ProductForm({ product, onDone }: ProductFormProps): React.JSX.El
   const create = useCreateProduct();
   const update = useUpdateProduct();
   const isEdit = product !== undefined;
+  const readOnly = useIsReadOnly();
 
   const [name, setName] = useState(product?.name ?? '');
   const [sku, setSku] = useState(product?.sku ?? '');
@@ -56,6 +59,7 @@ export function ProductForm({ product, onDone }: ProductFormProps): React.JSX.El
 
   function handleSubmit(e: React.FormEvent): void {
     e.preventDefault();
+    if (readOnly) return;
     setSkuError(undefined);
     setPriceError(undefined);
 
@@ -118,9 +122,10 @@ export function ProductForm({ product, onDone }: ProductFormProps): React.JSX.El
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <Input
-          label="Preço (R$)"
+          label="Preço"
           size="lg"
           inputMode="decimal"
+          className="font-mono tabular-nums"
           value={priceInput}
           placeholder="0,00"
           error={priceError}
@@ -134,6 +139,7 @@ export function ProductForm({ product, onDone }: ProductFormProps): React.JSX.El
           size="lg"
           value={sku}
           placeholder="Ex.: PLN-PREM-12M"
+          className="font-mono"
           error={skuError}
           onChange={(e) => {
             setSku(e.target.value);
@@ -143,7 +149,7 @@ export function ProductForm({ product, onDone }: ProductFormProps): React.JSX.El
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="product-desc" className="font-head text-sm font-medium text-text-mid">
+        <label htmlFor="product-desc" className="font-body text-sm font-bold text-text-mid">
           Descrição (opcional)
         </label>
         <textarea
@@ -152,33 +158,29 @@ export function ProductForm({ product, onDone }: ProductFormProps): React.JSX.El
           rows={3}
           placeholder="Detalhes do produto, condições, observações."
           onChange={(e) => setDescription(e.target.value)}
-          className="w-full resize-y rounded-sm border border-border bg-surface-inset px-3 py-2 font-body text-base text-text outline-none transition-[color,border-color,box-shadow] duration-200 placeholder:text-text-low hover:border-border-2 focus:border-brand focus:shadow-glow-sm"
+          className="w-full resize-y rounded-sm border border-border bg-surface-2 px-3 py-2 font-body text-base text-text outline-none transition-[color,border-color,box-shadow] duration-(--dur-base) ease-ds placeholder:text-text-low hover:border-border-2 focus:border-brand-text focus:shadow-glow-sm focus-visible:focus-ring"
         />
       </div>
 
-      <label className="flex cursor-pointer items-center gap-2.5 rounded-md border border-border-2 bg-surface-2 px-3 py-2.5">
-        <input
-          type="checkbox"
+      <div className="rounded-md border border-border bg-surface-2 px-3.5 py-3">
+        <Switch
           checked={active}
-          onChange={(e) => setActive(e.target.checked)}
-          className="size-4 accent-[var(--color-accent)]"
+          onCheckedChange={setActive}
+          label="Produto ativo"
+          description="Produtos ativos ficam disponíveis para vincular a um card."
         />
-        <span className="flex flex-col">
-          <span className="font-body text-sm text-text">Produto ativo</span>
-          <span className="font-body text-xs text-text-low">
-            Produtos ativos ficam disponíveis para vincular a um card.
-          </span>
-        </span>
-      </label>
+      </div>
 
       {/* Ações na zona do polegar (rodapé do painel/sheet). */}
       <div className="flex items-center justify-end gap-2 pt-1">
         <Button type="button" variant="ghost" onClick={onDone} disabled={pending}>
           Cancelar
         </Button>
-        <Button type="submit" variant="primary" loading={pending} disabled={!trimmedName}>
-          {isEdit ? 'Salvar' : 'Adicionar produto'}
-        </Button>
+        <ReadOnlyGuard>
+          <Button type="submit" variant="primary" loading={pending} disabled={!trimmedName}>
+            {isEdit ? 'Salvar' : 'Adicionar produto'}
+          </Button>
+        </ReadOnlyGuard>
       </div>
     </form>
   );
