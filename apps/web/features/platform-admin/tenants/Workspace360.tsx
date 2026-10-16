@@ -273,10 +273,11 @@ function Loaded({ data }: { data: Workspace360Data }) {
         <Kpi label="Deals" icon={Target} value={formatNumber(health.openDeals)} hint="Abertos no funil" />
       </section>
 
-      {/* As duas colunas terminam na mesma linha em lg+: o último bloco de cada lado
-          estica (o volume de membros/agentes varia por tenant, então não dá para acertar
-          a altura na mão). */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      {/* Colunas alinhadas pelo topo: nenhum card estica além do próprio conteúdo
+          (card com lista curta esticado parece lista que não carregou). Auditoria fica na
+          coluna larga para que o vão que sobra caia no fim da coluna lateral, não no meio
+          da página. */}
+      <div className="grid items-start gap-4 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
           <Panel
             title="Membros"
@@ -318,7 +319,7 @@ function Loaded({ data }: { data: Workspace360Data }) {
             </ul>
           </Panel>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:flex-1">
+          <div className="grid items-start gap-4 md:grid-cols-2">
             <Panel
               title="Agentes"
               titleId="w360-agents"
@@ -368,6 +369,38 @@ function Loaded({ data }: { data: Workspace360Data }) {
               </ul>
             </Panel>
           </div>
+
+          <Panel
+            title="Auditoria recente"
+            titleId="w360-audit"
+            icon={FileClock}
+            body="flush"
+            action={<Count value={formatNumber(recentAudit.length)} label={`${recentAudit.length} eventos`} />}
+          >
+            <ol className="divide-y divide-border">
+              {recentAudit.length === 0 && <EmptyRow>Sem eventos recentes.</EmptyRow>}
+              {recentAudit.map((e) => (
+                <li
+                  key={e.id}
+                  className="grid grid-cols-1 gap-1 px-5 py-3 sm:grid-cols-[10.5rem_minmax(0,1fr)_auto] sm:items-center sm:gap-4"
+                >
+                  <time
+                    dateTime={e.createdAt}
+                    className="whitespace-nowrap font-mono text-xs tabular-nums text-text-low"
+                  >
+                    {formatDateTime(e.createdAt, DATE_TIME)}
+                  </time>
+                  <span className="flex min-w-0 items-baseline gap-2">
+                    <span className="truncate font-mono text-sm text-text">{e.action}</span>
+                    <span className="truncate font-body text-sm text-text-low">{e.resourceType}</span>
+                  </span>
+                  <span className="justify-self-start sm:justify-self-end">
+                    <Badge size="sm">{e.actorType}</Badge>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </Panel>
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
@@ -392,7 +425,6 @@ function Loaded({ data }: { data: Workspace360Data }) {
             title="Saúde"
             titleId="w360-health"
             icon={HeartPulse}
-            className="lg:flex-1"
             tone={health.failedWebhookDeliveries > 0 || health.capExceeded ? 'warn' : 'default'}
           >
             <Facts
@@ -422,38 +454,6 @@ function Loaded({ data }: { data: Workspace360Data }) {
           </Panel>
         </div>
       </div>
-
-      <Panel
-        title="Auditoria recente"
-        titleId="w360-audit"
-        icon={FileClock}
-        body="flush"
-        action={<Count value={formatNumber(recentAudit.length)} label={`${recentAudit.length} eventos`} />}
-      >
-        <ol className="divide-y divide-border">
-          {recentAudit.length === 0 && <EmptyRow>Sem eventos recentes.</EmptyRow>}
-          {recentAudit.map((e) => (
-            <li
-              key={e.id}
-              className="grid grid-cols-1 gap-1 px-5 py-3 sm:grid-cols-[10.5rem_minmax(0,1fr)_auto] sm:items-center sm:gap-4"
-            >
-              <time
-                dateTime={e.createdAt}
-                className="whitespace-nowrap font-mono text-xs tabular-nums text-text-low"
-              >
-                {formatDateTime(e.createdAt, DATE_TIME)}
-              </time>
-              <span className="flex min-w-0 items-baseline gap-2">
-                <span className="truncate font-mono text-sm text-text">{e.action}</span>
-                <span className="truncate font-body text-sm text-text-low">{e.resourceType}</span>
-              </span>
-              <span className="justify-self-start sm:justify-self-end">
-                <Badge size="sm">{e.actorType}</Badge>
-              </span>
-            </li>
-          ))}
-        </ol>
-      </Panel>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { PolicyEditor } from '@/features/platform-admin/policies';
 
-export const metadata = { title: 'Plataforma — Politicas' };
+export const metadata = { title: 'Plataforma — Políticas' };
 
 export default function PlatformPoliciesPage() {
   return <PolicyEditor />;
