@@ -2,7 +2,7 @@
 id: F72-S08
 title: Varredura de auth, painel de plataforma, ajuda e páginas públicas no DS 3.0
 phase: F72
-status: blocked
+status: in-progress
 priority: medium
 estimated_size: M
 ui: true
@@ -11,6 +11,9 @@ blocks: [F72-S09]
 source_docs:
   - docs/features/DS3_ADOCAO.md
   - docs/design/ds-3.0-agency-os.html
+agent_id: backend-engineer
+claimed_at: 2026-10-16T14:12:08Z
+
 ---
 # F72-S08 — Auth, plataforma, ajuda e páginas públicas
 
