@@ -437,8 +437,7 @@ for (const theme of ['dark', 'light'] as const) {
         const movesBefore = ctx.moves.length;
         const from = await card(page, 'd_kitchen').boundingBox();
         const won = await column(page, 'st_won').locator('div.overflow-y-auto').boundingBox();
-        const estimate = await column(page, 'st_estimate').locator('div.overflow-y-auto').boundingBox();
-        if (!from || !won || !estimate) throw new Error('layout do board não mediu');
+        if (!from || !won) throw new Error('layout do board não mediu');
         await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
         await page.mouse.down();
         await page.mouse.move(from.x + from.width / 2 + 12, from.y + from.height / 2 + 4, { steps: 2 });
@@ -450,12 +449,29 @@ for (const theme of ['dark', 'light'] as const) {
         expect(ctx.moves.length).toBe(movesBefore);
 
         // Esc no meio do arrasto: o placeholder que já tinha viajado volta à origem.
+        // Antes de pegar de novo, o board precisa ASSENTAR: o overlay leva 200ms voando de
+        // volta (pousa por cima do card, e não é arrastável) e o sortable desliza os vizinhos
+        // de volta ao lugar. Pegar no meio disso aperta o overlay (nenhum arrasto) ou o
+        // vizinho que ainda passa sob o cursor — a geometria só vale medida depois.
+        await expect(page.locator('[data-lifted]')).toHaveCount(0);
+        await expect
+          .poll(() =>
+            page.evaluate(
+              () =>
+                document
+                  .querySelector('[data-tour-id="pipeline-board"]')
+                  ?.getAnimations({ subtree: true })
+                  .filter((a) => a.playState === 'running').length ?? 0,
+            ),
+          )
+          .toBe(0);
         const again = await card(page, 'd_kitchen').boundingBox();
-        if (!again) throw new Error('card sumiu');
+        const estimateNow = await column(page, 'st_estimate').locator('div.overflow-y-auto').boundingBox();
+        if (!again || !estimateNow) throw new Error('layout do board não mediu de novo');
         await page.mouse.move(again.x + again.width / 2, again.y + again.height / 2);
         await page.mouse.down();
         await page.mouse.move(again.x + again.width / 2 + 12, again.y + again.height / 2 + 4, { steps: 2 });
-        await page.mouse.move(estimate.x + estimate.width / 2, estimate.y + 40, { steps: 8 });
+        await page.mouse.move(estimateNow.x + estimateNow.width / 2, estimateNow.y + 40, { steps: 8 });
         await expect(column(page, 'st_estimate').locator('[data-deal-id="d_kitchen"]')).toHaveCount(1);
         await page.keyboard.press('Escape');
         await page.mouse.up();
