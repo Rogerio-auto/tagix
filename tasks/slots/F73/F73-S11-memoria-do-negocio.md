@@ -2,7 +2,7 @@
 id: F73-S11
 title: Memória do negócio (perfil da empresa, fatos com fonte, ensinar, corrigir e esquecer na hora) e a ferramenta remember_fact
 phase: F73
-status: blocked
+status: review
 priority: high
 estimated_size: M
 model: sonnet
@@ -14,6 +14,9 @@ source_docs:
   - docs/design/copilot-integracoes-ux.md
   - docs/decisions/ADR-004-motor-de-acoes-com-confirmacao-humana.md
 agent_id: backend-engineer
+claimed_at: 2026-10-17T07:24:57Z
+completed_at: 2026-10-17T07:27:41Z
+
 ---
 # F73-S11 — Memória do negócio
 

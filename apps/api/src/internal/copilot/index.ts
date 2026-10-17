@@ -25,7 +25,7 @@ import {
   type CopilotToolDefinition,
 } from './core/registry';
 import { createCopilotToolsRouter, type CopilotToolsRouterOptions } from './core/router';
-import { tools as memoryTools } from './memory-tools';
+import { executors as memoryExecutors, tools as memoryTools } from './memory-tools';
 import { tools as readCrmTools } from './read-crm';
 import { tools as readOpsTools } from './read-ops';
 
@@ -42,6 +42,7 @@ export const COPILOT_TOOLS: readonly CopilotToolDefinition[] = Object.freeze([
 export const COPILOT_EXECUTORS: readonly CapabilityExecutor[] = Object.freeze([
   ...actCrmExecutors,
   ...actExternalExecutors,
+  ...memoryExecutors,
 ]);
 
 /**
