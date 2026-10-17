@@ -10,7 +10,13 @@
  * produto existir.
  */
 import { describe, expect, it } from 'vitest';
-import { channelsFor, inQuietHours, routeNotification } from './notifications';
+import {
+  channelsFor,
+  inQuietHours,
+  NOTIFICATION_EVENTS,
+  PUSH_ONLY_EVENTS,
+  routeNotification,
+} from './notifications';
 
 const base = {
   evento: 'lead_novo' as const,
@@ -181,5 +187,70 @@ describe('routeNotification', () => {
       jaAvisado: true,
     });
     expect(d.channels).toEqual([]);
+  });
+});
+
+describe('Copiloto (F73-S02): briefing só por push, aprovação na cascata normal', () => {
+  const briefing = { ...base, evento: 'copilot_briefing' as const };
+  const aprovacao = { ...base, evento: 'copilot_aprovacao' as const };
+
+  it('briefing é opt-in: sem escolha da pessoa, nenhum aviso', () => {
+    expect(channelsFor({}, 'copilot_briefing')).toEqual([]);
+    const d = routeNotification(briefing);
+    expect(d.channels).toEqual([]);
+    expect(d.suppressedBy).toBe('preferencia');
+  });
+
+  it('quem optou recebe o briefing por push', () => {
+    const d = routeNotification({ ...briefing, prefs: { byEvent: { copilot_briefing: ['push'] } } });
+    expect(d.channels).toEqual(['push']);
+    expect(d.suppressedBy).toBeNull();
+  });
+
+  it('briefing NUNCA degrada para WhatsApp ou e-mail, nem com escolha explícita', () => {
+    // Resumo diário por WhatsApp vira spam diário — e é assim que o dono desliga tudo.
+    const prefs = { byEvent: { copilot_briefing: ['push', 'whatsapp', 'email'] as const } };
+    expect(channelsFor(prefs, 'copilot_briefing')).toEqual(['push']);
+    expect(routeNotification({ ...briefing, prefs }).channels).toEqual(['push']);
+  });
+
+  it('briefing sem push disponível não cai para outro canal: fica indisponível', () => {
+    const d = routeNotification({
+      ...briefing,
+      prefs: { byEvent: { copilot_briefing: ['push', 'whatsapp', 'email'] } },
+      canaisDisponiveis: ['whatsapp', 'email'],
+    });
+    expect(d.channels).toEqual([]);
+    expect(d.suppressedBy).toBe('indisponivel');
+  });
+
+  it('briefing pedindo só WhatsApp é tratado como "não quero por aqui"', () => {
+    const d = routeNotification({ ...briefing, prefs: { byEvent: { copilot_briefing: ['whatsapp'] } } });
+    expect(d.channels).toEqual([]);
+    expect(d.suppressedBy).toBe('preferencia');
+  });
+
+  it('PUSH_ONLY_EVENTS tem só o briefing', () => {
+    expect(PUSH_ONLY_EVENTS).toEqual(['copilot_briefing']);
+  });
+
+  it('aprovação sai por push por padrão, sem e-mail', () => {
+    expect(channelsFor({}, 'copilot_aprovacao')).toEqual(['push']);
+    expect(routeNotification(aprovacao).channels).toEqual(['push']);
+  });
+
+  it('aprovação segue a cascata normal: WhatsApp e e-mail quando a pessoa escolheu', () => {
+    const prefs = { byEvent: { copilot_aprovacao: ['push', 'whatsapp', 'email'] as const } };
+    expect(routeNotification({ ...aprovacao, prefs }).channels).toEqual(['push', 'whatsapp', 'email']);
+    // Sem push instalado, degrada para o WhatsApp — o oposto do briefing.
+    expect(
+      routeNotification({ ...aprovacao, prefs, canaisDisponiveis: ['whatsapp', 'email'] }).channels,
+    ).toEqual(['whatsapp', 'email']);
+  });
+
+  it('todo evento tem default declarado (nenhum cai em undefined)', () => {
+    for (const ev of NOTIFICATION_EVENTS) {
+      expect(Array.isArray(channelsFor({}, ev))).toBe(true);
+    }
   });
 });

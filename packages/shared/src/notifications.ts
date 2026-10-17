@@ -40,6 +40,10 @@ export const NOTIFICATION_EVENTS = [
   'compromisso_proximo',
   /** Cliente não apareceu. */
   'no_show',
+  /** Briefing do dia do Copiloto (F73-S12). Opt-in por pessoa e SÓ push (ver abaixo). */
+  'copilot_briefing',
+  /** Pedido de aprovação do Copiloto recebido, ou decidido (F73-S05). Cascata normal. */
+  'copilot_aprovacao',
 ] as const;
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
 
@@ -79,7 +83,20 @@ const DEFAULT_POR_EVENTO: Record<NotificationEvent, readonly NotificationChannel
   lead_esfriando: ['push'],
   compromisso_proximo: ['push'],
   no_show: ['push'],
+  // Opt-in: ninguém recebe o briefing por push sem ter pedido. O balão do dia já existe.
+  copilot_briefing: [],
+  copilot_aprovacao: ['push'],
 };
+
+/**
+ * Eventos que só podem sair por push, nunca degradar para WhatsApp ou e-mail.
+ *
+ * O briefing da manhã não é urgente: se o push não entrega, a pessoa o vê ao abrir o app.
+ * Mandar o mesmo resumo diário por WhatsApp ou e-mail transformaria um atalho em spam
+ * diário, e é assim que o dono desliga as notificações. A trava vale mesmo contra a
+ * escolha explícita por evento (`byEvent`): não é preferência, é regra do produto.
+ */
+export const PUSH_ONLY_EVENTS: readonly NotificationEvent[] = ['copilot_briefing'];
 
 /**
  * Canais que o membro aceita para este evento.
@@ -95,7 +112,9 @@ export function channelsFor(
 ): readonly NotificationChannel[] {
   const p = prefs ?? {};
   const explicito = p.byEvent?.[evento];
-  if (explicito !== undefined) return explicito;
+  if (explicito !== undefined) {
+    return PUSH_ONLY_EVENTS.includes(evento) ? explicito.filter((c) => c === 'push') : explicito;
+  }
 
   return DEFAULT_POR_EVENTO[evento].filter((c) => {
     if (c === 'push') return p.push !== false;

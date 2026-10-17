@@ -8,6 +8,7 @@
  */
 
 import type { AiMode, AiPausedReason } from './types/inbox';
+import type { CopilotProposalStatus } from './copilot/statuses';
 
 /** Status de visualização de uma mensagem (LIVECHAT.md §3.1). */
 export type ViewStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
@@ -289,6 +290,31 @@ export interface DashboardMetricChangedPayload {
 }
 
 /**
+ * Copiloto (F73 — COPILOTO.md §5.5). Contrato snake_case, como o resto do contrato do
+ * Copiloto. Payloads mínimos: o cliente refaz o fetch quando precisa do detalhe.
+ *
+ * `copilot:proposal_updated` → sala `member:<id>` (dono e aprovador), com throttle de
+ * 250 ms no emissor (F73-S05). É o progresso real do "movendo 5 de 7".
+ */
+export interface CopilotProposalUpdatedPayload {
+  proposal_id: string;
+  status: CopilotProposalStatus;
+  progress: { done: number; total: number; failed: number };
+  version: number;
+}
+
+/** `copilot:briefing_ready` → `member:<id>`. `for_date` é a data local (`YYYY-MM-DD`). */
+export interface CopilotBriefingReadyPayload {
+  for_date: string;
+  item_count: number;
+}
+
+/** `copilot:suggestions_changed` → sala do workspace. Só a contagem, sem PII. */
+export interface CopilotSuggestionsChangedPayload {
+  pending_count: number;
+}
+
+/**
  * Eventos emitidos do servidor para o client. Cada entrada mapeia o nome do
  * evento → assinatura do listener (convenção Socket.io `EventsMap`).
  */
@@ -320,6 +346,9 @@ export interface ServerToClient {
   'deal:deleted': (p: DealDeletedPayload) => void;
   'pipeline:updated': (p: PipelineUpdatedPayload) => void;
   'dashboard:metric_changed': (p: DashboardMetricChangedPayload) => void;
+  'copilot:proposal_updated': (p: CopilotProposalUpdatedPayload) => void;
+  'copilot:briefing_ready': (p: CopilotBriefingReadyPayload) => void;
+  'copilot:suggestions_changed': (p: CopilotSuggestionsChangedPayload) => void;
 }
 
 /** Nome de um evento Server→Client. */
@@ -357,4 +386,7 @@ export const SERVER_TO_CLIENT_EVENTS = [
   'deal:deleted',
   'pipeline:updated',
   'dashboard:metric_changed',
+  'copilot:proposal_updated',
+  'copilot:briefing_ready',
+  'copilot:suggestions_changed',
 ] as const satisfies readonly ServerToClientEvent[];
