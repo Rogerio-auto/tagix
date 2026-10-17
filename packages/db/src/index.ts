@@ -179,3 +179,36 @@ export { contactIdentitiesRepo, normalizeIdentity } from './repos/contact-identi
 export type { IdentityRef } from './repos/contact-identities';
 export { CONTACT_IDENTITY_KINDS } from './schema/contact_identities';
 export type { ContactIdentity, ContactIdentityKind } from './schema/contact_identities';
+
+// Copiloto (F73-S01): repos, régua de "parado", enums `as const` (espelhados em Zod no
+// @hm/shared pela F73-S02) e os tipos das linhas. `./copilot` recebe a lógica dos slots
+// seguintes (S13: gerador de sugestões) sem editar este barrel.
+export * from './repos/copilot';
+export * from './copilot';
+export {
+  COPILOT_BUDGET_MODES,
+  COPILOT_AUTO_OPEN_MODES,
+  COPILOT_HISTORY_RETENTION_MONTHS,
+  COPILOT_SURFACES,
+  COPILOT_SESSION_ORIGINS,
+  COPILOT_MESSAGE_ROLES,
+  COPILOT_TURN_STATUSES,
+  COPILOT_TOOL_CALL_DECISIONS,
+  COPILOT_RISK_LEVELS,
+  COPILOT_PROPOSAL_SOURCES,
+  COPILOT_PROPOSAL_STATUSES,
+  COPILOT_BLOCKED_REASONS,
+  COPILOT_ACTION_TARGET_TYPES,
+  COPILOT_ACTION_ITEM_STATUSES,
+  COPILOT_MEMORY_KINDS,
+  COPILOT_MEMORY_PROFILE_KEYS,
+  COPILOT_MEMORY_SOURCE_TYPES,
+  COPILOT_MEMORY_STATUSES,
+  COPILOT_BRIEFING_STATUSES,
+  COPILOT_AUTOPILOT_MODES,
+  COPILOT_SUGGESTION_CONFIDENCES,
+  COPILOT_SUGGESTION_STATUSES,
+} from './schema/copilot';
+export type * from './schema/copilot';
+export { AUDIT_LOG_ACTOR_TYPES, type AuditLogActorType } from './schema';
+export { LLM_USAGE_SURFACES, type LlmUsageSurface } from './schema/llm';

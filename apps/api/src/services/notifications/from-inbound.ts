@@ -35,6 +35,8 @@ const TITULO: Record<NotificationEvent, string> = {
   lead_esfriando: 'Lead esperando há tempo',
   compromisso_proximo: 'Compromisso chegando',
   no_show: 'Cliente não apareceu',
+  copilot_briefing: 'Briefing do dia',
+  copilot_aprovacao: 'Pedido de aprovação',
 };
 
 /** Nome do canal como o dono chama, não como o código chama. */

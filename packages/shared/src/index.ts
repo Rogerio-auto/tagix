@@ -61,6 +61,10 @@ export type {
 // --- Contratos de Inbox/visibilidade + handoff de IA (F30 / LIVECHAT_OPS) ---
 export * from './types/inbox';
 
+// --- Copiloto (F73 — COPILOTO.md §5/§6): capacidades, risco, status e contratos Zod. ---
+//     Puro (sem IO), seguro no navegador. Fixtures fora do barrel (mock/teste only).
+export * from './copilot';
+
 // --- Eventos Socket.io Server→Client (LIVECHAT.md §6, tipos puros) ---
 export * from './socket-events';
 
@@ -71,6 +75,7 @@ export {
   inQuietHours,
   NOTIFICATION_EVENTS,
   NOTIFICATION_CHANNELS,
+  PUSH_ONLY_EVENTS,
   JANELA_JA_VIU_MIN,
 } from './notifications';
 export type {
