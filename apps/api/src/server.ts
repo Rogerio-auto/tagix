@@ -8,6 +8,7 @@ import {
   startProposalSweeper,
   type ProposalSweeper,
 } from './services/copilot/proposals';
+import { startBriefingScheduler, type BriefingScheduler } from './services/copilot/briefing';
 import { createSocketServer, type IoServer } from './socket';
 
 export interface ApiServer {
@@ -23,6 +24,11 @@ export interface ApiServerOptions {
    * Default: ligada fora de `NODE_ENV=test`.
    */
   readonly copilotSweeper?: boolean;
+  /**
+   * Agendador do briefing da manhã (F73-S12: 06:30 locais de cada workspace). Só no processo
+   * HTTP, com lock Redis. Default: ligado fora de `NODE_ENV=test`.
+   */
+  readonly copilotBriefing?: boolean;
 }
 
 /** App Express + servidor HTTP + Socket.io (com adapter Redis) + trabalhos de fundo. */
@@ -36,13 +42,23 @@ export function createApiServer(options: ApiServerOptions = {}): ApiServer {
         createProposalEngineDeps({ executors: createExecutorRegistry(COPILOT_EXECUTORS) }),
       )
     : null;
+  const briefingEnabled = options.copilotBriefing ?? process.env['NODE_ENV'] !== 'test';
+  const briefing: BriefingScheduler | null = briefingEnabled ? startBriefingScheduler() : null;
   let stopping: Promise<void> | null = null;
   const stopBackground = (): Promise<void> =>
-    (stopping ??= (sweeper?.stop() ?? Promise.resolve()).catch((err: unknown) => {
-      createLogger('warn', { svc: '@hm/api' }).warn('falha ao parar a varredura do Copiloto', {
-        errorName: err instanceof Error ? err.name : typeof err,
-      });
-    }));
+    (stopping ??= Promise.all([
+      (sweeper?.stop() ?? Promise.resolve()).catch((err: unknown) => {
+        createLogger('warn', { svc: '@hm/api' }).warn('falha ao parar a varredura do Copiloto', {
+          errorName: err instanceof Error ? err.name : typeof err,
+        });
+      }),
+      (briefing?.stop() ?? Promise.resolve()).catch((err: unknown) => {
+        createLogger('warn', { svc: '@hm/api' }).warn(
+          'falha ao parar o agendador do briefing do Copiloto',
+          { errorName: err instanceof Error ? err.name : typeof err },
+        );
+      }),
+    ]).then(() => undefined));
   // Shutdown: fechar o HTTP para a varredura (e espera as execuções em andamento).
   httpServer.once('close', () => {
     void stopBackground();
