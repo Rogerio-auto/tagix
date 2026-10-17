@@ -2,7 +2,7 @@
 id: F73-S06
 title: Ferramentas de consulta do Copiloto, CRM (contatos, negócios, funil, agregações, previsão de receita) sob o escopo do membro
 phase: F73
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 model: sonnet
@@ -15,6 +15,8 @@ source_docs:
   - docs/features/PIPELINE.md
   - docs/features/DASHBOARD.md
 agent_id: backend-engineer
+claimed_at: 2026-10-17T06:35:10Z
+
 ---
 # F73-S06 — Consultas de CRM
 
