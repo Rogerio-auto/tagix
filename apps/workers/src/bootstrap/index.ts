@@ -125,6 +125,11 @@ import { startDlqMonitor, type DlqMonitorHandle } from '../dlq/index';
 import { startPrivacyExportProcessor } from '../privacy/index';
 import { startRetentionWorker, type RetentionWorkerHandle } from '../retention/index';
 import {
+  makeSuggestionsChangedEmitter,
+  startCopilotAutopilotScheduler,
+  type CopilotAutopilotSchedulerHandle,
+} from '../copilot-autopilot/index';
+import {
   startCampaignRecompute,
   type CampaignRecomputeHandle,
 } from '../campaigns/recompute/index';
@@ -186,6 +191,7 @@ export interface WorkersBootstrapHandle {
   readonly billingRecurrence: RecurrenceSchedulerHandle;
   readonly campaignRecompute: CampaignRecomputeHandle;
   readonly retention: RetentionWorkerHandle;
+  readonly copilotAutopilot: CopilotAutopilotSchedulerHandle;
   readonly dlqMonitor: DlqMonitorHandle;
   stop(): Promise<void>;
 }
@@ -469,6 +475,13 @@ export async function startWorkers(
   // Worker de retenção (F56-S25): sweep periódico de webhook_events além do
   // horizonte. Singleton via lock Redis; wiring é deste slot (composition root).
   const retention = startRetentionWorker({ redis, logger });
+  // Piloto automático do Copiloto (F73-S13): tick de hora em hora (singleton via lock Redis)
+  // que gera as sugestões de movimentação por estágio e avisa o quadro (só a contagem).
+  const copilotAutopilot = startCopilotAutopilotScheduler({
+    redis,
+    logger,
+    emit: makeSuggestionsChangedEmitter(logger, channel),
+  });
   // Monitor de DLQ (F56-S17): publica hm_dlq_depth + alerta em novas mensagens
   // mortas. Conexão dedicada, aberta preguiçosamente no 1º tick.
   const dlqMonitor = startDlqMonitor({ logger });
@@ -510,6 +523,7 @@ export async function startWorkers(
       'billing-recurrence-scheduler',
       'campaign-recompute-scheduler',
       'retention-worker',
+      'copilot-autopilot-scheduler',
       'dlq-monitor',
     ],
   });
@@ -533,6 +547,7 @@ export async function startWorkers(
     billingRecurrence,
     campaignRecompute,
     retention,
+    copilotAutopilot,
     dlqMonitor,
     async stop(): Promise<void> {
       // Para na ordem inversa do start; cada worker fecha sua própria conexão.
@@ -546,6 +561,7 @@ export async function startWorkers(
         });
       }
       await dlqMonitor.stop();
+      await copilotAutopilot.stop();
       await retention.stop();
       await campaignRecompute.stop();
       await billingRecurrence.stop();
