@@ -44,6 +44,11 @@
 
 - [ ] F73-S11 — proposta de `memory.remember` usa `target_type='message'` sintético (o enum `COPILOT_ACTION_TARGET_TYPES` não tem `memory`) — **Precisa de:** slot de schema + shared — **Impacto:** a Atividade não pode exibir o tipo literal desses itens (F74 deve tratar) — **Como fechar:** acrescentar `memory` ao enum (migração do CHECK + shared) e trocar no executor.
 
+- [ ] F73-S08 — `pending_automations` sem coluna de metadados nem status `cancelled`: desfazer marca `failed` com `last_error='cancelled_by_undo'` e correlaciona por `rule.metadata` — **Precisa de:** slot de schema — **Impacto:** relatórios de automação contam o cancelamento como falha — **Como fechar:** migração (`metadata jsonb`, status `cancelled`) + ajuste no `deal-hooks.ts`.
+- [ ] F73-S08 — o worker `calendar-reminders` avisa por WhatsApp o contato de todo evento com `events.contact_id`; o compromisso interno do Copiloto guarda o contato só em `metadata.related_contact_id` — **Precisa de:** slot no worker (marca "sem aviso ao cliente") — **Impacto:** o compromisso interno não aparece ligado ao contato na agenda — **Como fechar:** coluna/flag `notify_contact=false` respeitada pelo worker.
+- [ ] F73-S08 — `transition_rules.requiresApproval` não é aplicado no caminho comum de mover negócio (pré-existente) — **Precisa de:** Rogério (decidir o fluxo de aprovação no Pipeline) — **Impacto:** a regra de estágio só vale pelo Copiloto — **Como fechar:** slot de pipeline.
+- [ ] F73-S08 — consultas duplicadas do read-crm no act-crm (decididos do forecast; filtro do `search_contacts`) — **Precisa de:** F73-S14 ou slot de refatoração — **Impacto:** risco de divergência entre prévia e consulta — **Como fechar:** exportar do `read-crm` e importar.
+
 ## Itens bloqueados de propósito (v1.1)
 
 - [ ] F73-S16 — "Mover sozinho" do piloto automático — **Precisa de:** dado de aceitação (>= 70% de aceite e <= 3% de desfazer por 30 dias) — **Impacto:** o piloto só sugere e aguarda aprovação — **Como fechar:** destravar o slot depois da telemetria.
