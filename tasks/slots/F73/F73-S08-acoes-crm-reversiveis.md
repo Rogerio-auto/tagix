@@ -2,7 +2,7 @@
 id: F73-S08
 title: Ações de CRM do Copiloto (tags, contato, responsável, mover negócios, nota, compromisso interno) com prévia e desfazer
 phase: F73
-status: blocked
+status: in-progress
 priority: high
 estimated_size: L
 model: opus
@@ -15,6 +15,8 @@ source_docs:
   - docs/features/PIPELINE.md
   - docs/design/copilot-integracoes-ux.md
 agent_id: backend-engineer
+claimed_at: 2026-10-17T07:30:17Z
+
 ---
 # F73-S08 — Ações de CRM
 
