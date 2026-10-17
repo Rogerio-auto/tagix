@@ -1,11 +1,16 @@
 /**
- * F73-S02 — enums de status do Copiloto.
+ * F73-S02 — enums de status do Copiloto; F73-S03 liga a igualdade com o banco.
  *
- * A igualdade com o banco (`@hm/db`, F73-S01) fica em `skip` até o S01 exportar os enums;
- * o F73-S03 liga o teste. O import é dinâmico para não criar dependência de compilação de
- * `@hm/shared` em `@hm/db` (o pacote é importado pelo navegador).
+ * A igualdade com o `@hm/db` (F73-S01) importa o schema do db por CAMINHO RELATIVO
+ * (`packages/db/src/schema/copilot.ts`), só neste teste: `@hm/shared` não pode depender de
+ * `@hm/db` (circular: o db importa o shared, e o shared vai para o navegador). O arquivo de
+ * schema resolve as próprias dependências (`drizzle-orm`) a partir de `packages/db`.
+ *
+ * O carregamento é por `import.meta.glob` (resolvido pelo Vite em tempo de teste): o `tsc`
+ * do `@hm/shared` (rootDir `src`) não segue o padrão do glob, então o código do db não entra
+ * no programa dele, e o Vitest carrega o arquivo pelo mesmo caminho de um import estático.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import * as statuses from './statuses';
 import {
   COPILOT_DB_ENUMS,
@@ -15,6 +20,25 @@ import {
   COPILOT_PROPOSAL_STATUSES,
   COPILOT_PROPOSAL_TERMINAL_STATUSES,
 } from './statuses';
+
+type ModuleRecord = Readonly<Record<string, unknown>>;
+
+declare global {
+  interface ImportMeta {
+    /** Vite (Vitest): o `@hm/shared` não carrega os tipos de `vite/client`. */
+    glob<T>(pattern: string): Record<string, () => Promise<T>>;
+  }
+}
+
+/** `packages/db/src/schema/copilot.ts`, carregado em tempo de teste. */
+let dbCopilot: ModuleRecord = {};
+
+beforeAll(async () => {
+  const loaders = import.meta.glob<ModuleRecord>('../../../db/src/schema/copilot.ts');
+  const [load] = Object.values(loaders);
+  if (!load) throw new Error('schema do Copiloto no @hm/db não encontrado');
+  dbCopilot = await load();
+});
 
 describe('enums de status', () => {
   it.each(Object.entries(COPILOT_DB_ENUMS))('%s não tem valor repetido nem vazio', (_nome, valores) => {
@@ -36,13 +60,8 @@ describe('enums de status', () => {
     expect(COPILOT_HISTORY_RETENTION_MONTHS).toEqual([6, 12, 24]);
   });
 
-  // TODO(F73-S03): ligar. O `@hm/db` (F73-S01, já integrado) exporta os enums com os MESMOS
-  // nomes de constante e a MESMA ordem deste arquivo (conferido à mão na F73-S02). Fica em
-  // `skip` porque `@hm/shared` não pode depender de `@hm/db` (circular: o db importa o
-  // shared); o S03, que importa os dois, move/liga esta asserção. Compara valor E ordem.
-  it.skip('são iguais aos `check` do banco (@hm/db)', async () => {
-    const especificador = '@hm/db';
-    const db = (await import(/* @vite-ignore */ especificador)) as unknown as Record<string, unknown>;
+  it('são iguais aos `check` do banco (@hm/db): mesmo nome de constante, valor e ordem', () => {
+    const db = dbCopilot;
     const nomeDaConstante = new Map<unknown, string>(
       Object.entries(statuses).map(([nome, valor]) => [valor, nome]),
     );
@@ -54,5 +73,14 @@ describe('enums de status', () => {
       const valores: readonly unknown[] = Array.isArray(doBanco) ? doBanco : [];
       expect(valores, chave).toEqual([...nossos]);
     }
+  });
+
+  it('nenhum enum `COPILOT_*` do banco fica sem par aqui', () => {
+    const nossos = new Set(Object.keys(statuses));
+    const doBanco = Object.entries(dbCopilot)
+      .filter(([nome, valor]) => nome.startsWith('COPILOT_') && Array.isArray(valor))
+      .map(([nome]) => nome);
+    expect(doBanco.length).toBeGreaterThan(0);
+    for (const nome of doBanco) expect(nossos.has(nome), nome).toBe(true);
   });
 });

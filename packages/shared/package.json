@@ -8,7 +8,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./mq": "./src/mq/index.ts",
-    "./net": "./src/net/index.ts"
+    "./net": "./src/net/index.ts",
+    "./copilot": "./src/copilot/index.ts",
+    "./copilot/fixtures": "./src/copilot/fixtures.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

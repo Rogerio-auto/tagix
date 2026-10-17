@@ -16,6 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeDb, getDb, schema } from '@hm/db';
 import { SESSION_COOKIE } from '../auth/session';
 import { createBillingRouter } from '../routes/billing';
+import { createCopilotRouter } from '../routes/copilot';
 import { createContactsRouter } from '../routes/contacts';
 import { createMembersMeRouter } from '../routes/members/me';
 import {
@@ -87,6 +88,36 @@ describe('isExemptFromSubscriptionGuard', () => {
     ).toBe(false);
     expect(isExemptFromSubscriptionGuard('POST', '/api/privacy/contacts/x/forget')).toBe(false);
   });
+
+  it('Copiloto (ADR-003 §5): perguntar passa; confirmar, desfazer e o resto não', () => {
+    const id = randomUUID();
+    expect(isExemptFromSubscriptionGuard('POST', '/api/copilot/sessions')).toBe(true);
+    expect(isExemptFromSubscriptionGuard('POST', `/api/copilot/sessions/${id}/messages`)).toBe(
+      true,
+    );
+    expect(
+      isExemptFromSubscriptionGuard('POST', `/API/Copilot/Sessions/${id.toUpperCase()}/Messages`),
+    ).toBe(true);
+    expect(isExemptFromSubscriptionGuard('PATCH', '/api/copilot/me/prefs')).toBe(true);
+    // Só o método e o caminho exatos.
+    expect(isExemptFromSubscriptionGuard('POST', `/api/copilot/proposals/${id}/confirm`)).toBe(
+      false,
+    );
+    expect(isExemptFromSubscriptionGuard('POST', `/api/copilot/proposals/${id}/undo`)).toBe(false);
+    expect(isExemptFromSubscriptionGuard('PATCH', `/api/copilot/sessions/${id}`)).toBe(false);
+    expect(isExemptFromSubscriptionGuard('DELETE', `/api/copilot/sessions/${id}`)).toBe(false);
+    expect(isExemptFromSubscriptionGuard('DELETE', '/api/copilot/sessions')).toBe(false);
+    expect(isExemptFromSubscriptionGuard('POST', '/api/copilot/sessions/nao-uuid/messages')).toBe(
+      false,
+    );
+    expect(isExemptFromSubscriptionGuard('POST', `/api/copilot/sessions/${id}/messages/x`)).toBe(
+      false,
+    );
+    expect(isExemptFromSubscriptionGuard('POST', `/api/copilot/turns/${id}/cancel`)).toBe(false);
+    expect(isExemptFromSubscriptionGuard('PUT', '/api/copilot/settings')).toBe(false);
+    expect(isExemptFromSubscriptionGuard('POST', '/api/copilot/memory/facts')).toBe(false);
+    expect(isExemptFromSubscriptionGuard('POST', '/api/copilot/sessionsx')).toBe(false);
+  });
 });
 
 // ─── 2) Integração: routers reais + Postgres dev ──────────────────────────────
@@ -100,6 +131,7 @@ function buildApp(): Express {
   app.use(createContactsRouter());
   app.use(createMembersMeRouter());
   app.use(createBillingRouter());
+  app.use(createCopilotRouter());
   return app;
 }
 
@@ -192,6 +224,38 @@ describe('requireActiveSubscription (via withRLS, routers reais)', () => {
     await setStatus('past_due');
     const pastDue = await request(app).post('/api/contacts').set('Cookie', cookie).send({});
     expect(pastDue.status).toBe(400);
+  });
+
+  it('expired: perguntar ao Copiloto passa na guarda; confirmar proposta continua 402', async () => {
+    await setStatus('expired');
+    const id = randomUUID();
+    // Rotas de sessão são do F73-S10: hoje o router é um lugar reservado, então a prova de
+    // que a guarda deixou passar é chegar ao roteamento (404), e não o 402.
+    const open = await request(app).post('/api/copilot/sessions').set('Cookie', cookie).send({});
+    expect(open.status).not.toBe(402);
+    expect(open.status).toBe(404);
+    const ask = await request(app)
+      .post(`/api/copilot/sessions/${id}/messages`)
+      .set('Cookie', cookie)
+      .send({});
+    expect(ask.status).toBe(404);
+    const prefs = await request(app)
+      .patch('/api/copilot/me/prefs')
+      .set('Cookie', cookie)
+      .send({ first_use_hint_seen: true });
+    expect(prefs.status).toBe(200);
+
+    const confirm = await request(app)
+      .post(`/api/copilot/proposals/${id}/confirm`)
+      .set('Cookie', cookie)
+      .send({ version: 1 });
+    expect(confirm.status).toBe(402);
+    expect(confirm.body.error).toBe('subscription_inactive');
+    const settings = await request(app)
+      .put('/api/copilot/settings')
+      .set('Cookie', cookie)
+      .send({ enabled: false });
+    expect(settings.status).toBe(402);
   });
 
   it('sem sessão continua 401 (a guarda não antecipa nada)', async () => {

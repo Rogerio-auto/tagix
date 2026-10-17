@@ -25,7 +25,10 @@
  *  - assinatura de Web Push do próprio dispositivo (`/api/push/**`);
  *  - suporte da plataforma (`/api/support/**`): quem está bloqueado precisa falar com a gente;
  *  - `POST /api/conversations/:id/read`: marcar como lida é consequência de ler;
- *  - `POST /api/privacy/exports`: portabilidade (LGPD art. 18, V) é leitura dos próprios dados.
+ *  - `POST /api/privacy/exports`: portabilidade (LGPD art. 18, V) é leitura dos próprios dados;
+ *  - Copiloto (ADR-003 §5): `POST /api/copilot/sessions` e
+ *    `POST /api/copilot/sessions/:uuid/messages` (perguntar é leitura; a escrita é recusada
+ *    pelo callback das ferramentas), e `PATCH /api/copilot/me/prefs` (preferência pessoal).
  *
  * As exceções são casadas por método + caminho exatos (sem prefixos largos onde há rotas
  * irmãs com `:id`): `DELETE /api/members/me` NÃO é exceção, porque cairia em
@@ -79,6 +82,8 @@ interface ExemptRule {
 const ANY = null;
 const only = (...methods: string[]): ReadonlySet<string> => new Set(methods);
 const SEG = '[^/]+';
+/** UUID em minúsculas (o caminho é comparado em minúsculas). */
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 
 const EXEMPT_RULES: readonly ExemptRule[] = [
   { methods: ANY, pattern: /^\/auth(?:\/.*)?$/ },
@@ -92,6 +97,14 @@ const EXEMPT_RULES: readonly ExemptRule[] = [
   { methods: ANY, pattern: /^\/api\/support(?:\/.*)?$/ },
   { methods: only('POST'), pattern: new RegExp(`^/api/conversations/${SEG}/read/?$`) },
   { methods: only('POST'), pattern: /^\/api\/privacy\/exports\/?$/ },
+  // Copiloto (ADR-003 §5; COPILOTO.md P9): perguntar é LEITURA. Abrir sessão e mandar
+  // pergunta passam com a empresa só leitura; quem recusa a escrita é o callback das
+  // ferramentas (passo 3.6: `subscription_inactive`, proposta `blocked`). Exatas, com o id
+  // em UUID: confirmar, desfazer e qualquer outra rota do Copiloto continuam 402.
+  { methods: only('POST'), pattern: /^\/api\/copilot\/sessions\/?$/ },
+  { methods: only('POST'), pattern: new RegExp(`^/api/copilot/sessions/${UUID}/messages/?$`) },
+  // Preferência do próprio membro (como `PATCH /api/members/me`).
+  { methods: only('PATCH'), pattern: /^\/api\/copilot\/me\/prefs\/?$/ },
 ];
 
 /** Caminho do request sem query, em minúsculas (o roteador do Express ignora caixa). */

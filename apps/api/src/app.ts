@@ -9,6 +9,7 @@ import { requestContext } from './middlewares/request-context';
 import { securityMiddlewares } from './middlewares/security';
 import { uuidParamGuard } from './middlewares/uuid-params';
 import { createInternalToolsRouter } from './internal/tools';
+import { createCopilotInternalRouter } from './internal/copilot';
 import { buildWorkflowRegistry } from './internal/tools/workflow-handlers';
 import { registerCalendarHandlers } from './internal/tools/calendar-handlers';
 import { createAgentsRouter } from './routes/agents';
@@ -47,6 +48,7 @@ import { createLeadSourcesRouter } from './routes/meta/lead-sources';
 import { metaConnectionsRepo } from '@hm/db';
 import { platformSecrets } from './secrets';
 import { createMembersMeRouter } from './routes/members/me';
+import { createCopilotRouter } from './routes/copilot';
 import { createWorkspaceSettingsRouter } from './routes/workspace';
 import { createOrgSettingsRouter } from './routes/org';
 import { createTagsRouter } from './routes/tags';
@@ -149,6 +151,9 @@ export function createApp(): Express {
       registry: registerCalendarHandlers(buildWorkflowRegistry()),
     }),
   );
+  // Callback das ferramentas do Copiloto (F73-S03, ADR-003 §3): mesmo token de serviço do
+  // caminho de agente + grant HMAC do turno; reautoriza o MEMBRO a cada chamada.
+  app.use(createCopilotInternalRouter());
   app.use(createAuthRouter());
   // F71-S05: preview/aceite de convite pelo link (público, rate-limit por IP). Antes do
   // view-as: quem abre o link ainda não é membro da empresa do convite.
@@ -230,6 +235,9 @@ export function createApp(): Express {
   app.use(createDashboardLayoutRouter());
   // Settings workspace (F8-S07): PATCH /workspace + membros + org (depts/teams/SLA).
   app.use(createWorkspaceSettingsRouter());
+  // Copiloto (F73): /api/copilot/* atrás da porta única (sessão → RLS/assinatura →
+  // view-as/papel/desligado). Sub-rotas reservadas para os slots S05..S15.
+  app.use(createCopilotRouter());
   app.use(createOrgSettingsRouter());
   // Settings dados (F8-S08): tags CRUD + audit viewer.
   app.use(createTagsRouter());
