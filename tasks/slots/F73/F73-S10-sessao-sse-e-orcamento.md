@@ -2,7 +2,7 @@
 id: F73-S10
 title: API de sessão do Copiloto com streaming SSE de produção, contexto de página, histórico, limites e orçamento mensal próprio
 phase: F73
-status: in-progress
+status: review
 priority: critical
 estimated_size: L
 model: opus
@@ -15,6 +15,7 @@ source_docs:
   - docs/AGENTS_LANGGRAPH.md
 agent_id: backend-engineer
 claimed_at: 2026-10-17T06:38:37Z
+completed_at: 2026-10-17T06:56:54Z
 
 ---
 # F73-S10 — Sessão, SSE e orçamento
