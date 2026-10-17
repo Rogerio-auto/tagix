@@ -2,7 +2,7 @@
 id: F73-S07
 title: Ferramentas de consulta do Copiloto, operação (conversas com contaminação, agenda, campanhas, conhecimento)
 phase: F73
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 model: opus
@@ -17,6 +17,8 @@ source_docs:
   - docs/features/CALENDAR.md
   - docs/features/CAMPAIGNS.md
 agent_id: backend-engineer
+claimed_at: 2026-10-17T06:57:18Z
+
 ---
 # F73-S07 — Consultas de operação
 
