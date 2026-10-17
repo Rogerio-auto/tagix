@@ -2,7 +2,7 @@
 id: F73-S12
 title: Briefing do dia (geração determinística com score explicável por receita em risco, dado com hora, revalidação e push da manhã)
 phase: F73
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 model: sonnet
@@ -15,6 +15,8 @@ source_docs:
   - docs/features/APP_MOBILE_PLAN.md
   - docs/features/DASHBOARD.md
 agent_id: backend-engineer
+claimed_at: 2026-10-17T07:27:45Z
+
 ---
 # F73-S12 — Briefing do dia
 
