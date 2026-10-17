@@ -19,6 +19,11 @@ import {
   type RedisLike,
   type RetentionConfig,
 } from './config';
+import {
+  startCopilotHistoryRetention,
+  type CopilotHistoryPort,
+  type CopilotHistoryWorkerHandle,
+} from './copilot-history';
 import { createDbSweepPort } from './db-port';
 import { computeCutoff, runSweep, type RetentionSweepPort, type SweepResult } from './sweep';
 
@@ -35,6 +40,11 @@ export interface RetentionWorkerDeps {
   readonly port?: RetentionSweepPort;
   /** Relógio injetável (default: `Date.now`). */
   readonly now?: () => Date;
+  /**
+   * Retenção do histórico do Copiloto (F73-S15), ligada junto com este worker para o
+   * composition root não precisar de uma linha nova. `false` desliga; `port` injeta o banco.
+   */
+  readonly copilotHistory?: false | { readonly port?: CopilotHistoryPort };
 }
 
 /**
@@ -105,6 +115,19 @@ export function startRetentionWorker(deps: RetentionWorkerDeps): RetentionWorker
   const timer = setInterval(tick, config.intervalMs);
   timer.unref?.();
 
+  // Histórico do Copiloto (mensagens e sessões além do prazo do workspace): mesmo lock-pattern,
+  // mesma cadência diária, lock próprio.
+  const copilotHistory: CopilotHistoryWorkerHandle | null =
+    deps.copilotHistory === false
+      ? null
+      : startCopilotHistoryRetention({
+          redis: deps.redis,
+          logger: deps.logger,
+          config: deps.config ?? {},
+          ...(deps.copilotHistory?.port ? { port: deps.copilotHistory.port } : {}),
+          ...(deps.now ? { now: deps.now } : {}),
+        });
+
   deps.logger.info('retention worker iniciado', {
     table: 'webhook_events',
     horizonMs: config.horizonMs,
@@ -117,7 +140,7 @@ export function startRetentionWorker(deps: RetentionWorkerDeps): RetentionWorker
     async stop(): Promise<void> {
       clearTimeout(initial);
       clearInterval(timer);
-      await Promise.resolve();
+      await copilotHistory?.stop();
     },
   };
 }
@@ -145,3 +168,20 @@ export {
   type SweepOptions,
   type SweepResult,
 } from './sweep';
+export {
+  COPILOT_DEFAULT_RETENTION_MONTHS,
+  COPILOT_HISTORY_LOCK_KEY,
+  COPILOT_HISTORY_LOCK_TTL_MS,
+  createCopilotHistoryPort,
+  runCopilotHistoryOnce,
+  runCopilotHistorySweep,
+  startCopilotHistoryRetention,
+  subtractMonths,
+  type CopilotHistoryPort,
+  type CopilotHistoryResult,
+  type CopilotHistoryRunDeps,
+  type CopilotHistorySweepOptions,
+  type CopilotHistoryWorkerDeps,
+  type CopilotHistoryWorkerHandle,
+  type CopilotRetentionTarget,
+} from './copilot-history';

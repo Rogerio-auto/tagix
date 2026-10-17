@@ -141,3 +141,46 @@ groups:
         annotations:
           summary: 'Mídias recebidas falhando'
           description: 'Mais de 5 mídias esgotaram as tentativas em 30m. Ver logs "media:" dos workers; depois de corrigir, rodar o reprocessamento.'
+
+  - name: leadium-copilot
+    rules:
+      # p95 do tempo até o primeiro frame acima de 1,5 s por 10 min (meta da spec: 800 ms).
+      - alert: LeadiumCopilotTtfbHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(copilot_ttfb_seconds_bucket{job="leadium-api"}[5m]))) > 1.5
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: 'Copiloto: p95 do TTFB acima de 1,5 s'
+          description: 'O primeiro frame do SSE do Copiloto está lento há 10 min. Veja a seção 3 do runbook do Copiloto (copilot.turn: ttfb_ms) e a carga do banco.'
+
+      # Taxa de erro acima de 5% (falhas ÷ concluídos+falhos; orçamento, limite de taxa e
+      # cancelamento NÃO entram: não são erro do sistema). Mínimo de 10 turnos para não gritar à toa.
+      - alert: LeadiumCopilotErrorRate
+        expr: |
+          (
+            sum(rate(copilot_turns_total{job="leadium-api",status="failed"}[10m]))
+              /
+            clamp_min(sum(rate(copilot_turns_total{job="leadium-api",status=~"completed|failed"}[10m])), 1e-9)
+              > 0.05
+          )
+          and
+          (sum(increase(copilot_turns_total{job="leadium-api",status=~"completed|failed"}[10m])) >= 10)
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: 'Copiloto: mais de 5% dos turnos falhando'
+          description: 'Procure copilot.turn_failed no log da API, agrupe por code/runtime_code (seção 3).'
+
+      # Runtime (agent-runtime) indisponível: 3 turnos em 10 min terminaram em runtime_unavailable.
+      - alert: LeadiumCopilotRuntimeUnavailable
+        expr: sum(increase(copilot_runtime_unavailable_total{job="leadium-api"}[10m])) >= 3
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: 'Copiloto: runtime indisponível'
+          description: 'O agent-runtime não está respondendo ao Copiloto. Cheque AGENT_RUNTIME_URL/TOKEN, o serviço agent-runtime e o OpenRouter.'

@@ -53,6 +53,14 @@ import {
   type CopilotRunRequest,
 } from '@hm/shared';
 import type { CopilotToolDefinition } from '../../../internal/copilot/core/registry';
+import {
+  copilotRanStatus,
+  recordCopilotCost,
+  recordCopilotRejection,
+  recordCopilotRuntimeUnavailable,
+  recordCopilotTtfb,
+  recordCopilotTurn,
+} from '../../../observability/copilot-metrics';
 import { budgetResetsOn, monthToDateCopilotSpendUsd } from '../identity/budget';
 import { COPILOT_GRANT_TTL_SECONDS, generateGrantNonce, mintGrant } from '../identity/grant';
 import type { CopilotPrincipal } from '../identity/principal';
@@ -215,6 +223,7 @@ function rejectWithFrame(
     const ref = newRef();
     sse.send({ v: COPILOT_STREAM_VERSION, type: 'error', code: frame.code, ref });
     deps.logger.warn('copilot.turn_rejected', { ...fields, reason: frame.code, ref });
+    recordCopilotRejection(frame.code);
   } else {
     sse.send({
       v: COPILOT_STREAM_VERSION,
@@ -223,6 +232,7 @@ function rejectWithFrame(
       resets_on: frame.budget.resetsOn,
     });
     deps.logger.warn('copilot.turn_rejected', { ...fields, reason: 'budget_exceeded' });
+    recordCopilotRejection('budget_exceeded');
   }
   sse.end();
 }
@@ -420,6 +430,7 @@ async function runTurn(
     context_label: inputs.context.chipLabel,
   });
   const ttfbMs = Math.round(performance.now() - meta.t0);
+  recordCopilotTtfb(ttfbMs / 1000);
 
   // 6. Runtime, com abort por desconexão, "Parar" e teto de tempo do próprio Node.
   const controller = new AbortController();
@@ -519,6 +530,14 @@ async function runTurn(
       return row ?? null;
     })
     .catch(() => null);
+  recordCopilotTurn(copilotRanStatus(final?.status), (performance.now() - meta.t0) / 1000);
+  recordCopilotCost(finished.costUsd);
+  if (
+    (outcome.kind === 'failure' || outcome.kind === 'runtime_error') &&
+    outcome.code === 'runtime_unavailable'
+  ) {
+    recordCopilotRuntimeUnavailable();
+  }
   deps.logger.info('copilot.turn', {
     ...fields,
     outcome: outcome.kind === 'aborted' ? outcome.reason : outcome.kind,

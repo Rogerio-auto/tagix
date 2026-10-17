@@ -17,6 +17,7 @@
  */
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { schema, type CopilotProposalRow, type CopilotProposalStatus, type DbTx } from '@hm/db';
+import { recordCopilotProposal } from '../../../observability/copilot-metrics';
 
 export const PROPOSAL_AUDIT_RESOURCE = 'copilot_proposal' as const;
 
@@ -62,6 +63,10 @@ export async function recordProposalAudit(tx: DbTx, input: ProposalAuditInput): 
       ...input.extra,
     },
   });
+  // Só transição de status (não `adjusted`/`stop_requested`/...): um evento por mudança de estado.
+  if (input.event === proposal.status) {
+    recordCopilotProposal(proposal.capability, proposal.riskLevel, proposal.status);
+  }
 }
 
 /**

@@ -10,10 +10,21 @@ export {
   Sentry,
 } from './sentry';
 
-export {
-  metricsMiddleware,
-  metricsHandler,
-  getMetricsRegistry,
-} from '../middlewares/metrics';
+export { metricsMiddleware, metricsHandler, getMetricsRegistry } from '../middlewares/metrics';
 
 export { recordMqPublish, recordChannelSend, recordAgentRun } from './domain-metrics';
+
+export {
+  recordCopilotTurn,
+  recordCopilotTtfb,
+  recordCopilotRejection,
+  recordCopilotRuntimeUnavailable,
+  copilotRanStatus,
+  recordCopilotToolCall,
+  recordCopilotProposal,
+  recordCopilotCost,
+  normalizeToolKey,
+  COPILOT_TURN_METRIC_STATUSES,
+  type CopilotTurnMetricStatus,
+  type CopilotRanTurnStatus,
+} from './copilot-metrics';
