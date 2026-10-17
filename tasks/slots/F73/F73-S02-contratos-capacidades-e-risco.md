@@ -2,7 +2,7 @@
 id: F73-S02
 title: Contratos do Copiloto em @hm/shared (permissões copilot.*, catálogo de capacidades, classificador de risco, Zod de API e SSE)
 phase: F73
-status: review
+status: done
 priority: critical
 estimated_size: M
 model: opus
