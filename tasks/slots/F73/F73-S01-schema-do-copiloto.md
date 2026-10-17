@@ -2,7 +2,7 @@
 id: F73-S01
 title: Schema do Copiloto (sessões, turnos, propostas, memória, briefing, piloto) com RLS e repos
 phase: F73
-status: in-progress
+status: review
 priority: critical
 estimated_size: L
 model: opus
@@ -16,6 +16,7 @@ source_docs:
   - docs/DATA_MODEL.md
 agent_id: db-engineer
 claimed_at: 2026-10-16T23:27:39Z
+completed_at: 2026-10-17T03:24:40Z
 
 ---
 # F73-S01 — Schema do Copiloto
