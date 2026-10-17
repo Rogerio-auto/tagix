@@ -2,7 +2,7 @@
 id: F73-S13
 title: Piloto automático do pipeline, backend (regras por estágio, gerador determinístico de sugestões, aprovar ou recusar em lote via motor)
 phase: F73
-status: blocked
+status: in-progress
 priority: high
 estimated_size: M
 model: sonnet
@@ -15,6 +15,8 @@ source_docs:
   - docs/features/PIPELINE.md
   - docs/decisions/ADR-004-motor-de-acoes-com-confirmacao-humana.md
 agent_id: backend-engineer
+claimed_at: 2026-10-17T08:17:40Z
+
 ---
 # F73-S13 — Piloto automático (backend)
 
