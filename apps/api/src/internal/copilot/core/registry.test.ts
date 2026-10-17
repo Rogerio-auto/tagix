@@ -11,7 +11,7 @@ import {
   buildCopilotPrincipal,
   type CopilotPrincipal,
 } from '../../../services/copilot/identity/principal';
-import { COPILOT_TOOLS, copilotToolDescriptorsFor } from '../index';
+import { COPILOT_TOOLS } from '../index';
 import {
   createCopilotToolRegistry,
   defineCopilotTool,
@@ -151,7 +151,9 @@ describe('listToolDescriptorsFor', () => {
     );
     expect(COPILOT_TOOLS.every((t) => t.capability === 'query')).toBe(true);
     expect(keys.some((k) => k.startsWith('propose_'))).toBe(false);
-    expect(() => copilotToolDescriptorsFor(principal('OWNER'))).not.toThrow();
+    expect(() =>
+      listToolDescriptorsFor(principal('OWNER'), COPILOT_TOOLS, offer('ADMIN')),
+    ).not.toThrow();
   });
 });
 

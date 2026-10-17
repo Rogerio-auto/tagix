@@ -60,4 +60,15 @@ export {
   type HandledBy,
 } from './types';
 
+// Copiloto (F73-S10): `POST /copilot/run`, contrato em `@hm/shared/copilot` (internal.ts).
+export {
+  COPILOT_RUN_PATH,
+  createCopilotRuntimeClient,
+  isTerminalCopilotEvent,
+  parseCopilotRuntimeFrame,
+  type CopilotRuntimeClient,
+  type CopilotRuntimeClientConfig,
+  type RunCopilotOptions,
+} from './copilot';
+
 export const AGENTS_CLIENT_PKG = '@hm/agents-client' as const;

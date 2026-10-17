@@ -28,7 +28,9 @@
  *  - `POST /api/privacy/exports`: portabilidade (LGPD art. 18, V) é leitura dos próprios dados;
  *  - Copiloto (ADR-003 §5): `POST /api/copilot/sessions` e
  *    `POST /api/copilot/sessions/:uuid/messages` (perguntar é leitura; a escrita é recusada
- *    pelo callback das ferramentas), e `PATCH /api/copilot/me/prefs` (preferência pessoal).
+ *    pelo callback das ferramentas), `POST /api/copilot/turns/:uuid/cancel` (Parar um turno
+ *    não escreve dado de negócio e reduz custo) e `PATCH /api/copilot/me/prefs` (preferência
+ *    pessoal).
  *
  * As exceções são casadas por método + caminho exatos (sem prefixos largos onde há rotas
  * irmãs com `:id`): `DELETE /api/members/me` NÃO é exceção, porque cairia em
@@ -103,6 +105,11 @@ const EXEMPT_RULES: readonly ExemptRule[] = [
   // em UUID: confirmar, desfazer e qualquer outra rota do Copiloto continuam 402.
   { methods: only('POST'), pattern: /^\/api\/copilot\/sessions\/?$/ },
   { methods: only('POST'), pattern: new RegExp(`^/api/copilot/sessions/${UUID}/messages/?$`) },
+  // Parar o próprio turno (F73-S10; decisão registrada em COMMS, com base em ADR-003 §5): só
+  // aborta o runtime e marca o turno `cancelled`, sem escrever dado de negócio, e corta custo.
+  // Bloquear Parar com a empresa só leitura deixaria a pessoa pagando por um turno que não
+  // quer. Exata e ancorada, com o id em UUID: renomear/arquivar sessão continuam 402.
+  { methods: only('POST'), pattern: new RegExp(`^/api/copilot/turns/${UUID}/cancel/?$`) },
   // Preferência do próprio membro (como `PATCH /api/members/me`).
   { methods: only('PATCH'), pattern: /^\/api\/copilot\/me\/prefs\/?$/ },
 ];
