@@ -59,7 +59,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70   | 37     | 1   | 2   | 0   | 0   | 2   | 32   |
 | F71   | 19     | 9   | 0   | 0   | 0   | 0   | 10   |
 | F72   | 9     | 0   | 1   | 0   | 0   | 0   | 8   |
-| F73   | 16     | 2   | 13   | 0   | 0   | 1   | 0   |
+| F73   | 16     | 2   | 13   | 0   | 0   | 0   | 1   |
 | F74   | 13     | 0   | 13   | 0   | 0   | 0   | 0   |
 | F75   | 16     | 2   | 13   | 0   | 0   | 0   | 1   |
 | F76   | 9     | 1   | 8   | 0   | 0   | 0   | 0   |
@@ -852,7 +852,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 | ID      | Titulo                                                                                                                                   | Status      | Prioridade | Depende de                                                                      |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ---------- | ------------------------------------------------------------------------------- |
-| F73-S01 | Schema do Copiloto (sessões, turnos, propostas, memória, briefing, piloto) com RLS e repos                                               | 🟣 review    | critical   | —                                                                               |
+| F73-S01 | Schema do Copiloto (sessões, turnos, propostas, memória, briefing, piloto) com RLS e repos                                               | ✅ done      | critical   | —                                                                               |
 | F73-S02 | Contratos do Copiloto em @hm/shared (permissões copilot.*, catálogo de capacidades, classificador de risco, Zod de API e SSE)            | 🟢 available | critical   | —                                                                               |
 | F73-S03 | Identidade do membro, grant assinado, callback interno do Copiloto e API de me/configurações                                             | ⏸️ blocked  | critical   | F73-S01, F73-S02                                                                |
 | F73-S04 | Runtime do Copiloto (grafo LangGraph próprio, /copilot/run em SSE, ferramentas por callback com grant, resposta estruturada, /kb/search) | 🟢 available | critical   | —                                                                               |
