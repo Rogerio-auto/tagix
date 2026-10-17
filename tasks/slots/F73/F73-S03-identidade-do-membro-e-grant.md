@@ -2,7 +2,7 @@
 id: F73-S03
 title: Identidade do membro, grant assinado, callback interno do Copiloto e API de me/configurações
 phase: F73
-status: blocked
+status: in-progress
 priority: critical
 estimated_size: L
 model: opus
@@ -14,6 +14,8 @@ source_docs:
   - docs/features/COPILOTO.md
   - docs/features/PERMISSIONS.md
 agent_id: backend-engineer
+claimed_at: 2026-10-17T04:32:04Z
+
 ---
 # F73-S03 — Identidade do membro e grant
 
