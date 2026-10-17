@@ -119,6 +119,17 @@ export const ROLE_CAN = {
   'apikey.revoke': ADMINS,
   'webhook.view': ADMINS,
   'webhook.edit': ADMINS,
+
+  // §2.10 Copiloto (F73 — COPILOTO.md §6.2, ADR-003). O Copiloto age com as permissões
+  // de quem pede: estas chaves só abrem a superfície e a gestão dele. Cada capacidade
+  // de escrita exige, além disso, a permissão de domínio do catálogo
+  // (`copilot/capabilities.ts`), e a matriz de `copilot_settings` só RESTRINGE.
+  'copilot.use': ALL,
+  'copilot.manage': ADMINS,
+  'copilot.view_costs': ADMINS,
+  'copilot.memory.edit': MANAGERS,
+  'copilot.activity.view_all': MANAGERS,
+  'copilot.autopilot.manage': ADMINS,
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof ROLE_CAN;

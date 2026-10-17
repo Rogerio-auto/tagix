@@ -2,7 +2,7 @@
 id: F73-S02
 title: Contratos do Copiloto em @hm/shared (permissões copilot.*, catálogo de capacidades, classificador de risco, Zod de API e SSE)
 phase: F73
-status: available
+status: review
 priority: critical
 estimated_size: M
 model: opus
@@ -16,6 +16,9 @@ source_docs:
   - docs/features/PERMISSIONS.md
   - docs/design/copilot-integracoes-ux.md
 agent_id: backend-engineer
+claimed_at: 2026-10-17T02:57:21Z
+completed_at: 2026-10-17T03:39:09Z
+
 ---
 # F73-S02 — Contratos, capacidades e risco
 
