@@ -178,6 +178,103 @@ describe('defineCopilotTool / createCopilotToolRegistry', () => {
     }
   });
 
+  it('recusa a lista ampliada de identidade (qualquer grafia)', () => {
+    for (const field of [
+      'ws',
+      'mid',
+      'user_id',
+      'userId',
+      'requested_by',
+      'requestedBy',
+      'requested_by_member_id',
+      'approver_member_id',
+      'actor',
+      'actor_id',
+      'actorUserId',
+      'executed_as',
+      'executed_as_member_id',
+      'executedAsUser',
+      'Member-ID',
+      'turn_id',
+      'nonce',
+    ]) {
+      expect(() =>
+        defineCopilotTool({
+          ...base,
+          key: 'ident',
+          args: z.object({ [field]: z.string() }).strict(),
+        }),
+      ).toThrow(/identidade/);
+    }
+  });
+
+  it('recusa campo de identidade aninhado (objeto, array, opcional, união, refinamento)', () => {
+    const nested: z.ZodTypeAny[] = [
+      z.object({ filter: z.object({ member_id: z.string() }).strict() }).strict(),
+      z.object({ items: z.array(z.object({ workspace_id: z.string() })) }).strict(),
+      z.object({ opts: z.object({ actor_id: z.string() }).optional() }).strict(),
+      z.object({ opts: z.object({ ws: z.string() }).nullable().default(null) }).strict(),
+      z
+        .object({
+          target: z.union([z.object({ id: z.string() }), z.object({ requested_by: z.string() })]),
+        })
+        .strict(),
+      z
+        .object({
+          target: z.discriminatedUnion('kind', [
+            z.object({ kind: z.literal('a'), executed_as_member_id: z.string() }),
+            z.object({ kind: z.literal('b') }),
+          ]),
+        })
+        .strict(),
+      z
+        .object({
+          deep: z.array(z.array(z.object({ x: z.object({ userId: z.string() }) }))),
+        })
+        .strict(),
+      z
+        .object({
+          r: z.object({ approver_member_id: z.string() }).refine(() => true),
+        })
+        .strict(),
+      z.object({ t: z.tuple([z.string(), z.object({ mid: z.string() })]) }).strict(),
+      z.object({ m: z.record(z.string(), z.object({ actor: z.string() })) }).strict(),
+    ];
+    for (const args of nested) {
+      expect(() => defineCopilotTool({ ...base, key: 'nested', args })).toThrow(
+        /identidade proibido em args: 'args\./,
+      );
+    }
+  });
+
+  it('aceita alvos legítimos e objetos aninhados sem identidade', () => {
+    const t = defineCopilotTool({
+      ...base,
+      key: 'ok_nested',
+      args: z
+        .object({
+          owner_id: z.string().uuid().optional(),
+          assignee_member_id: z.string().uuid().optional(),
+          filters: z
+            .object({ stage_ids: z.array(z.string().uuid()), period: z.string() })
+            .strict()
+            .optional(),
+        })
+        .strict(),
+    });
+    expect(t.key).toBe('ok_nested');
+  });
+
+  it('recusa objeto aninhado com .passthrough()', () => {
+    expect(() =>
+      defineCopilotTool({
+        ...base,
+        key: 'nested_pass',
+        args: z.object({ f: z.object({ a: z.string() }).passthrough() }).strict(),
+      }),
+    ).toThrow(/passthrough/);
+  });
+
   it('recusa key inválida e key repetida', () => {
     expect(() =>
       defineCopilotTool({ ...base, key: 'Bad-Key', args: z.object({}).strict() }),

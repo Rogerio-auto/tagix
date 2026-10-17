@@ -162,6 +162,16 @@ describe('sentry — segredos de convite nunca saem (F71-S05, B3)', () => {
     expect(JSON.stringify(crumb)).not.toContain(TOKEN);
   });
 
+  it('X-Copilot-Grant é mascarado (credencial do turno do Copiloto, F73-S03)', async () => {
+    const { scrubSentryEvent } = await freshModule();
+    const grant = 'eyJ2IjoxfQ.c2lnbmF0dXJhLWRvLWdyYW50';
+    const event = scrubSentryEvent({
+      request: { headers: { 'X-Copilot-Grant': grant, 'x-copilot-grant': grant, accept: 'json' } },
+    });
+    expect(JSON.stringify(event)).not.toContain(grant);
+    expect(event.request?.headers?.['accept']).toBe('json');
+  });
+
   it('cookies do request são zerados (defesa em profundidade, L5) — também na transação', async () => {
     const { scrubSentryEvent } = await freshModule();
     const cookies = { hm_session: 'sessao-secreta', sb_refresh: 'refresh-secreto' };

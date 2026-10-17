@@ -49,8 +49,12 @@ function relativePath(req: Request): string {
   return req.path.toLowerCase().replace(/\/+$/, '') || '/';
 }
 
-function isSettingsPath(path: string): boolean {
-  return path === '/settings' || path.startsWith('/settings/');
+/**
+ * Só o caminho EXATO `/settings`: qualquer sub-rota futura (`/settings/...`) passa pela
+ * porta inteira, a menos que seja liberada aqui de propósito.
+ */
+export function isSettingsPath(path: string): boolean {
+  return path === '/settings';
 }
 
 /** Middleware. Montar com `router.use('/api/copilot', requireAuth, withRLS, copilotAvailable)`. */

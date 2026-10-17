@@ -8,10 +8,10 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
 import express, { type Express } from 'express';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { closeDb, copilotTurnsRepo, getDb, schema, withWorkspace } from '@hm/db';
-import { createLogger } from '@hm/logger';
+import { createLogger, type LogFields, type Logger } from '@hm/logger';
 import { mintGrant } from '../../../services/copilot/identity/grant';
 import {
   seedCopilotTurn,
@@ -330,6 +330,62 @@ describe('recusas antes do turno (nada executa, nada é consumido)', () => {
     expect(mismatch.status).toBe(403);
     // O teto de 1 continua disponível: nenhuma das recusas acima consumiu a chamada.
     expect((await call('test_query', turn)).status).toBe(200);
+  });
+});
+
+describe('falha do banco ao consumir a chamada (passo 4)', () => {
+  it('claimToolCall lança → envelope de erro seguro; log só com código/constraint', async () => {
+    const errors: { msg: string; fields: LogFields | undefined }[] = [];
+    const noop = (): void => undefined;
+    const captured: Logger = {
+      debug: noop,
+      info: noop,
+      warn: noop,
+      error: (msg, fields) => {
+        errors.push({ msg, fields });
+      },
+      child: () => captured,
+    };
+    const local = express();
+    local.use(express.json());
+    local.use(
+      createCopilotToolsRouter({ tools, token: TOKEN, grantSecret: SECRET, logger: captured }),
+    );
+    const turn = await turnFor('OWNER');
+    const sensitive = `Failed query: update copilot_turns params: ${turn.nonce},maria@example.com`;
+    const spy = vi.spyOn(copilotTurnsRepo, 'claimToolCall').mockRejectedValueOnce(
+      new Error(sensitive, {
+        cause: Object.assign(new Error('pg'), { code: '40001', constraint_name: 'ck_x' }),
+      }),
+    );
+    const before = snapshot();
+    try {
+      const res = await request(local)
+        .post('/internal/copilot/tools/test_query')
+        .set('Authorization', `Bearer ${TOKEN}`)
+        .set('X-Copilot-Grant', turn.grant)
+        .send({ turn_id: turn.turnId, call_id: 'c1', args: {} });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        ok: false,
+        decision: 'error',
+        model_view: COPILOT_MODEL_VIEWS.error,
+      });
+      expect(JSON.stringify(res.body)).not.toContain(turn.nonce);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(snapshot()).toEqual(before);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.fields).toMatchObject({
+      code: '40001',
+      constraint: 'ck_x',
+      errorName: 'Error',
+    });
+    const logged = JSON.stringify(errors);
+    expect(logged).not.toContain(turn.nonce);
+    expect(logged).not.toContain('maria@example.com');
+    expect(logged).not.toContain('Failed query');
   });
 });
 

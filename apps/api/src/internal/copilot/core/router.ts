@@ -13,6 +13,7 @@
  *   4. sob `withWorkspace(grant.ws)`: `claimToolCall` (turno vivo, do membro, nonce, teto),
  *      numa transação PRÓPRIA e já confirmada: a chamada é consumida mesmo que o resto
  *      falhe (R5: um modelo em loop não ganha chamadas de volta ao errar)  → 403 `turn_not_active`
+ *      (falha do banco neste passo → 200 `decision: 'error'`, log só com código/constraint)
  *   5. sob `withWorkspace(grant.ws)`, numa segunda transação:
  *      a. recarrega o membro, o workspace e a configuração (principal)
  *      b. ferramenta no registro                                           → 404 `tool_not_found`
@@ -371,13 +372,33 @@ export function createCopilotToolsRouter(options: CopilotToolsRouterOptions): Ro
     }
 
     // 4. Consome a chamada (transação própria, confirmada antes de qualquer execução).
-    const turn = await withWorkspace(grant.ws, (tx) =>
-      copilotTurnsRepo.claimToolCall(tx, {
-        turnId: grant.tid,
-        memberId: grant.mid,
-        nonce: grant.nonce,
-      }),
-    );
+    // Falha de banco aqui não pode cair no error handler genérico: a `message` do Drizzle
+    // embute os parâmetros da query (ids, nonce). Só código/constraint vão para o log.
+    let turn: ClaimedToolCall | null;
+    try {
+      turn = await withWorkspace(grant.ws, (tx) =>
+        copilotTurnsRepo.claimToolCall(tx, {
+          turnId: grant.tid,
+          memberId: grant.mid,
+          nonce: grant.nonce,
+        }),
+      );
+    } catch (err) {
+      logger.error('copilot-tools: falha ao consumir a chamada do turno', {
+        ref: `hm_copilot_tool_${loggableKey(rawKey)}`,
+        stage: 'claim',
+        ...ids,
+        errorName: err instanceof Error ? err.name : typeof err,
+        ...pgErrorFields(err),
+      });
+      const failure: CopilotToolEnvelope = {
+        ok: false,
+        decision: 'error',
+        model_view: COPILOT_MODEL_VIEWS.error,
+      };
+      res.status(200).json(failure);
+      return;
+    }
     if (!turn) {
       refuse(res, 403, 'turn_not_active', { toolKey: loggableKey(rawKey), ...ids });
       return;

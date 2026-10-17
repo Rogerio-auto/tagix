@@ -5,6 +5,7 @@
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
+  COPILOT_GRANT_CLOCK_SKEW_SECONDS,
   COPILOT_GRANT_TTL_SECONDS,
   generateGrantNonce,
   mintGrant,
@@ -136,6 +137,30 @@ describe('mintGrant / verifyGrant', () => {
     expect(verifyGrant(token, { secret, now: new Date(now.getTime() + 3_600_000) })).toMatchObject({
       reason: 'grant_expired',
     });
+  });
+
+  it('exp além de TTL + folga (assinado corretamente) → grant_malformed', () => {
+    const nowSeconds = Math.floor(now.getTime() / 1000);
+    const at = (exp: number): string =>
+      signRawGrant(
+        {
+          v: 1,
+          tid: input.turnId,
+          ws: input.workspaceId,
+          mid: input.memberId,
+          exp,
+          nonce: input.nonce,
+        },
+        secret,
+      );
+    const limit = nowSeconds + COPILOT_GRANT_TTL_SECONDS + COPILOT_GRANT_CLOCK_SKEW_SECONDS;
+    expect(verifyGrant(at(limit), { secret, now }).ok).toBe(true);
+    for (const exp of [limit + 1, nowSeconds + 3_600, 9e9]) {
+      expect(verifyGrant(at(exp), { secret, now })).toEqual({
+        ok: false,
+        reason: 'grant_malformed',
+      });
+    }
   });
 
   it('versão desconhecida (assinada corretamente) → grant_unsupported_version', () => {

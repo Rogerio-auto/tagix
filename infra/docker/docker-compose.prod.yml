@@ -191,6 +191,10 @@ services:
     environment:
       <<: *app-env
       API_PORT: "3001"
+      # Chave HMAC do grant do Copiloto (F73-S03, ADR-003 §2). SÓ na api (fora do
+      # `x-app-env`): os workers não assinam nem verificam grants e não recebem o segredo.
+      # Distinta do AGENT_RUNTIME_TOKEN; a api recusa subir sem ela ou com ela igual a ele.
+      COPILOT_GRANT_SECRET: ${COPILOT_GRANT_SECRET:?COPILOT_GRANT_SECRET obrigatória}
       CORS_ORIGIN: ${CORS_ORIGIN:-https://app.leadium.com.br,https://leadium.com.br}
       CSP_CONNECT_SRC: ${CSP_CONNECT_SRC:-}
     volumes:

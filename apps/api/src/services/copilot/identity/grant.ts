@@ -24,6 +24,8 @@ import { copilotGrantSecret } from '../../../config';
 export const COPILOT_GRANT_VERSION = 1 as const;
 /** Validade padrão e máxima (ADR-003 §2: o turno vive 120 s). */
 export const COPILOT_GRANT_TTL_SECONDS = 120;
+/** Folga de relógio aceita acima do TTL máximo ao conferir `exp` (emissor e verificador). */
+export const COPILOT_GRANT_CLOCK_SKEW_SECONDS = 5;
 /** Teto do token inteiro. Um grant legítimo tem ~250 caracteres. */
 export const COPILOT_GRANT_MAX_LENGTH = 1024;
 
@@ -141,7 +143,8 @@ function constantTimeEqual(a: Buffer, b: Buffer): boolean {
 }
 
 /**
- * Verifica o grant. Ordem: forma → assinatura (tempo constante) → versão → schema → `exp`.
+ * Verifica o grant. Ordem: forma → assinatura (tempo constante) → versão → schema → `exp`
+ * (vencido → `grant_expired`; além de `TTL + folga` → `grant_malformed`).
  * Nunca lança: entrada de rede vira motivo estável.
  */
 export function verifyGrant(token: unknown, options: GrantOptions = {}): GrantVerification {
@@ -193,6 +196,14 @@ export function verifyGrant(token: unknown, options: GrantOptions = {}): GrantVe
 
   const nowSeconds = Math.floor((options.now ?? new Date()).getTime() / 1000);
   if (payload.data.exp <= nowSeconds) return fail('grant_expired');
+  // Nenhum grant legítimo vale mais que o TTL máximo: um `exp` distante (segredo vazado,
+  // relógio errado, emissor fora do contrato) não vira credencial de longa duração.
+  if (
+    payload.data.exp >
+    nowSeconds + COPILOT_GRANT_TTL_SECONDS + COPILOT_GRANT_CLOCK_SKEW_SECONDS
+  ) {
+    return fail('grant_malformed');
+  }
 
   return { ok: true, payload: payload.data };
 }

@@ -9,8 +9,9 @@
  * - `key` válida (`CopilotToolKeySchema`) e única;
  * - `args` é um `z.object(...).strict()` (direto ou sob refinamentos): campo extra é
  *   `invalid_args`, nunca ignorado em silêncio;
- * - nenhum campo de identidade em `args` (`member_id`, `workspace_id`…): a identidade vem
- *   só do grant (ADR-003 §3; COPILOTO.md §8 R2);
+ * - nenhum campo de identidade em `args` (`member_id`, `workspace_id`, `actor_*`…), em
+ *   qualquer profundidade (objetos aninhados, arrays, uniões): a identidade vem só do grant
+ *   (ADR-003 §3; COPILOTO.md §8 R2);
  * - `label` vem do catálogo (`statusLabelFor`), nunca da ferramenta nem do modelo.
  *
  * O modelo só VÊ as ferramentas que o membro pode usar (`listToolDescriptorsFor`): o JSON
@@ -104,19 +105,49 @@ export interface CopilotToolDefinition<
   readonly label: string;
 }
 
-/** Campos que nunca podem existir em `args`: a identidade vem só do grant. */
-const IDENTITY_ARG_KEYS: ReadonlySet<string> = new Set([
-  'member_id',
-  'memberid',
-  'workspace_id',
-  'workspaceid',
-  'requested_by_member_id',
-  'actor',
-  'actor_member_id',
-  'executed_as_member_id',
-  'turn_id',
-  'grant',
-]);
+/**
+ * Campos que nunca podem existir em `args`, em QUALQUER profundidade: a identidade vem só
+ * do grant (ADR-003 §3; COPILOTO.md §8 R2). Comparados depois de `normalizeArgKey` (sem
+ * caixa, sem `_`/`-`): `member_id`, `memberId` e `Member-ID` são o mesmo campo.
+ *
+ * Alvos legítimos de uma ação (`owner_id`, `assignee_member_id`) continuam permitidos: o
+ * que se proíbe é o campo que diria QUEM está agindo, não SOBRE QUEM.
+ */
+const IDENTITY_ARG_KEYS: ReadonlySet<string> = new Set(
+  [
+    'member_id',
+    'mid',
+    'workspace_id',
+    'ws',
+    'tenant_id',
+    'user_id',
+    'auth_user_id',
+    'requested_by',
+    'requested_by_member_id',
+    'approver_member_id',
+    'approved_by',
+    'impersonator',
+    'turn_id',
+    'tid',
+    'grant',
+    'nonce',
+  ].map(normalizeArgKey),
+);
+
+/** Prefixos proibidos (`actor`, `actor_id`, `actorMemberId`, `executed_as_member_id`…). */
+const IDENTITY_ARG_PREFIXES: readonly string[] = ['actor', 'executed_as'].map(normalizeArgKey);
+
+function normalizeArgKey(key: string): string {
+  return key.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function isIdentityArgKey(key: string): boolean {
+  const normalized = normalizeArgKey(key);
+  return (
+    IDENTITY_ARG_KEYS.has(normalized) ||
+    IDENTITY_ARG_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+  );
+}
 
 /** Desembrulha refinamentos/transformações até o `ZodObject` (ou `null`). */
 function innerObject(schema: z.ZodTypeAny): z.AnyZodObject | null {
@@ -132,17 +163,93 @@ function innerObject(schema: z.ZodTypeAny): z.AnyZodObject | null {
   return null;
 }
 
+/** Profundidade máxima percorrida: args de ferramenta são rasos; além disso é erro. */
+const ARGS_MAX_DEPTH = 16;
+
+/** Filhos diretos de um schema (embrulhos, elementos, variantes e campos). */
+function childSchemas(schema: z.ZodTypeAny): readonly z.ZodTypeAny[] {
+  if (schema instanceof z.ZodObject) {
+    const fields = Object.values(schema.shape as Record<string, z.ZodTypeAny>);
+    const catchall: z.ZodTypeAny = schema._def.catchall;
+    return catchall instanceof z.ZodNever ? fields : [...fields, catchall];
+  }
+  if (
+    schema instanceof z.ZodOptional ||
+    schema instanceof z.ZodNullable ||
+    schema instanceof z.ZodDefault ||
+    schema instanceof z.ZodCatch ||
+    schema instanceof z.ZodReadonly
+  ) {
+    return [schema._def.innerType];
+  }
+  if (schema instanceof z.ZodEffects) return [schema.innerType()];
+  if (schema instanceof z.ZodBranded) return [schema.unwrap()];
+  if (schema instanceof z.ZodLazy) return [schema.schema];
+  if (schema instanceof z.ZodPipeline) return [schema._def.in, schema._def.out];
+  if (schema instanceof z.ZodArray) return [schema.element];
+  if (schema instanceof z.ZodSet) return [schema._def.valueType];
+  if (schema instanceof z.ZodTuple) {
+    const rest: z.ZodTypeAny | null = schema._def.rest;
+    return rest ? [...schema.items, rest] : [...schema.items];
+  }
+  if (schema instanceof z.ZodRecord || schema instanceof z.ZodMap) {
+    return [schema._def.keyType, schema._def.valueType];
+  }
+  if (schema instanceof z.ZodUnion || schema instanceof z.ZodDiscriminatedUnion) {
+    return [...schema.options];
+  }
+  if (schema instanceof z.ZodIntersection) return [schema._def.left, schema._def.right];
+  return [];
+}
+
+/**
+ * Percorre o schema inteiro (objetos aninhados, arrays, uniões, embrulhos) e lança no
+ * primeiro campo de identidade. Objetos aninhados também não podem repassar chaves
+ * desconhecidas (`.passthrough()`): o handler receberia campos que o modelo inventou.
+ */
+function assertNoIdentityFields(
+  key: string,
+  schema: z.ZodTypeAny,
+  path: string,
+  depth: number,
+  seen: Set<z.ZodTypeAny>,
+): void {
+  if (seen.has(schema)) return;
+  seen.add(schema);
+  if (depth > ARGS_MAX_DEPTH) {
+    throw new Error(`copilot tool '${key}': args profundo demais em '${path}'.`);
+  }
+  if (schema instanceof z.ZodObject) {
+    if (schema._def.unknownKeys === 'passthrough') {
+      throw new Error(`copilot tool '${key}': objeto em '${path}' não pode ser .passthrough().`);
+    }
+    for (const [field, child] of Object.entries(schema.shape as Record<string, z.ZodTypeAny>)) {
+      const fieldPath = `${path}.${field}`;
+      if (isIdentityArgKey(field)) {
+        throw new Error(
+          `copilot tool '${key}': campo de identidade proibido em args: '${fieldPath}'.`,
+        );
+      }
+      assertNoIdentityFields(key, child, fieldPath, depth + 1, seen);
+    }
+    const catchall: z.ZodTypeAny = schema._def.catchall;
+    if (!(catchall instanceof z.ZodNever)) {
+      assertNoIdentityFields(key, catchall, `${path}.*`, depth + 1, seen);
+    }
+    return;
+  }
+  for (const child of childSchemas(schema)) {
+    assertNoIdentityFields(key, child, path, depth + 1, seen);
+  }
+}
+
 function assertSafeArgs(key: string, args: z.ZodTypeAny): void {
   const obj = innerObject(args);
   if (!obj) throw new Error(`copilot tool '${key}': args precisa ser z.object(...).strict().`);
   if (obj._def.unknownKeys !== 'strict') {
     throw new Error(`copilot tool '${key}': args precisa ser .strict() (ADR-003 §3).`);
   }
-  for (const field of Object.keys(obj.shape)) {
-    if (IDENTITY_ARG_KEYS.has(field.toLowerCase())) {
-      throw new Error(`copilot tool '${key}': campo de identidade proibido em args: '${field}'.`);
-    }
-  }
+  assertNoIdentityFields(key, args, 'args', 0, new Set());
 }
 
 /**

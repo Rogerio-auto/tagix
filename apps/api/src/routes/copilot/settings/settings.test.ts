@@ -165,4 +165,23 @@ describe('/api/copilot/settings', () => {
     expect(back.body.enabled).toBe(true);
     expect((await request(app).get('/api/copilot/me').set('Cookie', cookie)).status).toBe(200);
   });
+
+  it('a exceção vale só para /settings exato: sub-rota com o Copiloto desligado → 403', async () => {
+    const cookie = seeded.members.ADMIN.cookie;
+    await request(app).put('/api/copilot/settings').set('Cookie', cookie).send({ enabled: false });
+    try {
+      const exact = ['/api/copilot/settings', '/api/copilot/settings/', '/api/copilot/Settings'];
+      for (const path of exact) {
+        expect((await request(app).get(path).set('Cookie', cookie)).status).toBe(200);
+      }
+      for (const path of ['/api/copilot/settings/x', '/api/copilot/settings/x/y']) {
+        const res = await request(app).get(path).set('Cookie', cookie);
+        expect(res.status).toBe(403);
+        expect(res.body.error).toBe('copilot_disabled');
+      }
+    } finally {
+      await request(app).put('/api/copilot/settings').set('Cookie', cookie).send({ enabled: true });
+    }
+    expect((await request(app).get('/api/copilot/me').set('Cookie', cookie)).status).toBe(200);
+  });
 });

@@ -47,7 +47,8 @@ let processGrantSecret: Buffer | null = null;
  * Chave do HMAC do grant do Copiloto.
  *
  * - Variável presente: precisa de ≥ 32 bytes em QUALQUER ambiente (valor curto é erro, não
- *   aviso: um segredo fraco em staging vira hábito em produção).
+ *   aviso: um segredo fraco em staging vira hábito em produção) e ser diferente do
+ *   `AGENT_RUNTIME_TOKEN` (o bearer de serviço não pode bastar para forjar um grant).
  * - Ausente em produção: lança (o boot falha em `loadConfig`).
  * - Ausente fora de produção: gera 32 bytes aleatórios por processo e avisa uma vez. Grants
  *   deixam de valer a cada reinício, o que em dev é o comportamento certo (turnos duram 120 s).
@@ -61,6 +62,12 @@ export function copilotGrantSecret(env: NodeJS.ProcessEnv = process.env): Buffer
     if (!parsed.success) {
       throw new Error(
         `${COPILOT_GRANT_SECRET_ENV} inválida: precisa de pelo menos ${COPILOT_GRANT_SECRET_MIN_BYTES} bytes.`,
+      );
+    }
+    // Segredos distintos por função: quem tem o bearer de serviço não pode forjar grants.
+    if (parsed.data === env['AGENT_RUNTIME_TOKEN']) {
+      throw new Error(
+        `${COPILOT_GRANT_SECRET_ENV} inválida: precisa ser diferente do AGENT_RUNTIME_TOKEN.`,
       );
     }
     return Buffer.from(parsed.data, 'utf8');

@@ -93,7 +93,29 @@ openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 48   # PG_PASSWORD, etc.
 nano /opt/leadium/.env
 ```
 Mínimos obrigatórios: `PG_PASSWORD`, `RABBITMQ_PASSWORD`, `SUPABASE_*`,
-`ENCRYPTION_KEY`, `OPENROUTER_API_KEY`, `AGENT_RUNTIME_TOKEN`.
+`ENCRYPTION_KEY`, `OPENROUTER_API_KEY`, `AGENT_RUNTIME_TOKEN`, `COPILOT_GRANT_SECRET`.
+
+#### `COPILOT_GRANT_SECRET` (Copiloto, F73-S03 / ADR-003 §2)
+
+Chave HMAC-SHA256 que assina o grant de cada turno do Copiloto. **Precisa estar no
+`/opt/leadium/.env` da VPS ANTES do deploy** que traz o Copiloto: o compose a exige
+(`${COPILOT_GRANT_SECRET:?…}`, a interpolação falha e o deploy para) e a API recusa
+subir em produção sem ela.
+
+```bash
+# Gerar (64 caracteres base64 = 48 bytes; o mínimo aceito é 32 bytes):
+openssl rand -base64 48
+# Colar no .env da VPS, em uma linha:
+#   COPILOT_GRANT_SECRET=<valor gerado>
+```
+
+- **Distinta do `AGENT_RUNTIME_TOKEN`.** O bearer de serviço autentica o runtime; o grant
+  amarra a chamada a um membro e a um turno. Se fossem o mesmo valor, quem tem o bearer
+  forjaria grants de qualquer membro. A API recusa subir quando os dois são iguais.
+- Vai **só** para o serviço `api` (não está no bloco `x-app-env`): os workers não a recebem.
+- Use o valor gerado como está (com `+`, `/` e `=`): não passe pelo `tr -dc` acima.
+- Rotação: troque no `.env` e faça o deploy. Os grants em voo (vida de 120 s) passam a ser
+  recusados como `grant_bad_signature`; os turnos ativos falham e o membro reenvia.
 
 ### 2.6. Primeiro deploy
 ```bash

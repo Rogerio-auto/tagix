@@ -39,6 +39,18 @@ describe('copilotGrantSecret', () => {
     }
   });
 
+  it('segredo igual ao AGENT_RUNTIME_TOKEN → lança em qualquer ambiente (inclusive no boot)', () => {
+    for (const env of ['production', 'development', 'test']) {
+      vi.stubEnv('NODE_ENV', env);
+      vi.stubEnv(COPILOT_GRANT_SECRET_ENV, STRONG);
+      vi.stubEnv('AGENT_RUNTIME_TOKEN', STRONG);
+      expect(() => copilotGrantSecret()).toThrow(/AGENT_RUNTIME_TOKEN/);
+      expect(() => loadConfig()).toThrow(/AGENT_RUNTIME_TOKEN/);
+    }
+    vi.stubEnv('AGENT_RUNTIME_TOKEN', `${STRONG}-outro`);
+    expect(copilotGrantSecret().equals(Buffer.from(STRONG, 'utf8'))).toBe(true);
+  });
+
   it('o tamanho é medido em bytes (UTF-8), não em caracteres', () => {
     vi.stubEnv('NODE_ENV', 'development');
     // 16 caracteres "é" = 32 bytes: aceito.
