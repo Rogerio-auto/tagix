@@ -15,8 +15,13 @@ import { COPILOT_TOOLS, copilotToolDescriptorsFor } from '../index';
 import {
   createCopilotToolRegistry,
   defineCopilotTool,
+  defineEngineTool,
   emitToolResult,
+  isEngineTool,
   listToolDescriptorsFor,
+  toolOfferedTo,
+  type CopilotToolDefinition,
+  type ToolOfferContext,
 } from './registry';
 
 const ok = async () => ({ ok: true, decision: 'executed' as const, model_view: 'ok' });
@@ -44,15 +49,17 @@ const tools = [
     taintsTurn: false,
     handler: ok,
   }),
-  defineCopilotTool({
+  // Escritas: só pelo motor (`makeProposeTool` usa `defineEngineTool`).
+  defineEngineTool({
     key: 'propose_deal_move',
     capability: 'deal.move',
     description: 'Propõe mover negócios.',
     args: z.object({ deal_ids: z.array(z.string().uuid()).min(1).max(200) }).strict(),
+    requires: ['pipeline.view'],
     taintsTurn: false,
     handler: ok,
   }),
-  defineCopilotTool({
+  defineEngineTool({
     key: 'propose_campaign_cancel',
     capability: 'campaign.cancel',
     description: 'Propõe cancelar uma campanha.',
@@ -62,7 +69,9 @@ const tools = [
   }),
 ];
 
-function principal(role: Role, matrix: CapabilityMatrix = {}): CopilotPrincipal {
+const offer = (...roles: Role[]): ToolOfferContext => ({ otherActiveRoles: new Set(roles) });
+
+function principalInput(role: Role, matrix: CapabilityMatrix = {}) {
   const settings: CopilotSettingsView = {
     ...COPILOT_SETTINGS_DEFAULTS,
     capabilityMatrix: matrix as Record<string, Record<string, boolean>>,
@@ -71,7 +80,7 @@ function principal(role: Role, matrix: CapabilityMatrix = {}): CopilotPrincipal 
     updatedBy: null,
     updatedAt: null,
   };
-  return buildCopilotPrincipal({
+  return {
     workspaceId: settings.workspaceId,
     memberId: '00000000-0000-4000-8000-000000000002',
     role,
@@ -79,11 +88,15 @@ function principal(role: Role, matrix: CapabilityMatrix = {}): CopilotPrincipal 
     subscriptionStatus: 'active',
     trialEndsAt: null,
     settings,
-  });
+  };
 }
 
-const keysFor = (p: CopilotPrincipal): string[] =>
-  listToolDescriptorsFor(p, tools).map((d) => d.key);
+function principal(role: Role, matrix: CapabilityMatrix = {}): CopilotPrincipal {
+  return buildCopilotPrincipal(principalInput(role, matrix));
+}
+
+const keysFor = (p: CopilotPrincipal, o?: ToolOfferContext): string[] =>
+  listToolDescriptorsFor(p, tools, o).map((d) => d.key);
 
 describe('listToolDescriptorsFor', () => {
   it('AGENT: vê consulta do pipeline e mover; NÃO vê campanhas nem cancelar campanha', () => {
@@ -124,6 +137,111 @@ describe('listToolDescriptorsFor', () => {
   it('o registro de produção começa vazio e compõe sem erro', () => {
     expect(COPILOT_TOOLS).toEqual([]);
     expect(copilotToolDescriptorsFor(principal('OWNER'))).toEqual([]);
+  });
+});
+
+describe('oferta de escritas (propose_*) a quem pode pedir aprovação (F73-S05)', () => {
+  const others = offer('OWNER', 'ADMIN', 'SUPERVISOR', 'AGENT', 'READONLY');
+
+  it('o papel não pode, mas existe aprovador possível → oferece (a recusa vira blocked)', () => {
+    expect(keysFor(principal('AGENT'), others)).toEqual([
+      'list_deals',
+      'propose_deal_move',
+      'propose_campaign_cancel',
+    ]);
+    expect(keysFor(principal('READONLY'), others)).toEqual([
+      'list_deals',
+      'list_campaigns',
+      'propose_deal_move',
+      'propose_campaign_cancel',
+    ]);
+  });
+
+  it('sem nenhum aprovador possível → NÃO oferece', () => {
+    // Só há atendentes e leitores além de mim: ninguém cancela campanha.
+    expect(keysFor(principal('AGENT'), offer('AGENT', 'READONLY'))).not.toContain(
+      'propose_campaign_cancel',
+    );
+    // O único papel que poderia está desligado na matriz.
+    expect(
+      keysFor(principal('AGENT', { ADMIN: { 'campaign.cancel': false } }), offer('ADMIN')),
+    ).not.toContain('propose_campaign_cancel');
+    // Sem contexto de oferta: falha fechada (só o que o papel executa).
+    expect(keysFor(principal('AGENT'))).not.toContain('propose_campaign_cancel');
+  });
+
+  it('capability_disabled para o PRÓPRIO papel esconde, mesmo com aprovadores', () => {
+    expect(
+      keysFor(principal('AGENT', { AGENT: { 'campaign.cancel': false } }), others),
+    ).not.toContain('propose_campaign_cancel');
+    expect(keysFor(principal('AGENT', { AGENT: { 'deal.move': false } }), others)).not.toContain(
+      'propose_deal_move',
+    );
+    expect(keysFor(principal('AGENT', { AGENT: { use: false } }), others)).toEqual([]);
+  });
+
+  it('assinatura inativa e `queries_only` NÃO escondem (o motor recusa com o motivo)', () => {
+    const readOnly = buildCopilotPrincipal({
+      ...principalInput('OWNER'),
+      subscriptionStatus: 'expired',
+    });
+    expect(readOnly.subscription.inactive).toBe(true);
+    expect(listToolDescriptorsFor(readOnly, tools, others).map((d) => d.key)).toContain(
+      'propose_campaign_cancel',
+    );
+  });
+
+  it('`requires` de leitura não satisfeitas escondem', () => {
+    const needsCampaigns = defineEngineTool({
+      key: 'propose_campaign_cancel_strict',
+      capability: 'campaign.cancel',
+      description: 'x',
+      args: z.object({ campaign_id: z.string().uuid() }).strict(),
+      requires: ['campaign.list'],
+      taintsTurn: false,
+      handler: ok,
+    });
+    expect(toolOfferedTo(principal('AGENT'), needsCampaigns, others)).toBe(false);
+    expect(toolOfferedTo(principal('READONLY'), needsCampaigns, others)).toBe(true);
+  });
+});
+
+describe('escrita só pelo motor de propostas (boot)', () => {
+  const engine = tools[2]!;
+
+  it('defineCopilotTool recusa capacidade de escrita', () => {
+    expect(() =>
+      defineCopilotTool({
+        key: 'move_direct',
+        capability: 'deal.move',
+        description: 'x',
+        args: z.object({}).strict(),
+        taintsTurn: false,
+        handler: ok,
+      }),
+    ).toThrow(/makeProposeTool/);
+  });
+
+  it('defineEngineTool recusa consulta e ferramenta que contamina o turno', () => {
+    const base = { description: 'x', args: z.object({}).strict(), handler: ok };
+    expect(() =>
+      defineEngineTool({ ...base, key: 'q', capability: 'query', taintsTurn: false }),
+    ).toThrow(/escrita/);
+    expect(() =>
+      defineEngineTool({ ...base, key: 'w', capability: 'deal.move', taintsTurn: true }),
+    ).toThrow(/contato/);
+  });
+
+  it('o registro lança com escrita forjada (cópia ou objeto montado com authorization)', () => {
+    expect(isEngineTool(engine)).toBe(true);
+    expect(() => createCopilotToolRegistry([engine])).not.toThrow();
+    const copy: CopilotToolDefinition = { ...engine, key: 'propose_copy' };
+    expect(isEngineTool(copy)).toBe(false);
+    expect(() => createCopilotToolRegistry([copy])).toThrow(/makeProposeTool/);
+    const query = tools[0]!;
+    const forged: CopilotToolDefinition = { ...query, key: 'forged', authorization: 'engine' };
+    expect(() => createCopilotToolRegistry([forged])).toThrow(/forjada/);
+    expect(toolOfferedTo(principal('OWNER'), copy, offer('ADMIN'))).toBe(false);
   });
 });
 
