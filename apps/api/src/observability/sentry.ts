@@ -54,6 +54,8 @@ const SECRET_PATH_RES: readonly RegExp[] = [
 const SECRET_QUERY_RE = /([?&#]|^)(token_hash|redirect_to|token)=[^&#\s"']*/gi;
 /** Chaves de objeto cujo valor nunca sai (corpo do aceite/preview/reset, headers). */
 const SECRET_KEY_RE = /token|password|secret|hash|authorization|cookie|emailproof|redirect_to/i;
+/** Cabeçalhos que são credenciais inteiras (o grant do Copiloto é uma: F73-S03). */
+const SECRET_HEADER_RE = /^(authorization|cookie|x-copilot-grant)$/i;
 const MAX_DEPTH = 8;
 
 /**
@@ -102,7 +104,7 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
     if (request.headers) {
       const headers: Record<string, string> = {};
       for (const [key, inner] of Object.entries(request.headers)) {
-        headers[key] = /^(authorization|cookie)$/i.test(key) ? MASK : scrubInviteSecrets(inner);
+        headers[key] = SECRET_HEADER_RE.test(key) ? MASK : scrubInviteSecrets(inner);
       }
       request.headers = headers;
     }
