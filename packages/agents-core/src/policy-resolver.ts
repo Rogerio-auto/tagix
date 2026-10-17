@@ -13,8 +13,10 @@
  *    workspace ainda não tem linha (provisionamento tardio), aplica os defaults
  *    do schema (`POLICY_DEFAULTS`), espelhando os `default()` de
  *    `workspace_agent_policies` para nunca deixar o runtime sem policy.
- *  - `monthToDateSpendUsd(workspaceId)` — soma `llm_usage_logs.cost_usd` do mês
- *    corrente (UTC) sob RLS; é a base do hard cap de custo (vide `cost-guard`).
+ *  - `monthToDateSpendUsd(workspaceId, at?, tx?, { surface })` — soma
+ *    `llm_usage_logs.cost_usd` do mês corrente (UTC) sob RLS, de UMA superfície (padrão
+ *    `'agent'`, F73-S10); é a base do hard cap de custo (vide `cost-guard`). O Copiloto
+ *    lê a sua (`'copilot'`) e decide o estado com `copilotBudgetState`.
  *  - `resolvePolicy(workspaceId, agentId?)` — orquestra os dois acima e monta o
  *    `PolicySnapshot`. `remaining_monthly_budget_usd = null` quando não há cap
  *    (`max_monthly_cost_usd IS NULL`); caso contrário, `cap - gasto`, nunca
@@ -32,7 +34,7 @@
  */
 import { and, eq, gte, lt, sql } from 'drizzle-orm';
 import { schema, withWorkspace } from '@hm/db';
-import type { DbTx } from '@hm/db';
+import type { CopilotSettingsView, DbTx, LlmUsageSurface } from '@hm/db';
 
 /**
  * Snapshot de policy resolvido pelo Node (snake_case — wire Pydantic/Zod).
@@ -173,10 +175,24 @@ export async function loadWorkspacePolicy(
   return tx ? read(tx) : withWorkspace(workspaceId, read);
 }
 
+/** Opções de `monthToDateSpendUsd`. */
+export interface SpendQueryOptions {
+  /**
+   * Superfície do custo (F73-S10). Padrão `'agent'`: o teto dos agentes de atendimento soma
+   * só o que eles gastaram, e o Copiloto (orçamento próprio, `'copilot'`) nunca derruba o
+   * atendimento por orçamento. Sem linhas `copilot`, o resultado é idêntico ao de antes.
+   */
+  readonly surface?: LlmUsageSurface;
+}
+
 /**
- * Soma `llm_usage_logs.cost_usd` do mês corrente (UTC) para o workspace, sob RLS.
- * Inclui toda chamada LLM da janela — chat de agente, embeddings, vision,
- * transcription — porque o cap é de custo total do workspace, não por agente.
+ * Soma `llm_usage_logs.cost_usd` do mês corrente (UTC) para o workspace e a superfície, sob
+ * RLS. Na superfície `agent` inclui toda chamada LLM dos agentes na janela (chat, embeddings,
+ * vision, transcription): o cap é de custo total do atendimento, não por agente.
+ *
+ * O filtro explícito por `workspace_id` não muda o resultado sob RLS; é o prefixo do índice
+ * (`workspace_id`, `surface`, `created_at desc`) e o cinto caso a função seja chamada fora
+ * do papel com RLS.
  *
  * Aceita um `tx` opcional (composição na mesma transação RLS do `loadWorkspacePolicy`).
  */
@@ -184,24 +200,71 @@ export async function monthToDateSpendUsd(
   workspaceId: string,
   at: Date = new Date(),
   tx?: DbTx,
+  options: SpendQueryOptions = {},
 ): Promise<number> {
   const start = monthStartUtc(at);
   const end = nextMonthStartUtc(at);
+  const surface: LlmUsageSurface = options.surface ?? 'agent';
+  const logs = schema.llmUsageLogs;
   const run = async (t: DbTx): Promise<number> => {
     const rows = await t
       .select({
-        spendUsd: sql<string | null>`coalesce(sum(${schema.llmUsageLogs.costUsd}), 0)`,
+        spendUsd: sql<string | null>`coalesce(sum(${logs.costUsd}), 0)`,
       })
-      .from(schema.llmUsageLogs)
+      .from(logs)
       .where(
         and(
-          gte(schema.llmUsageLogs.createdAt, start),
-          lt(schema.llmUsageLogs.createdAt, end),
+          eq(logs.workspaceId, workspaceId),
+          eq(logs.surface, surface),
+          gte(logs.createdAt, start),
+          lt(logs.createdAt, end),
         ),
       );
-    return Number(rows[0]?.spendUsd ?? '0');
+    const spend = Number(rows[0]?.spendUsd ?? '0');
+    return Number.isFinite(spend) ? spend : 0;
   };
   return tx ? run(tx) : withWorkspace(workspaceId, run);
+}
+
+// ─── Orçamento do Copiloto (F73-S10; COPILOTO.md P8) ─────────────────────────
+
+/** Estados do orçamento do Copiloto (mesmos valores de `COPILOT_BUDGET_STATES`, `@hm/shared`). */
+export type CopilotBudgetStateValue = 'ok' | 'alert' | 'queries_only' | 'paused';
+
+/**
+ * Teto duro das CONSULTAS no modo `queries_only`, como fração do teto mensal.
+ * PROVISÓRIO: 120 % depende da decisão de preço (COPILOTO.md P8). Mude só aqui.
+ */
+export const COPILOT_QUERY_HARD_CEILING_RATIO = 1.2;
+
+/** O que o estado do orçamento precisa da configuração (`copilot_settings`). */
+export type CopilotBudgetSettings = Pick<
+  CopilotSettingsView,
+  'monthlyBudgetUsd' | 'budgetAlertPct' | 'budgetMode'
+>;
+
+/**
+ * Estado do orçamento mensal do Copiloto a partir do gasto (função pura):
+ *
+ *   gasto < alerta                    → ok
+ *   alerta ≤ gasto < teto             → alert
+ *   gasto ≥ teto, modo `pause`        → paused       (nada passa)
+ *   gasto ≥ teto, modo `queries_only` → queries_only (escritas param; consultas seguem)
+ *   gasto ≥ teto × 120 %              → paused       (teto duro: nem consulta)
+ *
+ * Valor não finito (numeric corrompido) falha FECHADO: `paused`.
+ */
+export function copilotBudgetState(
+  settings: CopilotBudgetSettings,
+  spendUsd: number,
+): CopilotBudgetStateValue {
+  const cap = Number(settings.monthlyBudgetUsd);
+  if (!Number.isFinite(spendUsd) || !Number.isFinite(cap)) return 'paused';
+  if (spendUsd >= cap) {
+    if (settings.budgetMode === 'pause') return 'paused';
+    return spendUsd >= cap * COPILOT_QUERY_HARD_CEILING_RATIO ? 'paused' : 'queries_only';
+  }
+  return spendUsd >= (cap * settings.budgetAlertPct) / 100 ? 'alert' : 'ok';
 }
 
 /**

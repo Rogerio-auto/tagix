@@ -13,12 +13,17 @@
  * Montado em `app.ts` fora de `requireAuth` (auth de serviço + grant), como o caminho de agente.
  */
 import type { Router } from 'express';
+import type { DbTx } from '@hm/db';
 import type { CopilotToolDescriptor } from '@hm/shared';
 import type { CopilotPrincipal } from '../../services/copilot/identity/principal';
 import { executors as actCrmExecutors, tools as actCrmTools } from './act-crm';
 import { executors as actExternalExecutors, tools as actExternalTools } from './act-external';
 import type { CapabilityExecutor } from './core/executor-types';
-import { listToolDescriptorsFor, type CopilotToolDefinition } from './core/registry';
+import {
+  listToolDescriptorsFor,
+  loadToolOfferContext,
+  type CopilotToolDefinition,
+} from './core/registry';
 import { createCopilotToolsRouter, type CopilotToolsRouterOptions } from './core/router';
 import { tools as memoryTools } from './memory-tools';
 import { tools as readCrmTools } from './read-crm';
@@ -39,9 +44,21 @@ export const COPILOT_EXECUTORS: readonly CapabilityExecutor[] = Object.freeze([
   ...actExternalExecutors,
 ]);
 
-/** Descritores que o modelo vê neste turno (F73-S10 monta o `CopilotRunRequest.tools`). */
-export function copilotToolDescriptorsFor(principal: CopilotPrincipal): CopilotToolDescriptor[] {
-  return listToolDescriptorsFor(principal, COPILOT_TOOLS);
+/**
+ * Descritores que o modelo vê neste turno (F73-S10 monta o `CopilotRunRequest.tools`).
+ *
+ * Carrega o contexto de oferta (papéis dos OUTROS membros ativos) sob o `tx` RLS do turno, para
+ * que uma `propose_*` apareça também a quem só pode PEDIR aprovação (o motor grava `blocked`
+ * com o "Pedir aprovação"; ADR-003 §5 e §7). Sem aprovador possível, a escrita não é oferecida.
+ * `tools` é injetável só para testes; produção usa o registro completo.
+ */
+export async function copilotToolDescriptorsFor(
+  tx: DbTx,
+  principal: CopilotPrincipal,
+  tools: readonly CopilotToolDefinition[] = COPILOT_TOOLS,
+): Promise<CopilotToolDescriptor[]> {
+  const offer = await loadToolOfferContext(tx, principal);
+  return listToolDescriptorsFor(principal, tools, offer);
 }
 
 /** `POST /internal/copilot/tools/:key` com o registro completo. */

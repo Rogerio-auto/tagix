@@ -99,6 +99,12 @@ describe('isExemptFromSubscriptionGuard', () => {
       isExemptFromSubscriptionGuard('POST', `/API/Copilot/Sessions/${id.toUpperCase()}/Messages`),
     ).toBe(true);
     expect(isExemptFromSubscriptionGuard('PATCH', '/api/copilot/me/prefs')).toBe(true);
+    // Parar um turno (F73-S10): não escreve dado de negócio e corta custo.
+    expect(isExemptFromSubscriptionGuard('POST', `/api/copilot/turns/${id}/cancel`)).toBe(true);
+    expect(isExemptFromSubscriptionGuard('POST', `/api/copilot/turns/${id}/cancel/`)).toBe(true);
+    expect(
+      isExemptFromSubscriptionGuard('POST', `/API/Copilot/Turns/${id.toUpperCase()}/Cancel`),
+    ).toBe(true);
     // Só o método e o caminho exatos.
     expect(isExemptFromSubscriptionGuard('POST', `/api/copilot/proposals/${id}/confirm`)).toBe(
       false,
@@ -113,10 +119,17 @@ describe('isExemptFromSubscriptionGuard', () => {
     expect(isExemptFromSubscriptionGuard('POST', `/api/copilot/sessions/${id}/messages/x`)).toBe(
       false,
     );
-    expect(isExemptFromSubscriptionGuard('POST', `/api/copilot/turns/${id}/cancel`)).toBe(false);
     expect(isExemptFromSubscriptionGuard('PUT', '/api/copilot/settings')).toBe(false);
     expect(isExemptFromSubscriptionGuard('POST', '/api/copilot/memory/facts')).toBe(false);
     expect(isExemptFromSubscriptionGuard('POST', '/api/copilot/sessionsx')).toBe(false);
+    // A exceção do Parar é ancorada: nem outro método, nem id fora de UUID, nem sufixo/prefixo.
+    expect(isExemptFromSubscriptionGuard('DELETE', `/api/copilot/turns/${id}/cancel`)).toBe(false);
+    expect(isExemptFromSubscriptionGuard('PATCH', `/api/copilot/turns/${id}/cancel`)).toBe(false);
+    expect(isExemptFromSubscriptionGuard('POST', '/api/copilot/turns/nao-uuid/cancel')).toBe(false);
+    expect(isExemptFromSubscriptionGuard('POST', `/api/copilot/turns/${id}/cancel/x`)).toBe(false);
+    expect(isExemptFromSubscriptionGuard('POST', `/api/copilot/turns/${id}`)).toBe(false);
+    expect(isExemptFromSubscriptionGuard('POST', `/x/api/copilot/turns/${id}/cancel`)).toBe(false);
+    expect(isExemptFromSubscriptionGuard('POST', `/api/copilot/turns/${id}/cancelx`)).toBe(false);
   });
 });
 
@@ -226,19 +239,41 @@ describe('requireActiveSubscription (via withRLS, routers reais)', () => {
     expect(pastDue.status).toBe(400);
   });
 
-  it('expired: perguntar ao Copiloto passa na guarda; confirmar proposta continua 402', async () => {
+  it('expired: perguntar e Parar passam na guarda; renomear/arquivar e confirmar continuam 402', async () => {
     await setStatus('expired');
     const id = randomUUID();
-    // Rotas de sessão são do F73-S10: hoje o router é um lugar reservado, então a prova de
-    // que a guarda deixou passar é chegar ao roteamento (404), e não o 402.
-    const open = await request(app).post('/api/copilot/sessions').set('Cookie', cookie).send({});
-    expect(open.status).not.toBe(402);
-    expect(open.status).toBe(404);
+    // Abrir sessão chega ao handler (201); perguntar com corpo vazio chega à validação (400).
+    const open = await request(app)
+      .post('/api/copilot/sessions')
+      .set('Cookie', cookie)
+      .send({ origin: 'docked' });
+    expect(open.status).toBe(201);
+    const sessionId: unknown = open.body.id;
+    expect(typeof sessionId).toBe('string');
     const ask = await request(app)
       .post(`/api/copilot/sessions/${id}/messages`)
       .set('Cookie', cookie)
       .send({});
-    expect(ask.status).toBe(404);
+    expect(ask.status).toBe(400);
+    // Parar (F73-S10): chega ao handler; turno inexistente → 404 do handler, não 402.
+    const cancel = await request(app)
+      .post(`/api/copilot/turns/${id}/cancel`)
+      .set('Cookie', cookie)
+      .send({});
+    expect(cancel.status).toBe(404);
+    expect(cancel.body.error).toBe('turn_not_found');
+    // Renomear e arquivar sessão escrevem: continuam 402.
+    const rename = await request(app)
+      .patch(`/api/copilot/sessions/${String(sessionId)}`)
+      .set('Cookie', cookie)
+      .send({ title: 'Outro título' });
+    expect(rename.status).toBe(402);
+    expect(rename.body.error).toBe('subscription_inactive');
+    const archive = await request(app)
+      .delete(`/api/copilot/sessions/${String(sessionId)}`)
+      .set('Cookie', cookie);
+    expect(archive.status).toBe(402);
+    expect(archive.body.error).toBe('subscription_inactive');
     const prefs = await request(app)
       .patch('/api/copilot/me/prefs')
       .set('Cookie', cookie)
