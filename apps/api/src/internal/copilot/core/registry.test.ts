@@ -134,19 +134,25 @@ describe('listToolDescriptorsFor', () => {
     });
   });
 
-  it('o registro de produção compõe sem erro, com chaves únicas e só as 8 consultas de read-crm', () => {
+  it('o registro de produção compõe sem erro, com chaves únicas e só as consultas de read-crm e read-ops', () => {
     const keys = COPILOT_TOOLS.map((t) => t.key);
     expect(new Set(keys).size).toBe(keys.length);
     expect([...keys].sort()).toEqual(
       [
         'aggregate_deals',
         'forecast_revenue',
+        'get_campaign',
         'get_contact',
+        'get_conversation_digest',
         'get_deal',
         'get_pipeline_overview',
+        'list_campaigns',
+        'list_conversations',
         'list_deals',
+        'list_events',
         'list_members',
         'search_contacts',
+        'search_knowledge',
       ].sort(),
     );
     expect(COPILOT_TOOLS.every((t) => t.capability === 'query')).toBe(true);

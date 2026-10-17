@@ -2,7 +2,7 @@
 id: F73-S07
 title: Ferramentas de consulta do Copiloto, operação (conversas com contaminação, agenda, campanhas, conhecimento)
 phase: F73
-status: blocked
+status: review
 priority: high
 estimated_size: M
 model: opus
@@ -17,6 +17,9 @@ source_docs:
   - docs/features/CALENDAR.md
   - docs/features/CAMPAIGNS.md
 agent_id: backend-engineer
+claimed_at: 2026-10-17T06:57:18Z
+completed_at: 2026-10-17T07:24:49Z
+
 ---
 # F73-S07 — Consultas de operação
 
@@ -80,3 +83,28 @@ node --env-file=.env apps/api/node_modules/vitest/vitest.mjs run --root apps/api
 
 - Agente: `backend-engineer` (opus: superfície de injeção). Paralelo ao F73-S06.
 - Depende do S04 só pelo contrato de `/kb/search`; os testes usam fake.
+
+## Nota de execução (backend-engineer, 2026-10-17)
+
+Arquivos (todos em `apps/api/src/internal/copilot/read-ops/`): `index.ts` (registro das 6), `untrusted.ts`, `kb-client.ts`, `common.ts`, `list-conversations.ts`, `conversation-digest.ts`, `list-events.ts`, `campaigns.ts` (`list_campaigns` + `get_campaign`), `search-knowledge.ts`; testes `read-ops.integration.test.ts`, `kb-client.test.ts`, `untrusted.test.ts`. Reuso do S06 por import (`read-crm/common.ts`, `read-crm/limits.ts`: `startRead` com JIT desligado e `statement_timeout`, `fitModelView`, `clampLimit`, `notFound`, `maskPhone`, `loadWorkspaceFormat`); escopo de `services/copilot/identity/scope.ts`; agenda por `calendarRepo.accessibleCalendarIds` + `expandOccurrences` (os mesmos de `GET /api/events`).
+
+Decisões:
+- **Marca `untrusted`**: o runtime só delimita a chave `model_view.untrusted` (`render_model_view`, `prompt.py`), então todo texto de terceiro vai numa LISTA nessa chave, um item por texto, `{ untrusted: true, source, ...metadados do Node, text }`. Metadados (`role`, `at`, `n`, `field`) ficam dentro do item, serializados: texto que imite um campo chega escapado.
+- **`source` ganhou `conversation_message`** (além de `contact_message`|`event`|`kb`): no digest, as mensagens da equipe e da IA também vão marcadas (a da IA nasceu lendo o cliente; a da pessoa pode citá-lo). Mais estrito que o slot, sem custo.
+- **`list_conversations` não contamina** (como pede o slot), então o `model_view` não leva nome de contato nem prévia (nome pode vir do perfil do canal, escrito pelo contato; mesma linha do `list_deals` do S06). O nome aparece só no cartão, na hierarquia de `contact-label.ts`, com telefone MASCARADO quando não há nome. "Esperando" = `open|pending` com última mensagem do contato; ordem: quem espera há mais tempo primeiro.
+- **Digest**: sem cartão; exclui mensagens de sistema, reações e apagadas; mídia sem legenda vai com `kind` e texto vazio; cada mensagem recortada em 1.000 caracteres (por ponto de código); se não couber em 24 KB, saem as MAIS ANTIGAS.
+- **`list_events`**: sem `status`, cancelados ficam de fora; `calendar_id` inacessível/de outro workspace/inexistente → `not_found`; ocorrências de série apontam o id do mestre (o sintético `evt:` não é UUID); título, notas e local em `untrusted` (`source: 'event'`), um item por campo, ligados por `n`; leitura limitada a 500 linhas antes da expansão (acima disso, `truncated`).
+- **`get_campaign`**: números do rollup `campaign_metrics` (o da tela) + `pending` (destinatários `pending|sending`, o "agendadas") só no `model_view`. **Custo**: não existe fonte de custo por campanha no banco (envio Meta não é precificado; custo de IA não é ligado à campanha). `cost_used` sai `null` para todos; sem `agent.view_costs` nem a chave (nem `currency`/`cost_note`) vai ao modelo. A fonte futura entra em `loadCampaignCostUsed`, atrás da mesma trava.
+- **`search_knowledge`**: `createSearchKnowledgeTool(deps)` (config e logger injetáveis; padrão lê `AGENT_RUNTIME_URL`/`AGENT_RUNTIME_TOKEN` a cada chamada). Workspace sempre do grant. Qualquer falha (sem config, timeout 5 s, ≠ 2xx, corpo fora do contrato, rede) → `ok:false, decision:'error'` com mensagem fixa; motivo só no log (`copilot.kb_search_failed`, sem URL/corpo). A chamada HTTP acontece dentro da transação do callback (assinatura do registro): a conexão fica presa até 5 s.
+
+Validação (contagens reais, 2026-10-17, Postgres dev :5442):
+- `pnpm --filter @hm/api typecheck`: 0 erros.
+- `pnpm exec eslint src/internal/copilot/read-ops` (o `@hm/api` não tem script `lint`): 0 problemas. Prettier aplicado.
+- `vitest run src/internal/copilot/read-ops --maxWorkers=1`: **3 arquivos / 41 testes verdes** (integração 33, kb-client 5, untrusted 3).
+- `vitest run src/internal/copilot`: 176 verdes, 8 skip (EXPLAIN 50k do S06), **1 vermelho esperado**: `core/registry.test.ts` "o registro de produção compõe sem erro, com chaves únicas e só as 8 consultas de read-crm" — afirma exatamente as 8 do S06; com as 6 deste slot registradas o conjunto passa a ter 14 consultas. Arquivo fora da fronteira: ajuste do orchestrator na integração.
+- `vitest run src/services/copilot/turns src/services/copilot/identity`: 8 arquivos / 67 verdes.
+
+Lacunas de contrato (`@hm/shared`, não estendido):
+- `CampaignCardDataSchema` não tem o número de "agendadas"/ainda por enviar: vai só no `model_view` (`pending`).
+- `cost_used` sem fonte de dado (ver acima).
+- `ConversationListDataSchema` não tem campo de "não lidas" nem de departamento; não enviados.
