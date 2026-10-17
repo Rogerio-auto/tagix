@@ -1,0 +1,117 @@
+[
+  {
+    "type": "status",
+    "tool_key": "list_deals"
+  },
+  {
+    "type": "tool_call_completed",
+    "tool_key": "list_deals",
+    "call_id": "00000000-0000-4000-8000-000000000001",
+    "envelope": {
+      "ok": true,
+      "decision": "executed",
+      "result_id": "r-deals-1",
+      "model_view": {
+        "count": 3,
+        "deals": [
+          {
+            "id": "d1",
+            "title": "Ana · Alinhadores",
+            "value": 6800,
+            "idle_days": 9
+          },
+          {
+            "id": "d2",
+            "title": "Caio · Alinhadores",
+            "value": 7200,
+            "idle_days": 12
+          },
+          {
+            "id": "d3",
+            "title": "Lia · Alinhadores",
+            "value": 5900,
+            "idle_days": 8
+          }
+        ]
+      },
+      "public_event": {
+        "v": 1,
+        "type": "tool_result",
+        "kind": "deal_list",
+        "result_id": "r-deals-1",
+        "source": {
+          "label": "Pipeline",
+          "as_of": "2026-10-16T09:30:00-03:00",
+          "record_count": 3
+        },
+        "truncated": false,
+        "data": {
+          "currency": "BRL",
+          "total": 3,
+          "items": [
+            {
+              "deal_id": "a1b2c3d4-0001-4a5b-8c6d-7e8f9a0b1c2d",
+              "title": "Ana · Alinhadores",
+              "contact_name": "Ana",
+              "value": 6800,
+              "stage": {
+                "stage_id": "9d4c2b1a-0e8f-4a7b-9c6d-5e4f3a2b1c0d",
+                "name": "Proposta enviada"
+              },
+              "owner_name": "Bruna Lima",
+              "idle_days": 9
+            },
+            {
+              "deal_id": "a1b2c3d4-0002-4a5b-8c6d-7e8f9a0b1c2d",
+              "title": "Caio · Alinhadores",
+              "contact_name": "Caio",
+              "value": 7200,
+              "stage": {
+                "stage_id": "9d4c2b1a-0e8f-4a7b-9c6d-5e4f3a2b1c0d",
+                "name": "Proposta enviada"
+              },
+              "owner_name": "Bruna Lima",
+              "idle_days": 12
+            },
+            {
+              "deal_id": "a1b2c3d4-0003-4a5b-8c6d-7e8f9a0b1c2d",
+              "title": "Lia · Alinhadores",
+              "contact_name": "Lia",
+              "value": 5900,
+              "stage": {
+                "stage_id": "9d4c2b1a-0e8f-4a7b-9c6d-5e4f3a2b1c0d",
+                "name": "Proposta enviada"
+              },
+              "owner_name": "Bruna Lima",
+              "idle_days": 8
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "type": "iteration_exceeded"
+  },
+  {
+    "type": "verdict_delta",
+    "text": "Não consegui concluir a resposta dentro do limite deste pedido. Tente uma pergunta mais específica."
+  },
+  {
+    "type": "final",
+    "blocks": {
+      "verdict": "Não consegui concluir a resposta dentro do limite deste pedido. Tente uma pergunta mais específica.",
+      "why": [],
+      "data_refs": [],
+      "sources": [],
+      "next_steps": []
+    },
+    "usage": {
+      "prompt_tokens": 200,
+      "completion_tokens": 40,
+      "total_cost_usd": 0.0002
+    },
+    "iterations": 2,
+    "format_fallback": true
+  }
+]

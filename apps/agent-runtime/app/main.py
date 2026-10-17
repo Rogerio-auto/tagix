@@ -18,6 +18,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import __version__
 from app.checkpoint import lifespan_checkpointer
 from app.config import get_settings
+from app.copilot.graph import build_copilot_graph
+from app.copilot.route import router as copilot_router
 from app.db import close_pool, get_pool, init_pool
 from app.graph import build_graph
 from app.health import router as health_router
@@ -28,6 +30,7 @@ from app.providers.embeddings import EmbeddingsProvider
 from app.routes import run_router
 from app.routes.embed import router as embed_router
 from app.routes.evaluate import router as evaluate_router
+from app.routes.kb_search import router as kb_search_router
 from app.tools.calendar import register_calendar_tools
 from app.tools.registry import build_default_registry
 from app.tools.workflow import register_workflow_tools
@@ -64,6 +67,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             checkpointer=checkpointer,
             provider=provider,
         )
+        # Copiloto (F73-S04): segundo grafo, sem checkpointer e sem banco. Compartilha
+        # o provider OpenRouter e o client HTTP de callback (timeout de 20 s por chamada).
+        app.state.copilot_graph = build_copilot_graph(
+            provider=provider,
+            http_client=http_client,
+            settings=settings,
+        )
         logger.info("agent-runtime up (version={})", __version__)
         try:
             yield
@@ -99,6 +109,8 @@ def create_app() -> FastAPI:
     app.include_router(run_router)
     app.include_router(embed_router)
     app.include_router(evaluate_router)
+    app.include_router(copilot_router)
+    app.include_router(kb_search_router)
     app.include_router(metrics_router)
 
     return app
