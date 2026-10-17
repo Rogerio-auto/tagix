@@ -8,6 +8,9 @@
 
 - [ ] F75-S16 — confirmar se algum flow em produção chama host interno/porta baixa/resposta > 1 MiB (passam a falhar após o deploy) — **Precisa de:** Rogério (consulta no banco de produção antes do deploy) — **Impacto:** flow legítimo pode parar — **Como fechar:** `SELECT` nos nós `http_request` dos flows publicados; se houver host interno legítimo, pôr em `HM_FLOW_HTTP_ALLOWLIST`.
 
+- [ ] F73-S12 — calibrar a taxa de alcance de campanha do briefing (`BRIEFING_CAMPAIGN_REACH_RATE` = 2%, estimativa do worker) e os pesos do score — **Precisa de:** Rogério + telemetria do F73-S15 — **Impacto:** ordem dos itens de campanha no briefing — **Como fechar:** ajustar constantes após 30 dias de dados.
+- [ ] F73-S12 — `POST /api/copilot/briefing/today/seen` dá 402 com assinatura inativa (o GET passa) — **Precisa de:** decisão (isentar no guard?) — **Impacto:** briefing reabre sozinho em empresa em só leitura — **Como fechar:** exceção exata no `subscription-guard` se aprovado.
+
 ## Credenciais, contas e serviços externos
 
 - [ ] F73-S03 — `COPILOT_GRANT_SECRET` precisa existir no `.env` da VPS ANTES do próximo deploy (o compose de produção agora exige; sem ela o deploy para no `config`) — **Precisa de:** Rogério (acesso à VPS) — **Impacto:** deploy bloqueado — **Como fechar:** `openssl rand -base64 48` → `.env` da VPS (valor distinto do `AGENT_RUNTIME_TOKEN`); ver `docs/runbooks/deploy-production.md` §2.5.

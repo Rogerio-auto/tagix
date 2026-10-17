@@ -2,7 +2,7 @@
 id: F73-S12
 title: Briefing do dia (geração determinística com score explicável por receita em risco, dado com hora, revalidação e push da manhã)
 phase: F73
-status: review
+status: done
 priority: high
 estimated_size: M
 model: sonnet
