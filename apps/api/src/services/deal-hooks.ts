@@ -11,7 +11,7 @@
 import { eq } from 'drizzle-orm';
 import { getDb, schema } from '@hm/db';
 import { emitDealStageChanged } from './deal-events';
-import { onStageChanged, type StageChangeEvent } from './deal-move';
+import { onStageChanged, type DealMoveMetadata, type StageChangeEvent } from './deal-move';
 
 const { stages, pendingAutomations } = schema;
 
@@ -26,28 +26,60 @@ async function rulesForStage(stageId: string): Promise<AutomationRule[]> {
   return (row?.rules ?? []) as AutomationRule[];
 }
 
+/**
+ * A regra agendada leva a correlação da movimentação (`rule.metadata`, F73-S08): é por ela que
+ * o desfazer de uma movimentação do Copiloto acha e cancela o que ela deixou na fila
+ * (`cancelPendingAutomationsOfProposal`). `pending_automations` não tem coluna de metadados; o
+ * `rule` é o snapshot jsonb da regra e o worker ignora chaves que não conhece.
+ */
+function withCorrelation(
+  rule: AutomationRule,
+  metadata: DealMoveMetadata | undefined,
+): AutomationRule {
+  if (!metadata?.proposal_id) return rule;
+  const tagged: AutomationRule & { metadata: DealMoveMetadata } = {
+    ...rule,
+    metadata: {
+      ...(metadata.via ? { via: metadata.via } : {}),
+      proposal_id: metadata.proposal_id,
+    },
+  };
+  return tagged;
+}
+
 async function scheduleStageRules(
-  workspaceId: string,
-  dealId: string,
+  e: StageChangeEvent,
   stageId: string,
   trigger: 'on_enter' | 'on_exit',
   now: Date,
 ): Promise<void> {
-  const rules = (await rulesForStage(stageId)).filter(
-    (r) => r.trigger === trigger && r.enabled,
-  );
+  const rules = (await rulesForStage(stageId)).filter((r) => r.trigger === trigger && r.enabled);
   if (rules.length === 0) return;
   await getDb()
     .insert(pendingAutomations)
     .values(
       rules.map((rule) => ({
-        workspaceId,
-        dealId,
-        rule,
+        workspaceId: e.workspaceId,
+        dealId: e.dealId,
+        rule: withCorrelation(rule, e.metadata),
         scheduledAt: new Date(now.getTime() + Math.max(0, (rule.delaySeconds ?? 0) * 1000)),
         status: 'pending' as const,
       })),
     );
+}
+
+/**
+ * Agenda as automações de saída/entrada da movimentação. Desfazer (`origin: 'undo'`) não agenda
+ * nada: voltar para onde estava não é entrar no estágio de novo (o cancelamento das pendentes da
+ * movimentação desfeita já aconteceu na transação, em `moveDealToStage`).
+ */
+export async function scheduleStageAutomations(
+  e: StageChangeEvent,
+  now = new Date(),
+): Promise<void> {
+  if (e.origin === 'undo') return;
+  await scheduleStageRules(e, e.fromStageId, 'on_exit', now);
+  await scheduleStageRules(e, e.toStageId, 'on_enter', now);
 }
 
 let registered = false;
@@ -68,8 +100,6 @@ export function registerDealHooks(): void {
   });
 
   onStageChanged(async (e: StageChangeEvent) => {
-    const now = new Date();
-    await scheduleStageRules(e.workspaceId, e.dealId, e.fromStageId, 'on_exit', now);
-    await scheduleStageRules(e.workspaceId, e.dealId, e.toStageId, 'on_enter', now);
+    await scheduleStageAutomations(e);
   });
 }

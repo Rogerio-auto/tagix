@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { and, asc, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import { requireRefsInWorkspace, schema, TenantRefError } from '@hm/db';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
+import { addTags, removeTags } from '../../services/contacts/tags';
 import { param } from '../conversions/types';
 
 const {
@@ -426,33 +427,16 @@ export function createContactsCrudRouter(): Router {
     const memberId = req.auth!.member.id;
     const { tagId } = parsed.data;
 
-    const result = await req.scoped!(async (tx) => {
-      const [contact] = await tx
-        .select({ id: contacts.id })
-        .from(contacts)
-        .where(and(eq(contacts.id, id), isNull(contacts.deletedAt)))
-        .limit(1);
-      if (!contact) return 'no_contact' as const;
+    // Mesmo service do Copiloto (`contact.tag`, F73-S08).
+    const result = await req.scoped!((tx) =>
+      addTags(tx, { workspaceId, contactId: id, tagIds: [tagId], taggedBy: memberId }),
+    );
 
-      const [tag] = await tx
-        .select({ id: tags.id })
-        .from(tags)
-        .where(eq(tags.id, tagId))
-        .limit(1);
-      if (!tag) return 'no_tag' as const;
-
-      await tx
-        .insert(contactTags)
-        .values({ contactId: id, tagId, workspaceId, taggedBy: memberId })
-        .onConflictDoNothing();
-      return 'ok' as const;
-    });
-
-    if (result === 'no_contact') {
+    if (result.kind === 'no_contact') {
       res.sendStatus(404);
       return;
     }
-    if (result === 'no_tag') {
+    if (result.kind === 'no_tag') {
       res.status(404).json({ error: 'tag_not_found' });
       return;
     }
@@ -470,10 +454,7 @@ export function createContactsCrudRouter(): Router {
       return;
     }
     const [removed] = await req.scoped!((tx) =>
-      tx
-        .delete(contactTags)
-        .where(and(eq(contactTags.contactId, id), eq(contactTags.tagId, tagId)))
-        .returning({ tagId: contactTags.tagId }),
+      removeTags(tx, { contactId: id, tagIds: [tagId] }),
     );
     if (!removed) {
       res.sendStatus(404);

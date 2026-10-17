@@ -31,18 +31,11 @@ import {
 } from '@hm/db';
 import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
-import {
-  TransitionError,
-  moveDealToStage,
-  type DealActor,
-} from '../../services/deal-move';
+import { TransitionError, type DealActor } from '../../services/deal-move';
 import { emitDealCreated, emitDealUpdated } from '../../services/deal-events';
-import {
-  dealClosedFromRow,
-  dealCreatedFromRow,
-  domainEvents,
-  domainEventsOutbox,
-} from '@hm/shared/mq';
+import { moveDeal } from '../../services/deals/move';
+import { assignDealOwner } from '../../services/deals/owner';
+import { dealClosedFromRow, dealCreatedFromRow, domainEventsOutbox } from '@hm/shared/mq';
 import {
   loadContactReadThrough,
   loadConversationAdAttribution,
@@ -269,7 +262,7 @@ export function createDealsCrudRouter(): Router {
       updated = await req.scoped!(async (tx) => {
         // Deal alheio/inexistente é 404 ANTES de olhar as referências do payload.
         const [current] = await tx
-          .select({ id: deals.id })
+          .select({ id: deals.id, ownerId: deals.ownerId })
           .from(deals)
           .where(eq(deals.id, id))
           .limit(1);
@@ -280,6 +273,16 @@ export function createDealsCrudRouter(): Router {
           [{ kind: 'member', id: d.ownerId, field: 'ownerId' }],
           d.conversationId,
         );
+        // Troca de responsável pelo service (F73-S08): grava `deal_history` `owner_changed`.
+        if (d.ownerId !== undefined && (d.ownerId ?? null) !== current.ownerId) {
+          await assignDealOwner(tx, {
+            workspaceId: req.auth!.workspace.id,
+            dealId: id,
+            ownerId: d.ownerId ?? null,
+            actor: memberActor(req),
+          });
+          delete patch['ownerId'];
+        }
         const [row] = await tx.update(deals).set(patch).where(eq(deals.id, id)).returning();
         return row;
       });
@@ -305,31 +308,16 @@ export function createDealsCrudRouter(): Router {
     const id = param(req, 'id');
     const workspaceId = req.auth!.workspace.id;
     try {
-      const result = await req.scoped!(async (tx) => {
-        const moved = await moveDealToStage(tx, {
+      // `moveDeal`: transição + histórico + seam e, se mudou, `deal.stage_changed` na outbox
+      // da mesma transação (F70-S09/S17). O mesmo service que o Copiloto usa (F73-S08).
+      const result = await req.scoped!((tx) =>
+        moveDeal(tx, {
           dealId: id,
           newStageId: parsed.data.stageId,
           actor: memberActor(req),
           workspaceId,
-        });
-        // F70-S09/S17: movimento real (não o no-op para o mesmo estágio), na outbox
-        // da mesma transação.
-        if (moved.fromStageId !== moved.toStageId) {
-          await enqueueOutbox(
-            tx,
-            domainEventsOutbox([
-              domainEvents.dealStageChanged(workspaceId, {
-                dealId: moved.deal.id,
-                pipelineId: moved.deal.pipelineId,
-                fromStageId: moved.fromStageId,
-                toStageId: moved.toStageId,
-                actorType: 'member',
-              }),
-            ]),
-          );
-        }
-        return moved;
-      });
+        }),
+      );
       res.json({ deal: result.deal, fromStageId: result.fromStageId, toStageId: result.toStageId });
     } catch (err: unknown) {
       if (err instanceof TransitionError) {
