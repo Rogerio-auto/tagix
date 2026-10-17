@@ -50,9 +50,7 @@ class Settings(BaseSettings):
     # argumentos de ferramenta (o `verdict` sai em `verdict_delta`). `openai/gpt-4.1-mini`
     # cumpre os três, sem tokens de raciocínio antes da 1ª saída (meta p50 ≤ 4 s do
     # `final`, COPILOTO.md §9). A whitelist do super-admin pode trocar por env.
-    copilot_default_model: str = Field(
-        default="openai/gpt-4.1-mini", alias="COPILOT_DEFAULT_MODEL"
-    )
+    copilot_default_model: str = Field(default="openai/gpt-4.1-mini", alias="COPILOT_DEFAULT_MODEL")
 
     # Embeddings — OpenAI DIRETO (text-embedding-3-small, 1536 dims; F3-S02).
     # OpenRouter NÃO roteia embeddings; dimensão é contrato rígido com vector(1536).

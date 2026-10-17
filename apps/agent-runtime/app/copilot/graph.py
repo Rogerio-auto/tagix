@@ -89,12 +89,22 @@ def build_prompt_node(state: CopilotState) -> dict[str, Any]:
 
 
 def _accumulate_usage(prev: CopilotUsage, usage: Any) -> CopilotUsage:
+    """Soma o uso de uma chamada ao do turno.
+
+    Custo desconhecido em qualquer chamada (OpenRouter sem `usage.cost`, ou chamada sem
+    `usage`) torna o custo do turno `null`: uma soma parcial pareceria exata e iria para
+    `llm_usage_logs`. A API reconcilia pelo `generation_id` quando precisar.
+    """
     if usage is None:
-        return prev
+        return prev.model_copy(update={"total_cost_usd": None})
+    cost = getattr(usage, "cost_usd", None)
+    total = (
+        None if prev.total_cost_usd is None or cost is None else prev.total_cost_usd + float(cost)
+    )
     return CopilotUsage(
         prompt_tokens=prev.prompt_tokens + int(getattr(usage, "prompt_tokens", 0) or 0),
         completion_tokens=prev.completion_tokens + int(getattr(usage, "completion_tokens", 0) or 0),
-        total_cost_usd=prev.total_cost_usd + float(getattr(usage, "cost_usd", 0.0) or 0.0),
+        total_cost_usd=total,
     )
 
 

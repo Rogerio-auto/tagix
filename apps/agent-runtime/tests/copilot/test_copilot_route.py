@@ -99,9 +99,7 @@ def test_graph_not_initialized_is_503() -> None:
 )
 def test_invalid_tool_descriptor_is_422(descriptor: dict[str, Any]) -> None:
     graph, node = _happy_graph()
-    resp = _client(graph).post(
-        "/copilot/run", json=request_body(tools=[descriptor]), headers=AUTH
-    )
+    resp = _client(graph).post("/copilot/run", json=request_body(tools=[descriptor]), headers=AUTH)
     assert resp.status_code == 422
     assert node.requests == []
 
@@ -176,7 +174,7 @@ def test_copilot_package_never_imports_the_database_layer() -> None:
 async def test_turn_timeout_emits_timeout_error_and_cancels_the_model() -> None:
     provider = ScriptedProvider([HANG])
     graph = build_graph(provider, FakeNode({}))
-    req = with_policy(turn_timeout_s=0.3)
+    req = with_policy(turn_timeout_s=1)  # mínimo do contrato (int ≥ 1)
 
     frames = [f async for f in stream_copilot_turn(graph, req, get_settings())]
     events = parse_frames(frames)

@@ -130,7 +130,8 @@ def test_search_returns_best_chunk_per_document_under_rls() -> None:
     ]
     pool, embeddings = FakePool(rows), FakeEmbeddings()
     resp = _client(pool, embeddings).post(
-        "/kb/search", json={"workspace_id": WS, "query": "  política de troca  ", "limit": 2},
+        "/kb/search",
+        json={"workspace_id": WS, "query": "  política de troca  ", "limit": 2},
         headers=AUTH,
     )
 

@@ -35,22 +35,58 @@
         ]
       },
       "public_event": {
+        "v": 1,
         "type": "tool_result",
-        "result_id": "r-deals-1",
         "kind": "deal_list",
-        "data": {
-          "deal_ids": [
-            "d1",
-            "d2",
-            "d3"
-          ]
-        },
+        "result_id": "r-deals-1",
         "source": {
           "label": "Pipeline",
           "as_of": "2026-10-16T09:30:00-03:00",
           "record_count": 3
         },
-        "truncated": false
+        "truncated": false,
+        "data": {
+          "currency": "BRL",
+          "total": 3,
+          "items": [
+            {
+              "deal_id": "a1b2c3d4-0001-4a5b-8c6d-7e8f9a0b1c2d",
+              "title": "Ana · Alinhadores",
+              "contact_name": "Ana",
+              "value": 6800,
+              "stage": {
+                "stage_id": "9d4c2b1a-0e8f-4a7b-9c6d-5e4f3a2b1c0d",
+                "name": "Proposta enviada"
+              },
+              "owner_name": "Bruna Lima",
+              "idle_days": 9
+            },
+            {
+              "deal_id": "a1b2c3d4-0002-4a5b-8c6d-7e8f9a0b1c2d",
+              "title": "Caio · Alinhadores",
+              "contact_name": "Caio",
+              "value": 7200,
+              "stage": {
+                "stage_id": "9d4c2b1a-0e8f-4a7b-9c6d-5e4f3a2b1c0d",
+                "name": "Proposta enviada"
+              },
+              "owner_name": "Bruna Lima",
+              "idle_days": 12
+            },
+            {
+              "deal_id": "a1b2c3d4-0003-4a5b-8c6d-7e8f9a0b1c2d",
+              "title": "Lia · Alinhadores",
+              "contact_name": "Lia",
+              "value": 5900,
+              "stage": {
+                "stage_id": "9d4c2b1a-0e8f-4a7b-9c6d-5e4f3a2b1c0d",
+                "name": "Proposta enviada"
+              },
+              "owner_name": "Bruna Lima",
+              "idle_days": 8
+            }
+          ]
+        }
       }
     }
   },

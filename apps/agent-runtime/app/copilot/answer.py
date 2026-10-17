@@ -33,7 +33,9 @@ from app.copilot.partial_json import TopLevelStringFieldStreamer
 from app.copilot.types import (
     ANSWER_TOOL_NAME,
     DATA_REFS_MAX_ITEMS,
+    NEXT_STEP_LABEL_MAX_CHARS,
     NEXT_STEPS_MAX_ITEMS,
+    SOURCE_LABEL_MAX_CHARS,
     SOURCES_MAX_ITEMS,
     VERDICT_MAX_CHARS,
     WHY_MAX_CHARS,
@@ -42,6 +44,8 @@ from app.copilot.types import (
     AnswerSource,
     NextStep,
     NextStepAction,
+    is_internal_route,
+    is_iso_datetime,
 )
 
 # Veredito quando não há nada aproveitável do modelo (ex.: só chamou ferramentas até o teto).
@@ -83,18 +87,23 @@ ANSWER_TOOL_SPEC: Final[dict[str, Any]] = {
                 },
                 "data_refs": {
                     "type": "array",
+                    "maxItems": DATA_REFS_MAX_ITEMS,
                     "items": {"type": "string"},
                     "description": "result_id devolvidos pelas ferramentas neste turno.",
                 },
                 "sources": {
                     "type": "array",
+                    "maxItems": SOURCES_MAX_ITEMS,
                     "items": {
                         "type": "object",
                         "additionalProperties": False,
                         "required": ["label", "as_of"],
                         "properties": {
-                            "label": {"type": "string"},
-                            "as_of": {"type": "string"},
+                            "label": {"type": "string", "maxLength": SOURCE_LABEL_MAX_CHARS},
+                            "as_of": {
+                                "type": "string",
+                                "description": "Instante ISO 8601 com fuso, copiado da ferramenta.",
+                            },
                         },
                     },
                     "description": "Fontes usadas, com o horário (as_of) vindo da ferramenta.",
@@ -107,7 +116,7 @@ ANSWER_TOOL_SPEC: Final[dict[str, Any]] = {
                         "additionalProperties": False,
                         "required": ["label"],
                         "properties": {
-                            "label": {"type": "string"},
+                            "label": {"type": "string", "maxLength": NEXT_STEP_LABEL_MAX_CHARS},
                             "action": {
                                 "type": "object",
                                 "additionalProperties": False,
@@ -203,21 +212,16 @@ def _clean_str(value: Any, *, max_chars: int) -> str | None:
 
 
 def _safe_navigate_target(value: str) -> bool:
-    """Só rota interna relativa: `/x`, nunca `//host`, esquema ou barra invertida (R4)."""
-    return (
-        value.startswith("/")
-        and not value.startswith("//")
-        and "\\" not in value
-        and ":" not in value.split("?", 1)[0]
-        and not any(ch.isspace() for ch in value)
-        and len(value) <= 200
-    )
+    """Só rota interna relativa (R4): a regra do `InternalRouteSchema` (começa com `/`,
+    sem `//`, sem espaço nem `\\`, ≤ 300) e, a mais, nada de `:` no caminho (esquema
+    embutido do tipo `/redirect:https:…`)."""
+    return is_internal_route(value) and ":" not in value.split("?", 1)[0]
 
 
 def _parse_next_step(raw: Any) -> NextStep | None:
     if not isinstance(raw, dict):
         return None
-    label = _clean_str(raw.get("label"), max_chars=120)
+    label = _clean_str(raw.get("label"), max_chars=NEXT_STEP_LABEL_MAX_CHARS)
     if label is None:
         return None
     action: NextStepAction | None = None
@@ -237,10 +241,13 @@ def _parse_next_step(raw: Any) -> NextStep | None:
 def _parse_source(raw: Any) -> AnswerSource | None:
     if not isinstance(raw, dict):
         return None
-    label = _clean_str(raw.get("label"), max_chars=120)
-    as_of = _clean_str(raw.get("as_of"), max_chars=64)
-    if label is None or as_of is None:
+    label = _clean_str(raw.get("label"), max_chars=SOURCE_LABEL_MAX_CHARS)
+    as_of = raw.get("as_of")
+    # `as_of` copiado da ferramenta; data inventada ou em outro formato derruba a fonte
+    # (P6: horário de fonte que não é instante verificável não é fonte).
+    if label is None or not isinstance(as_of, str) or not is_iso_datetime(as_of.strip()):
         return None
+    as_of = as_of.strip()
     return AnswerSource(label=label, as_of=as_of)
 
 

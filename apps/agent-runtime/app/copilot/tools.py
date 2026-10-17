@@ -29,9 +29,10 @@ from time import monotonic
 from typing import Any, Final
 
 import httpx
+from pydantic import ValidationError
 
 from app.config import Settings
-from app.copilot.types import CopilotToolDescriptor
+from app.copilot.types import CopilotToolDescriptor, CopilotToolEnvelope
 from app.logging import get_logger
 
 logger = get_logger()
@@ -63,14 +64,16 @@ def failure_envelope(model_view: str = SAFE_FAILURE_VIEW) -> dict[str, Any]:
     return {"ok": False, "decision": "error", "model_view": model_view}
 
 
-def _is_envelope(data: Any) -> bool:
-    return (
-        isinstance(data, dict)
-        and isinstance(data.get("ok"), bool)
-        and isinstance(data.get("decision"), str)
-        and "model_view" in data
-        and (data.get("result_id") is None or isinstance(data.get("result_id"), str))
-    )
+def parse_envelope(data: Any) -> dict[str, Any] | None:
+    """Envelope do Node validado contra o contrato (`CopilotToolEnvelope`), ou `None`.
+
+    Fora do contrato é tratado como falha: um envelope torto não chega ao modelo nem ao
+    evento (o Node validaria o frame e derrubaria o turno inteiro).
+    """
+    try:
+        return CopilotToolEnvelope.model_validate(data).model_dump(mode="json")
+    except ValidationError:
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,17 +154,18 @@ class CopilotCallbackTool:
             data = resp.json()
         except ValueError:
             return self._fail(started, reason="not_json", status=resp.status_code)
-        if not _is_envelope(data):
+        envelope = parse_envelope(data)
+        if envelope is None:
             return self._fail(started, reason="bad_envelope", status=resp.status_code)
 
         duration_ms = round((monotonic() - started) * 1000)
         logger.info(
             "copilot tool ok",
             tool_key=self.key,
-            decision=str(data["decision"]),
+            decision=envelope["decision"],
             duration_ms=duration_ms,
         )
-        return CallbackOutcome(envelope=data, from_node=True, duration_ms=duration_ms)
+        return CallbackOutcome(envelope=envelope, from_node=True, duration_ms=duration_ms)
 
     def _fail(self, started: float, *, reason: str, status: int | None = None) -> CallbackOutcome:
         duration_ms = round((monotonic() - started) * 1000)

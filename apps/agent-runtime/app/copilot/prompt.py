@@ -187,8 +187,6 @@ def _section_memory(req: CopilotRunRequest) -> str:
 
 def _section_page(req: CopilotRunRequest) -> str:
     page = req.page_context_resolved
-    if page is None:
-        return f"{SECTION_TITLES[6]}\nSem contexto de tela: a pessoa não está olhando um registro."
     body = page.label if not page.entity_summary else f"{page.label}\n{page.entity_summary}"
     return (
         f"{SECTION_TITLES[6]}\n"
@@ -265,14 +263,12 @@ def _clip(text: str) -> str:
 def render_model_view(envelope: dict[str, Any]) -> str:
     """`model_view` do envelope → texto para o modelo, com spotlighting do que é de terceiro.
 
-    Duas formas de marcar dado de contato (o Node escolhe):
-    - `envelope.untrusted = true`: o `model_view` inteiro é de terceiro;
-    - `model_view` objeto com a chave `untrusted`: só aquela parte é de terceiro (cada
-      item da lista, ou cada valor do objeto, em bloco próprio); o resto é confiável.
+    O envelope é fechado (`CopilotToolEnvelopeSchema`); o Node marca dado de contato
+    DENTRO do `model_view` objeto, na chave `untrusted`: só aquela parte é de terceiro
+    (string inteira, cada item da lista ou cada valor do objeto, em bloco próprio); o
+    resto é confiável.
     """
     view = envelope.get("model_view")
-    if envelope.get("untrusted") is True:
-        return _wrap_chunked(_as_text(view), label=LABEL_THIRD_PARTY)
     if isinstance(view, dict) and "untrusted" in view:
         trusted = {k: v for k, v in view.items() if k != "untrusted"}
         parts = []

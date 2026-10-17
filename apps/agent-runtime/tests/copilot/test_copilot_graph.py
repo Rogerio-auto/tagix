@@ -335,7 +335,11 @@ async def test_proposal_forces_answer_and_stops_further_tools() -> None:
         "ok": True,
         "decision": "proposed",
         "result_id": "r-prop-1",
-        "model_view": {"status": "awaiting_confirmation", "proposal_id": "p1", "summary": "Mover 3"},
+        "model_view": {
+            "status": "awaiting_confirmation",
+            "proposal_id": "p1",
+            "summary": "Mover 3",
+        },
     }
     descriptors = [query_tool_descriptor(), query_tool_descriptor("propose_deal_move")]
     req = CopilotRunRequest.model_validate(request_body(tools=descriptors))
@@ -400,9 +404,7 @@ async def test_untrusted_model_view_reaches_model_spotlighted() -> None:
         "result_id": "r-conv-1",
         "model_view": {"count": 1, "untrusted": [{"from": "contato", "text": attack}]},
     }
-    provider = ScriptedProvider(
-        [tool_call_script("list_deals", {}), answer_script(ANSWER)]
-    )
+    provider = ScriptedProvider([tool_call_script("list_deals", {}), answer_script(ANSWER)])
     await run_turn(provider, FakeNode({"list_deals": json_responder(envelope)}))
     content = provider.calls[1]["messages"][-1]["content"]
     assert "⟦dados-de-terceiros⟧" in content

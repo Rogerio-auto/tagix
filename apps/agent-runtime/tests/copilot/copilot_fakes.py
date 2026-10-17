@@ -28,6 +28,13 @@ TURN_ID = "0b9f6a3e-5d1c-4f0e-9a51-7c2d8e4b1a10"
 WORKSPACE_ID = "6e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b"
 GRANT = "eyJ2IjoxLCJ0aWQiOiJmaXh0dXJlIn0.ZmFrZS1zaWduYXR1cmUtZm9yLXRlc3Rz"
 RUNTIME_TOKEN = "test-internal-token"
+FACT_ID = "3c8e1f4a-7b2d-4e9a-8c6f-1a2b3c4d5e6f"
+STAGE_ID = "9d4c2b1a-0e8f-4a7b-9c6d-5e4f3a2b1c0d"
+DEAL_IDS = (
+    "a1b2c3d4-0001-4a5b-8c6d-7e8f9a0b1c2d",
+    "a1b2c3d4-0002-4a5b-8c6d-7e8f9a0b1c2d",
+    "a1b2c3d4-0003-4a5b-8c6d-7e8f9a0b1c2d",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +81,7 @@ def request_body(**overrides: Any) -> dict[str, Any]:
             "profile": [{"key": "what_we_sell", "content": "Alinhadores ortodônticos."}],
             "facts": [
                 {
-                    "id": "f-1",
+                    "id": FACT_ID,
                     "content": "Ticket médio de alinhadores é R$ 6.800.",
                     "source_label": "Bruna, 02/10",
                     "untrusted": False,
@@ -196,7 +203,9 @@ class ScriptedProvider:
     async def _run(self, script: list[StreamDelta] | str) -> AsyncIterator[StreamDelta]:
         if script == HANG:
             yield StreamDelta(
-                tool_call=ToolCall(id="call_h", name="answer", arguments='{"verdict":"Parc', index=0)
+                tool_call=ToolCall(
+                    id="call_h", name="answer", arguments='{"verdict":"Parc', index=0
+                )
             )
             try:
                 self.hanging.set()
@@ -242,6 +251,41 @@ class FakeNode:
         return httpx.AsyncClient(transport=httpx.MockTransport(self.handler))
 
 
+_DEALS = (
+    ("Ana · Alinhadores", "Ana", 6800, 9),
+    ("Caio · Alinhadores", "Caio", 7200, 12),
+    ("Lia · Alinhadores", "Lia", 5900, 8),
+)
+
+
+def deal_list_public_event(result_id: str) -> dict[str, Any]:
+    """`tool_result` `deal_list` no formato do Zod (`DealListCardSchema` + `v`/`type`)."""
+    return {
+        "v": 1,
+        "type": "tool_result",
+        "kind": "deal_list",
+        "result_id": result_id,
+        "source": {"label": "Pipeline", "as_of": "2026-10-16T09:30:00-03:00", "record_count": 3},
+        "truncated": False,
+        "data": {
+            "currency": "BRL",
+            "total": 3,
+            "items": [
+                {
+                    "deal_id": deal_id,
+                    "title": title,
+                    "contact_name": contact,
+                    "value": value,
+                    "stage": {"stage_id": STAGE_ID, "name": "Proposta enviada"},
+                    "owner_name": "Bruna Lima",
+                    "idle_days": idle,
+                }
+                for deal_id, (title, contact, value, idle) in zip(DEAL_IDS, _DEALS, strict=True)
+            ],
+        },
+    }
+
+
 def ok_envelope(result_id: str = "r-deals-1", **extra: Any) -> dict[str, Any]:
     return {
         "ok": True,
@@ -255,14 +299,7 @@ def ok_envelope(result_id: str = "r-deals-1", **extra: Any) -> dict[str, Any]:
                 {"id": "d3", "title": "Lia · Alinhadores", "value": 5900, "idle_days": 8},
             ],
         },
-        "public_event": {
-            "type": "tool_result",
-            "result_id": result_id,
-            "kind": "deal_list",
-            "data": {"deal_ids": ["d1", "d2", "d3"]},
-            "source": {"label": "Pipeline", "as_of": "2026-10-16T09:30:00-03:00", "record_count": 3},
-            "truncated": False,
-        },
+        "public_event": deal_list_public_event(result_id),
         **extra,
     }
 
@@ -280,7 +317,9 @@ def json_responder(payload: dict[str, Any], status: int = 200):
 
 
 def build_graph(provider: ScriptedProvider, node: FakeNode):
-    return build_copilot_graph(provider=provider, http_client=node.client(), settings=get_settings())
+    return build_copilot_graph(
+        provider=provider, http_client=node.client(), settings=get_settings()
+    )
 
 
 def parse_frames(frames: list[str]) -> list[dict[str, Any]]:
