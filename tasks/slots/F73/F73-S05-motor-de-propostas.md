@@ -2,7 +2,7 @@
 id: F73-S05
 title: Motor de propostas (classificar, prever, confirmar, executar item a item, parar, desfazer, aprovação) e API de propostas e atividade
 phase: F73
-status: review
+status: done
 priority: critical
 estimated_size: L
 model: opus

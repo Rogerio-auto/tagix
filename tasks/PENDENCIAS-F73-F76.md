@@ -26,6 +26,10 @@
 - [ ] F73-S03 — `args_redacted` do Copiloto guarda só a forma dos args (sem ids), porque `internal/tools/log-redaction.ts` não tem política para chaves do Copiloto — **Precisa de:** slot que possa editar o redator (F73-S14 ou próprio) — **Impacto:** auditoria de chamadas sem ids de alvo — **Como fechar:** exportar gancho de política e registrar as chaves do Copiloto.
 - [ ] F73-S03 — escrita sob view-as responde `impersonation_read_only` (middleware global) e não `copilot_unavailable_impersonation` — **Precisa de:** decisão (aceitar) ou slot no middleware de impersonation — **Impacto:** só o código de erro difere; a escrita é barrada — **Como fechar:** F74 trata os dois códigos.
 
+- [ ] F73-S05 — idempotência do desfazer e do retry guardada em `audit_logs.metadata` (sem coluna) e lease sem dono (`lease_owner`); exclusão mútua vem do lock por item — **Precisa de:** slot de schema (`undo_idempotency_key`, `undo_lease_expires_at`, `lease_owner`) — **Impacto:** robustez; hoje há retomada após 10 min — **Como fechar:** migração + trocar a leitura no `undo.ts`/`retry.ts`/sweeper.
+- [ ] F73-S05 — `apps/api/src/index.ts` não trata SIGTERM: o sweeper só para em `httpServer 'close'` — **Precisa de:** slot de graceful shutdown — **Impacto:** seguro (lease retoma), mas o DoD "parado no shutdown" é nominal — **Como fechar:** `process.once('SIGTERM', () => httpServer.close())`.
+- [ ] F73-S05 — `can_confirm` do DTO não considera os `requires` do executor (pode mostrar verdadeiro e o confirmar dar 403) — **Precisa de:** F73-S14 — **Impacto:** botão habilitado que falha — **Como fechar:** `viewerCanAct` usar `authorizeWrite`.
+
 ## Itens bloqueados de propósito (v1.1)
 
 - [ ] F73-S16 — "Mover sozinho" do piloto automático — **Precisa de:** dado de aceitação (>= 70% de aceite e <= 3% de desfazer por 30 dias) — **Impacto:** o piloto só sugere e aguarda aprovação — **Como fechar:** destravar o slot depois da telemetria.
