@@ -36,6 +36,9 @@
 - [ ] F73-S10 — custo de turno cancelado/timeout/erro não é gravado (o runtime não emite `usage` parcial), mas o OpenRouter cobra — **Precisa de:** F73-S15 ou slot no runtime (emitir usage parcial no cancelamento) — **Impacto:** `/usage` subestima o gasto real — **Como fechar:** evento de usage parcial no runtime + gravação no `run.ts`.
 - [ ] F73-S10 — rótulos do contexto de página (título do negócio, nome do contato) vão no `entity_summary` entre aspas e cortados, mas sem marca `untrusted` — **Precisa de:** F73-S14 — **Impacto:** superfície de injeção — **Como fechar:** marcar e spotlight no prompt, ou contaminar o turno.
 
+- [ ] F73-S07 — não existe custo por campanha no banco (envio Meta sem preço; custo de IA sem vínculo) — `get_campaign.cost_used` e a linha "custo já usado" da política nível 4 ficam sem dado — **Precisa de:** Rogério (decidir se/como precificar envios) — **Impacto:** cartão e checagem de campanha sem custo — **Como fechar:** fonte de custo por campanha + `loadCampaignCostUsed`.
+- [ ] F73-S06 — `makeFormatters` em `read-crm/common.ts` não cai no padrão com locale inválido (o erro estoura ao formatar) — **Precisa de:** F73-S14 (correção pontual) — **Impacto:** consulta falha em workspace com locale inválido — **Como fechar:** validar o locale antes de criar os formatadores (como o `makeTextKit` do briefing).
+
 ## Itens bloqueados de propósito (v1.1)
 
 - [ ] F73-S16 — "Mover sozinho" do piloto automático — **Precisa de:** dado de aceitação (>= 70% de aceite e <= 3% de desfazer por 30 dias) — **Impacto:** o piloto só sugere e aguarda aprovação — **Como fechar:** destravar o slot depois da telemetria.

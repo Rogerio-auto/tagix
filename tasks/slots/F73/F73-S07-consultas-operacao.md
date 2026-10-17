@@ -2,7 +2,7 @@
 id: F73-S07
 title: Ferramentas de consulta do Copiloto, operação (conversas com contaminação, agenda, campanhas, conhecimento)
 phase: F73
-status: review
+status: done
 priority: high
 estimated_size: M
 model: opus
