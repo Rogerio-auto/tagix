@@ -9,8 +9,8 @@
 import { randomUUID } from 'node:crypto';
 import express, { Router, type Express } from 'express';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { closeDb, withWorkspace } from '@hm/db';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { closeDb, copilotProposalsRepo, withWorkspace } from '@hm/db';
 import { ActivityPageSchema, type Role } from '@hm/shared';
 import { requireAuth, withRLS } from '../../../middlewares/auth';
 import { copilotAvailable } from '../../../services/copilot/identity/available';
@@ -19,7 +19,11 @@ import {
   seedCopilotWorkspace,
   type SeededWorkspace,
 } from '../../../services/copilot/identity/test-fixtures';
-import { drainProposalExecutions, proposeAction } from '../../../services/copilot/proposals';
+import {
+  AfterCommitQueue,
+  drainProposalExecutions,
+  proposeAction,
+} from '../../../services/copilot/proposals';
 import {
   FakeStore,
   makeTestDeps,
@@ -36,18 +40,28 @@ const PII_TO = 'maria.souza@cliente.com.br +55 (11) 98888-7777';
 
 async function propose(role: Role, capability: 'deal.move' | 'campaign.pause', args: FakeArgs) {
   const executor = deps.executors.get(capability)!;
-  return withWorkspace(seeded.workspaceId, async (tx) => {
+  const queue = new AfterCommitQueue();
+  const outcome = await withWorkspace(seeded.workspaceId, async (tx) => {
     const principal = await resolveCopilotPrincipal(tx, {
       workspaceId: seeded.workspaceId,
       memberId: seeded.members[role].id,
     });
     return proposeAction(
       deps,
-      { tx, principal: principal!, source: 'copilot', turnId: null, sessionId: null },
+      {
+        tx,
+        principal: principal!,
+        source: 'copilot',
+        turnId: null,
+        sessionId: null,
+        afterCommit: (fn) => queue.push(fn),
+      },
       executor,
       args,
     );
   });
+  await queue.drain(deps.logger);
+  return outcome;
 }
 
 function ids(n: number): string[] {
@@ -178,5 +192,18 @@ describe('GET /api/copilot/activity.csv', () => {
     expect(text).toContain('[e-mail]');
     expect(text).toContain('[telefone]');
     expect(text).toContain('Mover negócios');
+  });
+
+  it('falha no meio do streaming DERRUBA a conexão (nunca um CSV truncado com cara de completo)', async () => {
+    const spy = vi
+      .spyOn(copilotProposalsRepo, 'listActivity')
+      .mockRejectedValueOnce(new Error('falha com dado: maria@example.com'));
+    try {
+      await expect(
+        request(app).get('/api/copilot/activity.csv').set('Cookie', cookie('OWNER')),
+      ).rejects.toThrow();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

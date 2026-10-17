@@ -19,6 +19,21 @@
  *   domínio com `actor = { type: 'member', memberId: ctx.principal.memberId }` e
  *   `metadata = { via: ctx.source, proposal_id: ctx.proposalId }`.
  * - `undoItem` confere que o estado atual ainda é `item.after`; se não for, `undo_conflict`.
+ * - `resolveIds` re-resolve alvos JÁ conhecidos (os itens da proposta) sob OUTRO principal, com
+ *   o mesmo escopo fino do `resolveTargets`: é como o motor descobre o que o APROVADOR enxerga
+ *   (ADR-003 §4 e §7). Quem ele não vê volta em `dropped`.
+ * - Efeito externo à transação (socket, fila, e-mail) NUNCA sai direto do executor: registre com
+ *   `ctx.afterCommit(fn)`. O motor só roda a fila depois do commit da transação do item (ou da
+ *   transação do callback, no nível 2); se a transação desfizer, a fila é descartada.
+ * - Teto de duração: `executeItem`/`undoItem` devem terminar em até `EXECUTOR_ITEM_MAX_MS`
+ *   (30 s). O lease do lote é de 120 s e é renovado a cada item; um item mais lento do que o
+ *   lease deixaria a varredura considerar a proposta parada. A exclusão mútua continua garantida
+ *   pelo lock da linha da proposta (`FOR UPDATE` no início do item), mas a retomada esperaria.
+ *   Trabalho longo (envio em massa) vai para a fila do domínio, e o item só a enfileira.
+ * - `summary` da prévia NÃO leva nome, telefone nem e-mail de CONTATO: ele vai para a
+ *   Atividade, para o CSV e para a trilha. Use contagens, nomes de estágio, de campanha e de
+ *   membros ("Mover 7 negócios de Orçamento enviado para Reativação"). O `label` do alvo só
+ *   aparece na prévia de quem já vê o registro (sem telefone nem e-mail).
  *
  * Os métodos usam a sintaxe de MÉTODO de propósito: o registro heterogêneo
  * (`readonly CapabilityExecutor[]`) aceita executores de `Args` diferentes sem `any` nem cast;
@@ -28,6 +43,7 @@ import type { z } from 'zod';
 import type { CopilotActionTargetType, CopilotProposalSource, DbTx } from '@hm/db';
 import type {
   CapabilityKey,
+  Permission,
   PolicyCheck,
   ProposalAdjustParams,
   ProposalImpact,
@@ -37,6 +53,15 @@ import type { CopilotPrincipal } from '../../../services/copilot/identity/princi
 
 /** Objeto JSON (o que vai para `jsonb`). */
 export type Json = Record<string, unknown>;
+
+/**
+ * Teto de duração de UM `executeItem`/`undoItem` (contrato; ver o cabeçalho). Bem abaixo do
+ * lease de 120 s (`COPILOT_PROPOSAL_LEASE_SECONDS`).
+ */
+export const EXECUTOR_ITEM_MAX_MS = 30_000;
+
+/** Efeito a rodar DEPOIS do commit (socket, fila). Erro vira log; nunca desfaz nada. */
+export type AfterCommitFn = () => void | Promise<void>;
 
 /** Contexto de toda chamada a um executor. Tudo aqui já foi autorizado pelo motor. */
 export interface ExecutorContext {
@@ -51,6 +76,19 @@ export interface ExecutorContext {
   /** `copilot` ou `autopilot`: vai em `metadata.via` das escritas de domínio. */
   readonly source: CopilotProposalSource;
   readonly now: Date;
+  /**
+   * Agenda `fn` para depois do commit da transação que contém esta escrita. Só existe sentido
+   * em `executeItem`/`undoItem`; nas fases de leitura (resolver, prévia, política) LANÇA, porque
+   * leitura não tem efeito para publicar. Se o item lançar (savepoint desfeito), o que ele
+   * agendou é descartado.
+   */
+  afterCommit(fn: AfterCommitFn): void;
+}
+
+/** Referência a um alvo já conhecido (item de uma proposta). */
+export interface TargetRef {
+  readonly type: CopilotActionTargetType;
+  readonly id: string;
 }
 
 /** Alvo resolvido sob o escopo do principal, com o estado lido agora. */
@@ -90,7 +128,10 @@ export interface ExecutorPreview {
   readonly irreversible: boolean;
   /** Avisa membros da equipe → nível ≥ 3. */
   readonly notifiesMembers: boolean;
-  /** Uma frase ("Mover 7 negócios de Orçamento enviado para Reativação"). ≤ 500. */
+  /**
+   * Uma frase ("Mover 7 negócios de Orçamento enviado para Reativação"). ≤ 500.
+   * PROIBIDO citar contato (nome, telefone, e-mail): vai para a Atividade, o CSV e a trilha.
+   */
   readonly summary: string;
   /** Resumo agrupado; ausente = o motor agrupa os itens por (antes, depois). */
   readonly beforeAfter?: ProposalPreview['before_after'];
@@ -157,8 +198,20 @@ export interface CapabilityExecutor<Args = unknown> {
   readonly argsSchema: z.ZodType<Args, z.ZodTypeDef, unknown>;
   /** Parâmetros ajustáveis na prévia. Ausente = só excluir itens. */
   readonly adjustableParams?: readonly AdjustableParam[];
+  /**
+   * Permissões de ENTIDADE além da permissão da capacidade (ex.: `pipeline.view` para mover
+   * negócios). O motor as passa em TODA autorização (propor, confirmar, aprovar, desfazer,
+   * executar) e o callback as confere antes do handler; a ferramenta `propose_*` herda daqui.
+   */
+  readonly requires?: readonly Permission[];
 
   resolveTargets(ctx: ExecutorContext, args: Args): Promise<ResolvedTargets>;
+  /**
+   * Re-resolve alvos já conhecidos sob `ctx.principal` (o aprovador, no confirmar de uma
+   * aprovação; os candidatos, em `listApprovers`). Mesmo escopo fino do `resolveTargets`; lê o
+   * estado atual. Só leitura.
+   */
+  resolveIds(ctx: ExecutorContext, targets: readonly TargetRef[]): Promise<ResolvedTargets>;
   preview(ctx: ExecutorContext, args: Args, targets: readonly Target[]): Promise<ExecutorPreview>;
   /** Nível 4: janela, consentimento, sessão de 24 h, progresso de campanha (ADR-004 §5). */
   policyCheck?(

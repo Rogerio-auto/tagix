@@ -12,25 +12,35 @@
  * - nenhum campo de identidade em `args` (`member_id`, `workspace_id`, `actor_*`…), em
  *   qualquer profundidade (objetos aninhados, arrays, uniões): a identidade vem só do grant
  *   (ADR-003 §3; COPILOTO.md §8 R2);
- * - `label` vem do catálogo (`statusLabelFor`), nunca da ferramenta nem do modelo.
+ * - `label` vem do catálogo (`statusLabelFor`), nunca da ferramenta nem do modelo;
+ * - capacidade de ESCRITA só entra pelo motor de propostas (`makeProposeTool`, que usa
+ *   `defineEngineTool`): `authorization: 'engine'`. Qualquer outra escrita lança no boot, e
+ *   `defineCopilotTool` recusa escrita já na definição (F73-S05; ADR-004 §1).
  *
  * O modelo só VÊ as ferramentas que o membro pode usar (`listToolDescriptorsFor`): o JSON
- * Schema dos `args` é gerado do mesmo Zod que valida a chamada.
+ * Schema dos `args` é gerado do mesmo Zod que valida a chamada. Escritas (`propose_*`) são
+ * oferecidas também a quem não pode executá-las mas tem a quem pedir aprovação: a recusa vira
+ * proposta `blocked` com "Pedir aprovação" (ADR-003 §7), e não silêncio.
  */
 import { randomBytes } from 'node:crypto';
+import { and, eq, ne } from 'drizzle-orm';
 import {
   extendZodWithOpenApi,
   OpenApiGeneratorV31,
   OpenAPIRegistry,
 } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
-import type { ClaimedToolCall, DbTx } from '@hm/db';
+import { schema, type ClaimedToolCall, type DbTx } from '@hm/db';
 import {
   COPILOT_STREAM_VERSION,
   CopilotToolDescriptorSchema,
   CopilotToolKeySchema,
+  ROLES,
   ToolResultEventSchema,
   can,
+  capabilityAllowed,
+  copilotAccessFor,
+  isWriteCapability,
   statusLabelFor,
   type CapabilityKey,
   type CopilotToolDescriptor,
@@ -38,9 +48,11 @@ import {
   type CopilotToolResultEvent,
   type Permission,
   type QueryArea,
+  type Role,
   type ToolResultCard,
 } from '@hm/shared';
 import type { CopilotPrincipal } from '../../../services/copilot/identity/principal';
+import type { AfterCommitFn } from './executor-types';
 
 // O gerador de JSON Schema do repositório (Zod v3) é o `zod-to-openapi` (OpenAPI 3.1 =
 // JSON Schema 2020-12). Idempotente: a API pública v1 aplica o mesmo patch.
@@ -74,6 +86,12 @@ export interface CopilotToolContext {
    * valida o evento público contra o contrato e devolve o par para o envelope.
    */
   emitResult(card: ToolResultCardInput): EmittedResult;
+  /**
+   * Agenda um efeito (socket, fila) para DEPOIS do commit da transação do callback. Se a
+   * ferramenta falhar (savepoint desfeito) ou a transação do callback não commitar, a fila é
+   * descartada: nada sai sobre um dado que não existe.
+   */
+  afterCommit(fn: AfterCommitFn): void;
 }
 
 /** Definição de uma ferramenta, como as áreas a escrevem. */
@@ -97,12 +115,33 @@ export interface CopilotToolSpec<Args> {
   handler(ctx: CopilotToolContext, args: Args): Promise<CopilotToolEnvelope>;
 }
 
+/**
+ * Quem autoriza papel/matriz/assinatura/orçamento:
+ * - ausente (`callback`): o callback, antes do handler (consultas);
+ * - `engine`: o motor de propostas, com o volume real dos alvos; o callback só confere turno,
+ *   grant, membro ativo, Copiloto ligado (e `copilot.use`), `requires` e orçamento `paused`.
+ */
+export type CopilotToolAuthorization = 'engine';
+
 /** Ferramenta registrada. `label` vem do catálogo. */
 export interface CopilotToolDefinition<
   Args = Record<string, unknown>,
 > extends CopilotToolSpec<Args> {
   /** Rótulo do `status` público ("Lendo o pipeline…"), sempre do catálogo. */
   readonly label: string;
+  /** `engine` só pelo `defineEngineTool` (motor de propostas). */
+  readonly authorization?: CopilotToolAuthorization;
+}
+
+/**
+ * Definições criadas pelo `defineEngineTool`. O campo `authorization` sozinho não basta (um
+ * objeto copiado ou montado à mão o teria): o registro exige a MESMA referência nascida aqui.
+ */
+const ENGINE_TOOLS = new WeakSet<CopilotToolDefinition>();
+
+/** A definição veio do motor de propostas? */
+export function isEngineTool(tool: CopilotToolDefinition): boolean {
+  return tool.authorization === 'engine' && ENGINE_TOOLS.has(tool);
 }
 
 /**
@@ -258,12 +297,42 @@ function assertSafeArgs(key: string, args: z.ZodTypeAny): void {
  * (o callback só o chama com a saída do próprio `args.safeParse`).
  */
 export function defineCopilotTool<Args>(spec: CopilotToolSpec<Args>): CopilotToolDefinition {
+  if (isWriteCapability(spec.capability)) {
+    throw new Error(
+      `copilot tool '${spec.key}': capacidade de escrita '${spec.capability}' só pelo motor de propostas (makeProposeTool).`,
+    );
+  }
+  return buildDefinition(spec, undefined);
+}
+
+/**
+ * Define uma ferramenta de ESCRITA cuja autorização é do motor de propostas. Uso exclusivo de
+ * `makeProposeTool` (`services/copilot/proposals`): é o handler dele que classifica, autoriza
+ * com o volume real e grava a proposta (inclusive `blocked`).
+ */
+export function defineEngineTool<Args>(spec: CopilotToolSpec<Args>): CopilotToolDefinition {
+  if (!isWriteCapability(spec.capability)) {
+    throw new Error(`copilot tool '${spec.key}': 'engine' é só para capacidade de escrita.`);
+  }
+  if (spec.taintsTurn) {
+    throw new Error(`copilot tool '${spec.key}': propor não lê conteúdo de contato.`);
+  }
+  const definition = buildDefinition(spec, 'engine');
+  ENGINE_TOOLS.add(definition);
+  return definition;
+}
+
+function buildDefinition<Args>(
+  spec: CopilotToolSpec<Args>,
+  authorization: CopilotToolAuthorization | undefined,
+): CopilotToolDefinition {
   const key = CopilotToolKeySchema.safeParse(spec.key);
   if (!key.success) throw new Error(`copilot tool: key inválida '${spec.key}'.`);
   assertSafeArgs(spec.key, spec.args);
   const definition: CopilotToolDefinition<Args> = {
     ...spec,
     label: statusLabelFor(spec.capability, spec.area).label,
+    ...(authorization ? { authorization } : {}),
   };
   // Apagamento de tipo deliberado: `Args` só entra pelo `safeParse` do próprio schema.
   return definition as unknown as CopilotToolDefinition;
@@ -274,7 +343,10 @@ export interface CopilotToolRegistry {
   list(): readonly CopilotToolDefinition[];
 }
 
-/** Monta o registro. Lança no boot se houver chave repetida ou ferramenta inválida. */
+/**
+ * Monta o registro. Lança no boot se houver chave repetida, ferramenta inválida, escrita que não
+ * veio do motor de propostas ou `engine` forjado.
+ */
 export function createCopilotToolRegistry(
   tools: readonly CopilotToolDefinition[],
 ): CopilotToolRegistry {
@@ -284,6 +356,14 @@ export function createCopilotToolRegistry(
       throw new Error(`copilot tool: key inválida '${tool.key}'.`);
     }
     assertSafeArgs(tool.key, tool.args);
+    if (isWriteCapability(tool.capability) && !isEngineTool(tool)) {
+      throw new Error(
+        `copilot tool '${tool.key}': escrita '${tool.capability}' precisa vir do makeProposeTool.`,
+      );
+    }
+    if (tool.authorization !== undefined && !isEngineTool(tool)) {
+      throw new Error(`copilot tool '${tool.key}': authorization '${tool.authorization}' forjada.`);
+    }
     if (byKey.has(tool.key)) throw new Error(`copilot tool: key repetida '${tool.key}'.`);
     byKey.set(tool.key, tool);
   }
@@ -313,23 +393,97 @@ export function argsJsonSchema(key: string, args: z.ZodTypeAny): Record<string, 
 }
 
 /**
- * A ferramenta é oferecida a este membro? Capacidade efetiva (papel ∧ matriz) e as
- * permissões de entidade. Assinatura e orçamento NÃO escondem ferramenta: a escrita é
- * recusada na chamada, com `action_blocked` explicando por quê (ADR-003 §5).
+ * Contexto da oferta de escritas: os papéis dos OUTROS membros ativos do workspace (quem poderia
+ * aprovar). Sem ele, uma escrita só é oferecida a quem pode executá-la (falha fechada).
  */
-export function toolOfferedTo(principal: CopilotPrincipal, tool: CopilotToolDefinition): boolean {
-  if (principal.memberStatus !== 'active' || !principal.settings.enabled) return false;
-  if (!principal.effectiveCapabilities[tool.capability].allowed) return false;
-  return (tool.requires ?? []).every((perm) => can(principal.role, perm));
+export interface ToolOfferContext {
+  readonly otherActiveRoles: ReadonlySet<Role>;
 }
 
-/** Ferramentas que o modelo vê neste turno. O que o membro não pode usar não aparece. */
+const ROLE_SET: ReadonlySet<string> = new Set(ROLES);
+
+function isRole(value: string): value is Role {
+  return ROLE_SET.has(value);
+}
+
+/** Uma query barata (índice de membros do workspace): papéis distintos dos outros ativos. */
+export async function loadToolOfferContext(
+  tx: DbTx,
+  principal: Pick<CopilotPrincipal, 'workspaceId' | 'memberId'>,
+): Promise<ToolOfferContext> {
+  const m = schema.members;
+  const rows = await tx
+    .selectDistinct({ role: m.role })
+    .from(m)
+    .where(
+      and(
+        eq(m.workspaceId, principal.workspaceId),
+        eq(m.status, 'active'),
+        ne(m.id, principal.memberId),
+      ),
+    );
+  const roles = new Set<Role>();
+  for (const { role } of rows) {
+    if (isRole(role)) roles.add(role);
+  }
+  return { otherActiveRoles: roles };
+}
+
+/** Algum papel ativo (fora o do membro) pode executar esta escrita e satisfaz as `requires`? */
+function hasPossibleApprover(
+  principal: CopilotPrincipal,
+  tool: CopilotToolDefinition,
+  offer: ToolOfferContext | undefined,
+): boolean {
+  if (!offer) return false;
+  for (const role of offer.otherActiveRoles) {
+    if (!capabilityAllowed(role, principal.matrix, tool.capability, 1).allowed) continue;
+    if ((tool.requires ?? []).every((perm) => can(role, perm))) return true;
+  }
+  return false;
+}
+
+/**
+ * A ferramenta é oferecida a este membro?
+ *
+ * Consultas: capacidade efetiva (papel ∧ matriz) e as permissões de entidade.
+ *
+ * Escritas (`engine`): membro ativo, Copiloto ligado e liberado para o papel (`copilot.use` ∧
+ * matriz `use`), `requires` de leitura satisfeitas, a matriz NÃO desligou a capacidade para o
+ * papel, e (o papel pode executar OU existe ao menos um aprovador possível). Papel, assinatura e
+ * `queries_only` NÃO escondem a escrita: o motor recusa com o volume real e grava `blocked` com
+ * o motivo e o "Pedir aprovação" (ADR-003 §5 e §7).
+ */
+export function toolOfferedTo(
+  principal: CopilotPrincipal,
+  tool: CopilotToolDefinition,
+  offer?: ToolOfferContext,
+): boolean {
+  if (principal.memberStatus !== 'active' || !principal.settings.enabled) return false;
+  if (!(tool.requires ?? []).every((perm) => can(principal.role, perm))) return false;
+  if (!isWriteCapability(tool.capability)) {
+    return principal.effectiveCapabilities[tool.capability].allowed;
+  }
+  if (!isEngineTool(tool)) return false;
+  if (!copilotAccessFor(principal.role, principal.matrix).allowed) return false;
+  if (principal.matrix[principal.role]?.[tool.capability] === false) return false;
+  return (
+    principal.effectiveCapabilities[tool.capability].allowed ||
+    hasPossibleApprover(principal, tool, offer)
+  );
+}
+
+/**
+ * Ferramentas que o modelo vê neste turno. O que o membro não pode usar não aparece. Passe o
+ * `loadToolOfferContext` para oferecer escritas a quem pode pedir aprovação.
+ */
 export function listToolDescriptorsFor(
   principal: CopilotPrincipal,
   tools: readonly CopilotToolDefinition[],
+  offer?: ToolOfferContext,
 ): CopilotToolDescriptor[] {
   return tools
-    .filter((tool) => toolOfferedTo(principal, tool))
+    .filter((tool) => toolOfferedTo(principal, tool, offer))
     .map((tool) =>
       CopilotToolDescriptorSchema.parse({
         key: tool.key,

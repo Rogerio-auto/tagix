@@ -3,6 +3,10 @@
  *
  * Cada recusa prova que o handler NÃO rodou (contador) e, depois do `claimToolCall`, que a
  * chamada ficou em `copilot_tool_calls` com `args_redacted` sem PII.
+ *
+ * Escritas passam pelo motor de propostas (`makeProposeTool`, executores FAKE da F73-S05): o
+ * callback só confere a porta (turno, grant, membro ativo, Copiloto ligado, `requires`,
+ * orçamento `paused`); papel, matriz, assinatura e `queries_only` viram proposta `blocked`.
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
@@ -10,7 +14,15 @@ import express, { type Express } from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { closeDb, copilotTurnsRepo, getDb, schema, withWorkspace } from '@hm/db';
+import {
+  closeDb,
+  copilotProposalsRepo,
+  copilotToolCallsRepo,
+  copilotTurnsRepo,
+  getDb,
+  schema,
+  withWorkspace,
+} from '@hm/db';
 import { createLogger, type LogFields, type Logger } from '@hm/logger';
 import { mintGrant } from '../../../services/copilot/identity/grant';
 import {
@@ -19,14 +31,40 @@ import {
   type SeededTurn,
   type SeededWorkspace,
 } from '../../../services/copilot/identity/test-fixtures';
-import { defineCopilotTool } from './registry';
+import { makeProposeTool } from '../../../services/copilot/proposals';
+import { FakeStore, makeTestDeps } from '../../../services/copilot/proposals/test-fixtures';
+import { defineCopilotTool, loadToolOfferContext, type CopilotToolDefinition } from './registry';
 import { COPILOT_MODEL_VIEWS, createCopilotToolsRouter } from './router';
 
 const TOKEN = `test-${randomUUID()}`;
 const SECRET = randomBytes(32);
-const calls = { query: 0, write: 0, taint: 0, boom: 0 };
+const calls = { query: 0, taint: 0, boom: 0, effects: 0 };
 
-const tools = [
+// Motor de propostas com executores FAKE (sem domínio): a escrita real do callback.
+const store = new FakeStore();
+const deps = makeTestDeps(store);
+const writes = {
+  get count(): number {
+    return store.executeCalls.length;
+  },
+};
+const moveTool = makeProposeTool(deps.executors.get('deal.move')!, {
+  key: 'test_write',
+  description: 'Mover negócios (teste).',
+  deps: () => deps,
+});
+const pauseTool = makeProposeTool(deps.executors.get('campaign.pause')!, {
+  description: 'Pausar campanha (teste).',
+  deps: () => deps,
+});
+/** Um alvo novo e visível no registro fake. */
+function deal(): string {
+  const id = randomUUID();
+  store.add(id);
+  return id;
+}
+
+const tools: CopilotToolDefinition[] = [
   defineCopilotTool({
     key: 'test_query',
     capability: 'query',
@@ -65,15 +103,22 @@ const tools = [
       return { ok: true, decision: 'executed', model_view: { open: 1 }, ...emitted };
     },
   }),
+  moveTool,
+  pauseTool,
   defineCopilotTool({
-    key: 'test_write',
-    capability: 'deal.move',
-    description: 'Escrita de teste.',
-    args: z.object({ note: z.string().max(50) }).strict(),
+    key: 'test_effects',
+    capability: 'query',
+    area: 'pipeline',
+    description: 'Agenda um efeito pós-commit e devolve um envelope válido ou inválido.',
+    args: z.object({ broken: z.boolean() }).strict(),
     taintsTurn: false,
-    async handler() {
-      calls.write++;
-      return { ok: true, decision: 'executed', model_view: 'feito' };
+    async handler(ctx, args) {
+      ctx.afterCommit(() => {
+        calls.effects++;
+      });
+      return args.broken
+        ? ({ ok: 'talvez' } as unknown as { ok: true; decision: 'executed'; model_view: string })
+        : { ok: true, decision: 'executed', model_view: 'ok' };
     },
   }),
   defineCopilotTool({
@@ -433,9 +478,10 @@ describe('depois do turno: reautoriza do zero a cada chamada', () => {
 
   it('args com campo extra → invalid_args (nada executa), registrado sem PII', async () => {
     const turn = await turnFor('OWNER');
-    const before = snapshot();
+    const before = writes.count;
     const res = await call('test_write', turn, {
-      note: 'ok',
+      ids: [deal()],
+      to: 'R',
       member_id: randomUUID(),
       email: 'joao@example.com',
     });
@@ -444,16 +490,16 @@ describe('depois do turno: reautoriza do zero a cada chamada', () => {
     expect(res.body.decision).toBe('invalid_args');
     expect(res.body.model_view).toContain(COPILOT_MODEL_VIEWS.invalidArgs);
     expect(res.body.model_view).not.toContain('joao@example.com');
-    expect(snapshot()).toEqual(before);
+    expect(writes.count).toBe(before);
     const [log] = await logsOf(turn.turnId);
     expect(log).toMatchObject({ decision: 'invalid_args', errorCode: 'invalid_args' });
     expect(JSON.stringify(log?.argsRedacted)).not.toContain('joao@example.com');
   });
 
-  it('membro rebaixado entre duas chamadas: a 2ª recusa por role', async () => {
+  it('membro rebaixado entre duas chamadas: a 2ª vira proposta blocked por role', async () => {
     const turn = await turnFor('SUPERVISOR');
     const memberId = seeded.members.SUPERVISOR.id;
-    const first = await call('test_write', turn, { note: 'mover' });
+    const first = await call('test_write', turn, { ids: [deal()], to: 'R' });
     expect(first.body).toMatchObject({ ok: true, decision: 'executed' });
 
     await getDb()
@@ -461,17 +507,18 @@ describe('depois do turno: reautoriza do zero a cada chamada', () => {
       .set({ role: 'READONLY' })
       .where(eq(schema.members.id, memberId));
     try {
-      const before = snapshot();
-      const second = await call('test_write', turn, { note: 'mover de novo' });
+      const before = writes.count;
+      const second = await call('test_write', turn, { ids: [deal()], to: 'R' });
       expect(second.status).toBe(200);
-      expect(second.body).toEqual({
+      expect(second.body).toMatchObject({
         ok: false,
-        decision: 'denied',
-        model_view: COPILOT_MODEL_VIEWS.denied.role,
+        decision: 'blocked',
+        model_view: { reason: 'role' },
+        public_event: { type: 'action_blocked', reason: 'role' },
       });
-      expect(snapshot()).toEqual(before);
+      expect(writes.count).toBe(before);
       const [log] = await logsOf(turn.turnId);
-      expect(log).toMatchObject({ decision: 'denied', errorCode: 'capability_denied:role' });
+      expect(log).toMatchObject({ decision: 'blocked', riskLevel: 2, errorCode: null });
     } finally {
       await getDb()
         .update(schema.members)
@@ -500,26 +547,39 @@ describe('depois do turno: reautoriza do zero a cada chamada', () => {
     }
   });
 
-  it('assinatura expirada: escrita recusa (subscription_inactive); consulta passa', async () => {
+  it('assinatura expirada: escrita vira blocked{subscription_inactive}; consulta passa', async () => {
     const turn = await turnFor('OWNER');
     await setSubscription('expired');
-    const before = snapshot();
-    const write = await call('test_write', turn, { note: 'x' });
-    expect(write.body).toMatchObject({ ok: false, decision: 'denied' });
-    expect(write.body.model_view).toBe(COPILOT_MODEL_VIEWS.denied.subscription_inactive);
-    expect(calls.write).toBe(before.write);
+    const before = { ...snapshot(), writes: writes.count };
+    const write = await call('test_write', turn, { ids: [deal()], to: 'R' });
+    expect(write.body).toMatchObject({
+      ok: false,
+      decision: 'blocked',
+      public_event: { type: 'action_blocked', reason: 'subscription_inactive' },
+    });
+    expect(writes.count).toBe(before.writes);
     const [log] = await logsOf(turn.turnId);
-    expect(log?.errorCode).toBe('capability_denied:subscription_inactive');
+    expect(log).toMatchObject({ decision: 'blocked', errorCode: null });
+    const proposal = await withWorkspace(seeded.workspaceId, (tx) =>
+      copilotProposalsRepo.getWithItems(tx, String(write.body.model_view.proposal_id)),
+    );
+    expect(proposal?.proposal).toMatchObject({
+      status: 'blocked',
+      blockedReason: 'subscription_inactive',
+    });
 
     const query = await call('test_query', turn);
     expect(query.body).toMatchObject({ ok: true, decision: 'executed' });
     expect(calls.query).toBe(before.query + 1);
   });
 
-  it('capacidade sem a permissão de entidade (READONLY escreve) → role', async () => {
+  it('papel sem a capacidade (READONLY move) → blocked role com "Pedir aprovação"', async () => {
     const turn = await turnFor('READONLY');
-    const res = await call('test_write', turn, { note: 'x' });
-    expect(res.body.decision).toBe('denied');
+    const res = await call('test_write', turn, { ids: [deal()], to: 'R' });
+    expect(res.body).toMatchObject({
+      decision: 'blocked',
+      public_event: { reason: 'role', can_request_approval: true },
+    });
   });
 
   it('Copiloto desligado no meio do turno → copilot_disabled', async () => {
@@ -553,15 +613,23 @@ describe('depois do turno: reautoriza do zero a cada chamada', () => {
         }),
       );
     try {
-      await insertCost('31'); // teto padrão 30 → queries_only
-      expect((await call('test_write', turn, { note: 'x' })).body.model_view).toBe(
-        COPILOT_MODEL_VIEWS.denied.budget,
-      );
+      await insertCost('31'); // teto padrão 30 → queries_only: o MOTOR recusa a escrita
+      expect((await call('test_write', turn, { ids: [deal()], to: 'R' })).body).toMatchObject({
+        decision: 'blocked',
+        public_event: { reason: 'budget' },
+      });
       expect((await call('test_query', turn)).body.decision).toBe('executed');
-      await insertCost('5'); // 36 = 120 % → teto duro
+      await insertCost('5'); // 36 = 120 % → teto duro: a porta do callback recusa tudo
       expect((await call('test_query', turn)).body.model_view).toBe(
         COPILOT_MODEL_VIEWS.denied.budget,
       );
+      const before = writes.count;
+      expect((await call('test_write', turn, { ids: [deal()], to: 'R' })).body).toEqual({
+        ok: false,
+        decision: 'denied',
+        model_view: COPILOT_MODEL_VIEWS.denied.budget,
+      });
+      expect(writes.count).toBe(before);
     } finally {
       await withWorkspace(seeded.workspaceId, (tx) =>
         tx
@@ -583,7 +651,9 @@ describe('depois do turno: reautoriza do zero a cada chamada', () => {
           surface: 'agent',
         }),
       );
-      expect((await call('test_write', turn, { note: 'x' })).body.decision).toBe('executed');
+      expect((await call('test_write', turn, { ids: [deal()], to: 'R' })).body.decision).toBe(
+        'executed',
+      );
     } finally {
       await withWorkspace(seeded.workspaceId, (tx) =>
         tx
@@ -635,11 +705,185 @@ describe('depois do turno: reautoriza do zero a cada chamada', () => {
   it('todas as chamadas do turno ficam registradas, em ordem', async () => {
     const turn = await turnFor('OWNER');
     await call('test_query', turn);
-    await call('test_write', turn, { note: 'x', extra: 1 });
+    await call('test_write', turn, { ids: [deal()], to: 'R', extra: 1 });
     await call('nao_existe', turn);
     const logs = await logsOf(turn.turnId);
     expect(logs.map((l) => l.decision).sort()).toEqual(['denied', 'executed', 'invalid_args']);
     expect(logs.every((l) => l.memberId === seeded.members.OWNER.id)).toBe(true);
     expect(logs.every((l) => typeof l.durationMs === 'number')).toBe(true);
+  });
+});
+
+describe('escritas pelo motor (authorization: engine) — F73-S05', () => {
+  it('AGENT pede campaign.pause → action_blocked{role, can_request_approval}, gravada e auditada', async () => {
+    const turn = await turnFor('AGENT');
+    const id = deal();
+    const res = await call('propose_campaign_pause', turn, { ids: [id], to: 'Pausada' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      ok: false,
+      decision: 'blocked',
+      model_view: { status: 'blocked', reason: 'role', risk_level: 4, can_request_approval: true },
+      public_event: {
+        type: 'action_blocked',
+        reason: 'role',
+        capability: 'campaign.pause',
+        can_request_approval: true,
+      },
+    });
+    const proposalId = String(res.body.public_event.proposal_id);
+    const stored = await withWorkspace(seeded.workspaceId, (tx) =>
+      copilotProposalsRepo.getWithItems(tx, proposalId),
+    );
+    expect(stored?.proposal).toMatchObject({
+      status: 'blocked',
+      blockedReason: 'role',
+      riskLevel: 4,
+      requestedByMemberId: seeded.members.AGENT.id,
+      turnId: turn.turnId,
+    });
+    expect(stored?.items.map((i) => i.targetId)).toEqual([id]);
+    const audit = await getDb()
+      .select({ action: schema.auditLogs.action, actorType: schema.auditLogs.actorType })
+      .from(schema.auditLogs)
+      .where(eq(schema.auditLogs.copilotProposalId, proposalId));
+    expect(audit).toEqual([{ action: 'copilot.proposal.blocked', actorType: 'copilot' }]);
+    const [log] = await logsOf(turn.turnId);
+    expect(log).toMatchObject({
+      decision: 'blocked',
+      riskLevel: 4,
+      toolKey: 'propose_campaign_pause',
+      errorCode: null,
+    });
+    expect(store.countExecutions(id)).toBe(0);
+  });
+
+  it('capacidade desligada na matriz para o papel: a porta deixa passar, o motor bloqueia', async () => {
+    const turn = await turnFor('AGENT');
+    await withWorkspace(seeded.workspaceId, (tx) =>
+      tx.insert(schema.copilotSettings).values({
+        workspaceId: seeded.workspaceId,
+        capabilityMatrix: { AGENT: { 'deal.move': false } },
+      }),
+    );
+    try {
+      const id = deal();
+      const res = await call('test_write', turn, { ids: [id], to: 'R' });
+      expect(res.body).toMatchObject({
+        decision: 'blocked',
+        public_event: { reason: 'capability_disabled', can_request_approval: false },
+      });
+      expect(store.countExecutions(id)).toBe(0);
+    } finally {
+      await withWorkspace(seeded.workspaceId, (tx) =>
+        tx
+          .delete(schema.copilotSettings)
+          .where(eq(schema.copilotSettings.workspaceId, seeded.workspaceId)),
+      );
+    }
+  });
+
+  it('a porta do callback continua valendo para escrita: Copiloto desligado → denied', async () => {
+    const turn = await turnFor('OWNER');
+    await withWorkspace(seeded.workspaceId, (tx) =>
+      tx.insert(schema.copilotSettings).values({ workspaceId: seeded.workspaceId, enabled: false }),
+    );
+    try {
+      const before = writes.count;
+      const res = await call('test_write', turn, { ids: [deal()], to: 'R' });
+      expect(res.body).toEqual({
+        ok: false,
+        decision: 'denied',
+        model_view: COPILOT_MODEL_VIEWS.denied.copilot_disabled,
+      });
+      expect(writes.count).toBe(before);
+    } finally {
+      await withWorkspace(seeded.workspaceId, (tx) =>
+        tx
+          .delete(schema.copilotSettings)
+          .where(eq(schema.copilotSettings.workspaceId, seeded.workspaceId)),
+      );
+    }
+  });
+
+  it('consulta continua com a autorização COMPLETA no callback (matriz desliga → denied)', async () => {
+    const turn = await turnFor('AGENT');
+    await withWorkspace(seeded.workspaceId, (tx) =>
+      tx.insert(schema.copilotSettings).values({
+        workspaceId: seeded.workspaceId,
+        capabilityMatrix: { AGENT: { query: false } },
+      }),
+    );
+    try {
+      const before = snapshot();
+      const res = await call('test_query', turn);
+      expect(res.body).toEqual({
+        ok: false,
+        decision: 'denied',
+        model_view: COPILOT_MODEL_VIEWS.denied.capability_disabled,
+      });
+      expect(snapshot()).toEqual(before);
+    } finally {
+      await withWorkspace(seeded.workspaceId, (tx) =>
+        tx
+          .delete(schema.copilotSettings)
+          .where(eq(schema.copilotSettings.workspaceId, seeded.workspaceId)),
+      );
+    }
+  });
+
+  it('loadToolOfferContext: papéis dos OUTROS membros ativos', async () => {
+    const ctx = await withWorkspace(seeded.workspaceId, (tx) =>
+      loadToolOfferContext(tx, {
+        workspaceId: seeded.workspaceId,
+        memberId: seeded.members.OWNER.id,
+      }),
+    );
+    expect([...ctx.otherActiveRoles].sort()).toEqual(['ADMIN', 'AGENT', 'READONLY', 'SUPERVISOR']);
+  });
+});
+
+describe('efeitos pós-commit (ctx.afterCommit) — F73-S05', () => {
+  it('saem depois do commit; ferramenta que falha descarta os dela', async () => {
+    const turn = await turnFor('OWNER');
+    const before = calls.effects;
+    expect((await call('test_effects', turn, { broken: false })).body.decision).toBe('executed');
+    expect(calls.effects).toBe(before + 1);
+    const broken = await call('test_effects', turn, { broken: true });
+    expect(broken.body.decision).toBe('error');
+    expect(calls.effects).toBe(before + 1);
+  });
+
+  it('nível 2 pelo callback: o progresso só sai depois do commit; transação que falha não emite nada', async () => {
+    const turn = await turnFor('OWNER');
+    const okId = deal();
+    const emittedBefore = deps.emitted.length;
+    const ok = await call('test_write', turn, { ids: [okId], to: 'R' });
+    expect(ok.body.decision).toBe('executed');
+    expect(deps.emitted.length).toBe(emittedBefore + 1);
+    expect(store.afterCommitEvents).toContain(`exec:${okId}`);
+
+    // A transação do callback falha DEPOIS do handler (o log não grava): rollback total.
+    const failId = deal();
+    const spy = vi
+      .spyOn(copilotToolCallsRepo, 'insert')
+      .mockRejectedValueOnce(new Error('falha ao gravar o log'));
+    try {
+      const failed = await call('test_write', turn, { ids: [failId], to: 'R' });
+      expect(failed.body).toEqual({
+        ok: false,
+        decision: 'error',
+        model_view: COPILOT_MODEL_VIEWS.error,
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(deps.emitted.length).toBe(emittedBefore + 1);
+    expect(store.afterCommitEvents).not.toContain(`exec:${failId}`);
+    const items = await getDb()
+      .select({ id: schema.copilotActionItems.id })
+      .from(schema.copilotActionItems)
+      .where(eq(schema.copilotActionItems.targetId, failId));
+    expect(items).toHaveLength(0);
   });
 });

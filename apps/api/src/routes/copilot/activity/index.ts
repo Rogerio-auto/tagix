@@ -118,6 +118,7 @@ export function createCopilotActivityRouter(): Router {
 
       let cursor: string | null = null;
       let written = 0;
+      let failure: Error | null = null;
       try {
         while (written < ACTIVITY_CSV_MAX_ROWS && !res.destroyed) {
           const { raw, names } = await scoped((tx) =>
@@ -132,11 +133,18 @@ export function createCopilotActivityRouter(): Router {
           if (!cursor) break;
         }
       } catch (err) {
-        // O status já saiu: registra e fecha. Nunca stack nem dado ao cliente.
+        // O status já saiu: registra e DERRUBA a conexão. `end()` entregaria um CSV truncado
+        // como se fosse completo; `destroy` faz o cliente ver o download como falho.
         logger.error('copilot-activity: falha no CSV', {
           ref: 'hm_copilot_activity_csv',
           errorName: err instanceof Error ? err.name : typeof err,
+          written,
         });
+        failure = new Error('copilot_activity_csv_failed');
+      }
+      if (failure) {
+        res.destroy(failure);
+        return;
       }
       res.end();
     },

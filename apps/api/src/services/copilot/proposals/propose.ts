@@ -6,7 +6,10 @@
  *   2. resolve os alvos sob o escopo do membro; o que ele não vê é descartado e informado;
  *   3. lê o estado e grava `expected_version` por alvo;
  *   4. classifica (`classifyRisk`, com `turn_tainted` lido do BANCO, nunca do modelo);
- *   5. autoriza (papel ∧ matriz ∧ assinatura ∧ orçamento). Negado → proposta `blocked`;
+ *   5. autoriza (papel ∧ matriz ∧ `requires` ∧ assinatura ∧ orçamento) com o volume REAL dos
+ *      alvos resolvidos. Negado → proposta `blocked` (com motivo e se dá para pedir aprovação).
+ *      O callback (`authorization: 'engine'`) NÃO pré-julga papel, matriz, assinatura nem
+ *      `queries_only`: é aqui que a recusa nasce, vira dado e aparece na Atividade;
  *   6. monta a prévia e, no nível 4, a checagem de política;
  *   7. nível 2 executa na hora (recibo com Desfazer); 3 e 4 ficam `proposed` (15/10 min).
  *
@@ -44,21 +47,22 @@ import {
   type ProposalPreview,
 } from '@hm/shared';
 import type {
+  AfterCommitFn,
   CapabilityExecutor,
-  ExecutorContext,
   ExecutorPreview,
   Target,
 } from '../../../internal/copilot/core/executor-types';
 import {
-  defineCopilotTool,
+  defineEngineTool,
   type CopilotToolContext,
   type CopilotToolDefinition,
 } from '../../../internal/copilot/core/registry';
-import { authorizeCapability, type CopilotDenialReason } from '../identity/authorize';
+import type { CopilotDenialReason } from '../identity/authorize';
 import { loadCopilotBudget } from '../identity/budget';
 import type { CopilotPrincipal } from '../identity/principal';
 import { listApprovers } from './approval';
 import { recordProposalAudit } from './audit';
+import { authorizeWrite, executorContext } from './context';
 import { createExecutorRegistry, createProposalEngineDeps } from './deps';
 import { buildProposalDTO, capabilityOf } from './dto';
 import { runProposalExecution, savepointRunner, startProposalExecution } from './execute';
@@ -83,6 +87,13 @@ export interface ProposeContext {
    * executam sem novo clique; o nível 4 continua exigindo o confirmar com "Revisei".
    */
   readonly preconfirmed?: boolean;
+  /**
+   * Fila pós-commit da transação `tx` do CHAMADOR. O nível 2 executa dentro de `tx`; tudo o que
+   * sai do banco (progresso no socket, efeitos do executor) entra aqui e só roda depois do
+   * commit do chamador (no callback, `CopilotToolContext.afterCommit`). Obrigatória: quem chama
+   * o motor dentro de uma transação precisa drenar a fila depois do commit dela.
+   */
+  readonly afterCommit: (fn: AfterCommitFn) => void;
 }
 
 export interface Dropped {
@@ -226,14 +237,14 @@ export async function createProposal<Args>(
   const targets = uniqueTargets(resolved.targets);
   if (targets.length > BATCH_LIMIT) return { kind: 'batch_too_large', targetCount: targets.length };
 
-  const ectx: ExecutorContext = {
+  const ectx = executorContext({
     tx,
     principal,
     requestedByMemberId: principal.requestedByMemberId,
     proposalId: null,
     source: ctx.source,
     now,
-  };
+  });
   const tainted = (ctx.turnTainted ?? false) || (await readTurnTainted(tx, ctx.turnId));
   const preview = targets.length > 0 ? await executor.preview(ectx, args, targets) : EMPTY_PREVIEW;
 
@@ -251,10 +262,9 @@ export async function createProposal<Args>(
   const auth =
     targets.length === 0
       ? ({ allowed: false, reason: 'scope' } as const)
-      : authorizeCapability(principal, capability, {
+      : authorizeWrite(principal, executor, capability, {
           budget: budget.state,
           targetCount: targets.length,
-          isWrite: true,
         });
   const blockedReason: CopilotBlockedReason | null = auth.allowed
     ? null
@@ -339,9 +349,22 @@ export async function createProposal<Args>(
   });
 
   if (blockedReason) {
+    // Só oferece "Pedir aprovação" se existe alguém que pode E enxerga todos os alvos.
     const canRequestApproval =
       blockedReason === 'role' &&
-      (await listApprovers(tx, principal, capability, targets.length)).length > 0;
+      (
+        await listApprovers(tx, principal, capability, {
+          targetCount: targets.length,
+          ...(executor.requires ? { requires: executor.requires } : {}),
+          coverage: {
+            executor,
+            targets: targets.map((t) => ({ type: t.type, id: t.id })),
+            source: ctx.source,
+            proposalId: inserted.proposal.id,
+            now,
+          },
+        })
+      ).length > 0;
     return {
       kind: 'blocked',
       reason: blockedReason,
@@ -358,11 +381,13 @@ export async function createProposal<Args>(
   const registry = { get: () => executor, list: () => [executor] } as const;
   const runDeps: ProposalEngineDeps = { ...deps, executors: registry };
   if (risk.level === 2) {
-    // Na hora, dentro da transação do chamador (savepoint por item).
+    // Na hora, dentro da transação do chamador (savepoint por item). Nada sai antes do commit
+    // DELE: o progresso e os efeitos do executor vão para a fila pós-commit do chamador.
     await runProposalExecution(runDeps, {
       workspaceId: principal.workspaceId,
       proposalId,
       run: savepointRunner(tx),
+      deferTo: ctx.afterCommit,
     });
     const final = await copilotProposalsRepo.getWithItems(tx, proposalId);
     if (!final) throw new Error('copilot: proposta executada sumiu.');
@@ -387,14 +412,14 @@ export async function proposeAction<Args>(
   if (!parsed.success) return { kind: 'invalid_args' };
   const args = parsed.data;
   const resolved = await executor.resolveTargets(
-    {
+    executorContext({
       tx: ctx.tx,
       principal: ctx.principal,
       requestedByMemberId: ctx.principal.requestedByMemberId,
       proposalId: null,
       source: ctx.source,
       now: deps.now(),
-    },
+    }),
     args,
   );
   return createProposal(deps, ctx, executor, args, resolved);
@@ -406,6 +431,8 @@ const MODEL_INSTRUCTIONS = {
   awaiting:
     'A proposta está aguardando a confirmação da pessoa na tela. Pare aqui: resuma o que será feito e não diga que já foi feito.',
   executed: 'Feito. A pessoa pode desfazer pelo recibo ou pela Atividade.',
+  executing:
+    'Confirmado e em execução agora. O progresso aparece na tela. Não diga que terminou: diga que está sendo feito.',
   notExecuted:
     'A ação não foi concluída por inteiro. Diga o que aconteceu com base nos números, sem inventar.',
   batch: `São mais de ${BATCH_LIMIT} registros: grande demais para o Copiloto. Sugira fazer pela tela, com filtro e seleção. Nada foi executado.`,
@@ -431,6 +458,7 @@ export function proposeEnvelope(outcome: ProposeOutcome): CopilotToolEnvelope {
           status: 'blocked',
           proposal_id: outcome.row.id,
           reason: outcome.reason,
+          risk_level: outcome.row.riskLevel,
           can_request_approval: outcome.canRequestApproval,
           not_found: outcome.dropped.length,
           message: `${message} Nada foi executado.`,
@@ -446,8 +474,28 @@ export function proposeEnvelope(outcome: ProposeOutcome): CopilotToolEnvelope {
         }),
       };
     }
-    case 'proposed':
     case 'executing':
+      // Pré-confirmado (S13): já foi aceito; não está "aguardando confirmação".
+      return {
+        ok: true,
+        decision: 'executed',
+        model_view: {
+          status: 'executing',
+          proposal_id: outcome.row.id,
+          risk_level: outcome.row.riskLevel,
+          summary: outcome.row.summary,
+          items: outcome.items.length,
+          not_found: outcome.dropped.length,
+          instruction: MODEL_INSTRUCTIONS.executing,
+        },
+        // O cartão acompanha o progresso pelo `copilot:proposal_updated` (status `executing`).
+        public_event: ActionProposedEventSchema.parse({
+          v: COPILOT_STREAM_VERSION,
+          type: 'action_proposed',
+          proposal: outcome.proposal,
+        }),
+      };
+    case 'proposed':
       return {
         ok: true,
         decision: 'proposed',
@@ -508,15 +556,11 @@ export function proposeEnvelope(outcome: ProposeOutcome): CopilotToolEnvelope {
   }
 }
 
-export interface ProposeToolOptions<Args> {
+export interface ProposeToolOptions {
   /** Para o modelo: o que faz e quando usar. Texto do código, nunca de dado de cliente. */
   readonly description: string;
   /** Default `propose_<capability com _>` (ex.: `propose_deal_move`). */
   readonly key?: string;
-  /** Permissões de entidade além da capacidade. */
-  readonly requires?: CopilotToolDefinition['requires'];
-  /** Volume real (`message.send` com 2+ muda a permissão no callback). */
-  readonly targetCount?: (args: Args) => number;
   /** Dependências do motor (testes). Default: as de produção, com este executor. */
   readonly deps?: () => ProposalEngineDeps;
 }
@@ -528,24 +572,25 @@ export function proposeToolKey(capability: string): string {
 
 /**
  * Gera a ferramenta `propose_<capability>` de um executor. É a ÚNICA forma de uma capacidade de
- * escrita chegar ao modelo: o handler é o motor, e o nível vem do sistema.
+ * escrita chegar ao modelo (o registro lança no boot com qualquer outra): o handler é o motor, o
+ * nível vem do sistema e a autorização de papel/matriz/assinatura/orçamento é do motor
+ * (`authorization: 'engine'`), com o volume real dos alvos. As `requires` vêm do executor.
  */
 export function makeProposeTool<Args>(
   executor: CapabilityExecutor<Args>,
-  options: ProposeToolOptions<Args>,
+  options: ProposeToolOptions,
 ): CopilotToolDefinition {
   let cachedDeps: ProposalEngineDeps | null = null;
   const depsOf = (): ProposalEngineDeps =>
     options.deps?.() ??
     (cachedDeps ??= createProposalEngineDeps({ executors: createExecutorRegistry([executor]) }));
-  return defineCopilotTool<Args>({
+  return defineEngineTool<Args>({
     key: options.key ?? proposeToolKey(executor.capability),
     capability: executor.capability,
     description: options.description,
     args: executor.argsSchema,
-    ...(options.requires ? { requires: options.requires } : {}),
+    ...(executor.requires ? { requires: executor.requires } : {}),
     taintsTurn: false,
-    ...(options.targetCount ? { targetCount: options.targetCount } : {}),
     async handler(ctx: CopilotToolContext, args: Args): Promise<CopilotToolEnvelope> {
       const outcome = await proposeAction(
         depsOf(),
@@ -556,6 +601,7 @@ export function makeProposeTool<Args>(
           turnId: ctx.turn.turnId,
           sessionId: ctx.turn.sessionId,
           turnTainted: ctx.turn.tainted,
+          afterCommit: (fn) => ctx.afterCommit(fn),
         },
         executor,
         args,

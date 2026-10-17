@@ -22,13 +22,10 @@ import {
   type ProposalAdjustParams,
   type ProposalDTO,
 } from '@hm/shared';
-import type {
-  CapabilityExecutor,
-  ExecutorContext,
-  Target,
-} from '../../../internal/copilot/core/executor-types';
+import type { CapabilityExecutor, Target } from '../../../internal/copilot/core/executor-types';
 import type { CopilotPrincipal } from '../identity/principal';
 import { recordProposalAudit } from './audit';
+import { executorContext } from './context';
 import { buildProposalDTO, canViewProposal } from './dto';
 import { auditCounts, countItems, encodeAfter, encodeBefore, itemLabel } from './items';
 import { argsJson, buildPreviewJson, readTurnTainted, summaryOf } from './propose';
@@ -87,14 +84,14 @@ export async function applyAdjustment(
   if (remaining.length === 0) return fail('invalid_adjustment');
 
   // Re-resolve sob o escopo: estado e versão de agora.
-  const ectx: ExecutorContext = {
+  const ectx = executorContext({
     tx,
     principal: viewer,
     requestedByMemberId: proposal.requestedByMemberId ?? viewer.memberId,
     proposalId: proposal.id,
     source: proposal.source,
     now,
-  };
+  });
   const resolved = await executor.resolveTargets(ectx, args);
   const fresh = new Map(resolved.targets.map((t) => [`${t.type}:${t.id}`, t]));
   const kept: { item: CopilotActionItemRow; target: Target }[] = [];

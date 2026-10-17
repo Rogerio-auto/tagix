@@ -19,6 +19,7 @@ import {
   type CopilotProposalRow,
 } from '@hm/db';
 import { CopilotToolEnvelopeSchema, type Role } from '@hm/shared';
+import type { CapabilityExecutor } from '../../../internal/copilot/core/executor-types';
 import { resolveCopilotPrincipal, type CopilotPrincipal } from '../identity/principal';
 import {
   seedCopilotTurn,
@@ -28,6 +29,7 @@ import {
 import { cancelProposal } from './cancel';
 import { confirmProposal, type ConfirmInput } from './confirm';
 import { listApprovers, requestApproval } from './approval';
+import { AfterCommitQueue } from './context';
 import { drainProposalExecutions, runProposalExecution, startProposalExecution } from './execute';
 import { makeProposeTool, proposeAction, proposeEnvelope, type ProposeOutcome } from './propose';
 import { retryFailedItems } from './retry';
@@ -72,10 +74,10 @@ async function principalIn(
   return p;
 }
 
-function newIds(n: number): string[] {
+function newIds(n: number, ownerId?: string): string[] {
   return Array.from({ length: n }, () => {
     const id = randomUUID();
-    store.add(id);
+    store.add(id, 'Orçamento enviado', ownerId);
     return id;
   });
 }
@@ -84,11 +86,19 @@ async function propose(
   role: Role,
   capability: 'deal.move' | 'campaign.pause',
   args: FakeArgs,
-  extra: { turnId?: string; sessionId?: string; turnTainted?: boolean } = {},
+  extra: {
+    turnId?: string;
+    sessionId?: string;
+    turnTainted?: boolean;
+    preconfirmed?: boolean;
+    executor?: CapabilityExecutor;
+  } = {},
 ): Promise<ProposeOutcome> {
-  const executor = deps.executors.get(capability);
+  const executor = extra.executor ?? deps.executors.get(capability);
   if (!executor) throw new Error('executor');
-  return withWorkspace(ws(), async (tx) =>
+  // Como o callback: efeitos pós-commit só depois do commit da transação.
+  const queue = new AfterCommitQueue();
+  const outcome = await withWorkspace(ws(), async (tx) =>
     proposeAction(
       deps,
       {
@@ -98,11 +108,22 @@ async function propose(
         turnId: extra.turnId ?? null,
         sessionId: extra.sessionId ?? null,
         ...(extra.turnTainted !== undefined ? { turnTainted: extra.turnTainted } : {}),
+        ...(extra.preconfirmed ? { preconfirmed: true } : {}),
+        afterCommit: (fn) => queue.push(fn),
       },
       executor,
       args,
     ),
   );
+  await queue.drain(deps.logger);
+  return outcome;
+}
+
+async function setRole(role: Role, to: Role): Promise<void> {
+  await getDb()
+    .update(schema.members)
+    .set({ role: to })
+    .where(eq(schema.members.id, memberId(role)));
 }
 
 function persistedRow(outcome: ProposeOutcome): CopilotProposalRow {
@@ -236,11 +257,14 @@ describe('nível 2: executa na hora e desfaz', () => {
           emitResult: () => {
             throw new Error('não usado');
           },
+          afterCommit: () => undefined,
         },
         { ids: [id!], to: 'Y' },
       ),
     );
     expect(CopilotToolEnvelopeSchema.parse(envelope).decision).toBe('executed');
+    expect(tool.authorization).toBe('engine');
+    expect(tool.requires).toEqual(['pipeline.view']);
   });
 });
 
@@ -446,10 +470,50 @@ describe('execução item a item', () => {
     const { proposal, items } = await load(row.id);
     expect(proposal.stopRequested).toBe(true);
     expect(items.filter((i) => i.status === 'done')).toHaveLength(2);
-    expect(items.filter((i) => i.status === 'pending')).toHaveLength(2);
+    // Nenhum item fica pendurado numa proposta fechada: os não executados viram "parados".
+    expect(items.filter((i) => i.status === 'pending')).toHaveLength(0);
+    const stoppedItems = items.filter(
+      (i) => i.status === 'skipped_policy' && i.errorCode === 'stopped',
+    );
+    expect(stoppedItems.map((i) => i.targetId)).toEqual([ids[2], ids[3]]);
     expect((await auditRows(row.id)).map((a) => a.action)).toContain(
       'copilot.proposal.stop_requested',
     );
+    expect((await auditRows(row.id)).at(-1)?.metadata).toMatchObject({
+      to: 'partially_completed',
+      stopped: true,
+      counts: { done: 2, skipped: 2, pending: 0 },
+    });
+
+    // "Tentar de novo" inclui os que o Parar deixou de fora.
+    const retried = await withWorkspace(ws(), async (tx) =>
+      retryFailedItems(deps, tx, await principalIn(tx, 'OWNER'), row.id, randomUUID()),
+    );
+    expect(retried.ok && retried.proposal.items.data.map((i) => i.target_id)).toEqual([
+      ids[2],
+      ids[3],
+    ]);
+  });
+
+  it('Parar antes do primeiro item → cancelled, todos parados, e o retry os inclui', async () => {
+    const ids = newIds(2);
+    const row = persistedRow(await propose('OWNER', 'deal.move', { ids, to: 'R' }));
+    const out = await confirm('OWNER', row.id, { version: row.version });
+    expect(out.ok && out.status).toBe(202);
+    await withWorkspace(ws(), async (tx) =>
+      cancelProposal(deps, tx, await principalIn(tx, 'OWNER'), row.id),
+    );
+    const final = await runProposalExecution(deps, { workspaceId: ws(), proposalId: row.id });
+    expect(final?.status).toBe('cancelled');
+    expect(store.executeCalls).toHaveLength(0);
+    const { items } = await load(row.id);
+    expect(items.every((i) => i.status === 'skipped_policy' && i.errorCode === 'stopped')).toBe(
+      true,
+    );
+    const retried = await withWorkspace(ws(), async (tx) =>
+      retryFailedItems(deps, tx, await principalIn(tx, 'OWNER'), row.id, randomUUID()),
+    );
+    expect(retried.ok && retried.proposal.items.total).toBe(2);
   });
 
   it('lease vencido é retomado pela varredura sem duplicar item', async () => {
@@ -542,7 +606,7 @@ describe('tentar de novo', () => {
     store.touch(ids[2]!, 'Paula');
     await confirmAndRun('OWNER', row);
     const retried = await withWorkspace(ws(), async (tx) =>
-      retryFailedItems(deps, tx, await principalIn(tx, 'OWNER'), row.id),
+      retryFailedItems(deps, tx, await principalIn(tx, 'OWNER'), row.id, randomUUID()),
     );
     expect(retried.ok).toBe(true);
     if (!retried.ok) return;
@@ -566,7 +630,7 @@ describe('aprovação', () => {
     const row = outcome.row;
 
     const approvers = await withWorkspace(ws(), async (tx) =>
-      listApprovers(tx, await principalIn(tx, 'AGENT'), 'campaign.pause', 1),
+      listApprovers(tx, await principalIn(tx, 'AGENT'), 'campaign.pause'),
     );
     expect(approvers.map((a) => a.role)).toEqual(['OWNER', 'ADMIN', 'SUPERVISOR']);
 
@@ -729,5 +793,462 @@ describe('varredura ligada (startProposalSweeper)', () => {
     const after = ticks;
     await new Promise((r) => setTimeout(r, 80));
     expect(ticks).toBe(after);
+  });
+});
+
+// ─── Revisão /hm-engineer (F73-S05) ──────────────────────────────────────────────
+
+describe('aprovador: escopo fino do APROVADOR (item 1)', () => {
+  it('READONLY pede mover negócio do OWNER: o AGENT não aparece na lista nem é aceito', async () => {
+    const [deal] = newIds(1, memberId('OWNER'));
+    const outcome = await propose('READONLY', 'deal.move', { ids: [deal!], to: 'R' });
+    expect(outcome.kind).toBe('blocked');
+    if (outcome.kind !== 'blocked') return;
+    expect(outcome.reason).toBe('role');
+    // Há quem possa e enxergue (OWNER, ADMIN, SUPERVISOR): o botão aparece.
+    expect(outcome.canRequestApproval).toBe(true);
+
+    const approvers = await withWorkspace(ws(), async (tx) =>
+      listApprovers(tx, await principalIn(tx, 'READONLY'), 'deal.move', {
+        targetCount: 1,
+        coverage: {
+          executor: deps.executors.get('deal.move')!,
+          targets: [{ type: 'deal', id: deal! }],
+          source: 'copilot',
+          proposalId: outcome.row.id,
+          now: new Date(),
+        },
+      }),
+    );
+    expect(approvers.map((a) => a.role)).toEqual(['OWNER', 'ADMIN', 'SUPERVISOR']);
+
+    const ask = await withWorkspace(ws(), async (tx) =>
+      requestApproval(
+        deps,
+        tx,
+        await principalIn(tx, 'READONLY'),
+        outcome.row.id,
+        memberId('AGENT'),
+      ),
+    );
+    expect(!ask.ok && ask.error).toBe('invalid_approver');
+  });
+
+  it('o alvo sai do escopo do aprovador depois do pedido: vira excluded/not_found no confirmar', async () => {
+    const ids = newIds(2, memberId('AGENT'));
+    const row = persistedRow(await propose('READONLY', 'deal.move', { ids, to: 'R' }));
+    expect(row.blockedReason).toBe('role');
+    const asked = await withWorkspace(ws(), async (tx) =>
+      requestApproval(deps, tx, await principalIn(tx, 'READONLY'), row.id, memberId('AGENT')),
+    );
+    expect(asked.ok).toBe(true);
+    if (!asked.ok) return;
+    // O negócio 0 passa para o OWNER: o AGENT deixa de enxergá-lo.
+    store.records.get(ids[0]!)!.ownerId = memberId('OWNER');
+
+    const out = await confirm('AGENT', row.id, { version: asked.row.version });
+    expect(out.ok && out.status).toBe(202);
+    if (!out.ok) return;
+    // Uma só transição (CAS) com a exclusão junto: version + 1.
+    expect(out.row.version).toBe(asked.row.version + 1);
+    const excluded = out.items.find((i) => i.targetId === ids[0]);
+    expect([excluded?.status, excluded?.errorCode]).toEqual(['excluded', 'not_found']);
+    const final = out.start ? await out.start() : null;
+    expect(final?.status).toBe('completed');
+    expect(store.countExecutions(ids[0]!)).toBe(0);
+    expect(store.countExecutions(ids[1]!)).toBe(1);
+    const exec = (await auditRows(row.id)).find((a) => a.action === 'copilot.proposal.executing');
+    expect(exec?.metadata).toMatchObject({ out_of_scope: 1, counts: { excluded: 1, pending: 1 } });
+  });
+
+  it('aprovador que não enxerga NENHUM alvo não executa nada (409 not_confirmable)', async () => {
+    const ids = newIds(1, memberId('AGENT'));
+    const row = persistedRow(await propose('READONLY', 'deal.move', { ids, to: 'R' }));
+    const asked = await withWorkspace(ws(), async (tx) =>
+      requestApproval(deps, tx, await principalIn(tx, 'READONLY'), row.id, memberId('AGENT')),
+    );
+    if (!asked.ok) throw new Error(asked.error);
+    store.records.get(ids[0]!)!.ownerId = memberId('OWNER');
+    const out = await confirm('AGENT', row.id, { version: asked.row.version });
+    expect(!out.ok && out.error).toBe('not_confirmable');
+    expect((await load(row.id)).proposal.status).toBe('awaiting_approval');
+    expect(store.executeCalls).toHaveLength(0);
+  });
+});
+
+describe('`requires` do executor em toda autorização do motor (item 5)', () => {
+  const strict = (): CapabilityExecutor => ({
+    ...deps.executors.get('deal.move')!,
+    requires: ['campaign.list'],
+  });
+
+  it('propor: AGENT tem `deal.move`, mas não a permissão de entidade → blocked role', async () => {
+    const outcome = await propose(
+      'AGENT',
+      'deal.move',
+      { ids: newIds(1), to: 'R' },
+      { executor: strict() },
+    );
+    expect(outcome.kind === 'blocked' && outcome.reason).toBe('role');
+  });
+
+  it('aprovadores: só papéis com as `requires`', async () => {
+    const approvers = await withWorkspace(ws(), async (tx) =>
+      listApprovers(tx, await principalIn(tx, 'OWNER'), 'deal.move', {
+        requires: ['campaign.list'],
+      }),
+    );
+    expect(approvers.map((a) => a.role)).toEqual(['ADMIN', 'SUPERVISOR']);
+  });
+
+  it('confirmar: a permissão de entidade perdida no caminho recusa (403)', async () => {
+    const row = persistedRow(await propose('SUPERVISOR', 'deal.move', { ids: newIds(2), to: 'R' }));
+    const strictDeps: TestDeps = {
+      ...deps,
+      executors: { get: () => strict(), list: () => [strict()] },
+    };
+    // SUPERVISOR tem `campaign.list`; READONLY também, mas não `deal.move`. Use um papel sem a
+    // permissão de entidade: AGENT (tem `deal.move`, não tem `campaign.list`).
+    await setRole('SUPERVISOR', 'AGENT');
+    try {
+      const out = await withWorkspace(ws(), async (tx) =>
+        confirmProposal(strictDeps, tx, await principalIn(tx, 'SUPERVISOR'), row.id, {
+          idempotencyKey: randomUUID(),
+          version: row.version,
+        }),
+      );
+      expect(!out.ok && out.error).toBe('forbidden');
+    } finally {
+      await setRole('SUPERVISOR', 'SUPERVISOR');
+    }
+  });
+});
+
+describe('confirmar com ajuste que falha não altera a proposta (item 3)', () => {
+  it('nível 4 + ajuste sem "Revisei" → 422 e a proposta fica como estava', async () => {
+    const row = persistedRow(await propose('OWNER', 'campaign.pause', { ids: newIds(1), to: 'P' }));
+    const out = await confirm('OWNER', row.id, {
+      version: row.version,
+      adjustments: { notify_members: true },
+    });
+    expect(!out.ok && out.error).toBe('ack_required');
+    // O DTO devolvido é o do estado que FICOU (sem o ajuste).
+    expect(!out.ok && out.proposal?.version).toBe(row.version);
+    const { proposal } = await load(row.id);
+    expect(proposal.version).toBe(row.version);
+    expect(proposal.args).toEqual(row.args);
+    expect((await auditRows(row.id)).map((a) => a.action)).not.toContain(
+      'copilot.proposal.adjusted',
+    );
+    // A versão original continua confirmável.
+    const ok = await confirm('OWNER', row.id, { version: row.version, acknowledged: true });
+    expect(ok.ok && ok.status).toBe(202);
+    if (ok.ok && ok.start) await ok.start();
+  });
+
+  it('só leitura (402) e papel rebaixado (403) com ajuste: nada gravado', async () => {
+    const row = persistedRow(await propose('OWNER', 'deal.move', { ids: newIds(2), to: 'R' }));
+    const stage = randomUUID();
+    await getDb()
+      .update(schema.workspaces)
+      .set({ subscriptionStatus: 'expired' })
+      .where(eq(schema.workspaces.id, ws()));
+    try {
+      const out = await confirm('OWNER', row.id, {
+        version: row.version,
+        adjustments: { target_stage_id: stage },
+      });
+      expect(!out.ok && out.error).toBe('subscription_inactive');
+    } finally {
+      await getDb()
+        .update(schema.workspaces)
+        .set({ subscriptionStatus: 'active' })
+        .where(eq(schema.workspaces.id, ws()));
+    }
+    const agentRow = persistedRow(await propose('AGENT', 'deal.move', { ids: newIds(2), to: 'R' }));
+    await setRole('AGENT', 'READONLY');
+    try {
+      const out = await confirm('AGENT', agentRow.id, {
+        version: agentRow.version,
+        adjustments: { target_stage_id: stage },
+      });
+      expect(!out.ok && out.error).toBe('forbidden');
+    } finally {
+      await setRole('AGENT', 'AGENT');
+    }
+    for (const r of [row, agentRow]) {
+      const { proposal } = await load(r.id);
+      expect([proposal.version, proposal.summary]).toEqual([r.version, r.summary]);
+    }
+  });
+});
+
+describe('nível 2: nada sai antes do commit do callback (item 4)', () => {
+  it('a transação do chamador falha depois de executar → nenhum evento, nada gravado', async () => {
+    const [id] = newIds(1);
+    const queue = new AfterCommitQueue();
+    let insideEmitted = -1;
+    await expect(
+      withWorkspace(ws(), async (tx) => {
+        const outcome = await proposeAction(
+          deps,
+          {
+            tx,
+            principal: await principalIn(tx, 'OWNER'),
+            source: 'copilot',
+            turnId: null,
+            sessionId: null,
+            afterCommit: (fn) => queue.push(fn),
+          },
+          deps.executors.get('deal.move')!,
+          { ids: [id!], to: 'R' },
+        );
+        expect(outcome.kind).toBe('executed');
+        insideEmitted = deps.emitted.length + store.afterCommitEvents.length;
+        throw new Error('o log do callback falhou');
+      }),
+    ).rejects.toThrow('o log do callback falhou');
+    // Dentro da transação: nada saiu. Depois do rollback: a fila é descartada (nunca drenada).
+    expect(insideEmitted).toBe(0);
+    expect(queue.size).toBeGreaterThan(0);
+    queue.clear();
+    expect(deps.emitted).toHaveLength(0);
+    expect(store.afterCommitEvents).toHaveLength(0);
+    const rows = await getDb()
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.copilotActionItems)
+      .where(eq(schema.copilotActionItems.targetId, id!));
+    expect(rows[0]?.n).toBe(0);
+  });
+
+  it('commit ok → o progresso final e os efeitos do executor saem depois, uma vez', async () => {
+    const [id] = newIds(1);
+    const outcome = await propose('OWNER', 'deal.move', { ids: [id!], to: 'R' });
+    expect(outcome.kind).toBe('executed');
+    expect(store.afterCommitEvents).toEqual([`exec:${id}`]);
+    expect(deps.emitted).toHaveLength(1);
+    expect(deps.emitted[0]?.payload).toMatchObject({ status: 'completed' });
+  });
+
+  it('lote: o efeito do item sai depois do commit DO ITEM; item que lança descarta o dele', async () => {
+    const ids = newIds(2);
+    const row = persistedRow(await propose('OWNER', 'deal.move', { ids, to: 'R' }));
+    const base = deps.executors.get('deal.move')!;
+    let n = 0;
+    let seenBeforeSecond: string[] = [];
+    const flaky: CapabilityExecutor = {
+      ...base,
+      async executeItem(ctx, args, item) {
+        if (n++ === 0) return base.executeItem(ctx, args, item);
+        // O 1º item já commitou: o efeito dele já saiu.
+        seenBeforeSecond = [...store.afterCommitEvents];
+        ctx.afterCommit(() => {
+          store.afterCommitEvents.push('fantasma');
+        });
+        throw Object.assign(new Error('regra'), { code: 'transition_rule' });
+      },
+    };
+    const flakyDeps: TestDeps = { ...deps, executors: { get: () => flaky, list: () => [flaky] } };
+    const out = await confirm('OWNER', row.id, { version: row.version });
+    expect(out.ok && out.status).toBe(202);
+    const final = await runProposalExecution(flakyDeps, { workspaceId: ws(), proposalId: row.id });
+    expect(final?.status).toBe('partially_completed');
+    expect(seenBeforeSecond).toEqual([`exec:${ids[0]}`]);
+    // O item que lançou teve o savepoint desfeito: o efeito dele nunca sai.
+    expect(store.afterCommitEvents).toEqual([`exec:${ids[0]}`]);
+  });
+});
+
+describe('reautorização na retomada (item 6)', () => {
+  it('rebaixado entre confirmar e a execução → failed/actor_unauthorized, sem executar', async () => {
+    const ids = newIds(2);
+    const row = persistedRow(await propose('AGENT', 'deal.move', { ids, to: 'R' }));
+    const out = await confirm('AGENT', row.id, { version: row.version });
+    expect(out.ok && out.status).toBe(202);
+    await setRole('AGENT', 'READONLY');
+    try {
+      const final = await runProposalExecution(deps, { workspaceId: ws(), proposalId: row.id });
+      expect(final?.status).toBe('failed');
+      expect(store.executeCalls).toHaveLength(0);
+      const { items } = await load(row.id);
+      expect(
+        items.every((i) => i.status === 'failed' && i.errorCode === 'actor_unauthorized'),
+      ).toBe(true);
+      expect((await auditRows(row.id)).at(-1)?.metadata).toMatchObject({
+        to: 'failed',
+        abort: 'actor_unauthorized',
+      });
+    } finally {
+      await setRole('AGENT', 'AGENT');
+    }
+  });
+
+  it('assinatura vencida antes da retomada pela varredura → não executa', async () => {
+    const row = persistedRow(await propose('OWNER', 'deal.move', { ids: newIds(2), to: 'R' }));
+    const out = await confirm('OWNER', row.id, { version: row.version });
+    expect(out.ok).toBe(true);
+    await getDb()
+      .update(schema.workspaces)
+      .set({ subscriptionStatus: 'expired' })
+      .where(eq(schema.workspaces.id, ws()));
+    try {
+      const final = await runProposalExecution(deps, { workspaceId: ws(), proposalId: row.id });
+      expect(final?.status).toBe('failed');
+      expect(store.executeCalls).toHaveLength(0);
+    } finally {
+      await getDb()
+        .update(schema.workspaces)
+        .set({ subscriptionStatus: 'active' })
+        .where(eq(schema.workspaces.id, ws()));
+    }
+  });
+});
+
+describe('exclusão mútua (item 7)', () => {
+  it('confirmar em paralelo com a corrida FORÇADA (1ª segura o lock depois do CAS) → 1 execução', async () => {
+    const ids = newIds(3);
+    const row = persistedRow(await propose('OWNER', 'deal.move', { ids, to: 'R' }));
+    let releaseFirst: () => void = () => undefined;
+    const holdFirst = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let casDone: () => void = () => undefined;
+    const afterCas = new Promise<void>((resolve) => {
+      casDone = resolve;
+    });
+    const first = withWorkspace(ws(), async (tx) => {
+      const out = await confirmProposal(deps, tx, await principalIn(tx, 'OWNER'), row.id, {
+        idempotencyKey: randomUUID(),
+        version: row.version,
+      });
+      casDone();
+      await holdFirst; // a transação continua aberta, com a linha travada pelo CAS
+      return out;
+    });
+    await afterCas;
+    // A 2ª leu a versão antiga (a 1ª não commitou) e o UPDATE dela fica preso no lock.
+    let secondSettled = false;
+    const second = confirm('OWNER', row.id, { version: row.version }).finally(() => {
+      secondSettled = true;
+    });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(secondSettled).toBe(false);
+    releaseFirst();
+    const [a, b] = await Promise.all([first, second]);
+    expect(a.ok && a.status).toBe(202);
+    expect(!b.ok && b.error).toBe('already_confirmed');
+    for (const r of [a, b]) if (r.ok && r.start) await r.start();
+    await drainProposalExecutions();
+    for (const id of ids) expect(store.countExecutions(id)).toBe(1);
+  });
+
+  it('a varredura não rouba uma execução viva: lease medido no relógio do BANCO', async () => {
+    const row = persistedRow(await propose('OWNER', 'deal.move', { ids: newIds(2), to: 'R' }));
+    const out = await confirm('OWNER', row.id, { version: row.version });
+    expect(out.ok).toBe(true);
+    // Relógio da réplica 10 min adiantado: ela "acha" que o lease venceu; o banco discorda.
+    const skewed: TestDeps = { ...deps, now: () => new Date(Date.now() + 10 * 60_000) };
+    const before = (await load(row.id)).proposal;
+    await sweepProposalsOnce(skewed, fakeSweepRedis(), { awaitResumes: true });
+    // (A varredura é entre workspaces: só se afirma sobre ESTA proposta.)
+    const after = (await load(row.id)).proposal;
+    expect(after.status).toBe('executing');
+    expect(after.leaseExpiresAt?.getTime()).toBe(before.leaseExpiresAt?.getTime());
+    for (const item of (await load(row.id)).items) {
+      expect(store.countExecutions(item.targetId)).toBe(0);
+    }
+    if (out.ok && out.start) await out.start();
+    expect((await load(row.id)).proposal.status).toBe('completed');
+  });
+});
+
+describe('desfazer interrompido (item 8)', () => {
+  it('outra chave assume só depois de 10 min parado; retoma sem repetir item', async () => {
+    const ids = newIds(3);
+    const row = persistedRow(await propose('OWNER', 'deal.move', { ids, to: 'R' }));
+    await confirmAndRun('OWNER', row);
+    const viewer = await withWorkspace(ws(), (tx) => principalIn(tx, 'OWNER'));
+    // Processo cai depois de desfazer 1 item: claim (1), lista (2), item (3), item (4) → crash.
+    let calls = 0;
+    await expect(
+      undoProposal(deps, viewer, row.id, randomUUID(), (fn) => {
+        calls++;
+        if (calls === 4) throw new Error('crash');
+        return withWorkspace(ws(), fn);
+      }),
+    ).rejects.toThrow('crash');
+    expect(store.undoCalls).toHaveLength(1);
+
+    // Chave nova logo em seguida: 409 (pode ser o mesmo desfazer ainda rodando).
+    const tooSoon = await undo('OWNER', row.id);
+    expect(!tooSoon.ok && tooSoon.error).toBe('not_undoable');
+
+    // Parado há 11 min (começo e último item): a chave nova assume e termina.
+    const past = new Date(Date.now() - 11 * 60_000);
+    await getDb()
+      .update(schema.copilotActionProposals)
+      .set({ undoneAt: past })
+      .where(eq(schema.copilotActionProposals.id, row.id));
+    await getDb()
+      .update(schema.copilotActionItems)
+      .set({ undoneAt: past })
+      .where(eq(schema.copilotActionItems.proposalId, row.id));
+    const key = randomUUID();
+    const resumed = await undo('OWNER', row.id, key);
+    expect(resumed.ok && resumed.row.status).toBe('undone');
+    expect(store.undoCalls).toHaveLength(3);
+    expect(new Set(store.undoCalls).size).toBe(3);
+    const starts = (await auditRows(row.id)).filter(
+      (a) => a.action === 'copilot.proposal.undo_started',
+    );
+    expect(starts).toHaveLength(2);
+    expect(starts[1]?.metadata).toMatchObject({ undo_key: key, resumed: true });
+    // A chave nova vira a dona do replay.
+    const replay = await undo('OWNER', row.id, key);
+    expect(replay.ok && replay.row.status).toBe('undone');
+  });
+});
+
+describe('itens menores (item 9)', () => {
+  it('pedido de aprovação vencido avisa o solicitante', async () => {
+    const row = persistedRow(await propose('AGENT', 'campaign.pause', { ids: newIds(1), to: 'P' }));
+    const asked = await withWorkspace(ws(), async (tx) =>
+      requestApproval(deps, tx, await principalIn(tx, 'AGENT'), row.id, memberId('ADMIN')),
+    );
+    expect(asked.ok).toBe(true);
+    await getDb()
+      .update(schema.copilotActionProposals)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(schema.copilotActionProposals.id, row.id));
+    await sweepProposalsOnce(deps, fakeSweepRedis(), { awaitResumes: true });
+    expect((await load(row.id)).proposal.status).toBe('expired');
+    expect(deps.notified.at(-1)).toMatchObject({
+      memberId: memberId('AGENT'),
+      evento: 'copilot_aprovacao',
+      titulo: 'Seu pedido de aprovação expirou sem resposta',
+    });
+  });
+
+  it('pré-confirmado (S13) nível 3 → envelope "executing" (não "aguardando confirmação")', async () => {
+    const outcome = await propose(
+      'OWNER',
+      'deal.move',
+      { ids: newIds(2), to: 'R' },
+      { preconfirmed: true },
+    );
+    expect(outcome.kind).toBe('executing');
+    const env = CopilotToolEnvelopeSchema.parse(proposeEnvelope(outcome));
+    expect(env.decision).toBe('executed');
+    expect(env.model_view).toMatchObject({ status: 'executing' });
+    if (outcome.kind === 'executing') {
+      expect((await outcome.start())?.status).toBe('completed');
+    }
+  });
+
+  it('bloqueio: o model_view leva o nível (o log do callback registra o risk_level)', async () => {
+    const outcome = await propose('AGENT', 'campaign.pause', { ids: newIds(1), to: 'P' });
+    const env = CopilotToolEnvelopeSchema.parse(proposeEnvelope(outcome));
+    expect(env.decision).toBe('blocked');
+    expect(env.model_view).toMatchObject({ reason: 'role', risk_level: 4 });
   });
 });

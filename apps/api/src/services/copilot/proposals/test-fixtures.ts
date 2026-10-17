@@ -5,6 +5,10 @@
  * executor confere a versão antes de escrever (como o real fará com `deals.updated_at`).
  * `deal.move` (nível base 2, desfazível) e `campaign.pause` (nível 4, externo, MANAGERS) cobrem
  * os quatro tratamentos sem tocar em tabela de negócio.
+ *
+ * Escopo fino como o real: um registro com `ownerId` só é visível para um AGENT se ele for o
+ * dono ("Atendente: só os seus negócios"); gestores veem tudo. Cada item feito agenda um efeito
+ * pós-commit (`afterCommitEvents`), para provar que nada sai antes do commit.
  */
 import { z } from 'zod';
 import { createLogger } from '@hm/logger';
@@ -13,6 +17,7 @@ import type {
   CapabilityExecutor,
   ExecutableItem,
   ExecuteItemResult,
+  ExecutorContext,
   Target,
 } from '../../../internal/copilot/core/executor-types';
 import type { NotifiableEvent } from '../../notifications';
@@ -25,6 +30,8 @@ export interface FakeRecord {
   editedBy: string | null;
   /** Invisível para o membro (fora do escopo). */
   hidden?: boolean;
+  /** Dono: um AGENT só vê o que é dele. */
+  ownerId?: string;
 }
 
 export class FakeStore {
@@ -32,11 +39,28 @@ export class FakeStore {
   readonly executeCalls: string[] = [];
   readonly undoCalls: string[] = [];
   policy: PolicyCheck['status'] = 'ok';
+  /** Efeitos pós-commit que o executor agendou e o motor de fato rodou. */
+  readonly afterCommitEvents: string[] = [];
   /** Gancho chamado ANTES de cada `executeItem` (índice da chamada, item). */
   onExecute: ((index: number, item: ExecutableItem) => void) | null = null;
 
-  add(id: string, value = 'Orçamento enviado'): void {
-    this.records.set(id, { value, version: 1, editedBy: null });
+  add(id: string, value = 'Orçamento enviado', ownerId?: string): void {
+    this.records.set(id, {
+      value,
+      version: 1,
+      editedBy: null,
+      ...(ownerId ? { ownerId } : {}),
+    });
+  }
+
+  /** O principal do contexto enxerga o registro? */
+  visible(id: string, ctx: Pick<ExecutorContext, 'principal'>): FakeRecord | null {
+    const rec = this.records.get(id);
+    if (!rec || rec.hidden) return null;
+    if (rec.ownerId && ctx.principal.role === 'AGENT' && ctx.principal.memberId !== rec.ownerId) {
+      return null;
+    }
+    return rec;
   }
 
   /** Alguém editou o alvo fora do Copiloto. */
@@ -67,9 +91,18 @@ function makeFakeExecutor(
   capability: 'deal.move' | 'campaign.pause',
 ): CapabilityExecutor<FakeArgs> {
   const targetType = capability === 'deal.move' ? 'deal' : 'campaign';
+  const toTarget = (id: string, rec: FakeRecord): Target => ({
+    type: targetType,
+    id,
+    label: `Registro ${id.slice(0, 8)}`,
+    expectedVersion: String(rec.version),
+    state: { value: rec.value },
+  });
   return {
     capability,
     argsSchema: FakeArgsSchema,
+    // Permissão de entidade (como o real): mover negócios exige ver o pipeline.
+    ...(capability === 'deal.move' ? { requires: ['pipeline.view'] as const } : {}),
     adjustableParams: ['target_stage_id', 'notify_members'],
     applyAdjustments(args, params) {
       return {
@@ -78,22 +111,23 @@ function makeFakeExecutor(
         ...(params.notify_members !== undefined ? { notify: params.notify_members } : {}),
       };
     },
-    async resolveTargets(_ctx, args) {
+    async resolveTargets(ctx, args) {
       const targets: Target[] = [];
       const dropped: { id: string; reason: 'not_found' }[] = [];
       for (const id of args.ids) {
-        const rec = store.records.get(id);
-        if (!rec || rec.hidden) {
-          dropped.push({ id, reason: 'not_found' });
-          continue;
-        }
-        targets.push({
-          type: targetType,
-          id,
-          label: `Registro ${id.slice(0, 8)}`,
-          expectedVersion: String(rec.version),
-          state: { value: rec.value },
-        });
+        const rec = store.visible(id, ctx);
+        if (!rec) dropped.push({ id, reason: 'not_found' });
+        else targets.push(toTarget(id, rec));
+      }
+      return { targets, dropped };
+    },
+    async resolveIds(ctx, refs) {
+      const targets: Target[] = [];
+      const dropped: { id: string; reason: 'not_found' }[] = [];
+      for (const ref of refs) {
+        const rec = ref.type === targetType ? store.visible(ref.id, ctx) : null;
+        if (!rec) dropped.push({ id: ref.id, reason: 'not_found' });
+        else targets.push(toTarget(ref.id, rec));
       }
       return { targets, dropped };
     },
@@ -126,7 +160,7 @@ function makeFakeExecutor(
           },
         }
       : {}),
-    async executeItem(_ctx, args, item): Promise<ExecuteItemResult> {
+    async executeItem(ctx, args, item): Promise<ExecuteItemResult> {
       const index = store.executeCalls.length;
       store.executeCalls.push(item.targetId);
       store.onExecute?.(index, item);
@@ -142,6 +176,9 @@ function makeFakeExecutor(
       rec.value = args.to;
       rec.version++;
       rec.editedBy = null;
+      ctx.afterCommit(() => {
+        store.afterCommitEvents.push(`exec:${item.targetId}`);
+      });
       return { status: 'done', after: { value: rec.value }, undoPayload: { value: before } };
     },
     async undoItem(_ctx, item) {

@@ -16,20 +16,26 @@ import {
   schema,
   type CopilotActionItemRow,
   type CopilotProposalRow,
+  type CopilotProposalSource,
   type DbTx,
 } from '@hm/db';
 import {
   ApproverSchema,
   ROLES,
+  can,
   capabilityAllowed,
+  effectiveCapabilities,
   type Approver,
   type CapabilityKey,
+  type Permission,
   type ProposalDTO,
   type Role,
 } from '@hm/shared';
+import type { CapabilityExecutor, TargetRef } from '../../../internal/copilot/core/executor-types';
 import type { NotifiableEvent } from '../../notifications';
 import type { CopilotPrincipal } from '../identity/principal';
 import { recordProposalAudit } from './audit';
+import { executorContext } from './context';
 import { buildProposalDTO, canViewProposal, capabilityOf } from './dto';
 import { auditCounts, countItems } from './items';
 import { APPROVAL_TTL_SECONDS, fail, type ProposalEngineDeps, type ProposalFailure } from './types';
@@ -41,14 +47,70 @@ function isRole(value: string): value is Role {
 }
 
 /**
- * Quem pode aprovar `capability` com `targetCount` alvos neste workspace (sem o próprio
- * solicitante). Ordem: papel mais alto primeiro, depois nome.
+ * Cobertura dos alvos: o aprovador precisa ENXERGAR todos os alvos da proposta (escopo fino,
+ * ADR-003 §4). Um atendente que só vê os próprios negócios não aprova mover o negócio do colega.
+ */
+export interface ApproverCoverage {
+  readonly executor: CapabilityExecutor;
+  readonly targets: readonly TargetRef[];
+  readonly source: CopilotProposalSource;
+  readonly proposalId: string | null;
+  readonly now: Date;
+}
+
+export interface ListApproversOptions {
+  /** Volume real (muda a permissão de `message.send`). Default 1. */
+  readonly targetCount?: number;
+  /** Permissões de entidade do executor (`CapabilityExecutor.requires`). */
+  readonly requires?: readonly Permission[];
+  /** Com alvos conhecidos: só quem vê TODOS eles. */
+  readonly coverage?: ApproverCoverage;
+}
+
+/** Principal de um candidato a aprovador: mesmo workspace, assinatura e matriz do solicitante. */
+function candidatePrincipal(requester: CopilotPrincipal, id: string, role: Role): CopilotPrincipal {
+  return {
+    ...requester,
+    memberId: id,
+    requestedByMemberId: requester.memberId,
+    role,
+    memberStatus: 'active',
+    effectiveCapabilities: effectiveCapabilities(role, requester.matrix),
+  };
+}
+
+/** O candidato vê todos os alvos? (re-resolve sob o principal DELE) */
+export async function coversAllTargets(
+  tx: DbTx,
+  principal: CopilotPrincipal,
+  coverage: ApproverCoverage,
+): Promise<boolean> {
+  if (coverage.targets.length === 0) return true;
+  const resolved = await coverage.executor.resolveIds(
+    executorContext({
+      tx,
+      principal,
+      requestedByMemberId: principal.requestedByMemberId,
+      proposalId: coverage.proposalId,
+      source: coverage.source,
+      now: coverage.now,
+    }),
+    coverage.targets,
+  );
+  const seen = new Set(resolved.targets.map((t) => `${t.type}:${t.id}`));
+  return coverage.targets.every((t) => seen.has(`${t.type}:${t.id}`));
+}
+
+/**
+ * Quem pode aprovar `capability` neste workspace (sem o próprio solicitante): membro ativo cujo
+ * papel tem a permissão para o volume, com as `requires`, sem a matriz desligar, e (com
+ * `coverage`) que enxerga todos os alvos. Ordem: papel mais alto primeiro, depois nome.
  */
 export async function listApprovers(
   tx: DbTx,
   requester: CopilotPrincipal,
   capability: CapabilityKey,
-  targetCount: number,
+  options: ListApproversOptions = {},
 ): Promise<Approver[]> {
   const m = schema.members;
   const rows = await tx
@@ -61,30 +123,48 @@ export async function listApprovers(
         ne(m.id, requester.memberId),
       ),
     );
-  const count = Math.max(1, targetCount);
-  return rows
+  const count = Math.max(1, options.targetCount ?? 1);
+  const eligible = rows
     .filter(
       (r): r is { id: string; name: string | null; role: Role } =>
-        isRole(r.role) && capabilityAllowed(r.role, requester.matrix, capability, count).allowed,
+        isRole(r.role) &&
+        capabilityAllowed(r.role, requester.matrix, capability, count).allowed &&
+        (options.requires ?? []).every((perm) => isRole(r.role) && can(r.role, perm)),
     )
     .sort(
       (a, b) =>
         (ROLE_ORDER.get(a.role) ?? 99) - (ROLE_ORDER.get(b.role) ?? 99) ||
         (a.name ?? '').localeCompare(b.name ?? '', 'pt-BR'),
-    )
-    .map((r) =>
-      ApproverSchema.parse({
-        member_id: r.id,
-        name: ((r.name ?? '').trim() || 'Membro').slice(0, 120),
-        role: r.role,
-      }),
     );
+  const covered: typeof eligible = [];
+  for (const r of eligible) {
+    if (
+      !options.coverage ||
+      (await coversAllTargets(tx, candidatePrincipal(requester, r.id, r.role), options.coverage))
+    ) {
+      covered.push(r);
+    }
+  }
+  return covered.map((r) =>
+    ApproverSchema.parse({
+      member_id: r.id,
+      name: ((r.name ?? '').trim() || 'Membro').slice(0, 120),
+      role: r.role,
+    }),
+  );
 }
 
-/** Evento da cascata para o aprovador (pedido) ou para o solicitante (decisão). */
+/** Alvos (referências) dos itens ainda pendentes de uma proposta. */
+export function pendingTargetRefs(items: readonly CopilotActionItemRow[]): TargetRef[] {
+  return items
+    .filter((i) => i.status === 'pending')
+    .map((i) => ({ type: i.targetType, id: i.targetId }));
+}
+
+/** Evento da cascata para o aprovador (pedido) ou para o solicitante (decisão ou prazo). */
 export function approvalNotification(
   row: CopilotProposalRow,
-  kind: 'requested' | 'approved' | 'rejected',
+  kind: 'requested' | 'approved' | 'rejected' | 'expired',
 ): NotifiableEvent | null {
   const memberId = kind === 'requested' ? row.approverMemberId : row.requestedByMemberId;
   if (!memberId) return null;
@@ -93,7 +173,9 @@ export function approvalNotification(
       ? 'Pedido de aprovação'
       : kind === 'approved'
         ? 'Seu pedido foi aprovado'
-        : 'Seu pedido foi recusado';
+        : kind === 'rejected'
+          ? 'Seu pedido foi recusado'
+          : 'Seu pedido de aprovação expirou sem resposta';
   return {
     workspaceId: row.workspaceId,
     memberId,
@@ -158,7 +240,19 @@ export async function requestApproval(
   }
 
   const counts = countItems(items);
-  const approvers = await listApprovers(tx, viewer, capabilityOf(proposal), counts.total);
+  const executor = deps.executors.get(proposal.capability);
+  if (!executor) return fail('executor_unavailable');
+  const approvers = await listApprovers(tx, viewer, capabilityOf(proposal), {
+    targetCount: counts.pending,
+    ...(executor.requires ? { requires: executor.requires } : {}),
+    coverage: {
+      executor,
+      targets: pendingTargetRefs(items),
+      source: proposal.source,
+      proposalId: proposal.id,
+      now,
+    },
+  });
   if (!approvers.some((a) => a.member_id === approverMemberId)) return fail('invalid_approver');
 
   const row = await copilotProposalsRepo.transition(tx, {

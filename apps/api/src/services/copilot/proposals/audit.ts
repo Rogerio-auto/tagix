@@ -13,7 +13,7 @@
  *   metadata                { capability, risk_level, from, to, counts, ... } — SEM PII
  *
  * `action` é `copilot.proposal.<evento>`: o status de destino, ou `adjusted`,
- * `stop_requested`, `undo_started` quando a transição não muda o status.
+ * `stop_requested`, `undo_started`, `retried` quando a transição não muda o status.
  */
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { schema, type CopilotProposalRow, type CopilotProposalStatus, type DbTx } from '@hm/db';
@@ -24,7 +24,8 @@ export type ProposalAuditEvent =
   | CopilotProposalStatus
   | 'adjusted'
   | 'stop_requested'
-  | 'undo_started';
+  | 'undo_started'
+  | 'retried';
 
 export interface ProposalAuditInput {
   readonly proposal: CopilotProposalRow;
@@ -82,4 +83,31 @@ export async function findUndoKey(tx: DbTx, proposalId: string): Promise<string 
     .orderBy(desc(a.createdAt))
     .limit(1);
   return row?.key ?? null;
+}
+
+/**
+ * "Tentar de novo" já feito para a proposta: a chave usada e a proposta nova (a trilha é a fonte,
+ * como no desfazer). `null` = nenhum.
+ */
+export async function findRetry(
+  tx: DbTx,
+  proposalId: string,
+): Promise<{ readonly key: string | null; readonly retryProposalId: string | null } | null> {
+  const a = schema.auditLogs;
+  const [row] = await tx
+    .select({
+      key: sql<string | null>`${a.metadata} ->> 'retry_key'`,
+      retryProposalId: sql<string | null>`${a.metadata} ->> 'retry_proposal_id'`,
+    })
+    .from(a)
+    .where(
+      and(
+        eq(a.copilotProposalId, proposalId),
+        eq(a.action, 'copilot.proposal.retried'),
+        sql`${a.workspaceId} = app_current_workspace()`,
+      ),
+    )
+    .orderBy(desc(a.createdAt))
+    .limit(1);
+  return row ?? null;
 }

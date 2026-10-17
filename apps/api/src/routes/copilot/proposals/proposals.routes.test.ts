@@ -20,7 +20,11 @@ import {
   seedCopilotWorkspace,
   type SeededWorkspace,
 } from '../../../services/copilot/identity/test-fixtures';
-import { drainProposalExecutions, proposeAction } from '../../../services/copilot/proposals';
+import {
+  AfterCommitQueue,
+  drainProposalExecutions,
+  proposeAction,
+} from '../../../services/copilot/proposals';
 import {
   FakeStore,
   makeTestDeps,
@@ -65,10 +69,10 @@ beforeEach(() => {
 const cookie = (role: Role): string => seeded.members[role].cookie;
 const memberId = (role: Role): string => seeded.members[role].id;
 
-function ids(n: number): string[] {
+function ids(n: number, ownerId?: string): string[] {
   return Array.from({ length: n }, () => {
     const id = randomUUID();
-    store.add(id);
+    store.add(id, 'Orçamento enviado', ownerId);
     return id;
   });
 }
@@ -79,6 +83,7 @@ async function propose(
   args: FakeArgs,
 ): Promise<CopilotProposalRow> {
   const executor = deps.executors.get(capability)!;
+  const queue = new AfterCommitQueue();
   const outcome = await withWorkspace(seeded.workspaceId, async (tx) => {
     const principal = await resolveCopilotPrincipal(tx, {
       workspaceId: seeded.workspaceId,
@@ -86,11 +91,19 @@ async function propose(
     });
     return proposeAction(
       deps,
-      { tx, principal: principal!, source: 'copilot', turnId: null, sessionId: null },
+      {
+        tx,
+        principal: principal!,
+        source: 'copilot',
+        turnId: null,
+        sessionId: null,
+        afterCommit: (fn) => queue.push(fn),
+      },
       executor,
       args,
     );
   });
+  await queue.drain(deps.logger);
   if (!('row' in outcome)) throw new Error(outcome.kind);
   return outcome.row;
 }
@@ -326,23 +339,41 @@ describe('adjust, cancel, undo, retry', () => {
     expect(closed.body.error).toBe('undo_window_closed');
   });
 
-  it('tentar de novo → 201 com proposta nova', async () => {
+  it('tentar de novo → 201; mesma chave 200 (mesma proposta); outra chave 409; sem chave 400', async () => {
     const targets = ids(2);
     const row = await propose('OWNER', 'deal.move', { ids: targets, to: 'R' });
     store.touch(targets[0]!, 'Paula');
     await confirmReq('OWNER', row.id, { version: row.version });
     await drainProposalExecutions();
-    const res = await request(app)
-      .post(`/api/copilot/proposals/${row.id}/retry-failed`)
-      .set('Cookie', cookie('OWNER'));
+    const retry = (id: string, key: string | null) => {
+      const r = request(app)
+        .post(`/api/copilot/proposals/${id}/retry-failed`)
+        .set('Cookie', cookie('OWNER'));
+      return key ? r.set('Idempotency-Key', key) : r;
+    };
+    expect((await retry(row.id, null)).status).toBe(400);
+    const key = randomUUID();
+    const res = await retry(row.id, key);
     expect(res.status).toBe(201);
     const dto = ProposalDTOSchema.parse(res.body);
     expect(dto.id).not.toBe(row.id);
     expect(dto.items.data.map((i) => i.target_id)).toEqual([targets[0]]);
-    const none = await request(app)
-      .post(`/api/copilot/proposals/${dto.id}/retry-failed`)
-      .set('Cookie', cookie('OWNER'));
+    // Duplo clique: a mesma chave devolve A MESMA proposta nova, sem criar outra.
+    const replay = await retry(row.id, key);
+    expect(replay.status).toBe(200);
+    expect(replay.body.id).toBe(dto.id);
+    const other = await retry(row.id, randomUUID());
+    expect(other.status).toBe(409);
+    expect(other.body.error).toBe('already_retried');
+    const none = await retry(dto.id, randomUUID());
     expect(none.status).toBe(409);
+    expect(none.body.error).toBe('nothing_to_retry');
+    // Uma única proposta nova: uma única linha `retried` na trilha da original.
+    const retried = await getDb()
+      .select({ action: schema.auditLogs.action })
+      .from(schema.auditLogs)
+      .where(eq(schema.auditLogs.copilotProposalId, row.id));
+    expect(retried.filter((a) => a.action === 'copilot.proposal.retried')).toHaveLength(1);
   });
 });
 
@@ -390,6 +421,37 @@ describe('aprovação', () => {
     expect(confirmed.status).toBe(202);
     await drainProposalExecutions();
     expect(deps.notified.at(-1)).toMatchObject({ memberId: memberId('AGENT') });
+  });
+
+  it('?proposal_id= corta quem não enxerga todos os alvos (AGENT dono de um só)', async () => {
+    // READONLY pede mover um negócio do OWNER: o AGENT tem `deal.move`, mas não vê o negócio.
+    const row = await propose('READONLY', 'deal.move', {
+      ids: ids(1, memberId('OWNER')),
+      to: 'R',
+    });
+    expect([row.status, row.blockedReason]).toEqual(['blocked', 'role']);
+    const byCapability = await request(app)
+      .get('/api/copilot/approvers?capability=deal.move')
+      .set('Cookie', cookie('READONLY'));
+    expect(byCapability.body.data.map((a: { role: string }) => a.role)).toContain('AGENT');
+    const byProposal = await request(app)
+      .get(`/api/copilot/approvers?proposal_id=${row.id}`)
+      .set('Cookie', cookie('READONLY'));
+    expect(byProposal.status).toBe(200);
+    expect(byProposal.body.data.map((a: { role: string }) => a.role)).toEqual([
+      'OWNER',
+      'ADMIN',
+      'SUPERVISOR',
+    ]);
+    // De outro membro: 404 (sem oráculo); os dois parâmetros juntos: 400.
+    const foreign = await request(app)
+      .get(`/api/copilot/approvers?proposal_id=${row.id}`)
+      .set('Cookie', cookie('AGENT'));
+    expect(foreign.status).toBe(404);
+    const both = await request(app)
+      .get(`/api/copilot/approvers?proposal_id=${row.id}&capability=deal.move`)
+      .set('Cookie', cookie('READONLY'));
+    expect(both.status).toBe(400);
   });
 });
 

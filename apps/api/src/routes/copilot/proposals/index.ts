@@ -10,7 +10,7 @@
  *   404 não existe ou não é visível (sem oráculo)
  *   409 `already_confirmed` | `stale_proposal` | `not_undoable` | `policy_blocked` | …
  *   410 `proposal_expired` | `undo_window_closed` · 422 `ack_required` | `invalid_adjustment` | …
- *   429 limite: confirmar, desfazer e ajustar, 30/min por membro
+ *   429 limite: confirmar, desfazer, ajustar e tentar de novo, 30/min por membro
  *
  * Quem pode o quê: ver = dono, aprovador, quem executou ou `copilot.activity.view_all`;
  * confirmar = dono (ou o aprovador, com as permissões DELE); ajustar e tentar de novo = dono;
@@ -47,6 +47,7 @@ import {
   PROPOSAL_ERROR_MESSAGES,
   PROPOSAL_ERROR_STATUS,
   adjustProposal,
+  pendingTargetRefs,
   buildProposalDTO,
   canViewProposal,
   cancelProposal,
@@ -70,7 +71,7 @@ export interface CopilotProposalsRouterOptions {
   readonly deps?: ProposalEngineDeps;
 }
 
-/** Limite de confirmar/desfazer/ajustar por membro (spec §5.2). */
+/** Limite de confirmar/desfazer/ajustar/tentar de novo por membro (spec §5.2). */
 export const PROPOSAL_WRITE_RATE_LIMIT = { max: 30, windowSec: 60 } as const;
 
 /**
@@ -237,19 +238,31 @@ export function createCopilotProposalsRouter(options: CopilotProposalsRouterOpti
     res.status(200).json(out.proposal);
   });
 
-  // POST /api/copilot/proposals/:id/retry-failed → proposta NOVA
-  router.post('/api/copilot/proposals/:id/retry-failed', async (req: Request, res: Response) => {
-    const id = paramId(req);
-    if (!id) return notFound(res);
-    const out = await req.scoped!(async (tx) => {
-      const viewer = await loadViewer(req, tx);
-      if (!viewer) return null;
-      return retryFailedItems(deps(), tx, viewer, id);
-    });
-    if (!out) return forbidden(res);
-    if (!out.ok) return sendProposalFailure(res, out);
-    res.status(201).json(out.proposal);
-  });
+  // POST /api/copilot/proposals/:id/retry-failed → proposta NOVA   (Idempotency-Key)
+  router.post(
+    '/api/copilot/proposals/:id/retry-failed',
+    limited,
+    async (req: Request, res: Response) => {
+      const id = paramId(req);
+      if (!id) return notFound(res);
+      const key = IdempotencyKeySchema.safeParse(req.header('idempotency-key'));
+      if (!key.success) {
+        return badRequest(
+          res,
+          'idempotency_key_required',
+          'Envie o header Idempotency-Key (UUID).',
+        );
+      }
+      const out = await req.scoped!(async (tx) => {
+        const viewer = await loadViewer(req, tx);
+        if (!viewer) return null;
+        return retryFailedItems(deps(), tx, viewer, id, key.data);
+      });
+      if (!out) return forbidden(res);
+      if (!out.ok) return sendProposalFailure(res, out);
+      res.status(out.status).json(out.proposal);
+    },
+  );
 
   // POST /api/copilot/proposals/:id/request-approval
   router.post(
@@ -273,26 +286,71 @@ export function createCopilotProposalsRouter(options: CopilotProposalsRouterOpti
     },
   );
 
-  // GET /api/copilot/approvers?capability=&count=
+  // GET /api/copilot/approvers?capability=&count=   ou   ?proposal_id=
+  // Com `proposal_id` (o caso da tela "Pedir aprovação"): só quem pode E enxerga todos os alvos
+  // daquela proposta. Só por capacidade: papel ∧ matriz ∧ `requires`, sem os alvos.
   const approversQuery = z
     .object({
-      capability: CapabilityKeySchema,
+      capability: CapabilityKeySchema.optional(),
       count: z.coerce.number().int().min(1).max(BATCH_LIMIT).optional(),
+      proposal_id: UuidSchema.optional(),
     })
-    .strict();
+    .strict()
+    .refine((q) => (q.capability === undefined) !== (q.proposal_id === undefined));
   router.get('/api/copilot/approvers', async (req: Request, res: Response) => {
     const query = approversQuery.safeParse(req.query);
-    if (!query.success || !isWriteCapability(query.data.capability)) {
-      return badRequest(res, 'invalid_query', 'Informe uma capacidade de escrita.');
+    if (
+      !query.success ||
+      (query.data.capability !== undefined && !isWriteCapability(query.data.capability))
+    ) {
+      return badRequest(
+        res,
+        'invalid_query',
+        'Informe uma capacidade de escrita ou uma proposta (proposal_id).',
+      );
     }
-    const { capability, count } = query.data;
+    const { capability, count, proposal_id: proposalId } = query.data;
+    const d = deps();
     const out = await req.scoped!(async (tx) => {
       const viewer = await loadViewer(req, tx);
-      if (!viewer) return null;
-      return listApprovers(tx, viewer, capability, count ?? 1);
+      if (!viewer) return { kind: 'forbidden' } as const;
+      if (proposalId) {
+        const loaded = await copilotProposalsRepo.getWithItems(tx, proposalId.toLowerCase());
+        if (
+          !loaded ||
+          !canViewProposal(loaded.proposal, viewer) ||
+          loaded.proposal.requestedByMemberId !== viewer.memberId
+        ) {
+          return { kind: 'not_found' } as const;
+        }
+        const executor = d.executors.get(loaded.proposal.capability);
+        const cap = CapabilityKeySchema.safeParse(loaded.proposal.capability);
+        if (!executor || !cap.success) return { kind: 'ok', data: [] } as const;
+        const targets = pendingTargetRefs(loaded.items);
+        const data = await listApprovers(tx, viewer, cap.data, {
+          targetCount: targets.length,
+          ...(executor.requires ? { requires: executor.requires } : {}),
+          coverage: {
+            executor,
+            targets,
+            source: loaded.proposal.source,
+            proposalId: loaded.proposal.id,
+            now: d.now(),
+          },
+        });
+        return { kind: 'ok', data } as const;
+      }
+      if (!capability) return { kind: 'ok', data: [] } as const;
+      const executor = d.executors.get(capability);
+      const data = await listApprovers(tx, viewer, capability, {
+        targetCount: count ?? 1,
+        ...(executor?.requires ? { requires: executor.requires } : {}),
+      });
+      return { kind: 'ok', data } as const;
     });
-    if (!out) return forbidden(res);
-    res.status(200).json({ data: out });
+    if (out.kind === 'forbidden') return forbidden(res);
+    if (out.kind === 'not_found') return notFound(res);
+    res.status(200).json({ data: out.data });
   });
 
   return router;

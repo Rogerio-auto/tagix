@@ -4,8 +4,10 @@
  * - Cada item roda na SUA transação RLS (`withWorkspace`), com o efeito de domínio num savepoint
  *   do executor. Status do item e escrita de domínio entram juntos ou não entram: um processo
  *   que morre no meio não deixa item "feito pela metade".
- * - Antes de cada item: renova o lease (`renewLease`) e confere o "Parar" (`stop_requested`).
- *   Lease perdido (a proposta não está mais `executing`) encerra o laço sem tocar em nada.
+ * - Antes de cada item: trava a linha da proposta (`FOR UPDATE`, exclusão mútua do lote),
+ *   confere o "Parar" (`stop_requested`) e renova o lease. Proposta fora de `executing` encerra
+ *   o laço sem tocar em nada.
+ * - Efeitos fora do banco (socket, fila) só saem DEPOIS do commit (`ExecutorContext.afterCommit`).
  * - O item é travado (`FOR UPDATE`) e só roda se ainda estiver `pending`: dois executores
  *   concorrentes (o original lento e a varredura que o retomou) nunca executam o mesmo item.
  * - Estado final: todos `done` → `completed`; algum `done` → `partially_completed`; nenhum
@@ -14,7 +16,8 @@
  * - Progresso em `copilot:proposal_updated` com throttle (`progress.ts`).
  *
  * O nível 2 executa na hora, DENTRO da transação do callback da ferramenta (a proposta acabou
- * de ser gravada e ainda não foi confirmada no banco): `run` usa savepoints dessa transação.
+ * de ser gravada e ainda não foi confirmada no banco): `run` usa savepoints dessa transação, e
+ * `deferTo` leva todo efeito pós-commit para a fila do callback (nada sai antes do commit dele).
  */
 import { and, eq } from 'drizzle-orm';
 import {
@@ -28,12 +31,13 @@ import {
 } from '@hm/db';
 import { CAPABILITIES, CapabilityKeySchema } from '@hm/shared';
 import type {
+  AfterCommitFn,
   CapabilityExecutor,
   ExecuteItemResult,
-  ExecutorContext,
 } from '../../../internal/copilot/core/executor-types';
 import { resolveCopilotPrincipal, type CopilotPrincipal } from '../identity/principal';
 import { recordProposalAudit } from './audit';
+import { AfterCommitQueue, authorizeWrite, executorContext } from './context';
 import { auditCounts, countItems, toExecutableItem } from './items';
 import { ProgressThrottle, proposalAudience, proposalPayload } from './progress';
 import { UNDO_WINDOW_SECONDS, type ProposalEngineDeps } from './types';
@@ -110,7 +114,22 @@ type StepOutcome =
   | { readonly kind: 'stop' }
   | { readonly kind: 'lost' };
 
-/** Fecha a proposta `executing` no estado final (CAS; tenta de novo se o "Parar" mexeu na versão). */
+/** Código dos itens que o "Parar" deixou de executar (entram no "Tentar de novo"). */
+export const STOPPED_ITEM_CODE = 'stopped' as const;
+
+/** Sinal interno do `finalize`: desfaz a transação (inclusive o "parado") e tenta de novo. */
+class FinalizeRetry extends Error {
+  constructor() {
+    super('finalize_retry');
+    this.name = 'FinalizeRetry';
+  }
+}
+
+/**
+ * Fecha a proposta `executing` no estado final (CAS; tenta de novo se o "Parar" mexeu na versão).
+ * Com `stopped`, os itens ainda `pending` viram `skipped_policy`/`stopped` na MESMA transação:
+ * nenhum item fica pendurado numa proposta fechada.
+ */
 async function finalize(
   deps: ProposalEngineDeps,
   run: TxRunner,
@@ -126,8 +145,21 @@ async function finalize(
       if (cur.proposal.status !== 'executing') {
         return { done: true as const, value: { row: cur.proposal, items: cur.items } };
       }
+      let items = cur.items;
+      if (flags.stopped && items.some((i) => i.status === 'pending')) {
+        await tx
+          .update(schema.copilotActionItems)
+          .set({ status: 'skipped_policy', errorCode: STOPPED_ITEM_CODE })
+          .where(
+            and(
+              eq(schema.copilotActionItems.proposalId, proposalId),
+              eq(schema.copilotActionItems.status, 'pending'),
+            ),
+          );
+        items = await copilotProposalsRepo.listItems(tx, proposalId);
+      }
       const now = deps.now();
-      const counts = countItems(cur.items);
+      const counts = countItems(items);
       const to =
         counts.total > 0 && counts.done === counts.total
           ? 'completed'
@@ -154,7 +186,8 @@ async function finalize(
           undoDeadline: undoable ? new Date(now.getTime() + window * 1000) : null,
         },
       });
-      if (!row) return { done: false as const };
+      // Versão mudou (o "Parar" chegou agora): desfaz e tenta de novo, com os itens relidos.
+      if (!row) throw new FinalizeRetry();
       await recordProposalAudit(tx, {
         proposal: row,
         event: to,
@@ -166,7 +199,10 @@ async function finalize(
           ...(flags.abortCode ? { abort: flags.abortCode } : {}),
         },
       });
-      return { done: true as const, value: { row, items: cur.items } };
+      return { done: true as const, value: { row, items } };
+    }).catch((err: unknown) => {
+      if (err instanceof FinalizeRetry) return { done: false as const };
+      throw err;
     });
     if (outcome.done) return outcome.value;
   }
@@ -174,7 +210,7 @@ async function finalize(
   return null;
 }
 
-/** Falha todos os itens pendentes com o mesmo motivo (executor ausente, ator inativo…). */
+/** Falha todos os itens pendentes com o mesmo motivo (executor ausente, ator sem permissão…). */
 async function failPending(run: TxRunner, proposalId: string, code: string): Promise<void> {
   await run(async (tx) => {
     await tx
@@ -194,33 +230,49 @@ export interface RunExecutionInput {
   readonly proposalId: string;
   /** Default: uma transação `withWorkspace` por item. */
   readonly run?: TxRunner;
+  /**
+   * Execução DENTRO de uma transação maior (nível 2, no callback): os efeitos pós-commit (os do
+   * executor e o progresso no socket) vão para a fila do chamador, que só a drena depois do
+   * commit DELE. Ausente: cada `run` é uma transação própria e a fila do item é drenada logo
+   * depois do commit do item.
+   */
+  readonly deferTo?: (fn: AfterCommitFn) => void;
 }
 
 /**
  * Executa (ou retoma) uma proposta `executing`: só os itens `pending`. Devolve a linha final
  * (ou `null` se a proposta sumiu / o lease foi perdido para outro executor).
+ *
+ * Antes do primeiro item, REAUTORIZA o ator (papel atual, matriz, `requires`, assinatura): entre
+ * o confirmar e uma retomada pela varredura o membro pode ter sido rebaixado. Negado → os itens
+ * pendentes viram `failed`/`actor_unauthorized` e a proposta fecha.
  */
 export async function runProposalExecution(
   deps: ProposalEngineDeps,
   input: RunExecutionInput,
 ): Promise<CopilotProposalRow | null> {
   const run = input.run ?? workspaceRunner(input.workspaceId);
+  const afterCommit = async (queue: AfterCommitQueue): Promise<void> => {
+    if (input.deferTo) queue.moveTo(input.deferTo);
+    else await queue.drain(deps.logger);
+  };
   const loaded = await run((tx) => copilotProposalsRepo.getWithItems(tx, input.proposalId));
   if (!loaded || loaded.proposal.status !== 'executing') return loaded?.proposal ?? null;
   const proposal = loaded.proposal;
 
   const executor = deps.executors.get(proposal.capability);
+  const capability = CapabilityKeySchema.safeParse(proposal.capability);
   let abortCode: string | null = null;
   let args: unknown = null;
   let principal: CopilotPrincipal | null = null;
-  if (!executor) {
+  if (!executor || !capability.success) {
     abortCode = 'executor_unavailable';
   } else {
     const parsed = executor.argsSchema.safeParse(proposal.args);
     if (!parsed.success) abortCode = 'invalid_args';
     else args = parsed.data;
   }
-  if (!abortCode) {
+  if (!abortCode && executor && capability.success) {
     const actorId = proposal.executedAsMemberId ?? proposal.requestedByMemberId;
     principal = actorId
       ? await run((tx) =>
@@ -231,7 +283,18 @@ export async function runProposalExecution(
           }),
         )
       : null;
-    if (!principal || principal.memberStatus !== 'active') abortCode = 'actor_inactive';
+    if (!principal) {
+      abortCode = 'actor_unauthorized';
+    } else {
+      // Orçamento não é reavaliado aqui: o confirmar já o conferiu, e parar no meio por fatura
+      // deixaria o lote pela metade sem ninguém ter pedido.
+      const pendingCount = loaded.items.filter((i) => i.status === 'pending').length;
+      const auth = authorizeWrite(principal, executor, capability.data, {
+        budget: 'ok',
+        targetCount: Math.max(1, pendingCount),
+      });
+      if (!auth.allowed) abortCode = 'actor_unauthorized';
+    }
   }
 
   if (abortCode || !executor || !principal) {
@@ -244,7 +307,11 @@ export async function runProposalExecution(
       stopped: false,
       abortCode,
     });
-    if (closed) await flushFinal(deps, closed.row, closed.items);
+    if (closed) {
+      const queue = new AfterCommitQueue();
+      queue.push(() => flushFinal(deps, closed.row, closed.items));
+      await afterCommit(queue);
+    }
     return closed?.row ?? null;
   }
 
@@ -257,10 +324,25 @@ export async function runProposalExecution(
   let stopped = false;
 
   for (const item of pending) {
+    const itemQueue = new AfterCommitQueue();
     const step: StepOutcome = await run(async (tx): Promise<StepOutcome> => {
+      // INVARIANTE (exclusão mútua do lote): a linha da proposta fica travada (`FOR UPDATE`)
+      // durante TODO o item, do conferir o status até gravar o desfecho. Dois executores da
+      // mesma proposta (o original lento e a varredura que o retomou) nunca rodam itens ao mesmo
+      // tempo: o segundo espera o commit do primeiro e, ao entrar, só encontra o item já fora de
+      // `pending` (CAS do item abaixo). O "Parar" e o fechamento também esperam este lock.
+      const [current] = await tx
+        .select({
+          status: schema.copilotActionProposals.status,
+          stopRequested: schema.copilotActionProposals.stopRequested,
+        })
+        .from(schema.copilotActionProposals)
+        .where(eq(schema.copilotActionProposals.id, proposal.id))
+        .for('update');
+      if (!current || current.status !== 'executing') return { kind: 'lost' };
+      if (current.stopRequested) return { kind: 'stop' };
       const lease = await copilotProposalsRepo.renewLease(tx, proposal.id);
       if (!lease) return { kind: 'lost' };
-      if (lease.stopRequested) return { kind: 'stop' };
       const [locked] = await tx
         .select()
         .from(schema.copilotActionItems)
@@ -275,18 +357,24 @@ export async function runProposalExecution(
       const now = deps.now();
       let result: ExecuteItemResult;
       try {
-        result = await tx.transaction((sp) => {
-          const ctx: ExecutorContext = {
-            tx: sp,
-            principal: actor,
-            requestedByMemberId: proposal.requestedByMemberId ?? actor.memberId,
-            proposalId: proposal.id,
-            source: proposal.source,
-            now,
-          };
-          return exec.executeItem(ctx, args, toExecutableItem(locked));
-        });
+        result = await tx.transaction((sp) =>
+          exec.executeItem(
+            executorContext({
+              tx: sp,
+              principal: actor,
+              requestedByMemberId: proposal.requestedByMemberId ?? actor.memberId,
+              proposalId: proposal.id,
+              source: proposal.source,
+              now,
+              afterCommit: (fn) => itemQueue.push(fn),
+            }),
+            args,
+            toExecutableItem(locked),
+          ),
+        );
       } catch (err) {
+        // Savepoint desfeito: o que o item agendou para depois do commit não aconteceu.
+        itemQueue.clear();
         deps.logger.warn('copilot-proposals: item falhou', {
           proposalId: proposal.id,
           itemId: locked.id,
@@ -303,6 +391,9 @@ export async function runProposalExecution(
       });
       return row ? { kind: 'item', row } : { kind: 'skip' };
     });
+    // Daqui para baixo a transação do item já commitou (ou, no nível 2, o savepoint foi liberado
+    // e a fila segue para a transação do callback).
+    await afterCommit(itemQueue);
 
     if (step.kind === 'lost') return null;
     if (step.kind === 'stop') {
@@ -312,7 +403,8 @@ export async function runProposalExecution(
     if (step.kind === 'item') {
       const idx = items.findIndex((i) => i.id === step.row.id);
       if (idx >= 0) items[idx] = step.row;
-      throttle.push(proposalPayload(proposal, items));
+      // No nível 2 não há progresso intermediário: só o estado final, depois do commit.
+      if (!input.deferTo) throttle.push(proposalPayload(proposal, items));
     }
   }
 
@@ -320,7 +412,12 @@ export async function runProposalExecution(
     stopped,
     abortCode: null,
   });
-  if (closed) await throttle.flush(proposalPayload(closed.row, closed.items));
+  if (closed) {
+    const payload = proposalPayload(closed.row, closed.items);
+    const queue = new AfterCommitQueue();
+    queue.push(() => throttle.flush(payload));
+    await afterCommit(queue);
+  }
   return closed?.row ?? null;
 }
 

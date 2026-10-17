@@ -97,6 +97,29 @@ describe('CSV', () => {
     expect(text).toContain('R$ 38.500');
   });
 
+  it('não mascara datas nem valores (o regex é pela forma do telefone, não por contar dígitos)', () => {
+    for (const keep of [
+      'Mover 7 negócios em 16/10/2026',
+      'Agendado para 2026-10-16',
+      'Executado em 2026-10-16T09:14:00.000Z',
+      'Impacto de R$ 1.250.000,00 na previsão',
+      'Total de 12.500 contatos',
+      'Pipeline 2026 com 1250000 em aberto',
+    ]) {
+      expect(scrubContactPii(keep)).toBe(keep);
+    }
+    for (const phone of [
+      '(11) 3333-4444',
+      '98888-7777',
+      '+55 11 98888 7777',
+      '5511988887777',
+      'ligar 11 3333 4444',
+    ]) {
+      expect(scrubContactPii(phone)).toContain('[telefone]');
+      expect(scrubContactPii(phone)).not.toMatch(/\d{4}/);
+    }
+  });
+
   it('célula: aspas, separadores e defesa contra fórmula', () => {
     expect(csvCell('=HYPERLINK("x")')).toBe(`"'=HYPERLINK(""x"")"`);
     expect(csvCell('+1')).toBe(`'+1`);

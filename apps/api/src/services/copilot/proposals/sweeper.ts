@@ -1,9 +1,12 @@
 /**
  * Varredura das propostas (ADR-004 §3), a cada 60 s, no processo HTTP da API:
  *
- *   1. expira `proposed`/`awaiting_approval` vencidas (`expired` + trilha);
- *   2. retoma `executing` com lease vencido: renova o lease (para a próxima varredura não pegar
- *      de novo) e executa SÓ os itens `pending` (o item é idempotente por status e versão).
+ *   1. expira `proposed`/`awaiting_approval` vencidas (`expired` + trilha). Pedido de aprovação
+ *      vencido avisa o solicitante (`copilot_aprovacao`);
+ *   2. retoma `executing` com lease vencido. A reivindicação é um UPDATE condicional medido no
+ *      relógio do BANCO (`lease_expires_at <= clock_timestamp()`): um executor vivo que acabou de
+ *      renovar o lease não perde a proposta para uma varredura com relógio adiantado. Depois,
+ *      executa SÓ os itens `pending` (item idempotente por status; lock da proposta por item).
  *
  * Singleton entre réplicas por lock Redis (`SET NX PX` + liberação por token), o mesmo padrão
  * do `acquireSchedulerLock` dos workers (que vive em `apps/workers` e não é importável daqui).
@@ -11,9 +14,18 @@
  * transição roda sob `withWorkspace` do workspace da proposta.
  */
 import { randomUUID } from 'node:crypto';
+import { and, eq, lte, sql } from 'drizzle-orm';
 import Redis from 'ioredis';
-import { copilotProposalsRepo, getDb, withWorkspace } from '@hm/db';
+import {
+  COPILOT_PROPOSAL_LEASE_SECONDS,
+  copilotProposalsRepo,
+  getDb,
+  schema,
+  withWorkspace,
+  type DbTx,
+} from '@hm/db';
 import { loadConfig } from '../../../config';
+import { approvalNotification, notifySafely } from './approval';
 import { recordProposalAudit } from './audit';
 import { drainProposalExecutions, startProposalExecution } from './execute';
 import { auditCounts, countItems } from './items';
@@ -50,6 +62,29 @@ export async function acquireSweepLock(
     released = true;
     await redis.eval(UNLOCK_LUA, 1, key, token);
   };
+}
+
+/**
+ * Reivindica uma proposta `executing` com lease vencido NO RELÓGIO DO BANCO, renovando-o (a
+ * próxima varredura não pega a mesma). `false` = alguém renovou antes (executor vivo).
+ */
+export async function claimStaleExecution(tx: DbTx, proposalId: string): Promise<boolean> {
+  const p = schema.copilotActionProposals;
+  const rows = await tx
+    .update(p)
+    .set({
+      leaseExpiresAt: sql`clock_timestamp() + make_interval(secs => ${COPILOT_PROPOSAL_LEASE_SECONDS})`,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(p.id, proposalId),
+        eq(p.status, 'executing'),
+        lte(p.leaseExpiresAt, sql`clock_timestamp()`),
+      ),
+    )
+    .returning({ id: p.id });
+  return rows.length > 0;
 }
 
 export interface SweepResult {
@@ -96,13 +131,16 @@ export async function sweepProposalsOnce(
       if (closed) {
         expired++;
         await publishProposalState(deps, closed.row, closed.items);
+        if (stale.status === 'awaiting_approval') {
+          await notifySafely(deps, approvalNotification(closed.row, 'expired'));
+        }
       }
     }
 
     for (const stale of await copilotProposalsRepo.listStaleExecuting(getDb(), now, RESUME_BATCH)) {
-      // Reivindica renovando o lease: a próxima varredura não pega a mesma proposta.
+      // Reivindica renovando o lease, só se ele venceu no relógio do banco.
       const claimed = await withWorkspace(stale.workspaceId, (tx) =>
-        copilotProposalsRepo.renewLease(tx, stale.id),
+        claimStaleExecution(tx, stale.id),
       );
       if (!claimed) continue;
       deps.logger.info('copilot-proposals: retomando execução com lease vencido', {

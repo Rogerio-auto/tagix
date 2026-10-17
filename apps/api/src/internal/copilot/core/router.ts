@@ -19,11 +19,19 @@
  *      b. ferramenta no registro                                           → 404 `tool_not_found`
  *      c. `args` pelo Zod `.strict()` da ferramenta                         → `invalid_args`
  *      d. capacidade: papel ∧ matriz ∧ assinatura ∧ orçamento              → `denied`
+ *         Escritas (`authorization: 'engine'`, só via `makeProposeTool`): aqui só membro ativo,
+ *         Copiloto ligado e liberado para o papel, `requires` e orçamento `paused`. Papel,
+ *         matriz da capacidade, assinatura e `queries_only` são do MOTOR, com o volume real dos
+ *         alvos: a recusa vira proposta `blocked` (motivo + "Pedir aprovação"), decisão
+ *         `blocked` e `risk_level` no log (F73-S05; ADR-003 §5 e §7).
  *      e. SÓ ENTÃO o handler, num savepoint; o envelope é validado contra o contrato e,
  *         se a ferramenta lê conteúdo de contato, o turno é marcado como contaminado ANTES
  *         de o resultado sair (`taint.ts`). Qualquer falha desfaz o savepoint inteiro.
  *      f. `copilot_tool_calls` gravado em TODOS os caminhos depois do passo 4, com
  *         `args_redacted` pelo redator do caminho de agente (por import): sem PII.
+ *   6. Depois do COMMIT da transação do passo 5, os efeitos agendados pela ferramenta
+ *      (`ctx.afterCommit`: progresso no socket, filas) rodam. Ferramenta que falhou ou
+ *      transação que não commitou descartam a fila: nenhum evento sobre dado que não existe.
  *
  * Antes do passo 4 não há turno confiável para referenciar (a FK de `copilot_tool_calls`
  * exige o turno): as recusas dos passos 1–4 vão só para o log estruturado, com o motivo.
@@ -45,10 +53,14 @@ import {
 } from '@hm/db';
 import { createLogger, type Logger } from '@hm/logger';
 import {
+  COPILOT_RISK_LEVELS,
   CopilotToolCallBodySchema,
   CopilotToolEnvelopeSchema,
   CopilotToolKeySchema,
+  can,
+  copilotAccessFor,
   isWriteCapability,
+  type CopilotBudgetState,
   type CopilotToolCallBody,
   type CopilotToolEnvelope,
 } from '@hm/shared';
@@ -64,9 +76,11 @@ import {
   resolveCopilotPrincipal,
   type CopilotPrincipal,
 } from '../../../services/copilot/identity/principal';
+import type { AfterCommitFn } from './executor-types';
 import {
   createCopilotToolRegistry,
   emitToolResult,
+  isEngineTool,
   type CopilotToolDefinition,
   type CopilotToolRegistry,
 } from './registry';
@@ -169,12 +183,40 @@ function describeIssues(issues: readonly ZodIssue[]): string {
   return `${COPILOT_MODEL_VIEWS.invalidArgs} Problemas: ${lines.join('; ')}${more}.`;
 }
 
-/** Nível de risco do envelope, quando a ferramenta é de escrita (S05 o calcula). */
+function isRiskLevel(value: unknown): value is CopilotRiskLevel {
+  return COPILOT_RISK_LEVELS.some((level) => level === value);
+}
+
+/**
+ * Nível de risco do envelope, quando a ferramenta é de escrita (o motor o calcula). O
+ * `action_blocked` público não carrega o nível; o `model_view` do motor carrega.
+ */
 function riskLevelOf(envelope: CopilotToolEnvelope): CopilotRiskLevel | null {
   const event = envelope.public_event;
-  if (!event) return null;
-  if (event.type === 'action_receipt') return event.risk_level;
-  if (event.type === 'action_proposed') return event.proposal.risk_level;
+  if (event?.type === 'action_receipt') return event.risk_level;
+  if (event?.type === 'action_proposed') return event.proposal.risk_level;
+  const view = envelope.model_view;
+  if (typeof view === 'object' && isRiskLevel(view['risk_level'])) return view['risk_level'];
+  return null;
+}
+
+/**
+ * Porta do callback para escritas do motor (`authorization: 'engine'`). Só o que NÃO depende
+ * dos alvos: membro ativo, Copiloto ligado e liberado para o papel, `requires` e orçamento
+ * `paused`. O resto (papel, matriz da capacidade, assinatura, `queries_only`) é do motor.
+ */
+function engineEntryDenial(
+  principal: CopilotPrincipal,
+  tool: CopilotToolDefinition,
+  budget: CopilotBudgetState,
+): CopilotDenialReason | null {
+  if (principal.memberStatus !== 'active') return 'role';
+  if (!principal.settings.enabled) return 'copilot_disabled';
+  const access = copilotAccessFor(principal.role, principal.matrix);
+  if (!access.allowed)
+    return access.reason === 'disabled_by_owner' ? 'capability_disabled' : 'role';
+  if (!(tool.requires ?? []).every((perm) => can(principal.role, perm))) return 'role';
+  if (budget === 'paused') return 'budget';
   return null;
 }
 
@@ -230,6 +272,7 @@ export function createCopilotToolsRouter(options: CopilotToolsRouterOptions): Ro
     turn: ClaimedToolCall,
     rawKey: string,
     body: CopilotToolCallBody,
+    afterCommit: AfterCommitFn[],
   ): Promise<CallOutcome> {
     const base = { toolKey: loggableKey(rawKey), riskLevel: null } as const;
     // a. Membro, workspace e configuração recarregados AGORA (sem cache).
@@ -271,6 +314,9 @@ export function createCopilotToolsRouter(options: CopilotToolsRouterOptions): Ro
     let reason: CopilotDenialReason | null = null;
     if (!principal) {
       reason = 'role';
+    } else if (isEngineTool(tool)) {
+      const budget = await loadCopilotBudget(tx, principal.settings, now());
+      reason = engineEntryDenial(principal, tool, budget.state);
     } else {
       const budget = await loadCopilotBudget(tx, principal.settings, now());
       const decision = authorizeCapability(principal, tool.capability, {
@@ -296,7 +342,16 @@ export function createCopilotToolsRouter(options: CopilotToolsRouterOptions): Ro
     try {
       const envelope = await tx.transaction(async (sp) => {
         const raw = await tool.handler(
-          { tx: sp, principal, turn, callId: body.call_id, emitResult: emitToolResult },
+          {
+            tx: sp,
+            principal,
+            turn,
+            callId: body.call_id,
+            emitResult: emitToolResult,
+            afterCommit: (fn) => {
+              afterCommit.push(fn);
+            },
+          },
           args,
         );
         const checked = CopilotToolEnvelopeSchema.safeParse(raw);
@@ -321,6 +376,8 @@ export function createCopilotToolsRouter(options: CopilotToolsRouterOptions): Ro
         riskLevel: riskLevelOf(envelope),
       };
     } catch (err) {
+      // Savepoint desfeito: o que a ferramenta agendou fala de dado que não existe.
+      afterCommit.length = 0;
       const code = err instanceof ToolCallFailure ? err.code : 'handler_failed';
       logger.error('copilot-tools: falha na ferramenta', {
         ref: `hm_copilot_tool_${base.toolKey}`,
@@ -405,10 +462,11 @@ export function createCopilotToolsRouter(options: CopilotToolsRouterOptions): Ro
     }
 
     // 5. Autoriza, executa e registra — tudo na mesma transação.
+    const afterCommit: AfterCommitFn[] = [];
     let outcome: CallOutcome;
     try {
       outcome = await withWorkspace(grant.ws, async (tx) => {
-        const result = await runCall(tx, grant, turn, rawKey, body);
+        const result = await runCall(tx, grant, turn, rawKey, body, afterCommit);
         await copilotToolCallsRepo.insert(tx, {
           workspaceId: grant.ws,
           turnId: turn.turnId,
@@ -438,6 +496,20 @@ export function createCopilotToolsRouter(options: CopilotToolsRouterOptions): Ro
       };
       res.status(200).json(failure);
       return;
+    }
+
+    // 6. Commit feito: agora os efeitos agendados podem sair (best-effort, nunca derrubam a
+    // resposta). Em ordem; falha vira log só com o nome do erro.
+    for (const fn of afterCommit.splice(0)) {
+      try {
+        await fn();
+      } catch (err) {
+        logger.warn('copilot-tools: efeito pós-commit falhou', {
+          toolKey: outcome.toolKey,
+          ...ids,
+          errorName: err instanceof Error ? err.name : typeof err,
+        });
+      }
     }
 
     if (outcome.decision === 'denied' || outcome.decision === 'invalid_args') {

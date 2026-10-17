@@ -12,8 +12,11 @@
  *   3. fecha `undone` (todos voltaram) ou `partially_undone`.
  *
  * Mesma chave: devolve o estado atual, ou RETOMA um desfazer interrompido no meio (os itens já
- * desfeitos não são tocados de novo). Outra chave numa proposta já desfeita (ou em desfazer):
- * 409 `not_undoable`.
+ * desfeitos não são tocados de novo). Outra chave numa proposta já desfeita: 409 `not_undoable`.
+ * Outra chave num desfazer em andamento: 409, SALVO se ele está parado há mais de
+ * `UNDO_STALL_TAKEOVER_MS` (o processo que o começou morreu e a chave original se perdeu no
+ * cliente): aí a chave nova assume e retoma, com trilha `undo_started { resumed: true }`.
+ * Enquanto não há coluna própria (`undo_idempotency_key`), a chave vive na trilha.
  *
  * O orçamento do Copiloto NÃO barra o desfazer: desfazer não chama o modelo, e travar a correção
  * de um erro por causa da fatura seria o pior momento para dizer não.
@@ -28,18 +31,31 @@ import {
   type DbTx,
 } from '@hm/db';
 import { can, type ProposalDTO } from '@hm/shared';
-import type {
-  ExecutorContext,
-  UndoItemResult,
-} from '../../../internal/copilot/core/executor-types';
-import { authorizeCapability } from '../identity/authorize';
+import type { UndoItemResult } from '../../../internal/copilot/core/executor-types';
 import { resolveCopilotPrincipal, type CopilotPrincipal } from '../identity/principal';
 import { findUndoKey, recordProposalAudit } from './audit';
+import { AfterCommitQueue, authorizeWrite, executorContext } from './context';
 import { buildProposalDTO, canViewProposal, capabilityOf } from './dto';
 import { errorCodeOf, undoAllowed, type TxRunner } from './execute';
 import { auditCounts, countItems, toUndoableItem } from './items';
 import { publishProposalState } from './progress';
 import { UNDOABLE_STATUSES, fail, type ProposalEngineDeps, type ProposalFailure } from './types';
+
+/** Desfazer começado e sem progresso há mais que isto aceita outra `Idempotency-Key`. */
+export const UNDO_STALL_TAKEOVER_MS = 10 * 60_000;
+
+/** Último sinal de vida do desfazer: o começo ou o último item desfeito. */
+function lastUndoProgress(
+  proposal: CopilotProposalRow,
+  items: readonly CopilotActionItemRow[],
+): number {
+  let last = proposal.undoneAt?.getTime() ?? 0;
+  for (const item of items) {
+    const at = item.undoneAt?.getTime() ?? 0;
+    if (at > last) last = at;
+  }
+  return last;
+}
 
 export interface Undone {
   readonly ok: true;
@@ -85,9 +101,15 @@ async function claimUndo(
   }
   if (!proposal.undoDeadline) return fail('not_undoable');
 
-  // Desfazer já começou: só a mesma chave continua.
+  // Desfazer já começou: a mesma chave continua; outra só assume um desfazer parado.
+  let takeover = false;
   if (proposal.undoneAt) {
-    if ((await findUndoKey(tx, proposal.id)) !== key) return fail('not_undoable');
+    if ((await findUndoKey(tx, proposal.id)) !== key) {
+      if (now.getTime() - lastUndoProgress(proposal, items) < UNDO_STALL_TAKEOVER_MS) {
+        return fail('not_undoable');
+      }
+      takeover = true;
+    }
   } else if (proposal.undoDeadline.getTime() <= now.getTime()) {
     return fail('undo_window_closed');
   }
@@ -99,10 +121,9 @@ async function claimUndo(
   });
   if (!principal) return fail('forbidden');
   const counts = countItems(items);
-  const auth = authorizeCapability(principal, capabilityOf(proposal), {
+  const auth = authorizeWrite(principal, executor, capabilityOf(proposal), {
     budget: 'ok',
     targetCount: Math.max(1, counts.done),
-    isWrite: true,
   });
   if (!auth.allowed) {
     if (auth.reason === 'subscription_inactive') return fail('subscription_inactive');
@@ -112,7 +133,7 @@ async function claimUndo(
     return fail('forbidden');
   }
 
-  if (proposal.undoneAt) return { kind: 'run', row: proposal, principal };
+  if (proposal.undoneAt && !takeover) return { kind: 'run', row: proposal, principal };
 
   const row = await copilotProposalsRepo.transition(tx, {
     id: proposal.id,
@@ -133,7 +154,7 @@ async function claimUndo(
     from: proposal.status,
     actorMemberId: principal.memberId,
     counts: auditCounts(counts),
-    extra: { undo_key: key },
+    extra: { undo_key: key, ...(takeover ? { resumed: true } : {}) },
   });
   return { kind: 'run', row, principal };
 }
@@ -164,6 +185,7 @@ export async function undoProposal(
   );
 
   for (const item of done) {
+    const itemQueue = new AfterCommitQueue();
     await run(async (tx) => {
       const [locked] = await tx
         .select()
@@ -179,18 +201,22 @@ export async function undoProposal(
       const now = deps.now();
       let result: UndoItemResult;
       try {
-        result = await tx.transaction((sp) => {
-          const ctx: ExecutorContext = {
-            tx: sp,
-            principal,
-            requestedByMemberId: proposal.requestedByMemberId ?? principal.memberId,
-            proposalId: proposal.id,
-            source: proposal.source,
-            now,
-          };
-          return undoItem(ctx, toUndoableItem(locked));
-        });
+        result = await tx.transaction((sp) =>
+          undoItem(
+            executorContext({
+              tx: sp,
+              principal,
+              requestedByMemberId: proposal.requestedByMemberId ?? principal.memberId,
+              proposalId: proposal.id,
+              source: proposal.source,
+              now,
+              afterCommit: (fn) => itemQueue.push(fn),
+            }),
+            toUndoableItem(locked),
+          ),
+        );
       } catch (err) {
+        itemQueue.clear();
         deps.logger.warn('copilot-proposals: desfazer item falhou', {
           proposalId: proposal.id,
           itemId: locked.id,
@@ -208,6 +234,8 @@ export async function undoProposal(
             : { errorCode: result.status === 'failed' ? 'undo_failed' : 'undo_conflict' },
       });
     });
+    // Transação do item confirmada: agora os efeitos externos do executor podem sair.
+    await itemQueue.drain(deps.logger);
   }
 
   const closed = await run(async (tx) => {
