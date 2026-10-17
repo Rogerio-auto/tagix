@@ -2,7 +2,7 @@
 id: F73-S03
 title: Identidade do membro, grant assinado, callback interno do Copiloto e API de me/configurações
 phase: F73
-status: review
+status: done
 priority: critical
 estimated_size: L
 model: opus
