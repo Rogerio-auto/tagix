@@ -6,6 +6,9 @@
  * agendada e promovida a `running` pelo worker quando startAt vence (F58-S11).
  * pause/resume alternam o status. RLS via req.scoped.
  *
+ * F73-S09: pause/resume (e a trilha de status) vivem em `services/campaigns/lifecycle`,
+ * o mesmo servico que o Copiloto usa; a rota delega sem mudar o comportamento.
+ *
  * F58-S11:
  *  - prazo final (endAt) ja vencido nao ativa nem retoma: a campanha nao
  *    enviaria nada e fecharia no tick seguinte — o cliente recebe o motivo agora;
@@ -15,46 +18,35 @@
  *    mostra o ultimo: quem pausou, por que, o que fazer).
  */
 import { Router, type Request, type Response } from 'express';
-import { and, eq, inArray } from 'drizzle-orm';
-import { schema, type DbTx } from '@hm/db';
+import { eq } from 'drizzle-orm';
+import { schema } from '@hm/db';
+import type { Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
+import {
+  CAMPAIGN_ENDED_MESSAGE,
+  hasEnded,
+  pauseCampaign,
+  recordMemberStatusChange,
+  resumeCampaign,
+  type CampaignActor,
+} from '../../services/campaigns/lifecycle';
 import { param } from '../conversions/types';
 import { validateCampaign } from './validate';
 import { buildValidationCampaign, loadCampaignChannel, makeGraphPorts } from './service';
 
-const { campaigns, campaignMetrics, campaignRecipients, auditLogs } = schema;
+const { campaigns, campaignMetrics } = schema;
 
 /** Mensagens das recusas por prazo (o cliente entende sem ler documentacao). */
-const ENDED_MESSAGE =
-  'O prazo final desta campanha já passou. Ajuste a data final ou duplique a campanha para enviar de novo.';
+const ENDED_MESSAGE = CAMPAIGN_ENDED_MESSAGE;
 const INVALID_WINDOW_MESSAGE = 'A data final precisa ser depois do início do envio.';
 
-/** Ação de ciclo de vida registrada pela pessoa (o worker registra as automáticas). */
-type MemberStatusAction = 'campaign.started' | 'campaign.scheduled' | 'campaign.paused' | 'campaign.resumed';
-
-async function recordMemberStatusChange(
-  tx: DbTx,
-  req: Request,
-  campaignId: string,
-  action: MemberStatusAction,
-  reason: string,
-  message: string,
-  extra: Record<string, unknown> = {},
-): Promise<void> {
-  await tx.insert(auditLogs).values({
+/** O membro autenticado como ator do servico de ciclo de vida. */
+function actorOf(req: Request): CampaignActor {
+  return {
     workspaceId: req.auth!.workspace.id,
-    actorMemberId: req.auth!.member.id,
-    actorType: 'member',
-    action,
-    resourceType: 'campaign',
-    resourceId: campaignId,
-    metadata: { reason, message, ...extra },
-  });
-}
-
-/** Prazo final ja vencido em `now`? */
-function hasEnded(endAt: Date | null, now: Date): boolean {
-  return endAt !== null && endAt.getTime() <= now.getTime();
+    memberId: req.auth!.member.id,
+    role: req.auth!.member.role as Role,
+  };
 }
 
 export function createCampaignsLifecycleRouter(): Router {
@@ -103,7 +95,7 @@ export function createCampaignsLifecycleRouter(): Router {
 
       await recordMemberStatusChange(
         tx,
-        req,
+        actorOf(req),
         id,
         startsInFuture ? 'campaign.scheduled' : 'campaign.started',
         startsInFuture ? 'scheduled' : 'activated',
@@ -150,25 +142,12 @@ export function createCampaignsLifecycleRouter(): Router {
   });
 
   // POST /api/campaigns/:id/pause — pausa manual (so do que esta enviando ou agendado).
+  // F73-S09: a transicao vive no servico de dominio (`services/campaigns/lifecycle`), o mesmo
+  // que o Copiloto usa; a rota so traduz o desfecho em HTTP.
   router.post('/api/campaigns/:id/pause', ...pauseGuard, async (req: Request, res: Response) => {
     const id = param(req, 'id');
-    const result = await req.scoped!(async (tx) => {
-      const [updated] = await tx
-        .update(campaigns)
-        .set({ status: 'paused', nextTickAt: null, updatedAt: new Date() })
-        .where(and(eq(campaigns.id, id), inArray(campaigns.status, ['running', 'scheduled'])))
-        .returning();
-      if (updated) {
-        await recordMemberStatusChange(tx, req, id, 'campaign.paused', 'manual', 'Pausada manualmente.');
-        return { kind: 'paused' as const, campaign: updated };
-      }
-      const [current] = await tx
-        .select({ status: campaigns.status })
-        .from(campaigns)
-        .where(eq(campaigns.id, id));
-      return current ? { kind: 'bad_state' as const, status: current.status } : null;
-    });
-    if (!result) {
+    const result = await req.scoped!((tx) => pauseCampaign(tx, actorOf(req), id));
+    if (result.kind === 'not_found') {
       res.sendStatus(404);
       return;
     }
@@ -186,50 +165,8 @@ export function createCampaignsLifecycleRouter(): Router {
   // POST /api/campaigns/:id/resume — retoma uma campanha pausada.
   router.post('/api/campaigns/:id/resume', ...pauseGuard, async (req: Request, res: Response) => {
     const id = param(req, 'id');
-    const result = await req.scoped!(async (tx) => {
-      const [campaign] = await tx.select().from(campaigns).where(eq(campaigns.id, id));
-      if (!campaign) return null;
-      if (campaign.status !== 'paused') return { kind: 'bad_state' as const, status: campaign.status };
-      const now = new Date();
-      if (hasEnded(campaign.endAt, now)) return { kind: 'ended' as const };
-
-      // Recipients que estavam 'sending' voltam para pending (re-tentativa segura).
-      // ANTES da linha da campanha: mesma ordem de locks do dispatch do worker
-      // (recipient -> campanha), sem ciclo de espera com um envio em voo.
-      await tx
-        .update(campaignRecipients)
-        .set({ status: 'pending' })
-        .where(
-          and(
-            eq(campaignRecipients.campaignId, id),
-            eq(campaignRecipients.status, 'sending'),
-          ),
-        );
-
-      const startsInFuture = campaign.startAt ? campaign.startAt.getTime() > now.getTime() : false;
-      const [updated] = await tx
-        .update(campaigns)
-        .set({
-          status: startsInFuture ? 'scheduled' : 'running',
-          nextTickAt: startsInFuture ? campaign.startAt : now,
-          updatedAt: now,
-        })
-        .where(and(eq(campaigns.id, id), eq(campaigns.status, 'paused')))
-        .returning();
-      if (!updated) return { kind: 'bad_state' as const, status: 'changed' };
-      await recordMemberStatusChange(
-        tx,
-        req,
-        id,
-        'campaign.resumed',
-        startsInFuture ? 'resumed_scheduled' : 'resumed',
-        startsInFuture
-          ? 'Retomada. O envio começa sozinho na data de início.'
-          : 'Envio retomado.',
-      );
-      return { kind: 'resumed' as const, campaign: updated };
-    });
-    if (!result) {
+    const result = await req.scoped!((tx) => resumeCampaign(tx, actorOf(req), id));
+    if (result.kind === 'not_found') {
       res.sendStatus(404);
       return;
     }
