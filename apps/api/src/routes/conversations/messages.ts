@@ -30,46 +30,29 @@
  * Router NÃO montado aqui — o orchestrator monta `createMessagesRouter()` em
  * `apps/api/src/app.ts`.
  */
-import { Buffer } from 'node:buffer';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, eq, sql } from 'drizzle-orm';
 import { assertConversationVisible, enqueueOutbox, schema } from '@hm/db';
-import { connectMq, makeEnvelope, QUEUES, queueJobOutbox, type MqHandle } from '@hm/shared/mq';
+import { makeEnvelope, QUEUES, queueJobOutbox } from '@hm/shared/mq';
 import {
   CHANNEL_PROVIDERS,
   contactsPayloadSchema,
   locationPayloadSchema,
-  planHumanReply,
   reactionPayloadSchema,
 } from '@hm/shared';
-import type {
-  AiMode,
-  ContactsPayload,
-  ConversationAiModeChangedPayload,
-  LocationPayload,
-  ReactionPayload,
-  Role,
-} from '@hm/shared';
+import type { ContactsPayload, LocationPayload, ReactionPayload, Role } from '@hm/shared';
 import { requireAuth, requireRole, withRLS } from '../../middlewares/auth';
-import { enqueueOutboundJob } from '../../mq/outbound-publisher';
+import {
+  IG_MESSAGE_TAGS,
+  buildOutboundJob,
+  type MediaKind,
+  type RichPayload,
+} from '../../services/messaging/outbound-job';
+import { emitAiModeChanged, persistMemberOutbound } from '../../services/messaging/send-on-behalf';
 
 /** Limite de corpo de texto (anti-abuso; alinhado a `MAX_NOTE_BODY`). */
 const MAX_TEXT_LEN = 5000;
-
-/**
- * Tags IG fora da janela 24h — espelham `igMessageTagSchema` do worker. Mantidas
- * locais para não importar do grafo de `apps/workers` (fora do build da API).
- */
-const IG_MESSAGE_TAGS = [
-  'HUMAN_AGENT',
-  'CONFIRMED_EVENT_UPDATE',
-  'POST_PURCHASE_UPDATE',
-  'ACCOUNT_UPDATE',
-] as const;
-
-/** Kinds de mídia enviáveis — espelham `outboundMediaKindSchema` do worker. */
-type MediaKind = 'image' | 'video' | 'audio' | 'voice' | 'document' | 'sticker';
 
 /** Normaliza o `type` do client (que pode mandar `'file'`) p/ um kind de mídia. */
 const TYPE_TO_MEDIA_KIND: Readonly<Record<string, MediaKind>> = {
@@ -105,23 +88,8 @@ const sendSchema = z
   })
   .strip();
 
-type SendBody = z.infer<typeof sendSchema>;
-
 /** Modalidades ricas (F45) que carregam `payload` validado em vez de `content`/mídia. */
 type RichKind = 'location' | 'contacts' | 'reaction';
-
-/**
- * Payload rico já validado, pronto para persistir + montar o job. `reaction`
- * carrega o `targetExternalId` resolvido sob RLS (não o `targetMessageId` cru).
- */
-type RichPayload =
-  | { readonly kind: 'location'; readonly location: LocationPayload }
-  | { readonly kind: 'contacts'; readonly contacts: ContactsPayload }
-  | {
-      readonly kind: 'reaction';
-      readonly reaction: ReactionPayload;
-      readonly targetExternalId: string;
-    };
 
 /** Resolve `type` do client → modalidade rica, ou `null` (texto/mídia). */
 function richKindFor(type: string): RichKind | null {
@@ -275,12 +243,6 @@ function mediaKindFor(type: string): MediaKind | null {
   return TYPE_TO_MEDIA_KIND[type] ?? null;
 }
 
-interface ResolvedConversation {
-  readonly channelId: string;
-  readonly remoteId: string;
-  readonly aiMode: string;
-}
-
 /** Linha completa de `messages` (resultado de insert `.returning()` / select). */
 type MessageRow = typeof schema.messages.$inferSelect;
 
@@ -293,7 +255,6 @@ type SendScopedResult =
   | { readonly kind: 'replay'; readonly message: MessageRow }
   | {
       readonly kind: 'created';
-      readonly conversation: ResolvedConversation;
       readonly message: MessageRow;
       readonly aiPausedByHandoff: boolean;
     }
@@ -309,123 +270,6 @@ type PreRich =
   | { readonly kind: 'contacts'; readonly contacts: ContactsPayload }
   | { readonly kind: 'reaction'; readonly reaction: ReactionPayload }
   | null;
-
-/**
- * Monta o `OutboundJob` no shape EXATO de `parseOutboundJob`. `chatId` é o id do
- * contato no provider (`conversations.remote_id`); `channelId` resolve a
- * credencial; `messageId` correlaciona o status final.
- */
-function buildOutboundJob(args: {
-  readonly conv: ResolvedConversation;
-  readonly conversationId: string;
-  readonly messageId: string;
-  readonly body: SendBody;
-  readonly mediaKind: MediaKind | null;
-  readonly rich: RichPayload | null;
-}): Record<string, unknown> {
-  const { conv, conversationId, messageId, body, mediaKind, rich } = args;
-  const base = {
-    channelId: conv.channelId,
-    conversationId,
-    messageId,
-    chatId: conv.remoteId,
-  };
-
-  if (rich) {
-    switch (rich.kind) {
-      case 'location':
-        return {
-          kind: 'location',
-          ...base,
-          latitude: rich.location.latitude,
-          longitude: rich.location.longitude,
-          ...(rich.location.name !== undefined ? { name: rich.location.name } : {}),
-          ...(rich.location.address !== undefined ? { address: rich.location.address } : {}),
-          ...(body.messageTag ? { messageTag: body.messageTag } : {}),
-        };
-      case 'contacts':
-        return {
-          kind: 'contacts',
-          ...base,
-          contacts: rich.contacts.contacts,
-          ...(body.messageTag ? { messageTag: body.messageTag } : {}),
-        };
-      case 'reaction':
-        return {
-          kind: 'reaction',
-          ...base,
-          targetExternalId: rich.targetExternalId,
-          emoji: rich.reaction.emoji,
-        };
-    }
-  }
-
-  if (mediaKind) {
-    return {
-      kind: 'media',
-      ...base,
-      mediaKind,
-      // `mediaUrl`/`mediaMime` já validados como presentes antes desta chamada.
-      publicMediaUrl: body.mediaUrl,
-      mime: body.mediaMime,
-      ...(body.content ? { caption: body.content } : {}),
-      ...(body.messageTag ? { messageTag: body.messageTag } : {}),
-    };
-  }
-
-  return {
-    kind: 'text',
-    ...base,
-    text: body.content,
-    ...(body.messageTag ? { messageTag: body.messageTag } : {}),
-  };
-}
-
-// ── Relay AMQP (best-effort, mesma estratégia de state.ts) ────────────────────
-
-/** Fila de relay do socket (mesma constante de `apps/api/src/socket/relay.ts`). */
-const SOCKET_RELAY_QUEUE = 'hm.q.socket.relay' as const;
-
-/** Handle AMQP lazy singleton por processo. */
-let mqHandlePromise: Promise<MqHandle> | null = null;
-
-async function getMqHandle(): Promise<MqHandle> {
-  mqHandlePromise ??= connectMq();
-  try {
-    return await mqHandlePromise;
-  } catch (err) {
-    mqHandlePromise = null;
-    throw err;
-  }
-}
-
-/**
- * Publica `conversation:ai_mode_changed` na fila de relay do socket.
- * Best-effort: se o broker não estiver disponível o erro é silenciado —
- * a persistência já está commitada quando chegamos aqui.
- */
-async function emitAiModeChanged(
-  workspaceId: string,
-  conversationId: string,
-  aiMode: AiMode,
-): Promise<void> {
-  const { channel } = await getMqHandle();
-  const payload: ConversationAiModeChangedPayload = {
-    conversationId,
-    aiMode,
-    reason: 'human_takeover',
-  };
-  const envelope = makeEnvelope('socket.relay', workspaceId, {
-    event: 'conversation:ai_mode_changed' as const,
-    target: { conversationId, workspace: true },
-    data: payload,
-  });
-  channel.sendToQueue(SOCKET_RELAY_QUEUE, Buffer.from(JSON.stringify(envelope)), {
-    persistent: true,
-    contentType: 'application/json',
-  });
-  await Promise.resolve();
-}
 
 export function createMessagesRouter(): Router {
   const router = Router();
@@ -584,18 +428,19 @@ export function createMessagesRouter(): Router {
                 ? (rich.contacts.contacts[0]?.name ?? null)
                 : null;
 
-        const [message] = await tx
-          .insert(schema.messages)
-          .values({
-            workspaceId,
-            conversationId,
-            direction: 'outbound',
-            senderType: 'member',
-            senderMemberId,
+        // Núcleo do envio do membro (F73-S09: `services/messaging/send-on-behalf`, o mesmo
+        // caminho do envio em nome do membro): mensagem `pending`, trilha da tag IG,
+        // auto-pausa de IA (F30-S04/F70-S07) e o job de envio na outbox NESTA transação
+        // (F70-S21) — commit da mensagem e do job é o mesmo.
+        const persisted = await persistMemberOutbound(tx, {
+          workspaceId,
+          conversationId,
+          conversation,
+          senderMemberId,
+          messageTag: body.messageTag ?? null,
+          values: {
             type: storedType(body.type, richKind),
             content: richKind ? richContent : (body.content ?? null),
-            viewStatus: 'pending',
-            externalId: null,
             outboundIdempotencyKey: idempotencyKey,
             mediaUrl: body.mediaUrl ?? null,
             mediaMime: body.mediaMime ?? null,
@@ -617,67 +462,25 @@ export function createMessagesRouter(): Router {
             ...(mediaKind && body.mediaKey
               ? { metadata: { mediaKey: body.mediaKey }, mediaStatus: 'ready' as const }
               : {}),
-          })
-          .returning();
-        if (!message) return null;
+          },
+          // Shape EXATO de `parseOutboundJob` (o worker valida).
+          job: (messageId) =>
+            buildOutboundJob({
+              conv: conversation,
+              conversationId,
+              messageId,
+              body,
+              mediaKind,
+              rich,
+            }),
+        });
+        if (!persisted) return null;
 
-        // Envio com tag IG (fora da janela 24h) é ação auditável.
-        if (body.messageTag != null) {
-          await tx.insert(schema.auditLogs).values({
-            workspaceId,
-            actorMemberId: senderMemberId,
-            actorType: 'member',
-            action: 'message.send_with_tag',
-            resourceType: 'message',
-            resourceId: message.id,
-            metadata: { messageTag: body.messageTag, conversationId },
-          });
-        }
-
-        // F30-S04 — auto-pausa de IA ao humano responder (regra única em
-        // `@hm/shared`, F70-S07). on → paused + human_takeover; paused/off só
-        // registram a atividade humana (nunca regridem).
-        //
-        // A rota não lê `first_response_at`/`ai_last_human_at` (não precisa de lock):
-        // passa `null` e deixa o banco proteger a 1ª resposta com `coalesce` — só
-        // grava se ainda NULL (F55-S02), com `now()` do servidor (mesma estratégia de
-        // resolved_at/closed_at). `at = now` sempre avança `ai_last_human_at`.
-        const now = new Date();
-        const plan = planHumanReply(
-          { aiMode: conversation.aiMode, firstResponseAt: null, aiLastHumanAt: null },
-          { memberId: senderMemberId, at: now, countsAsResponse: true },
-        );
-        const { firstResponseAt: markFirstResponse, ...patch } = plan.patch;
-        await tx
-          .update(schema.conversations)
-          .set({
-            ...patch,
-            ...(markFirstResponse !== undefined
-              ? { firstResponseAt: sql`coalesce(${schema.conversations.firstResponseAt}, now())` }
-              : {}),
-            updatedAt: now,
-          })
-          .where(eq(schema.conversations.id, conversationId));
-        const aiPausedByHandoff = plan.paused;
-
-        // F70-S21 — o job de envio entra na outbox NESTA transação: commit da mensagem
-        // `pending` e do job é o mesmo. Antes era publicado depois do commit; uma queda
-        // ou recusa do broker entre os dois deixava a mensagem `pending` para sempre.
-        // Shape EXATO de `parseOutboundJob` (o worker valida).
-        await enqueueOutboundJob(
-          tx,
-          workspaceId,
-          buildOutboundJob({
-            conv: conversation,
-            conversationId,
-            messageId: message.id,
-            body,
-            mediaKind,
-            rich,
-          }),
-        );
-
-        return { kind: 'created', conversation, message, aiPausedByHandoff };
+        return {
+          kind: 'created',
+          message: persisted.message,
+          aiPausedByHandoff: persisted.aiPausedByHandoff,
+        };
       });
 
       if (!result) {
