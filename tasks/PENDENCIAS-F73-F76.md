@@ -30,6 +30,9 @@
 - [ ] F73-S05 — `apps/api/src/index.ts` não trata SIGTERM: o sweeper só para em `httpServer 'close'` — **Precisa de:** slot de graceful shutdown — **Impacto:** seguro (lease retoma), mas o DoD "parado no shutdown" é nominal — **Como fechar:** `process.once('SIGTERM', () => httpServer.close())`.
 - [ ] F73-S05 — `can_confirm` do DTO não considera os `requires` do executor (pode mostrar verdadeiro e o confirmar dar 403) — **Precisa de:** F73-S14 — **Impacto:** botão habilitado que falha — **Como fechar:** `viewerCanAct` usar `authorizeWrite`.
 
+- [ ] F73-S06 — `get_pipeline_overview` p95 232 ms com 35 mil negócios abertos (meta 150 ms) — **Precisa de:** slot de schema — **Impacto:** funil lento em workspaces grandes (> ~25 mil abertos) — **Como fechar:** índice parcial `messages (conversation_id, coalesce(provider_timestamp, created_at) desc) where direction='inbound'` (medido −40%) ou coluna `deals.last_inbound_at` mantida por trigger.
+- [ ] F73-S06 — cartões sem campos que o produto não tem: `deal_card.installments` sempre `null`, `kpis` sem meta de receita; `percent` é fração 0..1 — **Precisa de:** Rogério (meta de receita existe?) e F74 (formatação) — **Impacto:** cartão mais pobre que a maquete — **Como fechar:** decidir meta/parcelas no produto.
+
 ## Itens bloqueados de propósito (v1.1)
 
 - [ ] F73-S16 — "Mover sozinho" do piloto automático — **Precisa de:** dado de aceitação (>= 70% de aceite e <= 3% de desfazer por 30 dias) — **Impacto:** o piloto só sugere e aguarda aprovação — **Como fechar:** destravar o slot depois da telemetria.

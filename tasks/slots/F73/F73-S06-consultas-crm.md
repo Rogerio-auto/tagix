@@ -2,7 +2,7 @@
 id: F73-S06
 title: Ferramentas de consulta do Copiloto, CRM (contatos, negócios, funil, agregações, previsão de receita) sob o escopo do membro
 phase: F73
-status: review
+status: done
 priority: high
 estimated_size: M
 model: sonnet
