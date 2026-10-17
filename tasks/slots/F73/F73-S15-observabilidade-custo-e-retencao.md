@@ -2,7 +2,7 @@
 id: F73-S15
 title: Observabilidade, uso e custo do Copiloto, telemetria de produto e retenção do histórico
 phase: F73
-status: review
+status: done
 priority: medium
 estimated_size: M
 model: sonnet

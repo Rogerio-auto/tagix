@@ -59,7 +59,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70   | 37     | 1   | 2   | 0   | 0   | 2   | 32   |
 | F71   | 19     | 9   | 0   | 0   | 0   | 0   | 10   |
 | F72   | 9     | 0   | 1   | 0   | 0   | 0   | 8   |
-| F73   | 16     | 0   | 3   | 0   | 0   | 1   | 12   |
+| F73   | 16     | 0   | 3   | 0   | 0   | 0   | 13   |
 | F74   | 13     | 0   | 13   | 0   | 0   | 0   | 0   |
 | F75   | 16     | 2   | 13   | 0   | 0   | 0   | 1   |
 | F76   | 9     | 1   | 8   | 0   | 0   | 0   | 0   |
@@ -866,7 +866,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F73-S12 | Briefing do dia (geração determinística com score explicável por receita em risco, dado com hora, revalidação e push da manhã)           | ✅ done     | high       | F73-S01, F73-S02, F73-S03, F73-S05                                              |
 | F73-S13 | Piloto automático do pipeline, backend (regras por estágio, gerador determinístico de sugestões, aprovar ou recusar em lote via motor)   | ⏸️ blocked | high       | F73-S01, F73-S02, F73-S03, F73-S05, F73-S08                                     |
 | F73-S14 | Portão de segurança do Copiloto (red team de prompt injection, escalonamento e exfiltração) e eval de uso de ferramentas                 | ⏸️ blocked | critical   | F73-S04, F73-S05, F73-S06, F73-S07, F73-S08, F73-S09, F73-S10, F73-S11, F73-S13 |
-| F73-S15 | Observabilidade, uso e custo do Copiloto, telemetria de produto e retenção do histórico                                                  | 🟣 review   | medium     | F73-S01, F73-S03, F73-S10                                                       |
+| F73-S15 | Observabilidade, uso e custo do Copiloto, telemetria de produto e retenção do histórico                                                  | ✅ done     | medium     | F73-S01, F73-S03, F73-S10                                                       |
 | F73-S16 | (v1.1, NÃO PEGAR) Piloto automático move sozinho, com limite diário, desfazer por 7 dias e registro na Atividade                         | ⏸️ blocked | low        | F73-S13, F73-S14, F73-S15, F74-S13                                              |
 
 ## Fase 74

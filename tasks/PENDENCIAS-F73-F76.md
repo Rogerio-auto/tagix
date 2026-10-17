@@ -54,6 +54,10 @@
 - [ ] F73-S08 — `transition_rules.requiresApproval` não é aplicado no caminho comum de mover negócio (pré-existente) — **Precisa de:** Rogério (decidir o fluxo de aprovação no Pipeline) — **Impacto:** a regra de estágio só vale pelo Copiloto — **Como fechar:** slot de pipeline.
 - [ ] F73-S08 — consultas duplicadas do read-crm no act-crm (decididos do forecast; filtro do `search_contacts`) — **Precisa de:** F73-S14 ou slot de refatoração — **Impacto:** risco de divergência entre prévia e consulta — **Como fechar:** exportar do `read-crm` e importar.
 
+- [ ] F73-S15 — alerta de orçamento usa o evento `copilot_aprovacao` (não há `copilot_orcamento` em `@hm/shared/notifications`): quem silencia aprovações silencia o alerta — **Precisa de:** slot no shared + labels — **Impacto:** aviso de custo pode não chegar — **Como fechar:** novo evento `copilot_orcamento` e trocar em `budget-alert.ts`.
+- [ ] F73-S15 — retenção não apaga sessões com turno (anonimiza) porque `copilot_turns.session_id` é NOT NULL com cascade — **Precisa de:** slot de schema (`session_id` nulo + `ON DELETE SET NULL`) — **Impacto:** cascos de sessão arquivados ficam no banco — **Como fechar:** migração + apagar o casco na retenção.
+- [ ] F73-S15 — `copilot_messages` sem índice `(workspace_id, created_at)` para a varredura de retenção — **Precisa de:** slot de schema — **Impacto:** retenção lê a tabela da empresa por lote — **Como fechar:** índice quando a tabela crescer.
+
 ## Itens bloqueados de propósito (v1.1)
 
 - [ ] F73-S16 — "Mover sozinho" do piloto automático — **Precisa de:** dado de aceitação (>= 70% de aceite e <= 3% de desfazer por 30 dias) — **Impacto:** o piloto só sugere e aguarda aprovação — **Como fechar:** destravar o slot depois da telemetria.
