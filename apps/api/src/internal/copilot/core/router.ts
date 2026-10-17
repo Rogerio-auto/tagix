@@ -64,6 +64,7 @@ import {
   type CopilotToolCallBody,
   type CopilotToolEnvelope,
 } from '@hm/shared';
+import { recordCopilotToolCall } from '../../../observability/copilot-metrics';
 import { createInternalTokenGuard } from '../../tools/auth';
 import { maskFreeText, redactLogArgs } from '../../tools/log-redaction';
 import {
@@ -497,6 +498,8 @@ export function createCopilotToolsRouter(options: CopilotToolsRouterOptions): Ro
       res.status(200).json(failure);
       return;
     }
+
+    recordCopilotToolCall(outcome.toolKey, outcome.decision);
 
     // 6. Commit feito: agora os efeitos agendados podem sair (best-effort, nunca derrubam a
     // resposta). Em ordem; falha vira log só com o nome do erro.

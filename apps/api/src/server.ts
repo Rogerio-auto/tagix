@@ -9,6 +9,7 @@ import {
   type ProposalSweeper,
 } from './services/copilot/proposals';
 import { startBriefingScheduler, type BriefingScheduler } from './services/copilot/briefing';
+import { startBudgetAlertScheduler, type BudgetAlertScheduler } from './services/copilot/usage';
 import { createSocketServer, type IoServer } from './socket';
 
 export interface ApiServer {
@@ -29,6 +30,11 @@ export interface ApiServerOptions {
    * HTTP, com lock Redis. Default: ligado fora de `NODE_ENV=test`.
    */
   readonly copilotBriefing?: boolean;
+  /**
+   * Agendador do alerta de orçamento do Copiloto (F73-S15). Só no processo HTTP, com lock Redis.
+   * Default: ligado fora de `NODE_ENV=test`.
+   */
+  readonly copilotBudgetAlert?: boolean;
 }
 
 /** App Express + servidor HTTP + Socket.io (com adapter Redis) + trabalhos de fundo. */
@@ -44,6 +50,10 @@ export function createApiServer(options: ApiServerOptions = {}): ApiServer {
     : null;
   const briefingEnabled = options.copilotBriefing ?? process.env['NODE_ENV'] !== 'test';
   const briefing: BriefingScheduler | null = briefingEnabled ? startBriefingScheduler() : null;
+  const budgetAlertEnabled = options.copilotBudgetAlert ?? process.env['NODE_ENV'] !== 'test';
+  const budgetAlert: BudgetAlertScheduler | null = budgetAlertEnabled
+    ? startBudgetAlertScheduler()
+    : null;
   let stopping: Promise<void> | null = null;
   const stopBackground = (): Promise<void> =>
     (stopping ??= Promise.all([
@@ -55,6 +65,12 @@ export function createApiServer(options: ApiServerOptions = {}): ApiServer {
       (briefing?.stop() ?? Promise.resolve()).catch((err: unknown) => {
         createLogger('warn', { svc: '@hm/api' }).warn(
           'falha ao parar o agendador do briefing do Copiloto',
+          { errorName: err instanceof Error ? err.name : typeof err },
+        );
+      }),
+      (budgetAlert?.stop() ?? Promise.resolve()).catch((err: unknown) => {
+        createLogger('warn', { svc: '@hm/api' }).warn(
+          'falha ao parar o agendador do alerta de orçamento do Copiloto',
           { errorName: err instanceof Error ? err.name : typeof err },
         );
       }),
