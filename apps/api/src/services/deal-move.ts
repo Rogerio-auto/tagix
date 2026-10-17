@@ -13,11 +13,11 @@
  *
  * Tudo roda dentro de UMA transacao RLS (`req.scoped`): o caller passa o `tx`.
  */
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { schema, type DbTx } from '@hm/db';
 import type { Role } from '@hm/shared';
 
-const { deals, stages, dealHistory } = schema;
+const { deals, stages, dealHistory, pendingAutomations } = schema;
 
 export type DealActorType = 'member' | 'agent' | 'system' | 'api';
 
@@ -27,6 +27,32 @@ export interface DealActor {
   role?: Role | null;
 }
 
+/**
+ * Origem da movimentação. Ausente = movimentação de negócio comum (tela, agente, flow, API).
+ * `undo` = desfazer de uma movimentação anterior (Copiloto, F73-S08): voltar para onde o
+ * negócio estava é RESTAURAR estado, não uma transição de negócio nova. Por isso:
+ *   - `validateTransition` ignora `allowedFromStageIds` (o caminho de volta pode não estar
+ *     na lista); `requiredFields` e `requiredRoles` continuam valendo;
+ *   - o hook de automação NÃO agenda `on_enter`/`on_exit`;
+ *   - as `pending_automations` ainda `pending` agendadas pela movimentação desfeita
+ *     (`metadata.proposal_id`) são canceladas na MESMA transação.
+ */
+export type StageChangeOrigin = 'undo';
+
+/**
+ * Correlação gravada em `deal_history.metadata` e nas `pending_automations` agendadas pela
+ * movimentação (`rule.metadata`, ver `deal-hooks.ts`). Sem PII.
+ */
+export interface DealMoveMetadata {
+  /** `copilot` | `autopilot` (F73) — quem originou a escrita. */
+  readonly via?: string;
+  /** Proposta do Copiloto que originou (ou desfaz) a movimentação. */
+  readonly proposal_id?: string;
+}
+
+/** Efeito a rodar DEPOIS do commit da transação do chamador. */
+export type DeferFn = (fn: () => void | Promise<void>) => void;
+
 export interface StageChangeEvent {
   workspaceId: string;
   dealId: string;
@@ -34,6 +60,10 @@ export interface StageChangeEvent {
   fromStageId: string;
   toStageId: string;
   actor: DealActor;
+  /** Ver `StageChangeOrigin`. Ausente = movimentação comum. */
+  origin?: StageChangeOrigin;
+  /** Correlação (Copiloto). Ausente = movimentação comum. */
+  metadata?: DealMoveMetadata;
 }
 
 /** Hook do seam onStageChanged. Roda DEPOIS do commit logico da transicao. */
@@ -78,16 +108,20 @@ export class TransitionError extends Error {
 type StageRow = typeof stages.$inferSelect;
 type DealRow = typeof deals.$inferSelect;
 
-/** Valida transition_rules do stage destino (PIPELINE.md 4.2). */
+/**
+ * Valida transition_rules do stage destino (PIPELINE.md 4.2). Com `origin: 'undo'` a regra de
+ * origem permitida (`allowedFromStageIds`) não se aplica: é a volta ao estado anterior.
+ */
 export function validateTransition(input: {
   from: StageRow;
   to: StageRow;
   deal: DealRow;
   actor: DealActor;
+  origin?: StageChangeOrigin;
 }): void {
   const rules = input.to.transitionRules ?? {};
 
-  const allowed = rules.allowedFromStageIds ?? [];
+  const allowed = input.origin === 'undo' ? [] : (rules.allowedFromStageIds ?? []);
   if (allowed.length > 0 && !allowed.includes(input.from.id)) {
     throw new TransitionError(
       'transition_not_allowed',
@@ -125,16 +159,56 @@ export interface MoveDealResult {
   toStageId: string;
 }
 
+/** Motivo gravado em `pending_automations.last_error` quando um desfazer cancela a automação. */
+export const AUTOMATION_CANCELLED_BY_UNDO = 'cancelled_by_undo' as const;
+
+/**
+ * Cancela as `pending_automations` ainda `pending` que a movimentação da proposta `proposalId`
+ * agendou para o negócio. O CHECK da tabela não tem `cancelled`: a linha vira `failed` com
+ * `last_error = 'cancelled_by_undo'` (o worker só pega `pending`). Devolve quantas cancelou.
+ */
+export async function cancelPendingAutomationsOfProposal(
+  tx: DbTx,
+  input: { dealId: string; proposalId: string },
+): Promise<number> {
+  const rows = await tx
+    .update(pendingAutomations)
+    .set({ status: 'failed', lastError: AUTOMATION_CANCELLED_BY_UNDO })
+    .where(
+      and(
+        eq(pendingAutomations.dealId, input.dealId),
+        eq(pendingAutomations.status, 'pending'),
+        sql`${pendingAutomations.rule} -> 'metadata' ->> 'proposal_id' = ${input.proposalId}`,
+      ),
+    )
+    .returning({ id: pendingAutomations.id });
+  return rows.length;
+}
+
+export interface MoveDealArgs {
+  dealId: string;
+  newStageId: string;
+  actor: DealActor;
+  workspaceId: string;
+  /** Ver `StageChangeOrigin`. */
+  origin?: StageChangeOrigin;
+  /** Correlação gravada em `deal_history.metadata` e repassada ao seam. */
+  metadata?: DealMoveMetadata;
+  /**
+   * Fila pós-commit do chamador. Presente: o seam (`deal:stage_changed`, agendamento de
+   * automações) roda SÓ depois do commit da transação `tx`; uma transação desfeita não emite
+   * nada. Ausente: comportamento histórico (o seam roda ao fim desta função).
+   */
+  afterCommit?: DeferFn;
+}
+
 /**
  * Move um deal para `newStageId` dentro da transacao `tx` (RLS ja escopada).
  * Valida transition rules -> update -> deal_history('stage_changed') -> seam.
  * Lanca TransitionError (regra) ou Error('deal_not_found'/'stage_not_found').
  */
-export async function moveDealToStage(
-  tx: DbTx,
-  args: { dealId: string; newStageId: string; actor: DealActor; workspaceId: string },
-): Promise<MoveDealResult> {
-  const { dealId, newStageId, actor, workspaceId } = args;
+export async function moveDealToStage(tx: DbTx, args: MoveDealArgs): Promise<MoveDealResult> {
+  const { dealId, newStageId, actor, workspaceId, origin, metadata } = args;
 
   const [deal] = await tx.select().from(deals).where(eq(deals.id, dealId)).limit(1);
   if (!deal) throw new Error('deal_not_found');
@@ -152,7 +226,7 @@ export async function moveDealToStage(
   if (!toStage) throw new Error('stage_not_found');
   if (!fromStage) throw new Error('stage_not_found');
 
-  validateTransition({ from: fromStage, to: toStage, deal, actor });
+  validateTransition({ from: fromStage, to: toStage, deal, actor, ...(origin ? { origin } : {}) });
 
   const [updated] = await tx
     .update(deals)
@@ -169,16 +243,28 @@ export async function moveDealToStage(
     toValue: { stageId: newStageId },
     actorMemberId: actor.memberId ?? null,
     actorType: actor.type,
+    ...(metadata || origin
+      ? { metadata: { ...(metadata ?? {}), ...(origin ? { origin } : {}) } }
+      : {}),
   });
 
-  await emitStageChanged({
+  // Desfazer: as automações que a movimentação desfeita deixou na fila não rodam mais.
+  if (origin === 'undo' && metadata?.proposal_id) {
+    await cancelPendingAutomationsOfProposal(tx, { dealId, proposalId: metadata.proposal_id });
+  }
+
+  const event: StageChangeEvent = {
     workspaceId,
     dealId,
     pipelineId: deal.pipelineId,
     fromStageId: deal.stageId,
     toStageId: newStageId,
     actor,
-  });
+    ...(origin ? { origin } : {}),
+    ...(metadata ? { metadata } : {}),
+  };
+  if (args.afterCommit) args.afterCommit(() => emitStageChanged(event));
+  else await emitStageChanged(event);
 
   return { deal: updated, fromStageId: deal.stageId, toStageId: newStageId };
 }

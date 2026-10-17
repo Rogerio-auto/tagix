@@ -2,7 +2,7 @@
 id: F73-S08
 title: Ações de CRM do Copiloto (tags, contato, responsável, mover negócios, nota, compromisso interno) com prévia e desfazer
 phase: F73
-status: blocked
+status: review
 priority: high
 estimated_size: L
 model: opus
@@ -15,6 +15,9 @@ source_docs:
   - docs/features/PIPELINE.md
   - docs/design/copilot-integracoes-ux.md
 agent_id: backend-engineer
+claimed_at: 2026-10-17T07:30:17Z
+completed_at: 2026-10-17T08:09:41Z
+
 ---
 # F73-S08 — Ações de CRM
 
@@ -101,3 +104,56 @@ node --env-file=.env apps/api/node_modules/vitest/vitest.mjs run --root apps/api
 
 - Agente: `backend-engineer` (opus: mexe em services centrais e na régua de risco).
 - A descoberta "automação de estágio torna a movimentação externa" não está na maquete: está registrada na spec §6.2. Se alguma automação real em produção mudar o nível de pedidos comuns, registre na nota de execução com números.
+
+## Nota de execução (backend-engineer/opus, 2026-10-17)
+
+**Ferramentas registradas** em `act-crm/index.ts` (`tools` + `executors`; `COPILOT_EXECUTORS` já compõe):
+`propose_tag_contacts` (contact.tag), `propose_update_contact` (contact.update), `propose_assign_deals`
+(deal.assign_owner), `propose_move_deals` (deal.move), `propose_add_note` (conversation.note),
+`propose_create_event` (event.create_internal). O `core/registry.test.ts` (lista de chaves de produção) passa a
+falhar por estas 6 chaves, como previsto: ajuste do orchestrator.
+
+**Services extraídos** (rotas delegam; testes existentes verdes sem edição):
+`services/contacts/tags.ts` (`addTags`, `removeTags`, `listContactTags`, `findTag`) ← `POST/DELETE /api/contacts/:id/tags`;
+`services/contacts/update.ts` (`updateContactFields` com `UPDATE_CONTACT_EDITABLE_FIELDS` por import, snapshot e
+restauração); `services/deals/owner.ts` (`assignDealOwner` + `deal_history owner_changed`) ← `PUT /api/deals/:id`
+quando o responsável muda; `services/deals/move.ts` (`moveDeal` = `moveDealToStage` + outbox) ←
+`POST /api/deals/:id/move-stage`; `services/conversation-notes/create.ts` (`createNote`, `deleteNote`,
+`notifyNoteMentions`) ← `POST /api/conversations/:id/notes`.
+
+**deal-move / deal-hooks:** `origin?: 'undo'`, `metadata?: { via, proposal_id }` (vai para `deal_history.metadata`) e
+`afterCommit?` (o seam — `deal:stage_changed` e agendamento — só roda depois do commit do chamador). Com `undo`:
+`allowedFromStageIds` ignorado, `requiredFields`/`requiredRoles` valem, o hook não agenda nada e as pendentes da
+proposta são canceladas NA MESMA transação (`cancelPendingAutomationsOfProposal`). Sem as opções, o caminho é o
+histórico (teste de não regressão em `services/deal-move.test.ts`).
+
+**Decisões e desvios (para revisão):**
+1. `pending_automations` não tem coluna de metadados nem status `cancelled` (CHECK `pending|processing|done|failed`).
+   Sem poder migrar (`packages/**` proibido): a correlação vai em `rule.metadata = { via, proposal_id }` (snapshot jsonb;
+   o worker ignora chaves desconhecidas) e "cancelar" = `status='failed'`, `last_error='cancelled_by_undo'`.
+   **Pendência:** migração com `metadata jsonb` + status `cancelled`.
+2. Compromisso interno: o worker `calendar-reminders` manda WhatsApp ao contato de TODO evento com `events.contact_id`.
+   Para cumprir "sem aviso ao cliente", o contato citado vai em `metadata.related_contact_id` (o negócio vai em `deal_id`).
+   **Pendência:** o worker respeitar um "sem aviso ao contato" para o vínculo poder ir à coluna.
+3. `transition_rules.requiresApproval` não é aplicado em lugar nenhum do caminho comum (achado pré-existente); o
+   Copiloto respeita (`skipped_policy`/`requires_approval`; no desfazer, `failed`). Não alterei o caminho comum.
+4. Δ previsão: a consulta de decididos do `forecast_revenue` não é exportada; está repetida em
+   `act-crm/forecast-impact.ts` (restrita aos funis envolvidos) com `stageProbability` importado. Idem o predicado de
+   busca do `search_contacts` em `act-crm/contact-targets.ts`. **Pendência:** extrair ambos para `read-crm` (S06).
+5. `routes/tags.ts` não mudou: não há lógica de contato×tag ali (só o catálogo). `PATCH /api/contacts/:id` não delega
+   (aceita bem mais que a allowlist da IA).
+6. `PUT /api/deals/:id` passa a gravar `deal_history owner_changed` quando o responsável muda (antes não havia trilha).
+7. Versões: negócio = `coalesce(updated_at, created_at)::text|stage_id|owner_id` (precisão do banco); contato =
+   `updated_at::text`; tag = "tem/não tem a tag". `conflictBy` = último ator do `deal_history` depois da versão (negócios)
+   ou `tagged_by` (tags); contato não tem trilha de edição (sem nome). Nota e compromisso são aditivos: sem conflito de
+   versão na execução; o desfazer confere corpo/horário.
+8. `deal.move` nível 4 (automação externa) fica sem desfazer (ADR-004 §4). Quem já está no destino (mover) ou já tem o
+   responsável/estado da tag sai da lista de alvos. O filtro do mover fica preso ao funil do estágio de destino.
+9. `notify_owners`: nota interna na conversa do negócio mencionando o responsável (≠ quem pede); negócio sem conversa
+   não recebe aviso (e não aparece em "quem é avisado"). O desfazer apaga a nota. `deal.assign_owner` não avisa ninguém.
+10. Contagem de automações externas em produção: não medida (sem acesso a produção neste slot).
+
+**Validação (2026-10-17, Postgres dev :5442):** `pnpm --filter @hm/api typecheck` verde; `pnpm exec eslint` nos paths do
+slot: 0 erros, 0 avisos; vitest do bloco de validação: **22 arquivos, 214 testes, 0 falhas** (novos: `act-crm`
+2 arquivos/24 testes, `services/deal-move.test.ts` 5 testes). Suíte do Copiloto (`src/internal/copilot` +
+`src/services/copilot`): 405 passaram, 9 pulados, 1 falha esperada (`core/registry.test.ts`, chaves de produção).

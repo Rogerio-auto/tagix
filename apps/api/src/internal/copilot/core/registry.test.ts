@@ -134,12 +134,18 @@ describe('listToolDescriptorsFor', () => {
     });
   });
 
-  it('o registro de produção compõe sem erro, com chaves únicas, as consultas de read-crm e read-ops e a escrita de memória pelo motor', () => {
+  it('o registro de produção compõe sem erro, com chaves únicas, as consultas de read-crm e read-ops e as escritas (memória + act-crm) pelo motor', () => {
     const keys = COPILOT_TOOLS.map((t) => t.key);
     expect(new Set(keys).size).toBe(keys.length);
     expect([...keys].sort()).toEqual(
       [
         'propose_memory_remember',
+        'propose_tag_contacts',
+        'propose_update_contact',
+        'propose_assign_deals',
+        'propose_move_deals',
+        'propose_add_note',
+        'propose_create_event',
         'aggregate_deals',
         'forecast_revenue',
         'get_campaign',
@@ -159,11 +165,18 @@ describe('listToolDescriptorsFor', () => {
     const queries = COPILOT_TOOLS.filter((t) => t.capability === 'query');
     expect(queries).toHaveLength(14);
     const writes = COPILOT_TOOLS.filter((t) => t.capability !== 'query');
-    expect(writes.map((t) => [t.key, t.capability])).toEqual([
-      ['propose_memory_remember', 'memory.remember'],
-    ]);
+    const writeKeys = [
+      'propose_memory_remember',
+      'propose_tag_contacts',
+      'propose_update_contact',
+      'propose_assign_deals',
+      'propose_move_deals',
+      'propose_add_note',
+      'propose_create_event',
+    ];
+    expect(writes.map((t) => t.key).sort()).toEqual([...writeKeys].sort());
     expect(writes.every((t) => isEngineTool(t))).toBe(true);
-    expect(keys.filter((k) => k.startsWith('propose_'))).toEqual(['propose_memory_remember']);
+    expect(keys.filter((k) => k.startsWith('propose_')).sort()).toEqual([...writeKeys].sort());
     expect(() =>
       listToolDescriptorsFor(principal('OWNER'), COPILOT_TOOLS, offer('ADMIN')),
     ).not.toThrow();
