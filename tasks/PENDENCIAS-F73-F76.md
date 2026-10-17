@@ -12,6 +12,8 @@
 
 ## Provas que não puderam ser executadas (infra, dispositivo, custo)
 
+- [ ] F73-S04 — prova do runtime do Copiloto com modelo real (latência até o 1º `verdict_delta` e o `final`, tool use com `tool_choice` forçado e `parallel_tool_calls=false`, argumentos de `answer` chegando em streaming, `usage.cost` no stream) com `openai/gpt-4.1-mini` — **Precisa de:** Rogério (chave OpenRouter e custo) — **Impacto:** o caminho só foi provado com provider fake — **Como fechar:** rodar um turno real pelo `/copilot/run` e registrar na nota do F73-S04.
+
 ## Dívida técnica e achados fora de fronteira (slots futuros)
 
 - [ ] F75-S16 (para F75-S13) — guard SSRF compartilhado (`packages/shared/src/net/ssrf-guard.ts`) não bloqueia fec0::/10, 2002::/16 (6to4 com v4 interno), 64:ff9b:1::/48, 2001::/32 (Teredo), 100::/64 — **Precisa de:** slot de `@hm/shared` (F75-S13) — **Impacto:** fail-closed incompleto em IPv6 raro (pouco roteável na VPS) — **Como fechar:** acrescentar as faixas em `isBlockedIpAddress` com teste.

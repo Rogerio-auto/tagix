@@ -2,7 +2,7 @@
 id: F73-S04
 title: Runtime do Copiloto (grafo LangGraph próprio, /copilot/run em SSE, ferramentas por callback com grant, resposta estruturada, /kb/search)
 phase: F73
-status: review
+status: done
 priority: critical
 estimated_size: L
 model: opus
