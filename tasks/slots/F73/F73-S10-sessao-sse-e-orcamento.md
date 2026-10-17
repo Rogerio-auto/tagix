@@ -2,7 +2,7 @@
 id: F73-S10
 title: API de sessão do Copiloto com streaming SSE de produção, contexto de página, histórico, limites e orçamento mensal próprio
 phase: F73
-status: review
+status: done
 priority: critical
 estimated_size: L
 model: opus
