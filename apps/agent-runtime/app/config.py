@@ -44,6 +44,16 @@ class Settings(BaseSettings):
     # roteado pelo MESMO OpenRouter. O custo vai a llm_usage_logs(request_type=evaluation).
     judge_model: str = Field(default="openai/gpt-4o-mini", alias="JUDGE_MODEL")
 
+    # Copiloto (F73-S04): modelo padrão da plataforma quando `policy.model` vem nulo
+    # (`copilot_settings.model = null`). Requisitos: tool use confiável com
+    # `tool_choice` forçado, `parallel_tool_calls=false` e streaming incremental dos
+    # argumentos de ferramenta (o `verdict` sai em `verdict_delta`). `openai/gpt-4.1-mini`
+    # cumpre os três, sem tokens de raciocínio antes da 1ª saída (meta p50 ≤ 4 s do
+    # `final`, COPILOTO.md §9). A whitelist do super-admin pode trocar por env.
+    copilot_default_model: str = Field(
+        default="openai/gpt-4.1-mini", alias="COPILOT_DEFAULT_MODEL"
+    )
+
     # Embeddings — OpenAI DIRETO (text-embedding-3-small, 1536 dims; F3-S02).
     # OpenRouter NÃO roteia embeddings; dimensão é contrato rígido com vector(1536).
     openai_api_key: str = Field(alias="OPENAI_API_KEY")

@@ -1,0 +1,115 @@
+[
+  {
+    "type": "status",
+    "tool_key": "list_deals"
+  },
+  {
+    "type": "tool_call_completed",
+    "tool_key": "list_deals",
+    "call_id": "00000000-0000-4000-8000-000000000001",
+    "envelope": {
+      "ok": true,
+      "decision": "executed",
+      "result_id": "r-deals-1",
+      "model_view": {
+        "count": 3,
+        "deals": [
+          {
+            "id": "d1",
+            "title": "Ana · Alinhadores",
+            "value": 6800,
+            "idle_days": 9
+          },
+          {
+            "id": "d2",
+            "title": "Caio · Alinhadores",
+            "value": 7200,
+            "idle_days": 12
+          },
+          {
+            "id": "d3",
+            "title": "Lia · Alinhadores",
+            "value": 5900,
+            "idle_days": 8
+          }
+        ]
+      },
+      "public_event": {
+        "type": "tool_result",
+        "result_id": "r-deals-1",
+        "kind": "deal_list",
+        "data": {
+          "deal_ids": [
+            "d1",
+            "d2",
+            "d3"
+          ]
+        },
+        "source": {
+          "label": "Pipeline",
+          "as_of": "2026-10-16T09:30:00-03:00",
+          "record_count": 3
+        },
+        "truncated": false
+      }
+    }
+  },
+  {
+    "type": "verdict_delta",
+    "text": "Três negóci"
+  },
+  {
+    "type": "verdict_delta",
+    "text": "os de alinhadores estão"
+  },
+  {
+    "type": "verdict_delta",
+    "text": " parados há mais de 7 dia"
+  },
+  {
+    "type": "verdict_delta",
+    "text": "s, somando R$ 19.900."
+  },
+  {
+    "type": "final",
+    "blocks": {
+      "verdict": "Três negócios de alinhadores estão parados há mais de 7 dias, somando R$ 19.900.",
+      "why": [
+        "Caio está há 12 dias sem resposta (R$ 7.200).",
+        "Ana, 9 dias; Lia, 8 dias."
+      ],
+      "data_refs": [
+        "r-deals-1"
+      ],
+      "sources": [
+        {
+          "label": "Pipeline",
+          "as_of": "2026-10-16T09:30:00-03:00"
+        }
+      ],
+      "next_steps": [
+        {
+          "label": "Abrir os 3 negócios",
+          "action": {
+            "kind": "navigate",
+            "value": "/pipeline"
+          }
+        },
+        {
+          "label": "Quem cuida deles?",
+          "action": {
+            "kind": "ask",
+            "value": "Quem cuida deles?"
+          }
+        }
+      ]
+    },
+    "usage": {
+      "prompt_tokens": 200,
+      "completion_tokens": 40,
+      "total_cost_usd": 0.0002
+    },
+    "iterations": 2,
+    "format_fallback": false
+  }
+]

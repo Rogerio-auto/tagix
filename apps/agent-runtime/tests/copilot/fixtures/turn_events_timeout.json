@@ -1,0 +1,10 @@
+[
+  {
+    "type": "verdict_delta",
+    "text": "Parc"
+  },
+  {
+    "type": "error",
+    "code": "timeout"
+  }
+]

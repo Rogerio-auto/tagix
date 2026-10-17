@@ -1,0 +1,70 @@
+{
+  "turn_id": "0b9f6a3e-5d1c-4f0e-9a51-7c2d8e4b1a10",
+  "workspace_id": "6e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b",
+  "grant": "eyJ2IjoxLCJ0aWQiOiJmaXh0dXJlIn0.ZmFrZS1zaWduYXR1cmUtZm9yLXRlc3Rz",
+  "member": {
+    "display_name": "Bruna Lima",
+    "role_label": "Gestora",
+    "locale": "pt-BR",
+    "timezone": "America/Sao_Paulo"
+  },
+  "now_iso": "2026-10-16T09:30:00-03:00",
+  "page_context_resolved": {
+    "label": "Pipeline Alinhadores",
+    "entity_summary": "Estágio Proposta enviada: 7 negócios abertos."
+  },
+  "history": [
+    {
+      "role": "user",
+      "content": "Como está o pipeline de alinhadores?"
+    },
+    {
+      "role": "assistant",
+      "content": "Está com 18 negócios abertos."
+    }
+  ],
+  "memory": {
+    "profile": [
+      {
+        "key": "what_we_sell",
+        "content": "Alinhadores ortodônticos."
+      }
+    ],
+    "facts": [
+      {
+        "id": "f-1",
+        "content": "Ticket médio de alinhadores é R$ 6.800.",
+        "source_label": "Bruna, 02/10",
+        "untrusted": false
+      }
+    ]
+  },
+  "tools": [
+    {
+      "key": "list_deals",
+      "description": "Lista negócios do pipeline sob o escopo de quem pede.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "stage": {
+            "type": "string"
+          },
+          "idle_days": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  ],
+  "policy": {
+    "model": "openai/gpt-4.1-mini",
+    "max_iterations": 8,
+    "max_tool_calls": 16,
+    "max_tokens_per_call": 1024,
+    "temperature": 0.2,
+    "turn_timeout_s": 60
+  },
+  "user_input": "Quais negócios estão parados há mais de 7 dias?"
+}
