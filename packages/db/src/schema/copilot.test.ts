@@ -30,6 +30,7 @@ import {
   dealIdleDaysSql,
   dealLastMessageDirectionSql,
   InvalidCursorError,
+  type InsertCopilotProposal,
 } from '../repos/copilot';
 import {
   AUDIT_LOG_ACTOR_TYPES,
@@ -80,8 +81,7 @@ import {
   copilotSuggestions,
   copilotToolCalls,
   copilotTurns,
-  type InsertCopilotProposalShape,
-} from './copilot.test-types';
+} from './copilot';
 import { LLM_USAGE_SURFACES } from './llm';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -201,7 +201,12 @@ async function seedTenant(label: string): Promise<Tenant> {
   if (!st || !st2 || !ct || !ch) throw new Error('seed stage/contact/channel');
   const [cv] = await db
     .insert(conversations)
-    .values({ workspaceId: w.id, channelId: ch.id, remoteId: `f73-${label}-${sfx}`, contactId: ct.id })
+    .values({
+      workspaceId: w.id,
+      channelId: ch.id,
+      remoteId: `f73-${label}-${sfx}`,
+      contactId: ct.id,
+    })
     .returning();
   if (!cv) throw new Error('seed conversation');
   const [d] = await db
@@ -252,7 +257,10 @@ async function seedSession(t: Tenant, memberId = t.owner) {
   );
 }
 
-async function seedTurn(t: Tenant, opts: { max?: number; expiresInMs?: number; memberId?: string } = {}) {
+async function seedTurn(
+  t: Tenant,
+  opts: { max?: number; expiresInMs?: number; memberId?: string } = {},
+) {
   const memberId = opts.memberId ?? t.owner;
   const session = await seedSession(t, memberId);
   const grantNonce = nonce();
@@ -269,7 +277,10 @@ async function seedTurn(t: Tenant, opts: { max?: number; expiresInMs?: number; m
   return { session, turn, grantNonce };
 }
 
-function proposalInput(t: Tenant, over: Partial<InsertCopilotProposalShape> = {}): InsertCopilotProposalShape {
+function proposalInput(
+  t: Tenant,
+  over: Partial<InsertCopilotProposal> = {},
+): InsertCopilotProposal {
   return {
     workspaceId: t.ws,
     capability: 'deal.move',
@@ -368,7 +379,10 @@ describe('schema Drizzle × catálogo do Postgres', () => {
     expect(cfg.name).toBe(name);
     const cons = await getDb().execute<{ conname: string; contype: string }>(sql`
       select conname, contype from pg_constraint where conrelid = ${name}::regclass`);
-    const dbChecks = cons.filter((c) => c.contype === 'c').map((c) => c.conname).sort();
+    const dbChecks = cons
+      .filter((c) => c.contype === 'c')
+      .map((c) => c.conname)
+      .sort();
     expect(cfg.checks.map((c) => c.name).sort()).toEqual(dbChecks);
     const dbFks = new Set(cons.filter((c) => c.contype === 'f').map((c) => c.conname));
     for (const fk of cfg.foreignKeys) {
@@ -398,7 +412,7 @@ describe('schema Drizzle × catálogo do Postgres', () => {
       select c.relname, c.relrowsecurity, c.relforcerowsecurity, p.qual, p.with_check
         from pg_class c
         left join pg_policies p on p.tablename = c.relname and p.policyname = c.relname || '_isolation'
-       where c.relname = any(${names}::text[])`);
+       where c.relname in ${names}`);
     expect(rows).toHaveLength(12);
     for (const r of rows) {
       expect(r.relrowsecurity, r.relname).toBe(true);
@@ -410,7 +424,12 @@ describe('schema Drizzle × catálogo do Postgres', () => {
 
   it('migração: cabeçalho com down, próxima livre no journal, deal_history intocado', () => {
     expect(migration).toMatch(/Reverter \(down\)/);
-    expect(migration).not.toMatch(/deal_history/i);
+    // O cabeçalho cita deal_history (para dizer que NÃO muda); o SQL executável não o toca.
+    const executable = migration
+      .split('\n')
+      .filter((l) => !l.trimStart().startsWith('--'))
+      .join('\n');
+    expect(executable).not.toMatch(/deal_history/i);
     const journal = JSON.parse(
       readFileSync(path.resolve(here, '../../drizzle/meta/_journal.json'), 'utf-8'),
     ) as { entries: Array<{ idx: number; tag: string }> };
@@ -428,7 +447,22 @@ describe('copilotSettingsRepo / copilotMemberPrefsRepo', () => {
     try {
       const empty = await withWorkspace(t.ws, (tx) => copilotSettingsRepo.get(tx, t.ws));
       expect(empty.persisted).toBe(false);
-      const { workspaceId: _w, persisted: _p, updatedAt: _u, updatedBy: _b, ...vals } = empty;
+      expect(empty).toMatchObject({ workspaceId: t.ws, updatedAt: null, updatedBy: null });
+      const vals = {
+        enabled: empty.enabled,
+        capabilityMatrix: empty.capabilityMatrix,
+        monthlyBudgetUsd: empty.monthlyBudgetUsd,
+        budgetMode: empty.budgetMode,
+        budgetAlertPct: empty.budgetAlertPct,
+        historyRetentionMonths: empty.historyRetentionMonths,
+        defaultAutoOpen: empty.defaultAutoOpen,
+        partnerAccess: empty.partnerAccess,
+        model: empty.model,
+      };
+      // Nenhum campo além dos do contrato + metadados.
+      expect(Object.keys(empty).sort()).toEqual(
+        [...Object.keys(vals), 'workspaceId', 'persisted', 'updatedAt', 'updatedBy'].sort(),
+      );
       expect(vals).toEqual({
         enabled: true,
         capabilityMatrix: {},
@@ -486,7 +520,11 @@ describe('copilotSettingsRepo / copilotMemberPrefsRepo', () => {
         patch: { surface: 'docked', briefingLastSeenOn: '2026-10-16' },
       }),
     );
-    expect(p1).toMatchObject({ surface: 'docked', briefingLastSeenOn: '2026-10-16', autoOpen: null });
+    expect(p1).toMatchObject({
+      surface: 'docked',
+      briefingLastSeenOn: '2026-10-16',
+      autoOpen: null,
+    });
     const p2 = await withWorkspace(A.ws, (tx) =>
       copilotMemberPrefsRepo.upsert(tx, {
         workspaceId: A.ws,
@@ -502,7 +540,11 @@ describe('copilotSettingsRepo / copilotMemberPrefsRepo', () => {
 
 describe('copilotSessionsRepo / copilotMessagesRepo', () => {
   it('lista só as sessões do membro, paginando por cursor; getOwned não vaza a de outro', async () => {
-    const mine = [await seedSession(A, A.agent), await seedSession(A, A.agent), await seedSession(A, A.agent)];
+    const mine = [
+      await seedSession(A, A.agent),
+      await seedSession(A, A.agent),
+      await seedSession(A, A.agent),
+    ];
     const other = await seedSession(A, A.owner);
     const p1 = await withWorkspace(A.ws, (tx) =>
       copilotSessionsRepo.listByMember(tx, { memberId: A.agent, limit: 2 }),
@@ -517,9 +559,13 @@ describe('copilotSessionsRepo / copilotMessagesRepo', () => {
     expect(seen).not.toContain(other.id);
     expect(new Set(seen).size).toBe(seen.length);
 
-    expect(await withWorkspace(A.ws, (tx) => copilotSessionsRepo.getOwned(tx, other.id, A.agent))).toBeNull();
+    expect(
+      await withWorkspace(A.ws, (tx) => copilotSessionsRepo.getOwned(tx, other.id, A.agent)),
+    ).toBeNull();
     // Outro workspace também não enxerga (RLS).
-    expect(await withWorkspace(B.ws, (tx) => copilotSessionsRepo.getOwned(tx, other.id, A.owner))).toBeNull();
+    expect(
+      await withWorkspace(B.ws, (tx) => copilotSessionsRepo.getOwned(tx, other.id, A.owner)),
+    ).toBeNull();
 
     const first = mine[0];
     if (!first) throw new Error('seed');
@@ -530,7 +576,9 @@ describe('copilotSessionsRepo / copilotMessagesRepo', () => {
     expect(
       await withWorkspace(A.ws, (tx) => copilotSessionsRepo.rename(tx, first.id, A.owner, 'x')),
     ).toBeNull();
-    const archived = await withWorkspace(A.ws, (tx) => copilotSessionsRepo.archive(tx, first.id, A.agent));
+    const archived = await withWorkspace(A.ws, (tx) =>
+      copilotSessionsRepo.archive(tx, first.id, A.agent),
+    );
     expect(archived?.archivedAt).toBeInstanceOf(Date);
     const after = await withWorkspace(A.ws, (tx) =>
       copilotSessionsRepo.listByMember(tx, { memberId: A.agent, limit: 50 }),
@@ -602,9 +650,7 @@ describe('copilotSessionsRepo / copilotMessagesRepo', () => {
 
     const hist = await withWorkspace(A.ws, (tx) => copilotMessagesRepo.lastForPrompt(tx, s.id, 50));
     expect(hist).toHaveLength(12);
-    expect(hist.map((m) => m.content)).toEqual(
-      Array.from({ length: 12 }, (_v, i) => `m${i + 3}`),
-    );
+    expect(hist.map((m) => m.content)).toEqual(Array.from({ length: 12 }, (_v, i) => `m${i + 3}`));
   });
 });
 
@@ -616,7 +662,11 @@ describe('copilotTurnsRepo', () => {
     const results = await Promise.all(
       Array.from({ length: 20 }, () =>
         withWorkspace(A.ws, (tx) =>
-          copilotTurnsRepo.claimToolCall(tx, { turnId: turn.id, memberId: A.owner, nonce: grantNonce }),
+          copilotTurnsRepo.claimToolCall(tx, {
+            turnId: turn.id,
+            memberId: A.owner,
+            nonce: grantNonce,
+          }),
         ),
       ),
     );
@@ -690,23 +740,36 @@ describe('copilotTurnsRepo', () => {
     // Outro membro pode usar o mesmo client_request_id.
     const otherSession = await seedSession(A, A.owner);
     const third = await withWorkspace(A.ws, (tx) =>
-      copilotTurnsRepo.createRunning(tx, { ...input, memberId: A.owner, sessionId: otherSession.id }),
+      copilotTurnsRepo.createRunning(tx, {
+        ...input,
+        memberId: A.owner,
+        sessionId: otherSession.id,
+      }),
     );
     expect(third.created).toBe(true);
 
-    expect(await withWorkspace(A.ws, (tx) => copilotTurnsRepo.markTainted(tx, first.turn.id))).toBe(true);
-    const running = await withWorkspace(A.ws, (tx) => copilotTurnsRepo.findRunningByMember(tx, A.agent));
+    expect(await withWorkspace(A.ws, (tx) => copilotTurnsRepo.markTainted(tx, first.turn.id))).toBe(
+      true,
+    );
+    const running = await withWorkspace(A.ws, (tx) =>
+      copilotTurnsRepo.findRunningByMember(tx, A.agent),
+    );
     expect(running?.id).toBe(first.turn.id);
     expect(running?.tainted).toBe(true);
     const failed = await withWorkspace(A.ws, (tx) =>
       copilotTurnsRepo.fail(tx, first.turn.id, { errorCode: 'budget', status: 'budget_blocked' }),
     );
     expect(failed).toMatchObject({ status: 'budget_blocked', errorCode: 'budget' });
-    expect(await withWorkspace(A.ws, (tx) => copilotTurnsRepo.findRunningByMember(tx, A.agent))).toBeNull();
+    expect(
+      await withWorkspace(A.ws, (tx) => copilotTurnsRepo.findRunningByMember(tx, A.agent)),
+    ).toBeNull();
 
     // Turno encerrado sem completed_at é recusado (copilot_turns_completed_chk).
     const e = await falhaCom(
-      getDb().update(copilotTurns).set({ completedAt: null }).where(eq(copilotTurns.id, first.turn.id)),
+      getDb()
+        .update(copilotTurns)
+        .set({ completedAt: null })
+        .where(eq(copilotTurns.id, first.turn.id)),
     );
     expect(e.constraint_name).toBe('copilot_turns_completed_chk');
   });
@@ -744,16 +807,30 @@ describe('copilotProposalsRepo', () => {
       copilotProposalsRepo.insertWithItems(tx, {
         proposal: proposalInput(A),
         items: [
-          { targetType: 'deal', targetId: A.deal, before: { stage_id: A.stage }, after: { stage_id: A.stage2 } },
-          { targetType: 'deal', targetId: deal2, before: { stage_id: A.stage }, after: { stage_id: A.stage2 } },
+          {
+            targetType: 'deal',
+            targetId: A.deal,
+            before: { stage_id: A.stage },
+            after: { stage_id: A.stage2 },
+          },
+          {
+            targetType: 'deal',
+            targetId: deal2,
+            before: { stage_id: A.stage },
+            after: { stage_id: A.stage2 },
+          },
         ],
       }),
     );
     expect(created.items.map((i) => i.position)).toEqual([0, 1]);
-    const got = await withWorkspace(A.ws, (tx) => copilotProposalsRepo.getWithItems(tx, created.proposal.id));
+    const got = await withWorkspace(A.ws, (tx) =>
+      copilotProposalsRepo.getWithItems(tx, created.proposal.id),
+    );
     expect(got?.items.map((i) => i.targetId)).toEqual([A.deal, deal2]);
     expect(got?.items.every((i) => i.status === 'pending')).toBe(true);
-    expect(await withWorkspace(B.ws, (tx) => copilotProposalsRepo.getWithItems(tx, created.proposal.id))).toBeNull();
+    expect(
+      await withWorkspace(B.ws, (tx) => copilotProposalsRepo.getWithItems(tx, created.proposal.id)),
+    ).toBeNull();
 
     const e = await falhaCom(
       withWorkspace(A.ws, (tx) =>
@@ -780,7 +857,11 @@ describe('copilotProposalsRepo', () => {
           from: ['proposed', 'awaiting_approval'],
           to: 'executing',
           expectedVersion: proposal.version,
-          patch: { confirmIdempotencyKey: key, confirmedAt: new Date(), executedAsMemberId: A.owner },
+          patch: {
+            confirmIdempotencyKey: key,
+            confirmedAt: new Date(),
+            executedAsMemberId: A.owner,
+          },
           leaseSeconds: 120,
         }),
       );
@@ -806,7 +887,10 @@ describe('copilotProposalsRepo', () => {
   it('setItemStatus (CAS por status), renewLease devolve stop_requested, varreduras', async () => {
     const { proposal, items } = await withWorkspace(A.ws, (tx) =>
       copilotProposalsRepo.insertWithItems(tx, {
-        proposal: proposalInput(A, { status: 'executing', leaseExpiresAt: new Date(Date.now() - 1000) }),
+        proposal: proposalInput(A, {
+          status: 'executing',
+          leaseExpiresAt: new Date(Date.now() - 1000),
+        }),
         items: [{ targetType: 'deal', targetId: A.deal }],
       }),
     );
@@ -836,7 +920,9 @@ describe('copilotProposalsRepo', () => {
       .update(copilotActionProposals)
       .set({ stopRequested: true })
       .where(eq(copilotActionProposals.id, proposal.id));
-    const lease = await withWorkspace(A.ws, (tx) => copilotProposalsRepo.renewLease(tx, proposal.id, 60));
+    const lease = await withWorkspace(A.ws, (tx) =>
+      copilotProposalsRepo.renewLease(tx, proposal.id, 60),
+    );
     expect(lease?.stopRequested).toBe(true);
     expect(lease?.leaseExpiresAt.getTime()).toBeGreaterThan(Date.now());
     const staleAfter = await copilotProposalsRepo.listStaleExecuting(getDb(), new Date(), 1000);
@@ -851,7 +937,9 @@ describe('copilotProposalsRepo', () => {
     );
     const expired = await copilotProposalsRepo.listExpiredOpen(getDb(), new Date(), 1000);
     expect(expired.map((p) => p.id)).toContain(old.id);
-    expect(expired.every((p) => p.status === 'proposed' || p.status === 'awaiting_approval')).toBe(true);
+    expect(expired.every((p) => p.status === 'proposed' || p.status === 'awaiting_approval')).toBe(
+      true,
+    );
   });
 
   it('listActivity: mine × all, contagem de itens e paginação', async () => {
@@ -907,7 +995,7 @@ describe('copilotProposalsRepo', () => {
   });
 
   it('CHECKs: risco 1–4, bloqueada exige motivo, aberta exige validade', async () => {
-    const ins = (over: Partial<InsertCopilotProposalShape>) =>
+    const ins = (over: Partial<InsertCopilotProposal>) =>
       withWorkspace(A.ws, (tx) =>
         copilotProposalsRepo.insertWithItems(tx, { proposal: proposalInput(A, over), items: [] }),
       );
@@ -923,7 +1011,9 @@ describe('copilotProposalsRepo', () => {
     expect((await falhaCom(ins({ expiresAt: null }))).constraint_name).toBe(
       'copilot_proposals_open_expires_chk',
     );
-    await expect(ins({ status: 'blocked', blockedReason: 'role', expiresAt: null })).resolves.toBeTruthy();
+    await expect(
+      ins({ status: 'blocked', blockedReason: 'role', expiresAt: null }),
+    ).resolves.toBeTruthy();
     // Nível 2 executado na hora: completed, sem validade, com prazo de desfazer.
     await expect(
       ins({
@@ -1003,20 +1093,33 @@ describe('copilotMemoryRepo', () => {
   });
 
   it('content: 1–500 após btrim; fato não tem chave de perfil', async () => {
-    const base = { workspaceId: A.ws, kind: 'fact' as const, sourceType: 'member' as const, sourceLabel: 'x' };
+    const base = {
+      workspaceId: A.ws,
+      kind: 'fact' as const,
+      sourceType: 'member' as const,
+      sourceLabel: 'x',
+    };
     const db = getDb();
-    expect((await falhaCom(db.insert(copilotMemoryEntries).values({ ...base, content: '   ' }))).constraint_name).toBe(
-      'copilot_memory_content_chk',
-    );
     expect(
-      (await falhaCom(db.insert(copilotMemoryEntries).values({ ...base, content: 'a'.repeat(501) }))).constraint_name,
+      (await falhaCom(db.insert(copilotMemoryEntries).values({ ...base, content: '   ' })))
+        .constraint_name,
+    ).toBe('copilot_memory_content_chk');
+    expect(
+      (
+        await falhaCom(
+          db.insert(copilotMemoryEntries).values({ ...base, content: 'a'.repeat(501) }),
+        )
+      ).constraint_name,
     ).toBe('copilot_memory_content_chk');
     await expect(
       db.insert(copilotMemoryEntries).values({ ...base, content: ` ${'a'.repeat(500)} ` }),
     ).resolves.toBeDefined();
     expect(
-      (await falhaCom(db.insert(copilotMemoryEntries).values({ ...base, content: 'x', profileKey: 'tone' })))
-        .constraint_name,
+      (
+        await falhaCom(
+          db.insert(copilotMemoryEntries).values({ ...base, content: 'x', profileKey: 'tone' }),
+        )
+      ).constraint_name,
     ).toBe('copilot_memory_kind_key_chk');
   });
 
@@ -1025,7 +1128,12 @@ describe('copilotMemoryRepo', () => {
     try {
       const db = getDb();
       await withWorkspace(t.ws, (tx) =>
-        copilotMemoryRepo.upsertProfile(tx, { workspaceId: t.ws, key: 'tone', content: 'Próximo', sourceLabel: 'Bruna' }),
+        copilotMemoryRepo.upsertProfile(tx, {
+          workspaceId: t.ws,
+          key: 'tone',
+          content: 'Próximo',
+          sourceLabel: 'Bruna',
+        }),
       );
       // 20 de integração (mais novos), 20 do Copiloto, 5 de pessoa (mais velhos): a ordem é por fonte.
       const mk = (sourceType: 'member' | 'copilot' | 'integration', n: number, agoMin: number) =>
@@ -1037,12 +1145,12 @@ describe('copilotMemoryRepo', () => {
           sourceLabel: sourceType,
           updatedAt: new Date(Date.now() - (agoMin + i) * 60_000),
         }));
-      await db.insert(copilotMemoryEntries).values([
-        ...mk('integration', 20, 0),
-        ...mk('copilot', 20, 100),
-        ...mk('member', 5, 1000),
-      ]);
-      const mem = await withWorkspace(t.ws, (tx) => copilotMemoryRepo.listActiveForPrompt(tx, t.ws));
+      await db
+        .insert(copilotMemoryEntries)
+        .values([...mk('integration', 20, 0), ...mk('copilot', 20, 100), ...mk('member', 5, 1000)]);
+      const mem = await withWorkspace(t.ws, (tx) =>
+        copilotMemoryRepo.listActiveForPrompt(tx, t.ws),
+      );
       expect(mem.profile).toEqual([{ key: 'tone', content: 'Próximo' }]);
       expect(mem.facts).toHaveLength(30);
       expect(mem.facts.slice(0, 5).every((f) => f.sourceType === 'member')).toBe(true);
@@ -1055,7 +1163,9 @@ describe('copilotMemoryRepo', () => {
         .update(copilotMemoryEntries)
         .set({ content: 'z'.repeat(400) })
         .where(eq(copilotMemoryEntries.workspaceId, t.ws));
-      const capped = await withWorkspace(t.ws, (tx) => copilotMemoryRepo.listActiveForPrompt(tx, t.ws));
+      const capped = await withWorkspace(t.ws, (tx) =>
+        copilotMemoryRepo.listActiveForPrompt(tx, t.ws),
+      );
       expect(capped.facts).toHaveLength(6);
       expect(capped.profile).toHaveLength(1);
     } finally {
@@ -1078,9 +1188,13 @@ describe('copilotMemoryRepo', () => {
     );
     expect(forgotten).toMatchObject({ status: 'forgotten', forgottenBy: A.owner });
     expect(
-      await withWorkspace(A.ws, (tx) => copilotMemoryRepo.forget(tx, { id: fact.id, memberId: A.owner })),
+      await withWorkspace(A.ws, (tx) =>
+        copilotMemoryRepo.forget(tx, { id: fact.id, memberId: A.owner }),
+      ),
     ).toBeNull();
-    const restored = await withWorkspace(A.ws, (tx) => copilotMemoryRepo.restore(tx, { id: fact.id }));
+    const restored = await withWorkspace(A.ws, (tx) =>
+      copilotMemoryRepo.restore(tx, { id: fact.id }),
+    );
     expect(restored).toMatchObject({ status: 'active', forgottenAt: null, forgottenBy: null });
 
     const fixed = await withWorkspace(A.ws, (tx) =>
@@ -1101,7 +1215,12 @@ describe('copilotMemoryRepo', () => {
     // Corrigir de novo o original (já superado) não casa.
     expect(
       await withWorkspace(A.ws, (tx) =>
-        copilotMemoryRepo.correct(tx, { id: fact.id, content: 'x', memberId: A.agent, sourceLabel: 'x' }),
+        copilotMemoryRepo.correct(tx, {
+          id: fact.id,
+          content: 'x',
+          memberId: A.agent,
+          sourceLabel: 'x',
+        }),
       ),
     ).toBeNull();
 
@@ -1130,8 +1249,12 @@ describe('copilotBriefingsRepo', () => {
       }),
     );
     await withWorkspace(A.ws, (tx) => copilotBriefingsRepo.markSeen(tx, A.agent, day));
-    expect(await withWorkspace(A.ws, (tx) => copilotBriefingsRepo.markPushSent(tx, first.id))).toBe(true);
-    expect(await withWorkspace(A.ws, (tx) => copilotBriefingsRepo.markPushSent(tx, first.id))).toBe(false);
+    expect(await withWorkspace(A.ws, (tx) => copilotBriefingsRepo.markPushSent(tx, first.id))).toBe(
+      true,
+    );
+    expect(await withWorkspace(A.ws, (tx) => copilotBriefingsRepo.markPushSent(tx, first.id))).toBe(
+      false,
+    );
     const again = await withWorkspace(A.ws, (tx) =>
       copilotBriefingsRepo.upsert(tx, {
         workspaceId: A.ws,
@@ -1161,14 +1284,16 @@ describe('copilotBriefingsRepo', () => {
     );
     expect(e.constraint_name).toBe('uq_copilot_briefings_member_date');
     const e2 = await falhaCom(
-      getDb().insert(copilotBriefings).values({
-        workspaceId: A.ws,
-        memberId: A.agent,
-        forDate: '2026-10-17',
-        dataAsOf: new Date(),
-        status: 'ready',
-        items: [{}, {}, {}, {}],
-      }),
+      getDb()
+        .insert(copilotBriefings)
+        .values({
+          workspaceId: A.ws,
+          memberId: A.agent,
+          forDate: '2026-10-17',
+          dataAsOf: new Date(),
+          status: 'ready',
+          items: [{}, {}, {}, {}],
+        }),
     );
     expect(e2.constraint_name).toBe('copilot_briefings_items_chk');
   });
@@ -1213,7 +1338,11 @@ describe('copilotAutopilotRepo', () => {
     const rules = await withWorkspace(A.ws, (tx) => copilotAutopilotRepo.listRules(tx));
     expect(rules.map((r) => r.stageId)).toContain(A.stage);
     expect(
-      (await withWorkspace(A.ws, (tx) => copilotAutopilotRepo.listRules(tx, { modes: ['suggest'] }))).length,
+      (
+        await withWorkspace(A.ws, (tx) =>
+          copilotAutopilotRepo.listRules(tx, { modes: ['suggest'] }),
+        )
+      ).length,
     ).toBe(0);
     const e = await falhaCom(
       withWorkspace(A.ws, (tx) =>
@@ -1241,7 +1370,9 @@ describe('copilotAutopilotRepo', () => {
       reasonText: 'Sem resposta há 9 dias; a última mensagem foi nossa, em 07/10',
       confidence: 'high' as const,
     };
-    const s1 = await withWorkspace(A.ws, (tx) => copilotAutopilotRepo.insertSuggestionIfAbsent(tx, input));
+    const s1 = await withWorkspace(A.ws, (tx) =>
+      copilotAutopilotRepo.insertSuggestionIfAbsent(tx, input),
+    );
     expect(s1?.status).toBe('pending');
     expect(
       await withWorkspace(A.ws, (tx) => copilotAutopilotRepo.insertSuggestionIfAbsent(tx, input)),
@@ -1256,17 +1387,27 @@ describe('copilotAutopilotRepo', () => {
     expect(list.items.map((s) => s.id)).toContain(s1?.id);
 
     const decided = await withWorkspace(A.ws, (tx) =>
-      copilotAutopilotRepo.decideSuggestions(tx, { ids: [s1?.id ?? ''], decision: 'reject', memberId: A.owner }),
+      copilotAutopilotRepo.decideSuggestions(tx, {
+        ids: [s1?.id ?? ''],
+        decision: 'reject',
+        memberId: A.owner,
+      }),
     );
     expect(decided).toHaveLength(1);
     expect(decided[0]).toMatchObject({ status: 'rejected', decidedBy: A.owner });
     expect(
       await withWorkspace(A.ws, (tx) =>
-        copilotAutopilotRepo.decideSuggestions(tx, { ids: [s1?.id ?? ''], decision: 'approve', memberId: A.owner }),
+        copilotAutopilotRepo.decideSuggestions(tx, {
+          ids: [s1?.id ?? ''],
+          decision: 'approve',
+          memberId: A.owner,
+        }),
       ),
     ).toHaveLength(0);
 
-    const s2 = await withWorkspace(A.ws, (tx) => copilotAutopilotRepo.insertSuggestionIfAbsent(tx, input));
+    const s2 = await withWorkspace(A.ws, (tx) =>
+      copilotAutopilotRepo.insertSuggestionIfAbsent(tx, input),
+    );
     expect(s2).not.toBeNull();
     const n = await withWorkspace(A.ws, (tx) =>
       copilotAutopilotRepo.expireSuggestionsForDeal(tx, { dealId, status: 'superseded' }),
@@ -1277,7 +1418,9 @@ describe('copilotAutopilotRepo', () => {
     ).not.toBeNull();
 
     const e2 = await falhaCom(
-      getDb().insert(copilotSuggestions).values({ ...input, dealId: A.deal, toStageId: A.stage }),
+      getDb()
+        .insert(copilotSuggestions)
+        .values({ ...input, dealId: A.deal, toStageId: A.stage }),
     );
     expect(e2.constraint_name).toBe('copilot_suggestions_stages_chk');
   });
@@ -1322,7 +1465,9 @@ describe('extensões de audit_logs e llm_usage_logs', () => {
     expect(e.constraint_name).toBe('audit_logs_actor_type_chk');
     // Valores antigos seguem válidos.
     await expect(
-      getDb().insert(auditLogs).values({ workspaceId: A.ws, actorType: 'system', action: 'x', resourceType: 'x' }),
+      getDb()
+        .insert(auditLogs)
+        .values({ workspaceId: A.ws, actorType: 'system', action: 'x', resourceType: 'x' }),
     ).resolves.toBeDefined();
     // requested_by de outro workspace: FK composta recusa.
     const e2 = await falhaCom(
@@ -1370,6 +1515,10 @@ describe('extensões de audit_logs e llm_usage_logs', () => {
 // ─── 10. Régua de "parado" ───────────────────────────────────────────────────────
 
 describe('dealIdleDaysSql / dealLastMessageDirectionSql', () => {
+  // Um único instante base: semeia as datas E é o `now` do SQL (o relógio do host
+  // e o do container do Postgres divergem, e o floor transformaria 3 dias em 2).
+  let base = Date.now();
+
   async function newConversation(t: Tenant): Promise<string> {
     const [cv] = await getDb()
       .insert(conversations)
@@ -1384,7 +1533,12 @@ describe('dealIdleDaysSql / dealLastMessageDirectionSql', () => {
     return cv.id;
   }
 
-  async function message(t: Tenant, conversationId: string, direction: 'inbound' | 'outbound', daysAgo: number) {
+  async function message(
+    t: Tenant,
+    conversationId: string,
+    direction: 'inbound' | 'outbound',
+    daysAgo: number,
+  ) {
     await getDb()
       .insert(messages)
       .values({
@@ -1393,7 +1547,7 @@ describe('dealIdleDaysSql / dealLastMessageDirectionSql', () => {
         direction,
         senderType: direction === 'inbound' ? 'contact' : 'member',
         content: direction,
-        providerTimestamp: new Date(Date.now() - daysAgo * 86_400_000),
+        providerTimestamp: new Date(base - daysAgo * 86_400_000),
       });
   }
 
@@ -1402,7 +1556,10 @@ describe('dealIdleDaysSql / dealLastMessageDirectionSql', () => {
       tx
         .select({
           id: deals.id,
-          idle: dealIdleDaysSql(),
+          idle: dealIdleDaysSql(
+            undefined,
+            sql`${new Date(base).toISOString()}::timestamptz`,
+          ),
           direction: dealLastMessageDirectionSql(),
         })
         .from(deals)
@@ -1412,9 +1569,10 @@ describe('dealIdleDaysSql / dealLastMessageDirectionSql', () => {
   }
 
   it('sem conversa, conversa vazia, só nossa, do contato e do contato seguida da nossa', async () => {
-    const updatedAt = new Date(Date.now() - 10 * 86_400_000);
-    const noConv = await seedDeal(A, { updatedAt: new Date(Date.now() - 4 * 86_400_000) });
-    const neverUpdated = await seedDeal(A, { createdAt: new Date(Date.now() - 2 * 86_400_000) });
+    base = Date.now();
+    const updatedAt = new Date(base - 10 * 86_400_000);
+    const noConv = await seedDeal(A, { updatedAt: new Date(base - 4 * 86_400_000) });
+    const neverUpdated = await seedDeal(A, { createdAt: new Date(base - 2 * 86_400_000) });
 
     const cvEmpty = await newConversation(A);
     const emptyConv = await seedDeal(A, { conversationId: cvEmpty, updatedAt });

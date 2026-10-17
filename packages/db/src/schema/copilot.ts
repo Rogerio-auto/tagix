@@ -308,10 +308,7 @@ export const copilotSettings = pgTable(
     ),
     check('copilot_settings_budget_chk', sql`${t.monthlyBudgetUsd} >= 0`),
     check('copilot_settings_alert_pct_chk', sql`${t.budgetAlertPct} between 1 and 100`),
-    check(
-      'copilot_settings_matrix_chk',
-      sql`jsonb_typeof(${t.capabilityMatrix}) = 'object'`,
-    ),
+    check('copilot_settings_matrix_chk', sql`jsonb_typeof(${t.capabilityMatrix}) = 'object'`),
     check(
       'copilot_settings_model_chk',
       sql`${t.model} is null or char_length(${t.model}) between 1 and 200`,
@@ -540,7 +537,9 @@ export const copilotActionProposals = pgTable(
     index('idx_copilot_proposals_session')
       .on(t.sessionId)
       .where(sql`${t.sessionId} is not null`),
-    index('idx_copilot_proposals_turn').on(t.turnId).where(sql`${t.turnId} is not null`),
+    index('idx_copilot_proposals_turn')
+      .on(t.turnId)
+      .where(sql`${t.turnId} is not null`),
     foreignKey({
       name: 'copilot_proposals_workspace_session_fk',
       columns: [t.workspaceId, t.sessionId],
@@ -590,10 +589,7 @@ export const copilotActionProposals = pgTable(
       'copilot_proposals_executing_lease_chk',
       sql`${t.status} <> 'executing' or ${t.leaseExpiresAt} is not null`,
     ),
-    check(
-      'copilot_proposals_capability_chk',
-      sql`char_length(${t.capability}) between 1 and 80`,
-    ),
+    check('copilot_proposals_capability_chk', sql`char_length(${t.capability}) between 1 and 80`),
     check('copilot_proposals_summary_chk', sql`char_length(btrim(${t.summary})) between 1 and 500`),
     check(
       'copilot_proposals_idempotency_key_chk',
@@ -627,7 +623,9 @@ export const copilotMessages = pgTable(
   },
   (t) => [
     index('idx_copilot_messages_session_created').on(t.sessionId, t.createdAt, t.id),
-    index('idx_copilot_messages_turn').on(t.turnId).where(sql`${t.turnId} is not null`),
+    index('idx_copilot_messages_turn')
+      .on(t.turnId)
+      .where(sql`${t.turnId} is not null`),
     index('idx_copilot_messages_proposal')
       .on(t.proposalId)
       .where(sql`${t.proposalId} is not null`),
@@ -693,10 +691,7 @@ export const copilotToolCalls = pgTable(
       sql`${t.riskLevel} is null or ${t.riskLevel} between 1 and 4`,
     ),
     check('copilot_tool_calls_tool_key_chk', sql`char_length(${t.toolKey}) between 1 and 80`),
-    check(
-      'copilot_tool_calls_duration_chk',
-      sql`${t.durationMs} is null or ${t.durationMs} >= 0`,
-    ),
+    check('copilot_tool_calls_duration_chk', sql`${t.durationMs} is null or ${t.durationMs} >= 0`),
   ],
 );
 
@@ -739,7 +734,10 @@ export const copilotActionItems = pgTable(
       columns: [t.workspaceId, t.proposalId],
       foreignColumns: [copilotActionProposals.workspaceId, copilotActionProposals.id],
     }).onDelete('cascade'),
-    check('copilot_action_items_target_type_chk', inList(t.targetType, COPILOT_ACTION_TARGET_TYPES)),
+    check(
+      'copilot_action_items_target_type_chk',
+      inList(t.targetType, COPILOT_ACTION_TARGET_TYPES),
+    ),
     check('copilot_action_items_status_chk', inList(t.status, COPILOT_ACTION_ITEM_STATUSES)),
     check('copilot_action_items_position_chk', sql`${t.position} >= 0`),
   ],
@@ -810,10 +808,7 @@ export const copilotMemoryEntries = pgTable(
       'copilot_memory_kind_key_chk',
       sql`(${t.kind} = 'profile') = (${t.profileKey} is not null)`,
     ),
-    check(
-      'copilot_memory_content_chk',
-      sql`length(btrim(${t.content})) between 1 and 500`,
-    ),
+    check('copilot_memory_content_chk', sql`length(btrim(${t.content})) between 1 and 500`),
     check('copilot_memory_source_type_chk', inList(t.sourceType, COPILOT_MEMORY_SOURCE_TYPES)),
     check(
       'copilot_memory_source_label_chk',
@@ -901,10 +896,7 @@ export const copilotAutopilotRules = pgTable(
       foreignColumns: [members.workspaceId, members.id],
     }).onDelete('set null'),
     check('copilot_autopilot_rules_mode_chk', inList(t.mode, COPILOT_AUTOPILOT_MODES)),
-    check(
-      'copilot_autopilot_rules_criteria_chk',
-      sql`jsonb_typeof(${t.criteria}) = 'object'`,
-    ),
+    check('copilot_autopilot_rules_criteria_chk', sql`jsonb_typeof(${t.criteria}) = 'object'`),
     check('copilot_autopilot_rules_daily_limit_chk', sql`${t.dailyLimit} between 1 and 50`),
   ],
 );
@@ -973,12 +965,12 @@ export const copilotSuggestions = pgTable(
       columns: [t.workspaceId, t.decidedBy],
       foreignColumns: [members.workspaceId, members.id],
     }).onDelete('set null'),
-    check('copilot_suggestions_confidence_chk', inList(t.confidence, COPILOT_SUGGESTION_CONFIDENCES)),
-    check('copilot_suggestions_status_chk', inList(t.status, COPILOT_SUGGESTION_STATUSES)),
     check(
-      'copilot_suggestions_stages_chk',
-      sql`${t.fromStageId} <> ${t.toStageId}`,
+      'copilot_suggestions_confidence_chk',
+      inList(t.confidence, COPILOT_SUGGESTION_CONFIDENCES),
     ),
+    check('copilot_suggestions_status_chk', inList(t.status, COPILOT_SUGGESTION_STATUSES)),
+    check('copilot_suggestions_stages_chk', sql`${t.fromStageId} <> ${t.toStageId}`),
     check(
       'copilot_suggestions_reason_code_chk',
       sql`char_length(${t.reasonCode}) between 1 and 64`,

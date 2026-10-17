@@ -151,7 +151,10 @@ export async function getMemberPrefs(
     .select()
     .from(copilotMemberPrefs)
     .where(
-      and(eq(copilotMemberPrefs.workspaceId, workspaceId), eq(copilotMemberPrefs.memberId, memberId)),
+      and(
+        eq(copilotMemberPrefs.workspaceId, workspaceId),
+        eq(copilotMemberPrefs.memberId, memberId),
+      ),
     );
   if (!row) return { ...COPILOT_MEMBER_PREFS_DEFAULTS, workspaceId, memberId, persisted: false };
   return prefsView(row);

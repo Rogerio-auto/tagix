@@ -34,6 +34,18 @@ import {
   contacts,
   conversationEvaluations,
   conversations,
+  copilotActionItems,
+  copilotActionProposals,
+  copilotAutopilotRules,
+  copilotBriefings,
+  copilotMemberPrefs,
+  copilotMemoryEntries,
+  copilotMessages,
+  copilotSessions,
+  copilotSettings,
+  copilotSuggestions,
+  copilotToolCalls,
+  copilotTurns,
   deals,
   dealItems,
   pipelines,
@@ -2590,4 +2602,232 @@ describe('RLS Member invites (F71-S01)', () => {
       .limit(1);
     await expect(seedInvite(wsA, `fk-${sfx}@test.local`, memberB?.id ?? null)).rejects.toThrow();
   });
+});
+
+describe('RLS Copiloto (F73-S01)', () => {
+  /**
+   * As 12 tabelas do Copiloto. Cada uma recebe uma linha em A e outra em B (papel owner, que
+   * bypassa a RLS só no seed) e passa pela mesma bateria: B não lê, não altera, não apaga e não
+   * grava (WITH CHECK) em A; A não move a própria linha para B.
+   */
+  const COPILOT_RLS_TABLES = [
+    'copilot_settings',
+    'copilot_member_prefs',
+    'copilot_sessions',
+    'copilot_turns',
+    'copilot_messages',
+    'copilot_tool_calls',
+    'copilot_action_proposals',
+    'copilot_action_items',
+    'copilot_memory_entries',
+    'copilot_briefings',
+    'copilot_autopilot_rules',
+    'copilot_suggestions',
+  ] as const;
+
+  const seededDeals: string[] = [];
+
+  async function seedCopilotGraph(workspaceId: string, memberId: string, sfx: string) {
+    const db = getDb(); // owner bypassa RLS no seed
+    const [pl] = await db.insert(pipelines).values({ workspaceId, name: `CP ${sfx}` }).returning();
+    if (!pl) throw new Error('seed pipeline');
+    const [st1] = await db
+      .insert(stages)
+      .values({ workspaceId, pipelineId: pl.id, name: `CP1 ${sfx}`, position: 0 })
+      .returning();
+    const [st2] = await db
+      .insert(stages)
+      .values({ workspaceId, pipelineId: pl.id, name: `CP2 ${sfx}`, position: 1 })
+      .returning();
+    const [ct] = await db
+      .insert(contacts)
+      .values({ workspaceId, displayName: `CP ${sfx}` })
+      .returning();
+    if (!st1 || !st2 || !ct) throw new Error('seed stage/contact');
+    const [dl] = await db
+      .insert(deals)
+      .values({ workspaceId, pipelineId: pl.id, stageId: st1.id, contactId: ct.id, title: `CP ${sfx}` })
+      .returning();
+    if (!dl) throw new Error('seed deal');
+    seededDeals.push(dl.id);
+
+    await db.insert(copilotSettings).values({ workspaceId, updatedBy: memberId });
+    await db.insert(copilotMemberPrefs).values({ workspaceId, memberId });
+    const [session] = await db
+      .insert(copilotSessions)
+      .values({ workspaceId, memberId, origin: 'bubble' })
+      .returning();
+    if (!session) throw new Error('seed session');
+    const [turn] = await db
+      .insert(copilotTurns)
+      .values({
+        workspaceId,
+        memberId,
+        sessionId: session.id,
+        grantNonce: randomUUID().replace(/-/g, ''),
+        expiresAt: new Date(Date.now() + 120_000),
+        maxToolCalls: 16,
+      })
+      .returning();
+    if (!turn) throw new Error('seed turn');
+    await db
+      .insert(copilotMessages)
+      .values({ workspaceId, sessionId: session.id, turnId: turn.id, role: 'user', content: 'oi' });
+    await db.insert(copilotToolCalls).values({
+      workspaceId,
+      turnId: turn.id,
+      memberId,
+      toolKey: 'list_deals',
+      decision: 'executed',
+    });
+    const [proposal] = await db
+      .insert(copilotActionProposals)
+      .values({
+        workspaceId,
+        sessionId: session.id,
+        turnId: turn.id,
+        capability: 'deal.move',
+        riskLevel: 3,
+        status: 'proposed',
+        requestedByMemberId: memberId,
+        summary: 'Mover 1 negócio',
+        expiresAt: new Date(Date.now() + 15 * 60_000),
+      })
+      .returning();
+    if (!proposal) throw new Error('seed proposal');
+    await db.insert(copilotActionItems).values({
+      workspaceId,
+      proposalId: proposal.id,
+      position: 0,
+      targetType: 'deal',
+      targetId: dl.id,
+    });
+    await db.insert(copilotMemoryEntries).values({
+      workspaceId,
+      kind: 'fact',
+      content: 'Ticket médio R$ 4.800',
+      sourceType: 'member',
+      sourceLabel: 'Seed',
+      createdBy: memberId,
+    });
+    await db.insert(copilotBriefings).values({
+      workspaceId,
+      memberId,
+      forDate: '2026-10-16',
+      dataAsOf: new Date(),
+      status: 'empty',
+    });
+    await db
+      .insert(copilotAutopilotRules)
+      .values({ workspaceId, stageId: st1.id, mode: 'suggest', enabledBy: memberId });
+    await db.insert(copilotSuggestions).values({
+      workspaceId,
+      dealId: dl.id,
+      fromStageId: st1.id,
+      toStageId: st2.id,
+      reasonCode: 'idle',
+      reasonText: 'Sem resposta há 9 dias',
+      confidence: 'high',
+      proposalId: proposal.id,
+    });
+  }
+
+  function pgCode(e: unknown): string | undefined {
+    let cur: unknown = e;
+    for (let i = 0; i < 5 && cur !== null && typeof cur === 'object'; i += 1) {
+      const c = cur as { code?: unknown; cause?: unknown };
+      if (typeof c.code === 'string') return c.code;
+      cur = c.cause;
+    }
+    return undefined;
+  }
+
+  /** Código SQLSTATE da falha, ou `'resolved'` se não falhou. */
+  async function sqlstateOf(p: Promise<unknown>): Promise<string | undefined> {
+    try {
+      await p;
+    } catch (e) {
+      return pgCode(e);
+    }
+    return 'resolved';
+  }
+
+  beforeAll(async () => {
+    const [memberB] = await getDb()
+      .select({ id: members.id })
+      .from(members)
+      .where(eq(members.workspaceId, wsB))
+      .limit(1);
+    if (!memberB) throw new Error('member B ausente');
+    const sfx = randomUUID().slice(0, 8);
+    await seedCopilotGraph(wsA, memberA, `a-${sfx}`);
+    await seedCopilotGraph(wsB, memberB.id, `b-${sfx}`);
+  });
+
+  afterAll(async () => {
+    // Os deals saem antes dos workspaces (o afterAll do arquivo apaga os workspaces).
+    for (const id of seededDeals) await getDb().delete(deals).where(eq(deals.id, id));
+  });
+
+  it.each(COPILOT_RLS_TABLES)(
+    '%s: B não lê, não altera, não apaga nem grava em A; A não move a linha para B',
+    async (table) => {
+      const t = sql.identifier(table);
+      const countIn = async (ws: string, target: string): Promise<number> => {
+        const rows = await withWorkspace(ws, (tx) =>
+          tx.execute<{ n: number }>(
+            sql`select count(*)::int as n from ${t} where workspace_id = ${target}::uuid`,
+          ),
+        );
+        return rows[0]?.n ?? -1;
+      };
+      // Leitura: cada um vê só o seu; sem filtro, B não enxerga nenhuma linha de A.
+      expect(await countIn(wsA, wsA)).toBeGreaterThan(0);
+      expect(await countIn(wsB, wsA)).toBe(0);
+      const all = await withWorkspace(wsB, (tx) =>
+        tx.execute<{ workspace_id: string }>(sql`select workspace_id from ${t}`),
+      );
+      expect(all.length).toBeGreaterThan(0);
+      expect(all.every((r) => r.workspace_id === wsB)).toBe(true);
+
+      // Escrita de B sobre A: UPDATE/DELETE não alcançam a linha (0 afetadas).
+      const upd = await withWorkspace(wsB, (tx) =>
+        tx.execute(
+          sql`update ${t} set workspace_id = workspace_id where workspace_id = ${wsA}::uuid returning 1`,
+        ),
+      );
+      expect(upd).toHaveLength(0);
+      const del = await withWorkspace(wsB, (tx) =>
+        tx.execute(sql`delete from ${t} where workspace_id = ${wsA}::uuid returning 1`),
+      );
+      expect(del).toHaveLength(0);
+      expect(await countIn(wsA, wsA)).toBeGreaterThan(0);
+
+      // WITH CHECK: B não grava uma linha com workspace_id de A (cópia exata de uma linha de A).
+      const [rowA] = await getDb().execute<{ j: Record<string, unknown> }>(
+        sql`select to_jsonb(x) as j from ${t} x where workspace_id = ${wsA}::uuid limit 1`,
+      );
+      if (!rowA) throw new Error(`sem linha de A em ${table}`);
+      expect(
+        await sqlstateOf(
+          withWorkspace(wsB, (tx) =>
+            tx.execute(
+              sql`insert into ${t} select * from jsonb_populate_record(null::${t}, ${JSON.stringify(rowA.j)}::jsonb)`,
+            ),
+          ),
+        ),
+      ).toBe('42501');
+
+      // WITH CHECK no UPDATE: A não consegue mover a própria linha para B.
+      expect(
+        await sqlstateOf(
+          withWorkspace(wsA, (tx) =>
+            tx.execute(
+              sql`update ${t} set workspace_id = ${wsB}::uuid where workspace_id = ${wsA}::uuid`,
+            ),
+          ),
+        ),
+      ).toBe('42501');
+    },
+  );
 });

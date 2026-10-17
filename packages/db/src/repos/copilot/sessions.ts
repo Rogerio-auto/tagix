@@ -39,7 +39,10 @@ export interface CreateCopilotSessionInput {
   lastPageContext?: CopilotJsonObject | null;
 }
 
-async function createSession(tx: DbTx, input: CreateCopilotSessionInput): Promise<CopilotSessionRow> {
+async function createSession(
+  tx: DbTx,
+  input: CreateCopilotSessionInput,
+): Promise<CopilotSessionRow> {
   const [row] = await tx
     .insert(copilotSessions)
     .values({
@@ -161,6 +164,10 @@ async function append(tx: DbTx, input: AppendCopilotMessageInput): Promise<Copil
       toolResults: input.toolResults ?? null,
       pageContext: input.pageContext ?? null,
       proposalId: input.proposalId ?? null,
+      // Relógio real, não `now()`: a pergunta e a resposta do mesmo turno costumam ser gravadas
+      // na MESMA transação, e `now()` daria o mesmo instante às duas — a ordem do histórico
+      // (keyset por created_at, id) cairia no desempate por uuid aleatório.
+      createdAt: sql`clock_timestamp()`,
     })
     .returning();
   if (!row) throw new Error('copilot: mensagem não materializou.');

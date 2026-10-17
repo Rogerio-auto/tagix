@@ -9,7 +9,7 @@
  * - A Atividade (A8) é uma view sobre propostas + contagem de itens; não há log paralelo.
  */
 import { and, asc, desc, eq, getTableColumns, inArray, lte, sql } from 'drizzle-orm';
-import type { DbTx } from '../../client';
+import type { DB, DbTx } from '../../client';
 import {
   copilotActionItems,
   copilotActionProposals,
@@ -28,10 +28,14 @@ import {
   toPage,
   type CopilotPage,
 } from './cursor';
+import { qualified } from './sql';
 
 export const COPILOT_ACTIVITY_PAGE_MAX = 50;
 /** Lease padrão do lote (ADR-004 §2: `now() + 2 min`). */
 export const COPILOT_PROPOSAL_LEASE_SECONDS = 120;
+
+/** Varreduras rodam fora de `withWorkspace` (papel owner, entre workspaces) ou dentro de um tx. */
+type SweepExecutor = DB | DbTx;
 
 /** Status em que a proposta ainda espera um humano (expira). */
 export const COPILOT_OPEN_PROPOSAL_STATUSES = ['proposed', 'awaiting_approval'] as const;
@@ -53,7 +57,10 @@ export interface CopilotProposalWithItems {
 
 /** Campos que uma transição pode gravar junto com o novo status. */
 export type CopilotProposalPatch = Partial<
-  Omit<NewCopilotProposalRow, 'id' | 'workspaceId' | 'status' | 'version' | 'createdAt' | 'updatedAt'>
+  Omit<
+    NewCopilotProposalRow,
+    'id' | 'workspaceId' | 'status' | 'version' | 'createdAt' | 'updatedAt'
+  >
 >;
 
 /** Grava a proposta e os itens (na ordem dada) na mesma transação. */
@@ -198,7 +205,11 @@ async function renewLease(
 }
 
 /** Propostas abertas vencidas (varredura de expiração). Índice parcial `open_expires`. */
-async function listExpiredOpen(tx: DbTx, now: Date, limit: number): Promise<CopilotProposalRow[]> {
+async function listExpiredOpen(
+  tx: SweepExecutor,
+  now: Date,
+  limit: number,
+): Promise<CopilotProposalRow[]> {
   return tx
     .select()
     .from(copilotActionProposals)
@@ -214,7 +225,7 @@ async function listExpiredOpen(tx: DbTx, now: Date, limit: number): Promise<Copi
 
 /** Lotes `executing` com lease vencido (varredura de retomada). Índice parcial `executing_lease`. */
 async function listStaleExecuting(
-  tx: DbTx,
+  tx: SweepExecutor,
   now: Date,
   limit: number,
 ): Promise<CopilotProposalRow[]> {
@@ -299,7 +310,7 @@ async function listActivity(
           'excluded', (count(*) filter (where i.status = 'excluded'))::int
         )
         from copilot_action_items i
-        where i.proposal_id = ${p.id}
+        where i.proposal_id = ${qualified(p.id)}
       )`.mapWith(parseCounts),
     })
     .from(p)

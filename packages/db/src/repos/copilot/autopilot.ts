@@ -185,7 +185,9 @@ async function expireSuggestionsForDeal(
   const rows = await tx
     .update(copilotSuggestions)
     .set({ status: input.status ?? 'expired' })
-    .where(and(eq(copilotSuggestions.dealId, input.dealId), eq(copilotSuggestions.status, 'pending')))
+    .where(
+      and(eq(copilotSuggestions.dealId, input.dealId), eq(copilotSuggestions.status, 'pending')),
+    )
     .returning({ id: copilotSuggestions.id });
   return rows.length;
 }

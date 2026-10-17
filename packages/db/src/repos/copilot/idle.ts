@@ -16,11 +16,13 @@
  * também vale.
  *
  * Os fragmentos são correlacionados às colunas passadas (padrão: a tabela `deals`); para usar com
- * alias, passe as colunas do alias (`alias(deals, 'd')`).
+ * alias, passe as colunas do alias (`alias(deals, 'd')`). As colunas saem sempre qualificadas
+ * (`qualified`), então funcionam na lista de seleção de um `select` de tabela única.
  */
 import { sql, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { deals } from '../../schema/pipeline';
+import { qualified } from './sql';
 
 export interface DealIdleColumns {
   readonly conversationId: AnyPgColumn;
@@ -41,7 +43,7 @@ export function dealLastInboundAtSql(cols: DealIdleColumns = DEFAULT_COLUMNS): S
   return sql<Date | null>`(
     select coalesce(idle_m.provider_timestamp, idle_m.created_at)
       from messages idle_m
-     where idle_m.conversation_id = ${cols.conversationId}
+     where idle_m.conversation_id = ${qualified(cols.conversationId)}
        and idle_m.direction = 'inbound'
      order by coalesce(idle_m.provider_timestamp, idle_m.created_at) desc
      limit 1
@@ -58,8 +60,8 @@ export function dealIdleDaysSql(
 ): SQL<number> {
   return sql<number>`greatest(0, floor(extract(epoch from (${now} - coalesce(
     ${dealLastInboundAtSql(cols)},
-    ${cols.updatedAt},
-    ${cols.createdAt}
+    ${qualified(cols.updatedAt)},
+    ${qualified(cols.createdAt)}
   ))) / 86400))::int`.mapWith(Number);
 }
 
@@ -70,7 +72,7 @@ export function dealLastMessageDirectionSql(
   return sql<DealLastMessageDirection | null>`(
     select idle_d.direction
       from messages idle_d
-     where idle_d.conversation_id = ${cols.conversationId}
+     where idle_d.conversation_id = ${qualified(cols.conversationId)}
      order by coalesce(idle_d.provider_timestamp, idle_d.created_at) desc, idle_d.id desc
      limit 1
   )`;
