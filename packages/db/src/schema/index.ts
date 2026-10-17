@@ -10,6 +10,7 @@ import {
   boolean,
   check,
   customType,
+  foreignKey,
   index,
   inet,
   integer,
@@ -274,6 +275,22 @@ export const subscriptions = pgTable(
 );
 
 // ─── Audit (§14.1) ────────────────────────────────────────────────────────────
+/**
+ * `audit_logs.actor_type`. `copilot`/`autopilot` entram na F73-S01 (ADR-003 §6): o Copiloto age
+ * com as permissões do membro, e a trilha diz que foi por ele. `actor_type` segue `text` sem
+ * `$type` para não estreitar os consumidores existentes.
+ */
+export const AUDIT_LOG_ACTOR_TYPES = [
+  'member',
+  'agent',
+  'api',
+  'system',
+  'platform_admin',
+  'copilot',
+  'autopilot',
+] as const;
+export type AuditLogActorType = (typeof AUDIT_LOG_ACTOR_TYPES)[number];
+
 export const auditLogs = pgTable(
   'audit_logs',
   {
@@ -287,14 +304,35 @@ export const auditLogs = pgTable(
     metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
     ipAddress: inet('ip_address'),
     userAgent: text('user_agent'),
+    /**
+     * Copiloto (F73-S01, ADR-003 §6/§7): quem PEDIU. `actor_member_id` continua sendo o membro
+     * cujas permissões foram usadas; os dois só diferem no fluxo de aprovação. FK composta
+     * `(workspace_id, requested_by_member_id)` com `ON DELETE SET NULL (requested_by_member_id)`.
+     */
+    requestedByMemberId: uuid('requested_by_member_id'),
+    /** Correlação com `copilot_action_proposals` (sem FK: a trilha sobrevive à retenção). */
+    copilotProposalId: uuid('copilot_proposal_id'),
+    /** Correlação com `copilot_turns` (sem FK, idem). */
+    copilotTurnId: uuid('copilot_turn_id'),
     createdAt: ts('created_at').notNull().defaultNow(),
   },
   (t) => [
     index('idx_audit_logs_workspace_created').on(t.workspaceId, t.createdAt),
     index('idx_audit_logs_actor_created').on(t.actorMemberId, t.createdAt),
+    index('idx_audit_logs_copilot_proposal')
+      .on(t.workspaceId, t.copilotProposalId)
+      .where(sql`${t.copilotProposalId} is not null`),
+    index('idx_audit_logs_requested_by')
+      .on(t.workspaceId, t.requestedByMemberId)
+      .where(sql`${t.requestedByMemberId} is not null`),
+    foreignKey({
+      name: 'audit_logs_workspace_requested_by_fk',
+      columns: [t.workspaceId, t.requestedByMemberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }).onDelete('set null'),
     check(
       'audit_logs_actor_type_chk',
-      sql`${t.actorType} in ('member','agent','api','system','platform_admin')`,
+      sql`${t.actorType} in (${sql.raw(AUDIT_LOG_ACTOR_TYPES.map((v) => `'${v}'`).join(','))})`,
     ),
   ],
 );
@@ -464,6 +502,11 @@ export * from './billing';
 // herdando o RLS já existente dessas tabelas.
 export * from './quick_replies';
 
+// --- Copiloto (F73-S01: COPILOTO.md §4, ADR-003/004) ---
+// 12 tabelas workspace-scoped (RLS direto, FORCE). FKs compostas para members, stages, deals e
+// entre as próprias tabelas → importado DEPOIS de pipeline.
+export * from './copilot';
+
 /** Tabelas com `workspace_id` que recebem RLS. */
 export const RLS_TABLES = [
   'workspaces',
@@ -582,4 +625,17 @@ export const RLS_TABLES = [
   'quick_replies',
   // Convites de membro (F71-S01). workspace_id próprio → RLS direto.
   'member_invites',
+  // Copiloto (F73-S01). Todas com workspace_id próprio → RLS direto.
+  'copilot_settings',
+  'copilot_member_prefs',
+  'copilot_sessions',
+  'copilot_messages',
+  'copilot_turns',
+  'copilot_tool_calls',
+  'copilot_action_proposals',
+  'copilot_action_items',
+  'copilot_memory_entries',
+  'copilot_briefings',
+  'copilot_autopilot_rules',
+  'copilot_suggestions',
 ] as const;

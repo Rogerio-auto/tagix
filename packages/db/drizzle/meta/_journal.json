@@ -680,6 +680,13 @@
       "when": 1781452857000,
       "tag": "0096_f70_contact_profile_name",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1781452858000,
+      "tag": "0097_f73_copilot",
+      "breakpoints": true
     }
   ]
 }

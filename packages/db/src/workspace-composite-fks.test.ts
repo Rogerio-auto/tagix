@@ -22,6 +22,18 @@ import {
   channels,
   contacts,
   conversations,
+  copilotActionItems,
+  copilotActionProposals,
+  copilotAutopilotRules,
+  copilotBriefings,
+  copilotMemberPrefs,
+  copilotMemoryEntries,
+  copilotMessages,
+  copilotSessions,
+  copilotSettings,
+  copilotSuggestions,
+  copilotToolCalls,
+  copilotTurns,
   deals,
   members,
   pipelines,
@@ -569,5 +581,325 @@ describe('pré-voo da migração', () => {
     const preflight = /DO \$preflight\$[\s\S]*?END \$preflight\$;/.exec(migration)?.[0];
     if (!preflight) throw new Error('pré-voo ausente');
     await expect(getDb().execute(sql.raw(preflight))).resolves.toBeDefined();
+  });
+});
+
+// ─── 4. Copiloto (F73-S01, migração 0097) ────────────────────────────────────────
+
+describe('Copiloto (0097): toda referência tenant é FK composta por workspace', () => {
+  /** Fixtures do Copiloto por tenant (deal, sessão, turno, proposta, fato de memória). */
+  type CopilotFx = {
+    deal: string;
+    stage2: string;
+    session: string;
+    turn: string;
+    proposal: string;
+    memory: string;
+  };
+  let FA: CopilotFx;
+  let FB: CopilotFx;
+
+  async function seedCopilot(t: Tenant): Promise<CopilotFx> {
+    const db = getDb(); // owner: bypassa a RLS no seed
+    const [st2] = await db
+      .insert(stages)
+      .values({ workspaceId: t.ws, pipelineId: t.pipeline, name: `S2 ${suffix}`, position: 1 })
+      .returning();
+    const [d] = await db.insert(deals).values(dealValues(t)).returning();
+    const [s] = await db
+      .insert(copilotSessions)
+      .values({ workspaceId: t.ws, memberId: t.member, origin: 'docked' })
+      .returning();
+    if (!st2 || !d || !s) throw new Error('seed copilot');
+    const [tu] = await db
+      .insert(copilotTurns)
+      .values({
+        workspaceId: t.ws,
+        memberId: t.member,
+        sessionId: s.id,
+        grantNonce: randomUUID().replace(/-/g, ''),
+        expiresAt: new Date(Date.now() + 60_000),
+        maxToolCalls: 8,
+      })
+      .returning();
+    if (!tu) throw new Error('seed turn');
+    const [p] = await db
+      .insert(copilotActionProposals)
+      .values({
+        workspaceId: t.ws,
+        sessionId: s.id,
+        turnId: tu.id,
+        capability: 'deal.move',
+        riskLevel: 3,
+        status: 'proposed',
+        requestedByMemberId: t.member,
+        summary: 'Mover',
+        expiresAt: new Date(Date.now() + 60_000),
+      })
+      .returning();
+    const [m] = await db
+      .insert(copilotMemoryEntries)
+      .values({
+        workspaceId: t.ws,
+        kind: 'fact',
+        content: 'Fato',
+        sourceType: 'member',
+        sourceLabel: 'Seed',
+      })
+      .returning();
+    if (!p || !m) throw new Error('seed proposal/memory');
+    return { deal: d.id, stage2: st2.id, session: s.id, turn: tu.id, proposal: p.id, memory: m.id };
+  }
+
+  beforeAll(async () => {
+    FA = await seedCopilot(A);
+    FB = await seedCopilot(B);
+  });
+
+  it('catálogo: toda FK das 12 tabelas (exceto a simples para workspaces) é (workspace_id, x) → (workspace_id, id); anuláveis com SET NULL só da coluna', async () => {
+    const rows = await getDb().execute<{
+      table: string;
+      conname: string;
+      def: string;
+      nullable: boolean;
+    }>(sql`
+      select c.conrelid::regclass::text as table, c.conname, pg_get_constraintdef(c.oid) as def,
+             not a.attnotnull as nullable
+        from pg_constraint c
+        join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[array_length(c.conkey, 1)]
+       where c.contype = 'f'
+         and (c.conrelid::regclass::text like 'copilot\_%'
+              or c.conname = 'audit_logs_workspace_requested_by_fk')`);
+    expect(rows.length).toBe(29 + 12);
+    let composite = 0;
+    for (const r of rows) {
+      if (r.def === 'FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE')
+        continue;
+      composite += 1;
+      expect(r.def, `${r.table}.${r.conname}`).toMatch(
+        /^FOREIGN KEY \(workspace_id, [a-z_]+\) REFERENCES [a-z_]+\(workspace_id, id\) ON DELETE /,
+      );
+      const col = /^FOREIGN KEY \(workspace_id, ([a-z_]+)\)/.exec(r.def)?.[1] ?? '?';
+      // Coluna anulável: SET NULL só dela (nunca do workspace_id, que é NOT NULL).
+      if (r.nullable)
+        expect(r.def, r.conname).toMatch(new RegExp(`ON DELETE SET NULL \\(${col}\\)$`));
+      else expect(r.def, r.conname).toMatch(/ON DELETE CASCADE$/);
+    }
+    // 28 nas 12 tabelas (settings 1, prefs 1, sessions 1, turns 2, proposals 6, messages 3,
+    // tool_calls 2, items 1, memory 3, briefings 1, rules 2, suggestions 5) + audit_logs 1.
+    expect(composite).toBe(29);
+    // O alvo de deals existe (criado pela 0097).
+    const [idx] = await getDb().execute<{ indexdef: string }>(sql`
+      select indexdef from pg_indexes where indexname = 'uq_deals_workspace_id'`);
+    expect(idx?.indexdef).toBe(
+      'CREATE UNIQUE INDEX uq_deals_workspace_id ON public.deals USING btree (workspace_id, id)',
+    );
+  });
+
+  // [descrição, insert que referencia algo de B a partir de A, constraint esperada]
+  const casos: Array<[string, () => Promise<unknown>, string]> = [
+    [
+      'sessão para membro de B',
+      () =>
+        getDb()
+          .insert(copilotSessions)
+          .values({ workspaceId: A.ws, memberId: B.member, origin: 'bubble' }),
+      'copilot_sessions_workspace_member_fk',
+    ],
+    [
+      'turno na sessão de B',
+      () =>
+        getDb()
+          .insert(copilotTurns)
+          .values({
+            workspaceId: A.ws,
+            memberId: A.member,
+            sessionId: FB.session,
+            grantNonce: randomUUID().replace(/-/g, ''),
+            expiresAt: new Date(Date.now() + 60_000),
+            maxToolCalls: 8,
+          }),
+      'copilot_turns_workspace_session_fk',
+    ],
+    [
+      'mensagem com proposta de B',
+      () =>
+        getDb().insert(copilotMessages).values({
+          workspaceId: A.ws,
+          sessionId: FA.session,
+          role: 'event',
+          content: 'x',
+          proposalId: FB.proposal,
+        }),
+      'copilot_messages_workspace_proposal_fk',
+    ],
+    [
+      'chamada de ferramenta no turno de B',
+      () =>
+        getDb().insert(copilotToolCalls).values({
+          workspaceId: A.ws,
+          turnId: FB.turn,
+          memberId: A.member,
+          toolKey: 'list_deals',
+          decision: 'executed',
+        }),
+      'copilot_tool_calls_workspace_turn_fk',
+    ],
+    [
+      'proposta pedida por membro de B',
+      () =>
+        getDb()
+          .insert(copilotActionProposals)
+          .values({
+            workspaceId: A.ws,
+            capability: 'deal.move',
+            riskLevel: 3,
+            status: 'proposed',
+            requestedByMemberId: B.member,
+            summary: 'x',
+            expiresAt: new Date(Date.now() + 60_000),
+          }),
+      'copilot_proposals_workspace_requested_by_fk',
+    ],
+    [
+      'item na proposta de B',
+      () =>
+        getDb().insert(copilotActionItems).values({
+          workspaceId: A.ws,
+          proposalId: FB.proposal,
+          position: 0,
+          targetType: 'deal',
+          targetId: FA.deal,
+        }),
+      'copilot_action_items_workspace_proposal_fk',
+    ],
+    [
+      'memória que supera fato de B',
+      () =>
+        getDb().insert(copilotMemoryEntries).values({
+          workspaceId: A.ws,
+          kind: 'fact',
+          content: 'x',
+          sourceType: 'member',
+          sourceLabel: 'x',
+          supersedesId: FB.memory,
+        }),
+      'copilot_memory_workspace_supersedes_fk',
+    ],
+    [
+      'briefing para membro de B',
+      () =>
+        getDb().insert(copilotBriefings).values({
+          workspaceId: A.ws,
+          memberId: B.member,
+          forDate: '2026-10-16',
+          dataAsOf: new Date(),
+          status: 'empty',
+        }),
+      'copilot_briefings_workspace_member_fk',
+    ],
+    [
+      'regra do piloto em estágio de B',
+      () => getDb().insert(copilotAutopilotRules).values({ workspaceId: A.ws, stageId: B.stage }),
+      'copilot_autopilot_rules_workspace_stage_fk',
+    ],
+    [
+      'sugestão para negócio de B',
+      () =>
+        getDb().insert(copilotSuggestions).values({
+          workspaceId: A.ws,
+          dealId: FB.deal,
+          fromStageId: A.stage,
+          toStageId: FA.stage2,
+          reasonCode: 'idle',
+          reasonText: 'x',
+          confidence: 'low',
+        }),
+      'copilot_suggestions_workspace_deal_fk',
+    ],
+    [
+      'sugestão com estágio de destino de B',
+      () =>
+        getDb().insert(copilotSuggestions).values({
+          workspaceId: A.ws,
+          dealId: FA.deal,
+          fromStageId: A.stage,
+          toStageId: FB.stage2,
+          reasonCode: 'idle',
+          reasonText: 'x',
+          confidence: 'low',
+        }),
+      'copilot_suggestions_workspace_to_stage_fk',
+    ],
+    [
+      'preferências de membro de B',
+      () => getDb().insert(copilotMemberPrefs).values({ workspaceId: A.ws, memberId: B.member }),
+      'copilot_member_prefs_workspace_member_fk',
+    ],
+    [
+      'configuração editada por membro de B',
+      () => getDb().insert(copilotSettings).values({ workspaceId: A.ws, updatedBy: B.member }),
+      'copilot_settings_workspace_updated_by_fk',
+    ],
+  ];
+
+  it.each(casos)('recusa (23503) %s, mesmo no papel owner', async (_c, run, fk) => {
+    const e = await falhaCom(run());
+    expect(e.code).toBe('23503');
+    expect(e.constraint_name).toBe(fk);
+  });
+
+  it('UPDATE sob hm_app + RLS (caminho da API): proposta de A apontando para turno de B é recusada', async () => {
+    const e = await falhaCom(
+      withWorkspace(A.ws, (tx) =>
+        tx
+          .update(copilotActionProposals)
+          .set({ turnId: FB.turn })
+          .where(eq(copilotActionProposals.id, FA.proposal)),
+      ),
+    );
+    expect(e.code).toBe('23503');
+    expect(e.constraint_name).toBe('copilot_proposals_workspace_turn_fk');
+  });
+
+  it('caminho feliz e SET NULL só da coluna: apagar o membro preserva a proposta e o workspace_id', async () => {
+    const db = getDb();
+    const [m] = await db
+      .insert(members)
+      .values({
+        workspaceId: A.ws,
+        authUserId: randomUUID(),
+        email: `s12-cp-${suffix}@test.local`,
+        role: 'AGENT',
+        status: 'active',
+      })
+      .returning();
+    if (!m) throw new Error('seed member');
+    const [p] = await withWorkspace(A.ws, (tx) =>
+      tx
+        .insert(copilotActionProposals)
+        .values({
+          workspaceId: A.ws,
+          capability: 'deal.move',
+          riskLevel: 3,
+          status: 'proposed',
+          requestedByMemberId: m.id,
+          approverMemberId: m.id,
+          summary: 'x',
+          expiresAt: new Date(Date.now() + 60_000),
+        })
+        .returning(),
+    );
+    if (!p) throw new Error('seed proposal');
+    await db.delete(members).where(eq(members.id, m.id));
+    const [after] = await db
+      .select()
+      .from(copilotActionProposals)
+      .where(eq(copilotActionProposals.id, p.id));
+    expect(after).toMatchObject({
+      workspaceId: A.ws,
+      requestedByMemberId: null,
+      approverMemberId: null,
+    });
   });
 });

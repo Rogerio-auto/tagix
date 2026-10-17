@@ -19,6 +19,8 @@ export * from './onboarding';
 export * from './products';
 // Itens do card / line-items (F47-S01): CRUD + soma do valor (recompute helper).
 export * from './deal_items';
+// Copiloto (F73-S01): configuração, sessões, turnos, propostas, memória, briefing, piloto.
+export * from './copilot';
 
 export const workspacesRepo = {
   async findById(id: string) {

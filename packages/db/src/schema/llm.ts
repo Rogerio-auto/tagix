@@ -28,6 +28,10 @@ import { agents, conversations, workspaces } from './index';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 
+/** `llm_usage_logs.surface` (F73-S01): quem gerou o custo. */
+export const LLM_USAGE_SURFACES = ['agent', 'copilot'] as const;
+export type LlmUsageSurface = (typeof LLM_USAGE_SURFACES)[number];
+
 export const llmUsageLogs = pgTable(
   'llm_usage_logs',
   {
@@ -65,6 +69,14 @@ export const llmUsageLogs = pgTable(
      * playground do billing real — NÃO conta no cap de produção. Default false.
      */
     isTest: boolean('is_test').notNull().default(false),
+    /**
+     * Superfície que gerou o custo (F73-S01). `agent` = atendimento (default: todo produtor
+     * existente continua igual); `copilot` = Copiloto, com orçamento próprio. O teto dos agentes
+     * passa a somar só `surface='agent'` (F73-S10), para o Copiloto nunca derrubar o atendimento.
+     */
+    surface: text('surface').$type<LlmUsageSurface>().notNull().default('agent'),
+    /** Correlação com `copilot_turns` (sem FK: o custo sobrevive à retenção do histórico). */
+    copilotTurnId: uuid('copilot_turn_id'),
     createdAt: ts('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -85,6 +97,19 @@ export const llmUsageLogs = pgTable(
       sql`${t.requestType} in ('chat','transcription','vision','embedding','tts','dalle','rerank')`,
     ),
     check('llm_usage_logs_router_chk', sql`${t.router} in ('openrouter','openai_direct')`),
+    // Orçamento por superfície (Copiloto × agentes): soma do mês por workspace e superfície.
+    index('idx_llm_usage_workspace_surface_created').on(
+      t.workspaceId,
+      t.surface,
+      t.createdAt.desc(),
+    ),
+    index('idx_llm_usage_copilot_turn')
+      .on(t.copilotTurnId)
+      .where(sql`${t.copilotTurnId} is not null`),
+    check(
+      'llm_usage_logs_surface_chk',
+      sql`${t.surface} in (${sql.raw(LLM_USAGE_SURFACES.map((v) => `'${v}'`).join(','))})`,
+    ),
   ],
 );
 
