@@ -2,7 +2,7 @@
 id: F73-S05
 title: Motor de propostas (classificar, prever, confirmar, executar item a item, parar, desfazer, aprovação) e API de propostas e atividade
 phase: F73
-status: in-progress
+status: review
 priority: critical
 estimated_size: L
 model: opus
@@ -15,6 +15,7 @@ source_docs:
   - docs/design/copilot-integracoes-ux.md
 agent_id: backend-engineer
 claimed_at: 2026-10-17T05:21:24Z
+completed_at: 2026-10-17T06:35:02Z
 
 ---
 # F73-S05 — Motor de propostas
