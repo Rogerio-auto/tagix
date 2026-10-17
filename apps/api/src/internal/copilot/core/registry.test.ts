@@ -134,49 +134,51 @@ describe('listToolDescriptorsFor', () => {
     });
   });
 
-  it('o registro de produção compõe sem erro, com chaves únicas, as consultas de read-crm e read-ops e as escritas (memória + act-crm) pelo motor', () => {
+  it('o registro de produção compõe sem erro: conjunto exato de pares [chave, capacidade], chaves únicas, escritas só pelo motor com prefixo propose_', () => {
+    const queryPairs: [string, string][] = [
+      'aggregate_deals',
+      'forecast_revenue',
+      'get_campaign',
+      'get_contact',
+      'get_conversation_digest',
+      'get_deal',
+      'get_pipeline_overview',
+      'list_campaigns',
+      'list_conversations',
+      'list_deals',
+      'list_events',
+      'list_members',
+      'search_contacts',
+      'search_knowledge',
+    ].map((k) => [k, 'query']);
+    const writePairs: [string, string][] = [
+      ['propose_memory_remember', 'memory.remember'],
+      ['propose_tag_contacts', 'contact.tag'],
+      ['propose_update_contact', 'contact.update'],
+      ['propose_assign_deals', 'deal.assign_owner'],
+      ['propose_move_deals', 'deal.move'],
+      ['propose_add_note', 'conversation.note'],
+      ['propose_create_event', 'event.create_internal'],
+      ['propose_send_messages', 'message.send'],
+      ['propose_campaign_status', 'campaign.pause'],
+      ['propose_trigger_flow', 'flow.trigger'],
+    ];
     const keys = COPILOT_TOOLS.map((t) => t.key);
     expect(new Set(keys).size).toBe(keys.length);
-    expect([...keys].sort()).toEqual(
-      [
-        'propose_memory_remember',
-        'propose_tag_contacts',
-        'propose_update_contact',
-        'propose_assign_deals',
-        'propose_move_deals',
-        'propose_add_note',
-        'propose_create_event',
-        'aggregate_deals',
-        'forecast_revenue',
-        'get_campaign',
-        'get_contact',
-        'get_conversation_digest',
-        'get_deal',
-        'get_pipeline_overview',
-        'list_campaigns',
-        'list_conversations',
-        'list_deals',
-        'list_events',
-        'list_members',
-        'search_contacts',
-        'search_knowledge',
-      ].sort(),
-    );
+    const byKey = (x: [string, string], y: [string, string]) => x[0].localeCompare(y[0]);
+    const pairs = (list: readonly CopilotToolDefinition[]): [string, string][] =>
+      list.map((t): [string, string] => [t.key, t.capability]).sort(byKey);
+    expect(pairs(COPILOT_TOOLS)).toEqual([...queryPairs, ...writePairs].sort(byKey));
     const queries = COPILOT_TOOLS.filter((t) => t.capability === 'query');
     expect(queries).toHaveLength(14);
     const writes = COPILOT_TOOLS.filter((t) => t.capability !== 'query');
-    const writeKeys = [
-      'propose_memory_remember',
-      'propose_tag_contacts',
-      'propose_update_contact',
-      'propose_assign_deals',
-      'propose_move_deals',
-      'propose_add_note',
-      'propose_create_event',
-    ];
-    expect(writes.map((t) => t.key).sort()).toEqual([...writeKeys].sort());
+    expect(writes).toHaveLength(10);
+    expect(pairs(writes)).toEqual([...writePairs].sort(byKey));
     expect(writes.every((t) => isEngineTool(t))).toBe(true);
-    expect(keys.filter((k) => k.startsWith('propose_')).sort()).toEqual([...writeKeys].sort());
+    expect(queries.every((t) => !isEngineTool(t))).toBe(true);
+    expect(keys.filter((k) => k.startsWith('propose_')).sort()).toEqual(
+      writePairs.map(([k]) => k).sort(),
+    );
     expect(() =>
       listToolDescriptorsFor(principal('OWNER'), COPILOT_TOOLS, offer('ADMIN')),
     ).not.toThrow();
