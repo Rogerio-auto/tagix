@@ -2,7 +2,7 @@
 id: F73-S04
 title: Runtime do Copiloto (grafo LangGraph próprio, /copilot/run em SSE, ferramentas por callback com grant, resposta estruturada, /kb/search)
 phase: F73
-status: available
+status: in-progress
 priority: critical
 estimated_size: L
 model: opus
@@ -15,6 +15,8 @@ source_docs:
   - docs/decisions/ADR-004-motor-de-acoes-com-confirmacao-humana.md
   - docs/AGENTS_LANGGRAPH.md
 agent_id: python-engineer
+claimed_at: 2026-10-17T02:57:36Z
+
 ---
 # F73-S04 — Grafo do Copiloto no agent-runtime
 
