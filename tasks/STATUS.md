@@ -59,7 +59,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F70   | 37     | 1   | 2   | 0   | 0   | 2   | 32   |
 | F71   | 19     | 9   | 0   | 0   | 0   | 0   | 10   |
 | F72   | 9     | 0   | 1   | 0   | 0   | 0   | 8   |
-| F73   | 16     | 0   | 4   | 0   | 0   | 1   | 11   |
+| F73   | 16     | 0   | 4   | 0   | 0   | 0   | 12   |
 | F74   | 13     | 0   | 13   | 0   | 0   | 0   | 0   |
 | F75   | 16     | 2   | 13   | 0   | 0   | 0   | 1   |
 | F76   | 9     | 1   | 8   | 0   | 0   | 0   | 0   |
@@ -860,7 +860,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F73-S06 | Ferramentas de consulta do Copiloto, CRM (contatos, negócios, funil, agregações, previsão de receita) sob o escopo do membro             | ✅ done     | high       | F73-S02, F73-S03                                                                |
 | F73-S07 | Ferramentas de consulta do Copiloto, operação (conversas com contaminação, agenda, campanhas, conhecimento)                              | ✅ done     | high       | F73-S02, F73-S03, F73-S04                                                       |
 | F73-S08 | Ações de CRM do Copiloto (tags, contato, responsável, mover negócios, nota, compromisso interno) com prévia e desfazer                   | ✅ done     | high       | F73-S05, F73-S06                                                                |
-| F73-S09 | Ações externas do Copiloto (nível 4), mensagens a clientes, pausar/retomar/cancelar campanha e disparar flow, com checagem de política   | 🟣 review   | high       | F73-S05, F73-S07                                                                |
+| F73-S09 | Ações externas do Copiloto (nível 4), mensagens a clientes, pausar/retomar/cancelar campanha e disparar flow, com checagem de política   | ✅ done     | high       | F73-S05, F73-S07                                                                |
 | F73-S10 | API de sessão do Copiloto com streaming SSE de produção, contexto de página, histórico, limites e orçamento mensal próprio               | ✅ done     | critical   | F73-S01, F73-S02, F73-S03, F73-S04                                              |
 | F73-S11 | Memória do negócio (perfil da empresa, fatos com fonte, ensinar, corrigir e esquecer na hora) e a ferramenta remember_fact               | ✅ done     | high       | F73-S01, F73-S03, F73-S05                                                       |
 | F73-S12 | Briefing do dia (geração determinística com score explicável por receita em risco, dado com hora, revalidação e push da manhã)           | ✅ done     | high       | F73-S01, F73-S02, F73-S03, F73-S05                                              |

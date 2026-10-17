@@ -2,7 +2,7 @@
 id: F73-S09
 title: Ações externas do Copiloto (nível 4), mensagens a clientes, pausar/retomar/cancelar campanha e disparar flow, com checagem de política
 phase: F73
-status: review
+status: done
 priority: high
 estimated_size: L
 model: opus

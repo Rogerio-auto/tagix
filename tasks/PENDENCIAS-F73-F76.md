@@ -11,6 +11,9 @@
 - [ ] F73-S12 — calibrar a taxa de alcance de campanha do briefing (`BRIEFING_CAMPAIGN_REACH_RATE` = 2%, estimativa do worker) e os pesos do score — **Precisa de:** Rogério + telemetria do F73-S15 — **Impacto:** ordem dos itens de campanha no briefing — **Como fechar:** ajustar constantes após 30 dias de dados.
 - [ ] F73-S12 — `POST /api/copilot/briefing/today/seen` dá 402 com assinatura inativa (o GET passa) — **Precisa de:** decisão (isentar no guard?) — **Impacto:** briefing reabre sozinho em empresa em só leitura — **Como fechar:** exceção exata no `subscription-guard` se aprovado.
 
+- [ ] F73-S09 — não existe agendamento de mensagem individual: "mandar amanhã 09:00" pelo Copiloto sai ao confirmar (aviso na política) — **Precisa de:** Rogério (priorizar agendador de mensagem) — **Impacto:** pedido de envio programado não é atendido como pedido — **Como fechar:** agendador de mensagem individual + `allowsUndoAtLevel4` (cancelar até sair).
+- [ ] F73-S09 — não existe horário de funcionamento por workspace: a janela de envio usa só a janela legal do mercado e 08–21h local como aviso — **Precisa de:** Rogério — **Impacto:** política de envio menos precisa — **Como fechar:** campo de horário comercial no workspace.
+
 ## Credenciais, contas e serviços externos
 
 - [ ] F73-S03 — `COPILOT_GRANT_SECRET` precisa existir no `.env` da VPS ANTES do próximo deploy (o compose de produção agora exige; sem ela o deploy para no `config`) — **Precisa de:** Rogério (acesso à VPS) — **Impacto:** deploy bloqueado — **Como fechar:** `openssl rand -base64 48` → `.env` da VPS (valor distinto do `AGENT_RUNTIME_TOKEN`); ver `docs/runbooks/deploy-production.md` §2.5.
@@ -18,6 +21,8 @@
 ## Provas que não puderam ser executadas (infra, dispositivo, custo)
 
 - [ ] F73-S04 — prova do runtime do Copiloto com modelo real (latência até o 1º `verdict_delta` e o `final`, tool use com `tool_choice` forçado e `parallel_tool_calls=false`, argumentos de `answer` chegando em streaming, `usage.cost` no stream) com `openai/gpt-4.1-mini` — **Precisa de:** Rogério (chave OpenRouter e custo) — **Impacto:** o caminho só foi provado com provider fake — **Como fechar:** rodar um turno real pelo `/copilot/run` e registrar na nota do F73-S04.
+
+- [ ] F73-S09 — no Postgres dev a migração 0095 constava aplicada mas o trigger `trg_campaign_outbox_gate`, a função `campaign_outbox_gate` e o índice `idx_campaign_deliveries_message` não existiam (reaplicado só no dev) — **Precisa de:** Rogério (consulta no banco de produção) — **Impacto:** se faltar em produção, cancelar campanha não descarta envios já na outbox — **Como fechar:** `select tgname from pg_trigger where tgname='trg_campaign_outbox_gate'`; se vazio, reaplicar o SQL idempotente da 0095.
 
 ## Dívida técnica e achados fora de fronteira (slots futuros)
 
