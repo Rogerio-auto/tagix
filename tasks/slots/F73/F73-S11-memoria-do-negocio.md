@@ -2,7 +2,7 @@
 id: F73-S11
 title: Memória do negócio (perfil da empresa, fatos com fonte, ensinar, corrigir e esquecer na hora) e a ferramenta remember_fact
 phase: F73
-status: review
+status: done
 priority: high
 estimated_size: M
 model: sonnet
