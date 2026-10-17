@@ -91,3 +91,46 @@ node --env-file=.env apps/api/node_modules/vitest/vitest.mjs run --root apps/api
 
 - Agente: `backend-engineer`. Paralelo ao F73-S07 (pastas disjuntas).
 - Nada de LLM aqui: números são SQL. O texto de `why[]` é montado de modelo de texto, em pt-BR, com `Intl` e o locale do workspace (nada de locale literal; regra da F59-S08).
+
+## Nota de execução (backend-engineer, 2026-10-17)
+
+### Entregue (`apps/api/src/internal/copilot/read-crm/`)
+
+`index.ts` registra as 8 ferramentas (todas `capability: 'query'`, `requires` da entidade; `taintsTurn: true` só em `search_contacts` e `get_contact`). Peças: `limits.ts` (50 linhas, `model_view` ≤ 24 KB em bytes UTF-8 por busca binária do maior prefixo, `startRead` = `statement_timeout` 5 s via `applyDashboardStatementTimeout` + `jit = off`), `common.ts` (moeda do mercado/locale/fuso do workspace, `Intl`, máscara de telefone, `not_found` único), `deal-filters.ts` (Zod único dos filtros + SQL com `dealScope`), `forecast.ts` (puro, cabeçalho com a definição), e uma ferramenta por arquivo.
+
+### Decisões
+
+- **Escopo num só lugar**: `dealScope`/`contactScope`/`conversationScope`/`resolveVisible` por import; `resolveVisible` em `get_deal`, `get_contact` e nos `pipeline_id`. Inexistente, outro workspace e fora do escopo dão a MESMA resposta (`ok:false, decision:'executed', model_view:{error:'not_found',message}`, sem cartão).
+- **Dias parado** só por `dealIdleDaysSql()`. Filtrar/ordenar por "parado" usa `lateral (select … offset 0)` para avaliar a régua uma vez por linha.
+- **Consulta principal só em `deals`** (nomes de estágio/responsável/contato por PK depois). Com JOINs o planejador repetia o recorte por estágio (a régua de "parado" rodava 6x por negócio).
+- **`jit = off`** em `startRead`: o predicado do AGENT tem dezenas de subplanos, o custo passa de `jit_above_cost` e o Postgres compila ~110 funções (mesma consulta: 18 ms sem JIT, 380 a 820 ms com). Vale também para S12/S13 (briefing e piloto no worker usam o mesmo `dealScope`).
+- **Contaminação**: `model_view` de `get_contact`/`search_contacts` leva nome, nome de perfil e campos personalizados de TEXTO em `untrusted`; telefone e e-mail nunca vão ao modelo (cartão: telefone mascarado). As ferramentas de negócio levam título do negócio (recortado a 80, telefone mascarado se o título for um telefone), sem nome de contato, notas ou campos personalizados, e NÃO contaminam (conforme o slot). Risco residual para o auditor: o título pode vir do formulário de lead (`leadgen`) ou do nome do contato.
+- **Previsão**: definição do slot, sem "data prevista de fechamento" (não existe no modelo): todo o funil aberto entra no previsto; o período só decide o que já está fechado (`next_month` dá fechado 0). Clamps: piso = fechado, teto = fechado + Σ aberto. Sem histórico nenhum, p = 0 e o `why` diz "sem histórico". Taxas e abertos respeitam o escopo do membro (AGENT: as próprias). `why[]` por modelo de texto pt-BR com `Intl` do workspace.
+- **`aggregate_deals`**: status padrão `open` (exceto `win_rate`, só decididos); `month` = criação, ou fechamento em `win_rate`/`won`/`lost`; `product` soma os itens (não o valor do negócio), "Sem produto" para o resto; `avg_idle_days` por produto é recusado (`invalid_args`); `win_rate` é fração 0..1 (`format: 'percent'`). Mês vira `series`, o resto `table`.
+- **`get_pipeline_overview`**: abertos por estágio; `conversion_to_next` = dos negócios criados nos últimos 180 dias que passaram pelo estágio (atual ou histórico `stage_changed`), a fração que chegou a estágio posterior; `null` no último e sem amostra.
+- **`list_members`**: só ativos; arg extra `query` (nome) para achar "a Paula" (fora do resumo do slot, útil para o modelo).
+
+### Resultados
+
+- `read-crm.integration.test.ts` 48 testes (callback real, banco de dev), `forecast.test.ts` 13 (3 estágios, 6 negócios, piso de 10 decididos, calculado à mão), `limits.test.ts` 5. Todo `model_view` dos testes é conferido ≤ 24 KB.
+- **EXPLAIN / latência com 50 mil negócios** (`explain.integration.test.ts`, só com `HM_EXPLAIN_50K=1`; workspace descartável apagado; conferido: 0 workspaces e 0 negócios sobrando no dev). Semente pessimista: 35 mil abertos, 30 mil conversas, 60 mil mensagens, 42 mil eventos de histórico. Handler real, 20 execuções, p95 (ms), máquina compartilhada:
+
+  | consulta | OWNER | AGENT |
+  |---|---|---|
+  | `list_deals` (maiores, 50) | 45 | 28 |
+  | `list_deals` (mais parados, `idle_days_gte` 7) | 139 | — |
+  | `aggregate_deals` estágio × soma / responsável × taxa / mês × contagem | 34 / 16 / 70 | — |
+  | `aggregate_deals` estágio × `avg_idle_days` | 135 | 48 |
+  | `get_pipeline_overview` | **232** | 94 |
+  | `forecast_revenue` | 86 | 79 |
+
+  Planos: `list_deals`/`aggregate_deals` = `Seq Scan on deals` (70% das linhas casam) + top-N/`GroupAggregate`; a régua é `Bitmap Index Scan on idx_messages_conversation_created` por negócio (3,7 µs sob RLS). `get_pipeline_overview` = `Index Scan idx_deals_workspace_pipeline_stage` + a régua em 35 mil negócios (~130 ms no plano com instrumentação) + coorte de conversão (2 leituras de `deal_history`).
+- **Fora do DoD (p95 ≤ 150 ms): `get_pipeline_overview` OWNER (232 ms)** nesta semente. O custo é linear na régua de "parado" (`dealIdleDaysSql`, S01) × negócios abertos; a ~25 mil abertos cabe em 150 ms. As formas dependentes da régua têm teto de regressão de 400 ms no teste, com o motivo no código.
+- **Pedido ao dono do schema (S01, não criado aqui)**: índice parcial `messages (conversation_id, (coalesce(provider_timestamp, created_at)) desc) where direction = 'inbound'`. Medido numa transação revertida (nada persistiu; `pg_indexes` conferido): a contagem de "parados" nos 35 mil abertos foi de 79 ms para 48 ms (-40%). Solução definitiva: coluna persistida `deals.last_inbound_at` mantida por trigger.
+
+### Campos que faltaram nos schemas de `@hm/shared` (não estendidos)
+
+- `deal_card.installments`: o modelo de dados não tem parcelamento de negócio; sai sempre `null`.
+- `kpis` sem meta: não existe meta de receita no produto; o cartão não mostra "meta".
+- `ValueFormat 'percent'`: o contrato não diz se é fração ou 0..100; aqui é fração 0..1 (como `conversion_to_next`). A interface (F74) precisa saber.
+- `table.rows` sem tipo de célula `boolean`/`date` real; datas vão como string ISO com `format: 'date'`.

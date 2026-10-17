@@ -134,9 +134,24 @@ describe('listToolDescriptorsFor', () => {
     });
   });
 
-  it('o registro de produção começa vazio e compõe sem erro', () => {
-    expect(COPILOT_TOOLS).toEqual([]);
-    expect(copilotToolDescriptorsFor(principal('OWNER'))).toEqual([]);
+  it('o registro de produção compõe sem erro, com chaves únicas e só as 8 consultas de read-crm', () => {
+    const keys = COPILOT_TOOLS.map((t) => t.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect([...keys].sort()).toEqual(
+      [
+        'aggregate_deals',
+        'forecast_revenue',
+        'get_contact',
+        'get_deal',
+        'get_pipeline_overview',
+        'list_deals',
+        'list_members',
+        'search_contacts',
+      ].sort(),
+    );
+    expect(COPILOT_TOOLS.every((t) => t.capability === 'query')).toBe(true);
+    expect(keys.some((k) => k.startsWith('propose_'))).toBe(false);
+    expect(() => copilotToolDescriptorsFor(principal('OWNER'))).not.toThrow();
   });
 });
 
