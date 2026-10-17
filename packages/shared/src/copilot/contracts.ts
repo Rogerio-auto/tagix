@@ -21,12 +21,14 @@ import { ROLES } from '../permissions';
 import { CAPABILITY_KEYS, type CapabilityKey } from './capabilities';
 import { RISK_LEVELS } from './risk';
 import {
-  COPILOT_AUTO_OPEN,
+  COPILOT_ACTION_ITEM_STATUSES,
+  COPILOT_ACTION_TARGET_TYPES,
+  COPILOT_AUTO_OPEN_MODES,
   COPILOT_AUTOPILOT_MODES,
+  COPILOT_BLOCKED_REASONS,
   COPILOT_BRIEFING_STATUSES,
   COPILOT_BUDGET_MODES,
-  COPILOT_ITEM_STATUSES,
-  COPILOT_ITEM_TARGET_TYPES,
+  COPILOT_HISTORY_RETENTION_MONTHS,
   COPILOT_MEMORY_PROFILE_KEYS,
   COPILOT_MEMORY_SOURCE_TYPES,
   COPILOT_MEMORY_STATUSES,
@@ -65,10 +67,20 @@ export const RiskLevelSchema = z.union([
   z.literal(RISK_LEVELS[3]),
 ]);
 export const ProposalStatusSchema = z.enum(COPILOT_PROPOSAL_STATUSES);
-export const ItemStatusSchema = z.enum(COPILOT_ITEM_STATUSES);
+export const ItemStatusSchema = z.enum(COPILOT_ACTION_ITEM_STATUSES);
 export const SessionOriginSchema = z.enum(COPILOT_SESSION_ORIGINS);
-export const AutoOpenSchema = z.enum(COPILOT_AUTO_OPEN);
+export const AutoOpenSchema = z.enum(COPILOT_AUTO_OPEN_MODES);
+// Tipos dos primitivos de enum: `CapabilityKey` (capabilities), `RiskLevel` (risk),
+// `Role` (permissions) e `Copilot*Status`/`CopilotSessionOrigin`/`CopilotAutoOpenMode`/
+// `CopilotBudgetMode`/`CopilotHistoryRetentionMonths` (statuses) são os `z.infer` destes
+// schemas por construção (os schemas são gerados das mesmas constantes).
 export const BudgetModeSchema = z.enum(COPILOT_BUDGET_MODES);
+/** 6, 12 ou 24 meses: os mesmos números do `check` do banco. */
+export const HistoryRetentionMonthsSchema = z.union([
+  z.literal(COPILOT_HISTORY_RETENTION_MONTHS[0]),
+  z.literal(COPILOT_HISTORY_RETENTION_MONTHS[1]),
+  z.literal(COPILOT_HISTORY_RETENTION_MONTHS[2]),
+]);
 
 const nonNegInt = z.number().int().nonnegative();
 const money = z.number().finite();
@@ -89,6 +101,7 @@ export const InternalRouteSchema = z
   .min(1)
   .max(300)
   .regex(/^\/(?!\/)[^\s\\]*$/, 'rota interna inválida');
+export type InternalRoute = z.infer<typeof InternalRouteSchema>;
 
 /** Página por cursor. */
 export function cursorPage<T extends z.ZodTypeAny>(item: T) {
@@ -466,6 +479,16 @@ export type EventListData = z.infer<typeof EventListDataSchema>;
 export type ConversationListData = z.infer<typeof ConversationListDataSchema>;
 export type CampaignCardData = z.infer<typeof CampaignCardDataSchema>;
 export type TableData = z.infer<typeof TableDataSchema>;
+export type DealListCard = z.infer<typeof DealListCardSchema>;
+export type ContactCardCard = z.infer<typeof ContactCardCardSchema>;
+export type DealCardCard = z.infer<typeof DealCardCardSchema>;
+export type KpisCard = z.infer<typeof KpisCardSchema>;
+export type SeriesCard = z.infer<typeof SeriesCardSchema>;
+export type FunnelCard = z.infer<typeof FunnelCardSchema>;
+export type EventListCard = z.infer<typeof EventListCardSchema>;
+export type ConversationListCard = z.infer<typeof ConversationListCardSchema>;
+export type CampaignCardCard = z.infer<typeof CampaignCardCardSchema>;
+export type TableCard = z.infer<typeof TableCardSchema>;
 
 // ─── Resposta em formato fixo (§7) ───────────────────────────────────────────
 
@@ -563,7 +586,7 @@ export type ProposalPreview = z.infer<typeof ProposalPreviewSchema>;
 export const ProposalItemSchema = z
   .object({
     id: UuidSchema,
-    target_type: z.enum(COPILOT_ITEM_TARGET_TYPES),
+    target_type: z.enum(COPILOT_ACTION_TARGET_TYPES),
     target_id: UuidSchema,
     /** Rótulo legível do alvo ("Maria Souza · Alinhadores"). */
     label: shortText(200),
@@ -576,13 +599,8 @@ export const ProposalItemSchema = z
   .strict();
 export type ProposalItem = z.infer<typeof ProposalItemSchema>;
 
-export const PROPOSAL_BLOCKED_REASONS = [
-  'role',
-  'capability_disabled',
-  'subscription_inactive',
-  'budget',
-  'scope',
-] as const;
+/** Mesmos valores de `blocked_reason` no banco (`COPILOT_BLOCKED_REASONS`). */
+export const PROPOSAL_BLOCKED_REASONS = COPILOT_BLOCKED_REASONS;
 export type ProposalBlockedReason = (typeof PROPOSAL_BLOCKED_REASONS)[number];
 export const ProposalBlockedReasonSchema = z.enum(PROPOSAL_BLOCKED_REASONS);
 
@@ -1001,7 +1019,7 @@ export const CopilotSettingsSchema = z
     monthly_budget_usd: z.number().nonnegative().max(100_000),
     budget_mode: BudgetModeSchema,
     budget_alert_pct: z.number().int().min(1).max(100),
-    history_retention_months: z.union([z.literal(6), z.literal(12), z.literal(24)]),
+    history_retention_months: HistoryRetentionMonthsSchema,
     default_auto_open: AutoOpenSchema,
     partner_access: z.boolean(),
     /** `null` = padrão da plataforma. Só leitura para o workspace (whitelist do super-admin). */
@@ -1025,7 +1043,7 @@ export const CopilotSettingsUpdateSchema = z
     monthly_budget_usd: z.number().nonnegative().max(100_000).optional(),
     budget_mode: BudgetModeSchema.optional(),
     budget_alert_pct: z.number().int().min(1).max(100).optional(),
-    history_retention_months: z.union([z.literal(6), z.literal(12), z.literal(24)]).optional(),
+    history_retention_months: HistoryRetentionMonthsSchema.optional(),
     default_auto_open: AutoOpenSchema.optional(),
     partner_access: z.literal(false).optional(),
   })
@@ -1042,12 +1060,14 @@ export type CopilotSettingsUpdate = z.infer<typeof CopilotSettingsUpdateSchema>;
 export const EffectiveCapabilitySchema = z
   .object({ allowed: z.boolean(), reason: z.enum(['role', 'disabled_by_owner']).optional() })
   .strict();
+export type EffectiveCapabilityDTO = z.infer<typeof EffectiveCapabilitySchema>;
 
 const effectiveShape = Object.fromEntries(
   CAPABILITY_KEYS.map((k) => [k, EffectiveCapabilitySchema]),
 ) as { [K in CapabilityKey]: typeof EffectiveCapabilitySchema };
 
 export const EffectiveCapabilitiesSchema = z.object(effectiveShape).strict();
+export type EffectiveCapabilitiesDTO = z.infer<typeof EffectiveCapabilitiesSchema>;
 
 export const COPILOT_UNAVAILABLE_REASONS = [
   'impersonation',
@@ -1229,6 +1249,7 @@ export type CopilotUsage = z.infer<typeof CopilotUsageSchema>;
 
 /** Header `Idempotency-Key` (confirmar, desfazer): UUID gerado por intenção do usuário. */
 export const IdempotencyKeySchema = UuidSchema;
+export type IdempotencyKey = z.infer<typeof IdempotencyKeySchema>;
 
 /** Parâmetros ajustáveis declarados pelo executor (ADR-004 §2). */
 export const ProposalAdjustParamsSchema = z

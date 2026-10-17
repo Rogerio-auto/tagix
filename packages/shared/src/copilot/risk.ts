@@ -26,12 +26,14 @@
  *   o nível ("Nível 4 · fala com clientes · em lote").
  */
 import { CAPABILITIES, type CapabilityKey } from './capabilities';
+import { COPILOT_RISK_LEVELS, type CopilotRiskLevel } from './statuses';
 
 /** Lote máximo por proposta. Acima disso o Copiloto recusa e aponta a tela (invalid_args). */
 export const BATCH_LIMIT = 200;
 
-export const RISK_LEVELS = [1, 2, 3, 4] as const;
-export type RiskLevel = (typeof RISK_LEVELS)[number];
+/** Mesmos valores de `risk_level` no banco (`COPILOT_RISK_LEVELS`). */
+export const RISK_LEVELS = COPILOT_RISK_LEVELS;
+export type RiskLevel = CopilotRiskLevel;
 
 export const RISK_REASONS = [
   /** Consulta: nível 1, executa na hora. */

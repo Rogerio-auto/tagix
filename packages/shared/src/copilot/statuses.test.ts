@@ -9,7 +9,9 @@ import { describe, expect, it } from 'vitest';
 import * as statuses from './statuses';
 import {
   COPILOT_DB_ENUMS,
+  COPILOT_HISTORY_RETENTION_MONTHS,
   COPILOT_PROPOSAL_OPEN_STATUSES,
+  COPILOT_RISK_LEVELS,
   COPILOT_PROPOSAL_STATUSES,
   COPILOT_PROPOSAL_TERMINAL_STATUSES,
 } from './statuses';
@@ -29,9 +31,15 @@ describe('enums de status', () => {
     expect(abertos.filter((s) => terminais.includes(s))).toEqual([]);
   });
 
-  // TODO(F73-S01): ligar quando `@hm/db` exportar os enums `as const` do schema do Copiloto
-  // com os MESMOS nomes de constante deste arquivo (o F73-S03 liga). Compara cada enum de
-  // `COPILOT_DB_ENUMS` como conjunto: a ordem não é contrato.
+  it('risco e retenção são NÚMEROS, como no banco', () => {
+    expect(COPILOT_RISK_LEVELS).toEqual([1, 2, 3, 4]);
+    expect(COPILOT_HISTORY_RETENTION_MONTHS).toEqual([6, 12, 24]);
+  });
+
+  // TODO(F73-S03): ligar. O `@hm/db` (F73-S01, já integrado) exporta os enums com os MESMOS
+  // nomes de constante e a MESMA ordem deste arquivo (conferido à mão na F73-S02). Fica em
+  // `skip` porque `@hm/shared` não pode depender de `@hm/db` (circular: o db importa o
+  // shared); o S03, que importa os dois, move/liga esta asserção. Compara valor E ordem.
   it.skip('são iguais aos `check` do banco (@hm/db)', async () => {
     const especificador = '@hm/db';
     const db = (await import(/* @vite-ignore */ especificador)) as unknown as Record<string, unknown>;
@@ -44,7 +52,7 @@ describe('enums de status', () => {
       const doBanco = db[nome ?? ''];
       expect(Array.isArray(doBanco), `${chave} (${nome ?? '?'}) no @hm/db`).toBe(true);
       const valores: readonly unknown[] = Array.isArray(doBanco) ? doBanco : [];
-      expect(valores.map(String).sort(), chave).toEqual([...nossos].map(String).sort());
+      expect(valores, chave).toEqual([...nossos]);
     }
   });
 });

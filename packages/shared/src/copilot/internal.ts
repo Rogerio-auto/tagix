@@ -20,10 +20,11 @@ import {
   ToolResultEventSchema,
   UuidSchema,
 } from './contracts';
-import { COPILOT_MEMORY_PROFILE_KEYS, COPILOT_TOOL_DECISIONS } from './statuses';
+import { COPILOT_MEMORY_PROFILE_KEYS, COPILOT_TOOL_CALL_DECISIONS } from './statuses';
 
 /** Chave de ferramenta: `list_deals`, `propose_deal_move`. É o `:key` do callback. */
 export const CopilotToolKeySchema = z.string().regex(/^[a-z][a-z0-9_]{0,63}$/, 'tool_key inválido');
+export type CopilotToolKey = z.infer<typeof CopilotToolKeySchema>;
 
 /** Limites duros por turno (R5). O Node também conta `tool_calls` no turno. */
 export const COPILOT_POLICY_LIMITS = {
@@ -146,7 +147,7 @@ export type CopilotToolPublicEvent = z.infer<typeof CopilotToolPublicEventSchema
 export const CopilotToolEnvelopeSchema = z
   .object({
     ok: z.boolean(),
-    decision: z.enum(COPILOT_TOOL_DECISIONS),
+    decision: z.enum(COPILOT_TOOL_CALL_DECISIONS),
     result_id: ResultIdSchema.optional(),
     /**
      * O que o modelo lê: texto ou JSON curto (≤ 24 KB serializado, R5). Dado de contato vem
@@ -225,3 +226,7 @@ export type CopilotRuntimeEvent = z.infer<typeof CopilotRuntimeEventSchema>;
 export type CopilotRuntimeEventType = CopilotRuntimeEvent['type'];
 export type RuntimeFinalEvent = z.infer<typeof RuntimeFinalEventSchema>;
 export type RuntimeToolCallCompletedEvent = z.infer<typeof RuntimeToolCallCompletedEventSchema>;
+export type RuntimeStatusEvent = z.infer<typeof RuntimeStatusEventSchema>;
+export type RuntimeVerdictDeltaEvent = z.infer<typeof RuntimeVerdictDeltaEventSchema>;
+export type RuntimeIterationExceededEvent = z.infer<typeof RuntimeIterationExceededEventSchema>;
+export type RuntimeErrorEvent = z.infer<typeof RuntimeErrorEventSchema>;

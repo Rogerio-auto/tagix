@@ -148,6 +148,29 @@ Tudo aqui exige `is_platform_admin=true`. Nenhum role normal acessa. Lista:
 - Ver/dispatchar correção de DLQ
 - Ver health da infra
 
+### 2.10 Copiloto (F73, [COPILOTO.md §6.2](./COPILOTO.md))
+
+| Ação | Permissão | OWNER | ADMIN | SUPERVISOR | AGENT | READONLY |
+|---|---|:-:|:-:|:-:|:-:|:-:|
+| Usar o Copiloto (perguntar, receber briefing, propor ações dentro do próprio papel) | `copilot.use` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Configurar o Copiloto (liga/desliga, matriz de capacidades × papel, orçamento, retenção) | `copilot.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Ver custo em US$ e a tela de uso | `copilot.view_costs` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Editar a memória do negócio (perfil e fatos: ensinar, corrigir, esquecer) | `copilot.memory.edit` | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Ver a Atividade de toda a equipe e exportar CSV | `copilot.activity.view_all` | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Configurar o piloto automático por estágio | `copilot.autopilot.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
+
+Estas chaves só abrem a **superfície** do Copiloto e a gestão dele. Nenhuma delas autoriza ação de domínio: cada capacidade de escrita do catálogo (`@hm/shared/copilot/capabilities.ts`) exige, além de `copilot.use`, a permissão de domínio das seções 2.1 a 2.5 (ex.: `deal.move`, `contact.edit`, `campaign.pause`). `message.send` depende do volume: 1 contato exige `conversation.assign`; 2 ou mais, `campaign.edit`.
+
+#### Copiloto: age com as permissões de quem pede
+
+Decisão travada no [ADR-003](../decisions/ADR-003-identidade-do-membro-nas-acoes-de-ia.md). O Copiloto **não tem papel próprio**, e o modelo nunca carrega identidade:
+
+- **Efetiva = papel ∧ matriz.** `pode = can(role, permissão da capacidade) ∧ matriz[role][capacidade] ≠ false` (`capabilityAllowed`/`effectiveCapabilities`). A matriz de `copilot_settings` só **restringe**: `true` nunca concede o que o papel não tem. `matriz[role].use = false` desliga o Copiloto inteiro para o papel; o OWNER não pode desligar o próprio acesso.
+- **Reautoriza a cada chamada de ferramenta**: papel atual, status do membro, assinatura e matriz são relidos do banco no callback. Rebaixar alguém vale na chamada seguinte, no meio do turno.
+- **Mesmo escopo das telas**: o AGENT só move os próprios negócios; conversas seguem a visibilidade da inbox. O que a pessoa não vê é `not_found`, nunca "sem permissão".
+- **Aprovação**: quando o papel bloqueia, a proposta pode ir a um aprovador, que confirma **com as permissões dele**, recalculadas no confirmar. A auditoria grava `actor_member_id` = permissões usadas e `requested_by_member_id` = quem pediu.
+- **Só leitura e view-as**: assinatura inativa deixa consultar e bloqueia escrita; em view-as (impersonation) o Copiloto fica indisponível.
+
 ---
 
 ## 3. Como a permissão é aplicada
