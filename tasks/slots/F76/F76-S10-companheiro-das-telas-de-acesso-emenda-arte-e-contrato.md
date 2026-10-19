@@ -2,7 +2,7 @@
 id: F76-S10
 title: Companheiro das telas de acesso — emenda ao ADR-006, direção de arte, folha de poses, contrato e textos
 phase: F76
-status: available
+status: in-progress
 priority: high
 estimated_size: M
 model: opus
@@ -15,6 +15,8 @@ source_docs:
   - docs/features/MASCOTE_ANIMACOES.md
   - docs/design/copilot-botao-animacao.md
 agent_id: frontend-engineer
+claimed_at: 2026-10-19T17:32:22Z
+
 ---
 # F76-S10 — Companheiro das telas de acesso: emenda, arte e contrato
 
