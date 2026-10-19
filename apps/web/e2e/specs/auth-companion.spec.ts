@@ -1050,7 +1050,7 @@ test.describe('Companheiro — movimento reduzido (1440)', () => {
     test.setTimeout(75_000);
     await installProbe(page);
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await installRoutes(page, { delayMs: 500 });
+    await installRoutes(page, { delayMs: 1_200 });
     await page.goto('/signup');
     await hydrated(page, 'Criar conta');
     await companionReady(page);
@@ -1263,7 +1263,7 @@ test.describe('Companheiro — celular 375', () => {
   }) => {
     test.setTimeout(75_000);
     await installProbe(page);
-    await installRoutes(page, { delayMs: 400 });
+    await installRoutes(page, { delayMs: 1_200 });
     await page.goto('/signup');
     await hydrated(page, 'Criar conta');
     await companionReady(page);
