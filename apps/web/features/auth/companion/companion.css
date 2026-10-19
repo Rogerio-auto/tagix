@@ -89,24 +89,21 @@
 
 .m-bubble-pos {
   position: absolute;
+  right: 0;
   pointer-events: none;
 }
 
-.m-bubble-pos[data-placement='start'] {
-  right: calc(100% + 6px);
-  top: 19px;
-  transform: translateY(-50%);
+/*
+ * `top` (posto `heading` no desktop): ACIMA da figura, alinhado à direita dela, rabicho para
+ * baixo (F76-S14, A1: à esquerda o balão cobria o eyebrow). `below` (posto `inline`, celular):
+ * abaixo da figura, rabicho para cima.
+ */
+.m-bubble-pos[data-placement='top'] {
+  bottom: calc(100% + 8px);
 }
 
 .m-bubble-pos[data-placement='below'] {
-  right: 0;
   top: calc(100% + 8px);
-}
-
-/* Acima da figura, alinhado à direita dela; o rabicho aponta para baixo (F76-S14, A1). */
-.m-bubble-pos[data-placement='top'] {
-  right: 0;
-  bottom: calc(100% + 8px);
 }
 
 .m-bubble {
@@ -127,7 +124,7 @@
   pointer-events: none;
   opacity: 0;
   transform: translateY(4px) scale(0.96);
-  transform-origin: right center;
+  transform-origin: right bottom;
   transition:
     opacity 140ms var(--ease),
     transform 140ms var(--ease);
@@ -152,35 +149,22 @@
   height: 6px;
   background: var(--surface-3);
   border: 0 solid var(--border-2);
-  border-width: 1px 1px 0 0;
+  border-width: 0 1px 1px 0;
   transform: rotate(45deg);
-  right: -4px;
-  top: 50%;
-  margin-top: -3px;
+  /* Centro = centro da figura de 48 px (24 px da borda direita). */
+  right: 21px;
+  bottom: -4px;
 }
 
 .m-bubble-pos[data-placement='below'] .m-bubble {
   transform-origin: right top;
 }
 
-.m-bubble-pos[data-placement='top'] .m-bubble {
-  transform-origin: right bottom;
-}
-
 .m-bubble-pos[data-placement='below'] .m-bubble::after {
   right: 14px;
+  bottom: auto;
   top: -4px;
-  margin-top: 0;
   border-width: 1px 0 0 1px;
-}
-
-/* Centro do rabicho = centro da figura de 48 px (24 px da borda direita). */
-.m-bubble-pos[data-placement='top'] .m-bubble::after {
-  right: 21px;
-  top: auto;
-  bottom: -4px;
-  margin-top: 0;
-  border-width: 0 1px 1px 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

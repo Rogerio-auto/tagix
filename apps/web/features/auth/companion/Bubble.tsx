@@ -10,13 +10,12 @@ import type { ReactNode } from 'react';
  * - `top`: ACIMA da figura (posto `heading`, desktop), alinhado à direita dela, rabicho para
  *   baixo. Acima não há texto: o `main` reserva ≥ 64 px ali (F76-S14, A1; à esquerda o
  *   balão cobria o eyebrow).
- * - `start`: à esquerda da figura, rabicho para a direita (sem uso nas telas de acesso).
  * - `below`: abaixo da figura (posto `inline`), alinhado à direita, rabicho para cima.
  *
  * Entra em 200 ms; ao sair fica montado por 140 ms só para o fade (`data-open`).
  */
 
-export type BubblePlacement = 'top' | 'start' | 'below';
+export type BubblePlacement = 'top' | 'below';
 
 export interface BubbleProps {
   /** Texto atual; `null` fecha. */

@@ -95,23 +95,40 @@ padding 6 × 10; `--shadow-ds-1`; rabicho = quadrado de 6 px girado 45° com as 
 raio 18 vira pílula; se um texto futuro quebrar, o balão de duas linhas continua elegante em vez de virar estádio.
 Sempre `aria-hidden`, `pointer-events: none`.
 
-Posição: no `heading`, à **esquerda** da figura, centrado na altura da cabeça, 6 px de folga, rabicho para a direita.
+Posição: no `heading` (desktop), **acima** da figura, alinhado à direita dela, 8 px de folga, rabicho para baixo
+(centrado na figura). **[refino S14]** À esquerda, como estava, o balão cobria o eyebrow ("RECUPERAÇÃO DE ACESSO" no
+`reset-sent`); acima há ≥ 64 px livres (padding do `main`) e nada de texto, e o balão não sai da coluna de 25rem.
 No `inline` (celular), **abaixo** da figura, alinhado à direita dela, 8 px de folga, rabicho para cima. Nunca no `perch`.
 
 ## 3. Postos
 
 | Posto | Onde (âncora por ref, nunca coordenada fixa) | Olhar | Significado |
 |---|---|---|---|
-| `heading` (lg+) | **em pé na linha do eyebrow** do `AuthHeading`: centro da sombra na base da caixa do eyebrow; centro x a 24 px para dentro da borda direita da coluna de 25rem | `none` | "agora é aqui" |
-| `perch` (lg+) | no `BrandPanel` (`<CompanionPerch/>`): centro x = borda esquerda do painel + 72 px; centro y = centro do campo focado, limitado a 96 px do topo e do pé | `left` (para o formulário) | "olho de longe enquanto você trabalha" |
+| `heading` (lg+) | **em pé na linha do eyebrow** do cabeçalho (`AuthHeading` e cabeçalho do convite, ambos com `useCompanionAnchor('heading')`): centro da sombra na base do eyebrow (o primeiro `<p>` do header); centro x a 24 px para dentro da borda direita da coluna de 25rem | `none` | "agora é aqui" |
+| `perch` (lg+) | **faixa em fluxo** no `BrandPanel` (`<CompanionPerch/>`, `flex-1 min-h-14`, sem texto), entre o eyebrow do painel e o bloco editorial. Caixa da figura DENTRO da faixa: `x` = início da faixa (= início do texto do painel); `y` = centro do campo focado, limitado à faixa. Faixa < 48 px de altura: fica no `heading` | `left` (para o formulário) | "olho de longe enquanto você trabalha" |
 | `inline` (< lg) | caixa 40×40 reservada no SSR na ponta direita da linha do `Logo` (`<CompanionInlineSlot/>`) | `none` | os dois acima, no lugar; nunca voa |
+
+**[refino S14] `perch` por construção.** A versão anterior fixava o centro em "borda do painel + 72 px", que caía
+sobre o título e a numeração dos pilares (o QA do S13 mediu cobertura em 31 de 32 combinações de campo × viewport). O
+`perch` agora é uma caixa real do layout: como a figura mora dentro dela, não existe viewport em que cubra texto. A
+folga vertical do painel é dividida entre a faixa e um respiro de baixo (`flex-1` nos dois), o que preserva a
+composição de antes (`justify-between`).
+
+**Fallback de posto.** Se o posto pedido não existe (sem âncora, caixa zerada, faixa < 48 px), o motor usa o próximo
+visível (`heading` → `perch` → `inline`; `perch` → `heading` → `inline`; `inline` → `heading` → `perch`). A figura nunca
+fica com `visibility: hidden` por falta de âncora (ex.: convite carregando, sem cabeçalho).
 
 **[refino]** O PLANO punha o centro da figura na linha do eyebrow; com 48 px isso invade o H1 em títulos longos
 ("Link de redefinição inválido" quebra até a borda). Em pé na linha, a figura ocupa só o espaço acima do cabeçalho
 (o `main` tem ≥ 64 px de respiro no lg+) e nunca toca o título.
 
 Medição: `getBoundingClientRect` relativa à raiz do layout; recalcula em `ResizeObserver` (raiz e âncoras),
-`document.fonts.ready` e troca de etapa.
+`document.fonts.ready` e troca de etapa. **[refino S14] Sob transform de ancestral:** `getBoundingClientRect` inclui o
+`transform` em andamento dos ancestrais (o `hm-rise` da coluna, 8 px; a entrada do `AuthStepTransition`, 4 px), então
+a medida logo após a troca de etapa saía 0,4-8 px fora da linha. Depois de cada medição o motor procura animações
+finitas em andamento cujo alvo contém o elemento medido (`document.getAnimations()`), espera todas
+(`Promise.allSettled(finished)`) e remede na hora (`flushSync`); a correção chega como deslize curto de `y`, nunca como
+pulo. Escolhido em vez de "medir sem o transform dos ancestrais" porque não presume o valor final do transform.
 
 ## 4. Estados e movimento
 
@@ -234,6 +251,8 @@ vai por baixo da figura (§2.4). Toque não dispara nada no personagem (ele não
 | 7 | "Leva uns dois minutos." / "Confira sua caixa de entrada." | "Leva poucos minutos." / "O link já está a caminho." | sem promessa nova; sem eco do H1 |
 | 8 | squint do rig C | assimetria | a diagonal lia como raiva |
 | 9 | corpo do rig C | torso com ombros | braços liam como pernas |
+| 10 | (S14) `perch` a 72 px da borda do painel | faixa em fluxo no painel, personagem dentro | a coordenada fixa cobria o texto |
+| 11 | (S14) balão à esquerda da figura no `heading` | acima, rabicho para baixo | cobria o eyebrow no desktop |
 
 ## 11. Peso e desempenho (metas para o S11/S13)
 

@@ -63,6 +63,8 @@ const layerOf = (r: Rec): string | null => r.el.getAttribute('data-layer');
 const props = (r: Rec): string[] =>
   r.keyframes.flatMap((k) => Object.keys(k).filter((p) => p !== 'offset' && p !== 'easing'));
 const alive = (): Rec[] => created.filter((r) => ['running', 'paused'].includes(r.anim.playState));
+/** Quantas animações estão de fato rodando (ociosidade): conta pela sonda, não pelo deck. */
+const running = (): number => alive().filter((r) => r.anim.playState === 'running').length;
 const finite = (r: Rec): boolean => r.options.iterations !== Number.POSITIVE_INFINITY;
 const isBreath = (r: Rec): boolean => r.keyframes.some((k) => k['translate'] === '0 -1.5px');
 
@@ -587,12 +589,12 @@ describe('figura', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     await renderFigure();
     act(() => deck.setHalted(true));
-    expect(deck.running).toBe(0);
+    expect(running()).toBe(0);
     await tick(10_000);
     expect(created.some((r) => layerOf(r) === 'eyes-open')).toBe(true);
-    expect(deck.running).toBe(0);
+    expect(running()).toBe(0);
     act(() => deck.setHalted(false));
-    expect(deck.running).toBeGreaterThan(0);
+    expect(running()).toBeGreaterThan(0);
   });
 
   it('frozen (digitando / teclado virtual) congela só a respiração', async () => {

@@ -120,13 +120,6 @@ export class MotionDeck {
     this.refresh();
   }
 
-  /** Quantas animações estão de fato rodando (teste de ociosidade). */
-  get running(): number {
-    let n = 0;
-    for (const anim of this.live.keys()) if (anim.playState === 'running') n += 1;
-    return n;
-  }
-
   private refresh(): void {
     for (const [anim, group] of this.live) {
       const stop = this.halted || this.frozen.has(group);
@@ -334,8 +327,6 @@ function usePageActive(target: RefObject<Element | null>): boolean {
   return pageVisible && inView;
 }
 
-/** Distância do topo da caixa da figura ao centro da sombra (base do corpo + 2,5 px). */
-const SHADOW_Y: Record<number, number> = { 48: 45.5, 40: 38.25 };
 const HEADING_INSET = 24;
 /** Faixa do `perch` mais baixa que a figura: ela fica no `heading` (F76-S14, A2). */
 const PERCH_MIN_HEIGHT = 48;
@@ -370,36 +361,32 @@ function measure(
     const header = anchors.get('heading');
     if (!header) return null;
     const hr = header.getBoundingClientRect();
-    if (hr.width === 0 && hr.height === 0) return null;
     const eyebrow = header.querySelector('p') ?? header.firstElementChild ?? header;
     const er = eyebrow.getBoundingClientRect();
     return {
       x: hr.right - HEADING_INSET - size / 2 - s.left,
-      y: er.bottom - (SHADOW_Y[size] ?? 45.5) - s.top,
+      // Base do eyebrow = centro da sombra (45,5 px do topo no LOD 48; 38,25 no 40).
+      y: er.bottom - (size === 48 ? 45.5 : 38.25) - s.top,
     };
   }
   const strip = anchors.get('perch');
   if (!strip) return null;
   const pr = strip.getBoundingClientRect();
-  if (pr.width === 0 && pr.height === 0) return null;
-  if (pr.height < PERCH_MIN_HEIGHT) return null;
-  const fr = focus?.getBoundingClientRect();
-  const fieldCy = fr ? fr.top + fr.height / 2 : pr.top + pr.height / 2;
-  const top = clamp(pr.top, fieldCy - size / 2, pr.bottom - size);
+  if (pr.height < PERCH_MIN_HEIGHT) return null; // também cobre a faixa oculta (altura 0)
+  // Sem campo focado (ex.: erro de validação sem alvo), o centro da própria faixa.
+  const fr = (focus ?? strip).getBoundingClientRect();
+  const top = clamp(pr.top, fr.top + fr.height / 2 - size / 2, pr.bottom - size);
   return { x: pr.left - s.left, y: top - s.top };
 }
-
-/** Posto pedido primeiro; sem ele, outro posto visível (nunca `visibility: hidden`). */
-const STATION_FALLBACK: Record<CompanionStation, readonly CompanionStation[]> = {
-  heading: ['heading', 'perch', 'inline'],
-  perch: ['perch', 'heading', 'inline'],
-  inline: ['inline', 'heading', 'perch'],
-};
 
 interface Resolved extends Point {
   station: CompanionStation;
 }
 
+/**
+ * Posto pedido primeiro; sem ele (sem âncora, caixa zerada, faixa baixa), o próximo visível:
+ * `heading` → `perch` → `inline`. Nunca fica `visibility: hidden` por falta de âncora.
+ */
 function resolveStation(
   stage: HTMLElement,
   wanted: CompanionStation,
@@ -407,7 +394,7 @@ function resolveStation(
   anchors: AnchorRegistry,
   focus: Element | null,
 ): Resolved | null {
-  for (const station of STATION_FALLBACK[wanted]) {
+  for (const station of [wanted, 'heading', 'perch', 'inline'] as const) {
     const point = measure(stage, station, size, anchors, focus);
     if (point !== null) return { station, ...point };
   }
@@ -420,20 +407,17 @@ function resolveStation(
  * `AuthStepTransition` (4 px) deixavam a figura 0,4-8 px fora da linha. Animações infinitas
  * e as do próprio palco não contam.
  */
-function ancestorMotion(targets: ReadonlyArray<Element | null | undefined>): Animation[] {
-  if (typeof document.getAnimations !== 'function' || typeof KeyframeEffect === 'undefined') {
-    return [];
-  }
-  const els = targets.filter((t): t is Element => t !== null && t !== undefined);
-  if (els.length === 0) return [];
+function ancestorMotion(els: ReadonlyArray<Element | null>): Animation[] {
+  if (typeof document.getAnimations !== 'function') return [];
   return document.getAnimations().filter((a) => {
-    if (a.playState !== 'running') return false;
-    const effect = a.effect;
-    if (!(effect instanceof KeyframeEffect)) return false;
-    const target = effect.target;
-    if (target === null || target.closest('[data-companion-stage]')) return false;
-    if (effect.getTiming().iterations === Infinity) return false;
-    return els.some((el) => target.contains(el));
+    const target = (a.effect as KeyframeEffect | null)?.target;
+    return (
+      a.playState === 'running' &&
+      !!target &&
+      !target.closest('[data-companion-stage]') &&
+      a.effect?.getTiming().iterations !== Infinity &&
+      els.some((el) => el !== null && target.contains(el))
+    );
   });
 }
 
@@ -478,14 +462,8 @@ export function CompanionActor({
   // A3: a remedição que vem do fim das animações dos ancestrais corrige de leve (deslize).
   const settleToken = useRef(0);
   const softCorrection = useRef(false);
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      settleToken.current += 1; // invalida o que estiver esperando
-    };
-  }, []);
+  // Desmontar invalida a remedição que estiver esperando.
+  useEffect(() => () => void (settleToken.current += 1), []);
 
   const active = usePageActive(enterRef);
   useEffect(() => {
@@ -537,8 +515,8 @@ export function CompanionActor({
       setPlaced(false);
       return;
     }
+    const next = resolved;
     const station = resolved.station;
-    const next: Point = { x: resolved.x, y: resolved.y };
     setShownStation(station);
 
     // A3: se algum ancestral ainda anima (transform), remede quando todos terminarem.
@@ -550,7 +528,7 @@ export function CompanionActor({
       settleToken.current += 1;
       const token = settleToken.current;
       void Promise.allSettled(motion.map((a) => a.finished)).then(() => {
-        if (!mounted.current || settleToken.current !== token) return;
+        if (settleToken.current !== token) return;
         softCorrection.current = true;
         flushSync(bump);
       });
@@ -652,12 +630,7 @@ export function CompanionActor({
     commitPos();
     const soft = softCorrection.current;
     softCorrection.current = false;
-    if (
-      moved &&
-      !reducedMotion &&
-      station !== 'inline' &&
-      ((station === 'perch' && focusChanged) || soft)
-    ) {
+    if (moved && !reducedMotion && ((station === 'perch' && focusChanged) || soft)) {
       void deck.play(fyRef.current, planGlide(prev.y - next.y), 'move');
     }
     director.landed();

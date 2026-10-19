@@ -1493,7 +1493,7 @@ test.describe('Companheiro — convite (âncora heading no cabeçalho)', () => {
       );
       const title = await boxOf(page.getByRole('heading', { level: 1 }));
       expect(fig.y + fig.height, 'convite: figura sobre o H1').toBeLessThanOrEqual(title.y + 1);
-      await capture(page, SHOTS, 'convite-sem-ancora', 'dark', { full: false });
+      await capture(page, SHOTS, 'convite-chegada-heading', 'dark', { full: false });
 
       // 1º foco: voa ao perch, dentro da faixa do painel.
       await focusField(page, 'Seu nome');
