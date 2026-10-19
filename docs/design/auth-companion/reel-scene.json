@@ -1,0 +1,69 @@
+{
+  "$schema": "leadium/reel-scene@1",
+  "title": "Análise de movimento — referência 'Login and otp Animation' (reel de Instagram, code.xr)",
+  "uso": "Referência de COREOGRAFIA (quando, quanto, com que curva e por quê o personagem se move). Não é arte para copiar: o personagem do Leadium é o robô do ADR-006; o orbe do reel só empresta o comportamento.",
+  "source": {
+    "url": "https://www.instagram.com/reel/DeefFnvTwrm/",
+    "baixado_com": "yt-dlp do craft-content (.venv)",
+    "arquivo": "fora do repositório (material de terceiros)",
+    "video": { "width": 720, "height": 1280, "fps": 30, "frames": 265, "duracao_s": 8.833 },
+    "recorte_do_app_px": { "x": 0, "y": 440, "w": 720, "h": 380, "nota": "todas as coordenadas abaixo estão neste recorte, em px de uma gravação de 720 de largura" }
+  },
+  "metodo": {
+    "medido_por_pixel": ["posição, tamanho e presença do orbe (componente conexo violeta, 40×38 px)", "presença/largura do balão (pílula violeta escura)"],
+    "lido_por_olho_nos_frames": ["expressões do orbe (ampliação 4× por frame-chave)", "estados do formulário, botão, cartões, título"],
+    "incerto": ["valores exatos de duração das transições de opacidade/blur (30 fps, ±1 frame)", "curvas: inferidas do perfil de velocidade medido, não do código-fonte do autor"]
+  },
+  "cena": {
+    "layout": "tela dividida: painel esquerdo 'hero' (gradiente pêssego→laranja, cartões flutuantes de dashboard, headline no rodapé); painel direito branco com formulário centrado (asterisco laranja, título, subtítulo, campos, botão, rodapé)",
+    "papel_do_orbe": "narrador/companheiro: sai de cima do formulário, 'assiste' o usuário preencher do painel esquerdo, e volta ao formulário quando muda a etapa, sempre se posicionando acima do próximo foco",
+    "layers": [
+      { "id": "hero-gradient", "tipo": "fundo", "obs": "estático; mancha laranja radial no terço inferior" },
+      { "id": "hero-cards", "tipo": "cartões", "obs": "3 cartões flutuantes; o cartão 'Payout sent' troca de conteúdo com crossfade+blur (f166-168, 5.53-5.6 s) quando o 4º dígito é digitado" },
+      { "id": "form", "tipo": "formulário", "obs": "troca de etapa por fade+blur out → vazio → fade+blur in do próximo" },
+      { "id": "companion", "tipo": "personagem", "obs": "40 px de diâmetro (≈5,5% da largura); sobreposto a ambos os painéis (z acima dos cartões)" },
+      { "id": "speech-bubble", "tipo": "balão", "obs": "pílula violeta escura, texto branco, rabicho apontando ao orbe; só 2 aparições" },
+      { "id": "cursor", "tipo": "ponteiro do mouse", "obs": "autoral do vídeo (demonstração), não faz parte do produto" }
+    ]
+  },
+  "companion_visual": {
+    "corpo": "esfera 40 px; gradiente linear violeta (#5A5CF0 aprox.) no topo → azul claro/ciano no terço inferior; brilho especular suave no alto-esquerdo; sombra projetada difusa violeta",
+    "rosto": "dois olhos em pílula vertical branca (≈5×14 px) + sorriso curto (arco de ≈14 px); sem nariz, sem sobrancelhas",
+    "expressoes_observadas": {
+      "neutra": "olhos em pílula + sorriso — estado padrão (f0, f12, f24, f120, f126, f132, f140, f150, f225-f255)",
+      "piscar": "olhos viram traço horizontal curto (f52, f160) — ~2-3 frames",
+      "feliz": "olhos em arco ^ ^ com sorriso (f90 no painel esquerdo, f200 junto do balão 'Enter your OTP')",
+      "olhos_estreitos_para_cima": "pílula vira seta/vírgula para cima (f185) — reação de 'animado' antes do envio",
+      "sucesso_final": "olhos fechados em 'v' invertido/check + sorriso, corpo achatado (largura 48 / altura 32 em f264) com anel claro de halo no topo"
+    },
+    "squash_stretch": "durante os voos o corpo alonga na direção do movimento (f45 alto e estreito); no pouso comprime 1-2 frames"
+  },
+  "timeline": {
+    "fps": 30,
+    "eventos": [
+      { "t": [0.00, 0.07], "f": [0, 2], "o_que": "Orbe parado em (508,174) com o balão 'Create your account' acima (centro 507,140; largura 77 px). Formulário de login completo (e-mail preenchido, senha, botão Log in).", "gatilho": "estado inicial / convite" },
+      { "t": [0.07, 1.27], "f": [2, 38], "o_que": "VOO 1: orbe sai do formulário para o painel esquerdo; balão some em f3. Trajetória quase horizontal, leve arco para baixo (y 174→250).", "x_px": [[0,508],[4,505],[8,486],[12,441],[16,368],[20,298],[24,249],[28,220],[32,205],[36,195],[38,192]], "y_px": [[0,174],[4,191],[8,213],[12,228],[16,238],[20,243],[24,246],[28,248],[32,249],[38,250]], "curva": "ease-in-out assimétrica: arranque lento (≈3 frames), pico de velocidade em f12-f16 (≈35 px/frame), desaceleração longa (≈14 frames) até o pouso; ≈ cubic-bezier(0.4, 0, 0.1, 1) em ≈1,2 s", "gatilho": "usuário vai preencher a senha — o companheiro 'sai da frente' do campo" },
+      { "t": [1.27, 4.13], "f": [38, 124], "o_que": "ESPERA no painel esquerdo em (192, 238–250): flutua ±6 px verticalmente (f48: y=238), pisca (f52), olhos felizes (f90). Enquanto isso: botão 'Log in' em hover (1.0 s), spinner 'Logging in' (1.27 s), formulário faz fade+blur out (2.3-2.57 s), painel vazio (2.6-2.73 s), 'Check your email' entra com blur→nítido (2.73-2.8 s), contador 0:45→0:44 (3.03 s).", "gatilho": "etapa do formulário em transição; o orbe não disputa atenção, só 'respira' e pisca" },
+      { "t": [4.13, 5.40], "f": [124, 162], "o_que": "VOO 2: do painel esquerdo ao topo do painel direito, acima do foco (caixas do código). Trajetória em ARCO com overshoot vertical: sobe de y=245 até y=49 (apex f144) e desce até y=75; x acelera e freia (192→508).", "x_px": [[124,192],[130,213],[134,258],[138,334],[142,405],[146,450],[150,478],[154,495],[158,504],[162,508]], "y_px": [[124,245],[128,229],[132,184],[136,110],[140,58],[144,49],[148,55],[152,64],[156,71],[162,75]], "curva": "x: ease-out (começa devagar 4 frames, depois ≈ 30 px/frame, freia exponencial); y: sobe rápido e assenta — comportamento de mola amortecida (apex 26 px acima do destino, assentamento sem segundo quique)", "gatilho": "etapa mudou para 'Check your email' — o companheiro vai ao novo foco" },
+      { "t": [5.40, 8.20], "f": [162, 246], "o_que": "Parado em (508,75) com micro-oscilação (≈±3 px). Balão 'Enter your OTP' fade-in em f162-163 (5.4-5.43 s), mantém-se até ≈f246 (8.2 s). Olhos felizes ^ ^ junto do balão (f200).", "bubble": { "texto": "Enter your OTP", "centro_px": [507, 42], "largura_px": 60, "gap_para_orbe_px": 33 }, "gatilho": "pedido contextual da etapa" },
+      { "t": [4.57, 5.47], "f": [137, 164], "o_que": "Digitação do OTP: dígito 4 (4.57 s), 5 (4.90 s), 4 (5.20 s, fade-in), 5 (5.47 s); contador 0:43→0:42 em 5.27 s; botão cinza→preto em f164 (5.47 s). Crossfade+blur do cartão 'Payout sent' em 5.53-5.6 s.", "gatilho": "preenchimento completo habilita a ação" },
+      { "t": [6.20, 7.20], "f": [186, 216], "o_que": "Botão 'Verify & continue' → spinner + 'Verifying'; caixas ganham contorno laranja-claro; orbe com olhos animados (f185).", "gatilho": "envio" },
+      { "t": [7.20, 7.50], "f": [216, 225], "o_que": "Caixas do código encolhem, desfocam e colapsam numa pilha de cartões brancos; balão desvanece; cartão único gira levemente e vira VERDE; botão: spinner→check, 'Verified', fundo preto→verde escuro com brilho verde abaixo.", "gatilho": "sucesso" },
+      { "t": [7.50, 8.00], "f": [225, 240], "o_que": "Título 'Check your email' e subtítulo perdem opacidade (blur+fade) e dão lugar a 'You are in' (crossfade com blur).", "gatilho": "sucesso — mensagem final" },
+      { "t": [8.00, 8.83], "f": [240, 264], "o_que": "Estado final: orbe fecha os olhos felizes e achata (48×32 em f264) com halo; cartão verde, botão verde 'Verified'. Painel esquerdo inalterado.", "gatilho": "celebração (assentamento)" }
+    ]
+  },
+  "principios_extraidos": [
+    "O companheiro nunca disputa o foco: cada voo acontece enquanto a interface da etapa está trocando (fade/blur out → vazio → fade/blur in) e termina antes do usuário precisar agir.",
+    "Posição = significado. Painel esquerdo = 'estou olhando de longe enquanto você trabalha'; topo do formulário = 'agora é aqui'.",
+    "Balão só em dois momentos (convite inicial, pedido contextual); some quando a ação começa.",
+    "Parado não é congelado: oscila poucos px e pisca (≈ a cada 3-5 s), feliz uma vez.",
+    "Voo com arco e overshoot vertical (mola) — dá peso, não é linha reta.",
+    "O sucesso é coreografado em três tempos: ação (spinner) → prova (cartão/botão verde) → mensagem (título troca) → celebração (olhos fechados, achata).",
+    "Todo texto/estado troca por fade + blur curto, nunca corte seco (≈ 200-330 ms)."
+  ],
+  "observacoes_de_qualidade": [
+    "Fonte de 720 px: expressões do rosto lidas por ampliação, não exatas.",
+    "O relatório de leitura em lote (Haiku) divergiu em coordenadas e na existência do balão; os números desta cena vêm da medição por pixel e da conferência visual dos frames-chave."
+  ]
+}
