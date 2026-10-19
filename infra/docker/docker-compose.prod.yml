@@ -195,6 +195,9 @@ services:
       # `x-app-env`): os workers não assinam nem verificam grants e não recebem o segredo.
       # Distinta do AGENT_RUNTIME_TOKEN; a api recusa subir sem ela ou com ela igual a ele.
       COPILOT_GRANT_SECRET: ${COPILOT_GRANT_SECRET:?COPILOT_GRANT_SECRET obrigatória}
+      # Chave global do Copiloto (F73-S17): DESLIGADA por padrão em produção. Desligado, o
+      # /api/copilot/*, o callback interno e os agendadores da api nem sobem.
+      COPILOT_ENABLED: ${COPILOT_ENABLED:-false}
       CORS_ORIGIN: ${CORS_ORIGIN:-https://app.leadium.com.br,https://leadium.com.br}
       CSP_CONNECT_SRC: ${CSP_CONNECT_SRC:-}
     volumes:
@@ -252,6 +255,9 @@ services:
       # Liga o servidor HTTP mínimo de observabilidade (/metrics + /healthz).
       # Opt-in por env; sem isto o processo de workers não sobe porta alguma.
       WORKERS_METRICS_PORT: "9091"
+      # Chave global do Copiloto (F73-S17), a MESMA da api: desligada, o piloto automático e a
+      # retenção do histórico do Copiloto não sobem.
+      COPILOT_ENABLED: ${COPILOT_ENABLED:-false}
     volumes:
       - leadium_storage:/data/storage
     networks:

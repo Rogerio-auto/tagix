@@ -93,7 +93,33 @@ openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 48   # PG_PASSWORD, etc.
 nano /opt/leadium/.env
 ```
 Mínimos obrigatórios: `PG_PASSWORD`, `RABBITMQ_PASSWORD`, `SUPABASE_*`,
-`ENCRYPTION_KEY`, `OPENROUTER_API_KEY`, `AGENT_RUNTIME_TOKEN`, `COPILOT_GRANT_SECRET`.
+`ENCRYPTION_KEY`, `OPENROUTER_API_KEY`, `AGENT_RUNTIME_TOKEN`, `COPILOT_GRANT_SECRET`,
+`COPILOT_ENABLED=false`.
+
+#### `COPILOT_ENABLED` (chave global do Copiloto, F73-S17)
+
+Interruptor **de ambiente**, separado do `copilot_settings.enabled` de cada workspace (que tem
+`DEFAULT true`). Em produção ele nasce **desligado**: ausente, vazio ou inválido = desligado
+(só `true` e `false` são aceitos; qualquer outro valor desliga, em qualquer ambiente).
+
+```bash
+# No .env da VPS (o compose já usa ${COPILOT_ENABLED:-false} em api e workers):
+#   COPILOT_ENABLED=false
+```
+
+Desligado:
+- `/api/copilot/*` e o callback interno `/internal/copilot/*` **não são montados**: respondem
+  404, igual a qualquer rota inexistente (nada revela que o Copiloto existe);
+- na `api` não sobem a varredura de propostas, o briefing das 06:30 nem o alerta de orçamento;
+- nos `workers` não sobem o `copilot-autopilot-scheduler` nem a retenção do histórico do Copiloto.
+
+O `COPILOT_GRANT_SECRET` continua obrigatório (veja abaixo): a chave desliga o Copiloto, não a
+validação do boot.
+
+**Critério para ligar** (`COPILOT_ENABLED=true` no `.env` da VPS + redeploy de `api` e `workers`,
+os dois ao mesmo tempo): os achados de segurança do F73-S14 fechados e reauditados, a tela do
+Copiloto entregue e o `COPILOT_GRANT_SECRET` em vigor. Para desligar de novo, volte a `false` e
+faça o redeploy: não há migration nem dado a desfazer.
 
 #### `COPILOT_GRANT_SECRET` (Copiloto, F73-S03 / ADR-003 §2)
 

@@ -1,6 +1,7 @@
 import { createServer, type Server as HttpServer } from 'node:http';
 import { createLogger } from '@hm/logger';
 import { createApp } from './app';
+import { parseCopilotEnabled } from './config';
 import { COPILOT_EXECUTORS } from './internal/copilot';
 import {
   createExecutorRegistry,
@@ -42,15 +43,19 @@ export function createApiServer(options: ApiServerOptions = {}): ApiServer {
   const httpServer = createServer(createApp());
   const io = createSocketServer(httpServer);
 
-  const sweeperEnabled = options.copilotSweeper ?? process.env['NODE_ENV'] !== 'test';
+  // Chave global COPILOT_ENABLED (F73-S17): desligada ⇒ nenhum trabalho de fundo do Copiloto
+  // sobe, nem com a opção explícita (a chave vence).
+  const copilotEnabled = parseCopilotEnabled();
+  const notTest = process.env['NODE_ENV'] !== 'test';
+  const sweeperEnabled = copilotEnabled && (options.copilotSweeper ?? notTest);
   const sweeper: ProposalSweeper | null = sweeperEnabled
     ? startProposalSweeper(
         createProposalEngineDeps({ executors: createExecutorRegistry(COPILOT_EXECUTORS) }),
       )
     : null;
-  const briefingEnabled = options.copilotBriefing ?? process.env['NODE_ENV'] !== 'test';
+  const briefingEnabled = copilotEnabled && (options.copilotBriefing ?? notTest);
   const briefing: BriefingScheduler | null = briefingEnabled ? startBriefingScheduler() : null;
-  const budgetAlertEnabled = options.copilotBudgetAlert ?? process.env['NODE_ENV'] !== 'test';
+  const budgetAlertEnabled = copilotEnabled && (options.copilotBudgetAlert ?? notTest);
   const budgetAlert: BudgetAlertScheduler | null = budgetAlertEnabled
     ? startBudgetAlertScheduler()
     : null;

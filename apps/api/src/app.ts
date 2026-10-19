@@ -87,7 +87,7 @@ import {
 export function createApp(): Express {
   // Valida env no boot (fail-fast). A allowlist CORS é lida da env dentro do
   // security middleware (F10-S07), não mais aqui.
-  loadConfig();
+  const { copilotEnabled } = loadConfig();
   // Observabilidade (F10-S01): Sentry opt-in (no-op sem DSN) iniciado no boot.
   initSentry();
   const app = express();
@@ -153,7 +153,8 @@ export function createApp(): Express {
   );
   // Callback das ferramentas do Copiloto (F73-S03, ADR-003 §3): mesmo token de serviço do
   // caminho de agente + grant HMAC do turno; reautoriza o MEMBRO a cada chamada.
-  app.use(createCopilotInternalRouter());
+  // Chave global COPILOT_ENABLED (F73-S17): desligada ⇒ não monta (404 do roteador padrão).
+  if (copilotEnabled) app.use(createCopilotInternalRouter());
   app.use(createAuthRouter());
   // F71-S05: preview/aceite de convite pelo link (público, rate-limit por IP). Antes do
   // view-as: quem abre o link ainda não é membro da empresa do convite.
@@ -237,7 +238,8 @@ export function createApp(): Express {
   app.use(createWorkspaceSettingsRouter());
   // Copiloto (F73): /api/copilot/* atrás da porta única (sessão → RLS/assinatura →
   // view-as/papel/desligado). Sub-rotas reservadas para os slots S05..S15.
-  app.use(createCopilotRouter());
+  // Chave global COPILOT_ENABLED (F73-S17): desligada ⇒ não monta (404 do roteador padrão).
+  if (copilotEnabled) app.use(createCopilotRouter());
   app.use(createOrgSettingsRouter());
   // Settings dados (F8-S08): tags CRUD + audit viewer.
   app.use(createTagsRouter());

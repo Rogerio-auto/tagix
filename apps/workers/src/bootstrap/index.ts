@@ -33,6 +33,7 @@ import {
   type MqHandle,
 } from '@hm/shared/mq';
 import { createLogger, type Logger } from '@hm/logger';
+import { z } from 'zod';
 import { createInboundDeps, startInboundWorker, type InboundWorkerHandle } from '../inbound/index';
 import {
   createOutboundDeps,
@@ -123,10 +124,15 @@ import {
 } from '../observability/index';
 import { startDlqMonitor, type DlqMonitorHandle } from '../dlq/index';
 import { startPrivacyExportProcessor } from '../privacy/index';
-import { startRetentionWorker, type RetentionWorkerHandle } from '../retention/index';
+import {
+  startRetentionWorker,
+  type RetentionWorkerDeps,
+  type RetentionWorkerHandle,
+} from '../retention/index';
 import {
   makeSuggestionsChangedEmitter,
   startCopilotAutopilotScheduler,
+  type CopilotAutopilotSchedulerDeps,
   type CopilotAutopilotSchedulerHandle,
 } from '../copilot-autopilot/index';
 import {
@@ -146,6 +152,86 @@ import {
   createAdapterFactory,
   type AdapterFactoryOptions,
 } from './adapter-factory';
+
+// ─── Chave de produção do Copiloto (F73-S17) ─────────────────────────────────
+
+/** Nome da variável. Global do ambiente; mesma regra de `apps/api/src/config.ts`. */
+export const COPILOT_ENABLED_ENV = 'COPILOT_ENABLED';
+
+/** Booleano estrito: só `true` ou `false` (sem espaços nas pontas nem diferença de caixa). */
+const CopilotEnabledSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.enum(['true', 'false']))
+  .transform((v) => v === 'true');
+
+/**
+ * O Copiloto está ligado neste processo? Cópia IDÊNTICA da regra da API (cada app tem a sua,
+ * com o mesmo teste — não há config compartilhada entre os dois).
+ *
+ * - `COPILOT_ENABLED=true|false` válido: vale em qualquer ambiente.
+ * - Ausente ou vazio: produção = DESLIGADO (falha fechada); desenvolvimento e teste = ligado.
+ * - Inválido (ex.: `1`, `yes`, `flase`): DESLIGADO em qualquer ambiente.
+ */
+export function parseCopilotEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env[COPILOT_ENABLED_ENV];
+  if (raw === undefined || raw.trim() === '') {
+    return (env['NODE_ENV'] ?? 'development') !== 'production';
+  }
+  const parsed = CopilotEnabledSchema.safeParse(raw);
+  return parsed.success ? parsed.data : false;
+}
+
+/**
+ * Ajuste do worker de retenção conforme a chave do Copiloto: desligado ⇒ a varredura do
+ * histórico do Copiloto (job do Copiloto que o worker de retenção hospeda) NÃO sobe.
+ */
+export function copilotRetentionOverrides(
+  copilotEnabled: boolean,
+): Pick<RetentionWorkerDeps, 'copilotHistory'> {
+  return copilotEnabled ? {} : { copilotHistory: false };
+}
+
+/** Nome do agendador do piloto automático no log de boot. */
+export const COPILOT_AUTOPILOT_WORKER_NAME = 'copilot-autopilot-scheduler';
+
+export interface CopilotJobsDeps {
+  readonly enabled: boolean;
+  readonly redis: CopilotAutopilotSchedulerDeps['redis'];
+  readonly logger: Logger;
+  readonly channel: MqChannel;
+  /** Injetável nos testes; default = o agendador real. */
+  readonly startAutopilot?: (
+    deps: CopilotAutopilotSchedulerDeps,
+  ) => CopilotAutopilotSchedulerHandle;
+}
+
+export interface CopilotJobs {
+  readonly autopilot: CopilotAutopilotSchedulerHandle | null;
+  /** Nomes dos jobs do Copiloto que efetivamente subiram (vazio = desligado). */
+  readonly workerNames: readonly string[];
+}
+
+/**
+ * Liga os jobs do Copiloto que o bootstrap controla — SÓ com a chave ligada. Desligado, nada é
+ * criado (nem o emitter, nem o lock Redis): o Copiloto fica inerte.
+ */
+export function startCopilotJobs(deps: CopilotJobsDeps): CopilotJobs {
+  if (!deps.enabled) {
+    deps.logger.info('copiloto desligado (COPILOT_ENABLED): jobs do Copiloto não sobem');
+    return { autopilot: null, workerNames: [] };
+  }
+  const startAutopilot = deps.startAutopilot ?? startCopilotAutopilotScheduler;
+  // Piloto automático do Copiloto (F73-S13): tick de hora em hora (singleton via lock Redis)
+  // que gera as sugestões de movimentação por estágio e avisa o quadro (só a contagem).
+  const autopilot = startAutopilot({
+    redis: deps.redis,
+    logger: deps.logger,
+    emit: makeSuggestionsChangedEmitter(deps.logger, deps.channel),
+  });
+  return { autopilot, workerNames: [COPILOT_AUTOPILOT_WORKER_NAME] };
+}
 
 /** Idade máxima (ms) sem tick do flow-wakeup antes do /healthz reprovar (default 3min). */
 function schedulerMaxAgeFromEnv(): number {
@@ -191,7 +277,8 @@ export interface WorkersBootstrapHandle {
   readonly billingRecurrence: RecurrenceSchedulerHandle;
   readonly campaignRecompute: CampaignRecomputeHandle;
   readonly retention: RetentionWorkerHandle;
-  readonly copilotAutopilot: CopilotAutopilotSchedulerHandle;
+  /** `null` com `COPILOT_ENABLED` desligado (F73-S17). */
+  readonly copilotAutopilot: CopilotAutopilotSchedulerHandle | null;
   readonly dlqMonitor: DlqMonitorHandle;
   stop(): Promise<void>;
 }
@@ -208,6 +295,8 @@ export async function startWorkers(
   options: BootstrapOptions = {},
 ): Promise<WorkersBootstrapHandle> {
   const logger = options.logger ?? createLogger('info', { svc: '@hm/workers' });
+  // Chave global do Copiloto (F73-S17): desligada por padrão em produção.
+  const copilotEnabled = parseCopilotEnabled();
 
   // Observabilidade (F10-S01): Sentry opt-in + servidor /metrics + /healthz (F56-S17,
   // ambos no-op sem env). O /healthz vive no MESMO servidor de WORKERS_METRICS_PORT.
@@ -474,14 +563,14 @@ export async function startWorkers(
   const campaignRecompute = startCampaignRecompute({ redis, logger });
   // Worker de retenção (F56-S25): sweep periódico de webhook_events além do
   // horizonte. Singleton via lock Redis; wiring é deste slot (composition root).
-  const retention = startRetentionWorker({ redis, logger });
-  // Piloto automático do Copiloto (F73-S13): tick de hora em hora (singleton via lock Redis)
-  // que gera as sugestões de movimentação por estágio e avisa o quadro (só a contagem).
-  const copilotAutopilot = startCopilotAutopilotScheduler({
+  const retention = startRetentionWorker({
     redis,
     logger,
-    emit: makeSuggestionsChangedEmitter(logger, channel),
+    ...copilotRetentionOverrides(copilotEnabled),
   });
+  // Jobs do Copiloto (F73-S13 piloto automático): só com COPILOT_ENABLED ligado (F73-S17).
+  const copilotJobs = startCopilotJobs({ enabled: copilotEnabled, redis, logger, channel });
+  const copilotAutopilot = copilotJobs.autopilot;
   // Monitor de DLQ (F56-S17): publica hm_dlq_depth + alerta em novas mensagens
   // mortas. Conexão dedicada, aberta preguiçosamente no 1º tick.
   const dlqMonitor = startDlqMonitor({ logger });
@@ -523,7 +612,7 @@ export async function startWorkers(
       'billing-recurrence-scheduler',
       'campaign-recompute-scheduler',
       'retention-worker',
-      'copilot-autopilot-scheduler',
+      ...copilotJobs.workerNames,
       'dlq-monitor',
     ],
   });
@@ -561,7 +650,7 @@ export async function startWorkers(
         });
       }
       await dlqMonitor.stop();
-      await copilotAutopilot.stop();
+      await copilotAutopilot?.stop();
       await retention.stop();
       await campaignRecompute.stop();
       await billingRecurrence.stop();

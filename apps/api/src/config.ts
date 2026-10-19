@@ -12,6 +12,8 @@ export interface ApiConfig {
   readonly databaseUrl: string;
   readonly redisUrl: string;
   readonly corsOrigin: string;
+  /** Chave global do Copiloto (F73-S17): desligada por padrão em produção. */
+  readonly copilotEnabled: boolean;
 }
 
 function required(name: string): string {
@@ -20,6 +22,39 @@ function required(name: string): string {
     throw new Error(`Variável de ambiente obrigatória ausente: ${name}`);
   }
   return value;
+}
+
+// ─── Chave de produção do Copiloto (F73-S17) ─────────────────────────────────
+
+/** Nome da variável. Global do ambiente; independe de `copilot_settings.enabled` (por workspace). */
+export const COPILOT_ENABLED_ENV = 'COPILOT_ENABLED';
+
+/** Booleano estrito: só `true` ou `false` (sem espaços nas pontas nem diferença de caixa). */
+const CopilotEnabledSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.enum(['true', 'false']))
+  .transform((v) => v === 'true');
+
+/**
+ * O Copiloto está ligado neste processo?
+ *
+ * - `COPILOT_ENABLED=true|false` válido: vale em qualquer ambiente.
+ * - Ausente ou vazio: produção = DESLIGADO (falha fechada); desenvolvimento e teste = ligado.
+ * - Inválido (ex.: `1`, `yes`, `flase`): DESLIGADO em qualquer ambiente. Um erro de digitação
+ *   nunca liga uma função que o operador quis desligar.
+ *
+ * Função pura: lê só o `env` recebido. API e workers aplicam a MESMA regra (o worker mantém
+ * uma cópia idêntica em `apps/workers/src/bootstrap`, com o mesmo teste).
+ */
+export function parseCopilotEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env[COPILOT_ENABLED_ENV];
+  if (raw === undefined || raw.trim() === '') {
+    return (env['NODE_ENV'] ?? 'development') !== 'production';
+  }
+  const parsed = CopilotEnabledSchema.safeParse(raw);
+  return parsed.success ? parsed.data : false;
 }
 
 // ─── Segredo do grant do Copiloto (ADR-003 §2) ───────────────────────────────
@@ -94,5 +129,6 @@ export function loadConfig(): ApiConfig {
     databaseUrl: required('DATABASE_URL'),
     redisUrl: required('REDIS_URL'),
     corsOrigin: process.env['CORS_ORIGIN'] ?? 'http://localhost:3000',
+    copilotEnabled: parseCopilotEnabled(),
   };
 }
