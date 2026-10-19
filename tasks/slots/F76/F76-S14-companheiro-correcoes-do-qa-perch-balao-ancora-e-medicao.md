@@ -2,7 +2,7 @@
 id: F76-S14
 title: Companheiro das telas de acesso — correções do QA (perch sem cobrir o painel, balão sem cobrir o eyebrow, âncora do convite, medição sob transform)
 phase: F76
-status: review
+status: done
 priority: high
 estimated_size: M
 model: sonnet

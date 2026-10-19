@@ -62,7 +62,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F73   | 17     | 0   | 2   | 0   | 0   | 0   | 15   |
 | F74   | 13     | 0   | 13   | 0   | 0   | 0   | 0   |
 | F75   | 16     | 2   | 13   | 0   | 0   | 0   | 1   |
-| F76   | 14     | 1   | 8   | 0   | 0   | 1   | 4   |
+| F76   | 14     | 1   | 8   | 0   | 0   | 0   | 5   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -926,7 +926,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F76-S11 | Companheiro das telas de acesso — motor (máquina de estados, diretor de foco, voo WAAPI, balão)                                                     | ✅ done      | high       | F76-S10                            |
 | F76-S12 | Companheiro das telas de acesso — integração (layout, AuthKit e formulários de login, cadastro, verificação, reset e convite)                       | ✅ done      | high       | F76-S10                            |
 | F76-S13 | Companheiro das telas de acesso — QA (capturas, axe, peso, LCP/CLS, privacidade) e portão de design                                                 | ✅ done      | high       | F76-S11, F76-S12                   |
-| F76-S14 | Companheiro das telas de acesso — correções do QA (perch sem cobrir o painel, balão sem cobrir o eyebrow, âncora do convite, medição sob transform) | 🟣 review    | high       | F76-S13                            |
+| F76-S14 | Companheiro das telas de acesso — correções do QA (perch sem cobrir o painel, balão sem cobrir o eyebrow, âncora do convite, medição sob transform) | ✅ done      | high       | F76-S13                            |
 
 ## Fase 8 — Permissions & Settings
 
