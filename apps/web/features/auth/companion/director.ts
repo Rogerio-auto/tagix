@@ -509,7 +509,6 @@ export function createDirector(options: DirectorOptions = {}): Director {
       bubbleTimer = clear(bubbleTimer);
       hideTimer = clear(hideTimer);
       movingTimer = clear(movingTimer);
-      listeners.clear();
     },
   };
 
