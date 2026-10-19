@@ -1,0 +1,174 @@
+/*
+ * Estilos do companheiro das telas de acesso (F76-S11). Importado SÓ pelo chunk lazy
+ * (CompanionFigure.tsx): fora do caminho do LCP. Nenhum hex; só tokens do DS.
+ *
+ * Regras de movimento: no personagem, só `transform` e `opacity`. `will-change` não
+ * aparece aqui: o ator o liga por estilo inline apenas durante o voo. Poses seguradas
+ * (avert, confused) são transições CSS curtas; o resto é WAAPI (flight.ts).
+ */
+
+/* ---------------------------------- palco ---------------------------------- */
+
+.m-pos {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.m-pos[data-placed='false'] {
+  visibility: hidden;
+}
+
+.m-layer,
+.m-enter,
+.m-figure {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.m-enter {
+  transform-origin: 50% 100%;
+}
+
+/* ------------------------- poses seguradas (CSS) --------------------------- */
+
+.m-figure [data-layer='head'] {
+  transition: transform 200ms var(--ease);
+}
+
+.m-figure[data-state='avert'] [data-layer='head'] {
+  transform: translateX(1.5px) rotate(8deg);
+  transition-duration: 240ms;
+}
+
+.m-figure[data-state='confused'] [data-layer='head'] {
+  transform: rotate(-9deg);
+  transition-duration: 240ms;
+  transition-timing-function: var(--ease-spring);
+}
+
+.m-figure[data-size='40'][data-state='avert'] [data-layer='head'] {
+  transform: translateX(1px) rotate(8deg);
+}
+
+/* Olhos: um conjunto por vez, com fade (120 ms; `avert` fecha em 120 ms). */
+.m-figure .m-eyeset {
+  transition: opacity 120ms var(--ease);
+}
+
+/* Olhar: 200 ms --ease (o deslocamento vem de art/rig.css). */
+.m-figure .m-eyes {
+  transition: transform 200ms var(--ease);
+}
+
+/* ----------------------------- movimento reduzido --------------------------- */
+
+.m-figure[data-motion='off'] .m-eyeset {
+  transition: opacity 160ms linear;
+}
+
+.m-figure[data-motion='off'] [data-layer='head'],
+.m-figure[data-motion='off'] .m-eyes {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-figure .m-eyeset {
+    transition: opacity 160ms linear;
+  }
+
+  .m-figure [data-layer='head'],
+  .m-figure .m-eyes {
+    transition: none;
+  }
+}
+
+/* ---------------------------------- balão ---------------------------------- */
+
+.m-bubble-pos {
+  position: absolute;
+  pointer-events: none;
+}
+
+.m-bubble-pos[data-placement='start'] {
+  right: calc(100% + 6px);
+  top: 19px;
+  transform: translateY(-50%);
+}
+
+.m-bubble-pos[data-placement='below'] {
+  right: 0;
+  top: calc(100% + 8px);
+}
+
+.m-bubble {
+  position: relative;
+  display: block;
+  width: max-content;
+  max-width: 26ch;
+  padding: 6px 10px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface-3);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-ds-1);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px) scale(0.96);
+  transform-origin: right center;
+  transition:
+    opacity 140ms var(--ease),
+    transform 140ms var(--ease);
+}
+
+.m-bubble[data-open='true'] {
+  opacity: 1;
+  transform: none;
+  transition-duration: 200ms;
+}
+
+.m-bubble[data-open='out'] {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+/* Rabicho: quadrado de 6 px girado 45° com as duas bordas voltadas para fora. */
+.m-bubble::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: var(--surface-3);
+  border: 0 solid var(--border-2);
+  border-width: 1px 1px 0 0;
+  transform: rotate(45deg);
+  right: -4px;
+  top: 50%;
+  margin-top: -3px;
+}
+
+.m-bubble-pos[data-placement='below'] .m-bubble {
+  transform-origin: right top;
+}
+
+.m-bubble-pos[data-placement='below'] .m-bubble::after {
+  right: 14px;
+  top: -4px;
+  margin-top: 0;
+  border-width: 1px 0 0 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-bubble,
+  .m-bubble[data-open='true'],
+  .m-bubble[data-open='out'] {
+    transform: none;
+    transition-property: opacity;
+  }
+}
