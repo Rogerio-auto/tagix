@@ -128,10 +128,7 @@ export function planFlight(from: Point, to: Point): FlightPlan {
 
   // Trajetória do chão: Y em --ease depois da antecipação. O arco é a diferença entre o
   // ápice pedido (menor y − lift) e onde o chão estaria nesse instante.
-  const g = bezierProgress(
-    [0.2, 0.8, 0.2, 1],
-    (APEX_OFFSET - a) / (1 - a),
-  );
+  const g = bezierProgress([0.2, 0.8, 0.2, 1], (APEX_OFFSET - a) / (1 - a));
   const groundAtApex = dy0 * (1 - g);
   const apexY = Math.min(dy0, 0) - lift;
   const hump = groundAtApex - apexY;
@@ -166,7 +163,11 @@ export function planFlight(from: Point, to: Point): FlightPlan {
     keyframes: [
       { offset: 0, transform: rest },
       { offset: a, transform: 'rotate(0deg) scale(1.06, 0.92)', easing: EASE },
-      { offset: STRETCH_OFFSET, transform: `rotate(${dir * 7}deg) scale(0.96, 1.05)`, easing: EASE },
+      {
+        offset: STRETCH_OFFSET,
+        transform: `rotate(${dir * 7}deg) scale(0.96, 1.05)`,
+        easing: EASE,
+      },
       { offset: APEX_OFFSET, transform: `rotate(${dir * 4}deg) scale(0.97, 1.04)`, easing: EASE },
       { offset: 1, transform: 'rotate(0deg) scale(1.06, 0.93)' },
     ],
@@ -209,7 +210,11 @@ export function planFlight(from: Point, to: Point): FlightPlan {
         duration: landTotal,
         keyframes: [
           { offset: 0, transform: 'rotate(0deg) scale(1.06, 0.93)' },
-          { offset: SQUASH_HOLD_MS / landTotal, transform: 'rotate(0deg) scale(1.06, 0.93)', easing: EASE_SPRING },
+          {
+            offset: SQUASH_HOLD_MS / landTotal,
+            transform: 'rotate(0deg) scale(1.06, 0.93)',
+            easing: EASE_SPRING,
+          },
           { offset: 1, transform: rest },
         ],
       },

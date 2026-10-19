@@ -65,7 +65,8 @@ export function whenQuiet(run: () => void): () => void {
   let cancelled = false;
 
   const fcp = performance.getEntriesByName('first-contentful-paint')[0]?.startTime;
-  const wait = fcp === undefined ? FCP_GUARD_MS : Math.max(0, fcp + FCP_GUARD_MS - performance.now());
+  const wait =
+    fcp === undefined ? FCP_GUARD_MS : Math.max(0, fcp + FCP_GUARD_MS - performance.now());
 
   const go = (): void => {
     if (!cancelled) run();

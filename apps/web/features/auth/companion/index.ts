@@ -23,9 +23,5 @@ export type {
   MascotState,
 } from './contract';
 
-export {
-  AuthCompanionRoot,
-  useAuthCompanion,
-  useAuthCompanionStep,
-} from './AuthCompanionRoot';
+export { AuthCompanionRoot, useAuthCompanion, useAuthCompanionStep } from './AuthCompanionRoot';
 export { CompanionInlineSlot, CompanionPerch, useCompanionAnchor } from './anchors';

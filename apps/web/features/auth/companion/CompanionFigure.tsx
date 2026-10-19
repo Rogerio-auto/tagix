@@ -16,12 +16,7 @@ import { RigMd48 } from './art/rig-md-48';
 import { RIG } from './art/rig';
 import type { EyeSet, TipSignal } from './art/rig';
 import { Bubble } from './Bubble';
-import type {
-  CompanionFigureProps,
-  CompanionStation,
-  MascotLook,
-  MascotState,
-} from './contract';
+import type { CompanionFigureProps, CompanionStation, MascotLook, MascotState } from './contract';
 import type { AnchorRegistry } from './anchors';
 import type { Director } from './director';
 import {
@@ -492,12 +487,10 @@ export function CompanionActor({
             ],
           }
         : planEntrance();
-      void deck
-        .play(enterRef.current, track, 'enter')
-        .then(() => {
-          setBusy(false);
-          director.entered();
-        });
+      void deck.play(enterRef.current, track, 'enter').then(() => {
+        setBusy(false);
+        director.entered();
+      });
       return;
     }
 
