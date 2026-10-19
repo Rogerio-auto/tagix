@@ -2,7 +2,7 @@
 id: F76-S11
 title: Companheiro das telas de acesso — motor (máquina de estados, diretor de foco, voo WAAPI, balão)
 phase: F76
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 model: sonnet
@@ -14,6 +14,7 @@ source_docs:
   - docs/decisions/ADR-006-mascote-personagem-tecnologia-e-politicas.md
 agent_id: frontend-engineer
 claimed_at: 2026-10-19T17:58:56Z
+completed_at: 2026-10-19T21:19:43Z
 
 ---
 # F76-S11 — Motor do companheiro
