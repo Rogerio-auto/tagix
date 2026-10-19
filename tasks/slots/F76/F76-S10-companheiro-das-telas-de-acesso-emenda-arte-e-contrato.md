@@ -2,7 +2,7 @@
 id: F76-S10
 title: Companheiro das telas de acesso — emenda ao ADR-006, direção de arte, folha de poses, contrato e textos
 phase: F76
-status: review
+status: done
 priority: high
 estimated_size: M
 model: opus
