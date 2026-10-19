@@ -15,6 +15,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stdout } from 'node:process';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '../../..');
@@ -553,4 +554,4 @@ footer.sheet { margin-top: 96px; padding-top: 20px; border-top: 1px solid var(--
 `;
 
 writeFileSync(join(HERE, 'poses.html'), html);
-console.log(`poses.html escrito (${(html.length / 1024).toFixed(1)} KB)`);
+stdout.write(`poses.html escrito (${(html.length / 1024).toFixed(1)} KB)\n`);
