@@ -2,7 +2,7 @@
 id: F76-S10
 title: Companheiro das telas de acesso — emenda ao ADR-006, direção de arte, folha de poses, contrato e textos
 phase: F76
-status: available
+status: review
 priority: high
 estimated_size: M
 model: opus
@@ -15,6 +15,9 @@ source_docs:
   - docs/features/MASCOTE_ANIMACOES.md
   - docs/design/copilot-botao-animacao.md
 agent_id: frontend-engineer
+claimed_at: 2026-10-19T17:32:22Z
+completed_at: 2026-10-19T17:54:37Z
+
 ---
 # F76-S10 — Companheiro das telas de acesso: emenda, arte e contrato
 
@@ -84,3 +87,22 @@ pnpm --filter @hm/web lint
 
 - Agente: `frontend-engineer` com `model: opus` explícito (gosto, voz e arte ficam no Opus).
 - Privacidade é requisito de contrato: nenhuma API do contrato recebe valor de campo.
+
+### Execução (2026-10-19, Opus)
+
+- Entregue: emenda §9 no ADR-006; `MASCOTE_ANIMACOES.md` §2.3 (nota), §3.2 (`avert`), §6.1 (tipo), §7 (`(auth)`);
+  `SPEC.md`; `poses.html` **gerada** por `poses.build.mjs` a partir da arte real (`art/rig-*.tsx`) e dos tokens reais
+  (`tokens.css` copiado para o `:root` da folha; contrastes calculados pelo gerador); arte `rig-md-48.tsx`,
+  `rig-inline-40.tsx`, `rig.json` (fonte única de pivôs/olhar/poses), `rig.ts` (leitura validada do JSON), `rig.css`
+  (mapa `--m-*` → tokens); `contract.ts`, `index.ts` (stub inofensivo; `CompanionInlineSlot` já reserva 40×40),
+  `copy.ts`; `art/rig.test.ts` (7 testes: camadas nos dois LODs, pose/pivô, 40 sem voo, zero hex, contrato sem valor).
+- Divergências do PLANO, com motivo: SPEC §10 (acento `--brand-text`; visor escuro no claro; ponta apagada em
+  repouso; `heading` em pé na linha do eyebrow; sombra; balão `--r-lg`/26ch; dois textos; `confused`; torso).
+- Validação: `pnpm --filter @hm/web typecheck` ok; `pnpm --filter @hm/web lint` passa mas o pacote **não tem script
+  `lint`** (no-op); `eslint --max-warnings 0 apps/web/features/auth/companion` ok; vitest 7/7.
+- **Portão de design:** o `/hm-designer` não estava disponível para o agente executor. Auto-revisão contra a barra
+  (Linear/Stripe/Vercel, dark-first, calmo, antena = único ponto de cor), com capturas Playwright da folha nos dois
+  temas: **aprovada com ressalvas** — (1) corrigido na revisão: corpo do rig C lia como balde e o `confused` como
+  raiva; (2) ressalva aberta: no claro o visor escuro deixa a figura mais pesada que no escuro (coerente com o
+  `LogoMark`, mas vale o olhar do `/hm-designer`); (3) a 1× o braço de 1,5 px é discreto, por intenção. O portão
+  formal `/hm-designer` sobre `docs/design/auth-companion/poses.html` fica com o orquestrador **antes de abrir o S11**.

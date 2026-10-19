@@ -1,0 +1,330 @@
+{
+  "$schema": "leadium/companion-rig@1",
+  "about": "Rig do robô do Leadium nas telas de acesso (F76-S10). Fonte única de camadas, pivôs, deslocamento do olhar e poses. Coordenadas na grade do próprio LOD (unidades do viewBox = px no tamanho nativo). As poses são o quadro-chave de cada estado: o motor (F76-S11) anima entre elas por WAAPI e, com movimento reduzido, aplica a pose parada. A geometria está em rig-md-48.tsx e rig-inline-40.tsx.",
+  "stroke": 1.5,
+  "pixelGrid": "Contornos com a borda EXTERNA do traço em pixel inteiro: o caminho fica 0,75 para dentro da borda (ex.: cabeça de 9 a 39 desenhada em x=9,75, largura 28,5). Preenchimentos sem traço (visor, olhos) caem direto em pixel inteiro.",
+  "layers": {
+    "shadow": "sombra de contato; IRMÃ de fig (não pula com o corpo); escala e opacidade dizem a altura",
+    "fig": "personagem inteiro; esmagar, esticar, inclinar e pular agem aqui (pivô na base do corpo)",
+    "halo": "anel de traço em --m-accent atrás da cabeça; só na celebração",
+    "arm-l": "braço esquerdo, articulado no ombro (dentro do corpo, escondido pelo preenchimento)",
+    "arm-r": "braço direito (osso de cima), articulado no ombro",
+    "hand-r": "antebraço/mão direita, filho de arm-r, articulado no cotovelo (follow-through do aceno)",
+    "body": "torso trapezoidal arredondado (mais largo nos ombros): lê como tronco, não como balde",
+    "head": "cabeça; vira no pescoço",
+    "antenna": "haste; filha de head; atrasa (follow-through) no voo e na inclinação",
+    "antenna-tip": "ponta da antena: o ÚNICO ponto de cor (apagada = tinta, acesa = --m-accent, alerta = --m-warn)",
+    "visor": "vidro escuro do rosto",
+    "eyes": "grupo dos olhos; transform reservado ao olhar (look)",
+    "eyes-open": "olhos em pílula; o piscar escala este grupo em Y",
+    "eyes-closed": "traços retos (piscar no meio, avert)",
+    "eyes-happy": "arcos ^ ^ (celebração, sucesso)",
+    "eyes-squint": "assimetria: um olho apertado em traço baixo, o outro em pílula erguida 1 px (confused: \"hm?\", nunca raiva)"
+  },
+  "order": [
+    "shadow",
+    "fig > halo",
+    "fig > arm-l",
+    "fig > arm-r > hand-r",
+    "fig > body",
+    "fig > head > antenna > antenna-tip",
+    "fig > head > (casco)",
+    "fig > head > visor",
+    "fig > head > eyes > eyes-open|eyes-closed|eyes-happy|eyes-squint"
+  ],
+  "tokens": {
+    "scope": "[data-companion]",
+    "--m-ink": {
+      "dark": "--text",
+      "light": "--text",
+      "uso": "traço"
+    },
+    "--m-fill": {
+      "dark": "--surface-2",
+      "light": "--surface-2",
+      "uso": "casco da cabeça e corpo"
+    },
+    "--m-visor": {
+      "dark": "--bg",
+      "light": "--text",
+      "uso": "visor (vidro escuro nos dois temas)"
+    },
+    "--m-eye": {
+      "dark": "--text",
+      "light": "--surface",
+      "uso": "olhos (luz no vidro)"
+    },
+    "--m-accent": {
+      "dark": "--brand-text",
+      "light": "--brand-text",
+      "uso": "ponta acesa, halo"
+    },
+    "--m-warn": {
+      "dark": "--warn",
+      "light": "--warn",
+      "uso": "ponta em confused"
+    },
+    "--m-shadow": {
+      "dark": "color-mix(in srgb, var(--text) 14%, transparent)",
+      "light": "color-mix(in srgb, var(--text) 14%, transparent)",
+      "uso": "centro da sombra de contato"
+    }
+  },
+  "lods": {
+    "md-48": {
+      "size": 48,
+      "viewBox": "0 0 48 48",
+      "fused": [],
+      "pivots": {
+        "shadow": [24, 45.5],
+        "fig": [24, 43],
+        "halo": [24, 19],
+        "arm-l": [20, 34.5],
+        "arm-r": [28, 34.5],
+        "hand-r": [29.875, 37.375],
+        "body": [24, 37.5],
+        "head": [24, 30.5],
+        "antenna": [24, 8.75],
+        "antenna-tip": [24, 3.5],
+        "visor": [24, 19],
+        "eyes": [24, 19],
+        "eyes-open": [24, 19]
+      },
+      "look": {
+        "none": [0, 0],
+        "left": [-2, 0],
+        "right": [2, 0],
+        "up": [0, -1.5]
+      },
+      "poses": {
+        "rest": {},
+        "blink": {
+          "layers": {
+            "eyes-open": {
+              "transform": "scaleY(0.12)"
+            }
+          }
+        },
+        "avert": {
+          "eyes": "closed",
+          "look": "right",
+          "layers": {
+            "head": {
+              "transform": "translateX(1.5px) rotate(8deg)"
+            }
+          }
+        },
+        "thinking": {
+          "tip": "lit",
+          "look": "up",
+          "layers": {
+            "antenna-tip": {
+              "transform": "scale(1.15)"
+            }
+          }
+        },
+        "confused": {
+          "eyes": "squint",
+          "tip": "warn",
+          "layers": {
+            "head": {
+              "transform": "rotate(-9deg)"
+            }
+          }
+        },
+        "crouch": {
+          "layers": {
+            "fig": {
+              "transform": "scale(1.04, 0.92)"
+            },
+            "antenna": {
+              "transform": "rotate(-3deg)"
+            }
+          }
+        },
+        "jump": {
+          "eyes": "happy",
+          "tip": "lit",
+          "layers": {
+            "fig": {
+              "transform": "translateY(-6px)"
+            },
+            "antenna": {
+              "transform": "rotate(4deg)"
+            },
+            "halo": {
+              "transform": "scale(1)",
+              "opacity": 0.25
+            },
+            "shadow": {
+              "transform": "scale(0.7)",
+              "opacity": 0.55
+            }
+          }
+        },
+        "land": {
+          "eyes": "happy",
+          "tip": "lit",
+          "layers": {
+            "fig": {
+              "transform": "scale(1.05, 0.95)"
+            },
+            "antenna": {
+              "transform": "rotate(-5deg)"
+            }
+          }
+        },
+        "success": {
+          "eyes": "happy",
+          "tip": "lit"
+        },
+        "anticipate": {
+          "layers": {
+            "fig": {
+              "transform": "scale(1.06, 0.92)"
+            }
+          }
+        },
+        "stretch": {
+          "layers": {
+            "fig": {
+              "transform": "rotate(7deg) scale(0.96, 1.05)"
+            },
+            "antenna": {
+              "transform": "rotate(-10deg)"
+            },
+            "shadow": {
+              "transform": "scale(0.8)",
+              "opacity": 0.7
+            }
+          }
+        },
+        "apex": {
+          "layers": {
+            "fig": {
+              "transform": "rotate(4deg) scale(0.97, 1.04)"
+            },
+            "antenna": {
+              "transform": "rotate(-6deg)"
+            },
+            "shadow": {
+              "transform": "scale(0.6)",
+              "opacity": 0.4
+            }
+          }
+        },
+        "squash": {
+          "layers": {
+            "fig": {
+              "transform": "scale(1.06, 0.93)"
+            },
+            "antenna": {
+              "transform": "rotate(6deg)"
+            }
+          }
+        }
+      }
+    },
+    "inline-40": {
+      "size": 40,
+      "viewBox": "0 0 40 40",
+      "fused": ["arm-l", "arm-r", "hand-r"],
+      "fusedNote": "Braços desenhados dentro de `body` como tocos fundidos ao contorno; os grupos arm-l/arm-r/hand-r existem vazios para o contrato de camadas não variar entre LODs. O 40 não voa nem acena.",
+      "pivots": {
+        "shadow": [20, 38.25],
+        "fig": [20, 37],
+        "halo": [20, 16],
+        "arm-l": [16.75, 30.5],
+        "arm-r": [23.25, 30.5],
+        "hand-r": [24.875, 32.5],
+        "body": [20, 32.5],
+        "head": [20, 26.5],
+        "antenna": [20, 6.75],
+        "antenna-tip": [20, 2.75],
+        "visor": [20, 16],
+        "eyes": [20, 16],
+        "eyes-open": [20, 16]
+      },
+      "look": {
+        "none": [0, 0],
+        "left": [-1.5, 0],
+        "right": [1.5, 0],
+        "up": [0, -1]
+      },
+      "poses": {
+        "rest": {},
+        "blink": {
+          "layers": {
+            "eyes-open": {
+              "transform": "scaleY(0.12)"
+            }
+          }
+        },
+        "avert": {
+          "eyes": "closed",
+          "look": "right",
+          "layers": {
+            "head": {
+              "transform": "translateX(1px) rotate(8deg)"
+            }
+          }
+        },
+        "thinking": {
+          "tip": "lit",
+          "look": "up",
+          "layers": {
+            "antenna-tip": {
+              "transform": "scale(1.15)"
+            }
+          }
+        },
+        "confused": {
+          "eyes": "squint",
+          "tip": "warn",
+          "layers": {
+            "head": {
+              "transform": "rotate(-9deg)"
+            }
+          }
+        },
+        "crouch": {
+          "layers": {
+            "fig": {
+              "transform": "scale(1.04, 0.92)"
+            }
+          }
+        },
+        "jump": {
+          "eyes": "happy",
+          "tip": "lit",
+          "layers": {
+            "fig": {
+              "transform": "translateY(-5px)"
+            },
+            "halo": {
+              "transform": "scale(1)",
+              "opacity": 0.25
+            },
+            "shadow": {
+              "transform": "scale(0.7)",
+              "opacity": 0.55
+            }
+          }
+        },
+        "land": {
+          "eyes": "happy",
+          "tip": "lit",
+          "layers": {
+            "fig": {
+              "transform": "scale(1.05, 0.95)"
+            }
+          }
+        },
+        "success": {
+          "eyes": "happy",
+          "tip": "lit"
+        }
+      }
+    }
+  }
+}

@@ -1,6 +1,7 @@
 # ADR-006 — Mascote "Personagem" (direção C): tecnologia, orçamento de atenção e política de carregamento
 
-> **Status:** aceita (direção, políticas e critério) · **tecnologia: pendente do spike medido F76-S01**
+> **Status:** aceita (direção, políticas e critério) · **tecnologia: pendente do spike medido F76-S01** ·
+> **emenda 1 (2026-10-19, §9):** companheiro nas telas de acesso
 > **Data:** 2026-10-16 · **Fase:** F76
 > **Decisor:** Rogério (direção C); critérios e números delegados ("decide e documenta")
 > **Contexto:** [`../design/copilot-botao-animacao.md`](../design/copilot-botao-animacao.md),
@@ -90,7 +91,7 @@ Os números são hipótese até a telemetria `nudge → aberto em 60 s` calibrar
 - Permitido: primeira carga/rota pesada, "pensando" do Copiloto, sincronização/importação/ações em lote, estados
   vazios (pose parada), recibo de ação com Desfazer (comemora só após sucesso), onboarding.
 - **Proibido:** Inbox e mensagens a clientes, KPIs e números, toasts e notificações, ícone do PWA e badge,
-  páginas públicas/autenticação, erros que a pessoa não resolve.
+  páginas públicas/autenticação (exceto as telas de acesso, ver a emenda do §9), erros que a pessoa não resolve.
 
 ## 6. Consequências
 
@@ -115,3 +116,45 @@ Os números são hipótese até a telemetria `nudge → aberto em 60 s` calibrar
 
 *Pendente.* Tabela dos 7 critérios × S/R com números, versões das libs, hash do commit, comandos de
 reprodução e a decisão final.
+
+## 9. Emenda 1 — companheiro das telas de acesso (Rogério, 2026-10-19)
+
+> Plano: [`../design/auth-companion/PLANO.md`](../design/auth-companion/PLANO.md) · arte e animação:
+> [`../design/auth-companion/SPEC.md`](../design/auth-companion/SPEC.md) · slots F76-S10..S13.
+
+**Decisão do Rogério:** o personagem passa a aparecer em `apps/web/app/(auth)/**` (login, cadastro, verificação,
+redefinição de senha e convite). Isso emenda o §5, que continua proibindo `(public)` e `(platform)`; a palavra
+"autenticação" da lista de proibidos do §5 passa a significar só essas duas.
+
+**Escopo e limites.**
+
+1. Só reage a ações da própria pessoa (foco, envio, resultado, troca de etapa). Nunca chama atenção por conta
+   própria, nunca acena sozinho e não usa o orçamento de atenção do §4, que vale só dentro do app autenticado.
+2. Um ator: um único personagem por tela.
+3. Balão em no máximo 2 momentos por fluxo, sempre redundante ao texto visível (ou só saudação, sem informação) e
+   `aria-hidden`.
+4. Nunca substitui o indicador do botão. `thinking` só aparece depois de 300 ms de envio pendente; a regra de
+   1.200 ms do §5 vale para carregamento de rota, não para reação a envio.
+5. Privacidade: olha para o campo focado e só lê o tipo e a posição do elemento. Nunca lê o valor, a senha, as
+   teclas nem a força da senha. Zero telemetria e zero rede; a única coisa guardada é a chave de saudação no
+   `sessionStorage`. O contrato público não tem parâmetro que carregue valor de campo.
+6. Movimento: voo ≤ 760 ms, estados ≤ 900 ms fora de loop, só `transform`/`opacity`, pausa fora da viewport e com aba
+   oculta. A respiração é exceção ao "repouso não respira nem flutua" de `MASCOTE_ANIMACOES.md` §2.3, limitada a 3
+   ciclos após cada pouso, e depois só o piscar. `prefers-reduced-motion` = poses estáticas e crossfade de 160 ms.
+7. Peso ≤ 30 KB gz (meta ≤ 12 KB), chunk lazy fora do LCP, zero CLS.
+8. Cor: a ponta da antena é o único ponto de cor, **apagada em repouso**, e usa `--brand-text` (ícone de marca),
+   nunca `--brand`, que continua sendo do único CTA da tela.
+
+**Marcas.** Telas de acesso só na marca Leadium (o web não tem `data-brand` antes do login). Odonto = `glyph`, que
+nas telas de acesso significa nada. Maian = `glyph` até decisão. Se o `data-brand` passar a existir antes do login,
+vale a mesma regra: renderiza só sem `data-brand` ou com `data-brand="leadium"`.
+
+**Tecnologia.** Módulo isolado `apps/web/features/auth/companion` na hipótese S (SVG inline em camadas + CSS/WAAPI +
+máquina de estados TS), com contrato de camadas e estados idêntico à spec §3.1/§3.2 e pivôs/poses no `art/rig.json`.
+Não depende do F76-S01: serve de medição real da hipótese S para ele. O F76-S03 o absorve como adaptador sobre
+`@hm/ui` `Mascot`. Se o S01 escolher Rive, o módulo é descartado ou migrado sem mudar esta emenda.
+
+**Contrato estendido.** Novo estado `avert` (olhos fechados, cabeça 8° para fora, 240 ms) na spec §3.2/§6.1.
+
+**Continua proibido:** Inbox e mensagens a clientes, KPIs, toasts e notificações, ícone do PWA, páginas públicas e
+de plataforma, e qualquer reação a conteúdo digitado.
