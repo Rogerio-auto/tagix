@@ -665,7 +665,10 @@ for (const theme of ['dark', 'light'] as const satisfies readonly Theme[]) {
                 expect(b.x + b.width, `${label}: balão cortado à direita`).toBeLessThanOrEqual(
                   size.width,
                 );
-                expect(await textUnderBubble(page), `${label}: balão cobre texto`).toEqual([]);
+                // `reset-sent` no desktop tem teste próprio, marcado como bug conhecido (abaixo).
+                if (!(screen.name === 'reset-sent' && size.width >= 1024)) {
+                  expect(await textUnderBubble(page), `${label}: balão cobre texto`).toEqual([]);
+                }
               }
             }
 
@@ -679,7 +682,16 @@ for (const theme of ['dark', 'light'] as const satisfies readonly Theme[]) {
                 `${label}: contraste do balão ${JSON.stringify(report.worst)}`,
               ).toBeGreaterThanOrEqual(4.5);
             }
-            await capture(page, SHOTS, `${screen.name}-${motion}`, theme, { full: false });
+            if (screen.name === 'verify-pending') {
+              // A requisição fica segura de propósito: `networkidle` do `capture` nunca chega.
+              await page.screenshot({
+                path: `${SHOTS}/${screen.name}-${motion}-${size.width}-${theme}.png`,
+                animations: 'disabled',
+              });
+              if (typeof scenario.verify === 'object') scenario.verify.release();
+            } else {
+              await capture(page, SHOTS, `${screen.name}-${motion}`, theme, { full: false });
+            }
           });
         }
       });
@@ -934,6 +946,102 @@ for (const theme of ['dark', 'light'] as const satisfies readonly Theme[]) {
     });
   });
 }
+
+/*
+ * BUG CONHECIDO (relatório F76-S13, achado A1): no desktop, o balão do `reset-sent`
+ * ("O link já está a caminho.") cobre a base do eyebrow "RECUPERAÇÃO DE ACESSO", porque o
+ * eyebrow é longo e o balão fica à esquerda da figura, centrado na altura da cabeça
+ * (`companion.css`, `.m-bubble-pos[data-placement='start']`, `top: 19px`). `test.fail` mantém
+ * o CI verde e vira vermelho assim que o S11 corrigir (aí é só remover a linha).
+ */
+for (const theme of ['dark', 'light'] as const satisfies readonly Theme[]) {
+  test.describe(`Companheiro — balão x eyebrow 1440 ${theme}`, () => {
+    test.use({ viewport: { width: 1440, height: 900 } });
+
+    test('reset-sent: o balão não cobre o texto do eyebrow', async ({ page }) => {
+      test.fail(
+        true,
+        'A1: o balão cobre "RECUPERAÇÃO DE ACESSO" no desktop (companion.css .m-bubble-pos[start])',
+      );
+      test.setTimeout(60_000);
+      await installProbe(page);
+      await useTheme(page, theme);
+      await installRoutes(page);
+      await page.goto('/reset-password');
+      await hydrated(page, 'Enviar instruções');
+      await companionReady(page);
+      await page.getByLabel('Email').fill('ana@aurora.test');
+      await page.getByRole('button', { name: 'Enviar instruções' }).click();
+      await expect(h1(page, 'Confira sua caixa de entrada')).toBeVisible();
+      await expect(bubbleBox(page)).toHaveText('O link já está a caminho.', { timeout: 10_000 });
+      await settled(page);
+      await detail(page, `achado-A1-balao-cobre-eyebrow-${theme}`);
+      expect(await textUnderBubble(page)).toEqual([]);
+    });
+  });
+}
+
+/**
+ * Texto do painel editorial que a caixa da figura cobre (o `perch` fica a 72 px da borda
+ * esquerda do painel, onde também começam o título e a numeração dos pilares).
+ */
+async function editorialTextUnderActor(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const panel = document.querySelector('aside[aria-label="Sobre a Leadium"]');
+    const a = document.querySelector('[data-companion-actor]')?.getBoundingClientRect();
+    if (!panel || !a) return ['(sem painel ou figura)'];
+    const hits: string[] = [];
+    const walker = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const text = (n.textContent ?? '').trim();
+      if (!text) continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      for (const r of Array.from(range.getClientRects())) {
+        if (r.left < a.right && r.right > a.left && r.top < a.bottom && r.bottom > a.top) {
+          hits.push(`"${text.slice(0, 22)}" em ${Math.round(r.left)},${Math.round(r.top)}`);
+        }
+      }
+    }
+    return hits;
+  });
+}
+
+/*
+ * BUG CONHECIDO (relatório F76-S13, achado A2): no `perch`, a figura (centro x = borda do
+ * painel + 72) cai em cima do texto editorial: o título "Toda conversa vira o próximo passo.",
+ * a numeração 01/02/03 dos pilares e, em 1024 px, o meio do texto dos pilares. Em 31 de 32
+ * combinações campo x viewport medidas, a caixa cobre texto. `test.fail`: vira vermelho
+ * quando o S11/S10 mudarem o posto ou o painel (aí é só remover a linha).
+ */
+test.describe('Companheiro — perch x painel editorial', () => {
+  for (const size of [
+    { width: 1024, height: 768 },
+    { width: 1440, height: 900 },
+  ] as const) {
+    test(`${size.width}: a figura no perch não cobre o texto do painel`, async ({ page }) => {
+      test.fail(true, 'A2: o perch cobre título/numeração/texto do painel editorial');
+      test.setTimeout(75_000);
+      await installProbe(page);
+      await installRoutes(page);
+      await page.setViewportSize(size);
+      await page.goto('/signup');
+      await hydrated(page, 'Criar conta');
+      await companionReady(page);
+      const found: string[] = [];
+      const labels = ['Seu nome', 'Email', 'Nome do workspace', 'Senha'];
+      for (const [i, label] of labels.entries()) {
+        await focusField(page, label);
+        await expect(actor(page)).toHaveAttribute('data-station', 'perch');
+        await settled(page);
+        await stable(actor(page));
+        if (i === 0) await detail(page, `achado-A2-perch-cobre-painel-${size.width}`);
+        for (const hit of await editorialTextUnderActor(page)) found.push(`${label}: ${hit}`);
+      }
+      expect(found, 'texto do painel sob a figura').toEqual([]);
+    });
+  }
+});
 
 /* Movimento reduzido nos quadros-chave: sem voo, sem respiração, sem piscar. */
 test.describe('Companheiro — movimento reduzido (1440)', () => {
