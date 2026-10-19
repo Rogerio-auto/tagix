@@ -2,7 +2,7 @@
 id: F76-S14
 title: Companheiro das telas de acesso — correções do QA (perch sem cobrir o painel, balão sem cobrir o eyebrow, âncora do convite, medição sob transform)
 phase: F76
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 model: sonnet
@@ -14,6 +14,7 @@ source_docs:
   - docs/decisions/ADR-006-mascote-personagem-tecnologia-e-politicas.md
 agent_id: frontend-engineer
 claimed_at: 2026-10-19T22:37:22Z
+completed_at: 2026-10-19T23:30:28Z
 
 ---
 # F76-S14 — Correções do QA do companheiro
