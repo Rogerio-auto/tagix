@@ -220,7 +220,11 @@ describe('foco, posto e estado', () => {
     root.appendChild(text);
     director.setFigureReady(true);
     focusIn(text);
-    expect(director.getSnapshot()).toMatchObject({ station: 'inline', look: 'none', moving: false });
+    expect(director.getSnapshot()).toMatchObject({
+      station: 'inline',
+      look: 'none',
+      moving: false,
+    });
     const pass = field('password');
     root.appendChild(pass);
     focusIn(pass);

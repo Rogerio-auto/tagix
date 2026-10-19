@@ -17,7 +17,7 @@ import type { MachineEvent, MachineModel } from './machine';
  * - Escuta SÓ `focusin`/`focusout` (e `pointerdown`, que não lê nada do evento) na raiz.
  * - Do alvo lê apenas `tagName`, `type`, `isContentEditable` e, depois, a posição via
  *   `getBoundingClientRect()` (feita pela figura). NUNCA `.value`, `.checked`, `.files`,
- *   seleção, nem `input`/`keydown`/`keyup`/`beforeinput`.
+ *   seleção, nem qualquer evento de digitação ou de teclado.
  * - Não existe `lastKeyAt`: para pausar a respiração "enquanto digita" o motor usa um
  *   sinal ainda mais grosseiro e sem teclado, "há um campo editável focado" (`typing`).
  *   Zero listeners de teclado; o ADR permite esta alternativa.
