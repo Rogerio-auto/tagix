@@ -2,7 +2,7 @@
 id: F76-S11
 title: Companheiro das telas de acesso — motor (máquina de estados, diretor de foco, voo WAAPI, balão)
 phase: F76
-status: review
+status: done
 priority: high
 estimated_size: M
 model: sonnet

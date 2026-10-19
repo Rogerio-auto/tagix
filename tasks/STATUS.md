@@ -62,7 +62,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F73   | 17     | 0   | 2   | 0   | 0   | 0   | 15   |
 | F74   | 13     | 0   | 13   | 0   | 0   | 0   | 0   |
 | F75   | 16     | 2   | 13   | 0   | 0   | 0   | 1   |
-| F76   | 13     | 1   | 9   | 0   | 0   | 2   | 1   |
+| F76   | 13     | 1   | 9   | 0   | 0   | 0   | 3   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -923,8 +923,8 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F76-S08 | Marca por empresa com flag do personagem (Odonto só glifo, Maian) e telemetria só de evento                                   | ⏸️ blocked  | high       | F76-S04, F76-S05                   |
 | F76-S09 | QA da F76 — axe nos dois temas, movimento reduzido, INP, peso e quadros longos, capturas e portão de design                   | ⏸️ blocked  | high       | F76-S05, F76-S06, F76-S07, F76-S08 |
 | F76-S10 | Companheiro das telas de acesso — emenda ao ADR-006, direção de arte, folha de poses, contrato e textos                       | ✅ done      | high       | —                                  |
-| F76-S11 | Companheiro das telas de acesso — motor (máquina de estados, diretor de foco, voo WAAPI, balão)                               | 🟣 review    | high       | F76-S10                            |
-| F76-S12 | Companheiro das telas de acesso — integração (layout, AuthKit e formulários de login, cadastro, verificação, reset e convite) | 🟣 review    | high       | F76-S10                            |
+| F76-S11 | Companheiro das telas de acesso — motor (máquina de estados, diretor de foco, voo WAAPI, balão)                               | ✅ done      | high       | F76-S10                            |
+| F76-S12 | Companheiro das telas de acesso — integração (layout, AuthKit e formulários de login, cadastro, verificação, reset e convite) | ✅ done      | high       | F76-S10                            |
 | F76-S13 | Companheiro das telas de acesso — QA (capturas, axe, peso, LCP/CLS, privacidade) e portão de design                           | ⏸️ blocked  | high       | F76-S11, F76-S12                   |
 
 ## Fase 8 — Permissions & Settings
