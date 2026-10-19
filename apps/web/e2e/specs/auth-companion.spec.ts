@@ -13,7 +13,11 @@
  * 3. PRIVACIDADE: digita e-mail e senha de teste; o palco, os `data-*`, o storage e a rede
  *    não os contêm; o módulo não escuta teclado; nenhuma requisição extra.
  * 4. CELULAR: sem voo, caixa 40x40 reservada, balão some com o teclado aberto.
- * 5. CONVITE: fallback do posto `heading` (a tela não usa `AuthHeading`).
+ * 5. CONVITE: âncora `heading` no cabeçalho do convite (F76-S14, A4); o personagem aparece,
+ *    fica na linha do eyebrow "Convite" e celebra no sucesso.
+ * 6. F76-S14 (correções do QA): A1 balão acima da figura sem cobrir eyebrow/logotipo/texto;
+ *    A2 `perch` dentro da faixa em fluxo do painel, nunca sobre o texto editorial, em
+ *    1024/1280/1440/1920 × campos de login/cadastro/redefinição; A3 alinhamento estável.
  *
  * AMBIENTE: servidor de produção (`E2E_SERVER=start`) é o que importa; em `dev` o chunk lazy
  * compila sob demanda e os tempos mudam. Rodar com `--workers=1` (ver `mobile-nav.spec.ts`).
@@ -30,7 +34,7 @@ import {
   type Theme,
 } from '../fixtures/a11y';
 
-const SHOTS = 'e2e/.artifacts/f76-s13';
+const SHOTS = 'e2e/.artifacts/f76-s14';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 // Contexto do NAVEGADOR de teste (não é formatação no componente).
@@ -351,8 +355,8 @@ async function boxOf(locator: Locator): Promise<Box> {
   return b;
 }
 
-function centerOf(b: Box): { x: number; y: number } {
-  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+function rectsIntersect(a: Box, b: Box): boolean {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 }
 
 /** Espera a caixa parar (duas leituras iguais com 200 ms de intervalo). */
@@ -449,8 +453,8 @@ interface Screen {
   scenario?: () => Scenario;
   ready: (page: Page) => Promise<void>;
   open?: (page: Page) => Promise<void>;
-  /** Pose esperada depois que tudo assentou; `null` = convite (sem âncora de título). */
-  pose: Pose | null;
+  /** Pose esperada depois que tudo assentou. */
+  pose: Pose;
   /** Texto do balão esperado (1ª visita da sessão). */
   bubble?: string;
 }
@@ -577,8 +581,8 @@ const SCREENS: Screen[] = [
       await expect(h1(page, 'Clínica Aurora')).toBeVisible();
       await expect(page.getByLabel('Crie uma senha')).toBeVisible();
     },
-    // Sem `AuthHeading` não há âncora `heading`: ver o teste de fallback (seção 5).
-    pose: null,
+    // O cabeçalho do convite registra a âncora `heading` (F76-S14, A4): mesma pose do login.
+    pose: IDLE,
   },
 ];
 
@@ -613,22 +617,17 @@ for (const theme of ['dark', 'light'] as const satisfies readonly Theme[]) {
             await screen.open?.(page);
 
             const label = `${screen.name} ${size.width} ${theme} ${motion}`;
-            if (screen.pose) {
-              await companionReady(page);
-              await expect(figure(page)).toHaveAttribute(
-                'data-motion',
-                motion === 'reduzido' ? 'off' : 'live',
-              );
-              await expectPose(page, screen.pose, label);
-              if (screen.bubble) {
-                await expect(bubbleBox(page), `${label}: balão`).toHaveText(screen.bubble, {
-                  timeout: 10_000,
-                });
-                await settled(page);
-              }
-            } else {
-              // Convite: dá tempo de sobra para o chunk carregar (FCP + 400 ms + idle).
-              await page.waitForTimeout(2_500);
+            await companionReady(page);
+            await expect(figure(page)).toHaveAttribute(
+              'data-motion',
+              motion === 'reduzido' ? 'off' : 'live',
+            );
+            await expectPose(page, screen.pose, label);
+            if (screen.bubble) {
+              await expect(bubbleBox(page), `${label}: balão`).toHaveText(screen.bubble, {
+                timeout: 10_000,
+              });
+              await settled(page);
             }
 
             // Geometria: nada do palco vaza da viewport nem gera rolagem horizontal.
@@ -636,11 +635,15 @@ for (const theme of ['dark', 'light'] as const satisfies readonly Theme[]) {
               () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
             );
             expect(overflow, `${label}: rolagem horizontal`).toBeLessThanOrEqual(0);
-            if (screen.pose) {
+            {
               const fig = await boxOf(actor(page));
               expect(fig.x, `${label}: figura à esquerda da viewport`).toBeGreaterThanOrEqual(0);
               expect(fig.x + fig.width, `${label}: figura além da viewport`).toBeLessThanOrEqual(
                 size.width,
+              );
+              await expect(actor(page), `${label}: figura visível`).toHaveCSS(
+                'visibility',
+                'visible',
               );
               // Em pé na linha do eyebrow / na linha do logotipo: nunca encosta no título.
               const title = await boxOf(page.getByRole('heading', { level: 1 }));
@@ -648,24 +651,24 @@ for (const theme of ['dark', 'light'] as const satisfies readonly Theme[]) {
                 title.y + 1,
               );
               if (size.width >= 1024) {
-                // Em pé na linha do eyebrow: a base da figura = base do eyebrow + 2,5 px de sombra. Folga de 5 px: a medida do motor
-                // acontece com a troca de etapa ainda em `translateY` (até 4 px), ver achado A3.
+                // Em pé na linha do eyebrow: a base da figura = base do eyebrow + 2,5 px de
+                // sombra. A medida remedida quando as animações dos ancestrais terminam (A3)
+                // zera o erro do `translateY` de 4 px da troca de etapa: folga de 3 px.
                 const eyebrow = await boxOf(page.locator('main header p').first());
                 expect(
                   Math.abs(fig.y + fig.height - (eyebrow.y + eyebrow.height)),
                   `${label}: figura fora da linha do eyebrow`,
-                ).toBeLessThanOrEqual(5);
+                ).toBeLessThanOrEqual(3);
               }
               if (screen.bubble) {
                 const b = await boxOf(page.locator('[data-companion-bubble] .m-bubble'));
                 expect(b.x, `${label}: balão cortado à esquerda`).toBeGreaterThanOrEqual(0);
+                expect(b.y, `${label}: balão cortado em cima`).toBeGreaterThanOrEqual(0);
                 expect(b.x + b.width, `${label}: balão cortado à direita`).toBeLessThanOrEqual(
                   size.width,
                 );
-                // `reset-sent` no desktop tem teste próprio, marcado como bug conhecido (abaixo).
-                if (!(screen.name === 'reset-sent' && size.width >= 1024)) {
-                  expect(await textUnderBubble(page), `${label}: balão cobre texto`).toEqual([]);
-                }
+                // A1: vale também para `reset-sent` no desktop (balão acima da figura).
+                expect(await textUnderBubble(page), `${label}: balão cobre texto`).toEqual([]);
               }
             }
 
@@ -722,13 +725,22 @@ for (const theme of ['dark', 'light'] as const satisfies readonly Theme[]) {
       await expect(bubbleBox(page)).toHaveText('Que bom que voltou.', { timeout: 10_000 });
       await settled(page);
 
-      // Balão à ESQUERDA da figura, rabicho para a direita (SPEC §2.4).
+      // Balão ACIMA da figura, alinhado à direita dela, rabicho para baixo (SPEC §2.4, A1).
       const fig = await boxOf(figure(page));
       const bubble = await boxOf(page.locator('[data-companion-bubble] .m-bubble'));
-      expect(bubble.x + bubble.width).toBeLessThanOrEqual(fig.x + 1);
+      expect(bubble.y + bubble.height, 'balão acima da figura').toBeLessThanOrEqual(fig.y + 1);
+      expect(
+        Math.abs(bubble.x + bubble.width - (fig.x + fig.width)),
+        'balão alinhado à direita da figura',
+      ).toBeLessThanOrEqual(2);
       // Em pé na linha do eyebrow: a base da figura cai na base do eyebrow (±3 px da sombra).
       const eyebrow = await boxOf(page.locator('main header p').first());
-      expect(Math.abs(fig.y + fig.height - (eyebrow.y + eyebrow.height))).toBeLessThanOrEqual(4);
+      expect(Math.abs(fig.y + fig.height - (eyebrow.y + eyebrow.height))).toBeLessThanOrEqual(3);
+      // O balão não toca o eyebrow nem o logotipo, e fica na coluna de 25rem.
+      expect(rectsIntersect(bubble, eyebrow), 'balão sobre o eyebrow').toBe(false);
+      const logo = await boxOf(page.getByText('Leadium', { exact: true }).first());
+      expect(rectsIntersect(bubble, logo), 'balão sobre o logotipo').toBe(false);
+      expect(await textUnderBubble(page), 'balão cobre texto').toEqual([]);
       // A 24 px da borda direita da coluna de 25rem.
       const header = await boxOf(page.locator('main header').first());
       expect(Math.abs(fig.x + fig.width / 2 - (header.x + header.width - 24))).toBeLessThanOrEqual(
@@ -764,20 +776,28 @@ for (const theme of ['dark', 'light'] as const satisfies readonly Theme[]) {
       await settled(page);
       await stable(actor(page));
 
-      const panel = await boxOf(page.locator('aside[aria-label="Sobre a Leadium"]'));
+      // A2: o perch é a faixa em fluxo do painel; a caixa da figura fica DENTRO dela, no início
+      // do texto do painel, e o y acompanha o campo limitado à faixa.
+      const strip = await boxOf(page.locator('[data-companion-anchor="perch"]'));
       const field = await boxOf(page.getByLabel('Email', { exact: true }));
-      const c = centerOf(await boxOf(actor(page)));
-      expect(Math.abs(c.x - (panel.x + 72)), 'perch: x = borda do painel + 72').toBeLessThanOrEqual(
-        2,
+      const fig = await boxOf(actor(page));
+      expect(strip.height, 'faixa do perch reserva ≥ 56 px').toBeGreaterThanOrEqual(56);
+      expect(Math.abs(fig.x - strip.x), 'perch: x = início da faixa').toBeLessThanOrEqual(1);
+      expect(fig.y, 'perch: acima da faixa').toBeGreaterThanOrEqual(strip.y - 1);
+      expect(fig.y + fig.height, 'perch: abaixo da faixa').toBeLessThanOrEqual(
+        strip.y + strip.height + 1,
       );
       const expectedY = Math.min(
-        Math.max(field.y + field.height / 2, panel.y + 96),
-        panel.y + panel.height - 96,
+        Math.max(field.y + field.height / 2 - fig.height / 2, strip.y),
+        strip.y + strip.height - fig.height,
       );
       expect(
-        Math.abs(c.y - expectedY),
-        'perch: y = centro do campo (limitado)',
+        Math.abs(fig.y - expectedY),
+        'perch: y = centro do campo (limitado à faixa)',
       ).toBeLessThanOrEqual(2);
+      expect(await editorialTextUnderActor(page), 'perch: texto do painel sob a figura').toEqual(
+        [],
+      );
       // No perch o balão nunca existe.
       await expect(page.locator('[data-companion-bubble]')).toHaveCount(0);
 
@@ -945,21 +965,16 @@ for (const theme of ['dark', 'light'] as const satisfies readonly Theme[]) {
 }
 
 /*
- * BUG CONHECIDO (relatório F76-S13, achado A1): no desktop, o balão do `reset-sent`
- * ("O link já está a caminho.") cobre a base do eyebrow "RECUPERAÇÃO DE ACESSO", porque o
- * eyebrow é longo e o balão fica à esquerda da figura, centrado na altura da cabeça
- * (`companion.css`, `.m-bubble-pos[data-placement='start']`, `top: 19px`). `test.fail` mantém
- * o CI verde e vira vermelho assim que o S11 corrigir (aí é só remover a linha).
+ * A1 (F76-S14): no desktop o balão do `reset-sent` ("O link já está a caminho.") ficava à
+ * esquerda da figura e cobria a base do eyebrow "RECUPERAÇÃO DE ACESSO". Agora ele vai ACIMA
+ * da figura (`placement='top'`): não toca o eyebrow, o logotipo nem texto algum, e fica na
+ * coluna do formulário.
  */
 for (const theme of ['dark', 'light'] as const satisfies readonly Theme[]) {
   test.describe(`Companheiro — balão x eyebrow 1440 ${theme}`, () => {
     test.use({ viewport: { width: 1440, height: 900 } });
 
     test('reset-sent: o balão não cobre o texto do eyebrow', async ({ page }) => {
-      test.fail(
-        true,
-        'A1: o balão cobre "RECUPERAÇÃO DE ACESSO" no desktop (companion.css .m-bubble-pos[start])',
-      );
       test.setTimeout(60_000);
       await installProbe(page);
       await useTheme(page, theme);
@@ -972,15 +987,29 @@ for (const theme of ['dark', 'light'] as const satisfies readonly Theme[]) {
       await expect(h1(page, 'Confira sua caixa de entrada')).toBeVisible();
       await expect(bubbleBox(page)).toHaveText('O link já está a caminho.', { timeout: 10_000 });
       await settled(page);
-      await detail(page, `achado-A1-balao-cobre-eyebrow-${theme}`);
-      expect(await textUnderBubble(page)).toEqual([]);
+      await detail(page, `achado-A1-balao-acima-do-eyebrow-${theme}`);
+
+      const bubble = await boxOf(page.locator('[data-companion-bubble] .m-bubble'));
+      const fig = await boxOf(figure(page));
+      const eyebrow = await boxOf(page.locator('main header p').first());
+      const column = await boxOf(page.locator('main header').first());
+      expect(await textUnderBubble(page), 'balão cobre texto').toEqual([]);
+      expect(rectsIntersect(bubble, eyebrow), 'balão sobre o eyebrow').toBe(false);
+      expect(bubble.y + bubble.height, 'balão acima da figura').toBeLessThanOrEqual(fig.y + 1);
+      expect(bubble.x, 'balão dentro da coluna (esquerda)').toBeGreaterThanOrEqual(column.x);
+      expect(bubble.x + bubble.width, 'balão dentro da coluna (direita)').toBeLessThanOrEqual(
+        column.x + column.width + 1,
+      );
+      expect(bubble.y, 'balão dentro da viewport').toBeGreaterThanOrEqual(0);
+      const logo = await boxOf(page.getByText('Leadium', { exact: true }).first());
+      expect(rectsIntersect(bubble, logo), 'balão sobre o logotipo').toBe(false);
     });
   });
 }
 
 /**
- * Texto do painel editorial que a caixa da figura cobre (o `perch` fica a 72 px da borda
- * esquerda do painel, onde também começam o título e a numeração dos pilares).
+ * Texto do painel editorial que a caixa da figura cobre. O `perch` é uma faixa em fluxo
+ * (F76-S14), então o resultado esperado é sempre vazio.
  */
 async function editorialTextUnderActor(page: Page): Promise<string[]> {
   return page.evaluate(() => {
@@ -1005,38 +1034,77 @@ async function editorialTextUnderActor(page: Page): Promise<string[]> {
 }
 
 /*
- * BUG CONHECIDO (relatório F76-S13, achado A2): no `perch`, a figura (centro x = borda do
- * painel + 72) cai em cima do texto editorial: o título "Toda conversa vira o próximo passo.",
- * a numeração 01/02/03 dos pilares e, em 1024 px, o meio do texto dos pilares. Em 31 de 32
- * combinações campo x viewport medidas, a caixa cobre texto. `test.fail`: vira vermelho
- * quando o S11/S10 mudarem o posto ou o painel (aí é só remover a linha).
+ * A2 (F76-S14): o `perch` é uma FAIXA em fluxo no `BrandPanel` (`flex-1 min-h-14`, sem
+ * texto); o personagem fica dentro dela. Prova por medição, em cada campo de login, cadastro
+ * e redefinição: a caixa da figura (1) não intersecta nenhum texto do painel, (2) está dentro
+ * da faixa e (3) a faixa reserva >= 56 px. O 1600x600 é a viewport baixa: a faixa segura 56 px
+ * mesmo quando o painel cresce.
  */
-test.describe('Companheiro — perch x painel editorial', () => {
-  for (const size of [
-    { width: 1024, height: 768 },
-    { width: 1440, height: 900 },
-  ] as const) {
-    test(`${size.width}: a figura no perch não cobre o texto do painel`, async ({ page }) => {
-      test.fail(true, 'A2: o perch cobre título/numeração/texto do painel editorial');
-      test.setTimeout(75_000);
-      await installProbe(page);
-      await installRoutes(page);
-      await page.setViewportSize(size);
-      await page.goto('/signup');
-      await hydrated(page, 'Criar conta');
-      await companionReady(page);
-      const found: string[] = [];
-      const labels = ['Seu nome', 'Email', 'Nome do workspace', 'Senha'];
-      for (const [i, label] of labels.entries()) {
-        await focusField(page, label);
-        await expect(actor(page)).toHaveAttribute('data-station', 'perch');
-        await settled(page);
-        await stable(actor(page));
-        if (i === 0) await detail(page, `achado-A2-perch-cobre-painel-${size.width}`);
-        for (const hit of await editorialTextUnderActor(page)) found.push(`${label}: ${hit}`);
-      }
-      expect(found, 'texto do painel sob a figura').toEqual([]);
-    });
+interface PerchRoute {
+  name: string;
+  path: string;
+  button: string;
+  fields: string[];
+}
+const PERCH_ROUTES: PerchRoute[] = [
+  { name: 'login', path: '/login', button: 'Entrar', fields: ['Email', 'Senha'] },
+  {
+    name: 'signup',
+    path: '/signup',
+    button: 'Criar conta',
+    fields: ['Seu nome', 'Email', 'Nome do workspace', 'Senha'],
+  },
+  { name: 'reset', path: '/reset-password', button: 'Enviar instruções', fields: ['Email'] },
+];
+const PERCH_SIZES = [
+  { width: 1024, height: 768 },
+  { width: 1280, height: 800 },
+  { width: 1440, height: 900 },
+  { width: 1920, height: 1080 },
+  { width: 1600, height: 600 },
+] as const;
+
+test.describe('Companheiro — perch x painel editorial (A2)', () => {
+  for (const size of PERCH_SIZES) {
+    for (const route of PERCH_ROUTES) {
+      test(`${size.width}x${size.height} ${route.name}: a figura no perch não cobre o texto do painel`, async ({
+        page,
+      }) => {
+        test.setTimeout(75_000);
+        await installProbe(page);
+        await installRoutes(page);
+        await page.setViewportSize(size);
+        await page.goto(route.path);
+        await hydrated(page, route.button);
+        await companionReady(page);
+        for (const [i, label] of route.fields.entries()) {
+          await focusField(page, label);
+          await expect(actor(page)).toHaveAttribute('data-station', 'perch');
+          await settled(page);
+          await stable(actor(page));
+          const strip = await boxOf(page.locator('[data-companion-anchor="perch"]'));
+          const fig = await boxOf(actor(page));
+          const where = `${route.name} ${size.width}x${size.height} "${label}"`;
+          expect(strip.height, `${where}: faixa ≥ 56 px`).toBeGreaterThanOrEqual(56);
+          expect(fig.x, `${where}: figura à esquerda da faixa`).toBeGreaterThanOrEqual(strip.x - 1);
+          expect(fig.y, `${where}: figura acima da faixa`).toBeGreaterThanOrEqual(strip.y - 1);
+          expect(fig.y + fig.height, `${where}: figura abaixo da faixa`).toBeLessThanOrEqual(
+            strip.y + strip.height + 1,
+          );
+          expect(
+            await editorialTextUnderActor(page),
+            `${where}: texto do painel sob a figura`,
+          ).toEqual([]);
+          if (i === 0 && route.name === 'signup' && size.width !== 1920) {
+            await detail(page, `achado-A2-perch-na-faixa-${size.width}x${size.height}`);
+            await page.screenshot({
+              path: `${SHOTS}/achado-A2-perch-na-faixa-${size.width}x${size.height}-tela.png`,
+              animations: 'disabled',
+            });
+          }
+        }
+      });
+    }
   }
 });
 
@@ -1389,87 +1457,81 @@ test.describe('Companheiro — celular 375', () => {
 });
 
 /* ----------------------------------------------------------------------------------- */
-/* 5. CONVITE: fallback do posto `heading`                                              */
+/* 5. CONVITE: âncora `heading` no cabeçalho (F76-S14, A4)                              */
 /* ----------------------------------------------------------------------------------- */
 
-test.describe('Companheiro — convite (sem âncora de título)', () => {
+const INVITE_URL = `/convite/${TOKEN}#token_hash=${PROOF_HASH}&type=invite`;
+
+test.describe('Companheiro — convite (âncora heading no cabeçalho)', () => {
   test.describe('desktop', () => {
     test.use({ viewport: { width: 1440, height: 900 } });
 
-    test('sem AuthHeading: o personagem não aparece em lugar estranho', async ({ page }) => {
-      test.setTimeout(60_000);
+    test('o personagem aparece na linha do eyebrow "Convite", vai ao perch e celebra no sucesso', async ({
+      page,
+    }) => {
+      test.setTimeout(75_000);
       await installProbe(page);
       await installRoutes(page, { invite: PREVIEW });
-      await page.goto(`/convite/${TOKEN}#token_hash=${PROOF_HASH}&type=invite`);
+      await page.goto(INVITE_URL);
       await expect(h1(page, 'Clínica Aurora')).toBeVisible();
       await expect(page.getByLabel('Crie uma senha')).toBeVisible();
-      await page.waitForTimeout(3_000);
+      await companionReady(page);
 
-      // O chunk carregou (o ator existe) mas o posto `heading` não tem âncora.
-      const info = await page.evaluate(() => {
-        const a = document.querySelector('[data-companion-actor]');
-        if (!a) return { mounted: false, placed: null, station: null, visibility: null };
-        return {
-          mounted: true,
-          placed: a.getAttribute('data-placed'),
-          station: a.getAttribute('data-station'),
-          visibility: getComputedStyle(a).visibility,
-        };
-      });
-      console.log(`CONVITE heading-fallback ${JSON.stringify(info)}`);
-      test
-        .info()
-        .annotations.push({ type: 'convite-heading-fallback', description: JSON.stringify(info) });
-      // Contrato observado: fica montado, oculto (`visibility: hidden`) e sem balão, até a
-      // pessoa focar um campo (então o posto vira `perch`, que tem âncora no painel).
-      expect(info.mounted).toBe(true);
-      expect(info.placed).toBe('false');
-      expect(info.visibility).toBe('hidden');
-      await expect(page.locator('[data-companion-bubble]')).toHaveCount(0);
+      // Visível, no posto heading, em pé na linha do eyebrow (o `<p>` dentro do `div`).
+      await expect(actor(page)).toHaveAttribute('data-station', 'heading');
+      await expect(actor(page)).toHaveCSS('visibility', 'visible');
+      await expectPose(page, IDLE, 'convite');
+      const fig = await boxOf(actor(page));
+      const eyebrow = await boxOf(page.locator('main header p').first());
+      expect(
+        Math.abs(fig.y + fig.height - (eyebrow.y + eyebrow.height)),
+        'convite: figura fora da linha do eyebrow',
+      ).toBeLessThanOrEqual(3);
+      const header = await boxOf(page.locator('main header').first());
+      expect(Math.abs(fig.x + fig.width / 2 - (header.x + header.width - 24))).toBeLessThanOrEqual(
+        2,
+      );
+      const title = await boxOf(page.getByRole('heading', { level: 1 }));
+      expect(fig.y + fig.height, 'convite: figura sobre o H1').toBeLessThanOrEqual(title.y + 1);
       await capture(page, SHOTS, 'convite-sem-ancora', 'dark', { full: false });
 
-      // 1º foco: aparece direto no painel (sem voo, pois nunca esteve em outro posto).
+      // 1º foco: voa ao perch, dentro da faixa do painel.
       await focusField(page, 'Seu nome');
-      await expect(actor(page)).toHaveAttribute('data-placed', 'true', { timeout: 5_000 });
       await expect(actor(page)).toHaveAttribute('data-station', 'perch');
       await settled(page);
-      const panel = await boxOf(page.locator('aside[aria-label="Sobre a Leadium"]'));
-      const c = centerOf(await boxOf(actor(page)));
-      expect(Math.abs(c.x - (panel.x + 72))).toBeLessThanOrEqual(2);
+      await stable(actor(page));
+      const strip = await boxOf(page.locator('[data-companion-anchor="perch"]'));
+      const perched = await boxOf(actor(page));
+      expect(Math.abs(perched.x - strip.x)).toBeLessThanOrEqual(1);
+      expect(perched.y).toBeGreaterThanOrEqual(strip.y - 1);
+      expect(perched.y + perched.height).toBeLessThanOrEqual(strip.y + strip.height + 1);
+      expect(await editorialTextUnderActor(page), 'convite: texto do painel sob a figura').toEqual(
+        [],
+      );
       await detail(page, 'convite-foco-perch-dark');
       await capture(page, SHOTS, 'convite-foco-perch', 'dark', { full: false });
 
-      // Sucesso do convite ('invite-done' com final): o ator tem de voltar ao título, que
-      // não existe. Registra o que acontece (o ator não deve ficar preso em lugar estranho).
+      // Sucesso ('invite-done', final): volta ao título e CELEBRA, visível.
       await page.getByLabel('Seu nome').fill('Bia Lima');
       await page.getByLabel('Crie uma senha').fill('senha-forte-2026');
       await page.getByRole('button', { name: 'Criar conta e entrar' }).click();
       await expect(page.getByText('Conta criada', { exact: true })).toBeVisible({ timeout: 5_000 });
-      await page.waitForTimeout(2_000);
-      const done = await page.evaluate(() => {
-        const a = document.querySelector('[data-companion-actor]');
-        const f = document.querySelector('[data-companion]');
-        if (!a || !f) return null;
-        const r = a.getBoundingClientRect();
-        return {
-          station: a.getAttribute('data-station'),
-          placed: a.getAttribute('data-placed'),
-          visibility: getComputedStyle(a).visibility,
-          state: f.getAttribute('data-state'),
-          x: Math.round(r.x),
-          y: Math.round(r.y),
-        };
-      });
-      console.log(`CONVITE conta-criada ${JSON.stringify(done)}`);
-      test
-        .info()
-        .annotations.push({ type: 'convite-done-fallback', description: JSON.stringify(done) });
+      await expect(actor(page)).toHaveAttribute('data-station', 'heading', { timeout: 5_000 });
+      await expect(figure(page)).toHaveAttribute('data-state', 'celebrate', { timeout: 5_000 });
+      await settled(page);
+      await expectPose(page, SUCCESS, 'convite: sucesso final');
+      await expect(actor(page), 'convite: celebra visível').toHaveCSS('visibility', 'visible');
+      await expect(actor(page)).toHaveAttribute('data-placed', 'true');
+      const done = await boxOf(actor(page));
+      const doneEyebrow = await boxOf(page.locator('main header p').first());
+      expect(
+        Math.abs(done.y + done.height - (doneEyebrow.y + doneEyebrow.height)),
+        'convite: celebração fora da linha do eyebrow',
+      ).toBeLessThanOrEqual(3);
+      expect(done.x).toBeGreaterThanOrEqual(0);
+      expect(done.x + done.width).toBeLessThanOrEqual(1440);
+      await detail(page, 'convite-celebra-heading-dark');
       await capture(page, SHOTS, 'convite-conta-criada', 'dark', { full: false });
-      expect(done, 'ator montado depois do sucesso').not.toBeNull();
-      // Nunca visível num lugar sem sentido: ou oculto, ou no painel (perch) / título.
-      if (done && done.visibility === 'visible') {
-        expect(['perch', 'heading']).toContain(done.station);
-      }
     });
   });
 
@@ -1480,7 +1542,7 @@ test.describe('Companheiro — convite (sem âncora de título)', () => {
       test.setTimeout(60_000);
       await installProbe(page);
       await installRoutes(page, { invite: PREVIEW });
-      await page.goto(`/convite/${TOKEN}#token_hash=${PROOF_HASH}&type=invite`);
+      await page.goto(INVITE_URL);
       await expect(h1(page, 'Clínica Aurora')).toBeVisible();
       await companionReady(page);
       await expect(actor(page)).toHaveAttribute('data-station', 'inline');
