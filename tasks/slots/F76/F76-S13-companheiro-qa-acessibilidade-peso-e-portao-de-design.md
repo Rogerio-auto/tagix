@@ -2,7 +2,7 @@
 id: F76-S13
 title: Companheiro das telas de acesso — QA (capturas, axe, peso, LCP/CLS, privacidade) e portão de design
 phase: F76
-status: review
+status: done
 priority: high
 estimated_size: M
 model: sonnet
