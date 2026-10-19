@@ -61,6 +61,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   root = document.createElement('div');
   document.body.appendChild(root);
+  director = createDirector({ desktop: true, storage: memoryStorage() });
 });
 
 afterEach(() => {
@@ -294,7 +295,7 @@ describe('sinais dos formulários', () => {
     expect(director.getSnapshot().state).toBe('idle');
   });
 
-  it('thinking interrompe o avert e, ao sair, o avert que esperava volta se o foco segue', () => {
+  it('thinking interrompe o avert (foco ainda na senha)', () => {
     setup();
     const pass = field('password');
     root.appendChild(pass);
