@@ -5,10 +5,17 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { Input } from '@hm/ui';
+import { useAuthCompanion, useAuthCompanionStep } from '@/features/auth/companion';
 import { useVerifyEmail } from '../queries';
 import { forgetSignupEmail, readSignupEmail } from '../pending-email';
 import { isValidEmail, sanitizeEmailParam } from '../resend';
-import { AuthHeading, AuthNotice, primaryLinkClass, quietLinkClass } from './AuthKit';
+import {
+  AuthHeading,
+  AuthNotice,
+  AuthStepTransition,
+  primaryLinkClass,
+  quietLinkClass,
+} from './AuthKit';
 import { ResendVerification } from './ResendVerification';
 
 type Phase = 'verifying' | 'success' | 'error' | 'missing';
@@ -121,25 +128,41 @@ export function VerifyEmail() {
   const [phase, setPhase] = useState<Phase>(token ? 'verifying' : 'missing');
   const [knownEmail, setKnownEmail] = useState(emailParam);
   const ran = useRef(false);
+  // Companheiro: só SINAIS (etapa e resultado). O Leadium confirma por LINK (?token=): não
+  // existe campo de código aqui, então não há nada digitado a observar.
+  useAuthCompanionStep(
+    phase === 'verifying' ? 'verify-pending' : phase === 'success' ? 'verify-done' : 'verify-invalid',
+  );
+  const companion = useAuthCompanion();
 
   useEffect(() => {
-    if (ran.current || !token) return;
+    if (ran.current) return;
     ran.current = true;
+    if (!token) {
+      // Link cortado ou aberto à mão: nada a enviar, e o companheiro reage como a um link inválido.
+      companion.signal({ type: 'error', kind: 'server' });
+      return;
+    }
+    companion.signal({ type: 'submit' });
     verify
       .mutateAsync(token)
       .then(() => {
+        companion.signal({ type: 'success', final: true });
         // O link não carrega o email; o cadastro deste navegador o lembrou.
         const remembered = emailParam || sanitizeEmailParam(readSignupEmail());
         setKnownEmail(remembered);
         forgetSignupEmail();
         setPhase('success');
       })
-      .catch(() => setPhase('error'));
-  }, [token, verify, emailParam]);
+      .catch(() => {
+        companion.signal({ type: 'error', kind: 'server' });
+        setPhase('error');
+      });
+  }, [token, verify, emailParam, companion]);
 
   if (phase === 'verifying') {
     return (
-      <>
+      <AuthStepTransition stepKey="verify-pending">
         <AuthHeading
           eyebrow="Confirmação de email"
           title="Confirmando seu email"
@@ -152,11 +175,21 @@ export function VerifyEmail() {
           <Loader2 className="size-5 animate-spin text-text-mid motion-reduce:animate-none" aria-hidden />
           <p className="font-body text-sm text-text-mid">Validando o link de confirmação…</p>
         </div>
-      </>
+      </AuthStepTransition>
     );
   }
 
-  if (phase === 'success') return <VerifiedSuccess email={knownEmail} />;
+  if (phase === 'success') {
+    return (
+      <AuthStepTransition stepKey="verify-done">
+        <VerifiedSuccess email={knownEmail} />
+      </AuthStepTransition>
+    );
+  }
 
-  return <ExpiredLinkRecovery initialEmail={emailParam} missing={phase === 'missing'} />;
+  return (
+    <AuthStepTransition stepKey="verify-invalid">
+      <ExpiredLinkRecovery initialEmail={emailParam} missing={phase === 'missing'} />
+    </AuthStepTransition>
+  );
 }

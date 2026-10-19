@@ -6,12 +6,19 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, AlertTriangle, MailCheck, Sparkles } from 'lucide-react';
 import { Button, Input } from '@hm/ui';
+import { useAuthCompanion, useAuthCompanionStep } from '@/features/auth/companion';
 import { signupSchema, type SignupInput } from '../schema';
 import { useSignup } from '../queries';
 import { rememberSignupEmail } from '../pending-email';
 import { TERMS_VERSION } from '../terms';
 import { RESEND_COOLDOWN_SECONDS } from '../resend';
-import { AuthHeading, AuthNotice, inlineLinkClass, quietLinkClass } from './AuthKit';
+import {
+  AuthHeading,
+  AuthNotice,
+  AuthStepTransition,
+  inlineLinkClass,
+  quietLinkClass,
+} from './AuthKit';
 import { ResendVerification } from './ResendVerification';
 import { TurnstileWidget } from './TurnstileWidget';
 
@@ -34,6 +41,9 @@ export function SignupForm() {
   const [submitError, setSubmitError] = useState<SubmitError | null>(null);
   // Email para o qual o link saiu (null = ainda no formulário).
   const [sentTo, setSentTo] = useState<string | null>(null);
+  // Companheiro: só SINAIS (etapa, envio, resultado). Nenhum valor de campo passa por aqui.
+  useAuthCompanionStep(sentTo !== null ? 'signup-sent' : 'signup');
+  const companion = useAuthCompanion();
   const [token, setToken] = useState('');
   // Plano vindo da página de venda (?plan=). Client-only, sem Suspense (mesmo
   // padrão do ?next= no login). A API revalida — aqui é só intenção/exibição.
@@ -55,15 +65,17 @@ export function SignupForm() {
   const onToken = useCallback((t: string) => setToken(t), []);
   const password = watch('password') ?? '';
 
-  const onSubmit = handleSubmit(async (data) => {
+  const onValid = async (data: SignupInput) => {
     setSubmitError(null);
     if (!token) {
+      companion.signal({ type: 'error', kind: 'validation' });
       setSubmitError({
         title: 'Confirme que você não é um robô',
         description: 'Complete a verificação anti-robô antes de continuar.',
       });
       return;
     }
+    companion.signal({ type: 'submit' });
     try {
       await signup.mutateAsync({
         ...data,
@@ -73,19 +85,24 @@ export function SignupForm() {
         plan: plan || undefined,
       });
       // Resposta uniforme — sucesso = "verifique seu email" (sem auto-login).
+      companion.signal({ type: 'success', final: true });
       rememberSignupEmail(data.email);
       setSentTo(data.email);
     } catch {
+      companion.signal({ type: 'error', kind: 'server' });
       setSubmitError({
         title: 'Não foi possível criar a conta',
         description: 'Algo deu errado. Recarregue a página e tente novamente.',
       });
     }
-  });
+  };
+  const onSubmit = handleSubmit(onValid, () =>
+    companion.signal({ type: 'error', kind: 'validation' }),
+  );
 
   if (sentTo !== null) {
     return (
-      <>
+      <AuthStepTransition stepKey="signup-sent">
         {/* O título acompanha o estado (ressalva da F71-S09): a tela agora é outra. */}
         <AuthHeading
           eyebrow="Confirmação"
@@ -112,12 +129,12 @@ export function SignupForm() {
             </Link>
           </div>
         </div>
-      </>
+      </AuthStepTransition>
     );
   }
 
   return (
-    <>
+    <AuthStepTransition stepKey="signup">
       <AuthHeading
         eyebrow="Nova conta"
         title="Criar conta"
@@ -223,7 +240,7 @@ export function SignupForm() {
           </Link>
         </p>
       </form>
-    </>
+    </AuthStepTransition>
   );
 }
 

@@ -6,34 +6,50 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangle, MailCheck } from 'lucide-react';
 import { Button, Input } from '@hm/ui';
+import { useAuthCompanion, useAuthCompanionStep } from '@/features/auth/companion';
 import { resetSchema, type ResetInput } from '../schema';
 import { useRequestReset } from '../queries';
-import { AuthHeading, AuthNotice, quietLinkClass, secondaryLinkClass } from './AuthKit';
+import {
+  AuthHeading,
+  AuthNotice,
+  AuthStepTransition,
+  quietLinkClass,
+  secondaryLinkClass,
+} from './AuthKit';
 
 export function ResetPasswordForm() {
   const requestReset = useRequestReset();
   const [sent, setSent] = useState(false);
   const [failed, setFailed] = useState(false);
+  // Companheiro: só SINAIS (etapa, envio, resultado). Nenhum valor de campo passa por aqui.
+  useAuthCompanionStep(sent ? 'reset-sent' : 'reset-request');
+  const companion = useAuthCompanion();
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<ResetInput>({ resolver: zodResolver(resetSchema) });
 
-  const onSubmit = handleSubmit(async (data) => {
+  const onValid = async (data: ResetInput) => {
     setFailed(false);
+    companion.signal({ type: 'submit' });
     try {
       await requestReset.mutateAsync(data);
+      companion.signal({ type: 'success', final: true });
       setSent(true);
     } catch {
+      companion.signal({ type: 'error', kind: 'server' });
       // UX §2.11: erro em 3 partes, inline (mobile-safe — teclado não esconde).
       setFailed(true);
     }
-  });
+  };
+  const onSubmit = handleSubmit(onValid, () =>
+    companion.signal({ type: 'error', kind: 'validation' }),
+  );
 
   if (sent) {
     return (
-      <>
+      <AuthStepTransition stepKey="reset-sent">
         <AuthHeading
           eyebrow="Recuperação de acesso"
           title="Confira sua caixa de entrada"
@@ -49,12 +65,12 @@ export function ResetPasswordForm() {
             Voltar ao login
           </Link>
         </div>
-      </>
+      </AuthStepTransition>
     );
   }
 
   return (
-    <>
+    <AuthStepTransition stepKey="reset-request">
       <AuthHeading
         eyebrow="Recuperação de acesso"
         title="Redefinir senha"
@@ -93,6 +109,6 @@ export function ResetPasswordForm() {
           </Link>
         </div>
       </form>
-    </>
+    </AuthStepTransition>
   );
 }
