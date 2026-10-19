@@ -2,7 +2,7 @@
 id: F76-S12
 title: Companheiro das telas de acesso — integração (layout, AuthKit e formulários de login, cadastro, verificação, reset e convite)
 phase: F76
-status: in-progress
+status: review
 priority: high
 estimated_size: M
 model: sonnet
@@ -13,6 +13,7 @@ source_docs:
   - docs/design/auth-companion/SPEC.md
 agent_id: frontend-engineer
 claimed_at: 2026-10-19T17:58:54Z
+completed_at: 2026-10-19T21:08:55Z
 
 ---
 # F76-S12 — Integração nas telas de acesso

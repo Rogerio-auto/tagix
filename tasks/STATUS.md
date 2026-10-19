@@ -62,7 +62,7 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 | F73   | 17     | 0   | 2   | 0   | 0   | 0   | 15   |
 | F74   | 13     | 0   | 13   | 0   | 0   | 0   | 0   |
 | F75   | 16     | 2   | 13   | 0   | 0   | 0   | 1   |
-| F76   | 13     | 1   | 10   | 0   | 1   | 0   | 1   |
+| F76   | 13     | 1   | 10   | 0   | 0   | 1   | 1   |
 | F8   | 10     | 0   | 0   | 0   | 0   | 0   | 10   |
 | F9   | 6     | 0   | 0   | 0   | 0   | 0   | 6   |
 
@@ -911,21 +911,21 @@ Legenda: `available` 🟢 · `blocked` ⏸️ · `claimed` 🟡 · `in-progress`
 
 ## Fase 76
 
-| ID      | Titulo                                                                                                                        | Status        | Prioridade | Depende de                         |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------- | ---------- | ---------------------------------- |
-| F76-S01 | Spike medido — SVG+CSS com máquina de estados em TS contra Rive para o personagem                                             | 🟢 available   | critical   | —                                  |
-| F76-S02 | Arte final do personagem com rig em camadas, LODs de 16 a 160 px, folha de estados e variantes por marca                      | ⏸️ blocked    | critical   | F76-S01                            |
-| F76-S03 | Componentes do personagem no @hm/ui — Mascot, MascotStage, GradientText, Thinking, LongWait e tokens por marca                | ⏸️ blocked    | critical   | F76-S02                            |
-| F76-S04 | Diretor do orçamento de atenção com persistência por membro e a configuração Animações do Copiloto                            | ⏸️ blocked    | high       | F76-S03, F73-S02                   |
-| F76-S05 | Botões do Copiloto na sidebar, TopBar, barra recolhida e celular, com varredura, personagem e alça espiando                   | ⏸️ blocked    | high       | F76-S03, F76-S04, F74-S01          |
-| F76-S06 | Política de carregamento — loading.tsx por rota com skeleton imediato e LongWait só em espera longa                           | ⏸️ blocked    | high       | F76-S03                            |
-| F76-S07 | Personagem nos estados vazios, no recibo de ação com Desfazer e na apresentação do Copiloto                                   | ⏸️ blocked    | medium     | F76-S03                            |
-| F76-S08 | Marca por empresa com flag do personagem (Odonto só glifo, Maian) e telemetria só de evento                                   | ⏸️ blocked    | high       | F76-S04, F76-S05                   |
-| F76-S09 | QA da F76 — axe nos dois temas, movimento reduzido, INP, peso e quadros longos, capturas e portão de design                   | ⏸️ blocked    | high       | F76-S05, F76-S06, F76-S07, F76-S08 |
-| F76-S10 | Companheiro das telas de acesso — emenda ao ADR-006, direção de arte, folha de poses, contrato e textos                       | ✅ done        | high       | —                                  |
-| F76-S11 | Companheiro das telas de acesso — motor (máquina de estados, diretor de foco, voo WAAPI, balão)                               | ⏸️ blocked    | high       | F76-S10                            |
-| F76-S12 | Companheiro das telas de acesso — integração (layout, AuthKit e formulários de login, cadastro, verificação, reset e convite) | 🔵 in-progress | high       | F76-S10                            |
-| F76-S13 | Companheiro das telas de acesso — QA (capturas, axe, peso, LCP/CLS, privacidade) e portão de design                           | ⏸️ blocked    | high       | F76-S11, F76-S12                   |
+| ID      | Titulo                                                                                                                        | Status      | Prioridade | Depende de                         |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------- | ---------- | ---------------------------------- |
+| F76-S01 | Spike medido — SVG+CSS com máquina de estados em TS contra Rive para o personagem                                             | 🟢 available | critical   | —                                  |
+| F76-S02 | Arte final do personagem com rig em camadas, LODs de 16 a 160 px, folha de estados e variantes por marca                      | ⏸️ blocked  | critical   | F76-S01                            |
+| F76-S03 | Componentes do personagem no @hm/ui — Mascot, MascotStage, GradientText, Thinking, LongWait e tokens por marca                | ⏸️ blocked  | critical   | F76-S02                            |
+| F76-S04 | Diretor do orçamento de atenção com persistência por membro e a configuração Animações do Copiloto                            | ⏸️ blocked  | high       | F76-S03, F73-S02                   |
+| F76-S05 | Botões do Copiloto na sidebar, TopBar, barra recolhida e celular, com varredura, personagem e alça espiando                   | ⏸️ blocked  | high       | F76-S03, F76-S04, F74-S01          |
+| F76-S06 | Política de carregamento — loading.tsx por rota com skeleton imediato e LongWait só em espera longa                           | ⏸️ blocked  | high       | F76-S03                            |
+| F76-S07 | Personagem nos estados vazios, no recibo de ação com Desfazer e na apresentação do Copiloto                                   | ⏸️ blocked  | medium     | F76-S03                            |
+| F76-S08 | Marca por empresa com flag do personagem (Odonto só glifo, Maian) e telemetria só de evento                                   | ⏸️ blocked  | high       | F76-S04, F76-S05                   |
+| F76-S09 | QA da F76 — axe nos dois temas, movimento reduzido, INP, peso e quadros longos, capturas e portão de design                   | ⏸️ blocked  | high       | F76-S05, F76-S06, F76-S07, F76-S08 |
+| F76-S10 | Companheiro das telas de acesso — emenda ao ADR-006, direção de arte, folha de poses, contrato e textos                       | ✅ done      | high       | —                                  |
+| F76-S11 | Companheiro das telas de acesso — motor (máquina de estados, diretor de foco, voo WAAPI, balão)                               | ⏸️ blocked  | high       | F76-S10                            |
+| F76-S12 | Companheiro das telas de acesso — integração (layout, AuthKit e formulários de login, cadastro, verificação, reset e convite) | 🟣 review    | high       | F76-S10                            |
+| F76-S13 | Companheiro das telas de acesso — QA (capturas, axe, peso, LCP/CLS, privacidade) e portão de design                           | ⏸️ blocked  | high       | F76-S11, F76-S12                   |
 
 ## Fase 8 — Permissions & Settings
 
