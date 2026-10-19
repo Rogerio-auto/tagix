@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangle, Clock, MailWarning, UserCheck } from 'lucide-react';
 import { Button, Input, cn } from '@hm/ui';
 import { ApiError } from '@/shared/lib/api-client';
+import { useAuthCompanion, useAuthCompanionStep } from '@/features/auth/companion';
 import { postLoginPath } from '@/shared/auth/route-guard';
 import { loginSchema, type LoginInput } from '../schema';
 import { useLogin } from '../queries';
@@ -62,6 +63,9 @@ export function LoginForm({
 }: LoginFormProps) {
   const router = useRouter();
   const login = useLogin();
+  // Companheiro: só SINAIS (etapa, envio, resultado). Nenhum valor de campo passa por aqui.
+  useAuthCompanionStep('login');
+  const companion = useAuthCompanion();
   const [submitError, setSubmitError] = useState<SubmitError | null>(null);
   const [unverified, setUnverified] = useState(false);
   const {
@@ -81,11 +85,14 @@ export function LoginForm({
     if (initialEmail) setFocus('password');
   }, [initialEmail, setFocus]);
 
-  const onSubmit = handleSubmit(async (data) => {
+  const onValid = async (data: LoginInput) => {
     setSubmitError(null);
     setUnverified(false);
+    companion.signal({ type: 'submit' });
     try {
       const res = await login.mutateAsync(data);
+      // Sucesso: celebra e navega NO MESMO tick (sem retenção artificial do redirect).
+      companion.signal({ type: 'success', final: false });
       // Intenção de plano da venda: se o cadastro escolheu um plano pago, o login o
       // entrega ao checkout (plano pré-selecionado). Tem prioridade sobre o ?next=.
       if (res.pendingPlanKey) {
@@ -103,6 +110,8 @@ export function LoginForm({
       router.refresh();
     } catch (err) {
       if (err instanceof ApiError && err.status === 403 && err.code === 'email_unverified') {
+        // Não é erro de credencial: a senha estava certa e o painel próprio explica.
+        companion.signal({ type: 'settled' });
         setUnverified(true);
         return;
       }
@@ -110,6 +119,7 @@ export function LoginForm({
       // mobile o toast fica atrás do teclado, e os dois juntos anunciavam o erro duas
       // vezes no leitor de tela.
       const isBadCreds = err instanceof ApiError && err.status === 401;
+      companion.signal({ type: 'error', kind: isBadCreds ? 'credentials' : 'server' });
       const nextError: SubmitError = isBadCreds
         ? {
             title: 'Email ou senha incorretos',
@@ -121,7 +131,10 @@ export function LoginForm({
           };
       setSubmitError(nextError);
     }
-  });
+  };
+  const onSubmit = handleSubmit(onValid, () =>
+    companion.signal({ type: 'error', kind: 'validation' }),
+  );
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>

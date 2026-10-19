@@ -1,8 +1,9 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect, useRef } from 'react';
+import { Component, createRef, useEffect, useRef } from 'react';
 import { cn } from '@hm/ui';
+import { useCompanionAnchor } from '@/features/auth/companion';
 
 /**
  * Peças visuais das telas de acesso (DS 3.0, F72-S08): título editorial, avisos em
@@ -25,12 +26,15 @@ export interface AuthHeadingProps {
 
 export function AuthHeading({ eyebrow, title, lead, focusOnMount = false }: AuthHeadingProps) {
   const ref = useRef<HTMLHeadingElement>(null);
+  // Âncora do posto `heading` do companheiro: ele fica em pé na linha do eyebrow, medido
+  // por ref (nunca por coordenada fixa). Só posição; nenhum texto do título sai daqui.
+  const anchorRef = useCompanionAnchor<HTMLElement>('heading');
   useEffect(() => {
     if (focusOnMount) ref.current?.focus({ preventScroll: false });
   }, [focusOnMount]);
 
   return (
-    <header className="mb-8 flex flex-col gap-3">
+    <header ref={anchorRef} className="mb-8 flex flex-col gap-3">
       <p className="flex items-center gap-2.5 font-mono text-xs font-medium uppercase tracking-[0.14em] text-text-low">
         <span aria-hidden className="h-px w-5 bg-border-2" />
         {eyebrow}
@@ -45,6 +49,109 @@ export function AuthHeading({ eyebrow, title, lead, focusOnMount = false }: Auth
       {lead && <p className="font-body text-body text-pretty text-text-mid">{lead}</p>}
     </header>
   );
+}
+
+export interface AuthStepTransitionProps {
+  /** Identifica a etapa. Quando muda, o bloco antigo sai e o novo entra. */
+  stepKey: string;
+  children: ReactNode;
+}
+
+const STEP_EXIT_MS = 160;
+const STEP_ENTER_MS = 240;
+const STEP_REDUCED_MS = 120;
+
+/** Lê a curva do token (`--ease`, `--ease-spring`): a fonte é `@hm/design-tokens`, não este arquivo. */
+function readEasing(el: Element, token: '--ease' | '--ease-spring'): string {
+  const value = getComputedStyle(el).getPropertyValue(token).trim();
+  return value === '' ? 'ease-out' : value;
+}
+
+/**
+ * Troca de etapa na MESMA rota (cadastro -> "Verifique seu email", verificação em curso ->
+ * sucesso): o bloco novo monta na hora e entra com fade + blur curto; o bloco antigo sai
+ * como um FANTASMA (clone inerte do DOM, sobreposto e fora do fluxo).
+ *
+ * Por que fantasma e não "segurar" o bloco antigo: segurar adiaria a montagem do novo e,
+ * com ela, o `focusOnMount` do H1 (WCAG 2.4.3). O fantasma não toma o foco, não muda a
+ * altura da coluna (zero layout shift) e não roda efeito nenhum. Blur só neste bloco.
+ *
+ * Entrada: opacity, blur 4->0, translateY 4->0 em 240 ms `--ease-spring`.
+ * Saída: opacity ->0 e blur 0->4 px em 160 ms `--ease`.
+ * Movimento reduzido: só opacity, 120 ms.
+ *
+ * É classe porque `getSnapshotBeforeUpdate` é a única janela em que o DOM antigo ainda
+ * existe e o novo ainda não foi aplicado; hooks não têm equivalente.
+ */
+export class AuthStepTransition extends Component<AuthStepTransitionProps> {
+  private readonly contentRef = createRef<HTMLDivElement>();
+  private readonly ghostRef = createRef<HTMLDivElement>();
+
+  getSnapshotBeforeUpdate(prev: AuthStepTransitionProps): HTMLElement | null {
+    const content = this.contentRef.current;
+    if (prev.stepKey === this.props.stepKey || !content) return null;
+    const clone = content.cloneNode(true);
+    return clone instanceof HTMLElement ? clone : null;
+  }
+
+  componentDidUpdate(prev: AuthStepTransitionProps, _state: unknown, ghost: HTMLElement | null) {
+    if (prev.stepKey === this.props.stepKey) return;
+    const content = this.contentRef.current;
+    const host = this.ghostRef.current;
+    if (!content || typeof content.animate !== 'function') return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (reduced) {
+      content.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: STEP_REDUCED_MS,
+        easing: readEasing(content, '--ease'),
+      });
+    } else {
+      content.animate(
+        [
+          { opacity: 0, filter: 'blur(4px)', transform: 'translateY(4px)' },
+          { opacity: 1, filter: 'blur(0px)', transform: 'translateY(0)' },
+        ],
+        { duration: STEP_ENTER_MS, easing: readEasing(content, '--ease-spring') },
+      );
+    }
+
+    if (!ghost || !host) return;
+    // O fantasma é só pixel: sem ids duplicados, sem iframe (o captcha recarregaria), sem foco.
+    ghost.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+    ghost.querySelectorAll('iframe, script, video, audio').forEach((n) => n.remove());
+    ghost.setAttribute('inert', '');
+    host.appendChild(ghost);
+    const out = ghost.animate(
+      reduced
+        ? [{ opacity: 1 }, { opacity: 0 }]
+        : [
+            { opacity: 1, filter: 'blur(0px)' },
+            { opacity: 0, filter: 'blur(4px)' },
+          ],
+      {
+        duration: reduced ? STEP_REDUCED_MS : STEP_EXIT_MS,
+        easing: readEasing(content, '--ease'),
+        fill: 'forwards',
+      },
+    );
+    const cleanup = () => ghost.remove();
+    out.addEventListener('finish', cleanup, { once: true });
+    out.addEventListener('cancel', cleanup, { once: true });
+  }
+
+  render() {
+    return (
+      <div className="relative">
+        <div
+          ref={this.ghostRef}
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 z-10"
+        />
+        <div ref={this.contentRef}>{this.props.children}</div>
+      </div>
+    );
+  }
 }
 
 export type NoticeTone = 'danger' | 'warn' | 'info' | 'success' | 'neutral';
