@@ -17,9 +17,10 @@ import { AuthCompanionRoot, CompanionInlineSlot, CompanionPerch } from '@/featur
  * imagem genérica: tipografia, hairlines e um grid que some para baixo.
  *
  * Companheiro (ADR-006 §9): `AuthCompanionRoot` envolve a raiz e desenha o palco por cima
- * (absoluto, sem tocar o fluxo). Os três postos são só âncoras sem peso no layout: o
- * `perch` dentro do painel (lg+), o `inline` (caixa 40x40 reservada) na linha do logotipo
- * (< lg) e o `heading`, ligado por ref no `AuthHeading`.
+ * (absoluto, sem tocar o fluxo). Os três postos são âncoras: o `perch` é uma faixa em
+ * fluxo no painel (lg+; ver `BrandPanel`), o `inline` (caixa 40x40 reservada) fica na linha
+ * do logotipo (< lg) e o `heading` é ligado por ref no `AuthHeading` (e no cabeçalho do
+ * convite).
  */
 /**
  * `no-referrer` em todo o grupo: verificação e redefinição de senha carregam `?token=` na
@@ -92,7 +93,6 @@ function BrandPanel() {
       aria-label="Sobre a Leadium"
       className="relative hidden min-h-dvh flex-1 overflow-hidden border-l border-border bg-bg-elevated lg:flex"
     >
-      <CompanionPerch />
       {/* Grid de hairlines (maquete DS 3.0): camada decorativa, some para baixo. */}
       <div
         aria-hidden
@@ -104,11 +104,16 @@ function BrandPanel() {
         className="pointer-events-none absolute -right-40 -top-40 size-[36rem] rounded-full bg-[radial-gradient(closest-side,var(--brand-faint),transparent)] opacity-40"
       />
 
-      <div className="relative flex w-full flex-col justify-between gap-16 p-12 xl:p-16">
+      <div className="relative flex w-full flex-col gap-6 p-12 xl:p-16">
         <p className="flex items-center gap-2.5 font-mono text-xs font-medium uppercase tracking-[0.14em] text-text-low">
           <span aria-hidden className="h-px w-5 bg-brand-text" />
           Atendimento · Vendas · Automação
         </p>
+
+        {/* Posto do companheiro: faixa em fluxo (>= 56 px), sem texto. O personagem fica
+            DENTRO dela, então nunca cobre o texto editorial, em nenhuma viewport. Divide a
+            folga vertical com o respiro de baixo, como o `justify-between` fazia. */}
+        <CompanionPerch />
 
         <div className="flex max-w-[34rem] flex-col gap-10">
           <p className="font-head text-h2 text-balance text-text xl:text-h1">
@@ -125,6 +130,8 @@ function BrandPanel() {
             ))}
           </ol>
         </div>
+
+        <div aria-hidden className="min-h-4 flex-1" />
 
         <p className="font-mono text-xs text-text-low">
           Leadium · plataforma de conversas que vendem

@@ -148,6 +148,8 @@ function stub(el: Element | null, r: DOMRect): void {
 /* ---------------------------------- telas ---------------------------------- */
 
 let api: AuthCompanionApi | null = null;
+/** `false` simula uma tela sem `AuthHeading` (ex.: convite carregando). */
+let withHeading = true;
 
 function Screen(): React.ReactNode {
   const heading = useCompanionAnchor<HTMLElement>('heading');
@@ -158,7 +160,7 @@ function Screen(): React.ReactNode {
       <div className="logo-row">
         <CompanionInlineSlot />
       </div>
-      <header ref={heading}>
+      <header ref={withHeading ? heading : undefined}>
         <p>Acesso</p>
         <h1>Entrar</h1>
       </header>
@@ -188,7 +190,8 @@ async function mount(): Promise<void> {
   stub(host.querySelector('[data-companion-stage]'), rect(0, 0, 1200, 800));
   stub(host.querySelector('header'), rect(100, 300, 400, 120));
   stub(host.querySelector('header > p'), rect(100, 300, 300, 16));
-  stub(host.querySelector('[data-companion-anchor="perch"]'), rect(700, 0, 500, 800));
+  // A faixa do perch (F76-S14): 400x120 no fluxo do painel, y 100..220.
+  stub(host.querySelector('[data-companion-anchor="perch"]'), rect(700, 100, 400, 120));
   stub(host.querySelector('#email'), rect(100, 380, 300, 44));
   stub(host.querySelector('#pass'), rect(100, 450, 300, 44));
 }
@@ -219,6 +222,7 @@ beforeEach(() => {
   reducedMotion = false;
   hidden = false;
   api = null;
+  withHeading = true;
   installEnvironment();
 });
 
@@ -312,7 +316,8 @@ describe('voo (movimento vivo)', () => {
     expect(d).toBeLessThanOrEqual(760);
     expect(pos.style.willChange).toBe('transform');
     expect(pos.getAttribute('data-station')).toBe('perch');
-    expect(pos.style.transform).toBe('translate(748px, 378px)');
+    // x = início da faixa; y = centro do campo (402) limitado à faixa (100..220 - 48).
+    expect(pos.style.transform).toBe('translate(700px, 172px)');
 
     // O arco, o esticar e a sombra viajam juntos.
     const flightLayers = created.map(layerOf);
@@ -382,6 +387,52 @@ describe('voo (movimento vivo)', () => {
   });
 });
 
+describe('perch em faixa e fallback de postos (F76-S14)', () => {
+  it('a caixa da figura fica sempre dentro da faixa, com o campo acima ou abaixo dela', async () => {
+    await mount();
+    const pos = await waitForActor();
+    await settleAnimations();
+    await focus(host.querySelector('#email') as Element); // centro 402: abaixo da faixa
+    await settleAnimations();
+    expect(pos.style.transform).toBe('translate(700px, 172px)');
+
+    stub(host.querySelector('#pass'), rect(100, 20, 300, 44)); // centro 42: acima da faixa
+    await focus(host.querySelector('#pass') as Element);
+    await settleAnimations();
+    expect(pos.style.transform).toBe('translate(700px, 100px)');
+  });
+
+  it('faixa mais baixa que a figura (48 px): fica no heading, sem voar para o painel', async () => {
+    await mount();
+    const pos = await waitForActor();
+    await settleAnimations();
+    const before = pos.style.transform;
+    stub(host.querySelector('[data-companion-anchor="perch"]'), rect(700, 100, 400, 40));
+    created.length = 0;
+    await focus(host.querySelector('#email') as Element);
+    await settleAnimations();
+    expect(pos.getAttribute('data-station')).toBe('heading');
+    expect(pos.style.transform).toBe(before);
+    expect(created.some((r) => r.options.duration === 560)).toBe(false);
+  });
+
+  it('o heading mede a base do primeiro <p> do header (o eyebrow), não a do header', async () => {
+    await mount();
+    const pos = await waitForActor();
+    // A base do eyebrow (316) manda, não a do header (420).
+    expect(pos.style.transform).toBe('translate(452px, 270.5px)');
+  });
+
+  it('sem âncora heading o personagem usa o perch em vez de ficar invisível', async () => {
+    withHeading = false;
+    await mount();
+    const pos = await waitForActor();
+    expect(pos.getAttribute('data-station')).toBe('perch');
+    expect(pos.getAttribute('data-placed')).toBe('true');
+    expect(pos.style.transform).toBe('translate(700px, 136px)');
+  });
+});
+
 describe('movimento reduzido', () => {
   it('não voa: troca de posto por crossfade de 160 ms; sem respiração nem piscar', async () => {
     reducedMotion = true;
@@ -401,7 +452,7 @@ describe('movimento reduzido', () => {
     });
     await settleAnimations();
 
-    expect(pos.style.transform).toBe('translate(748px, 378px)');
+    expect(pos.style.transform).toBe('translate(700px, 172px)');
     expect(pos.style.willChange).toBe('');
     const moving = created.filter((r) =>
       props(r).some((p) => p === 'transform' || p === 'translate'),

@@ -8,7 +8,7 @@ import type { CompanionAnchorName } from './contract';
  * Âncoras do companheiro (F76-S11): o motor mede elementos por ref, nunca por coordenada
  * fixa (SPEC §3). Cada posto tem a sua:
  * - `heading`: o `<header>` do `AuthHeading` (ref via `useCompanionAnchor('heading')`);
- * - `perch`: `<CompanionPerch/>` preenche o `BrandPanel` (que precisa ser `relative`);
+ * - `perch`: `<CompanionPerch/>`, faixa em fluxo no `BrandPanel` (F76-S14);
  * - `inline`: `<CompanionInlineSlot/>` reserva a caixa 40×40 na linha do logotipo.
  *
  * Fora do provider tudo vira inerte: a tela funciona igual sem o companheiro.
@@ -72,17 +72,20 @@ export function useCompanionAnchor<T extends HTMLElement>(
 }
 
 /**
- * Âncora do posto `perch`. Preenche o `BrandPanel` (que deve ser `position: relative`);
- * posicionada em absoluto, não afeta layout nem CLS.
+ * Posto `perch` (F76-S14): uma FAIXA REAL no fluxo do `BrandPanel`, entre o eyebrow e o bloco
+ * editorial (`flex-1 min-h-14`, sem texto). O personagem fica dentro dela, então não existe
+ * viewport em que ele possa sobrepor o texto do painel: a faixa é caixa de layout, não uma
+ * coordenada. O motor lê o retângulo dela (nunca uma constante) e, se ela tiver menos de
+ * 48 px de altura, o personagem fica no posto `heading`. O pai precisa ser `flex-col`.
  */
 export function CompanionPerch(): ReactNode {
-  const ref = useSlotRef<HTMLSpanElement>('perch');
+  const ref = useSlotRef<HTMLDivElement>('perch');
   return (
-    <span
+    <div
       ref={ref}
       aria-hidden="true"
       data-companion-anchor="perch"
-      className="pointer-events-none absolute inset-0 hidden lg:block"
+      className="pointer-events-none hidden min-h-14 flex-1 lg:block"
     />
   );
 }

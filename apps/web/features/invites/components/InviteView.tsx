@@ -6,6 +6,7 @@ import { AlertTriangle, CircleCheck, Clock, LinkIcon, MailCheck, MailQuestion, U
 import { Button, Skeleton } from '@hm/ui';
 import { formatRelative } from '../time';
 import { roleLabel, type InvitePreview } from '../types';
+import { useCompanionAnchor } from '@/features/auth/companion';
 import {
   AuthNotice,
   primaryLinkClass,
@@ -85,8 +86,11 @@ const eyebrowClass =
 /** O "passe": quem convidou, para onde, com que papel e até quando. */
 function InviteHeader({ preview }: { preview: InvitePreview }): React.JSX.Element {
   const initial = preview.workspaceName.trim().charAt(0).toUpperCase() || '·';
+  // Âncora do posto `heading` do companheiro (F76-S14, A4): ele fica em pé na linha do
+  // eyebrow "Convite", como nas demais telas. Só posição; nenhum dado do convite sai daqui.
+  const anchorRef = useCompanionAnchor<HTMLElement>('heading');
   return (
-    <header className="flex flex-col gap-6">
+    <header ref={anchorRef} className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
         <p className={eyebrowClass}>
           <span aria-hidden className="h-px w-5 bg-border-2" />

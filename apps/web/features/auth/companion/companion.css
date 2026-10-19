@@ -103,6 +103,12 @@
   top: calc(100% + 8px);
 }
 
+/* Acima da figura, alinhado à direita dela; o rabicho aponta para baixo (F76-S14, A1). */
+.m-bubble-pos[data-placement='top'] {
+  right: 0;
+  bottom: calc(100% + 8px);
+}
+
 .m-bubble {
   position: relative;
   display: block;
@@ -157,11 +163,24 @@
   transform-origin: right top;
 }
 
+.m-bubble-pos[data-placement='top'] .m-bubble {
+  transform-origin: right bottom;
+}
+
 .m-bubble-pos[data-placement='below'] .m-bubble::after {
   right: 14px;
   top: -4px;
   margin-top: 0;
   border-width: 1px 0 0 1px;
+}
+
+/* Centro do rabicho = centro da figura de 48 px (24 px da borda direita). */
+.m-bubble-pos[data-placement='top'] .m-bubble::after {
+  right: 21px;
+  top: auto;
+  bottom: -4px;
+  margin-top: 0;
+  border-width: 0 1px 1px 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -9,6 +9,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import type { ReactNode, RefObject } from 'react';
+import { flushSync } from 'react-dom';
 import './art/rig.css';
 import './companion.css';
 import { RigInline40 } from './art/rig-inline-40';
@@ -333,11 +334,23 @@ function usePageActive(target: RefObject<Element | null>): boolean {
   return pageVisible && inView;
 }
 
-const HEIGHT_TO_SHADOW_48 = 45.5;
+/** Distância do topo da caixa da figura ao centro da sombra (base do corpo + 2,5 px). */
+const SHADOW_Y: Record<number, number> = { 48: 45.5, 40: 38.25 };
 const HEADING_INSET = 24;
-const PERCH_X = 72;
-const PERCH_MARGIN = 96;
+/** Faixa do `perch` mais baixa que a figura: ela fica no `heading` (F76-S14, A2). */
+const PERCH_MIN_HEIGHT = 48;
 
+/**
+ * Onde o posto `station` fica agora, ou `null` se ele não existe nesta tela/viewport
+ * (sem âncora, caixa zerada, faixa baixa demais).
+ *
+ * - `heading`: em pé na linha do eyebrow, a 24 px da borda direita do `<header>`. O eyebrow é
+ *   o primeiro `<p>` descendente do header (o do `AuthHeading` é filho direto; o do convite
+ *   fica dentro de um `div`); sem `<p>`, o primeiro filho; sem filho, o próprio header.
+ * - `perch`: DENTRO da faixa em fluxo do painel (A2): `x` no início do texto do painel e `y`
+ *   do campo focado limitado à faixa, de modo que a caixa da figura nunca sai dela.
+ * - `inline`: a caixa 40x40 reservada na linha do logotipo.
+ */
 function measure(
   stage: HTMLElement,
   station: CompanionStation,
@@ -357,23 +370,71 @@ function measure(
     const header = anchors.get('heading');
     if (!header) return null;
     const hr = header.getBoundingClientRect();
-    const eyebrow = header.firstElementChild ?? header;
+    if (hr.width === 0 && hr.height === 0) return null;
+    const eyebrow = header.querySelector('p') ?? header.firstElementChild ?? header;
     const er = eyebrow.getBoundingClientRect();
     return {
       x: hr.right - HEADING_INSET - size / 2 - s.left,
-      y: er.bottom - HEIGHT_TO_SHADOW_48 - s.top,
+      y: er.bottom - (SHADOW_Y[size] ?? 45.5) - s.top,
     };
   }
-  const panel = anchors.get('perch');
-  if (!panel) return null;
-  const pr = panel.getBoundingClientRect();
+  const strip = anchors.get('perch');
+  if (!strip) return null;
+  const pr = strip.getBoundingClientRect();
   if (pr.width === 0 && pr.height === 0) return null;
+  if (pr.height < PERCH_MIN_HEIGHT) return null;
   const fr = focus?.getBoundingClientRect();
   const fieldCy = fr ? fr.top + fr.height / 2 : pr.top + pr.height / 2;
-  const lo = pr.top + PERCH_MARGIN;
-  const hi = pr.bottom - PERCH_MARGIN;
-  const cy = hi < lo ? pr.top + pr.height / 2 : clamp(lo, fieldCy, hi);
-  return { x: pr.left + PERCH_X - size / 2 - s.left, y: cy - size / 2 - s.top };
+  const top = clamp(pr.top, fieldCy - size / 2, pr.bottom - size);
+  return { x: pr.left - s.left, y: top - s.top };
+}
+
+/** Posto pedido primeiro; sem ele, outro posto visível (nunca `visibility: hidden`). */
+const STATION_FALLBACK: Record<CompanionStation, readonly CompanionStation[]> = {
+  heading: ['heading', 'perch', 'inline'],
+  perch: ['perch', 'heading', 'inline'],
+  inline: ['inline', 'heading', 'perch'],
+};
+
+interface Resolved extends Point {
+  station: CompanionStation;
+}
+
+function resolveStation(
+  stage: HTMLElement,
+  wanted: CompanionStation,
+  size: number,
+  anchors: AnchorRegistry,
+  focus: Element | null,
+): Resolved | null {
+  for (const station of STATION_FALLBACK[wanted]) {
+    const point = measure(stage, station, size, anchors, focus);
+    if (point !== null) return { station, ...point };
+  }
+  return null;
+}
+
+/**
+ * Animações em andamento de quem CONTÉM os elementos medidos (A3). `getBoundingClientRect`
+ * inclui o `transform` dos ancestrais: o `hm-rise` da coluna (8 px) e a entrada do
+ * `AuthStepTransition` (4 px) deixavam a figura 0,4-8 px fora da linha. Animações infinitas
+ * e as do próprio palco não contam.
+ */
+function ancestorMotion(targets: ReadonlyArray<Element | null | undefined>): Animation[] {
+  if (typeof document.getAnimations !== 'function' || typeof KeyframeEffect === 'undefined') {
+    return [];
+  }
+  const els = targets.filter((t): t is Element => t !== null && t !== undefined);
+  if (els.length === 0) return [];
+  return document.getAnimations().filter((a) => {
+    if (a.playState !== 'running') return false;
+    const effect = a.effect;
+    if (!(effect instanceof KeyframeEffect)) return false;
+    const target = effect.target;
+    if (target === null || target.closest('[data-companion-stage]')) return false;
+    if (effect.getTiming().iterations === Infinity) return false;
+    return els.some((el) => target.contains(el));
+  });
 }
 
 interface Placed {
@@ -412,6 +473,19 @@ export function CompanionActor({
   const [busy, setBusy] = useState(true);
   const [tick, setTick] = useState(0);
   const bump = useCallback(() => setTick((t) => t + 1), []);
+  // Posto em que a figura está de fato (pode diferir do pedido: faixa baixa, sem âncora).
+  const [shownStation, setShownStation] = useState<CompanionStation>(snap.station);
+  // A3: a remedição que vem do fim das animações dos ancestrais corrige de leve (deslize).
+  const settleToken = useRef(0);
+  const softCorrection = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      settleToken.current += 1; // invalida o que estiver esperando
+    };
+  }, []);
 
   const active = usePageActive(enterRef);
   useEffect(() => {
@@ -451,18 +525,37 @@ export function CompanionActor({
     };
   }, [anchors, stageRef, bump]);
 
-  const station = snap.station;
   const focusRev = snap.focusRev;
 
   useLayoutEffect(() => {
     const stage = stageRef.current;
     const pos = posRef.current;
     if (!stage || !pos) return;
-    const next = measure(stage, station, size, anchors, director.getFocusTarget());
-    if (next === null) {
+    const focusEl = director.getFocusTarget();
+    const resolved = resolveStation(stage, snap.station, size, anchors, focusEl);
+    if (resolved === null) {
       setPlaced(false);
       return;
     }
+    const station = resolved.station;
+    const next: Point = { x: resolved.x, y: resolved.y };
+    setShownStation(station);
+
+    // A3: se algum ancestral ainda anima (transform), remede quando todos terminarem.
+    const motion = ancestorMotion([
+      anchors.get(station),
+      station === 'perch' ? focusEl : null,
+    ]);
+    if (motion.length > 0) {
+      settleToken.current += 1;
+      const token = settleToken.current;
+      void Promise.allSettled(motion.map((a) => a.finished)).then(() => {
+        if (!mounted.current || settleToken.current !== token) return;
+        softCorrection.current = true;
+        flushSync(bump);
+      });
+    }
+
     const prev = placedRef.current;
     const focusChanged = lastFocusRev.current !== focusRev;
     lastFocusRev.current = focusRev;
@@ -496,7 +589,12 @@ export function CompanionActor({
 
     const stationChanged = prev.station !== station;
     const moved = Math.abs(prev.x - next.x) > 0.5 || Math.abs(prev.y - next.y) > 0.5;
-    if (!stationChanged && !moved) return;
+    if (!stationChanged && !moved) {
+      softCorrection.current = false;
+      // O diretor pediu outro posto, mas a figura já está no certo (fallback): solta o voo.
+      director.landed();
+      return;
+    }
 
     const flyable = stationChanged && station !== 'inline' && prev.station !== 'inline';
 
@@ -552,11 +650,18 @@ export function CompanionActor({
 
     // Deslize do `perch` até o novo campo (sem arco) ou reposição instantânea.
     commitPos();
-    if (station === 'perch' && focusChanged && moved && !reducedMotion) {
+    const soft = softCorrection.current;
+    softCorrection.current = false;
+    if (
+      moved &&
+      !reducedMotion &&
+      station !== 'inline' &&
+      ((station === 'perch' && focusChanged) || soft)
+    ) {
       void deck.play(fyRef.current, planGlide(prev.y - next.y), 'move');
     }
     director.landed();
-  }, [station, focusRev, size, tick, reducedMotion, anchors, stageRef, director, deck, bump]);
+  }, [snap.station, focusRev, size, tick, reducedMotion, anchors, stageRef, director, deck, bump]);
 
   const frozen = snap.typing || snap.keyboardOpen;
   const onStateEnd = useCallback((s: MascotState) => director.stateEnded(s), [director]);
@@ -566,7 +671,7 @@ export function CompanionActor({
       ref={posRef}
       data-companion-actor=""
       data-placed={placed ? 'true' : 'false'}
-      data-station={station}
+      data-station={shownStation}
       style={{ width: size, height: size }}
       className="m-pos"
     >
@@ -590,9 +695,9 @@ export function CompanionActor({
         </div>
       </div>
       <Bubble
-        text={station === 'perch' ? null : snap.bubble}
+        text={shownStation === 'perch' ? null : snap.bubble}
         seq={snap.bubbleSeq}
-        placement={station === 'inline' ? 'below' : 'start'}
+        placement={shownStation === 'inline' ? 'below' : 'top'}
       />
     </div>
   );
