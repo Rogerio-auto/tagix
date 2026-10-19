@@ -24,6 +24,9 @@ Copiloto, nos estados vazios, nos recibos com Desfazer e no onboarding.
 2. **Um ator por vez.** No máximo um personagem animado por viewport. Os demais ficam em pose parada.
 3. **Movimento significa estado.** Repouso não respira nem flutua; só pisca. Loop contínuo só em "pensando",
    enquanto existe trabalho real.
+   *Exceção única (ADR-006 §9):* o companheiro das telas de acesso respira (`fig` 0→−1,5 px, 4,2 s) por no máximo
+   3 ciclos depois de cada pouso ou fim de estado, pausando se houve tecla há < 1,5 s; depois só pisca. Fora de
+   `(auth)` a regra acima vale sem exceção.
 4. **Atenção é orçamento, não direito.** Chamar a pessoa tem cota, portões, aprendizado e silêncio (ADR-006 §4).
 5. **Marca manda.** Cor por token; marca que proíbe personagem recebe o glifo parado (`glyph`).
 6. **Acessível por construção.** `aria-hidden` no decorativo, anúncio em `aria-live="polite"`, movimento reduzido
@@ -61,6 +64,7 @@ Copiloto, nos estados vazios, nos recibos com Desfazer e no onboarding.
 | `confused` | 900 ms e fica na pose | cabeça inclina, olhos `squint`, ponta da antena em `--warn` | erro de integração que a pessoa resolve | erro que ela não resolve |
 | `peek` | entra 320 ms, sai 240 ms | espia da borda (só a cabeça, clip) | sugestão pendente na alça | Copiloto aberto |
 | `look` | 200 ms | olhos 1,1 px na direção (`up`/`left`/`right`) | hover no botão; painel aberto | — |
+| `avert` | 240 ms `--ease`; volta em 200 ms | `eyes-closed` em 120 ms, cabeça +8° para fora e translateX 1,5 px (no `md`) | foco num campo de senha (`input[type=password]`), só nas telas de acesso (ADR-006 §9) | fora de `(auth)`; nunca reage ao conteúdo digitado |
 
 Transições: qualquer estado com fim volta para `idle`; `thinking` sai para `celebrate` (sucesso), `confused`
 (erro resolvível) ou `idle`. Pedido de estado novo durante um estado de uma vez **enfileira** (máx. 1) em vez de
@@ -146,7 +150,7 @@ Regra em ADR-006 §4. Implementação:
 ### 6.1 `Mascot`
 
 ```ts
-type MascotState = 'idle'|'blink'|'wave'|'play'|'thinking'|'celebrate'|'sleep'|'confused'|'peek'
+type MascotState = 'idle'|'blink'|'wave'|'play'|'thinking'|'celebrate'|'sleep'|'confused'|'peek'|'avert' // avert: ADR-006 §9
 type MascotLook = 'none'|'up'|'left'|'right'
 interface MascotProps {
   state?: MascotState                 // padrão 'idle'
@@ -216,7 +220,8 @@ do Desfazer, personagem `celebrate` (24 px) só em `done`, chama `MascotStage.cl
 | Rotas pesadas: `pipeline`, `calendar` (já tem `loading.tsx`), `flows/[id]` (já tem), `campaigns`, `agents`, `knowledge`, `conversions`, `contacts`, `hoje` | `loading.tsx` próprio com skeleton fiel ao layout + `LongWait` | S06 |
 | `conversations` (Inbox) | **só skeleton**, nunca personagem | S06 |
 | `settings`, `help` | só skeleton (leve) | S06 |
-| `(auth)`, `(public)`, `(platform)` | sem personagem | — |
+| `(auth)` (login, cadastro, verificação, senha, convite) | companheiro reativo (ADR-006 §9; arte e animação em [`../design/auth-companion/SPEC.md`](../design/auth-companion/SPEC.md)): só reage a foco, envio, resultado e troca de etapa; nunca ao conteúdo digitado; só marca Leadium | S10–S13 |
+| `(public)`, `(platform)` | sem personagem | — |
 | Fallbacks de `Suspense` com espera de dado do cliente (widgets da Home, gráficos) | skeleton; nunca personagem em KPI/número | S06 |
 | "Pensando" do Copiloto | `Thinking` | S03 (componente), F74 (uso) |
 | Sincronização, importação e ações em lote (F75 passo 5, importação CSV, ação de lote do Copiloto, envio de campanha em lote) | `LongWait` com `progress` real | S06 (padrão e uso nos existentes), F75-S10 (assistente) |

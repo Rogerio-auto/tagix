@@ -1,0 +1,117 @@
+/*
+ * Pintura do robô das telas de acesso (F76-S10). Só tokens de @hm/design-tokens, nenhum hex.
+ *
+ * As variáveis --m-* são LOCAIS a [data-companion] e mapeiam tokens que já existem. O F76-S03
+ * promove os mesmos nomes ao tokens.css sem renomear (SPEC §2). Importado pela figura do
+ * motor (F76-S11), dentro do chunk lazy: fora do caminho do LCP.
+ *
+ * Decisões (SPEC §2):
+ * - Visor é vidro escuro nos dois temas. No claro, --bg sobre --surface-2 dá 1,03:1 e o visor
+ *   sumiria; por isso no claro o visor é --text e o olho é --surface (luz no vidro).
+ * - A ponta acesa usa --brand-text, não --brand: --brand é do único CTA da tela (DS, Logo.tsx);
+ *   --brand-text é o token de ícone/marca pequena nos dois temas.
+ */
+
+[data-companion] {
+  --m-ink: var(--text);
+  --m-fill: var(--surface-2);
+  --m-visor: var(--bg);
+  --m-eye: var(--text);
+  --m-accent: var(--brand-text);
+  --m-warn: var(--warn);
+  --m-shadow: color-mix(in srgb, var(--text) 14%, transparent);
+}
+
+[data-theme='light'] [data-companion],
+[data-companion][data-theme='light'] {
+  --m-visor: var(--text);
+  --m-eye: var(--surface);
+}
+
+.m-rig {
+  display: block;
+  overflow: visible;
+  flex: none;
+}
+
+/* Traço único. */
+.m-rig .m-line {
+  fill: none;
+  stroke: var(--m-ink);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.m-rig .m-solid {
+  fill: var(--m-fill);
+  stroke: var(--m-ink);
+  stroke-width: 1.5;
+}
+
+.m-rig .m-visor {
+  fill: var(--m-visor);
+}
+
+.m-rig .m-eye {
+  fill: var(--m-eye);
+}
+
+.m-rig .m-eye-line {
+  fill: none;
+  stroke: var(--m-eye);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Ponta da antena: apagada em tinta; acende só com significado. */
+.m-rig .m-tip {
+  fill: var(--m-ink);
+}
+.m-rig[data-tip='lit'] .m-tip {
+  fill: var(--m-accent);
+}
+.m-rig[data-tip='warn'] .m-tip {
+  fill: var(--m-warn);
+}
+
+/* Halo: anel fino que não engrossa ao escalar. Invisível fora da celebração. */
+.m-rig .m-halo {
+  fill: none;
+  stroke: var(--m-accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  opacity: 0;
+}
+
+/* Um conjunto de olhos por vez. */
+.m-rig .m-eyeset {
+  opacity: 0;
+}
+.m-rig[data-eyes='open'] [data-layer='eyes-open'],
+.m-rig[data-eyes='closed'] [data-layer='eyes-closed'],
+.m-rig[data-eyes='happy'] [data-layer='eyes-happy'],
+.m-rig[data-eyes='squint'] [data-layer='eyes-squint'] {
+  opacity: 1;
+}
+
+/* Olhar: deslocamento do grupo `eyes` (rig.json → lods.*.look). */
+.m-rig[data-rig='md-48'][data-look='left'] .m-eyes {
+  transform: translateX(-2px);
+}
+.m-rig[data-rig='md-48'][data-look='right'] .m-eyes {
+  transform: translateX(2px);
+}
+.m-rig[data-rig='md-48'][data-look='up'] .m-eyes {
+  transform: translateY(-1.5px);
+}
+.m-rig[data-rig='inline-40'][data-look='left'] .m-eyes {
+  transform: translateX(-1.5px);
+}
+.m-rig[data-rig='inline-40'][data-look='right'] .m-eyes {
+  transform: translateX(1.5px);
+}
+.m-rig[data-rig='inline-40'][data-look='up'] .m-eyes {
+  transform: translateY(-1px);
+}
