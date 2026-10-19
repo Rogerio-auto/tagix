@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button, Input, cn } from '@hm/ui';
+import { useAuthCompanion } from '@/features/auth/companion';
 import { invitePasswordSchema, passwordStrength, type StrengthLevel } from '../password-strength';
 
 const formSchema = z.object({
@@ -52,6 +53,7 @@ export interface CreatePasswordFormProps {
 
 /** Nome + senha — o convidado sem conta cria a dele aqui (a prova do email já está em memória). */
 export function CreatePasswordForm({ busy, onSubmit }: CreatePasswordFormProps): React.JSX.Element {
+  const companion = useAuthCompanion();
   const {
     register,
     handleSubmit,
@@ -59,9 +61,10 @@ export function CreatePasswordForm({ busy, onSubmit }: CreatePasswordFormProps):
     formState: { errors },
   } = useForm<CreatePasswordValues>({ resolver: zodResolver(formSchema) });
   const password = watch('password') ?? '';
+  const onInvalid = () => companion.signal({ type: 'error', kind: 'validation' });
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
+    <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex flex-col gap-5" noValidate>
       <Input
         label="Seu nome"
         size="lg"

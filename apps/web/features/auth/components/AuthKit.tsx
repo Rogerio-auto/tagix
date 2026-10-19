@@ -87,14 +87,14 @@ export class AuthStepTransition extends Component<AuthStepTransitionProps> {
   private readonly contentRef = createRef<HTMLDivElement>();
   private readonly ghostRef = createRef<HTMLDivElement>();
 
-  getSnapshotBeforeUpdate(prev: AuthStepTransitionProps): HTMLElement | null {
+  override getSnapshotBeforeUpdate(prev: AuthStepTransitionProps): HTMLElement | null {
     const content = this.contentRef.current;
     if (prev.stepKey === this.props.stepKey || !content) return null;
     const clone = content.cloneNode(true);
     return clone instanceof HTMLElement ? clone : null;
   }
 
-  componentDidUpdate(prev: AuthStepTransitionProps, _state: unknown, ghost: HTMLElement | null) {
+  override componentDidUpdate(prev: AuthStepTransitionProps, _state: unknown, ghost: HTMLElement | null) {
     if (prev.stepKey === this.props.stepKey) return;
     const content = this.contentRef.current;
     const host = this.ghostRef.current;
@@ -140,7 +140,7 @@ export class AuthStepTransition extends Component<AuthStepTransitionProps> {
     out.addEventListener('cancel', cleanup, { once: true });
   }
 
-  render() {
+  override render() {
     return (
       <div className="relative">
         <div

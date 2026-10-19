@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/shared/lib/api-client';
 import { safeNextPath } from '@/shared/lib/safe-redirect';
+import { useAuthCompanion, useAuthCompanionStep } from '@/features/auth/companion';
+import { AuthStepTransition } from '@/features/auth/components/AuthKit';
 import {
   useAcceptInvite,
   useInviteLogout,
@@ -108,6 +110,7 @@ export function InviteScreen({ token }: { token: string }): React.JSX.Element {
   const accept = useAcceptInvite();
   const sendEmail = useSendInviteEmail();
   const logout = useInviteLogout();
+  const companion = useAuthCompanion();
 
   // Prova de posse: só em memória. `undefined` = fragmento ainda não lido.
   const [proof, setProof] = useState<EmailProof | null | undefined>(undefined);
@@ -128,6 +131,9 @@ export function InviteScreen({ token }: { token: string }): React.JSX.Element {
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [now, setNow] = useState(() => Date.now());
 
+  // Companheiro: só SINAIS (etapa, envio, resultado). Nenhum valor de campo passa por aqui.
+  useAuthCompanionStep(createdNext !== null ? 'invite-done' : 'invite');
+
   // Relógio do cooldown: só liga enquanto há contagem.
   useEffect(() => {
     if (cooldownUntil <= Date.now()) return;
@@ -147,46 +153,52 @@ export function InviteScreen({ token }: { token: string }): React.JSX.Element {
   const onFailure = useCallback((err: unknown) => {
     const { error: viewError, code, status } = acceptError(err);
     if (status === 404) {
+      companion.signal({ type: 'error', kind: 'server' });
       setInvalid(true);
       return;
     }
-    if (code === 'login_required' || status === 401) {
-      setLoginRequired(true);
+    if (code === 'login_required' || status === 401 || code === 'wrong_account') {
+      // Não é falha a mostrar: a tela troca para "entre" / "conta errada", que já explica.
+      companion.signal({ type: 'settled' });
+      if (code === 'wrong_account') setWrongAccount(true);
+      else setLoginRequired(true);
       setError(null);
       return;
     }
-    if (code === 'wrong_account') {
-      setWrongAccount(true);
-      setError(null);
-      return;
-    }
+    const weak = code === 'weak_password' || code === 'password_required';
+    companion.signal({ type: 'error', kind: weak ? 'validation' : 'server' });
     if (code === 'email_proof_required') setProof(null);
     setError(viewError);
-  }, []);
+  }, [companion]);
 
   const onAccept = useCallback(() => {
     setError(null);
+    companion.signal({ type: 'submit' });
     accept.mutate(
       { token },
       {
         onSuccess: (res) => {
+          // Sai da tela: celebra e navega no mesmo tick (como o login).
+          companion.signal({ type: 'success', final: false });
           router.replace(safeNextPath(res.next));
           router.refresh();
         },
         onError: onFailure,
       },
     );
-  }, [accept, onFailure, router, token]);
+  }, [accept, companion, onFailure, router, token]);
 
   const onCreate = useCallback(
     (values: CreatePasswordValues) => {
       if (!proof) return;
       setError(null);
+      companion.signal({ type: 'submit' });
       accept.mutate(
         { token, name: values.name, password: values.password, emailProof: proof },
         {
           onSuccess: (res) => {
             // A prova é de uso único: depois de consumida, sai da memória.
+            companion.signal({ type: 'success', final: true });
             setProof(null);
             setCreatedNext(createdLoginHref(res.next));
           },
@@ -194,19 +206,23 @@ export function InviteScreen({ token }: { token: string }): React.JSX.Element {
         },
       );
     },
-    [accept, onFailure, proof, token],
+    [accept, companion, onFailure, proof, token],
   );
 
   const onSendProof = useCallback(() => {
     setError(null);
+    companion.signal({ type: 'submit' });
     sendEmail.mutate(token, {
       onSuccess: (res) => {
+        // O envio do email é um passo, não o fim: a tela segue em "invite".
+        companion.signal({ type: 'success', final: false });
         setSentEmailMasked(res.emailMasked);
         setCooldownUntil(Date.now() + SEND_COOLDOWN_SECONDS * 1000);
         setNow(Date.now());
       },
       onError: (err) => {
         const { error: viewError, cooldown: shouldCool } = sendError(err);
+        companion.signal({ type: 'error', kind: 'server' });
         if (shouldCool) {
           setCooldownUntil(Date.now() + SEND_COOLDOWN_SECONDS * 1000);
           setNow(Date.now());
@@ -214,7 +230,7 @@ export function InviteScreen({ token }: { token: string }): React.JSX.Element {
         setError(viewError);
       },
     });
-  }, [sendEmail, token]);
+  }, [companion, sendEmail, token]);
 
   const onLogout = useCallback(() => {
     logout.mutate(undefined, {
@@ -243,18 +259,22 @@ export function InviteScreen({ token }: { token: string }): React.JSX.Element {
     state = stage ? { kind: 'ready', preview: preview.data, stage } : { kind: 'loading' };
   }
 
+  const stepKey = state.kind === 'ready' ? `ready:${state.stage.kind}` : state.kind;
+
   return (
-    <InviteView
-      state={state}
-      loginHref={loginHref}
-      busy={accept.isPending || sendEmail.isPending || logout.isPending}
-      error={error}
-      cooldown={cooldown}
-      onAccept={onAccept}
-      onCreate={onCreate}
-      onSendProof={onSendProof}
-      onLogout={onLogout}
-      onRetry={() => void preview.refetch()}
-    />
+    <AuthStepTransition stepKey={stepKey}>
+      <InviteView
+        state={state}
+        loginHref={loginHref}
+        busy={accept.isPending || sendEmail.isPending || logout.isPending}
+        error={error}
+        cooldown={cooldown}
+        onAccept={onAccept}
+        onCreate={onCreate}
+        onSendProof={onSendProof}
+        onLogout={onLogout}
+        onRetry={() => void preview.refetch()}
+      />
+    </AuthStepTransition>
   );
 }
