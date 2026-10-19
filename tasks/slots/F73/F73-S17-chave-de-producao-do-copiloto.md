@@ -2,7 +2,7 @@
 id: F73-S17
 title: Chave de produção do Copiloto — COPILOT_ENABLED (desligado por padrão) fecha rotas, varreduras, briefing e autopilot
 phase: F73
-status: review
+status: done
 priority: critical
 estimated_size: S
 model: sonnet
