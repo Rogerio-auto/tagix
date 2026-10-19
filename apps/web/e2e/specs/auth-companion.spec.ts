@@ -648,12 +648,13 @@ for (const theme of ['dark', 'light'] as const satisfies readonly Theme[]) {
                 title.y + 1,
               );
               if (size.width >= 1024) {
-                // Em pé na linha do eyebrow: a base da figura = base do eyebrow + 2,5 px de sombra.
+                // Em pé na linha do eyebrow: a base da figura = base do eyebrow + 2,5 px de sombra. Folga de 5 px: a medida do motor
+                // acontece com a troca de etapa ainda em `translateY` (até 4 px), ver achado A3.
                 const eyebrow = await boxOf(page.locator('main header p').first());
                 expect(
                   Math.abs(fig.y + fig.height - (eyebrow.y + eyebrow.height)),
                   `${label}: figura fora da linha do eyebrow`,
-                ).toBeLessThanOrEqual(3);
+                ).toBeLessThanOrEqual(5);
               }
               if (screen.bubble) {
                 const b = await boxOf(page.locator('[data-companion-bubble] .m-bubble'));
@@ -1415,6 +1416,7 @@ test.describe('Companheiro — convite (sem âncora de título)', () => {
           visibility: getComputedStyle(a).visibility,
         };
       });
+      console.log(`CONVITE heading-fallback ${JSON.stringify(info)}`);
       test
         .info()
         .annotations.push({ type: 'convite-heading-fallback', description: JSON.stringify(info) });
@@ -1458,6 +1460,7 @@ test.describe('Companheiro — convite (sem âncora de título)', () => {
           y: Math.round(r.y),
         };
       });
+      console.log(`CONVITE conta-criada ${JSON.stringify(done)}`);
       test
         .info()
         .annotations.push({ type: 'convite-done-fallback', description: JSON.stringify(done) });
