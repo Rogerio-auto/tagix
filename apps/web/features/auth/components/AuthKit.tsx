@@ -120,6 +120,9 @@ export class AuthStepTransition extends Component<AuthStepTransitionProps> {
     // O fantasma é só pixel: sem ids duplicados, sem iframe (o captcha recarregaria), sem foco.
     ghost.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
     ghost.querySelectorAll('iframe, script, video, audio').forEach((n) => n.remove());
+    // O React espelha o valor dos campos controlados no atributo `value`: o fantasma não
+    // carrega o que a pessoa digitou (nem a senha), só a forma do campo.
+    ghost.querySelectorAll('input, textarea').forEach((n) => n.removeAttribute('value'));
     ghost.setAttribute('inert', '');
     host.appendChild(ghost);
     const out = ghost.animate(
