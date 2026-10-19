@@ -318,10 +318,6 @@ async function settled(page: Page): Promise<void> {
   await page.waitForTimeout(80);
 }
 
-const stateOf = (page: Page): Promise<string | null> => figure(page).getAttribute('data-state');
-const svgAttr = (page: Page, name: string): Promise<string | null> =>
-  figure(page).locator('svg[data-rig]').getAttribute(name);
-
 interface Pose {
   state: string;
   eyes?: string;
