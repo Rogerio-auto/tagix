@@ -61,6 +61,20 @@ const STEP_EXIT_MS = 160;
 const STEP_ENTER_MS = 240;
 const STEP_REDUCED_MS = 120;
 
+/**
+ * Esvazia os campos de um clone do formulário: o fantasma só leva a FORMA dos campos, nunca o
+ * que a pessoa digitou (nem a senha). `cloneNode` copia o VALOR ATUAL e a flag de "editado" do
+ * input (não só o atributo `value`), então remover o atributo não basta: zera a propriedade
+ * `value` também. `name` sai para que o clone nunca seja tratado como campo do formulário.
+ */
+export function scrubGhostFields(root: ParentNode): void {
+  root.querySelectorAll('input, textarea').forEach((el) => {
+    el.removeAttribute('value');
+    el.removeAttribute('name');
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) el.value = '';
+  });
+}
+
 /** Lê a curva do token (`--ease`, `--ease-spring`): a fonte é `@hm/design-tokens`, não este arquivo. */
 function readEasing(el: Element, token: '--ease' | '--ease-spring'): string {
   const value = getComputedStyle(el).getPropertyValue(token).trim();
@@ -120,9 +134,7 @@ export class AuthStepTransition extends Component<AuthStepTransitionProps> {
     // O fantasma é só pixel: sem ids duplicados, sem iframe (o captcha recarregaria), sem foco.
     ghost.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
     ghost.querySelectorAll('iframe, script, video, audio').forEach((n) => n.remove());
-    // O React espelha o valor dos campos controlados no atributo `value`: o fantasma não
-    // carrega o que a pessoa digitou (nem a senha), só a forma do campo.
-    ghost.querySelectorAll('input, textarea').forEach((n) => n.removeAttribute('value'));
+    scrubGhostFields(ghost);
     ghost.setAttribute('inert', '');
     host.appendChild(ghost);
     const out = ghost.animate(
